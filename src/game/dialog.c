@@ -171,15 +171,15 @@ typedef struct DialogFile {
 
 static void dialog_state_init(int64_t npc_obj, int64_t pc_obj, DialogState* state);
 static void dialog_perform_response(int type, int num, int extra, int option_index, DialogState* state);
-static void sub_414E60(DialogState* a1, bool randomize);
-static int sub_414F50(DialogState* a1, int* a2);
-static bool sub_4150D0(DialogState* a1, char* a2);
-static bool sub_415BA0(DialogState* a1, char* a2, int a3);
+static void dialog_build_exchange(DialogState* a1, bool randomize);
+static int dialog_collect_pc_options(DialogState* a1, int* a2);
+static bool dialog_check_conditions(DialogState* a1, char* a2);
+static bool dialog_perform_actions(DialogState* a1, char* a2, int a3);
 static int sub_4167C0(const char* str);
-static bool sub_416840(DialogState* a1, bool a2);
+static bool dialog_build_npc_reply(DialogState* a1, bool a2);
 static bool dialog_search(int dlg, DialogFileEntry* entry);
 static void sub_416B00(char* dst, char* src, DialogState* a3);
-static bool sub_416C10(int a1, int a2, DialogState* a3);
+static bool dialog_build_pc_option(int a1, int a2, DialogState* a3);
 static void dialog_response_val_decode(int response_val, int* type_ptr, int* num_ptr);
 static bool find_dialog(const char* path, int* index_ptr);
 static void dialog_load_internal(DialogFile* dialog);
@@ -201,7 +201,7 @@ static void dialog_copy_npc_class_specific_msg(char* buffer, DialogState* state,
 static void dialog_copy_npc_race_specific_msg(char* buffer, DialogState* state, int num);
 static void dialog_copy_npc_generic_msg(char* buffer, DialogState* state, int start, int end);
 static bool dialog_copy_npc_override_msg(char* buffer, DialogState* state, int num);
-static int sub_4189C0(const char* a1, int a2);
+static int dialog_speech_id_pack(const char* a1, int a2);
 static void dialog_ask_money(int amt, int accept_type, int accept_num, int decline_type, int decline_num, DialogState* state);
 static void dialog_pay_money(int cost, DialogState* state);
 static void dialog_build_single_option_reply(int msg_num, int response_type, int response_num, DialogState* state);
@@ -212,7 +212,7 @@ static void dialog_ask_money_for_rumor(int cost, int* rumors, int num_rumors, in
 static void dialog_tell_rumor(int rumor, int a2, int a3, DialogState* state);
 static void dialog_build_pc_insult_option(int a1, int a2, int a3, DialogState* a4);
 static void dialog_insult_reply(int a1, int a2, DialogState* state);
-static void sub_419260(DialogState* a1, const char* a2);
+static void dialog_build_greeting(DialogState* a1, const char* a2);
 static bool sub_4197D0(unsigned int flags, int a2, DialogState* a3);
 static void dialog_offer_healing(DialogHealingOfferType type, int response_val, DialogState* state);
 static void dialog_build_use_skill_option(int index, int skill, int response_val, DialogState* state);
@@ -467,8 +467,16 @@ void sub_412F60(int dlg)
     dialog_files_length--;
 }
 
-// 0x412FD0
-bool sub_412FD0(DialogState* state)
+/**
+ * Starts a conversation whose identifying fields (dlg, pc_obj, npc_obj, num,
+ * script_num) the caller has filled in. Fails if the NPC cannot speak; if the
+ * NPC is dead (speak-with-dead) or hostile it floats a race-based brushoff
+ * (DIALOG_STATUS_FLOAT_AND_END), otherwise it builds the first exchange at
+ * line `num`.
+ *
+ * 0x412FD0
+ */
+bool dialog_begin(DialogState* state)
 {
     int64_t pc_loc;
     int64_t npc_loc;
@@ -497,7 +505,7 @@ bool sub_412FD0(DialogState* state)
 
         state->status_num = state->num;
         state->status = DIALOG_STATUS_CONTINUE;
-        sub_414E60(state, 0);
+        dialog_build_exchange(state, 0);
     } else {
         dialog_copy_npc_race_specific_msg(state->reply, state, 1000);
         state->status = DIALOG_STATUS_FLOAT_AND_END;
@@ -506,8 +514,16 @@ bool sub_412FD0(DialogState* state)
     return true;
 }
 
-// 0x413130
-void sub_413130(DialogState* state, int index)
+/**
+ * Advances the conversation after the PC picks option `index`: runs the
+ * option's {Result} actions, then dispatches its stored response triple.
+ * When status is DIALOG_STATUS_BARTER this is the return-from-barter path -
+ * the pending response_val parked in status_num is decoded and dispatched
+ * instead. No-ops when the dialog has already handed control elsewhere.
+ *
+ * 0x413130
+ */
+void dialog_select_option(DialogState* state, int index)
 {
     int v1;
     int v2;
@@ -530,7 +546,7 @@ void sub_413130(DialogState* state, int index)
     if (state->status == DIALOG_STATUS_BARTER) {
         dialog_response_val_decode(state->status_num, &v1, &v2);
         v3 = 0;
-    } else if (sub_415BA0(state, state->actions[index], index)) {
+    } else if (dialog_perform_actions(state, state->actions[index], index)) {
         v1 = state->option_response_types[index];
         v2 = state->option_response_nums[index];
         v3 = state->option_response_extras[index];
@@ -547,7 +563,7 @@ void sub_413130(DialogState* state, int index)
 }
 
 // 0x413280
-void sub_413280(DialogState* state)
+void dialog_end(DialogState* state)
 {
     sub_4C10A0(state->npc_obj, state->pc_obj);
 }
@@ -560,9 +576,9 @@ void sub_4132A0(int64_t npc_obj, int64_t pc_obj, char* buffer)
     if (ai_can_speak(npc_obj, pc_obj, false) == AI_SPEAK_OK) {
         dialog_state_init(npc_obj, pc_obj, &state);
         if (critter_pc_leader_get(npc_obj) == pc_obj) {
-            sub_419260(&state, "1 0, 2 0, 3 0, 4 0, 5 0, 6 0, 7 0, 8 0");
+            dialog_build_greeting(&state, "1 0, 2 0, 3 0, 4 0, 5 0, 6 0, 7 0, 8 0");
         } else {
-            sub_419260(&state, NULL);
+            dialog_build_greeting(&state, NULL);
         }
         strcpy(buffer, state.reply);
     } else {
@@ -740,7 +756,7 @@ void sub_413A30(DialogState* a1, bool a2)
     if (a2 || ai_can_speak(a1->npc_obj, a1->pc_obj, false) == AI_SPEAK_OK) {
         a1->status_num = a1->num;
         a1->status = DIALOG_STATUS_CONTINUE;
-        sub_416840(a1, 0);
+        dialog_build_npc_reply(a1, 0);
     } else {
         a1->reply[0] = '\0';
         a1->speech_id = -1;
@@ -1171,7 +1187,7 @@ void dialog_perform_response(int type, int num, int extra, int option_index, Dia
     case DIALOG_RESPONSE_GO_TO_LINE:
         state->status_num = num;
         state->status = DIALOG_STATUS_CONTINUE;
-        sub_414E60(state, 0);
+        dialog_build_exchange(state, 0);
         break;
     case DIALOG_RESPONSE_RETURN_TO_SCRIPT:
         state->status = DIALOG_STATUS_RETURN_TO_SCRIPT;
@@ -1278,8 +1294,16 @@ void dialog_perform_response(int type, int num, int extra, int option_index, Dia
     }
 }
 
-// 0x414E60
-void sub_414E60(DialogState* a1, bool randomize)
+/**
+ * Builds the exchange the UI displays: the NPC reply for the line in
+ * status_num plus up to five eligible PC options. When every candidate
+ * option is filtered out, offers a single generic farewell that returns to
+ * the script. `randomize` replays the exchange with the stored seed instead
+ * of drawing a fresh one, so generated text comes out identical.
+ *
+ * 0x414E60
+ */
+void dialog_build_exchange(DialogState* a1, bool randomize)
 {
     int index;
     int v1[5];
@@ -1296,11 +1320,11 @@ void sub_414E60(DialogState* a1, bool randomize)
         a1->seed = random_seed_generate();
     }
 
-    if (sub_416840(a1, randomize)) {
-        a1->num_options = sub_414F50(a1, v1);
+    if (dialog_build_npc_reply(a1, randomize)) {
+        a1->num_options = dialog_collect_pc_options(a1, v1);
         v2 = 0;
         for (index = 0; index < a1->num_options; index++) {
-            if (!sub_416C10(v1[index], index - v2, a1)) {
+            if (!dialog_build_pc_option(v1[index], index - v2, a1)) {
                 v2++;
             }
         }
@@ -1314,7 +1338,7 @@ void sub_414E60(DialogState* a1, bool randomize)
 }
 
 // 0x414F50
-int sub_414F50(DialogState* a1, int* a2)
+int dialog_collect_pc_options(DialogState* a1, int* a2)
 {
     DialogFileEntry key;
     int gender;
@@ -1355,7 +1379,7 @@ int sub_414F50(DialogState* a1, int* a2)
         if (entry->data.gender == -1 || entry->data.gender == gender) {
             if ((entry->iq < 0 && intelligence <= -entry->iq)
                 || (entry->iq >= 0 && intelligence >= entry->iq)) {
-                if (entry->conditions == NULL || sub_4150D0(a1, entry->conditions)) {
+                if (entry->conditions == NULL || dialog_check_conditions(a1, entry->conditions)) {
                     a2[cnt++] = entry->num;
                 }
             }
@@ -1366,7 +1390,7 @@ int sub_414F50(DialogState* a1, int* a2)
 }
 
 // 0x4150D0
-bool sub_4150D0(DialogState* a1, char* a2)
+bool dialog_check_conditions(DialogState* a1, char* a2)
 {
     char* pch;
     int cond;
@@ -1867,7 +1891,7 @@ bool sub_4150D0(DialogState* a1, char* a2)
 }
 
 // 0x415BA0
-bool sub_415BA0(DialogState* a1, char* a2, int a3)
+bool dialog_perform_actions(DialogState* a1, char* a2, int a3)
 {
     char* pch;
     int act;
@@ -2096,7 +2120,7 @@ bool sub_415BA0(DialogState* a1, char* a2, int a3)
                 critter_follow(a1->npc_obj, a1->pc_obj, value);
                 a1->status_num = v41;
                 a1->status = DIALOG_STATUS_CONTINUE;
-                sub_414E60(a1, false);
+                dialog_build_exchange(a1, false);
                 v57 = false;
             } else {
                 dialog_copy_npc_wont_follow_msg(a1->npc_obj, a1->pc_obj, rc, a1->reply, &(a1->speech_id));
@@ -2134,7 +2158,7 @@ bool sub_415BA0(DialogState* a1, char* a2, int a3)
                 ai_npc_unwait(a1->npc_obj, value);
                 a1->status_num = v43;
                 a1->status = DIALOG_STATUS_CONTINUE;
-                sub_414E60(a1, false);
+                dialog_build_exchange(a1, false);
                 v57 = false;
             } else {
                 dialog_copy_npc_wont_follow_msg(a1->npc_obj, a1->pc_obj, rc, a1->reply, &(a1->speech_id));
@@ -2232,7 +2256,7 @@ bool sub_415BA0(DialogState* a1, char* a2, int a3)
             } else {
                 a1->status_num = v50;
                 a1->status = DIALOG_STATUS_CONTINUE;
-                sub_414E60(a1, false);
+                dialog_build_exchange(a1, false);
                 v57 = false;
             }
             break;
@@ -2264,8 +2288,15 @@ int sub_4167C0(const char* str)
     return atoi(str);
 }
 
-// 0x416840
-bool sub_416840(DialogState* a1, bool a2)
+/**
+ * Fetches the NPC line in status_num and renders its reply text, running the
+ * line's {Result} actions (skipped on replay) and capturing its voice-over
+ * id. Generated-dialog NPC opcodes are handled here: {G:} greetings, {I:}
+ * insults, {M:} money begging, {R:} rumors (GeneratedDialog.doc).
+ *
+ * 0x416840
+ */
+bool dialog_build_npc_reply(DialogState* a1, bool a2)
 {
     DialogFileEntry entry;
 
@@ -2278,14 +2309,14 @@ bool sub_416840(DialogState* a1, bool a2)
     }
 
     a1->field_1840 = entry.response_val;
-    a1->speech_id = sub_4189C0(entry.conditions, a1->script_num);
+    a1->speech_id = dialog_speech_id_pack(entry.conditions, a1->script_num);
 
     if (!a2) {
-        sub_415BA0(a1, entry.actions, 0);
+        dialog_perform_actions(a1, entry.actions, 0);
     }
 
     if (SDL_strncasecmp(entry.str, "g:", 2) == 0) {
-        sub_419260(a1, &(entry.str[2]));
+        dialog_build_greeting(a1, &(entry.str[2]));
 
         if (a1->status) {
             a1->num_options = 0;
@@ -2397,8 +2428,16 @@ void sub_416B00(char* dst, char* src, DialogState* a3)
     strcat(dst, remainder);
 }
 
-// 0x416C10
-bool sub_416C10(int a1, int a2, DialogState* a3)
+/**
+ * Fills PC option slot `a2` from dialog line `a1`: plain lines copy their
+ * text and decoded {R} response; generated-dialog opcodes ({A:} through
+ * {Z:}, GeneratedDialog.doc) get their text from the gd_pc mes files and the
+ * entry step of their flow as the response type. Returns false if the option
+ * cannot be offered (e.g. all directions already known).
+ *
+ * 0x416C10
+ */
+bool dialog_build_pc_option(int a1, int a2, DialogState* a3)
 {
     DialogFileEntry entry;
     char* pch;
@@ -2469,7 +2508,7 @@ bool sub_416C10(int a1, int a2, DialogState* a3)
     } else if (SDL_strncasecmp(entry.str, "q:", 2) == 0) {
         v4 = quest_dialog_line(a3->pc_obj, a3->npc_obj, atoi(entry.str + 2));
         if (v4 != -1) {
-            return sub_416C10(v4, a2, a3);
+            return dialog_build_pc_option(v4, a2, a3);
         }
         return false;
     } else if (SDL_strncasecmp(entry.str, "r:", 2) == 0) {
@@ -3285,13 +3324,20 @@ bool dialog_copy_npc_override_msg(char* buffer, DialogState* state, int num)
         strcpy(buffer, entry.data.female_str);
     }
 
-    state->speech_id = sub_4189C0(entry.conditions, scr.num);
+    state->speech_id = dialog_speech_id_pack(entry.conditions, scr.num);
 
     return true;
 }
 
-// 0x4189C0
-int sub_4189C0(const char* a1, int a2)
+/**
+ * Inverse of `dialog_speech_id_unpack`: on NPC lines the {Test} field is
+ * reused to hold the voice-over sample number, which is packed here with the
+ * script number that names the speech directory. Returns -1 when the line
+ * has no voice-over.
+ *
+ * 0x4189C0
+ */
+int dialog_speech_id_pack(const char* a1, int a2)
 {
     if (a1 != NULL && a2 != 0) {
         return ((a2 & 0x7FFF) << 16) | (atoi(a1) & 0xFFFF);
@@ -3573,8 +3619,16 @@ void dialog_insult_reply(int a1, int a2, DialogState* state)
     }
 }
 
-// 0x419260
-void sub_419260(DialogState* a1, const char* str)
+/**
+ * The {G:} greeting generator: runs the ten greeting tests from
+ * GeneratedDialog.doc (dead, associates, spell effects, underwear,
+ * barbarian armor, reaction) to pick the NPC's reply, honoring per-test
+ * overrides parsed from the parameter string ("N M" jump, "N fl M" float,
+ * "N 0" skip).
+ *
+ * 0x419260
+ */
+void dialog_build_greeting(DialogState* a1, const char* str)
 {
     unsigned int flags[10];
     int values[10];
@@ -3786,7 +3840,7 @@ bool sub_4197D0(unsigned int flags, int a2, DialogState* a3)
     if ((flags & 0x4) != 0) {
         a3->status_num = a2;
         a3->status = DIALOG_STATUS_CONTINUE;
-        sub_414E60(a3, 0);
+        dialog_build_exchange(a3, 0);
         return true;
     }
 

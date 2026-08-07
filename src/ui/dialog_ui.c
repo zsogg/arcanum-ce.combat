@@ -156,7 +156,7 @@ void dialog_ui_start_dialog(int64_t pc_obj, int64_t npc_obj, int script_num, int
         entry->state.npc_obj = npc_obj;
         entry->state.num = num;
         entry->state.script_num = script_num;
-        if (!sub_412FD0(&(entry->state))) {
+        if (!dialog_begin(&(entry->state))) {
             dialog_unload(entry->dlg);
             return;
         }
@@ -168,14 +168,14 @@ void dialog_ui_start_dialog(int64_t pc_obj, int64_t npc_obj, int script_num, int
                 TB_EXPIRE_DEFAULT,
                 entry->state.reply,
                 entry->state.speech_id);
-            sub_413280(&(entry->state));
+            dialog_end(&(entry->state));
             dialog_unload(entry->dlg);
             return;
         }
 
         if (player_is_local_pc_obj(pc_obj)) {
             if (!intgame_dialog_begin(dialog_ui_message_filter)) {
-                sub_413280(&(entry->state));
+                dialog_end(&(entry->state));
                 dialog_unload(entry->dlg);
                 return;
             }
@@ -233,7 +233,7 @@ void dialog_ui_end_dialog(int64_t obj, int a2)
 
     tb_expire_in(entry->state.npc_obj, TB_EXPIRE_DEFAULT);
 
-    sub_413280(&(entry->state));
+    dialog_end(&(entry->state));
 }
 
 // 0x5679C0
@@ -247,7 +247,7 @@ void sub_5679C0(DialogUiEntry* entry)
 
     dialog_unload(entry->dlg);
 
-    sub_413280(&(entry->state));
+    dialog_end(&(entry->state));
 }
 
 // 0x567A10
@@ -290,7 +290,7 @@ bool dialog_ui_process_option(DialogUiEntry* entry, int option)
         entry->state.options[option]);
     tb_remove(entry->state.npc_obj);
     dialog_ui_speech_stop();
-    sub_413130(&(entry->state), option);
+    dialog_select_option(&(entry->state), option);
 
     switch (entry->state.status) {
     case DIALOG_STATUS_CONTINUE:
