@@ -1297,7 +1297,7 @@ tig_art_id_t a_name_portal_aid_from_wall_aid(tig_art_id_t wall_art_id, ObjectID*
     mes_get_msg(portal_mes_file, &mes_file_entry);
 
     // `a_name_portal_init` splits string into two chunks.
-    *oid = sub_4E6540(atoi(mes_file_entry.str + strlen(mes_file_entry.str) + 1));
+    *oid = objid_create_a(atoi(mes_file_entry.str + strlen(mes_file_entry.str) + 1));
 
     rotation = tig_art_id_rotation_get(wall_art_id);
     palette = tig_art_id_palette_get(wall_art_id);

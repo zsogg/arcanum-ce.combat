@@ -90,12 +90,18 @@ bool objid_is_equal(ObjectID a, ObjectID b)
     return false;
 }
 
-// 0x4E6540
-ObjectID sub_4E6540(int a1)
+/**
+ * Wraps a plain int as an OID_TYPE_A ObjectID - the permanent-numeric-id
+ * flavor used for prototypes (description + 20, see
+ * `proto_description_to_oid`) and other statically numbered objects.
+ *
+ * 0x4E6540
+ */
+ObjectID objid_create_a(int num)
 {
     ObjectID oid;
     oid.type = OID_TYPE_A;
-    oid.d.a = a1;
+    oid.d.a = num;
     return oid;
 }
 

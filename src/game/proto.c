@@ -76,11 +76,11 @@ static void proto_adjust_field_percent(int64_t obj, int f, int percent);
 static void proto_adjust_worth_by_complexity(int64_t obj);
 static void proto_load_critter_stats(int64_t obj, int description);
 static int proto_parse_critter_stats(TigFile* stream, int64_t obj, int type);
-static void sub_49BB40(int64_t obj, int a2);
-static bool sub_49BB70(const char* str, int* fld_ptr, int* a3, int* a4, int* a5);
-static int sub_49BF10(const char* str, const char** identifiers, int size);
-static void sub_49C060(int64_t obj, TigFile* stream, int type);
-static void sub_49C610(TigFile* stream, const char* name, int value, const char** identifiers, int size);
+static void proto_set_max_hp(int64_t obj, int hp);
+static bool proto_parse_field(const char* str, int* fld_ptr, int* a3, int* a4, int* a5);
+static int proto_parse_flag(const char* str, const char** identifiers, int size);
+static void proto_write_critter_stats(int64_t obj, TigFile* stream, int type);
+static void proto_write_flags(TigFile* stream, const char* name, int value, const char** identifiers, int size);
 static void proto_id_list_create(int** proto_ids_ptr, int* cnt_ptr);
 static int proto_id_list_sort(const void* va, const void* vb);
 static bool proto_id_list_check(int* proto_ids, int cnt, int id);
@@ -150,7 +150,7 @@ static int race_to_body_type_tbl[RACE_COUNT] = {
 };
 
 // 0x5B38C8
-static const char* off_5B38C8[] = {
+static const char* proto_field_names[] = {
     /*             PROTO_F_DESCRIPTION */ "Description",
     /*           PROTO_F_INTERNAL_NAME */ "Internal Name",
     /*                   PROTO_F_LEVEL */ "Level",
@@ -191,7 +191,7 @@ static const char* off_5B38C8[] = {
 };
 
 // 0x5B395C
-static const char* off_5B395C[] = {
+static const char* proto_blit_flag_names[] = {
     "TAB_FLIP_X",
     "TAB_FLIP_Y",
     "TAB_PALETTE_ORIGINAL",
@@ -516,7 +516,7 @@ void proto_deallocate_all(void)
  */
 ObjectID proto_description_to_oid(int description)
 {
-    return sub_4E6540(description + 20);
+    return objid_create_a(description + 20);
 }
 
 /**
@@ -534,7 +534,7 @@ void proto_recreate(int description)
     object_type = proto_description_to_type(description);
     obj_create_proto(object_type, &obj);
     obj_field_int32_set(obj, OBJ_F_NAME, proto_default_name(object_type));
-    sub_408020(obj, description + 20);
+    obj_assign_perm_id_a(obj, description + 20);
     proto_init_properties(obj, description);
     in_proto_save = true;
     proto_save(obj);
@@ -16238,7 +16238,7 @@ int proto_parse_critter_stats(TigFile* stream, int64_t obj, int type)
     }
 
     while (tig_file_fgets(str, sizeof(str), stream) != NULL) {
-        if (sub_49BB70(str, &fld, &v2, &v3, &v4)) {
+        if (proto_parse_field(str, &fld, &v2, &v3, &v4)) {
             if (fld == PROTO_F_DESCRIPTION) {
                 return v2;
             }
@@ -16305,7 +16305,7 @@ int proto_parse_critter_stats(TigFile* stream, int64_t obj, int type)
                     obj_field_int32_set(obj, OBJ_F_MATERIAL, v2);
                     break;
                 case PROTO_F_HIT_POINTS:
-                    sub_49BB40(obj, v2);
+                    proto_set_max_hp(obj, v2);
                     break;
                 case PROTO_F_SCRIPT:
                     scr.num = v3;
@@ -16379,14 +16379,26 @@ int proto_parse_critter_stats(TigFile* stream, int64_t obj, int type)
     return -1;
 }
 
-// 0x49BB40
-void sub_49BB40(int64_t obj, int a2)
+/**
+ * Sets the object's maximum hit points to `hp` by moving the adjustment
+ * field: hp_adj += hp - current max.
+ *
+ * 0x49BB40
+ */
+void proto_set_max_hp(int64_t obj, int hp)
 {
-    object_hp_adj_set(obj, object_hp_adj_get(obj) + a2 - object_hp_max(obj));
+    object_hp_adj_set(obj, object_hp_adj_get(obj) + hp - object_hp_max(obj));
 }
 
-// 0x49BB70
-bool sub_49BB70(const char* str, int* fld_ptr, int* a3, int* a4, int* a5)
+/**
+ * Parses one "Name: value..." line of a rules stat block (npc.txt /
+ * unique.txt / monster.txt) into the PROTO_F_* field it names (via
+ * `proto_field_names`) and up to three numeric or symbolic values - stats,
+ * spells, degrees and portraits are accepted by name.
+ *
+ * 0x49BB70
+ */
+bool proto_parse_field(const char* str, int* fld_ptr, int* a3, int* a4, int* a5)
 {
     int fld;
     size_t pos;
@@ -16399,8 +16411,8 @@ bool sub_49BB70(const char* str, int* fld_ptr, int* a3, int* a4, int* a5)
     int v4;
 
     for (fld = 0; fld < PROTO_F_COUNT; fld++) {
-        pos = strlen(off_5B38C8[fld]) + 1;
-        if (SDL_strncasecmp(str, off_5B38C8[fld], pos - 1) == 0) {
+        pos = strlen(proto_field_names[fld]) + 1;
+        if (SDL_strncasecmp(str, proto_field_names[fld], pos - 1) == 0) {
             break;
         }
     }
@@ -16431,16 +16443,16 @@ bool sub_49BB70(const char* str, int* fld_ptr, int* a3, int* a4, int* a5)
         sscanf(str, "%d %d", a3, a4);
         return true;
     case PROTO_F_CRITTER_FLAG:
-        *a3 = sub_49BF10(str, obj_flags_ocf, OCF_COUNT);
+        *a3 = proto_parse_flag(str, obj_flags_ocf, OCF_COUNT);
         return true;
     case PROTO_F_CRITTER2_FLAG:
-        *a3 = sub_49BF10(str, obj_flags_ocf2, OCF2_COUNT);
+        *a3 = proto_parse_flag(str, obj_flags_ocf2, OCF2_COUNT);
         return true;
     case PROTO_F_NPC_FLAG:
-        *a3 = sub_49BF10(str, obj_flags_onf, ONF_COUNT);
+        *a3 = proto_parse_flag(str, obj_flags_onf, ONF_COUNT);
         return true;
     case PROTO_F_BLIT_FLAG:
-        *a3 = sub_49BF10(str, off_5B395C, sizeof(off_5B395C) / sizeof(off_5B395C[0]));
+        *a3 = proto_parse_flag(str, proto_blit_flag_names, sizeof(proto_blit_flag_names) / sizeof(proto_blit_flag_names[0]));
         return true;
     case PROTO_F_BASIC_STAT:
         for (stat = STAT_STRENGTH; stat <= STAT_CHARISMA; stat++) {
@@ -16480,7 +16492,7 @@ bool sub_49BB70(const char* str, int* fld_ptr, int* a3, int* a4, int* a5)
         *a5 = v1 | (v2 << 8) | (v3 << 16) | (v4 << 24);
         return true;
     case PROTO_F_OBJECT_FLAG:
-        *a3 = sub_49BF10(str, obj_flags_of, OF_COUNT);
+        *a3 = proto_parse_flag(str, obj_flags_of, OF_COUNT);
         return true;
     default:
         *a3 = atoi(str);
@@ -16489,7 +16501,7 @@ bool sub_49BB70(const char* str, int* fld_ptr, int* a3, int* a4, int* a5)
 }
 
 // 0x49BF10
-int sub_49BF10(const char* str, const char** identifiers, int size)
+int proto_parse_flag(const char* str, const char** identifiers, int size)
 {
     int index;
 
@@ -16503,8 +16515,14 @@ int sub_49BF10(const char* str, const char** identifiers, int size)
     return 0;
 }
 
-// 0x49C060
-void sub_49C060(int64_t obj, TigFile* stream, int type)
+/**
+ * Writes a critter's stat block in the rules text format that
+ * `proto_parse_critter_stats` reads back. Unused in CE (editor-side in the
+ * original); kept for the format documentation it embodies.
+ *
+ * 0x49C060
+ */
+void proto_write_critter_stats(int64_t obj, TigFile* stream, int type)
 {
     char description[2000];
     int value;
@@ -16520,42 +16538,42 @@ void sub_49C060(int64_t obj, TigFile* stream, int type)
 
     object_examine(obj, obj, description);
     tig_file_fprintf(stream, "%s: %d   // %s\n",
-        off_5B38C8[PROTO_F_DESCRIPTION],
+        proto_field_names[PROTO_F_DESCRIPTION],
         obj_field_int32_get(obj, OBJ_F_DESCRIPTION),
         description);
 
     value = obj_field_int32_get(obj, OBJ_F_NAME);
     if (value != 0) {
         tig_file_fprintf(stream, "%s: %d\n",
-            off_5B38C8[PROTO_F_INTERNAL_NAME],
+            proto_field_names[PROTO_F_INTERNAL_NAME],
             value);
     }
 
     tig_file_fprintf(stream, "%s: %d\n",
-        off_5B38C8[PROTO_F_LEVEL],
+        proto_field_names[PROTO_F_LEVEL],
         stat_level_get(obj, STAT_LEVEL));
 
     art_id = obj_field_int32_get(obj, OBJ_F_CURRENT_AID);
     switch (type) {
     case 1:
         tig_file_fprintf(stream, "%s: %d %d\n",
-            off_5B38C8[PROTO_F_ART_NUMBER_AND_PALETTE],
+            proto_field_names[PROTO_F_ART_NUMBER_AND_PALETTE],
             tig_art_num_get(art_id),
             tig_art_id_palette_get(art_id));
         break;
     case 2:
         tig_file_fprintf(stream, "%s: %d %d\n",
-            off_5B38C8[PROTO_F_ART_NUMBER_AND_PALETTE],
+            proto_field_names[PROTO_F_ART_NUMBER_AND_PALETTE],
             tig_art_monster_id_specie_get(art_id),
             tig_art_id_palette_get(art_id));
         break;
     default:
         tig_file_fprintf(stream, "%s: %s %d\n",
-            off_5B38C8[PROTO_F_BASIC_STAT],
+            proto_field_names[PROTO_F_BASIC_STAT],
             stat_name(STAT_GENDER),
             stat_base_get(obj, STAT_GENDER));
         tig_file_fprintf(stream, "%s: %s %d\n",
-            off_5B38C8[PROTO_F_BASIC_STAT],
+            proto_field_names[PROTO_F_BASIC_STAT],
             stat_name(STAT_RACE),
             stat_base_get(obj, STAT_RACE));
         break;
@@ -16564,43 +16582,43 @@ void sub_49C060(int64_t obj, TigFile* stream, int type)
     value = obj_field_int32_get(obj, OBJ_F_BLIT_SCALE);
     if (value != 100) {
         tig_file_fprintf(stream, "%s: %d\n",
-            off_5B38C8[PROTO_F_SCALE],
+            proto_field_names[PROTO_F_SCALE],
             value);
     }
 
     value = stat_level_get(obj, STAT_ALIGNMENT);
     if (value != 0) {
         tig_file_fprintf(stream, "%s: %d\n",
-            off_5B38C8[PROTO_F_ALIGNMENT],
+            proto_field_names[PROTO_F_ALIGNMENT],
             value);
     }
 
-    sub_49C610(stream,
-        off_5B38C8[PROTO_F_CRITTER_FLAG],
+    proto_write_flags(stream,
+        proto_field_names[PROTO_F_CRITTER_FLAG],
         obj_field_int32_get(obj, OBJ_F_CRITTER_FLAGS),
         obj_flags_ocf,
         OCF_COUNT);
 
-    sub_49C610(stream,
-        off_5B38C8[PROTO_F_CRITTER2_FLAG],
+    proto_write_flags(stream,
+        proto_field_names[PROTO_F_CRITTER2_FLAG],
         obj_field_int32_get(obj, OBJ_F_CRITTER_FLAGS2),
         obj_flags_ocf2,
         OCF2_COUNT);
 
-    sub_49C610(stream,
-        off_5B38C8[PROTO_F_NPC_FLAG],
+    proto_write_flags(stream,
+        proto_field_names[PROTO_F_NPC_FLAG],
         obj_field_int32_get(obj, OBJ_F_NPC_FLAGS),
         obj_flags_onf,
         ONF_COUNT);
 
-    sub_49C610(stream,
-        off_5B38C8[PROTO_F_BLIT_FLAG],
+    proto_write_flags(stream,
+        proto_field_names[PROTO_F_BLIT_FLAG],
         obj_field_int32_get(obj, OBJ_F_BLIT_FLAGS),
-        off_5B395C,
-        sizeof(off_5B395C) / sizeof(off_5B395C[0]));
+        proto_blit_flag_names,
+        sizeof(proto_blit_flag_names) / sizeof(proto_blit_flag_names[0]));
 
-    sub_49C610(stream,
-        off_5B38C8[PROTO_F_SPELL_FLAG],
+    proto_write_flags(stream,
+        proto_field_names[PROTO_F_SPELL_FLAG],
         obj_field_int32_get(obj, OBJ_F_SPELL_FLAGS),
         obj_flags_ofs,
         OFS_COUNT);
@@ -16608,7 +16626,7 @@ void sub_49C060(int64_t obj, TigFile* stream, int type)
     value = obj_field_int32_get(obj, OBJ_F_CRITTER_CRIT_HIT_CHART);
     if (value != CRIT_BODY_TYPE_BIPED) {
         tig_file_fprintf(stream, "%s: %d\n",
-            off_5B38C8[PROTO_F_HIT_CHART],
+            proto_field_names[PROTO_F_HIT_CHART],
             value);
     }
 
@@ -16616,7 +16634,7 @@ void sub_49C060(int64_t obj, TigFile* stream, int type)
         value = stat_base_get(obj, stat);
         if (value != 8) {
             tig_file_fprintf(stream, "%s: %s %d\n",
-                off_5B38C8[PROTO_F_BASIC_STAT],
+                proto_field_names[PROTO_F_BASIC_STAT],
                 stat_name(stat),
                 value);
         }
@@ -16629,32 +16647,32 @@ void sub_49C060(int64_t obj, TigFile* stream, int type)
         num_spl = spell_college_level_get(obj, college);
         for (spl = 0; spl < num_spl; spl++) {
             tig_file_fprintf(stream, "%s: %s\n",
-                off_5B38C8[PROTO_F_SPELL],
+                proto_field_names[PROTO_F_SPELL],
                 spell_name(college * 5 + spl));
         }
     }
 
     tig_file_fprintf(stream, "%s: %d\n",
-        off_5B38C8[PROTO_F_FACTION],
+        proto_field_names[PROTO_F_FACTION],
         obj_field_int32_get(obj, OBJ_F_NPC_FACTION));
 
     tig_file_fprintf(stream, "%s: %d\n",
-        off_5B38C8[PROTO_F_AI_PACKET],
+        proto_field_names[PROTO_F_AI_PACKET],
         obj_field_int32_get(obj, OBJ_F_NPC_AI_DATA));
 
     tig_file_fprintf(stream, "%s: %d\n",
-        off_5B38C8[PROTO_F_MATERIAL],
+        proto_field_names[PROTO_F_MATERIAL],
         obj_field_int32_get(obj, OBJ_F_MATERIAL));
 
     tig_file_fprintf(stream, "%s: %d\n",
-        off_5B38C8[PROTO_F_HIT_POINTS],
+        proto_field_names[PROTO_F_HIT_POINTS],
         object_hp_max(obj));
 
     for (index = 0; index < 36; index++) {
         obj_arrayfield_script_get(obj, OBJ_F_SCRIPTS_IDX, index, &scr);
         if (scr[2] != 0) {
             tig_file_fprintf(stream, "%s: %d %d %d %d %d %d\n",
-                off_5B38C8[PROTO_F_SCRIPT],
+                proto_field_names[PROTO_F_SCRIPT],
                 index,
                 scr[2],
                 scr[1] & 0xFF,
@@ -16668,7 +16686,7 @@ void sub_49C060(int64_t obj, TigFile* stream, int type)
         value = obj_arrayfield_int32_get(obj, OBJ_F_RESISTANCE_IDX, index);
         if (value != 0) {
             tig_file_fprintf(stream, "%s: %d\n",
-                off_5B38C8[index],
+                proto_field_names[index],
                 value);
         }
     }
@@ -16678,37 +16696,37 @@ void sub_49C060(int64_t obj, TigFile* stream, int type)
         max_damage = obj_arrayfield_uint32_get(obj, OBJ_F_NPC_DAMAGE_IDX, index * 2 + 1);
         if (min_damage != 0 || max_damage != 0) {
             tig_file_fprintf(stream, "%s: %d %d\n",
-                off_5B38C8[index],
+                proto_field_names[index],
                 min_damage,
                 max_damage);
         }
     }
 
     tig_file_fprintf(stream, "%s: %d\n",
-        off_5B38C8[PROTO_F_SOUND_BANK],
+        proto_field_names[PROTO_F_SOUND_BANK],
         obj_field_int32_get(obj, OBJ_F_SOUND_EFFECT));
 
     value = obj_field_int32_get(obj, OBJ_F_CRITTER_INVENTORY_SOURCE);
     if (value != 0) {
         tig_file_fprintf(stream, "%s: %d\n",
-            off_5B38C8[PROTO_F_INVENTORY_SOURCE],
+            proto_field_names[PROTO_F_INVENTORY_SOURCE],
             value);
     }
 
     tig_file_fprintf(stream, "%s: %d\n",
-        off_5B38C8[PROTO_F_PORTRAIT],
+        proto_field_names[PROTO_F_PORTRAIT],
         obj_field_int32_get(obj, OBJ_F_CRITTER_PORTRAIT));
 
     tig_file_fprintf(stream, "%s: %d\n",
-        off_5B38C8[PROTO_F_RETAIL_PRICE_MULTIPLIER],
+        proto_field_names[PROTO_F_RETAIL_PRICE_MULTIPLIER],
         obj_field_int32_get(obj, OBJ_F_NPC_RETAIL_PRICE_MULTIPLIER));
 
     tig_file_fprintf(stream, "%s: %d\n",
-        off_5B38C8[PROTO_F_SOCIAL_CLASS],
+        proto_field_names[PROTO_F_SOCIAL_CLASS],
         critter_social_class_get(obj));
 
-    sub_49C610(stream,
-        off_5B38C8[PROTO_F_OBJECT_FLAG],
+    proto_write_flags(stream,
+        proto_field_names[PROTO_F_OBJECT_FLAG],
         obj_field_int32_get(obj, OBJ_F_FLAGS),
         obj_flags_of,
         OF_COUNT);
@@ -16716,20 +16734,20 @@ void sub_49C060(int64_t obj, TigFile* stream, int type)
     value = obj_field_int32_get(obj, OBJ_F_CRITTER_AUTO_LEVEL_SCHEME);
     if (value != 0) {
         tig_file_fprintf(stream, "%s: %d\n",
-            off_5B38C8[PROTO_F_AUTO_LEVEL_SCHEME],
+            proto_field_names[PROTO_F_AUTO_LEVEL_SCHEME],
             value);
     }
 
     value = obj_field_int32_get(obj, OBJ_F_CATEGORY);
     if (value != 0) {
         tig_file_fprintf(stream, "%s: %d\n",
-            off_5B38C8[PROTO_F_CATEGORY],
+            proto_field_names[PROTO_F_CATEGORY],
             value);
     }
 }
 
 // 0x49C610
-void sub_49C610(TigFile* stream, const char* name, int value, const char** identifiers, int size)
+void proto_write_flags(TigFile* stream, const char* name, int value, const char** identifiers, int size)
 {
     int index;
 

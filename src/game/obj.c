@@ -2297,8 +2297,13 @@ Object* obj_allocate(int64_t* obj_ptr)
     return obj_pool_allocate(obj_ptr);
 }
 
-// 0x408020
-ObjectID sub_408020(int64_t obj, int a2)
+/**
+ * Gives `obj` the permanent OID_TYPE_A id `num`, replacing any id it already
+ * has in the permanent lookup pool.
+ *
+ * 0x408020
+ */
+ObjectID obj_assign_perm_id_a(int64_t obj, int num)
 {
     Object* object;
 
@@ -2307,7 +2312,7 @@ ObjectID sub_408020(int64_t obj, int a2)
         obj_pool_perm_oid_remove(object->oid);
     }
 
-    object->oid = sub_4E6540(a2);
+    object->oid = objid_create_a(num);
     obj_pool_perm_oid_set(object->oid, obj);
 
     obj_unlock(obj);
