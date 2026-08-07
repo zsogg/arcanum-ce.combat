@@ -568,7 +568,7 @@ bool sleep_ui_message_filter(TigMessage* msg)
     }
 
     // Schedule the first sleep event in 50 ms.
-    sub_45A950(&datetime, 50);
+    datetime_from_milliseconds(&datetime, 50);
     timeevent_add_delay(&timeevent, &datetime);
 
     // Fade out.
@@ -597,7 +597,7 @@ bool sleep_ui_process_callback(TimeEvent* timeevent)
     int hours;
 
     // Advance game time by one hour.
-    sub_45A950(&datetime, 3600000);
+    datetime_from_milliseconds(&datetime, 3600000);
     timeevent_inc_datetime(&datetime);
 
     // Apply healing if not in wait mode.
@@ -634,7 +634,7 @@ bool sleep_ui_process_callback(TimeEvent* timeevent)
         next_timeevent.params[0].integer_value = timeevent->params[0].integer_value - 1;
 
         // Schedule next event in 200ms.
-        sub_45A950(&datetime, 200);
+        datetime_from_milliseconds(&datetime, 200);
         timeevent_add_delay(&next_timeevent, &datetime);
 
         return true;
@@ -651,7 +651,7 @@ bool sleep_ui_process_callback(TimeEvent* timeevent)
         next_timeevent.params[0].integer_value = timeevent->params[0].integer_value;
 
         // Schedule next event in 200ms.
-        sub_45A950(&datetime, 200);
+        datetime_from_milliseconds(&datetime, 200);
         timeevent_add_delay(&next_timeevent, &datetime);
         return true;
     }

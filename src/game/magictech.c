@@ -3789,7 +3789,7 @@ void sub_453FA0(void)
                     magictech_cur_run_info->flags |= MAGICTECH_RUN_UNRESISTABLE;
                 }
 
-                sub_45A950(&datetime, duration->period);
+                datetime_from_milliseconds(&datetime, duration->period);
 
                 if (duration->stat > -1) {
                     if (magictech_cur_run_info->parent_obj.type != -1) {
@@ -3932,7 +3932,7 @@ void sub_454790(TimeEvent* timeevent, int a2, int a3, DateTime* datetime)
     timeevent->params[0].integer_value = a2;
     timeevent->params[2].integer_value = 1;
     magictech_cur_run_info->action = MAGICTECH_ACTION_MAINTAIN;
-    sub_45A950(datetime, 1000 * a3);
+    datetime_from_milliseconds(datetime, 1000 * a3);
     sub_455250(magictech_cur_run_info, datetime);
     datetime->milliseconds *= 8;
 }
@@ -4892,7 +4892,7 @@ void sub_455C30(MagicTechInvocation* mt_invocation)
         timeevent.type = TIMEEVENT_TYPE_MAGICTECH;
         timeevent.params[0].integer_value = run_info->id;
         timeevent.params[2].integer_value = 3;
-        sub_45A950(&datetime, 2);
+        datetime_from_milliseconds(&datetime, 2);
         if (timeevent_add_delay(&timeevent, &datetime)) {
             return;
         }
@@ -5421,7 +5421,7 @@ void magictech_interrupt_delayed(int mt_id)
     timeevent.type = TIMEEVENT_TYPE_MAGICTECH;
     timeevent.params[0].integer_value = mt_id;
     timeevent.params[2].integer_value = 2;
-    sub_45A950(&datetime, 1);
+    datetime_from_milliseconds(&datetime, 1);
 
     if (!timeevent_add_delay(&timeevent, &datetime)) {
         tig_debug_printf("magictech_interrupt_delayed: Error: failed to queue timeevent!\n");
@@ -6600,7 +6600,7 @@ bool magictech_recharge_timeevent_schedule(int64_t item_obj, int mana_cost, bool
     timeevent.params[0].object_value = item_obj;
     timeevent.params[1].integer_value = dword_5E760C;
     timeevent.params[2].integer_value = magictech_recharge_timeevent_mana_cost;
-    sub_45A950(&datetime, 60000);
+    datetime_from_milliseconds(&datetime, 60000);
     datetime.milliseconds *= 8;
     return timeevent_add_delay(&timeevent, &datetime);
 }

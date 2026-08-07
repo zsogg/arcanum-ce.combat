@@ -3835,7 +3835,7 @@ bool sub_423C80(AnimRunInfo* run_info, DateTime* a2, int delay)
     TimeEvent timeevent;
     DateTime datetime;
 
-    sub_45A950(&datetime, delay);
+    datetime_from_milliseconds(&datetime, delay);
     datetime.milliseconds *= 8;
 
     timeevent.type = TIMEEVENT_TYPE_ANIM;
@@ -11200,7 +11200,7 @@ bool anim_fidget_timeevent_process(TimeEvent* timeevent)
     rect.height = 400;
 
     if (location_screen_rect_to_loc_rect(&rect, &loc_rect)) {
-        sub_45A950(&datetime, 4000);
+        datetime_from_milliseconds(&datetime, 4000);
 
         cnt = sub_4302D0(&loc_rect, &objects);
         if (cnt != 0) {
@@ -11306,7 +11306,7 @@ void sub_430460(void)
     DateTime datetime;
     TimeEvent timeevent;
 
-    sub_45A950(&datetime, 4000);
+    datetime_from_milliseconds(&datetime, 4000);
     timeevent.type = TIMEEVENT_TYPE_FIDGET_ANIM;
     timeevent_add_delay(&timeevent, &datetime);
 }

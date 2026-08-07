@@ -283,8 +283,16 @@ int datetime_get_year(DateTime* datetime)
     return datetime_start_year + datetime->days / 360;
 }
 
-// 0x45A950
-void sub_45A950(DateTime* datetime, unsigned int milliseconds)
+/**
+ * Builds a `DateTime` representing a delay of `milliseconds`, for use with
+ * `timeevent_add_delay`.
+ *
+ * A zero delay is clamped to one millisecond, so a scheduled event never fires
+ * in the same tick it was scheduled.
+ *
+ * 0x45A950
+ */
+void datetime_from_milliseconds(DateTime* datetime, unsigned int milliseconds)
 {
     datetime->days = 0;
     if (milliseconds != 0) {
@@ -309,7 +317,7 @@ bool sub_45A9B0(DateTime* datetime, unsigned int milliseconds)
 {
     DateTime other;
 
-    sub_45A950(&other, milliseconds);
+    datetime_from_milliseconds(&other, milliseconds);
     return datetime_compare(datetime, &other) >= 0;
 }
 
@@ -488,8 +496,8 @@ void datetime_set_start_hour(int hour)
 {
     if (hour >= 0) {
         datetime_start_time_in_milliseconds = 3600000 * hour;
-        sub_45A950(&timeevent_game_time, datetime_start_time_in_milliseconds);
-        sub_45A950(&timeevent_anim_time, datetime_start_time_in_milliseconds);
+        datetime_from_milliseconds(&timeevent_game_time, datetime_start_time_in_milliseconds);
+        datetime_from_milliseconds(&timeevent_anim_time, datetime_start_time_in_milliseconds);
     }
 }
 
@@ -521,9 +529,9 @@ bool timeevent_init(GameInitInfo* init_info)
         timeevent_new_lists[TIME_TYPE_GAME_TIME] = NULL;
         timeevent_new_lists[TIME_TYPE_ANIMATIONS] = NULL;
 
-        sub_45A950(&timeevent_real_time, 0);
-        sub_45A950(&timeevent_game_time, datetime_start_time_in_milliseconds);
-        sub_45A950(&timeevent_anim_time, datetime_start_time_in_milliseconds);
+        datetime_from_milliseconds(&timeevent_real_time, 0);
+        datetime_from_milliseconds(&timeevent_game_time, datetime_start_time_in_milliseconds);
+        datetime_from_milliseconds(&timeevent_anim_time, datetime_start_time_in_milliseconds);
 
         tig_timer_now(&dword_5E8610);
 
@@ -557,9 +565,9 @@ bool timeevent_set_funcs(TimeEventFuncs* funcs)
 void timeevent_reset(void)
 {
     timeevent_clear();
-    sub_45A950(&timeevent_real_time, 0);
-    sub_45A950(&timeevent_game_time, datetime_start_time_in_milliseconds);
-    sub_45A950(&timeevent_anim_time, datetime_start_time_in_milliseconds);
+    datetime_from_milliseconds(&timeevent_real_time, 0);
+    datetime_from_milliseconds(&timeevent_game_time, datetime_start_time_in_milliseconds);
+    datetime_from_milliseconds(&timeevent_anim_time, datetime_start_time_in_milliseconds);
     tig_timer_now(&dword_5E8610);
 }
 
@@ -1025,7 +1033,7 @@ bool timeevent_add_immediate(TimeEvent* timeevent)
 
     dword_5E8620 = true;
 
-    sub_45A950(&datetime, 0);
+    datetime_from_milliseconds(&datetime, 0);
     rc = timeevent_add_delay(timeevent, &datetime);
 
     dword_5E8620 = false;
@@ -1528,7 +1536,7 @@ bool timeevent_inc_milliseconds(unsigned int milliseconds)
 {
     DateTime datetime;
 
-    sub_45A950(&datetime, milliseconds);
+    datetime_from_milliseconds(&datetime, milliseconds);
     // NOTE: Uninline.
     return timeevent_inc_datetime(&datetime);
 }

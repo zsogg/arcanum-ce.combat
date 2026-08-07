@@ -446,7 +446,7 @@ void trap_timeevent_schedule(int spl, int64_t loc, int delay, int64_t item_obj)
         timeevent.params[0].integer_value = spl;
         timeevent.params[1].location_value = loc;
         timeevent.params[2].object_value = item_obj;
-        sub_45A950(&datetime, 1000 * delay);
+        datetime_from_milliseconds(&datetime, 1000 * delay);
         timeevent_add_delay(&timeevent, &datetime);
     } else {
         magictech_invocation_init(&mt_invocation, OBJ_HANDLE_NULL, spl);

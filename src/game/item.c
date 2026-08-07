@@ -2183,7 +2183,7 @@ void sub_4640C0(int64_t obj)
             ms /= 4;
         }
 
-        sub_45A950(&datetime, ms);
+        datetime_from_milliseconds(&datetime, ms);
         timeevent_add_delay(&timeevent, &datetime);
     }
 }
@@ -4537,7 +4537,7 @@ bool item_decay(int64_t obj, int ms)
     timeevent.type = TIMEEVENT_TYPE_ITEM_DECAY;
     timeevent.params[0].object_value = obj;
     timeevent.params[1].integer_value = sub_45A7F0();
-    sub_45A950(&datetime, ms);
+    datetime_from_milliseconds(&datetime, ms);
     return timeevent_add_delay(&timeevent, &datetime);
 }
 

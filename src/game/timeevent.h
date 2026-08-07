@@ -119,7 +119,7 @@ int datetime_get_day_since_reference_date(void);
 int datetime_get_day(DateTime* datetime);
 int datetime_get_month(DateTime* datetime);
 int datetime_get_year(DateTime* datetime);
-void sub_45A950(DateTime* datetime, unsigned int milliseconds);
+void datetime_from_milliseconds(DateTime* datetime, unsigned int milliseconds);
 int datetime_compare(const DateTime* datetime1, const DateTime* datetime2);
 bool sub_45A9B0(DateTime* datetime, unsigned int milliseconds);
 void datetime_sub_milliseconds(DateTime* datetime, unsigned int milliseconds);

@@ -750,7 +750,7 @@ bool anim_goal_add_func(AnimGoalData* goal_data, AnimID* anim_id, bool a3, unsig
     timeevent.params[0].integer_value = new_anim_id.slot_num;
     timeevent.params[1].integer_value = new_anim_id.unique_id;
     timeevent.params[2].integer_value = 3333;
-    sub_45A950(&datetime, 5);
+    datetime_from_milliseconds(&datetime, 5);
 
     if (!combat_turn_based_is_active() || combat_turn_based_whos_turn_get() == run_info->anim_obj) {
         return timeevent_add_delay(&timeevent, &datetime);

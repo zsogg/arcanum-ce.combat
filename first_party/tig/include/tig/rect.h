@@ -63,8 +63,9 @@ int tig_rect_intersection(const TigRect* a, const TigRect* b, TigRect* r);
 //     +-----------------+
 int tig_rect_clip(const TigRect* a, const TigRect* b, TigRect* rects);
 
-// 0x52D480
-void sub_52D480(TigRectListNode** node_ptr, TigRect* rect);
+// Adds a rectangle to a rect list, splitting it so the list stays free of
+// overlaps while covering the same area. Used to accumulate dirty rects.
+void tig_rect_list_add_disjoint(TigRectListNode** node_ptr, TigRect* rect);
 
 // Computes a union of two rectangles.
 //

@@ -5400,7 +5400,7 @@ bool intgame_clock_process_callback(TimeEvent* timeevent)
     if (intgame_iso_interface_created) {
         intgame_clock_refresh();
         next_timeevent.type = TIMEEVENT_TYPE_CLOCK;
-        sub_45A950(&datetime, 3600000);
+        datetime_from_milliseconds(&datetime, 3600000);
         timeevent_clear_one_typed(TIMEEVENT_TYPE_CLOCK);
         timeevent_add_delay(&next_timeevent, &datetime);
     }

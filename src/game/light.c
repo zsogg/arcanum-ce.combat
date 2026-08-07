@@ -391,7 +391,7 @@ void light_start_animating(Light* light)
             timeevent.params[0].pointer_value = light;
             timeevent.params[1].integer_value = 1000 / art_anim_data.fps;
 
-            sub_45A950(&datetime, 1000 / art_anim_data.fps);
+            datetime_from_milliseconds(&datetime, 1000 / art_anim_data.fps);
             if (timeevent_add_delay(&timeevent, &datetime)) {
                 light_set_flags_internal(light, LF_ANIMATING);
             }
@@ -418,7 +418,7 @@ bool light_timeevent_process(TimeEvent* timeevent)
     light_inc_frame((Light*)timeevent->params[0].pointer_value);
 
     next_timeevent = *timeevent;
-    sub_45A950(&datetime, next_timeevent.params[1].integer_value);
+    datetime_from_milliseconds(&datetime, next_timeevent.params[1].integer_value);
     timeevent_add_delay(&next_timeevent, &datetime);
 
     return true;
@@ -2386,7 +2386,7 @@ void light_render_internal(GameDrawInfo* draw_info)
         tmp_rect = rect_node->rect;
         sub_4DF1D0(&tmp_rect);
         if (head != NULL) {
-            sub_52D480(&head, &tmp_rect);
+            tig_rect_list_add_disjoint(&head, &tmp_rect);
         } else {
             head = tig_rect_node_create();
             head->rect = tmp_rect;

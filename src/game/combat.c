@@ -3070,7 +3070,7 @@ void sub_4B7080(void)
 
     if (!sub_45C0E0(TIMEEVENT_TYPE_TB_COMBAT)) {
         timeevent.type = TIMEEVENT_TYPE_TB_COMBAT;
-        sub_45A950(&datetime, 2);
+        datetime_from_milliseconds(&datetime, 2);
         timeevent_add_delay(&timeevent, &datetime);
     }
 }
@@ -3324,7 +3324,7 @@ void combat_turn_based_end_turn(void)
     DateTime datetime;
 
     combat_debug(OBJ_HANDLE_NULL, "TB End Turn");
-    sub_45A950(&datetime, 1000);
+    datetime_from_milliseconds(&datetime, 1000);
     timeevent_inc_datetime(&datetime);
     combat_turn_based_begin_turn();
 }

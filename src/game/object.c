@@ -1217,7 +1217,7 @@ void object_invalidate_rect(TigRect* rect)
     }
 
     if (object_dirty_rects_head != NULL) {
-        sub_52D480(&object_dirty_rects_head, rect);
+        tig_rect_list_add_disjoint(&object_dirty_rects_head, rect);
     } else {
         object_dirty_rects_head = tig_rect_node_create();
         object_dirty_rects_head->rect = *rect;
@@ -2597,12 +2597,12 @@ void object_bust(int64_t obj, int64_t triggerer_obj)
 
             scenery_respawn_delay = obj_field_int32_get(obj, OBJ_F_SCENERY_RESPAWN_DELAY);
             if (scenery_respawn_delay == 0) {
-                sub_45A950(&datetime, 0);
+                datetime_from_milliseconds(&datetime, 0);
                 datetime.days = 1;
             } else if (scenery_respawn_delay > 0) {
-                sub_45A950(&datetime, 8000 * scenery_respawn_delay);
+                datetime_from_milliseconds(&datetime, 8000 * scenery_respawn_delay);
             } else {
-                sub_45A950(&datetime, -60000 * scenery_respawn_delay);
+                datetime_from_milliseconds(&datetime, -60000 * scenery_respawn_delay);
             }
 
             timeevent_add_delay(&timeevent, &datetime);
@@ -4080,7 +4080,7 @@ bool object_locked_set(int64_t obj, bool locked)
     if ((flags & (type == OBJ_TYPE_PORTAL ? OPF_LOCKED : OCOF_LOCKED)) != 0 && !locked) {
         timeevent.type = TIMEEVENT_TYPE_LOCK;
         timeevent.params[0].object_value = obj;
-        sub_45A950(&datetime, 3600000);
+        datetime_from_milliseconds(&datetime, 3600000);
         timeevent_add_delay(&timeevent, &datetime);
     }
 
@@ -4137,7 +4137,7 @@ bool object_jammed_set(int64_t obj, bool jammed)
     if ((flags & (type == OBJ_TYPE_PORTAL ? OPF_JAMMED : OCOF_JAMMED)) == 0 && jammed) {
         timeevent.type = TIMEEVENT_TYPE_LOCK;
         timeevent.params[0].object_value = obj;
-        sub_45A950(&datetime, 86400000);
+        datetime_from_milliseconds(&datetime, 86400000);
         timeevent_add_delay(&timeevent, &datetime);
     }
 

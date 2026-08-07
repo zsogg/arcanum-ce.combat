@@ -813,14 +813,14 @@ void gamelib_invalidate_rect(TigRect* rect)
 
     if (in_draw) {
         if (gamelib_pending_dirty_rects_head != NULL) {
-            sub_52D480(&gamelib_pending_dirty_rects_head, &dirty_rect);
+            tig_rect_list_add_disjoint(&gamelib_pending_dirty_rects_head, &dirty_rect);
         } else {
             gamelib_pending_dirty_rects_head = tig_rect_node_create();
             gamelib_pending_dirty_rects_head->rect = dirty_rect;
         }
     } else {
         if (gamelib_dirty_rects_head != NULL) {
-            sub_52D480(&gamelib_dirty_rects_head, &dirty_rect);
+            tig_rect_list_add_disjoint(&gamelib_dirty_rects_head, &dirty_rect);
         } else {
             gamelib_dirty_rects_head = tig_rect_node_create();
             gamelib_dirty_rects_head->rect = dirty_rect;

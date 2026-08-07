@@ -1685,7 +1685,7 @@ void sub_5412E0(bool a1)
                 sub_557FD0(mes_file_entry.str);
 
                 timeevent.type = TIMEEVENT_TYPE_NEWSPAPERS;
-                sub_45A950(&datetime, 86400000 - sub_45AD70());
+                datetime_from_milliseconds(&datetime, 86400000 - sub_45AD70());
                 timeevent_add_delay(&timeevent, &datetime);
 
                 wmap_rnd_schedule();
@@ -5549,7 +5549,7 @@ void sub_547EF0(void)
 
             timeevent.type = TIMEEVENT_TYPE_MAINMENU;
             timeevent.params[0].integer_value = index;
-            sub_45A950(&datetime, stru_64B870[index].fps);
+            datetime_from_milliseconds(&datetime, stru_64B870[index].fps);
             timeevent_add_delay(&timeevent, &datetime);
         }
     }
@@ -5599,7 +5599,7 @@ bool mainmenu_ui_process_callback(TimeEvent* timeevent)
 
     next_timeevent.type = TIMEEVENT_TYPE_MAINMENU;
     next_timeevent.params[0].integer_value = index;
-    sub_45A950(&datetime, stru_64B870[index].fps);
+    datetime_from_milliseconds(&datetime, stru_64B870[index].fps);
     timeevent_add_delay(&next_timeevent, &datetime);
 
     return true;

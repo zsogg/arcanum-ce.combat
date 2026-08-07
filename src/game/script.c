@@ -2003,7 +2003,7 @@ int script_execute_action(ScriptAction* action, int line, ScriptState* state)
         timeevent.params[2].object_value = triggerer_obj;
         timeevent.params[3].object_value = attachee_obj;
 
-        sub_45A950(&datetime, 1000 * seconds);
+        datetime_from_milliseconds(&datetime, 1000 * seconds);
 
         if (action->type == SAT_CALL_SCRIPT_IN) {
             datetime.milliseconds *= 8;
@@ -2458,7 +2458,7 @@ int script_execute_action(ScriptAction* action, int line, ScriptState* state)
 
             if (teleport_data.time > 0) {
                 DateTime datetime;
-                sub_45A950(&datetime, 1000 * teleport_data.time);
+                datetime_from_milliseconds(&datetime, 1000 * teleport_data.time);
                 timeevent_inc_datetime(&datetime);
             }
 
@@ -2491,7 +2491,7 @@ int script_execute_action(ScriptAction* action, int line, ScriptState* state)
                 timeevent.params[2].float_value = 2.0f;
                 timeevent.params[3].integer_value = 48;
 
-                sub_45A950(&datetime, 1000 * delay);
+                datetime_from_milliseconds(&datetime, 1000 * delay);
                 timeevent_add_delay(&timeevent, &datetime);
             } else {
                 teleport_data.fade_in.flags = FADE_IN;

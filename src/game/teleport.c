@@ -184,7 +184,7 @@ bool teleport_process(TeleportData* teleport_data)
     if ((teleport_data->flags & TELEPORT_TIME) != 0) {
         DateTime datetime;
 
-        sub_45A950(&datetime, 1000 * teleport_data->time);
+        datetime_from_milliseconds(&datetime, 1000 * teleport_data->time);
         timeevent_inc_datetime(&datetime);
     }
 

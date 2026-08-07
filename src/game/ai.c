@@ -3027,7 +3027,7 @@ void sub_4AD700(int64_t obj, int millis)
 {
     DateTime datetime;
 
-    sub_45A950(&datetime, millis);
+    datetime_from_milliseconds(&datetime, millis);
     sub_4AD730(obj, &datetime);
 }
 

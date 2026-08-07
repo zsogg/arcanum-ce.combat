@@ -233,7 +233,7 @@ bool newspaper_timeevent_process(TimeEvent* timeevent)
 
     // Schedule the next rotation event in 24 hours.
     next_timeevent.type = TIMEEVENT_TYPE_NEWSPAPERS;
-    sub_45A950(&datetime, 86400000);
+    datetime_from_milliseconds(&datetime, 86400000);
     timeevent_add_delay(&next_timeevent, &datetime);
 
     return true;
