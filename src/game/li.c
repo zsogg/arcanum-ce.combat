@@ -11,8 +11,13 @@ static TigRect li_indicator_frame;
 // 0x5FC410
 static TigArtBlitInfo li_indicator_blit_info;
 
-// 0x5FC43C
-static int dword_5FC43C;
+/**
+ * Nesting count of `li_disable` calls. The indicator is drawn while this is at
+ * or below zero.
+ *
+ * 0x5FC43C
+ */
+static int li_disable_count;
 
 // 0x5FC440
 static TigVideoBuffer* li_indicator_vb;
@@ -106,28 +111,48 @@ void li_resize(GameResizeInfo* resize_info)
     li_blit();
 }
 
-// 0x4BBC00
-void sub_4BBC00(void)
+/**
+ * Suppresses the indicator.
+ *
+ * `li_update` only draws while the count is at or below zero, so this and
+ * `li_enable` form a nesting pair.
+ *
+ * NOTE: The two call sites in the shipped game are not balanced -
+ * `script_execute_action` enables before scheduling a teleport fade and
+ * `gfade_timeevent_process` disables once the fade in starts, which leaves the
+ * count negative in between. This matches the original binary.
+ *
+ * 0x4BBC00
+ */
+void li_disable(void)
 {
-    dword_5FC43C++;
+    li_disable_count++;
 }
 
-// 0x4BBC10
-void sub_4BBC10(void)
+/**
+ * Undoes one `li_disable`.
+ *
+ * 0x4BBC10
+ */
+void li_enable(void)
 {
-    dword_5FC43C--;
+    li_disable_count--;
 }
 
-// 0x4BBC20
-int sub_4BBC20(void)
+/**
+ * Returns the current suppression count. Unused by the shipped game.
+ *
+ * 0x4BBC20
+ */
+int li_disable_count_get(void)
 {
-    return dword_5FC43C;
+    return li_disable_count;
 }
 
 // 0x4BBC30
 void li_update(void)
 {
-    if (dword_5FC43C <= 0) {
+    if (li_disable_count <= 0) {
         tig_video_blit(li_indicator_vb, &li_indicator_bounds, &li_indicator_frame);
         li_indicator_art_id = tig_art_id_frame_inc(li_indicator_art_id);
         li_blit();

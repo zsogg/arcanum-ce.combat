@@ -42,8 +42,15 @@ bool ui_timeevent_process(TimeEvent* timeevent)
     return true;
 }
 
-// 0x4601C0
-void sub_4601C0(void)
+/**
+ * Notifies the UI that the local PC's stats or abilities changed.
+ *
+ * Called after stat, spell, magick and fatigue changes; the in-game
+ * implementation redraws the interface bars and the character sheet.
+ *
+ * 0x4601C0
+ */
+void ui_refresh_interface(void)
 {
     if (ui_callbacks.field_0 != NULL) {
         ui_callbacks.field_0();

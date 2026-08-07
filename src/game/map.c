@@ -1582,7 +1582,7 @@ void map_clear_objects(void)
         if (obj_inst_first(&obj, &iter)) {
             do {
                 if (!object_is_static(obj)) {
-                    sub_43CF70(obj);
+                    object_remove_from_sector(obj);
                     object_delete(obj);
                 }
             } while (obj_inst_next(&obj, &iter));

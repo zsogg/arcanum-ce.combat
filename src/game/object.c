@@ -1369,14 +1369,21 @@ void sub_43CEA0(int64_t obj, unsigned int flags, const char* path)
         portal_delete(obj, (flags & 0x1) != 0);
         break;
     default:
-        sub_43CF70(obj);
+        object_remove_from_sector(obj);
         object_delete(obj);
         break;
     }
 }
 
-// 0x43CF70
-void sub_43CF70(int64_t obj)
+/**
+ * Removes `obj` from the object list of the sector it is standing in.
+ *
+ * Only touches the sector when the object is static or its sector is already
+ * loaded, so it is safe to call for objects in unloaded sectors.
+ *
+ * 0x43CF70
+ */
+void object_remove_from_sector(int64_t obj)
 {
     int64_t sector_id;
     Sector* sector;
@@ -1898,7 +1905,7 @@ bool sub_43D9F0(int x, int y, int64_t* obj_ptr, unsigned int flags)
                                     test_y = (int)((float)test_y / (float)scale * 100.0f);
                                 }
 
-                                if (!sub_502FD0(aid, test_x, test_y)) {
+                                if (!tig_art_hit_test(aid, test_x, test_y)) {
                                     v67 = obj_node->obj;
 
                                     if (obj_type == OBJ_TYPE_WALL
@@ -1926,7 +1933,7 @@ bool sub_43D9F0(int x, int y, int64_t* obj_ptr, unsigned int flags)
                                                 test_y = (int)((float)test_y / (float)scale * 100.0f);
                                             }
 
-                                            if (!sub_502FD0(aid, test_x, test_y)) {
+                                            if (!tig_art_hit_test(aid, test_x, test_y)) {
                                                 v69 = obj_node->obj;
                                                 if (obj_type == OBJ_TYPE_WALL
                                                     && (obj_field_int32_get(obj_node->obj, OBJ_F_WALL_FLAGS) & (OWAF_TRANS_LEFT | OWAF_TRANS_RIGHT)) != 0) {

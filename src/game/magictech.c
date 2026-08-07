@@ -3860,7 +3860,7 @@ END:
     magictech_id_free_lock(magictech_cur_run_info->id);
 
     if (player_is_pc_obj(magictech_cur_run_info->target_obj.obj)) {
-        sub_4601C0();
+        ui_refresh_interface();
     }
 }
 

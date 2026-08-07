@@ -1863,7 +1863,7 @@ void critter_give_xp(int64_t obj, int xp_gain)
         stat_base_set(obj, STAT_EXPERIENCE_POINTS, xp);
 
         if (player_is_local_pc_obj(obj)) {
-            sub_4601C0();
+            ui_refresh_interface();
         }
     }
 }

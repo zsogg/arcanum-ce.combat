@@ -1119,8 +1119,18 @@ int sub_502E50(tig_art_id_t art_id, int x, int y, unsigned int* color_ptr)
     return TIG_OK;
 }
 
-// 0x502FD0
-int sub_502FD0(tig_art_id_t art_id, int x, int y)
+/**
+ * Tests whether the pixel at (`x`, `y`) within the frame selected by `art_id`
+ * is solid enough to count as a hit.
+ *
+ * Returns `TIG_OK` for a hit, `TIG_ERR_GENERIC` when the pixel is transparent
+ * (palette index below 2), or `TIG_ERR_IO` when the art is not cached.
+ * Coordinates are relative to the frame's top left corner and are mirrored for
+ * critters facing left when mirroring is enabled.
+ *
+ * 0x502FD0
+ */
+int tig_art_hit_test(tig_art_id_t art_id, int x, int y)
 {
     int cache_entry_index;
     int rotation;

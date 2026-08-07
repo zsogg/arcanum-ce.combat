@@ -511,7 +511,7 @@ void sub_4D3E20(int64_t obj)
     }
     ai_timeevent_clear(obj);
     sub_4601D0(obj);
-    sub_43CF70(obj);
+    object_remove_from_sector(obj);
 }
 
 // 0x4D3E80

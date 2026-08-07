@@ -765,7 +765,7 @@ int stat_base_set(int64_t obj, int stat, int value)
         }
 
         // Update UI.
-        sub_4601C0();
+        ui_refresh_interface();
         break;
     case STAT_MAGICK_POINTS:
     case STAT_TECH_POINTS:

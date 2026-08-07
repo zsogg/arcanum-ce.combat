@@ -1402,7 +1402,15 @@ bool tig_window_filter_message(TigMessage* msg)
     return false;
 }
 
-// 0x51E850
+/**
+ * Moves a window to the top of the window stack and invalidates it.
+ *
+ * NOTE: Behaviourally identical to `tig_window_move_on_top` below - the
+ * original binary contains both copies. Left unnamed because it is unclear
+ * which of the two the original sources called this one.
+ *
+ * 0x51E850
+ */
 int sub_51E850(tig_window_handle_t window_handle)
 {
     int window_index;

@@ -224,7 +224,7 @@ typedef struct UiCallbacks {
 void ui_init(UiCallbacks* callbacks);
 void ui_exit(void);
 bool ui_timeevent_process(TimeEvent* timeevent);
-void sub_4601C0(void);
+void ui_refresh_interface(void);
 void sub_4601D0(int64_t obj);
 void ui_update_inven(int64_t obj);
 void ui_refresh_health_bar(int64_t obj);

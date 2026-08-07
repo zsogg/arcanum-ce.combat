@@ -2483,7 +2483,7 @@ int script_execute_action(ScriptAction* action, int line, ScriptState* state)
                 TimeEvent timeevent;
                 DateTime datetime;
 
-                sub_4BBC10();
+                li_enable();
 
                 timeevent.type = TIMEEVENT_TYPE_FADE;
                 timeevent.params[0].integer_value = 1;

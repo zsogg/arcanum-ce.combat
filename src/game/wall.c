@@ -127,7 +127,7 @@ void wall_delete(int64_t obj, bool a2)
 
     if (a2) {
         if (obj_handle_is_valid(obj)) {
-            sub_43CF70(obj);
+            object_remove_from_sector(obj);
             object_delete(obj);
         }
     }

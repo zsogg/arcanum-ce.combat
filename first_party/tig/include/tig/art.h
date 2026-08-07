@@ -442,7 +442,7 @@ int tig_art_id_palette_get(tig_art_id_t art_id);
 tig_art_id_t tig_art_id_palette_set(tig_art_id_t art_id, int value);
 int sub_502E00(tig_art_id_t art_id);
 int sub_502E50(tig_art_id_t art_id, int x, int y, unsigned int* color_ptr);
-int sub_502FD0(tig_art_id_t art_id, int x, int y);
+int tig_art_hit_test(tig_art_id_t art_id, int x, int y);
 int tig_art_anim_data(tig_art_id_t art_id, TigArtAnimData* data);
 int tig_art_frame_data(tig_art_id_t art_id, TigArtFrameData* data);
 int sub_503340(tig_art_id_t art_id, uint8_t* dst, int pitch);

@@ -79,7 +79,7 @@ static bool tig_file_close_internal(TigFile* stream);
 static int tig_file_open_internal_native(const char* path, const char* mode, TigFile* stream);
 static void tig_file_process_attribs(SDL_PathType type, unsigned int* flags);
 static void tig_file_list_add(TigFileList* list, TigFileInfo* info);
-static bool sub_5310C0(const char* filename, const void* owner, size_t size);
+static bool tig_file_locked_by_native(const char* filename, const void* owner, size_t size);
 static unsigned int tig_file_ignored(const char* path);
 static bool tig_file_copy_native(const char* src, const char* dst);
 static bool tig_file_copy_internal(TigFile* dst, TigFile* src);
@@ -1678,7 +1678,7 @@ bool tig_file_locked_by(const char* filename, const void* owner, size_t size)
         SDL_snprintf(path, sizeof(path), "%s\\%s", repo->path, filename);
     }
 
-    return sub_5310C0(path, owner, size);
+    return tig_file_locked_by_native(path, owner, size);
 }
 
 // 0x530BD0
@@ -1846,8 +1846,13 @@ void tig_file_list_add(TigFileList* list, TigFileInfo* info)
     }
 }
 
-// 0x5310C0
-bool sub_5310C0(const char* filename, const void* owner, size_t size)
+/**
+ * Returns `true` if the lock file `filename` starts with the `size` bytes of
+ * `owner`, that is, if this lock is ours.
+ *
+ * 0x5310C0
+ */
+bool tig_file_locked_by_native(const char* filename, const void* owner, size_t size)
 {
     FILE* stream;
     uint8_t file_owner[1024];
@@ -1861,7 +1866,13 @@ bool sub_5310C0(const char* filename, const void* owner, size_t size)
         size = 1024;
     }
 
-    if (fread(file_owner, size, 1, stream) != 0) {
+    // FIX: Was `!= 0`, which is inverted - `fread` returns the number of items
+    // read, so the function bailed out on every successful read and compared
+    // uninitialized stack memory whenever the read failed. As a result
+    // `tig_file_unlock` never recognized its own lock files and left them
+    // behind. The original reads with `_read` and only treats -1 as failure;
+    // `tig_file_lock` above uses the corresponding `fwrite(...) != 1`.
+    if (fread(file_owner, size, 1, stream) != 1) {
         fclose(stream);
         return false;
     }
