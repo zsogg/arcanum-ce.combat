@@ -197,7 +197,7 @@ static int64_t qword_5E2F50;
 static bool object_editor;
 
 // 0x5E2F60
-Ryan stru_5E2F60;
+ObjectLocator stru_5E2F60;
 
 // 0x5E2F88
 static unsigned int dword_5E2F88;
@@ -986,7 +986,7 @@ void object_hover_obj_set(int64_t obj)
                     pc_obj = player_get_local_pc_obj();
                     if (pc_obj == OBJ_HANDLE_NULL) {
                         object_hover_obj = OBJ_HANDLE_NULL;
-                        sub_443EB0(OBJ_HANDLE_NULL, &stru_5E2F60);
+                        object_locator_init(OBJ_HANDLE_NULL, &stru_5E2F60);
                         return;
                     }
 
@@ -1010,7 +1010,7 @@ void object_hover_obj_set(int64_t obj)
             }
         }
 
-        sub_443EB0(object_hover_obj, &stru_5E2F60);
+        object_locator_init(object_hover_obj, &stru_5E2F60);
     }
 }
 
@@ -1021,7 +1021,7 @@ int64_t object_hover_obj_get(void)
         return OBJ_HANDLE_NULL;
     }
 
-    if (!sub_444020(&object_hover_obj, &stru_5E2F60)) {
+    if (!object_locator_validate(&object_hover_obj, &stru_5E2F60)) {
         object_hover_obj_set(OBJ_HANDLE_NULL);
         return OBJ_HANDLE_NULL;
     }
@@ -4959,7 +4959,7 @@ bool sub_443880(TigRect* rect, tig_art_id_t art_id)
 }
 
 // 0x4439D0
-bool object_save_obj_handle_safe(int64_t* obj_ptr, Ryan* a2, TigFile* stream)
+bool object_save_obj_handle_safe(int64_t* obj_ptr, ObjectLocator* a2, TigFile* stream)
 {
     ObjectID oid;
     int64_t loc;
@@ -4991,7 +4991,7 @@ bool object_save_obj_handle_safe(int64_t* obj_ptr, Ryan* a2, TigFile* stream)
 }
 
 // 0x443AD0
-bool object_load_obj_handle_safe(int64_t* obj_ptr, Ryan* a2, TigFile* stream)
+bool object_load_obj_handle_safe(int64_t* obj_ptr, ObjectLocator* a2, TigFile* stream)
 {
     ObjectID oid;
     int64_t loc;
@@ -5053,71 +5053,96 @@ bool object_load_obj_handle_safe(int64_t* obj_ptr, Ryan* a2, TigFile* stream)
     return true;
 }
 
-// 0x443EB0
-void sub_443EB0(int64_t obj, Ryan* a2)
+/**
+ * Captures the durable identity of `obj` into `locator`.
+ *
+ * Destroyed objects and `OBJ_HANDLE_NULL` are recorded as a null id, so a
+ * locator can always be taken. Location and map are only kept for static
+ * objects - dynamic ones are found by id alone.
+ *
+ * 0x443EB0
+ */
+void object_locator_init(int64_t obj, ObjectLocator* locator)
 {
     if (obj != OBJ_HANDLE_NULL) {
         if ((obj_field_int32_get(obj, OBJ_F_FLAGS) & OF_DESTROYED) != 0) {
-            a2->objid.type = OID_TYPE_NULL;
-            a2->objid.d.a = 0xBEEFBEEF;
-            a2->location = 0;
-            a2->map = 0;
+            locator->objid.type = OID_TYPE_NULL;
+            locator->objid.d.a = 0xBEEFBEEF;
+            locator->location = 0;
+            locator->map = 0;
         } else {
-            a2->objid = obj_get_id(obj);
+            locator->objid = obj_get_id(obj);
             if (object_is_static(obj)) {
-                a2->location = obj_field_int64_get(obj, OBJ_F_LOCATION);
+                locator->location = obj_field_int64_get(obj, OBJ_F_LOCATION);
             } else {
-                a2->location = 0;
+                locator->location = 0;
             }
-            a2->map = map_current_map();
+            locator->map = map_current_map();
         }
     } else {
-        a2->objid.type = OID_TYPE_NULL;
-        a2->location = 0;
-        a2->map = 0;
+        locator->objid.type = OID_TYPE_NULL;
+        locator->location = 0;
+        locator->map = 0;
     }
 }
 
-// 0x443F80
-bool sub_443F80(int64_t* obj_ptr, Ryan* a2)
+/**
+ * Looks the object described by `locator` back up, returning it in `obj_ptr`.
+ *
+ * For a static object this first touches its location, which pulls the
+ * containing sector back into memory. Returns `false` if the object cannot be
+ * found, or if it lives on a map other than the current one. A null locator
+ * resolves to `OBJ_HANDLE_NULL` and still succeeds.
+ *
+ * 0x443F80
+ */
+bool object_locator_resolve(int64_t* obj_ptr, ObjectLocator* locator)
 {
     ObjectList objects;
 
-    if (a2->objid.type == OID_TYPE_NULL) {
+    if (locator->objid.type == OID_TYPE_NULL) {
         *obj_ptr = OBJ_HANDLE_NULL;
         return true;
     }
 
-    if (a2->location != 0) {
-        if (a2->map != map_current_map()) {
+    if (locator->location != 0) {
+        if (locator->map != map_current_map()) {
             *obj_ptr = OBJ_HANDLE_NULL;
             return false;
         }
 
-        object_list_location(a2->location, 0x3FFFF, &objects);
+        object_list_location(locator->location, 0x3FFFF, &objects);
         object_list_destroy(&objects);
     }
 
-    *obj_ptr = obj_pool_perm_lookup(a2->objid);
+    *obj_ptr = obj_pool_perm_lookup(locator->objid);
 
     return *obj_ptr != OBJ_HANDLE_NULL;
 }
 
-// 0x444020
-bool sub_444020(int64_t* obj_ptr, Ryan* a2)
+/**
+ * Ensures `obj_ptr` still refers to a live object, recovering it through
+ * `locator` if the handle has gone stale.
+ *
+ * This is the entry point callers should use before dereferencing a stored
+ * handle; a handle can be invalidated at any time by its sector unloading.
+ *
+ * 0x444020
+ */
+bool object_locator_validate(int64_t* obj_ptr, ObjectLocator* locator)
 {
     int64_t obj;
 
-    if (obj_ptr == NULL || a2 == NULL) {
+    if (obj_ptr == NULL || locator == NULL) {
         // FIXME: Crash!
         *obj_ptr = OBJ_HANDLE_NULL;
         return false;
     }
 
-    if (a2->objid.type != OID_TYPE_NULL
+    if (locator->objid.type != OID_TYPE_NULL
         && *obj_ptr != OBJ_HANDLE_NULL
         && !obj_handle_is_valid(*obj_ptr)) {
-        if (!sub_443F80(&obj, a2)) {
+        if (!object_locator_resolve(&obj, locator)) {
             tig_debug_printf("Object: ERROR: Object validate recovery FAILED!\n");
             *obj_ptr = OBJ_HANDLE_NULL;
             return false;
@@ -5134,30 +5159,44 @@ bool sub_444020(int64_t* obj_ptr, Ryan* a2)
     return true;
 }
 
-// 0x4440E0
-void sub_4440E0(int64_t obj, FollowerInfo* a2)
+/**
+ * Initializes `ref` to point at `obj`, recording both the handle and the
+ * locator needed to recover it later.
+ *
+ * 0x4440E0
+ */
+void object_ref_init(int64_t obj, ObjectRef* ref)
 {
-    if (a2 != NULL) {
-        a2->obj = obj;
-        sub_443EB0(obj, &(a2->field_8));
+    if (ref != NULL) {
+        ref->obj = obj;
+        object_locator_init(obj, &(ref->locator));
     }
 }
 
-// 0x444110
-bool sub_444110(FollowerInfo* a1)
+/**
+ * Refreshes `ref`'s handle from its locator, whether or not the current handle
+ * is still valid.
+ *
+ * 0x444110
+ */
+bool object_ref_resolve(ObjectRef* ref)
 {
-    if (a1 != NULL) {
-        return sub_443F80(&(a1->obj), &(a1->field_8));
+    if (ref != NULL) {
+        return object_locator_resolve(&(ref->obj), &(ref->locator));
     } else {
         return false;
     }
 }
 
-// 0x444130
-bool sub_444130(FollowerInfo* a1)
+/**
+ * Ensures `ref`'s handle is live, recovering it from the locator if not.
+ *
+ * 0x444130
+ */
+bool object_ref_validate(ObjectRef* ref)
 {
-    if (a1 != NULL) {
-        return sub_444020(&(a1->obj), &(a1->field_8));
+    if (ref != NULL) {
+        return object_locator_validate(&(ref->obj), &(ref->locator));
     } else {
         return false;
     }

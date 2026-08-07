@@ -106,7 +106,7 @@ typedef struct Packet9 {
     /* 000C */ int field_C;
     /* 0010 */ int field_10;
     /* 0014 */ int field_14;
-    /* 0018 */ FollowerInfo field_18;
+    /* 0018 */ ObjectRef field_18;
     /* 0048 */ int field_48;
     /* 004C */ int field_4C;
     /* 0050 */ int64_t loc;
@@ -262,7 +262,7 @@ static_assert(sizeof(Packet67) == 0x08, "wrong size");
 typedef struct PacketNotifyPlayerLagging {
     /* 0000 */ int type;
     /* 0004 */ int padding_4;
-    /* 0008 */ FollowerInfo field_8;
+    /* 0008 */ ObjectRef field_8;
 } PacketNotifyPlayerLagging;
 
 static_assert(sizeof(PacketNotifyPlayerLagging) == 0x38, "wrong size");
@@ -270,7 +270,7 @@ static_assert(sizeof(PacketNotifyPlayerLagging) == 0x38, "wrong size");
 typedef struct PacketNotifyPlayerRecovered {
     /* 0000 */ int type;
     /* 0004 */ int padding_4;
-    /* 0008 */ FollowerInfo field_8;
+    /* 0008 */ ObjectRef field_8;
 } PacketNotifyPlayerRecovered;
 
 // Serializeable.

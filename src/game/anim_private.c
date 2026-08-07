@@ -736,7 +736,7 @@ bool anim_goal_add_func(AnimGoalData* goal_data, AnimID* anim_id, bool a3, unsig
     run_info->goals[0] = *goal_data;
     run_info->cur_stack_data = &(run_info->goals[0]);
     for (idx = 0; idx < 5; idx++) {
-        sub_443EB0(run_info->goals[0].params[idx].obj, &(run_info->goals[0].field_B0[idx]));
+        object_locator_init(run_info->goals[0].params[idx].obj, &(run_info->goals[0].field_B0[idx]));
     }
     sub_44C840(run_info, anim_goal_nodes[run_info->goals[0].type]);
     anim_validate_active_goals("GoalAdd");
@@ -794,7 +794,7 @@ bool anim_subgoal_add_func(AnimID anim_id, AnimGoalData* goal_data)
 
     run_info->goals[0] = *goal_data;
     for (idx = 0; idx < 5; idx++) {
-        sub_443EB0(run_info->goals[0].params[idx].obj, &(run_info->goals[0].field_B0[idx]));
+        object_locator_init(run_info->goals[0].params[idx].obj, &(run_info->goals[0].field_B0[idx]));
     }
 
     if (run_info->path_attached_to_stack_index != -1) {
@@ -834,7 +834,7 @@ bool anim_recover_handles(AnimRunInfo* run_info, AnimGoalSubNode* goal_subnode)
             }
 
             if (!obj_handle_is_valid(obj)) {
-                if (!sub_443F80(&obj, &(run_info->cur_stack_data->field_B0[idx]))) {
+                if (!object_locator_resolve(&obj, &(run_info->cur_stack_data->field_B0[idx]))) {
                     tig_debug_printf("Anim: ERROR: Object validate recovery FAILED!\n");
                     run_info->cur_stack_data->params[idx].obj = OBJ_HANDLE_NULL;
                     ASSERT(0); // 3808, "0"

@@ -120,10 +120,10 @@ typedef struct SkillCallbacks {
     | SKILL_INVOCATION_MAGIC_TECH_PENALTY)
 
 typedef struct SkillInvocation {
-    /* 0000 */ FollowerInfo source;
-    /* 0030 */ FollowerInfo target;
+    /* 0000 */ ObjectRef source;
+    /* 0030 */ ObjectRef target;
     /* 0060 */ int64_t target_loc;
-    /* 0068 */ FollowerInfo item;
+    /* 0068 */ ObjectRef item;
     /* 0098 */ unsigned int flags;
     /* 009C */ int skill;
     /* 00A0 */ int modifier;

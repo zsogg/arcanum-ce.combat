@@ -177,8 +177,8 @@ bool trap_attempt_spot(int64_t pc_obj, int64_t trap_obj)
 
     if (!magictech_check_env_sf(OSF_DETECTING_TRAPS)) {
         skill_invocation_init(&skill_invocation);
-        sub_4440E0(pc_obj, &(skill_invocation.source));
-        sub_4440E0(trap_obj, &(skill_invocation.target));
+        object_ref_init(pc_obj, &(skill_invocation.source));
+        object_ref_init(trap_obj, &(skill_invocation.target));
         skill_invocation.skill = SKILL_SPOT_TRAP;
 
         item_obj = item_wield_get(pc_obj, ITEM_INV_LOC_SHIELD);
@@ -690,7 +690,7 @@ void trigger_trap(int64_t obj, ScriptInvocation* invocation)
     switch (invocation->script->num) {
     case TRAP_SCRIPT_MAGICAL:
         magictech_invocation_init(&mt_invocation, OBJ_HANDLE_NULL, (invocation->script->hdr.counters >> 24) & 0xFF);
-        sub_4440E0(obj, &(mt_invocation.target_obj));
+        object_ref_init(obj, &(mt_invocation.target_obj));
         magictech_invocation_run(&mt_invocation);
         return;
     case TRAP_SCRIPT_MECHANICAL:
@@ -750,7 +750,7 @@ void trigger_trap(int64_t obj, ScriptInvocation* invocation)
 
     if (((invocation->script->hdr.counters >> 24) & 0xFF) != 0) {
         magictech_invocation_init(&mt_invocation, OBJ_HANDLE_NULL, (invocation->script->hdr.counters >> 24) & 0xFF);
-        sub_4440E0(obj, &(mt_invocation.target_obj));
+        object_ref_init(obj, &(mt_invocation.target_obj));
         magictech_invocation_run(&mt_invocation);
     }
 }

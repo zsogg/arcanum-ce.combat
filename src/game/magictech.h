@@ -293,11 +293,11 @@ typedef unsigned int MagicTechInvocationFlags;
 typedef struct MagicTechInvocation {
     /* 0000 */ int spell;
     /* 0004 */ int padding_4;
-    /* 0008 */ FollowerInfo source_obj;
+    /* 0008 */ ObjectRef source_obj;
     /* 0038 */ int64_t loc;
-    /* 0040 */ FollowerInfo parent_obj;
-    /* 0070 */ FollowerInfo target_obj;
-    /* 00A0 */ FollowerInfo attacker_obj;
+    /* 0040 */ ObjectRef parent_obj;
+    /* 0070 */ ObjectRef target_obj;
+    /* 00A0 */ ObjectRef attacker_obj;
     /* 00D0 */ int64_t target_loc;
     /* 00D8 */ unsigned int trigger;
     /* 00DC */ MagicTechInvocationFlags flags;
@@ -307,8 +307,8 @@ typedef struct MagicTechInvocation {
 static_assert(sizeof(MagicTechInvocation) == 0xE0, "wrong size");
 
 typedef struct MagicTechSummonInfo {
-    /* 0000 */ FollowerInfo field_0;
-    /* 0030 */ FollowerInfo field_30;
+    /* 0000 */ ObjectRef field_0;
+    /* 0030 */ ObjectRef field_30;
     /* 0060 */ ObjectID field_60;
     /* 0078 */ int64_t loc;
     /* 0080 */ int64_t* summoned_obj_ptr;

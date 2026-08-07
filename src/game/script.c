@@ -1924,7 +1924,7 @@ int script_execute_action(ScriptAction* action, int line, ScriptState* state)
 
         MagicTechInvocation mt_invocation;
         magictech_invocation_init(&mt_invocation, source_obj, spell);
-        sub_4440E0(target_obj, &(mt_invocation.target_obj));
+        object_ref_init(target_obj, &(mt_invocation.target_obj));
         magictech_invocation_run(&mt_invocation);
         return NEXT;
     }
@@ -2078,7 +2078,7 @@ int script_execute_action(ScriptAction* action, int line, ScriptState* state)
 
         MagicTechInvocation mt_invocation;
         magictech_invocation_init(&mt_invocation, OBJ_HANDLE_NULL, spell);
-        sub_4440E0(target_obj, &(mt_invocation.target_obj));
+        object_ref_init(target_obj, &(mt_invocation.target_obj));
         magictech_invocation_run(&mt_invocation);
 
         return NEXT;
@@ -2608,7 +2608,7 @@ int script_execute_action(ScriptAction* action, int line, ScriptState* state)
         int64_t target_obj = script_get_obj(action->op_type[2], action->op_value[2], state);
         MagicTechInvocation mt_invocation;
         magictech_invocation_init(&mt_invocation, source_obj, spell);
-        sub_4440E0(target_obj, &(mt_invocation.target_obj));
+        object_ref_init(target_obj, &(mt_invocation.target_obj));
         mt_invocation.flags |= MAGICTECH_INVOCATION_FREE;
         magictech_invocation_run(&mt_invocation);
         return NEXT;
@@ -2634,7 +2634,7 @@ int script_execute_action(ScriptAction* action, int line, ScriptState* state)
         int64_t target_obj = script_get_obj(action->op_type[2], action->op_value[2], state);
         MagicTechInvocation mt_invocation;
         magictech_invocation_init(&mt_invocation, source_obj, spell);
-        sub_4440E0(target_obj, &(mt_invocation.target_obj));
+        object_ref_init(target_obj, &(mt_invocation.target_obj));
         mt_invocation.flags |= MAGICTECH_INVOCATION_UNRESISTABLE;
         magictech_invocation_run(&mt_invocation);
         return NEXT;
@@ -2645,7 +2645,7 @@ int script_execute_action(ScriptAction* action, int line, ScriptState* state)
         int64_t target_obj = script_get_obj(action->op_type[2], action->op_value[2], state);
         MagicTechInvocation mt_invocation;
         magictech_invocation_init(&mt_invocation, source_obj, spell);
-        sub_4440E0(target_obj, &(mt_invocation.target_obj));
+        object_ref_init(target_obj, &(mt_invocation.target_obj));
         mt_invocation.flags |= MAGICTECH_INVOCATION_FREE;
         mt_invocation.flags |= MAGICTECH_INVOCATION_UNRESISTABLE;
         magictech_invocation_run(&mt_invocation);
@@ -2759,7 +2759,7 @@ int script_execute_action(ScriptAction* action, int line, ScriptState* state)
         int64_t target_obj = script_get_obj(action->op_type[1], action->op_value[1], state);
         MagicTechInvocation mt_invocation;
         magictech_invocation_init(&mt_invocation, OBJ_HANDLE_NULL, spell);
-        sub_4440E0(target_obj, &(mt_invocation.target_obj));
+        object_ref_init(target_obj, &(mt_invocation.target_obj));
         mt_invocation.flags |= MAGICTECH_INVOCATION_UNRESISTABLE;
         magictech_invocation_run(&mt_invocation);
         return NEXT;

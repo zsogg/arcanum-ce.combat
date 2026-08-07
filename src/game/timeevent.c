@@ -43,7 +43,7 @@ typedef unsigned int TimeEventParamTypeFlags;
 
 typedef struct TimeEventNode {
     TimeEvent te;
-    Ryan field_30[TIMEEVENT_PARAM_TYPE_COUNT];
+    ObjectLocator field_30[TIMEEVENT_PARAM_TYPE_COUNT];
     struct TimeEventNode* next;
     int field_D4;
 } TimeEventNode;
@@ -957,7 +957,7 @@ bool timeevent_recover_handles_internal(TimeEventNode* node, bool force)
 
                 if (obj == OBJ_HANDLE_NULL
                     || !obj_handle_is_valid(obj)) {
-                    if (!sub_443F80(&obj, &(node->field_30[index]))) {
+                    if (!object_locator_resolve(&obj, &(node->field_30[index]))) {
                         node->te.params[index].object_value = OBJ_HANDLE_NULL;
                         tig_debug_printf("TimeEvent: ERROR: Object validate recovery FAILED: TE-Type: %s!\n", info->name);
                         return false;
@@ -1107,7 +1107,7 @@ bool timeevent_add_base_at_func(TimeEvent* timeevent, DateTime* base, DateTime* 
 
     for (index = 0; index < TIMEEVENT_PARAM_COUNT; index++) {
         if ((dword_5B2794[index][TIMEEVENT_PARAM_TYPE_OBJECT] & stru_5B2188[timeevent->type].flags) != 0) {
-            sub_443EB0(timeevent->params[index].object_value, &(node->field_30[index]));
+            object_locator_init(timeevent->params[index].object_value, &(node->field_30[index]));
         } else {
             node->field_30[index].objid.type = OID_TYPE_NULL;
         }
@@ -1215,7 +1215,7 @@ bool sub_45BB40(TimeEventNode* node)
 
     for (index = 0; index < TIMEEVENT_PARAM_COUNT; index++) {
         if ((dword_5B2794[index][TIMEEVENT_PARAM_TYPE_OBJECT] & stru_5B2188[node->te.type].flags) != 0) {
-            sub_443EB0(node->te.params[index].object_value, &(node->field_30[index]));
+            object_locator_init(node->te.params[index].object_value, &(node->field_30[index]));
         } else {
             node->field_30[index].objid.type = OID_TYPE_NULL;
         }

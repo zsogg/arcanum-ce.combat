@@ -58,24 +58,35 @@
 #define OBJ_TRAVERSAL_SOUND 0x20u
 
 // TODO: Better name.
-typedef struct Ryan {
+// Durable identity of an object, good across handle invalidation, sector
+// unloads and save/load - unlike a bare object handle, which is only valid
+// while the object stays in memory.
+//
+// `location` and `map` are only set for static objects; they let
+// `object_locator_resolve` bring the containing sector back in before looking
+// the object up. Destroyed objects are recorded as a null id.
+typedef struct ObjectLocator {
     /* 0000 */ ObjectID objid;
     /* 0018 */ int64_t location;
     /* 0020 */ int map;
     /* 0024 */ int padding_24;
-} Ryan;
+} ObjectLocator;
 
 // Serializeable.
-static_assert(sizeof(Ryan) == 0x28, "wrong size");
+static_assert(sizeof(ObjectLocator) == 0x28, "wrong size");
 
-// TODO: Better name.
-typedef struct FollowerInfo {
+// An object handle paired with the locator needed to recover it.
+//
+// Used wherever a reference has to outlive the handle: spell source/parent/
+// target, skill invocations, hotkeys, the follower list. Call
+// `object_ref_validate` before trusting `obj`.
+typedef struct ObjectRef {
     /* 0000 */ int64_t obj;
-    /* 0008 */ Ryan field_8;
-} FollowerInfo;
+    /* 0008 */ ObjectLocator locator;
+} ObjectRef;
 
 // Serializeable.
-static_assert(sizeof(FollowerInfo) == 0x30, "wrong size");
+static_assert(sizeof(ObjectRef) == 0x30, "wrong size");
 
 typedef struct ObjectList {
     /* 0000 */ int num_sectors;
@@ -89,7 +100,7 @@ extern bool dword_5E2E94;
 extern tig_art_id_t object_hover_underlay_art_id;
 extern tig_color_t object_hover_color;
 extern tig_art_id_t object_hover_overlay_art_id;
-extern Ryan stru_5E2F60;
+extern ObjectLocator stru_5E2F60;
 extern int64_t object_hover_obj;
 
 bool object_init(GameInitInfo* init_info);
@@ -188,14 +199,14 @@ bool sub_4420D0(uint8_t* data, int64_t* obj_ptr, int64_t loc);
 void sub_442520(int64_t obj);
 void sub_443770(int64_t obj);
 bool sub_4437E0(TigRect* rect);
-bool object_save_obj_handle_safe(int64_t* obj_ptr, Ryan* a2, TigFile* stream);
-bool object_load_obj_handle_safe(int64_t* obj_ptr, Ryan* a2, TigFile* stream);
-void sub_443EB0(int64_t obj, Ryan* a2);
-bool sub_443F80(int64_t* obj_ptr, Ryan* a2);
-bool sub_444020(int64_t* obj_ptr, Ryan* a2);
-void sub_4440E0(int64_t obj, FollowerInfo* a2);
-bool sub_444110(FollowerInfo* a1);
-bool sub_444130(FollowerInfo* a1);
+bool object_save_obj_handle_safe(int64_t* obj_ptr, ObjectLocator* a2, TigFile* stream);
+bool object_load_obj_handle_safe(int64_t* obj_ptr, ObjectLocator* a2, TigFile* stream);
+void object_locator_init(int64_t obj, ObjectLocator* a2);
+bool object_locator_resolve(int64_t* obj_ptr, ObjectLocator* a2);
+bool object_locator_validate(int64_t* obj_ptr, ObjectLocator* a2);
+void object_ref_init(int64_t obj, ObjectRef* a2);
+bool object_ref_resolve(ObjectRef* a1);
+bool object_ref_validate(ObjectRef* a1);
 int64_t get_fire_at_location(int64_t loc);
 void sub_4445A0(int64_t a1, int64_t a2);
 

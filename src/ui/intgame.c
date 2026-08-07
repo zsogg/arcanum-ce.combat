@@ -3735,7 +3735,7 @@ void intgame_hotkey_activate(Hotkey* hotkey)
         break;
     case HOTKEY_ITEM:
         intgame_mode_set(INTGAME_MODE_MAIN);
-        sub_444130(&(hotkey->item_obj));
+        object_ref_validate(&(hotkey->item_obj));
         if (obj_field_handle_get(hotkey->item_obj.obj, OBJ_F_ITEM_PARENT) == pc_obj) {
             v2 = hotkey->item_obj.obj;
             if (obj_field_int32_get(v2, OBJ_F_TYPE) != OBJ_TYPE_WRITTEN
@@ -3784,7 +3784,7 @@ void intgame_hotkey_activate(Hotkey* hotkey)
         spell_ui_activate(pc_obj, hotkey->data);
         break;
     case HOTKEY_ITEM_SPELL:
-        sub_444130(&(hotkey->item_obj));
+        object_ref_validate(&(hotkey->item_obj));
 
         weapon_obj = item_wield_get(pc_obj, ITEM_INV_LOC_WEAPON);
         if (obj_field_handle_get(hotkey->item_obj.obj, OBJ_F_ITEM_PARENT) == pc_obj) {
@@ -6718,9 +6718,9 @@ void sub_554830(int64_t a1, int64_t a2)
     }
 
     skill_invocation_init(&skill_invocation);
-    sub_4440E0(a1, &(skill_invocation.source));
-    sub_4440E0(a2, &(skill_invocation.target));
-    sub_4440E0(weapon_obj, &(skill_invocation.item));
+    object_ref_init(a1, &(skill_invocation.source));
+    object_ref_init(a2, &(skill_invocation.target));
+    object_ref_init(weapon_obj, &(skill_invocation.item));
     skill_invocation.skill = skill;
 
     effectiveness -= skill_invocation_difficulty(&skill_invocation);

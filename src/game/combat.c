@@ -895,10 +895,10 @@ int sub_4B3170(CombatContext* combat)
             SkillInvocation skill_invocation;
 
             skill_invocation_init(&skill_invocation);
-            sub_4440E0(combat->attacker_obj, &(skill_invocation.source));
-            sub_4440E0(combat->target_obj, &(skill_invocation.target));
+            object_ref_init(combat->attacker_obj, &(skill_invocation.source));
+            object_ref_init(combat->target_obj, &(skill_invocation.target));
             skill_invocation.target_loc = combat->target_loc;
-            sub_4440E0(combat->weapon_obj, &(skill_invocation.item));
+            object_ref_init(combat->weapon_obj, &(skill_invocation.item));
             skill_invocation.hit_loc = combat->hit_loc;
             skill_invocation.skill = combat->skill;
 
@@ -935,7 +935,7 @@ int sub_4B3170(CombatContext* combat)
             if (combat->target_obj != OBJ_HANDLE_NULL
                 && (combat->flags & CF_HIT) != 0) {
                 skill_invocation_init(&skill_invocation);
-                sub_4440E0(combat->target_obj, &(skill_invocation.source));
+                object_ref_init(combat->target_obj, &(skill_invocation.source));
                 skill_invocation.skill = SKILL_DODGE;
                 if (!skill_invocation_run(&skill_invocation)) {
                     return 0;

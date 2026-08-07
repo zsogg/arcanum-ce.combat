@@ -1060,7 +1060,7 @@ void multiplayer_notify_player_lagging(int64_t obj)
 
     if (tig_net_is_host()) {
         pkt.type = 68;
-        sub_4440E0(obj, &(pkt.field_8));
+        object_ref_init(obj, &(pkt.field_8));
         tig_net_send_app_all(&pkt, sizeof(pkt));
     }
 }
@@ -1078,7 +1078,7 @@ void multiplayer_notify_player_recovered(int64_t obj)
 
     if (tig_net_is_host()) {
         pkt.type = 69;
-        sub_4440E0(obj, &(pkt.field_8));
+        object_ref_init(obj, &(pkt.field_8));
         tig_net_send_app_all(&pkt, sizeof(pkt));
     }
 }

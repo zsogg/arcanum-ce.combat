@@ -255,7 +255,7 @@ static TigRect follower_ui_drop_down_menu_rects[8];
  *
  * 0x67BC08
  */
-static FollowerInfo* follower_ui_followers;
+static ObjectRef* follower_ui_followers;
 
 /**
  * Index into `follower_ui_followers` of the first follower shown in the
@@ -408,7 +408,7 @@ bool follower_ui_init(GameInitInfo* init_info)
     follower_ui_followers_capacity = FOLLOWER_UI_FOLLOWERS_INITIAL_CAPACITY;
     follower_ui_followers_count = 0;
     follower_ui_top_index = 0;
-    follower_ui_followers = (FollowerInfo*)MALLOC(sizeof(*follower_ui_followers) * follower_ui_followers_capacity);
+    follower_ui_followers = (ObjectRef*)MALLOC(sizeof(*follower_ui_followers) * follower_ui_followers_capacity);
 
     // Create white font for normal menu items.
     font_desc.flags = 0;
@@ -749,7 +749,7 @@ bool follower_ui_message_filter(TigMessage* msg)
             for (index = 0; index < FOLLOWER_UI_SLOTS; index++) {
                 if (msg->data.button.button_handle == follower_ui_buttons[index]) {
                     follower_ui_commander_obj = player_get_local_pc_obj();
-                    sub_444130(&follower_ui_followers[follower_ui_top_index + index]);
+                    object_ref_validate(&follower_ui_followers[follower_ui_top_index + index]);
                     follower_ui_subordinate_obj = follower_ui_followers[follower_ui_top_index + index].obj;
                     if (follower_ui_subordinate_obj != OBJ_HANDLE_NULL) {
                         sub_57CD60(follower_ui_commander_obj, follower_ui_subordinate_obj, str);
@@ -797,7 +797,7 @@ bool follower_ui_message_filter(TigMessage* msg)
             // Left-click on a portrait slot.
             for (index = 0; index < FOLLOWER_UI_BUTTON_COUNT; index++) {
                 if (msg->data.button.button_handle == follower_ui_buttons[index]) {
-                    sub_444130(&follower_ui_followers[follower_ui_top_index + index]);
+                    object_ref_validate(&follower_ui_followers[follower_ui_top_index + index]);
                     target_descriptor_set_obj(&td, follower_ui_followers[follower_ui_top_index + index].obj);
                     sub_54EA80(&td);
                     return true;
@@ -849,7 +849,7 @@ void follower_ui_drop_down_menu_create(int index)
 
     follower_ui_commander_obj = player_get_local_pc_obj();
 
-    sub_444130(&(follower_ui_followers[follower_ui_top_index + index]));
+    object_ref_validate(&(follower_ui_followers[follower_ui_top_index + index]));
     follower_ui_subordinate_obj = follower_ui_followers[follower_ui_top_index + index].obj;
 
     window_data.flags = 0;
@@ -1013,7 +1013,7 @@ void follower_ui_update(void)
             break;
         }
 
-        sub_444130(&(follower_ui_followers[follower_ui_top_index + index]));
+        object_ref_validate(&(follower_ui_followers[follower_ui_top_index + index]));
 
         follower_obj = follower_ui_followers[follower_ui_top_index + index].obj;
         if (follower_obj == OBJ_HANDLE_NULL) {
@@ -1195,14 +1195,14 @@ void follower_ui_refresh(void)
     // Grow the followers array if needed.
     if (follower_ui_followers_count > follower_ui_followers_capacity) {
         follower_ui_followers_capacity = follower_ui_followers_count + FOLLOWER_UI_FOLLOWERS_CAPACITY_INCREMENT;
-        follower_ui_followers = (FollowerInfo*)REALLOC(follower_ui_followers, sizeof(*follower_ui_followers) * follower_ui_followers_capacity);
+        follower_ui_followers = (ObjectRef*)REALLOC(follower_ui_followers, sizeof(*follower_ui_followers) * follower_ui_followers_capacity);
     }
 
     // Retrieve followers' safe object handles.
     index = 0;
     node = followers.head;
     while (node != NULL) {
-        sub_4440E0(node->obj, &(follower_ui_followers[index++]));
+        object_ref_init(node->obj, &(follower_ui_followers[index++]));
         node = node->next;
     }
     follower_ui_followers_count = index;

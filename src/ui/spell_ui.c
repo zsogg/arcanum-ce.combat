@@ -312,7 +312,7 @@ void spell_ui_apply(TargetDescriptor* td)
     if (td->is_loc) {
         mt_invocation.target_loc = td->loc;
     } else {
-        sub_4440E0(td->obj, &(mt_invocation.target_obj));
+        object_ref_init(td->obj, &(mt_invocation.target_obj));
     }
 
     if (!magictech_check_los(&mt_invocation)) {

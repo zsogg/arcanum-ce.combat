@@ -1523,7 +1523,7 @@ void target_context_build_list(TargetContext* ctx)
                 if (targets->entries[idx].obj != OBJ_HANDLE_NULL) {
                     mt_obj_node->obj = targets->entries[idx].obj;
                     mt_obj_node->next = *ctx->obj_list;
-                    sub_443EB0(mt_obj_node->obj, &(mt_obj_node->field_8));
+                    object_locator_init(mt_obj_node->obj, &(mt_obj_node->field_8));
                     if (mt_obj_node->obj != OBJ_HANDLE_NULL) {
                         mt_obj_node->type = obj_field_int32_get(mt_obj_node->obj, OBJ_F_TYPE);
                         if (obj_type_is_critter(mt_obj_node->type)) {

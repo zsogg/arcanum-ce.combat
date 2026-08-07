@@ -575,8 +575,8 @@ void dialog_state_init(int64_t npc_obj, int64_t pc_obj, DialogState* state)
 {
     state->npc_obj = npc_obj;
     state->pc_obj = pc_obj;
-    sub_443EB0(state->npc_obj, &(state->field_40));
-    sub_443EB0(state->pc_obj, &(state->field_10));
+    object_locator_init(state->npc_obj, &(state->field_40));
+    object_locator_init(state->pc_obj, &(state->field_10));
     state->script_num = 0;
 }
 
@@ -3928,7 +3928,7 @@ void dialog_use_spell(int spell, int a2, int a3, DialogState* state)
     MagicTechInvocation mt_invocation;
 
     magictech_invocation_init(&mt_invocation, state->npc_obj, spell);
-    sub_4440E0(state->pc_obj, &(mt_invocation.target_obj));
+    object_ref_init(state->pc_obj, &(mt_invocation.target_obj));
     if (critter_pc_leader_get(state->npc_obj) == OBJ_HANDLE_NULL) {
         mt_invocation.flags |= MAGICTECH_INVOCATION_FREE;
     }

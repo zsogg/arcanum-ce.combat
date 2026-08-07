@@ -1483,9 +1483,9 @@ bool skill_disarm_trap(int64_t obj, int a2, int64_t target_obj)
 void skill_invocation_init(SkillInvocation* skill_invocation)
 {
     skill_invocation->flags = 0;
-    sub_4440E0(OBJ_HANDLE_NULL, &(skill_invocation->item));
-    sub_4440E0(OBJ_HANDLE_NULL, &(skill_invocation->source));
-    sub_4440E0(OBJ_HANDLE_NULL, &(skill_invocation->target));
+    object_ref_init(OBJ_HANDLE_NULL, &(skill_invocation->item));
+    object_ref_init(OBJ_HANDLE_NULL, &(skill_invocation->source));
+    object_ref_init(OBJ_HANDLE_NULL, &(skill_invocation->target));
     skill_invocation->target_loc = 0;
     skill_invocation->modifier = 0;
     skill_invocation->skill = -1;
@@ -1498,9 +1498,9 @@ void skill_invocation_init(SkillInvocation* skill_invocation)
  */
 bool skill_invocation_recover(SkillInvocation* skill_invocation)
 {
-    return sub_444130(&(skill_invocation->source))
-        && sub_444130(&(skill_invocation->target))
-        && sub_444130(&(skill_invocation->item));
+    return object_ref_validate(&(skill_invocation->source))
+        && object_ref_validate(&(skill_invocation->target))
+        && object_ref_validate(&(skill_invocation->item));
 }
 
 /**
@@ -2614,8 +2614,8 @@ void skill_perform_repair_service(int64_t item_obj, int64_t npc_obj, int64_t pc_
     skill_invocation_init(&skill_invocation);
     skill_invocation.flags |= SKILL_INVOCATION_FORCED;
     skill_invocation.skill = SKILL_REPAIR;
-    sub_4440E0(npc_obj, &(skill_invocation.source));
-    sub_4440E0(item_obj, &(skill_invocation.target));
+    object_ref_init(npc_obj, &(skill_invocation.source));
+    object_ref_init(item_obj, &(skill_invocation.target));
     skill_invocation_run(&skill_invocation);
 
     // Transfer the specified amount of money from the PC to the NPC as payment
@@ -2690,7 +2690,7 @@ void skill_pick_best_follower(SkillInvocation* skill_invocation)
         while (node != NULL) {
             // Temporarily set the follower to be the source object of the
             // invocation. This is needed to calculate invocation's difficulty.
-            sub_4440E0(node->obj, &(skill_invocation->source));
+            object_ref_init(node->obj, &(skill_invocation->source));
             effectiveness = tech_skill_effectiveness(skill_invocation->source.obj, GET_TECH_SKILL(skill_invocation->skill), skill_invocation->target.obj) - skill_invocation_difficulty(skill_invocation);
 
             // Update the best follower if this one has higher effectiveness.
@@ -2716,7 +2716,7 @@ void skill_pick_best_follower(SkillInvocation* skill_invocation)
         while (node != NULL) {
             // Temporarily set the follower to be the source object of the
             // invocation. This is needed to calculate invocation's difficulty.
-            sub_4440E0(node->obj, &(skill_invocation->source));
+            object_ref_init(node->obj, &(skill_invocation->source));
             effectiveness = basic_skill_effectiveness(skill_invocation->source.obj, GET_BASIC_SKILL(skill_invocation->skill), skill_invocation->target.obj) - skill_invocation_difficulty(skill_invocation);
 
             // Update the best follower if this one has higher effectiveness.
@@ -2733,7 +2733,7 @@ void skill_pick_best_follower(SkillInvocation* skill_invocation)
     }
 
     // Update the skill invocation's source to the best follower.
-    sub_4440E0(best_follower_obj, &(skill_invocation->source));
+    object_ref_init(best_follower_obj, &(skill_invocation->source));
 }
 
 /**

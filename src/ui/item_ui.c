@@ -161,9 +161,9 @@ void item_ui_apply(TargetDescriptor* td)
         && !tig_kb_get_modifier(SDL_KMOD_LCTRL)
         && (obj_field_int32_get(qword_6810D8, OBJ_F_GENERIC_FLAGS) & OGF_IS_LOCKPICK) != 0) {
         skill_invocation_init(&skill_invocation);
-        sub_4440E0(pc_obj, &(skill_invocation.source));
+        object_ref_init(pc_obj, &(skill_invocation.source));
         if (!td->is_loc) {
-            sub_4440E0(td->obj, &(skill_invocation.target));
+            object_ref_init(td->obj, &(skill_invocation.target));
         }
         skill_invocation.skill = SKILL_PICK_LOCKS;
         skill_invocation.item.obj = item_find_first_generic(skill_invocation.source.obj, OGF_IS_LOCKPICK);

@@ -37,11 +37,11 @@ static bool sub_421CE0(AnimID* anim_id, AnimRunInfo* run_info);
 static void violence_filter_changed(void);
 static bool anim_run_info_save(AnimRunInfo* run_info, TigFile* stream);
 static bool anim_goal_data_save(AnimGoalData* goal_data, TigFile* stream);
-static bool anim_run_info_param_save(AnimRunInfoParam* param, Ryan* a2, int type, TigFile* stream);
+static bool anim_run_info_param_save(AnimRunInfoParam* param, ObjectLocator* a2, int type, TigFile* stream);
 static bool anim_load_internal(GameLoadInfo* load_info);
 static bool anim_run_info_load(AnimRunInfo* run_info, TigFile* stream);
 static bool anim_goal_data_load(AnimGoalData* goal_data, TigFile* stream);
-static bool anim_run_info_param_load(AnimRunInfoParam* param, Ryan* a2, int type, TigFile* stream);
+static bool anim_run_info_param_load(AnimRunInfoParam* param, ObjectLocator* a2, int type, TigFile* stream);
 static bool sub_423C80(AnimRunInfo* run_info, DateTime* a2, int delay);
 static void sub_423D10(AnimRunInfo* run_info, unsigned int* flags_ptr, AnimGoalNode** goal_node_ptr, AnimGoalData** goal_data_ptr, bool* a5);
 static int anim_goal_pending_active_goals_count(void);
@@ -3003,7 +3003,7 @@ bool anim_goal_data_save(AnimGoalData* goal_data, TigFile* stream)
 }
 
 // 0x422430
-bool anim_run_info_param_save(AnimRunInfoParam* param, Ryan* a2, int type, TigFile* stream)
+bool anim_run_info_param_save(AnimRunInfoParam* param, ObjectLocator* a2, int type, TigFile* stream)
 {
     if (stream == NULL) {
         return false;
@@ -3166,7 +3166,7 @@ bool anim_goal_data_load(AnimGoalData* goal_data, TigFile* stream)
 }
 
 // 0x422A50
-bool anim_run_info_param_load(AnimRunInfoParam* param, Ryan* a2, int type, TigFile* stream)
+bool anim_run_info_param_load(AnimRunInfoParam* param, ObjectLocator* a2, int type, TigFile* stream)
 {
     if (stream == NULL) {
         return false;
@@ -4004,7 +4004,7 @@ bool sub_424070(int64_t obj, int priority_level, bool a3, bool a4)
             pkt.field_4 = 0;
 
             if (tig_net_is_host()) {
-                sub_4440E0(obj, &(pkt.field_18));
+                object_ref_init(obj, &(pkt.field_18));
                 pkt.priority_level = priority_level;
                 pkt.field_48 = a3;
                 pkt.loc = obj_field_int64_get(obj, OBJ_F_LOCATION);
@@ -4013,7 +4013,7 @@ bool sub_424070(int64_t obj, int priority_level, bool a3, bool a4)
                 pkt.offset_y = obj_field_int32_get(obj, OBJ_F_OFFSET_Y);
                 tig_net_send_app_all(&pkt, sizeof(pkt));
             } else {
-                sub_4440E0(obj, &(pkt.field_18));
+                object_ref_init(obj, &(pkt.field_18));
                 pkt.priority_level = priority_level;
                 pkt.field_48 = a3;
                 pkt.loc = 0;
@@ -6714,12 +6714,12 @@ bool sub_428E10(AnimRunInfo* run_info)
         target_obj = OBJ_HANDLE_NULL;
     }
 
-    sub_4440E0(source_obj, &(skill_invocation.source));
-    sub_4440E0(target_obj, &(skill_invocation.target));
-    sub_4440E0(item_obj, &(skill_invocation.item));
+    object_ref_init(source_obj, &(skill_invocation.source));
+    object_ref_init(target_obj, &(skill_invocation.target));
+    object_ref_init(item_obj, &(skill_invocation.item));
 
     if (item_obj != -1) {
-        sub_4440E0(item_obj, &(skill_invocation.item));
+        object_ref_init(item_obj, &(skill_invocation.item));
     }
 
     flags = run_info->cur_stack_data->params[AGDATA_FLAGS_DATA].data;
@@ -6793,12 +6793,12 @@ bool sub_429160(AnimRunInfo* run_info)
     skill_invocation_init(&skill_invocation);
     skill_invocation.skill = run_info->cur_stack_data->params[AGDATA_SKILL_DATA].data;
     skill_invocation.modifier = run_info->cur_stack_data->params[AGDATA_SCRATCH_VAL4].data;
-    sub_4440E0(source_obj, &(skill_invocation.source));
+    object_ref_init(source_obj, &(skill_invocation.source));
     skill_invocation.target_loc = target_loc;
-    sub_4440E0(item_obj, &(skill_invocation.item));
+    object_ref_init(item_obj, &(skill_invocation.item));
 
     if (item_obj != -1) {
-        sub_4440E0(item_obj, &(skill_invocation.item));
+        object_ref_init(item_obj, &(skill_invocation.item));
     }
 
     if ((run_info->cur_stack_data->params[AGDATA_FLAGS_DATA].data & 0x01) != 0) {
@@ -7579,11 +7579,11 @@ bool sub_42A2A0(AnimRunInfo* run_info)
         target_obj = OBJ_HANDLE_NULL;
     }
 
-    sub_4440E0(source_obj, &(skill_invocation.source));
-    sub_4440E0(target_obj, &(skill_invocation.target));
+    object_ref_init(source_obj, &(skill_invocation.source));
+    object_ref_init(target_obj, &(skill_invocation.target));
 
     if (run_info->cur_stack_data->params[AGDATA_SCRATCH_OBJ].obj != -1) {
-        sub_4440E0(run_info->cur_stack_data->params[AGDATA_SCRATCH_OBJ].obj, &(skill_invocation.item));
+        object_ref_init(run_info->cur_stack_data->params[AGDATA_SCRATCH_OBJ].obj, &(skill_invocation.item));
     }
 
     if ((run_info->cur_stack_data->params[AGDATA_FLAGS_DATA].data & 0x1) != 0) {
@@ -7666,11 +7666,11 @@ bool sub_42A4E0(AnimRunInfo* run_info)
         target_obj = OBJ_HANDLE_NULL;
     }
 
-    sub_4440E0(source_obj, &(skill_invocation.source));
-    sub_4440E0(target_obj, &(skill_invocation.target));
+    object_ref_init(source_obj, &(skill_invocation.source));
+    object_ref_init(target_obj, &(skill_invocation.target));
 
     if (run_info->cur_stack_data->params[AGDATA_SCRATCH_OBJ].obj != -1) {
-        sub_4440E0(run_info->cur_stack_data->params[AGDATA_SCRATCH_OBJ].obj, &(skill_invocation.item));
+        object_ref_init(run_info->cur_stack_data->params[AGDATA_SCRATCH_OBJ].obj, &(skill_invocation.item));
     }
 
     if ((run_info->cur_stack_data->params[AGDATA_FLAGS_DATA].data & 0x1) != 0) {

@@ -2362,7 +2362,7 @@ void ai_action_perform_cast(Ai* ai)
         magictech_invocation_init(&mt_invocation, ai->obj, ai->spell);
     }
 
-    sub_4440E0(ai->danger_source, &(mt_invocation.target_obj));
+    object_ref_init(ai->danger_source, &(mt_invocation.target_obj));
 
     if (magictech_invocation_check(&mt_invocation)) {
         magictech_invocation_run(&mt_invocation);
@@ -4038,8 +4038,8 @@ int ai_can_see(int64_t source_obj, int64_t target_obj)
 
         prowling = basic_skill_effectiveness(target_obj, BASIC_SKILL_PROWLING, source_obj);
         skill_invocation_init(&skill_invocation);
-        sub_4440E0(target_obj, &(skill_invocation.source));
-        sub_4440E0(source_obj, &(skill_invocation.target));
+        object_ref_init(target_obj, &(skill_invocation.source));
+        object_ref_init(source_obj, &(skill_invocation.target));
         skill_invocation.flags |= SKILL_INVOCATION_CHECK_SEEING;
         skill_invocation.skill = BASIC_SKILL_PROWLING;
 
@@ -4108,8 +4108,8 @@ int ai_can_hear(int64_t source_obj, int64_t target_obj, int loudness)
 
         prowling = basic_skill_effectiveness(target_obj, BASIC_SKILL_PROWLING, source_obj);
         skill_invocation_init(&skill_invocation);
-        sub_4440E0(target_obj, &(skill_invocation.source));
-        sub_4440E0(source_obj, &(skill_invocation.target));
+        object_ref_init(target_obj, &(skill_invocation.source));
+        object_ref_init(source_obj, &(skill_invocation.target));
         skill_invocation.flags |= SKILL_INVOCATION_CHECK_HEARING;
         skill_invocation.skill = BASIC_SKILL_PROWLING;
 

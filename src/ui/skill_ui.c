@@ -280,9 +280,9 @@ void skill_ui_activate(TargetDescriptor* td, int64_t obj, int a3)
     case SKILL_REPAIR:
         if (!td->is_loc) {
             skill_invocation_init(&skill_invocation);
-            sub_4440E0(obj, &(skill_invocation.source));
-            sub_4440E0(td->obj, &(skill_invocation.target));
-            sub_4440E0(OBJ_HANDLE_NULL, &(skill_invocation.item));
+            object_ref_init(obj, &(skill_invocation.source));
+            object_ref_init(td->obj, &(skill_invocation.target));
+            object_ref_init(OBJ_HANDLE_NULL, &(skill_invocation.item));
             skill_invocation.flags = 0;
             skill_invocation.skill = SKILL_REPAIR;
             sub_57A6B0(&skill_invocation);
@@ -291,9 +291,9 @@ void skill_ui_activate(TargetDescriptor* td, int64_t obj, int a3)
     case SKILL_DISARM_TRAPS:
         if (!td->is_loc && combat_consume_action_points(obj, 4)) {
             skill_invocation_init(&skill_invocation);
-            sub_4440E0(obj, &(skill_invocation.source));
-            sub_4440E0(td->obj, &(skill_invocation.target));
-            sub_4440E0(OBJ_HANDLE_NULL, &(skill_invocation.item));
+            object_ref_init(obj, &(skill_invocation.source));
+            object_ref_init(td->obj, &(skill_invocation.target));
+            object_ref_init(OBJ_HANDLE_NULL, &(skill_invocation.item));
             skill_invocation.flags = SKILL_INVOCATION_0x04;
             skill_invocation.skill = SKILL_DISARM_TRAPS;
             sub_57A620(&skill_invocation);

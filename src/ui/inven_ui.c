@@ -4469,9 +4469,9 @@ void sub_579B60(int64_t obj)
 
     if (sub_579840(obj, 1)) {
         skill_invocation_init(&skill_invocation);
-        sub_4440E0(inven_ui_pc_obj, &(skill_invocation.source));
-        sub_4440E0(qword_682C78, &(skill_invocation.target));
-        sub_4440E0(obj, &(skill_invocation.item));
+        object_ref_init(inven_ui_pc_obj, &(skill_invocation.source));
+        object_ref_init(qword_682C78, &(skill_invocation.target));
+        object_ref_init(obj, &(skill_invocation.item));
         skill_invocation.skill = SKILL_GAMBLING;
         skill_invocation.modifier = 0;
         if (skill_invocation_run(&skill_invocation)) {

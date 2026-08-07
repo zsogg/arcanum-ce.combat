@@ -8,9 +8,9 @@
 typedef struct DialogState {
     /* 0000 */ int dlg;
     /* 0008 */ int64_t pc_obj;
-    /* 0010 */ Ryan field_10;
+    /* 0010 */ ObjectLocator field_10;
     /* 0038 */ int64_t npc_obj;
-    /* 0040 */ Ryan field_40;
+    /* 0040 */ ObjectLocator field_40;
     /* 0068 */ int num;
     /* 006C */ int script_num;
     /* 0070 */ char reply[1000];

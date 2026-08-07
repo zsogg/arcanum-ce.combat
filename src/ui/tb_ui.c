@@ -323,7 +323,7 @@ void sub_57CE10(void)
         object_hover_color = tig_color_make(255, 255, 255);
         tig_art_interface_id_create(467, dword_5E2E6C, 1, 0, &object_hover_underlay_art_id);
         tig_art_interface_id_create(468, dword_5E2E68, 1, 0, &object_hover_overlay_art_id);
-        sub_443EB0(OBJ_HANDLE_NULL, &stru_5E2F60);
+        object_locator_init(OBJ_HANDLE_NULL, &stru_5E2F60);
     }
 }
 
