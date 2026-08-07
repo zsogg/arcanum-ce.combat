@@ -13832,7 +13832,7 @@ bool anim_goal_follow_obj(int64_t source_obj, int64_t target_obj)
         }
     }
 
-    if (!sub_4348E0(source_obj, 0)) {
+    if (!anim_can_start_goal(source_obj, 0)) {
         return false;
     }
 
@@ -13893,8 +13893,17 @@ bool anim_goal_follow_obj(int64_t source_obj, int64_t target_obj)
     return true;
 }
 
-// 0x4348E0
-bool sub_4348E0(int64_t obj, int action_points)
+/**
+ * Gate check at the top of the `anim_goal_*` starters: `obj` can begin an
+ * action costing `action_points` if it is an active critter and - in
+ * turn-based combat - it is its turn and it can afford the cost (attack
+ * passes `combat_attack_cost`, item use 4, free actions 0). Quirk faithful to
+ * the original binary (verified at 0x4348E0): an NPC with more than 35% of
+ * its fatigue remaining bypasses the action-point check entirely.
+ *
+ * 0x4348E0
+ */
+bool anim_can_start_goal(int64_t obj, int action_points)
 {
     if (obj == OBJ_HANDLE_NULL) {
         return false;
@@ -13932,7 +13941,7 @@ bool anim_goal_flee(int64_t obj, int64_t from_obj)
 {
     AnimGoalData goal_data;
 
-    if (!sub_4348E0(obj, 0)) {
+    if (!anim_can_start_goal(obj, 0)) {
         return false;
     }
 
@@ -13983,7 +13992,7 @@ bool anim_goal_attack_ex(int64_t attacker_obj, int64_t target_obj, int sound_id)
         return anim_goal_throw_item(attacker_obj, weapon_obj, obj_field_int64_get(target_obj, OBJ_F_LOCATION));
     }
 
-    if (!sub_4348E0(attacker_obj, combat_attack_cost(attacker_obj))) {
+    if (!anim_can_start_goal(attacker_obj, combat_attack_cost(attacker_obj))) {
         return false;
     }
 
@@ -14114,7 +14123,7 @@ bool anim_goal_throw_item(int64_t obj, int64_t item_obj, int64_t target_loc)
 
     ASSERT(item_obj != OBJ_HANDLE_NULL); // itemObj != OBJ_HANDLE_NULL
 
-    if (!sub_4348E0(obj, 0)) {
+    if (!anim_can_start_goal(obj, 0)) {
         return false;
     }
 
@@ -14175,7 +14184,7 @@ bool anim_goal_use_skill_on(int64_t obj, int64_t target_obj, int64_t item_obj, i
         return sub_436220(obj, target_obj, item_obj);
     }
 
-    if (!sub_4348E0(obj, 4)) {
+    if (!anim_can_start_goal(obj, 4)) {
         return false;
     }
 
@@ -14217,7 +14226,7 @@ bool anim_goal_use_item_on_obj_with_skill(int64_t obj, int64_t item_obj, int64_t
         return false;
     }
 
-    if (!sub_4348E0(obj, 4)) {
+    if (!anim_can_start_goal(obj, 4)) {
         return false;
     }
 
@@ -14263,7 +14272,7 @@ bool anim_goal_use_item_on_obj(int64_t obj, int64_t target_obj, int64_t item_obj
         return false;
     }
 
-    if (!sub_4348E0(obj, 4)) {
+    if (!anim_can_start_goal(obj, 4)) {
         return false;
     }
 
@@ -14308,7 +14317,7 @@ bool anim_goal_use_item_on_loc(int64_t obj, int64_t target_loc, int64_t item_obj
         return false;
     }
 
-    if (!sub_4348E0(obj, 4)) {
+    if (!anim_can_start_goal(obj, 4)) {
         return false;
     }
 
@@ -14340,7 +14349,7 @@ bool anim_goal_pickup_item(int64_t obj, int64_t item_obj)
         return false;
     }
 
-    if (!sub_4348E0(obj, 4)) {
+    if (!anim_can_start_goal(obj, 4)) {
         return false;
     }
 
@@ -14557,7 +14566,7 @@ bool anim_goal_fidget(int64_t critter_obj)
         return false;
     }
 
-    if (!sub_4348E0(critter_obj, 0)) {
+    if (!anim_can_start_goal(critter_obj, 0)) {
         return false;
     }
 
@@ -14732,7 +14741,7 @@ bool sub_436220(int64_t obj, int64_t target_obj, int64_t item_obj)
     int frame;
     int v1;
 
-    if (!sub_4348E0(obj, 4)) {
+    if (!anim_can_start_goal(obj, 4)) {
         return false;
     }
 
@@ -14796,7 +14805,7 @@ bool anim_goal_please_move(int64_t obj, int64_t target_obj)
         obj = tmp_obj;
     }
 
-    if (!sub_4348E0(target_obj, 0)) {
+    if (!anim_can_start_goal(target_obj, 0)) {
         return false;
     }
 
@@ -14999,7 +15008,7 @@ bool anim_goal_attempt_spread_out(int64_t obj, int64_t target_obj)
     AnimGoalData goal_data;
     AnimRunInfo* run_info;
 
-    if (!sub_4348E0(obj, 0)) {
+    if (!anim_can_start_goal(obj, 0)) {
         return false;
     }
 

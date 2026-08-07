@@ -107,7 +107,7 @@ bool sub_434030(int64_t obj, int64_t loc);
 bool anim_goal_move_near_tile(int64_t source_obj, int64_t target_loc, int range);
 bool anim_goal_run_near_tile(int64_t source_obj, int64_t target_loc, int range);
 bool anim_goal_follow_obj(int64_t source_obj, int64_t target_obj);
-bool sub_4348E0(int64_t obj, int action_points);
+bool anim_can_start_goal(int64_t obj, int action_points);
 bool anim_goal_flee(int64_t obj, int64_t flee_from);
 bool anim_goal_attack(int64_t attacker_obj, int64_t target_obj);
 bool anim_goal_attack_ex(int64_t attacker_obj, int64_t target_obj, int sound_id);
