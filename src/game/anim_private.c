@@ -650,7 +650,7 @@ bool sub_44D3B0(AnimGoalData* goal_data, int64_t obj, int goal_type, bool a4)
 
     ASSERT(goal_node != NULL); // pGoalNode != NULL
 
-    return sub_424070(obj, goal_node->priority_level, goal_node->field_8, 1);
+    return anim_interrupt_all_goals_of_obj(obj, goal_node->priority_level, goal_node->field_8, 1);
 }
 
 // 0x44D4E0

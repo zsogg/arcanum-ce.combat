@@ -1012,7 +1012,7 @@ void critter_disband_internal(int64_t obj)
     critter_leader_set(obj, OBJ_HANDLE_NULL);
 
     // Update animations.
-    sub_424070(obj, PRIORITY_5, false, true);
+    anim_interrupt_all_goals_of_obj(obj, PRIORITY_5, false, true);
     anim_speed_recalc(obj);
 
     // Remove forced follower flag if present.
@@ -1708,7 +1708,7 @@ void critter_set_concealed_internal(int64_t obj, bool concealed)
     tig_art_id_t new_art_id;
     unsigned int flags;
 
-    sub_424070(obj, PRIORITY_5, false, false);
+    anim_interrupt_all_goals_of_obj(obj, PRIORITY_5, false, false);
 
     // Update animation based on concealed state.
     art_id = obj_field_int32_get(obj, OBJ_F_CURRENT_AID);

@@ -480,7 +480,7 @@ void sub_4D3D60(int64_t obj)
     int type;
 
     type = obj_field_int32_get(obj, OBJ_F_TYPE);
-    sub_424070(obj, 5, 0, 1);
+    anim_interrupt_all_goals_of_obj(obj, 5, 0, 1);
 
     // NOTE: Conditions looks odd, check (note fallthrough from npc block).
     switch (type) {

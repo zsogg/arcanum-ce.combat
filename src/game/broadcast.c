@@ -275,7 +275,7 @@ void broadcast_msg_client(int64_t pc_obj, Broadcast* bcast)
                             dialog_copy_npc_order_ok_msg(candidate_obj, pc_obj, str, &speech_id);
                             broadcast_float_line_func(candidate_obj, pc_obj, str, speech_id);
                         }
-                        sub_424070(candidate_obj, PRIORITY_3, false, true);
+                        anim_interrupt_all_goals_of_obj(candidate_obj, PRIORITY_3, false, true);
                         ai_npc_wait(candidate_obj);
                     }
                     break;

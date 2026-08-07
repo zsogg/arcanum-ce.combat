@@ -1356,7 +1356,7 @@ void combat_critter_toggle_combat_mode(int64_t obj)
         }
 
         if (!v1 && anim_is_fidgeting(obj)) {
-            sub_424070(obj, 3, 0, 0);
+            anim_interrupt_all_goals_of_obj(obj, 3, 0, 0);
         }
     } else {
         if (is_pc) {
@@ -2863,7 +2863,7 @@ bool sub_4B6C90(bool turn_based)
     }
 
     pc = player_get_local_pc_obj();
-    if (!sub_424070(pc, 3, 0, 1)) {
+    if (!anim_interrupt_all_goals_of_obj(pc, 3, 0, 1)) {
         return false;
     }
 
@@ -2959,7 +2959,7 @@ void combat_turn_based_whos_turn_set(int64_t obj)
     combat_debug(obj, "Whos Turn Set");
 
     if (!player_is_local_pc_obj(qword_5FC248)) {
-        sub_424070(qword_5FC248, 3, 0, 1);
+        anim_interrupt_all_goals_of_obj(qword_5FC248, 3, 0, 1);
     }
 
     if (dword_5FC240->obj != obj) {
@@ -3137,7 +3137,7 @@ bool combat_turn_based_start(void)
 
     node = combat_critter_list.head;
     while (node != NULL) {
-        sub_424070(node->obj, 3, 0, 1);
+        anim_interrupt_all_goals_of_obj(node->obj, 3, 0, 1);
         node = node->next;
     }
 

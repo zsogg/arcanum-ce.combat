@@ -1321,7 +1321,7 @@ void object_destroy(int64_t obj)
         sub_4639E0(obj, true);
     }
 
-    sub_423FF0(obj);
+    anim_force_interrupt_all_goals_of_obj(obj);
     sub_459740(obj);
     sub_4601D0(obj);
     sub_443770(obj);
@@ -1414,7 +1414,7 @@ void object_delete(int64_t obj)
     if ((flags & OF_TEXT_FLOATER) != 0) {
         tf_remove(obj);
     }
-    sub_423FF0(obj);
+    anim_force_interrupt_all_goals_of_obj(obj);
     sub_459740(obj);
     ai_timeevent_clear(obj);
     sub_4601D0(obj);
@@ -2555,7 +2555,7 @@ void object_bust(int64_t obj, int64_t triggerer_obj)
         return;
     }
 
-    sub_424070(obj, 5, 0, 1);
+    anim_interrupt_all_goals_of_obj(obj, 5, 0, 1);
 
     switch (obj_field_int32_get(obj, OBJ_F_TYPE)) {
     case OBJ_TYPE_WALL:
@@ -2751,13 +2751,13 @@ void sub_43F710(int64_t obj)
 
     if ((obj_field_int32_get(obj, OBJ_F_SCENERY_FLAGS) & OSCF_NO_AUTO_ANIMATE) != 0) {
         if (!sub_44CB60()) {
-            sub_423FF0(obj);
+            anim_force_interrupt_all_goals_of_obj(obj);
         }
     } else {
         if (tig_art_anim_data(obj_field_int32_get(obj, OBJ_F_CURRENT_AID), &art_anim_data) == TIG_OK) {
             if (art_anim_data.num_frames <= 1 && sfx_misc_sound(obj, MISC_SOUND_ANIMATING) == -1) {
                 if (!sub_44CB60()) {
-                    sub_423FF0(obj);
+                    anim_force_interrupt_all_goals_of_obj(obj);
                 }
             } else {
                 anim_goal_animate_loop(obj);

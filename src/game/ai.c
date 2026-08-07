@@ -1349,7 +1349,7 @@ void ai_stop_attacking(int64_t obj)
         combat_focus_obj = obj_field_handle_get(obj, OBJ_F_NPC_COMBAT_FOCUS);
         if (combat_focus_obj != OBJ_HANDLE_NULL) {
             sub_4AA300(obj, combat_focus_obj);
-            sub_424070(obj, 3, 0, 0);
+            anim_interrupt_all_goals_of_obj(obj, 3, 0, 0);
             combat_critter_deactivate_combat_mode(obj);
         }
         if (critter_pc_leader_get(obj) != OBJ_HANDLE_NULL) {
@@ -2653,7 +2653,7 @@ bool ai_waypoints_process(int64_t obj, bool a2)
 
     if (a2) {
         if (next_map == map) {
-            sub_424070(obj, 4, false, true);
+            anim_interrupt_all_goals_of_obj(obj, 4, false, true);
             sub_43E770(obj, next_loc, 0, 0);
         } else {
             teleport_data.flags = 0;
@@ -2764,7 +2764,7 @@ bool ai_standpoints_process(int64_t obj, bool a2)
 
     if (a2) {
         if (next_map == map) {
-            sub_424070(obj, 4, 0, 1);
+            anim_interrupt_all_goals_of_obj(obj, 4, 0, 1);
             sub_43E770(obj, standpoint_loc, 0, 0);
         } else {
             teleport_data.flags = 0;
@@ -2909,7 +2909,7 @@ bool ai_timeevent_process(TimeEvent* timeevent)
         }
     } else {
         if (!combat_turn_based_is_active() && !critter_is_dead(obj)) {
-            sub_424070(obj, 4, false, true);
+            anim_interrupt_all_goals_of_obj(obj, 4, false, true);
         }
 
         loc = obj_field_int64_get(obj, OBJ_F_LOCATION);
@@ -2988,7 +2988,7 @@ bool sub_4AD4D0(int64_t obj)
         return false;
     }
 
-    sub_424070(obj, 4, false, true);
+    anim_interrupt_all_goals_of_obj(obj, 4, false, true);
     sub_43E770(obj, obj_field_int64_get(pc_leader_obj, OBJ_F_LOCATION), 0, 0);
 
     return true;
@@ -3112,7 +3112,7 @@ int ai_can_speak(int64_t npc_obj, int64_t pc_obj, bool a3)
                 return AI_SPEAK_COMBAT;
             }
 
-            if (!sub_424070(npc_obj, 2, false, false)) {
+            if (!anim_interrupt_all_goals_of_obj(npc_obj, 2, false, false)) {
                 return AI_SPEAK_ANIM;
             }
         }

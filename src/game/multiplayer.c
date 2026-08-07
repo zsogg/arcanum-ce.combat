@@ -900,7 +900,7 @@ bool multiplayer_timeevent_process(TimeEvent* timeevent)
     case 3:
         objid_id_to_str(str, obj_get_id(player_get_local_pc_obj()));
         snprintf(path, sizeof(path), "Players\\%s.mpc", str);
-        sub_424070(player_get_local_pc_obj(), PRIORITY_HIGHEST, false, true);
+        anim_interrupt_all_goals_of_obj(player_get_local_pc_obj(), PRIORITY_HIGHEST, false, true);
 
         if (sub_460BB0()) {
             save_char(path, player_get_local_pc_obj());
@@ -1598,7 +1598,7 @@ bool save_char(const char* path, int64_t obj)
     }
 
     sub_4598D0(obj);
-    sub_424070(obj, PRIORITY_HIGHEST, false, true);
+    anim_interrupt_all_goals_of_obj(obj, PRIORITY_HIGHEST, false, true);
 
     scheme = auto_level_scheme_get(obj);
     if (scheme != 0) {
@@ -1915,7 +1915,7 @@ bool sub_4A4320(void)
 
     objid_id_to_str(str, obj_get_id(player_get_local_pc_obj()));
     snprintf(path, sizeof(path), "Players\\%s.mpc", str);
-    sub_424070(player_get_local_pc_obj(), 6, false, true);
+    anim_interrupt_all_goals_of_obj(player_get_local_pc_obj(), 6, false, true);
     return save_char(path, player_get_local_pc_obj());
 }
 
@@ -2979,7 +2979,7 @@ bool sub_4A6470(int64_t pc_obj)
 
     objid_id_to_str(oidstr, obj_get_id(pc_obj));
     snprintf(path, sizeof(path), "Players\\%s.mpc", oidstr);
-    sub_424070(player_get_local_pc_obj(), PRIORITY_HIGHEST, false, true);
+    anim_interrupt_all_goals_of_obj(player_get_local_pc_obj(), PRIORITY_HIGHEST, false, true);
 
     if (sub_460BC0()) {
         if (tig_file_exists(path, NULL)) {

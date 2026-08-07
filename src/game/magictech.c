@@ -1879,7 +1879,7 @@ void magictech_effect_summon(MagicTechSummonInfo* summon_info)
             tig_net_send_app_all(&pkt, sizeof(pkt));
 
             if (obj_field_int32_get(obj, OBJ_F_TYPE) == OBJ_TYPE_SCENERY) {
-                sub_424070(obj, 5, false, false);
+                anim_interrupt_all_goals_of_obj(obj, 5, false, false);
                 sub_43F710(obj);
             }
         } else {
@@ -4375,7 +4375,7 @@ void sub_455350(int64_t obj, int64_t target_loc)
             tile_script_exec(source_loc, obj);
         }
 
-        sub_424070(obj, 5, false, true);
+        anim_interrupt_all_goals_of_obj(obj, 5, false, true);
         sub_43E770(obj, source_loc, 0, 0);
 
         if (player_is_local_pc_obj(obj)) {

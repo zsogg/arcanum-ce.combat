@@ -1183,7 +1183,7 @@ bool charedit_open(int64_t obj, ChareditMode mode)
     // the charedit UI is closed, the affected NPC stands still until it's time
     // to act somehow. I'm not sure this is needed at all, so for now let's skip
     // it and see what happens.
-    // sub_424070(obj, 4, 0, 1);
+    // anim_interrupt_all_goals_of_obj(obj, 4, 0, 1);
 
     charedit_created = true;
 

@@ -3965,8 +3965,14 @@ void sub_423FE0(void (*func)(void))
     dword_5E34F8 = func;
 }
 
-// 0x423FF0
-bool sub_423FF0(int64_t obj)
+/**
+ * Force-interrupts every animation slot belonging to `obj`, regardless of goal
+ * priority. Sibling of `anim_interrupt_all_goals_of_obj`, which respects
+ * priorities.
+ *
+ * 0x423FF0
+ */
+bool anim_force_interrupt_all_goals_of_obj(int64_t obj)
 {
     int prev = -1;
     int slot;
@@ -3988,8 +3994,24 @@ bool sub_423FF0(int64_t obj)
     return true;
 }
 
-// 0x424070
-bool sub_424070(int64_t obj, int priority_level, bool a3, bool a4)
+/**
+ * Interrupts every animation slot belonging to `obj` whose current goal is
+ * beaten by `priority_level` (see `anim_interrupt`). Callers use it to clear a
+ * critter's running animations before starting a new goal, and pass the new
+ * goal's priority. The per-object counterpart of the global
+ * `anim_goal_interrupt_all_goals_of_priority`; compare
+ * `anim_interrupt_all_goals_of_type`, which filters by root goal type instead
+ * of priority.
+ *
+ * `a3` mirrors `AnimGoalNode.field_8` of the goal about to start (see the
+ * identical idiom in `anim_interrupt_all_goals_of_type`): when set, the sweep
+ * runs at PRIORITY_NONE. `a4` suppresses the multiplayer broadcast (Packet9);
+ * it is set when the caller is itself reacting to a remote event or performing
+ * a local-only cleanup.
+ *
+ * 0x424070
+ */
+bool anim_interrupt_all_goals_of_obj(int64_t obj, int priority_level, bool a3, bool a4)
 {
     int prev = -1;
     int slot;
@@ -6573,7 +6595,7 @@ bool sub_428A10(AnimRunInfo* run_info)
     if (sub_425840(source_obj, source_loc, target_loc, rot, target_obj)) {
         if (tig_net_is_active()
             && tig_net_is_host()) {
-            sub_424070(source_obj, 2, false, false);
+            anim_interrupt_all_goals_of_obj(source_obj, 2, false, false);
         }
         return false;
     }
@@ -6591,14 +6613,14 @@ bool sub_428A10(AnimRunInfo* run_info)
             mp_ui_show_inven_loot(source_obj, target_obj);
 
             if (tig_net_is_active()) {
-                sub_424070(source_obj, 2, false, false);
+                anim_interrupt_all_goals_of_obj(source_obj, 2, false, false);
             }
         }
         return true;
     case OBJ_TYPE_SCENERY:
         if (tig_net_is_active()
             && tig_net_is_host()) {
-            sub_424070(source_obj, 2, false, false);
+            anim_interrupt_all_goals_of_obj(source_obj, 2, false, false);
         }
         if (tig_art_scenery_id_type_get(obj_field_int32_get(target_obj, OBJ_F_CURRENT_AID)) == TIG_ART_SCENERY_TYPE_BEDS) {
             ui_sleep_toggle(target_obj);
@@ -6619,14 +6641,14 @@ bool sub_428A10(AnimRunInfo* run_info)
             mp_ui_show_inven_loot(source_obj, target_obj);
 
             if (tig_net_is_active()) {
-                sub_424070(source_obj, 2, false, false);
+                anim_interrupt_all_goals_of_obj(source_obj, 2, false, false);
             }
         }
         return true;
     default:
         if (tig_net_is_active()
             && tig_net_is_host()) {
-            sub_424070(source_obj, 2, false, false);
+            anim_interrupt_all_goals_of_obj(source_obj, 2, false, false);
         }
         if (!object_script_execute(source_obj, target_obj, source_obj, SAP_USE, 0)) {
             return false;
@@ -11445,7 +11467,7 @@ bool sub_4305D0(AnimRunInfo* run_info)
             object_set_current_aid(obj, art_id);
 
             sub_4EDF20(obj, loc, 0, 0, false);
-            sub_424070(obj, 2, false, false);
+            anim_interrupt_all_goals_of_obj(obj, 2, false, false);
 
             return false;
         }
@@ -13343,7 +13365,7 @@ bool anim_goal_move_to_tile(int64_t obj, int64_t loc)
     if (!anim_is_current_goal_type(obj, AG_MOVE_TO_TILE, &stru_5A1908)) {
         sub_44D500(&goal_data, obj, AG_MOVE_TO_TILE);
         goal_data.params[AGDATA_TARGET_TILE].loc = loc;
-        if (!sub_424070(obj, 3, false, false)) {
+        if (!anim_interrupt_all_goals_of_obj(obj, 3, false, false)) {
             return false;
         }
 
@@ -13464,7 +13486,7 @@ bool sub_433A00(int64_t obj, int64_t loc, bool a3)
         sub_44D500(&goal_data, obj, AG_MOVE_TO_TILE);
         goal_data.params[AGDATA_TARGET_TILE].loc = loc;
 
-        if (!sub_424070(obj, 3, false, false)) {
+        if (!anim_interrupt_all_goals_of_obj(obj, 3, false, false)) {
             return false;
         }
 
@@ -13511,7 +13533,7 @@ bool anim_goal_run_to_tile(int64_t obj, int64_t loc)
         sub_44D500(&goal_data, obj, AG_RUN_TO_TILE);
         goal_data.params[AGDATA_TARGET_TILE].loc = loc;
 
-        if (!sub_424070(obj, 3, false, false)) {
+        if (!anim_interrupt_all_goals_of_obj(obj, 3, false, false)) {
             return false;
         }
 
@@ -13603,7 +13625,7 @@ bool sub_434030(int64_t obj, int64_t loc)
         sub_44D500(&goal_data, obj, AG_RUN_TO_TILE);
         goal_data.params[AGDATA_TARGET_TILE].loc = loc;
 
-        if (!sub_424070(obj, 3, false, false)) {
+        if (!anim_interrupt_all_goals_of_obj(obj, 3, false, false)) {
             return false;
         }
 
@@ -13857,7 +13879,7 @@ bool anim_goal_follow_obj(int64_t source_obj, int64_t target_obj)
         anim_interrupt(&anim_id, PRIORITY_HIGHEST);
     }
 
-    if (!sub_424070(source_obj, 3, false, false)) {
+    if (!anim_interrupt_all_goals_of_obj(source_obj, 3, false, false)) {
         return false;
     }
 
@@ -13991,7 +14013,7 @@ bool anim_goal_attack_ex(int64_t attacker_obj, int64_t target_obj, int sound_id)
         return false;
     }
 
-    if (!sub_424070(attacker_obj, 3, false, false)) {
+    if (!anim_interrupt_all_goals_of_obj(attacker_obj, 3, false, false)) {
         sub_4364D0(attacker_obj);
         return false;
     }
@@ -14110,7 +14132,7 @@ bool anim_goal_throw_item(int64_t obj, int64_t item_obj, int64_t target_loc)
         return false;
     }
 
-    if (!sub_424070(obj, 3, false, false)) {
+    if (!anim_interrupt_all_goals_of_obj(obj, 3, false, false)) {
         return false;
     }
 
@@ -14354,7 +14376,7 @@ bool anim_goal_animate_stunned(int64_t obj)
         return false;
     }
 
-    if (!sub_424070(obj, 4, false, false)) {
+    if (!anim_interrupt_all_goals_of_obj(obj, 4, false, false)) {
         return false;
     }
 
@@ -14387,7 +14409,7 @@ bool anim_goal_projectile(int64_t source_obj, int64_t missile_obj, tig_art_id_t 
         return false;
     }
 
-    if (!sub_424070(missile_obj, 4, false, true)) {
+    if (!anim_interrupt_all_goals_of_obj(missile_obj, 4, false, true)) {
         return false;
     }
 
@@ -14468,7 +14490,7 @@ bool anim_goal_knockdown(int64_t critter_obj)
         return false;
     }
 
-    if (!sub_424070(critter_obj, 5, false, false)) {
+    if (!anim_interrupt_all_goals_of_obj(critter_obj, 5, false, false)) {
         return false;
     }
 
@@ -14493,7 +14515,7 @@ bool anim_goal_make_knockdown(int64_t obj)
         return false;
     }
 
-    if (!sub_424070(obj, PRIORITY_4, false, false)) {
+    if (!anim_interrupt_all_goals_of_obj(obj, PRIORITY_4, false, false)) {
         return false;
     }
 
@@ -15006,7 +15028,7 @@ bool anim_goal_attempt_spread_out(int64_t obj, int64_t target_obj)
         }
     }
 
-    if (!sub_424070(obj, 3, false, false)) {
+    if (!anim_interrupt_all_goals_of_obj(obj, 3, false, false)) {
         return false;
     }
 

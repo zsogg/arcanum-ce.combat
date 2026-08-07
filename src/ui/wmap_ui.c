@@ -1228,7 +1228,7 @@ void wmap_ui_open_internal(void)
         return;
     }
 
-    sub_424070(player_get_local_pc_obj(), 4, false, true);
+    anim_interrupt_all_goals_of_obj(player_get_local_pc_obj(), 4, false, true);
 
     if (!wmap_ui_create()) {
         wmap_ui_close();
@@ -4106,7 +4106,7 @@ int wmap_ui_compass_arrow_frame_get(void)
 // 0x565140
 bool sub_565140(void)
 {
-    if (!sub_424070(player_get_local_pc_obj(), 3, 0, 1)) {
+    if (!anim_interrupt_all_goals_of_obj(player_get_local_pc_obj(), 3, 0, 1)) {
         return false;
     }
 

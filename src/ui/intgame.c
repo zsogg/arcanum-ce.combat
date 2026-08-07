@@ -2769,7 +2769,7 @@ void intgame_process_event(TigMessage* msg)
                             }
                         }
 
-                        if (sub_424070(pc_obj, 3, 0, 0)) {
+                        if (anim_interrupt_all_goals_of_obj(pc_obj, 3, 0, 0)) {
                             sub_4B4320(pc_obj);
 
                             tig_mouse_get_state(&mouse_state);
@@ -3550,7 +3550,7 @@ void sub_54ED30(TargetDescriptor* td)
 
     if (combat_auto_attack_get(pc_obj)) {
         if (sub_44E6F0(pc_obj, &goal_data)
-            || !sub_424070(pc_obj, 3, 0, 0)) {
+            || !anim_interrupt_all_goals_of_obj(pc_obj, 3, 0, 0)) {
             return;
         }
 
@@ -3584,7 +3584,7 @@ void sub_54ED30(TargetDescriptor* td)
                 && anim_id_is_equal(&anim_id, &fidget_anim_id)
                 && num_goal_subslots_in_use(&anim_id) < 4) {
                 if (is_anim_forever(&anim_id)) {
-                    if (sub_424070(pc_obj, 3, false, false)) {
+                    if (anim_interrupt_all_goals_of_obj(pc_obj, 3, false, false)) {
                         if (!anim_goal_add(&goal_data, &anim_id)) {
                             return;
                         }
@@ -3601,7 +3601,7 @@ void sub_54ED30(TargetDescriptor* td)
             if (anim == AG_ATTACK || anim == AG_ATTEMPT_ATTACK) {
                 if (num_goal_subslots_in_use(&anim_id) < 4) {
                     if (is_anim_forever(&anim_id)) {
-                        if (sub_424070(pc_obj, 3, 0, 0)
+                        if (anim_interrupt_all_goals_of_obj(pc_obj, 3, 0, 0)
                             && !anim_goal_add(&goal_data, &anim_id)) {
                             return;
                         }
@@ -3614,7 +3614,7 @@ void sub_54ED30(TargetDescriptor* td)
                     }
                 }
             } else {
-                if (sub_424070(pc_obj, 3, false, false)
+                if (anim_interrupt_all_goals_of_obj(pc_obj, 3, false, false)
                     && anim_goal_add(&goal_data, &anim_id)) {
                     if (tig_kb_get_modifier(SDL_KMOD_SHIFT)) {
                         sub_436C50(anim_id);
@@ -3638,7 +3638,7 @@ void sub_54ED30(TargetDescriptor* td)
                     }
                 }
             }
-        } else if (sub_424070(pc_obj, 3, false, false)) {
+        } else if (anim_interrupt_all_goals_of_obj(pc_obj, 3, false, false)) {
             if (tig_net_is_active()
                 && !tig_kb_get_modifier(SDL_KMOD_SHIFT)
                 && !tig_kb_get_modifier(SDL_KMOD_CTRL)) {
