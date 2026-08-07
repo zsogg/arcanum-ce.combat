@@ -8,11 +8,12 @@
 /**
  * What the dialog engine has decided should happen next; consumed by the
  * dialog UI after each processed option (see the switch in
- * `dialog_ui_process_option`). The first three values are produced from a
- * dialog file's {R} response field by `dialog_response_val_decode`, per
+ * `dialog_ui_process_option`). The first three values are set by
+ * `dialog_perform_response` from a dialog file's {R} response field, per
  * Troika's Eventscripts.doc: positive is a dialog line to continue at, zero
- * returns to the calling script, negative runs the given script line. The
- * remaining values hand control to another screen; they are produced by the
+ * returns to the calling script, negative runs the given script line (they
+ * coincide with the first three DialogResponseType values). The remaining
+ * values hand control to another screen; they are produced by the
  * generated-dialog opcodes ({B:}, {L:}) and by the CE/SU/II/RI result actions.
  */
 typedef enum DialogStatus {
@@ -28,6 +29,49 @@ typedef enum DialogStatus {
     DIALOG_STATUS_REPAIR, // open the repair-items screen
 } DialogStatus;
 
+/**
+ * What choosing a PC option does, dispatched by `dialog_perform_response`.
+ * The first three values are what `dialog_response_val_decode` produces from a
+ * dialog file's {R} response field (and deliberately coincide with the first
+ * three DialogStatus values, which those responses set verbatim). The rest are
+ * the steps of the generated-dialog flows (GeneratedDialog.doc): the opcode
+ * parser turns {B:}/{C:}/{D:}/{H:}/{L:}/{P:}/{R:}/{T:}/{X:} options into their
+ * entry steps, and each step's handler builds the options for the next one.
+ */
+typedef enum DialogResponseType {
+    DIALOG_RESPONSE_GO_TO_LINE,
+    DIALOG_RESPONSE_RETURN_TO_SCRIPT,
+    DIALOG_RESPONSE_RUN_SCRIPT_LINE,
+    DIALOG_RESPONSE_BARTER,
+    DIALOG_RESPONSE_PAY_MONEY,
+    DIALOG_RESPONSE_OFFER_TRAINING,
+    DIALOG_RESPONSE_ASK_MONEY_FOR_TRAINING,
+    DIALOG_RESPONSE_PERFORM_TRAINING,
+    DIALOG_RESPONSE_ASK_MONEY_FOR_RUMOR,
+    DIALOG_RESPONSE_TELL_RUMOR,
+    DIALOG_RESPONSE_INSULT_REPLY,
+    DIALOG_RESPONSE_OFFER_HEALING,
+    DIALOG_RESPONSE_OFFER_MAGICKAL_HEALING,
+    DIALOG_RESPONSE_OFFER_MAGICKAL_POISON_HEALING,
+    DIALOG_RESPONSE_ASK_MONEY_FOR_SKILL,
+    DIALOG_RESPONSE_ASK_MONEY_FOR_SPELL,
+    DIALOG_RESPONSE_USE_SKILL,
+    DIALOG_RESPONSE_USE_SPELL,
+    DIALOG_RESPONSE_OFFER_DIRECTIONS,
+    DIALOG_RESPONSE_ASK_MONEY_FOR_DIRECTIONS,
+    DIALOG_RESPONSE_GIVE_DIRECTIONS,
+    DIALOG_RESPONSE_OFFER_MARK_AREA,
+    DIALOG_RESPONSE_ASK_MONEY_FOR_MARK_AREA,
+    DIALOG_RESPONSE_MARK_AREA,
+    DIALOG_RESPONSE_CHECK_STORY,
+    DIALOG_RESPONSE_ASK_ABOUT_NEWSPAPERS,
+    DIALOG_RESPONSE_OFFER_TODAY_NEWSPAPER,
+    DIALOG_RESPONSE_OFFER_OLDER_NEWSPAPER,
+    DIALOG_RESPONSE_ASK_MONEY_FOR_NEWSPAPER,
+    DIALOG_RESPONSE_BUY_NEWSPAPER,
+    DIALOG_RESPONSE_WORLDMAP,
+} DialogResponseType;
+
 typedef struct DialogState {
     /* 0000 */ int dlg;
     /* 0008 */ int64_t pc_obj;
@@ -42,9 +86,9 @@ typedef struct DialogState {
     /* 0460 */ char options[5][1000];
     /* 17E8 */ int status;
     /* 17EC */ int status_num;
-    /* 17F0 */ int field_17F0[5];
-    /* 1804 */ int field_1804[5];
-    /* 1818 */ int field_1818[5];
+    /* 17F0 */ int option_response_types[5];
+    /* 1804 */ int option_response_nums[5];
+    /* 1818 */ int option_response_extras[5];
     /* 182C */ char* actions[5];
     /* 1840 */ int field_1840;
     /* 1844 */ unsigned int seed;
