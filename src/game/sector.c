@@ -1192,7 +1192,7 @@ bool sector_history_save(TigFile* stream)
                 }
 
                 sector_history_entries[sector_history_size].id = cache_entry->sector.id;
-                sector_history_entries[sector_history_size].datetime = sub_45A7C0();
+                sector_history_entries[sector_history_size].datetime = timeevent_current_datetime();
                 sector_history_size++;
             }
         }
@@ -1288,7 +1288,7 @@ void sector_cache_evict(Sector* sector)
         }
 
         sector_history_entries[sector_history_size].id = sector->id;
-        sector_history_entries[sector_history_size].datetime = sub_45A7C0();
+        sector_history_entries[sector_history_size].datetime = timeevent_current_datetime();
         sector_history_size++;
     }
 

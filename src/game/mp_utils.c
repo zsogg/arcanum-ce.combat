@@ -46,7 +46,7 @@ bool mp_object_create(int name, int64_t loc, int64_t* obj_ptr)
 {
     if (tig_net_is_active()) {
         if (tig_net_is_host()
-            && object_create(sub_4685A0(name), loc, obj_ptr)) {
+            && object_create(proto_get_by_description(name), loc, obj_ptr)) {
             Packet70 pkt;
 
             pkt.type = 70;
@@ -63,7 +63,7 @@ bool mp_object_create(int name, int64_t loc, int64_t* obj_ptr)
         return false;
     }
 
-    return object_create(sub_4685A0(name), loc, obj_ptr);
+    return object_create(proto_get_by_description(name), loc, obj_ptr);
 }
 
 // 0x4EDA60

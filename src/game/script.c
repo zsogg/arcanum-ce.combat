@@ -1988,7 +1988,7 @@ int script_execute_action(ScriptAction* action, int line, ScriptState* state)
 
         DateTime datetime;
         if (action->type == SAT_CALL_SCRIPT_AT) {
-            datetime = sub_45A7C0();
+            datetime = timeevent_current_datetime();
             datetime.milliseconds += 86400000;
             datetime_sub_milliseconds(&datetime, sub_45AD70());
 
@@ -2366,13 +2366,13 @@ int script_execute_action(ScriptAction* action, int line, ScriptState* state)
         return NEXT;
     }
     case SAT_GET_CURRENT_HOUR: {
-        DateTime datetime = sub_45A7C0();
+        DateTime datetime = timeevent_current_datetime();
         int hour = datetime_get_hour(&datetime);
         script_set_value(action->op_type[0], action->op_value[0], state, hour);
         return NEXT;
     }
     case SAT_GET_CURRENT_MINUTE: {
-        DateTime datetime = sub_45A7C0();
+        DateTime datetime = timeevent_current_datetime();
         int minute = datetime_get_minute(&datetime);
         script_set_value(action->op_type[0], action->op_value[0], state, minute);
         return NEXT;
@@ -2512,7 +2512,7 @@ int script_execute_action(ScriptAction* action, int line, ScriptState* state)
         return NEXT;
     }
     case SAT_GET_HOURS_SINCE_STARTUP: {
-        DateTime datetime = sub_45A7C0();
+        DateTime datetime = timeevent_current_datetime();
         int hours = datetime_get_hour_since_reference_date(&datetime);
         script_set_value(action->op_type[0], action->op_value[0], state, hours);
     }
@@ -3368,7 +3368,7 @@ ScriptFile* script_lock(int script_id)
     cache_entry_id = cache_find(script_id);
     if (script_cache_entries[cache_entry_id].script_id == script_id) {
         script_cache_entries[cache_entry_id].ref_count++;
-        script_cache_entries[cache_entry_id].datetime = sub_45A7C0();
+        script_cache_entries[cache_entry_id].datetime = timeevent_current_datetime();
         return script_cache_entries[cache_entry_id].file;
     }
 
@@ -3378,7 +3378,7 @@ ScriptFile* script_lock(int script_id)
 
     if (cache_add(cache_entry_id, script_id)) {
         script_cache_entries[cache_entry_id].ref_count++;
-        script_cache_entries[cache_entry_id].datetime = sub_45A7C0();
+        script_cache_entries[cache_entry_id].datetime = timeevent_current_datetime();
         return script_cache_entries[cache_entry_id].file;
     }
 

@@ -2758,7 +2758,7 @@ int sub_4A5D80(int64_t obj, char* str)
         }
 
         tig_str_parse_value(&str, &basic_proto);
-        if (sub_462540(obj, sub_4685A0(basic_proto), 0)) {
+        if (sub_462540(obj, proto_get_by_description(basic_proto), 0)) {
             cnt++;
         }
     }
@@ -2822,7 +2822,7 @@ bool sub_4A5EE0(int64_t obj)
 
             for (idx = 0; idx < 3; idx++) {
                 prod_basic_proto = schematic_info.prod[idx];
-                prod_proto_obj = sub_4685A0(schematic_info.prod[idx]);
+                prod_proto_obj = proto_get_by_description(schematic_info.prod[idx]);
                 if (obj_field_int32_get(prod_proto_obj, OBJ_F_TYPE) != OBJ_TYPE_ARMOR) {
                     break;
                 }

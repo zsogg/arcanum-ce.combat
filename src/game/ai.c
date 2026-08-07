@@ -750,7 +750,7 @@ bool ai_look_for_item_func(int64_t obj, unsigned int flags)
     ai_objects_in_radius(obj, radius, &objects, OBJ_TM_CONTAINER);
     node = objects.head;
     while (node != NULL) {
-        if (sub_49B290(node->obj) == BP_JUNK_PILE) {
+        if (proto_get_description(node->obj) == BP_JUNK_PILE) {
             item_obj = item_type != -1
                 ? item_find_first_of_type(node->obj, item_type)
                 : item_find_first(node->obj);
@@ -3832,7 +3832,7 @@ int ai_attempt_open_container(int64_t obj, int64_t container_obj)
     unsigned int container_flags;
     int key_id;
 
-    if (sub_49B290(container_obj) == BP_JUNK_PILE) {
+    if (proto_get_description(container_obj) == BP_JUNK_PILE) {
         return AI_ATTEMPT_OPEN_CONTAINER_OK;
     }
 

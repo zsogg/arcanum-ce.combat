@@ -166,7 +166,7 @@ void bless_add(int64_t obj, int bless)
     // Append blessing ID and current time to the blessing field arrays.
     cnt = obj_arrayfield_length_get(obj, OBJ_F_PC_BLESSING_IDX);
     obj_arrayfield_uint32_set(obj, OBJ_F_PC_BLESSING_IDX, cnt, bless);
-    obj_arrayfield_int64_set(obj, OBJ_F_PC_BLESSING_TS_IDX, cnt, sub_45A7C0().value);
+    obj_arrayfield_int64_set(obj, OBJ_F_PC_BLESSING_TS_IDX, cnt, timeevent_current_datetime().value);
 
     // Apply the associated effect.
     effect_add(obj, bless_get_effect(bless), EFFECT_CAUSE_BLESS);

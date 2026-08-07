@@ -107,7 +107,7 @@ typedef struct TimeEventFuncs {
     TimeEventProcessFunc mp_ctrl_ui_func;
 } TimeEventFuncs;
 
-DateTime sub_45A7C0(void);
+DateTime timeevent_current_datetime(void);
 DateTime sub_45A7D0(DateTime* other);
 int sub_45A7F0(void);
 int sub_45A820(unsigned int milliseconds);

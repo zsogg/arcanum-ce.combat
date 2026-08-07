@@ -379,10 +379,10 @@ bool trap_use_at_loc(int64_t pc_obj, int64_t item_obj, int64_t target_loc)
         switch (spl) {
         case 176:
             ai_notify_explosion_dynamite(pc_obj);
-            prototype_handle = sub_4685A0(BP_LIT_DYNAMITE);
+            prototype_handle = proto_get_by_description(BP_LIT_DYNAMITE);
             break;
         case 220:
-            prototype_handle = sub_4685A0(BP_TICKING_TIME_BOMB);
+            prototype_handle = proto_get_by_description(BP_TICKING_TIME_BOMB);
             break;
         default:
             prototype_handle = OBJ_HANDLE_NULL;
@@ -421,7 +421,7 @@ bool trap_use_at_loc(int64_t pc_obj, int64_t item_obj, int64_t target_loc)
             : BP_MECHANICAL_TRAP;
     }
 
-    prototype_handle = sub_4685A0(name);
+    prototype_handle = proto_get_by_description(name);
     if (!object_create(prototype_handle, target_loc, &trap_obj)) {
         return false;
     }
@@ -493,7 +493,7 @@ void trap_handle_disarm(int64_t pc_obj, int64_t trap_obj, bool* is_success_ptr, 
         if (*is_critical_ptr
             && tech_skill_training_get(pc_obj, TECH_SKILL_DISARM_TRAPS) >= TRAINING_EXPERT
             && get_disarm_item_name(trap_obj, &disarm_item_name)) {
-            prototype_handle = sub_4685A0(disarm_item_name);
+            prototype_handle = proto_get_by_description(disarm_item_name);
             loc = obj_field_int64_get(pc_obj, OBJ_F_LOCATION);
             if (object_create(prototype_handle, loc, &disarm_item_obj)) {
                 item_transfer(disarm_item_obj, pc_obj);

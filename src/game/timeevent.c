@@ -201,8 +201,12 @@ static int dword_5E8628;
 // 0x5DE6E0
 static bool dword_5DE6E0;
 
-// 0x45A7C0
-DateTime sub_45A7C0(void)
+/**
+ * Returns the current in-game date and time.
+ *
+ * 0x45A7C0
+ */
+DateTime timeevent_current_datetime(void)
 {
     return timeevent_game_time;
 }

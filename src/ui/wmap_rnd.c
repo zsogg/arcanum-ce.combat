@@ -1386,7 +1386,7 @@ void wmap_rnd_encounter_build_object(int name, int64_t loc, int64_t* obj_ptr)
     int64_t proto_obj;
     int64_t obj;
 
-    proto_obj = sub_4685A0(name);
+    proto_obj = proto_get_by_description(name);
     if (!object_create(proto_obj, loc, &obj)) {
         tig_debug_printf("wmap_rnd_encounter_build_object: ERROR: object_create failed!\n");
         exit(EXIT_FAILURE);

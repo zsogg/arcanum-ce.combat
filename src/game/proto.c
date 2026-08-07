@@ -66,7 +66,7 @@ static void sub_468660(bool* rescan_ptr);
 static int sub_468720(ObjectType object_type);
 static void sub_468800(void);
 static bool proto_save(int64_t obj);
-static ObjectID sub_468860(int a1);
+static ObjectID proto_description_to_oid(int description);
 static void sub_468890(int description);
 static void sub_468930(int64_t obj, int description);
 static void sub_49AFF0(int64_t obj, int description);
@@ -244,7 +244,7 @@ bool proto_init(GameInitInfo* init_info)
     tig_file_mkdir("proto");
 
     for (index = 0; index < OBJ_TYPE_COUNT; index++) {
-        dword_5E882C[index] = sub_468860(sub_468600(index));
+        dword_5E882C[index] = proto_description_to_oid(sub_468600(index));
     }
 
     rescan = false;
@@ -322,10 +322,15 @@ int64_t sub_468570(ObjectType object_type)
     return obj_pool_perm_lookup(dword_5E882C[object_type]);
 }
 
-// 0x4685A0
-int64_t sub_4685A0(int a1)
+/**
+ * Returns the prototype object for a description (`BP_*`), or `OBJ_HANDLE_NULL`
+ * if it is not loaded.
+ *
+ * 0x4685A0
+ */
+int64_t proto_get_by_description(int description)
 {
-    return obj_pool_perm_lookup(sub_468860(a1));
+    return obj_pool_perm_lookup(proto_description_to_oid(description));
 }
 
 // 0x4685D0
@@ -402,7 +407,7 @@ void sub_468660(bool* rescan_ptr)
 
     for (type = 0; type < 20; type++) {
         for (oname = dword_5B37FC[type]; oname < dword_5B384C[type]; oname++) {
-            oid = sub_468860(oname);
+            oid = proto_description_to_oid(oname);
             if (!proto_id_list_check(proto_ids, proto_ids_cnt, oid.d.a)) {
                 sub_468890(oname);
                 *rescan_ptr = true;
@@ -472,15 +477,21 @@ void sub_468800(void)
 
     for (object_type = 0; object_type < OBJ_TYPE_COUNT; object_type++) {
         for (description = dword_5B37FC[object_type]; description < dword_5B384C[object_type]; description++) {
-            obj_deallocate(obj_pool_perm_lookup(sub_468860(description)));
+            obj_deallocate(obj_pool_perm_lookup(proto_description_to_oid(description)));
         }
     }
 }
 
-// 0x468860
-ObjectID sub_468860(int a1)
+/**
+ * Builds the object ID of the prototype for a description (`BP_*`).
+ *
+ * Prototype IDs are offset by 20 from their description.
+ *
+ * 0x468860
+ */
+ObjectID proto_description_to_oid(int description)
 {
-    return sub_4E6540(a1 + 20);
+    return sub_4E6540(description + 20);
 }
 
 // 0x468890
@@ -16058,8 +16069,14 @@ void sub_49B240(int64_t obj, int f, int percent)
     obj_field_int32_set(obj, f, value + value * percent / 100);
 }
 
-// 0x49B290
-int sub_49B290(int64_t obj)
+/**
+ * Returns the description (`BP_*`) of the prototype `obj` was created from.
+ *
+ * Inverse of `proto_description_to_oid`.
+ *
+ * 0x49B290
+ */
+int proto_get_description(int64_t obj)
 {
     int64_t prototype_handle;
     ObjectID oid;

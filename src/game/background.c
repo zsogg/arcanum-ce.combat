@@ -363,7 +363,7 @@ void background_generate_inventory(int64_t obj)
 
         tok = strtok(str, " \t\n");
         while (tok != NULL) {
-            proto_obj = sub_4685A0(atoi(tok));
+            proto_obj = proto_get_by_description(atoi(tok));
             loc = obj_field_int64_get(obj, OBJ_F_LOCATION);
             if (object_create(proto_obj, loc, &item_obj)) {
                 // Mark item as identified.

@@ -1743,7 +1743,7 @@ void logbook_ui_check(void)
     TigRect rect;
 
     // Retrieve current in-game time.
-    logbook_ui_entry_datetimes[0] = sub_45A7C0();
+    logbook_ui_entry_datetimes[0] = timeevent_current_datetime();
 
     // Note that the maximum number of rumors is 2000, but this check was
     // probably either future-proof, or was completed before rumor limit was

@@ -165,7 +165,7 @@ void curse_add(int64_t obj, int curse)
     // Append curse ID and current time to the curse field arrays.
     cnt = obj_arrayfield_length_get(obj, OBJ_F_PC_CURSE_IDX);
     obj_arrayfield_uint32_set(obj, OBJ_F_PC_CURSE_IDX, cnt, curse);
-    obj_arrayfield_int64_set(obj, OBJ_F_PC_CURSE_TS_IDX, cnt, sub_45A7C0().value);
+    obj_arrayfield_int64_set(obj, OBJ_F_PC_CURSE_TS_IDX, cnt, timeevent_current_datetime().value);
 
     // Apply the associated effect.
     effect_add(obj, curse_get_effect(curse), EFFECT_CAUSE_CURSE);

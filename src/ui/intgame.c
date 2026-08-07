@@ -2220,7 +2220,7 @@ bool sub_54B5D0(TigMessage* msg)
 
         if (msg->data.button.state == TIG_BUTTON_STATE_MOUSE_INSIDE) {
             if (msg->data.button.button_handle == intgame_clock_button_info.button_handle) {
-                datetime = sub_45A7C0();
+                datetime = timeevent_current_datetime();
 
                 mes_file_entry.num = 22; // "Current Time"
                 mes_get_msg(intgame_mes_file, &mes_file_entry);
@@ -5295,7 +5295,7 @@ void intgame_clock_refresh(void)
         return;
     }
 
-    datetime = sub_45A7C0();
+    datetime = timeevent_current_datetime();
     v1 = (dword_64C47C[1] + dword_64C47C[0]
              + (datetime_seconds_since_reference_date(&datetime) + 73800) % 86400 * (dword_64C47C[1] + dword_64C47C[0]) / 86400
              - intgame_clock_frame.width / 2)
@@ -6298,7 +6298,7 @@ bool intgame_examine_portrait(int64_t pc_obj, int64_t target_obj, int* portrait_
             : 436; // door_icon.art
         return false;
     case OBJ_TYPE_CONTAINER:
-        switch (sub_49B290(target_obj)) {
+        switch (proto_get_description(target_obj)) {
         case BP_JUNK_PILE:
             *portrait_ptr = 832; // cont_junk.art
             break;

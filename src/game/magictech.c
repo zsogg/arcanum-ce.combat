@@ -2810,7 +2810,7 @@ void magictech_pick_proto_from_list(ObjectID* oid, int list)
         break;
     }
 
-    *oid = obj_get_id(sub_4685A0(stru_5B0ED8[list].entries[idx].basic_prototype));
+    *oid = obj_get_id(proto_get_by_description(stru_5B0ED8[list].entries[idx].basic_prototype));
 }
 
 // 0x4529D0
@@ -6067,7 +6067,7 @@ void magictech_build_effect_info(MagicTechInfo* info, char* str)
             }
 
             if (value > 0) {
-                component_info->data.summon.oid = obj_get_id(sub_4685A0(value));
+                component_info->data.summon.oid = obj_get_id(proto_get_by_description(value));
             } else {
                 component_info->data.summon.oid.type = OID_TYPE_NULL;
             }
@@ -6825,7 +6825,7 @@ void magictech_anim_play_hit_fx(int64_t obj, CombatContext* combat)
         }
     }
 
-    if (sub_49B290(obj) == BP_KERGHAN_3 && !combat->total_dam) {
+    if (proto_get_description(obj) == BP_KERGHAN_3 && !combat->total_dam) {
         sub_4CCD20(&spell_eye_candies, &node, obj, -1, 1259);
         node.animate = true;
         animfx_add(&node);

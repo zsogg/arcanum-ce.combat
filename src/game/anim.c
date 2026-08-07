@@ -4268,7 +4268,7 @@ bool sub_4248A0(tig_art_id_t art_id, int64_t self_obj, int64_t target_obj, int64
     ASSERT(obj_ptr != NULL); // 3074, "obj != NULL"
 
     if (multiplayer_is_locked() || tig_net_is_host()) {
-        proto_obj = sub_4685A0(BP_PROJECTILE);
+        proto_obj = proto_get_by_description(BP_PROJECTILE);
 
         if (tig_net_is_active()
             && !tig_net_is_host()) {
@@ -7868,7 +7868,7 @@ bool sub_42AA70(int64_t source_obj, int64_t target_obj)
     }
 
     if (item_parent(target_obj, &parent_obj)) {
-        if (parent_obj == OBJ_HANDLE_NULL || sub_49B290(parent_obj) != BP_JUNK_PILE) {
+        if (parent_obj == OBJ_HANDLE_NULL || proto_get_description(parent_obj) != BP_JUNK_PILE) {
             return false;
         }
     }
@@ -13013,7 +13013,7 @@ void sub_432D90(int64_t obj)
     loc = obj_field_int64_get(obj, OBJ_F_LOCATION);
     offset_x = obj_field_int32_get(obj, OBJ_F_OFFSET_X);
     offset_y = obj_field_int32_get(obj, OBJ_F_OFFSET_Y);
-    object_create(sub_4685A0(BP_POOL_OF_BLOOD), loc, &blood_obj);
+    object_create(proto_get_by_description(BP_POOL_OF_BLOOD), loc, &blood_obj);
     blood_art_id = obj_field_int32_get(blood_obj, OBJ_F_CURRENT_AID);
 
     // FIXME: Useless.
@@ -14411,7 +14411,7 @@ bool anim_goal_projectile(int64_t source_obj, int64_t missile_obj, tig_art_id_t 
 
     if (weapon_obj != OBJ_HANDLE_NULL
         && obj_field_int32_get(weapon_obj, OBJ_F_TYPE) == OBJ_TYPE_WEAPON
-        && animfx_id_get(&weapon_eye_candies, 5 * sub_49B290(weapon_obj) - 30143, &v1)) {
+        && animfx_id_get(&weapon_eye_candies, 5 * proto_get_description(weapon_obj) - 30143, &v1)) {
         projectile_speed = v1->projectile_speed;
     } else {
         projectile_speed = 0;
@@ -15312,7 +15312,7 @@ bool anim_play_weapon_fx(CombatContext* combat, int64_t source_obj, int64_t targ
     }
 
     art_id = obj_field_int32_get(source_obj, OBJ_F_CURRENT_AID);
-    fx_id = 5 * (sub_49B290(weapon_obj) - 6029);
+    fx_id = 5 * (proto_get_description(weapon_obj) - 6029);
     sub_4CCD20(&weapon_eye_candies, &node, target_obj, -1, fx_id + which);
     node.rotation = tig_art_id_rotation_get(art_id);
     node.animate = true;

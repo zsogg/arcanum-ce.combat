@@ -934,7 +934,7 @@ int tech_from_schematic(int schematic)
     // field (`OBJ_F_ITEM_DISCIPLINE`).
     if (schematic >= 4000) {
         schematic_ui_info_get(schematic, &schematic_info);
-        obj = sub_4685A0(schematic_info.prod[0]);
+        obj = proto_get_by_description(schematic_info.prod[0]);
         return obj_field_int32_get(obj, OBJ_F_ITEM_DISCIPLINE);
     }
 
@@ -1167,7 +1167,7 @@ void schematic_ui_redraw(void)
     tig_font_pop();
 
     // Draw tech discipline icon.
-    obj = sub_4685A0(schematic_info.prod[0]);
+    obj = proto_get_by_description(schematic_info.prod[0]);
     icon[0] = (char)obj_field_int32_get(obj, OBJ_F_ITEM_DISCIPLINE) + '0';
     icon[1] = '\0';
 
@@ -1239,14 +1239,14 @@ void schematic_ui_draw_component(int ingr, SchematicInfo* schematic_info, bool* 
     // Check availability of the required item.
     if (ingr == 0) {
         for (index = 0; index < 3; index++) {
-            item_obj = sub_4685A0(schematic_info->item1[index]);
+            item_obj = proto_get_by_description(schematic_info->item1[index]);
             if (sub_462540(schematic_ui_primary_obj, item_obj, 0x7) != OBJ_HANDLE_NULL) {
                 break;
             }
         }
 
         if (index == 3) {
-            item_obj = sub_4685A0(schematic_info->item1[0]);
+            item_obj = proto_get_by_description(schematic_info->item1[0]);
             *have_item = false;
         } else {
             *have_item = true;
@@ -1255,14 +1255,14 @@ void schematic_ui_draw_component(int ingr, SchematicInfo* schematic_info, bool* 
         schematic_ui_component1_obj = item_obj;
     } else {
         for (index = 0; index < 3; index++) {
-            item_obj = sub_4685A0(schematic_info->item2[index]);
+            item_obj = proto_get_by_description(schematic_info->item2[index]);
             if (sub_462540(schematic_ui_primary_obj, item_obj, 0x7) != OBJ_HANDLE_NULL) {
                 break;
             }
         }
 
         if (index == 3) {
-            item_obj = sub_4685A0(schematic_info->item2[0]);
+            item_obj = proto_get_by_description(schematic_info->item2[0]);
             *have_item = false;
         } else {
             *have_item = true;
@@ -1434,7 +1434,7 @@ bool schematic_ui_process(int schematic, int64_t primary_obj, int64_t secondary_
 
     // Find available item for component 1.
     for (ingridient1 = 0; ingridient1 < 3; ingridient1++) {
-        obj = sub_4685A0(info.item1[ingridient1]);
+        obj = proto_get_by_description(info.item1[ingridient1]);
         ingridient1_obj = sub_462540(primary_obj, obj, 0x7);
         if (ingridient1_obj != OBJ_HANDLE_NULL) {
             break;
@@ -1446,7 +1446,7 @@ bool schematic_ui_process(int schematic, int64_t primary_obj, int64_t secondary_
 
     // Find available item for component 2.
     for (ingridient2 = 0; ingridient2 < 3; ingridient2++) {
-        obj = sub_4685A0(info.item2[ingridient2]);
+        obj = proto_get_by_description(info.item2[ingridient2]);
         ingridient2_obj = sub_462540(primary_obj, obj, 0x7);
         if (ingridient2_obj != OBJ_HANDLE_NULL) {
             break;
@@ -1488,7 +1488,7 @@ bool schematic_ui_process(int schematic, int64_t primary_obj, int64_t secondary_
 
     // Create final product items.
     for (qty = 0; qty < info.qty; qty++) {
-        if (!object_create(sub_4685A0(prod), loc, &prod_obj)) {
+        if (!object_create(proto_get_by_description(prod), loc, &prod_obj)) {
             return false;
         }
 
@@ -1563,9 +1563,9 @@ void schematic_ui_learned_schematic_component_names(int tech, int degree, char* 
 
     schematic_ui_info_get(tech_schematic_get(tech, degree), &schematic_info);
 
-    obj = sub_4685A0(schematic_info.item1[0]);
+    obj = proto_get_by_description(schematic_info.item1[0]);
     object_examine(obj, obj, item1);
 
-    obj = sub_4685A0(schematic_info.item2[0]);
+    obj = proto_get_by_description(schematic_info.item2[0]);
     object_examine(obj, obj, item2);
 }

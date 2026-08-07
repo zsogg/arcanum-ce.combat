@@ -204,7 +204,7 @@ int64_t newspaper_create(int num, int64_t loc)
     int64_t obj;
 
     // Retrieve "Tarant Newspaper" prototype.
-    prototype_obj = sub_4685A0(BP_TARANT_NEWSPAPER);
+    prototype_obj = proto_get_by_description(BP_TARANT_NEWSPAPER);
 
     // Create the newspaper object at the specified location.
     if (!object_create(prototype_obj, loc, &obj)) {

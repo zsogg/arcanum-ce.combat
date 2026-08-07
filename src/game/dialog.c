@@ -423,11 +423,11 @@ bool dialog_load(const char* path, int* dlg_ptr)
 
     if (find_dialog(path, &index)) {
         dialog_files[index].refcount++;
-        dialog_files[index].timestamp = sub_45A7C0();
+        dialog_files[index].timestamp = timeevent_current_datetime();
     } else {
         strcpy(dialog.path, path);
         dialog.refcount = 1;
-        dialog.timestamp = sub_45A7C0();
+        dialog.timestamp = timeevent_current_datetime();
         dialog.entries_length = 0;
         dialog.entries_capacity = 0;
         dialog.entries = NULL;

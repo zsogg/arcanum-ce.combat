@@ -433,7 +433,7 @@ void combat_create_projectile(CombatContext* combat, int64_t loc, int a3, int a4
     unsigned int weapon_flags;
     unsigned int critter_flags2;
 
-    if (!object_create(sub_4685A0(BP_PROJECTILE), loc, &proj_obj)) {
+    if (!object_create(proto_get_by_description(BP_PROJECTILE), loc, &proj_obj)) {
         return;
     }
 

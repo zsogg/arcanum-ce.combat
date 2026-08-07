@@ -1488,7 +1488,7 @@ bool gamelib_saveinfo_init(const char* name, const char* description, GameSaveIn
     save_info->pc_location = obj_field_int64_get(pc_obj, OBJ_F_LOCATION);
     save_info->story_state = script_story_state_get();
     strcpy(save_info->description, description);
-    save_info->datetime = sub_45A7C0();
+    save_info->datetime = timeevent_current_datetime();
 
     return true;
 }

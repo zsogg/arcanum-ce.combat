@@ -228,7 +228,7 @@ bool player_obj_create_player(PlayerCreateInfo* player_create_info)
     char str[80];
 
     if (player_create_info->basic_prototype != -1) {
-        player_pc_prototype_obj = obj_pool_perm_lookup(obj_get_id(sub_4685A0(player_create_info->basic_prototype)));
+        player_pc_prototype_obj = obj_pool_perm_lookup(obj_get_id(proto_get_by_description(player_create_info->basic_prototype)));
     } else {
         player_pc_prototype_obj = sub_468570(OBJ_TYPE_PC);
     }

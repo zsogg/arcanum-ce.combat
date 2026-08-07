@@ -2558,7 +2558,7 @@ void object_bust(int64_t obj, int64_t triggerer_obj)
         portal_bust(obj, triggerer_obj);
         break;
     case OBJ_TYPE_CONTAINER:
-        if (sub_49B290(obj) == BP_JUNK_PILE) {
+        if (proto_get_description(obj) == BP_JUNK_PILE) {
             object_hp_damage_set(obj, 0);
         } else {
             sub_463730(obj, true);
@@ -4012,7 +4012,7 @@ bool object_is_lockable(int64_t obj)
 {
     int type;
 
-    if (sub_49B290(obj) == BP_JUNK_PILE) {
+    if (proto_get_description(obj) == BP_JUNK_PILE) {
         return false;
     }
 
