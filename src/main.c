@@ -353,7 +353,7 @@ void main_loop(void)
 
     pc_obj = player_get_local_pc_obj();
     location = obj_field_int64_get(pc_obj, OBJ_F_LOCATION);
-    sub_43E770(pc_obj, location, 0, 0);
+    object_move_to(pc_obj, location, 0, 0);
     location_origin_set(location);
 
     art_id = obj_field_int32_get(pc_obj, OBJ_F_CURRENT_AID);

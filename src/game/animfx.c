@@ -161,8 +161,15 @@ void animfx_exit(void)
     }
 }
 
-// 0x4CCD20
-void sub_4CCD20(AnimFxList* list, AnimFxNode* node, int64_t obj, int mt_id, int fx_id)
+/**
+ * Initializes `node` for effect `fx_id` of `list` played on `obj`, with all
+ * optional fields defaulted (no parent, no animation, no light/art capture,
+ * default scale). Callers tweak fields as needed and hand the node to
+ * `animfx_add` / `animfx_has` / `animfx_preload_art`.
+ *
+ * 0x4CCD20
+ */
+void animfx_node_init(AnimFxList* list, AnimFxNode* node, int64_t obj, int mt_id, int fx_id)
 {
     node->list = list;
     node->obj = obj;

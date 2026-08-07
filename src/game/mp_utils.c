@@ -137,7 +137,7 @@ void sub_4EDF20(int64_t obj, int64_t location, int dx, int dy, bool a7)
         if (a7 && player_is_local_pc_obj(obj)) {
             location_origin_set(location);
         }
-        sub_43E770(obj, location, dx, dy);
+        object_move_to(obj, location, dx, dy);
     }
 
     if (tig_net_is_active()
@@ -159,7 +159,7 @@ void sub_4EDFF0(Packet99* pkt)
 
     if (tig_net_is_host()) {
         obj = obj_pool_perm_lookup(pkt->oid);
-        sub_43E770(obj, pkt->location, pkt->dx, pkt->dy);
+        object_move_to(obj, pkt->location, pkt->dx, pkt->dy);
 
         if (pkt->field_30 && player_is_local_pc_obj(obj)) {
             location_origin_set(pkt->location);

@@ -162,7 +162,7 @@ bool anim_ui_bkg_process_callback(TimeEvent* timeevent)
                 sub_575770();
             }
             if (mainmenu_ui_is_active()) {
-                sub_5412D0();
+                mainmenu_ui_dismiss();
                 anim_ui_event_add_delay(ANIM_UI_EVENT_TYPE_END_DEATH, -1, 300);
             } else {
                 slide_ui_start(SLIDE_UI_TYPE_DEATH);
@@ -184,7 +184,7 @@ bool anim_ui_bkg_process_callback(TimeEvent* timeevent)
             sub_575770();
         }
         if (mainmenu_ui_is_active()) {
-            sub_5412D0();
+            mainmenu_ui_dismiss();
             anim_ui_event_add_delay(ANIM_UI_EVENT_TYPE_END_GAME, -1, 300);
         } else {
             slide_ui_start(SLIDE_UI_TYPE_END_GAME);

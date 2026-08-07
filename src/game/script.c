@@ -3559,7 +3559,7 @@ void script_fx_play(int64_t obj, int fx_id)
 {
     AnimFxNode fx;
 
-    sub_4CCD20(&script_eye_candies, &fx, obj, -1, fx_id);
+    animfx_node_init(&script_eye_candies, &fx, obj, -1, fx_id);
     fx.rotation = tig_art_id_rotation_get(obj_field_int32_get(obj, OBJ_F_CURRENT_AID));
     fx.animate = true;
     animfx_add(&fx);

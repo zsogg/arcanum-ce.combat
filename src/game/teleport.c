@@ -464,7 +464,7 @@ bool sub_4D39A0(TeleportData* teleport_data)
                 location_origin_set(node->loc);
             }
 
-            sub_43E770(node->obj, node->loc, 0, 0);
+            object_move_to(node->obj, node->loc, 0, 0);
         }
         node = node->next;
     }

@@ -2519,7 +2519,7 @@ void MTComponentEyeCandy_ProcFunc(void)
     } else {
         AnimFxNode node;
 
-        sub_4CCD20(&spell_eye_candies,
+        animfx_node_init(&spell_eye_candies,
             &node,
             stru_5E6D28.target_obj,
             magictech_cur_run_info->id,
@@ -4376,7 +4376,7 @@ void sub_455350(int64_t obj, int64_t target_loc)
         }
 
         anim_interrupt_all_goals_of_obj(obj, 5, false, true);
-        sub_43E770(obj, source_loc, 0, 0);
+        object_move_to(obj, source_loc, 0, 0);
 
         if (player_is_local_pc_obj(obj)) {
             location_origin_set(source_loc);
@@ -5188,7 +5188,7 @@ void magictech_preload_art(MagicTechRunInfo* run_info)
     AnimFxNode node;
 
     for (type = 0; type < MAGICTECH_EYE_CANDY_TYPE_COUNT; type++) {
-        sub_4CCD20(&spell_eye_candies,
+        animfx_node_init(&spell_eye_candies,
             &node,
             run_info->parent_obj.obj,
             run_info->id,
@@ -5207,7 +5207,7 @@ bool sub_456D20(int mt_id, tig_art_id_t* art_id_ptr, tig_art_id_t* light_art_id_
         return false;
     }
 
-    sub_4CCD20(&spell_eye_candies,
+    animfx_node_init(&spell_eye_candies,
         &node,
         run_info->parent_obj.obj,
         run_info->id,
@@ -5240,7 +5240,7 @@ void sub_456E00(int mt_id)
     AnimFxNode node;
 
     if (magictech_id_to_run_info(mt_id, &run_info)) {
-        sub_4CCD20(&spell_eye_candies,
+        animfx_node_init(&spell_eye_candies,
             &node,
             run_info->parent_obj.obj,
             run_info->id,
@@ -5255,7 +5255,7 @@ void magictech_fx_add(int64_t obj, int fx)
 {
     AnimFxNode node;
 
-    sub_4CCD20(&spell_eye_candies, &node, obj, -1, fx % 10 + 6 * (fx / 10));
+    animfx_node_init(&spell_eye_candies, &node, obj, -1, fx % 10 + 6 * (fx / 10));
     node.animate = true;
     animfx_add(&node);
 }
@@ -6787,7 +6787,7 @@ void magictech_anim_play_hit_fx(int64_t obj, CombatContext* combat)
 
     if ((spell_flags & OSF_SHIELDED) != 0) {
         if (sub_459170(obj, OSF_SHIELDED, &magictech)) {
-            sub_4CCD20(&spell_eye_candies,
+            animfx_node_init(&spell_eye_candies,
                 &node,
                 obj,
                 magictech_run_info[magictech].id,
@@ -6801,7 +6801,7 @@ void magictech_anim_play_hit_fx(int64_t obj, CombatContext* combat)
 
     if ((spell_flags & OSF_MAGNETIC_INVERSION) != 0) {
         if (sub_459170(obj, OSF_MAGNETIC_INVERSION, &magictech)) {
-            sub_4CCD20(&spell_eye_candies,
+            animfx_node_init(&spell_eye_candies,
                 &node,
                 obj,
                 magictech_run_info[magictech].id,
@@ -6810,7 +6810,7 @@ void magictech_anim_play_hit_fx(int64_t obj, CombatContext* combat)
             animfx_add(&node);
         } else {
             tig_debug_printf("MagicTech: magictech_anim_play_hit_fx: Failed to match spell from flags!\n");
-            sub_4CCD20(&spell_eye_candies, &node, obj, -1, 1097);
+            animfx_node_init(&spell_eye_candies, &node, obj, -1, 1097);
             node.animate = true;
             animfx_add(&node);
         }
@@ -6826,7 +6826,7 @@ void magictech_anim_play_hit_fx(int64_t obj, CombatContext* combat)
     }
 
     if (proto_get_description(obj) == BP_KERGHAN_3 && !combat->total_dam) {
-        sub_4CCD20(&spell_eye_candies, &node, obj, -1, 1259);
+        animfx_node_init(&spell_eye_candies, &node, obj, -1, 1259);
         node.animate = true;
         animfx_add(&node);
     }

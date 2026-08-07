@@ -8459,7 +8459,7 @@ void anim_goal_reset_position_mp(AnimID* anim_id, int64_t obj, int64_t loc, tig_
         object_set_current_aid(obj, art_id);
     }
 
-    sub_43E770(obj, loc, offset_x, offset_y);
+    object_move_to(obj, loc, offset_x, offset_y);
 
     if (anim_id_to_run_info(anim_id, &run_info)) {
         run_info->flags = flags;
@@ -10463,7 +10463,7 @@ bool sub_42E9B0(AnimRunInfo* run_info)
             }
         }
 
-        sub_43E770(obj, loc, 0, 0);
+        object_move_to(obj, loc, 0, 0);
         run_info->cur_stack_data->params[AGDATA_TARGET_TILE].loc = loc;
         run_info->goals[0].params[AGDATA_TARGET_TILE].loc = loc;
 
@@ -10664,7 +10664,7 @@ bool sub_42F000(AnimRunInfo* run_info)
         return false;
     }
 
-    sub_43E770(obj, loc, offset_x - x_shifts[rot], offset_y - y_shifts[rot]);
+    object_move_to(obj, loc, offset_x - x_shifts[rot], offset_y - y_shifts[rot]);
 
     return true;
 }
@@ -10814,7 +10814,7 @@ bool AGupdateAnimMoveStraight(AnimRunInfo* run_info)
             offset_y += (int)(loc_y - new_loc_y);
         }
 
-        sub_43E770(obj, new_loc, offset_x, offset_y);
+        object_move_to(obj, new_loc, offset_x, offset_y);
 
         run_info->path.curr += 2;
 
@@ -10949,7 +10949,7 @@ bool sub_42F6A0(AnimRunInfo* run_info)
             offset_y += (int)(projectile_loc_y - new_loc_y);
         }
 
-        sub_43E770(projectile_obj, new_loc, offset_x, offset_y);
+        object_move_to(projectile_obj, new_loc, offset_x, offset_y);
 
         run_info->path.curr += 2;
 
@@ -11012,7 +11012,7 @@ bool AGupdateAnimMoveStraightKnockback(AnimRunInfo* run_info)
 
         if (new_loc != loc) {
             if (sub_42FD70(run_info, obj, &(run_info->path), loc, new_loc)) {
-                sub_43E770(obj, loc, 0, 0);
+                object_move_to(obj, loc, 0, 0);
                 combat_context_init(OBJ_HANDLE_NULL, obj, &combat);
                 combat.dam[DAMAGE_TYPE_NORMAL] = random_between(1, (run_info->path.max - run_info->path.curr) / 2);
                 combat.dam[DAMAGE_TYPE_FATIGUE] = random_between(1, (run_info->path.max - run_info->path.curr) / 2);
@@ -11031,7 +11031,7 @@ bool AGupdateAnimMoveStraightKnockback(AnimRunInfo* run_info)
             offset_y += (int)(loc_y - new_loc_y);
         }
 
-        sub_43E770(obj, new_loc, offset_x, offset_y);
+        object_move_to(obj, new_loc, offset_x, offset_y);
 
         run_info->path.curr += 2;
         if (run_info->path.curr >= run_info->path.max) {
@@ -11604,7 +11604,7 @@ bool sub_4305D0(AnimRunInfo* run_info)
                 offset_y += 2 * v2 - 15;
             }
 
-            sub_43E770(obj, new_loc, offset_x, offset_y);
+            object_move_to(obj, new_loc, offset_x, offset_y);
             run_info->path.flags |= 0x02;
 
             if (tig_net_is_active()
@@ -12020,7 +12020,7 @@ bool AGbeginAnimEyeCandy(AnimRunInfo* run_info)
         AnimFxNode node;
 
         animfx_list = animfx_list_get(run_info->cur_stack_data->params[AGDATA_SKILL_DATA].data);
-        sub_4CCD20(animfx_list, &node, obj, -1, run_info->cur_stack_data->params[AGDATA_SCRATCH_VAL4].data);
+        animfx_node_init(animfx_list, &node, obj, -1, run_info->cur_stack_data->params[AGDATA_SCRATCH_VAL4].data);
         node.art_id_ptr = &art_id;
         if (!sub_4CD7A0(&node)) {
             return false;
@@ -12396,7 +12396,7 @@ bool AGbeginAnimEyeCandyReverse(AnimRunInfo* run_info)
         AnimFxNode node;
 
         animfx_list = animfx_list_get(run_info->cur_stack_data->params[AGDATA_SKILL_DATA].data);
-        sub_4CCD20(animfx_list, &node, obj, -1, run_info->cur_stack_data->params[AGDATA_SCRATCH_VAL4].data);
+        animfx_node_init(animfx_list, &node, obj, -1, run_info->cur_stack_data->params[AGDATA_SCRATCH_VAL4].data);
         node.art_id_ptr = &art_id;
         if (!sub_4CD7A0(&node)) {
             return false;
@@ -13138,7 +13138,7 @@ void anim_play_blood_splotch_fx(int64_t obj, int blood_splotch_type, int damage_
         }
     }
 
-    sub_4CCD20(&anim_eye_candies, &fx, obj, -1, fx_id);
+    animfx_node_init(&anim_eye_candies, &fx, obj, -1, fx_id);
     fx.animate = true;
     fx.max_simultaneous_effects = 3;
     animfx_add(&fx);
@@ -15345,7 +15345,7 @@ bool anim_play_weapon_fx(CombatContext* combat, int64_t source_obj, int64_t targ
 
     art_id = obj_field_int32_get(source_obj, OBJ_F_CURRENT_AID);
     fx_id = 5 * (proto_get_description(weapon_obj) - 6029);
-    sub_4CCD20(&weapon_eye_candies, &node, target_obj, -1, fx_id + which);
+    animfx_node_init(&weapon_eye_candies, &node, target_obj, -1, fx_id + which);
     node.rotation = tig_art_id_rotation_get(art_id);
     node.animate = true;
     node.max_simultaneous_effects = 2;
@@ -15356,7 +15356,7 @@ bool anim_play_weapon_fx(CombatContext* combat, int64_t source_obj, int64_t targ
     if (which == ANIM_WEAPON_EYE_CANDY_TYPE_HIT) {
         // TODO: Check if there is a bug in fx id type, probably should be
         // 4 (secondary hit).
-        sub_4CCD20(&weapon_eye_candies, &node, target_obj, -1, fx_id + 5);
+        animfx_node_init(&weapon_eye_candies, &node, target_obj, -1, fx_id + 5);
         node.animate = true;
         node.max_simultaneous_effects = 0;
         node.flags |= ANIMFX_PLAY_STACK;

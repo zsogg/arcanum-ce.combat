@@ -75,7 +75,7 @@ static void object_list_vicinity_loc(int64_t loc, unsigned int flags, ObjectList
 static bool object_create_func(int64_t proto_obj, int64_t loc, int64_t* obj_ptr, ObjectID oid);
 static bool object_duplicate_func(int64_t proto_obj, int64_t loc, ObjectID* oids, int64_t* obj_ptr);
 static bool sub_442260(int64_t obj, int64_t loc);
-static void sub_4423E0(int64_t obj, int offset_x, int offset_y);
+static void object_set_offsets(int64_t obj, int offset_x, int offset_y);
 static void object_render_palette_clear(int64_t obj);
 static void sub_442D90(int64_t obj, ObjectRenderColors* colors);
 static TigPalette* object_render_palette_get(int64_t obj);
@@ -2227,8 +2227,18 @@ void object_get_rect(int64_t obj, unsigned int flags, TigRect* rect)
     }
 }
 
-// 0x43E770
-void sub_43E770(int64_t obj, int64_t loc, int offset_x, int offset_y)
+/**
+ * Instantly places `obj` at `loc` with the given pixel offsets - the
+ * low-level positioning primitive under teleports, spawns, straight-line
+ * movement updates and multiplayer position resets. Handles the sector
+ * object-list bookkeeping (move within, or remove/insert across sector
+ * boundaries), text/floater follow, screen rect invalidation, and the
+ * light and animation notifications. Same-location calls reduce to
+ * `object_set_offsets`.
+ *
+ * 0x43E770
+ */
+void object_move_to(int64_t obj, int64_t loc, int offset_x, int offset_y)
 {
     unsigned int flags;
     int64_t cur_loc;
@@ -2245,7 +2255,7 @@ void sub_43E770(int64_t obj, int64_t loc, int offset_x, int offset_y)
 
     cur_loc = obj_field_int64_get(obj, OBJ_F_LOCATION);
     if (cur_loc == loc) {
-        sub_4423E0(obj, offset_x, offset_y);
+        object_set_offsets(obj, offset_x, offset_y);
         return;
     }
 
@@ -2317,7 +2327,7 @@ bool object_teleported_timeevent_process(TimeEvent* timeevent)
 void object_set_offset(int64_t obj, int offset_x, int offset_y)
 {
     if ((obj_field_int32_get(obj, OBJ_F_FLAGS) & OF_DESTROYED) == 0) {
-        sub_4423E0(obj, offset_x, offset_y);
+        object_set_offsets(obj, offset_x, offset_y);
     }
 }
 
@@ -2783,7 +2793,7 @@ void object_inc_current_aid(int64_t obj)
             obj_field_int32_set(obj, OBJ_F_CURRENT_AID, next_aid);
             if (tig_art_frame_data(next_aid, &art_frame_data) == TIG_OK) {
                 if (art_frame_data.offset_x != 0 || art_frame_data.offset_y != 0) {
-                    sub_4423E0(obj,
+                    object_set_offsets(obj,
                         art_frame_data.offset_x + obj_field_int32_get(obj, OBJ_F_OFFSET_X),
                         art_frame_data.offset_y + obj_field_int32_get(obj, OBJ_F_OFFSET_Y));
                 }
@@ -2815,7 +2825,7 @@ void object_dec_current_aid(int64_t obj)
             obj_field_int32_set(obj, OBJ_F_CURRENT_AID, prev_aid);
             if (tig_art_frame_data(prev_aid, &art_frame_data) == TIG_OK) {
                 if (art_frame_data.offset_x != 0 || art_frame_data.offset_y != 0) {
-                    sub_4423E0(obj,
+                    object_set_offsets(obj,
                         art_frame_data.offset_x + obj_field_int32_get(obj, OBJ_F_OFFSET_X),
                         art_frame_data.offset_y + obj_field_int32_get(obj, OBJ_F_OFFSET_Y));
                 }
@@ -2960,7 +2970,7 @@ void object_cycle_rotation(int64_t obj)
             obj_field_int32_set(obj,
                 OBJ_F_RENDER_FLAGS,
                 obj_field_int32_get(obj, OBJ_F_RENDER_FLAGS) & ~ORF_08000000);
-            sub_4423E0(obj, 0, 0);
+            object_set_offsets(obj, 0, 0);
         }
     }
 }
@@ -4230,7 +4240,7 @@ bool object_duplicate_func(int64_t proto_obj, int64_t loc, ObjectID* oids, int64
         return false;
     }
 
-    sub_43E770(*obj_ptr, loc, 0, 0);
+    object_move_to(*obj_ptr, loc, 0, 0);
 
     if (obj_field_int32_get(*obj_ptr, OBJ_F_TYPE) == OBJ_TYPE_NPC) {
         obj_field_int64_set(*obj_ptr, OBJ_F_NPC_STANDPOINT_DAY, loc);
@@ -4304,8 +4314,13 @@ bool sub_442260(int64_t obj, int64_t loc)
     return true;
 }
 
-// 0x4423E0
-void sub_4423E0(int64_t obj, int offset_x, int offset_y)
+/**
+ * Updates only `obj`'s pixel offsets within its current tile, with the same
+ * follow/invalidate bookkeeping as `object_move_to`.
+ *
+ * 0x4423E0
+ */
+void object_set_offsets(int64_t obj, int offset_x, int offset_y)
 {
     TigRect rect;
     int64_t loc;
@@ -5354,7 +5369,7 @@ void sub_4445A0(int64_t a1, int64_t a2)
             }
         } else {
             loc = obj_field_int64_get(a1, OBJ_F_LOCATION);
-            sub_43E770(a2, loc, 0, 0);
+            object_move_to(a2, loc, 0, 0);
         }
     }
 }

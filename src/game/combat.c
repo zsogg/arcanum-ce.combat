@@ -503,7 +503,7 @@ void sub_4B2690(int64_t proj_obj, int64_t a2, int64_t a3, CombatContext* combat,
     if ((proj_flags & 0x40) != 0) {
         weapon_obj = obj_field_handle_get(proj_obj, OBJ_F_PROJECTILE_PARENT_WEAPON);
         loc = obj_field_int64_get(proj_obj, OBJ_F_LOCATION);
-        sub_43E770(weapon_obj, loc, 0, 0);
+        object_move_to(weapon_obj, loc, 0, 0);
         object_flags_unset(weapon_obj, OF_OFF);
         object_destroy(proj_obj);
     } else if ((proj_flags & 0x1000) != 0) {
@@ -3816,7 +3816,7 @@ void combat_recalc_reaction(int64_t obj)
     if (critter_is_dead(obj) || sub_4B7DC0(obj)) {
         animfx_remove(&combat_eye_candies, obj, 0, -1);
     } else {
-        sub_4CCD20(&combat_eye_candies, &node, obj, -1, 0);
+        animfx_node_init(&combat_eye_candies, &node, obj, -1, 0);
         if (!animfx_has(&node)) {
             animfx_add(&node);
         }

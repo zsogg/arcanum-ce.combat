@@ -268,7 +268,7 @@ void trap_mark_known(int64_t pc_obj, int64_t trap_obj, int reason)
     } else {
         obj_arrayfield_script_get(trap_obj, OBJ_F_SCRIPTS_IDX, SAP_USE, &scr);
         if (scr.num >= TRAP_SCRIPT_FIRST && scr.num < TRAP_SCRIPT_COUNT) {
-            sub_4CCD20(&trap_eye_candies,
+            animfx_node_init(&trap_eye_candies,
                 &animfx,
                 trap_obj,
                 -1,
@@ -623,7 +623,7 @@ bool trap_script_execute(ScriptInvocation* invocation)
     }
 
     if (base != -1) {
-        sub_4CCD20(&trap_eye_candies,
+        animfx_node_init(&trap_eye_candies,
             &animfx,
             invocation->triggerer_obj,
             -1,
@@ -641,7 +641,7 @@ bool trap_script_execute(ScriptInvocation* invocation)
         while (node != NULL) {
             trigger_trap(node->obj, invocation);
             if (base != -1) {
-                sub_4CCD20(&trap_eye_candies,
+                animfx_node_init(&trap_eye_candies,
                     &animfx,
                     node->obj,
                     -1,
@@ -662,7 +662,7 @@ bool trap_script_execute(ScriptInvocation* invocation)
         if (invocation->triggerer_obj != OBJ_HANDLE_NULL) {
             trigger_trap(invocation->triggerer_obj, invocation);
             if (base != -1) {
-                sub_4CCD20(&trap_eye_candies,
+                animfx_node_init(&trap_eye_candies,
                     &animfx,
                     invocation->triggerer_obj,
                     -1,

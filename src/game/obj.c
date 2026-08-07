@@ -91,7 +91,7 @@ static void object_convert_scalar_ids_to_handles(Object* object);
 static void object_convert_array_ids_to_handles(Object* object);
 static bool convert_handle_to_id(void* entry, int index);
 static bool convert_id_to_handle(void* entry, int index);
-static int sub_40C030(ObjectType object_type);
+static int obj_type_change_array_len(ObjectType object_type);
 static bool object_field_valid(int type, int fld);
 static bool sub_40C560(Object* object, int fld);
 static void sub_40C580(Object* object);
@@ -1071,7 +1071,7 @@ void obj_perm_dup(int64_t* copy_obj_ptr, int64_t existing_obj)
     copy_object->modified = false;
     copy_object->data = (intptr_t*)CALLOC(copy_object->num_fields, sizeof(*copy_object->data));
     sub_40C5C0(copy_object, existing_object);
-    memset(copy_object->field_4C, 0, 4 * sub_40C030(copy_object->type));
+    memset(copy_object->field_4C, 0, 4 * obj_type_change_array_len(copy_object->type));
 
     dword_5D1108 = existing_object;
     object_inst_enumerate_overridden_fields(copy_object, object_inst_field_copy);
@@ -1344,7 +1344,7 @@ bool obj_dif_write(TigFile* stream, int64_t obj)
         return false;
     }
 
-    cnt = sub_40C030(object->type);
+    cnt = obj_type_change_array_len(object->type);
     for (index = 0; index < cnt; index++) {
         if (!objf_write(&(object->field_4C[index]), sizeof(object->field_4C[0]), stream)) {
             obj_unlock(obj);
@@ -1418,7 +1418,7 @@ bool obj_dif_read(TigFile* stream, int64_t obj)
         }
     }
 
-    cnt = sub_40C030(object->type);
+    cnt = obj_type_change_array_len(object->type);
     for (idx = 0; idx < cnt; idx++) {
         if (!objf_read(&(object->field_4C[idx]), 4, stream)) {
             tig_debug_println("Error in obj_dif_read:\n  Unable to read one of the modified flag vars.");
@@ -1462,7 +1462,7 @@ void sub_406B80(int64_t obj)
 
     object = obj_lock(obj);
     if (object->modified) {
-        cnt = sub_40C030(object->type);
+        cnt = obj_type_change_array_len(object->type);
         for (index = 0; index < cnt; index++) {
             object->field_4C[index] = 0;
         }
@@ -2916,7 +2916,7 @@ bool obj_proto_write_file(TigFile* stream, int64_t obj)
         return false;
     }
 
-    cnt = sub_40C030(object->type);
+    cnt = obj_type_change_array_len(object->type);
     if (!objf_write(object->field_4C, sizeof(object->field_4C[0]) * cnt, stream)) {
         obj_unlock(obj);
         return false;
@@ -2956,7 +2956,7 @@ bool obj_proto_read_file(TigFile* stream, int64_t* obj_ptr, ObjectID oid)
         return false;
     }
 
-    size = 4 * sub_40C030(object->type);
+    size = 4 * obj_type_change_array_len(object->type);
     object->field_4C = MALLOC(size);
     if (!objf_read(object->field_4C, size, stream)) {
         obj_unlock(obj);
@@ -3017,7 +3017,7 @@ bool obj_inst_write_file(TigFile* stream, int64_t obj)
         return false;
     }
 
-    cnt = sub_40C030(object->type);
+    cnt = obj_type_change_array_len(object->type);
     if (!objf_write(object->field_48, sizeof(object->field_48[0]) * cnt, stream)) {
         obj_unlock(obj);
         return false;
@@ -3067,7 +3067,7 @@ bool obj_inst_read_file(TigFile* stream, int64_t* obj_ptr, ObjectID oid)
 
     object->data = (intptr_t*)CALLOC(object->num_fields, sizeof(*object->data));
 
-    if (!objf_read(object->field_48, sizeof(*object->field_48) * sub_40C030(object->type), stream)) {
+    if (!objf_read(object->field_48, sizeof(*object->field_48) * obj_type_change_array_len(object->type), stream)) {
         obj_unlock(obj);
         obj_pool_deallocate(obj);
         return false;
@@ -3106,7 +3106,7 @@ void obj_proto_write_mem(WriteBuffer* wb, int64_t obj)
     write_buffer_append(&(object->prototype_oid), sizeof(object->prototype_oid), wb);
     write_buffer_append(&(object->oid), sizeof(object->oid), wb);
     write_buffer_append(&(object->type), sizeof(object->type), wb);
-    cnt = sub_40C030(object->type);
+    cnt = obj_type_change_array_len(object->type);
     write_buffer_append(object->field_4C, sizeof(object->field_4C[0]) * cnt, wb);
     dword_5D10F4 = 0;
     dword_5D1118 = wb;
@@ -3127,7 +3127,7 @@ bool obj_proto_read_mem(uint8_t* data, int64_t* obj_ptr)
     mem_read_advance(&(object->oid), sizeof(object->oid), &data);
     mem_read_advance(&(object->type), sizeof(object->type), &data);
 
-    size = sizeof(*object->field_4C) * sub_40C030(object->type);
+    size = sizeof(*object->field_4C) * obj_type_change_array_len(object->type);
     object->field_4C = MALLOC(size);
     mem_read_advance(object->field_4C, size, &data);
 
@@ -3167,7 +3167,7 @@ void obj_inst_write_mem(WriteBuffer* wb, int64_t obj)
     write_buffer_append(&(object->oid), sizeof(object->oid), wb);
     write_buffer_append(&(object->type), sizeof(object->type), wb);
     write_buffer_append(&(object->num_fields), sizeof(object->num_fields), wb);
-    cnt = sub_40C030(object->type);
+    cnt = obj_type_change_array_len(object->type);
     write_buffer_append(object->field_48, sizeof(object->field_48[0]) * cnt, wb);
     dword_5D1118 = wb;
 
@@ -3193,7 +3193,7 @@ bool obj_inst_read_mem(uint8_t* data, int64_t* obj_ptr)
     sub_40C580(object);
 
     object->data = (intptr_t*)CALLOC(object->num_fields, sizeof(*object->data));
-    mem_read_advance(object->field_48, 4 * sub_40C030(object->type), &data);
+    mem_read_advance(object->field_48, 4 * obj_type_change_array_len(object->type), &data);
 
     dword_5D111C = data;
     if (!object_inst_enumerate_overridden_fields(object, obj_inst_field_read_mem)) {
@@ -4152,8 +4152,16 @@ bool convert_id_to_handle(void* entry, int index)
     return true;
 }
 
-// 0x40C030
-int sub_40C030(ObjectType object_type)
+/**
+ * Number of 32-bit words in `object_type`'s change/presence bitmap arrays
+ * (`field_48`/`field_4C`): the change_array_idx of the type's last field,
+ * plus one. Item subtypes that define no fields of their own fall back to
+ * the generic item (and ultimately object) tail field. Serialization walks
+ * exactly this many words when reading or writing a bitmap.
+ *
+ * 0x40C030
+ */
+int obj_type_change_array_len(ObjectType object_type)
 {
     int v1;
 
@@ -4346,7 +4354,7 @@ void sub_40C580(Object* object)
 {
     int cnt;
 
-    cnt = sub_40C030(object->type);
+    cnt = obj_type_change_array_len(object->type);
     object->field_48 = (int*)CALLOC(sizeof(int) * 2 * cnt, 1);
     object->field_4C = &(object->field_48[cnt]);
 }
@@ -4362,7 +4370,7 @@ void sub_40C5C0(Object* dst, Object* src)
 {
     int cnt;
 
-    cnt = sub_40C030(dst->type);
+    cnt = obj_type_change_array_len(dst->type);
     dst->field_48 = (int*)MALLOC(sizeof(int) * 2 * cnt);
     dst->field_4C = &(dst->field_48[cnt]);
     memcpy(dst->field_48, src->field_48, sizeof(int) * 2 * cnt);
@@ -4373,7 +4381,7 @@ void sub_40C610(Object* object)
 {
     int cnt;
 
-    cnt = sub_40C030(object->type);
+    cnt = obj_type_change_array_len(object->type);
     object->field_4C = (int*)CALLOC(sizeof(int) * cnt, 1);
 }
 
@@ -4388,7 +4396,7 @@ void sub_40C650(Object* dst, Object* src)
 {
     int cnt;
 
-    cnt = sub_40C030(dst->type);
+    cnt = obj_type_change_array_len(dst->type);
     dst->field_4C = (int*)MALLOC(sizeof(int) * cnt);
 
     memcpy(dst->field_4C, src->field_4C, sizeof(int) * cnt);
@@ -4399,7 +4407,7 @@ void sub_40C690(Object* object)
 {
     int cnt;
 
-    cnt = sub_40C030(object->type);
+    cnt = obj_type_change_array_len(object->type);
     memset(object->field_4C, 0, sizeof(int) * cnt);
 }
 

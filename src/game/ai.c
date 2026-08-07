@@ -2654,7 +2654,7 @@ bool ai_waypoints_process(int64_t obj, bool a2)
     if (a2) {
         if (next_map == map) {
             anim_interrupt_all_goals_of_obj(obj, 4, false, true);
-            sub_43E770(obj, next_loc, 0, 0);
+            object_move_to(obj, next_loc, 0, 0);
         } else {
             teleport_data.flags = 0;
             teleport_data.map = next_map;
@@ -2765,7 +2765,7 @@ bool ai_standpoints_process(int64_t obj, bool a2)
     if (a2) {
         if (next_map == map) {
             anim_interrupt_all_goals_of_obj(obj, 4, 0, 1);
-            sub_43E770(obj, standpoint_loc, 0, 0);
+            object_move_to(obj, standpoint_loc, 0, 0);
         } else {
             teleport_data.flags = 0;
             teleport_data.map = next_map;
@@ -2989,7 +2989,7 @@ bool sub_4AD4D0(int64_t obj)
     }
 
     anim_interrupt_all_goals_of_obj(obj, 4, false, true);
-    sub_43E770(obj, obj_field_int64_get(pc_leader_obj, OBJ_F_LOCATION), 0, 0);
+    object_move_to(obj, obj_field_int64_get(pc_leader_obj, OBJ_F_LOCATION), 0, 0);
 
     return true;
 }
