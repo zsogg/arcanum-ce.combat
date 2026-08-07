@@ -60,22 +60,22 @@ typedef enum ProtoField {
     PROTO_F_COUNT,
 } ProtoField;
 
-static ObjectType sub_4685D0(int description);
-static int sub_468600(ObjectType object_type);
-static void sub_468660(bool* rescan_ptr);
-static int sub_468720(ObjectType object_type);
-static void sub_468800(void);
+static ObjectType proto_description_to_type(int description);
+static int proto_first_description_of_type(ObjectType object_type);
+static void proto_recreate_missing(bool* rescan_ptr);
+static int proto_default_name(ObjectType object_type);
+static void proto_deallocate_all(void);
 static bool proto_save(int64_t obj);
 static ObjectID proto_description_to_oid(int description);
-static void sub_468890(int description);
-static void sub_468930(int64_t obj, int description);
-static void sub_49AFF0(int64_t obj, int description);
-static void sub_49B010(int64_t obj, int description);
-static void sub_49B220(int64_t obj, int description);
-static void sub_49B240(int64_t obj, int f, int percent);
-static void sub_49B2E0(int64_t obj);
-static void sub_49B340(int64_t obj, int description);
-static int sub_49B5A0(TigFile* stream, int64_t obj, int type);
+static void proto_recreate(int description);
+static void proto_init_properties(int64_t obj, int description);
+static void proto_init_npc(int64_t obj, int description);
+static void proto_init_unique_npc(int64_t obj, int description);
+static void proto_init_monster(int64_t obj, int description);
+static void proto_adjust_field_percent(int64_t obj, int f, int percent);
+static void proto_adjust_worth_by_complexity(int64_t obj);
+static void proto_load_critter_stats(int64_t obj, int description);
+static int proto_parse_critter_stats(TigFile* stream, int64_t obj, int type);
 static void sub_49BB40(int64_t obj, int a2);
 static bool sub_49BB70(const char* str, int* fld_ptr, int* a3, int* a4, int* a5);
 static int sub_49BF10(const char* str, const char** identifiers, int size);
@@ -87,7 +87,7 @@ static bool proto_id_list_check(int* proto_ids, int cnt, int id);
 static void proto_id_list_destroy(int* proto_ids);
 
 // 0x5B37FC
-static int dword_5B37FC[OBJ_TYPE_COUNT] = {
+static int proto_description_begin[OBJ_TYPE_COUNT] = {
     /*          OBJ_TYPE_WALL */ 1000,
     /*        OBJ_TYPE_PORTAL */ 2008,
     /*     OBJ_TYPE_CONTAINER */ 3023,
@@ -111,7 +111,7 @@ static int dword_5B37FC[OBJ_TYPE_COUNT] = {
 };
 
 // 0x5B384C
-static int dword_5B384C[OBJ_TYPE_COUNT] = {
+static int proto_description_end[OBJ_TYPE_COUNT] = {
     /*          OBJ_TYPE_WALL */ 1008,
     /*        OBJ_TYPE_PORTAL */ 2023,
     /*     OBJ_TYPE_CONTAINER */ 3061,
@@ -220,7 +220,7 @@ static const char* off_5B395C[] = {
 static bool in_proto_save;
 
 // 0x5E882C
-static ObjectID* dword_5E882C;
+static ObjectID* proto_first_oids;
 
 // 0x5E8830
 static bool initialized;
@@ -239,21 +239,21 @@ bool proto_init(GameInitInfo* init_info)
         return true;
     }
 
-    dword_5E882C = (ObjectID*)CALLOC(OBJ_TYPE_COUNT, sizeof(ObjectID));
+    proto_first_oids = (ObjectID*)CALLOC(OBJ_TYPE_COUNT, sizeof(ObjectID));
 
     tig_file_mkdir("proto");
 
     for (index = 0; index < OBJ_TYPE_COUNT; index++) {
-        dword_5E882C[index] = proto_description_to_oid(sub_468600(index));
+        proto_first_oids[index] = proto_description_to_oid(proto_first_description_of_type(index));
     }
 
     rescan = false;
-    sub_468660(&rescan);
+    proto_recreate_missing(&rescan);
 
     if (rescan) {
         obj_exit();
         if (!obj_init(init_info)) {
-            FREE(dword_5E882C);
+            FREE(proto_first_oids);
             return false;
         }
     }
@@ -277,8 +277,8 @@ bool proto_init(GameInitInfo* init_info)
 // 0x468310
 void proto_exit(void)
 {
-    sub_468800();
-    FREE(dword_5E882C);
+    proto_deallocate_all();
+    FREE(proto_first_oids);
     initialized = false;
 }
 
@@ -316,10 +316,16 @@ bool proto_save(int64_t obj)
     return true;
 }
 
-// 0x468570
-int64_t sub_468570(ObjectType object_type)
+/**
+ * Returns the prototype object for the first description of `object_type` -
+ * the type's canonical base prototype (e.g. the single PC proto for
+ * OBJ_TYPE_PC, basic coins for OBJ_TYPE_GOLD).
+ *
+ * 0x468570
+ */
+int64_t proto_get_first_by_type(ObjectType object_type)
 {
-    return obj_pool_perm_lookup(dword_5E882C[object_type]);
+    return obj_pool_perm_lookup(proto_first_oids[object_type]);
 }
 
 /**
@@ -333,13 +339,19 @@ int64_t proto_get_by_description(int description)
     return obj_pool_perm_lookup(proto_description_to_oid(description));
 }
 
-// 0x4685D0
-ObjectType sub_4685D0(int description)
+/**
+ * Maps a description (`BP_*`) to its object type via the per-type description
+ * ranges. Monsters and unique NPCs fold into OBJ_TYPE_NPC, matching how the
+ * ranges nest (see `proto_is_valid`).
+ *
+ * 0x4685D0
+ */
+ObjectType proto_description_to_type(int description)
 {
     ObjectType object_type;
 
     for (object_type = OBJ_TYPE_WALL; object_type < OBJ_TYPE_MONSTER; object_type++) {
-        if (description < dword_5B37FC[object_type + 1]) {
+        if (description < proto_description_begin[object_type + 1]) {
             break;
         }
     }
@@ -352,9 +364,9 @@ ObjectType sub_4685D0(int description)
 }
 
 // 0x468600
-int sub_468600(ObjectType object_type)
+int proto_first_description_of_type(ObjectType object_type)
 {
-    return dword_5B37FC[object_type];
+    return proto_description_begin[object_type];
 }
 
 // 0x468610
@@ -362,7 +374,7 @@ bool proto_is_valid(int description)
 {
     ObjectType object_type;
 
-    object_type = sub_4685D0(description);
+    object_type = proto_description_to_type(description);
     if (object_type == OBJ_TYPE_NPC) {
         if (description >= 28310) {
             object_type = OBJ_TYPE_UNIQUE_NPC;
@@ -371,11 +383,17 @@ bool proto_is_valid(int description)
         }
     }
 
-    return description >= dword_5B37FC[object_type] && description < dword_5B384C[object_type];
+    return description >= proto_description_begin[object_type] && description < proto_description_end[object_type];
 }
 
-// 0x468660
-void sub_468660(bool* rescan_ptr)
+/**
+ * Scans every description of every type and recreates any prototype whose
+ * .pro file is missing from the repository, setting `*rescan_ptr` when it had
+ * to. This is what regenerates the stock protos on first run.
+ *
+ * 0x468660
+ */
+void proto_recreate_missing(bool* rescan_ptr)
 {
     int type;
     int oname;
@@ -406,10 +424,10 @@ void sub_468660(bool* rescan_ptr)
     proto_id_list_create(&proto_ids, &proto_ids_cnt);
 
     for (type = 0; type < 20; type++) {
-        for (oname = dword_5B37FC[type]; oname < dword_5B384C[type]; oname++) {
+        for (oname = proto_description_begin[type]; oname < proto_description_end[type]; oname++) {
             oid = proto_description_to_oid(oname);
             if (!proto_id_list_check(proto_ids, proto_ids_cnt, oid.d.a)) {
-                sub_468890(oname);
+                proto_recreate(oname);
                 *rescan_ptr = true;
             }
         }
@@ -420,8 +438,15 @@ void sub_468660(bool* rescan_ptr)
     tig_debug_printf("Reading prototypes completed.\n");
 }
 
-// 0x468720
-int sub_468720(ObjectType object_type)
+/**
+ * The generic o_name line for a type ("Wall", "Weapon", ...), used as
+ * OBJ_F_NAME until `proto_init_properties` assigns a specific one. Community
+ * proto research (MiscProtoOffsets, offset 0x13F) documents the same
+ * behaviour from the data side: most items carry their type's generic value.
+ *
+ * 0x468720
+ */
+int proto_default_name(ObjectType object_type)
 {
     switch (object_type) {
     case OBJ_TYPE_WALL:
@@ -470,13 +495,13 @@ int sub_468720(ObjectType object_type)
 }
 
 // 0x468800
-void sub_468800(void)
+void proto_deallocate_all(void)
 {
     ObjectType object_type;
     int description;
 
     for (object_type = 0; object_type < OBJ_TYPE_COUNT; object_type++) {
-        for (description = dword_5B37FC[object_type]; description < dword_5B384C[object_type]; description++) {
+        for (description = proto_description_begin[object_type]; description < proto_description_end[object_type]; description++) {
             obj_deallocate(obj_pool_perm_lookup(proto_description_to_oid(description)));
         }
     }
@@ -494,25 +519,38 @@ ObjectID proto_description_to_oid(int description)
     return sub_4E6540(description + 20);
 }
 
-// 0x468890
-void sub_468890(int description)
+/**
+ * Builds the prototype for `description` from scratch - creates the proto
+ * object, applies the hardcoded per-description properties, saves it as a
+ * .pro file - then releases the in-memory copy.
+ *
+ * 0x468890
+ */
+void proto_recreate(int description)
 {
     ObjectType object_type;
     int64_t obj;
 
-    object_type = sub_4685D0(description);
+    object_type = proto_description_to_type(description);
     obj_create_proto(object_type, &obj);
-    obj_field_int32_set(obj, OBJ_F_NAME, sub_468720(object_type));
+    obj_field_int32_set(obj, OBJ_F_NAME, proto_default_name(object_type));
     sub_408020(obj, description + 20);
-    sub_468930(obj, description);
+    proto_init_properties(obj, description);
     in_proto_save = true;
     proto_save(obj);
     in_proto_save = false;
     obj_deallocate(obj);
 }
 
-// 0x468930
-void sub_468930(int64_t obj, int description)
+/**
+ * The prototype properties initialization routine (referenced by the FIX note
+ * in `proto_recreate_missing`): a per-description switch spanning every
+ * object type that sets each stock prototype's fields. Critters defer to
+ * `proto_init_npc` / `proto_init_unique_npc` / `proto_init_monster`.
+ *
+ * 0x468930
+ */
+void proto_init_properties(int64_t obj, int description)
 {
     Script scr;
     tig_art_id_t art_id;
@@ -524,11 +562,11 @@ void sub_468930(int64_t obj, int description)
     scr.hdr.flags = 0;
     scr.hdr.counters = 0;
 
-    switch (sub_4685D0(description)) {
+    switch (proto_description_to_type(description)) {
     case OBJ_TYPE_WALL:
         switch (description) {
         case BP_RED_BRICK_WALL:
-            sub_49B240(obj, OBJ_F_HP_PTS, -30);
+            proto_adjust_field_percent(obj, OBJ_F_HP_PTS, -30);
             obj_field_int32_set(obj, OBJ_F_MATERIAL, MATERIAL_BRICK);
             break;
         case BP_GREY_BRICK_WALL:
@@ -539,19 +577,19 @@ void sub_468930(int64_t obj, int description)
             obj_field_int32_set(obj, OBJ_F_FLAGS, obj_field_int32_get(obj, OBJ_F_FLAGS) | 0x400000);
             break;
         case BP_LIGHT_WOOD_WALL:
-            sub_49B240(obj, OBJ_F_HP_PTS, -50);
+            proto_adjust_field_percent(obj, OBJ_F_HP_PTS, -50);
             obj_field_int32_set(obj, OBJ_F_MATERIAL, MATERIAL_WOOD);
             break;
         case BP_HEAVY_WOOD_WALL:
             obj_field_int32_set(obj, OBJ_F_MATERIAL, MATERIAL_WOOD);
             break;
         case BP_WOOD_FENCE:
-            sub_49B240(obj, OBJ_F_HP_PTS, -60);
+            proto_adjust_field_percent(obj, OBJ_F_HP_PTS, -60);
             obj_field_int32_set(obj, OBJ_F_MATERIAL, MATERIAL_WOOD);
             obj_field_int32_set(obj, OBJ_F_FLAGS, obj_field_int32_get(obj, OBJ_F_FLAGS) | 0x30);
             break;
         case BP_METAL_FENCE:
-            sub_49B240(obj, OBJ_F_HP_PTS, -30);
+            proto_adjust_field_percent(obj, OBJ_F_HP_PTS, -30);
             obj_field_int32_set(obj, OBJ_F_MATERIAL, MATERIAL_METAL);
             obj_field_int32_set(obj, OBJ_F_FLAGS, obj_field_int32_get(obj, OBJ_F_FLAGS) | 0x30);
             break;
@@ -566,7 +604,7 @@ void sub_468930(int64_t obj, int description)
         obj_field_int32_set(obj, OBJ_F_PORTAL_FLAGS, 9);
         switch (description) {
         case BP_LIGHT_WOOD_DOOR:
-            sub_49B240(obj, OBJ_F_HP_PTS, -30);
+            proto_adjust_field_percent(obj, OBJ_F_HP_PTS, -30);
             obj_field_int32_set(obj, OBJ_F_MATERIAL, MATERIAL_WOOD);
             obj_field_int32_set(obj, OBJ_F_SOUND_EFFECT, 8060);
             break;
@@ -585,7 +623,7 @@ void sub_468930(int64_t obj, int description)
             obj_field_int32_set(obj, OBJ_F_SOUND_EFFECT, 8075);
             break;
         case BP_GLASS_DOOR:
-            sub_49B240(obj, OBJ_F_HP_PTS, -70);
+            proto_adjust_field_percent(obj, OBJ_F_HP_PTS, -70);
             obj_field_int32_set(obj, OBJ_F_MATERIAL, MATERIAL_GLASS);
             obj_field_int32_set(obj, OBJ_F_FLAGS, obj_field_int32_get(obj, OBJ_F_FLAGS) | 0x10);
             obj_field_int32_set(obj, OBJ_F_FLAGS, obj_field_int32_get(obj, OBJ_F_FLAGS) & ~0x4000);
@@ -601,14 +639,14 @@ void sub_468930(int64_t obj, int description)
             obj_field_int32_set(obj, OBJ_F_SOUND_EFFECT, 8070);
             break;
         case BP_WINDOW:
-            sub_49B240(obj, OBJ_F_HP_PTS, -70);
+            proto_adjust_field_percent(obj, OBJ_F_HP_PTS, -70);
             obj_field_int32_set(obj, OBJ_F_MATERIAL, MATERIAL_GLASS);
             obj_field_int32_set(obj, OBJ_F_FLAGS, obj_field_int32_get(obj, OBJ_F_FLAGS) | 0x10);
             obj_field_int32_set(obj, OBJ_F_FLAGS, obj_field_int32_get(obj, OBJ_F_FLAGS) & ~0x4000);
             obj_field_int32_set(obj, OBJ_F_SOUND_EFFECT, 8100);
             break;
         case BP_NON_OPENING_WINDOW:
-            sub_49B240(obj, OBJ_F_HP_PTS, -70);
+            proto_adjust_field_percent(obj, OBJ_F_HP_PTS, -70);
             obj_field_int32_set(obj, OBJ_F_MATERIAL, MATERIAL_GLASS);
             obj_field_int32_set(obj, OBJ_F_FLAGS, obj_field_int32_get(obj, OBJ_F_FLAGS) | 0x10);
             obj_field_int32_set(obj, OBJ_F_FLAGS, obj_field_int32_get(obj, OBJ_F_FLAGS) & ~0x4000);
@@ -616,7 +654,7 @@ void sub_468930(int64_t obj, int description)
             obj_field_int32_set(obj, OBJ_F_SOUND_EFFECT, 8100);
             break;
         case BP_CURTAINS:
-            sub_49B240(obj, OBJ_F_HP_PTS, -90);
+            proto_adjust_field_percent(obj, OBJ_F_HP_PTS, -90);
             obj_field_int32_set(obj, OBJ_F_MATERIAL, MATERIAL_CLOTH);
             obj_field_int32_set(obj, OBJ_F_FLAGS, obj_field_int32_get(obj, OBJ_F_FLAGS) | 0x420);
             obj_field_int32_set(obj, OBJ_F_FLAGS, obj_field_int32_get(obj, OBJ_F_FLAGS) & ~0x4000);
@@ -630,7 +668,7 @@ void sub_468930(int64_t obj, int description)
             obj_field_int32_set(obj, OBJ_F_SOUND_EFFECT, 8100);
             break;
         case BP_WOODEN_SHUTTERS:
-            sub_49B240(obj, OBJ_F_HP_PTS, -30);
+            proto_adjust_field_percent(obj, OBJ_F_HP_PTS, -30);
             obj_field_int32_set(obj, OBJ_F_MATERIAL, MATERIAL_WOOD);
             obj_field_int32_set(obj, OBJ_F_SOUND_EFFECT, 8110);
             break;
@@ -639,7 +677,7 @@ void sub_468930(int64_t obj, int description)
             obj_field_int32_set(obj, OBJ_F_SOUND_EFFECT, 8105);
             break;
         case BP_STAINED_GLASS:
-            sub_49B240(obj, OBJ_F_HP_PTS, -50);
+            proto_adjust_field_percent(obj, OBJ_F_HP_PTS, -50);
             obj_field_int32_set(obj, OBJ_F_MATERIAL, MATERIAL_GLASS);
             obj_field_int32_set(obj, OBJ_F_PORTAL_FLAGS, 2);
             obj_field_int32_set(obj, OBJ_F_SOUND_EFFECT, 8100);
@@ -6304,7 +6342,7 @@ void sub_468930(int64_t obj, int description)
             obj_field_int32_set(obj, OBJ_F_CATEGORY, 1);
             break;
         }
-        sub_49B2E0(obj);
+        proto_adjust_worth_by_complexity(obj);
         if (obj_field_int32_get(obj, OBJ_F_SOUND_EFFECT) == 0) {
             obj_field_int32_set(obj, OBJ_F_SOUND_EFFECT, 2 * (5 * (tig_art_item_id_subtype_get(obj_field_int32_get(obj, OBJ_F_ITEM_INV_AID)) - 2) + 2000));
         }
@@ -11278,7 +11316,7 @@ void sub_468930(int64_t obj, int description)
             obj_field_int32_set(obj, OBJ_F_CATEGORY, 8);
             break;
         }
-        sub_49B2E0(obj);
+        proto_adjust_worth_by_complexity(obj);
         break;
     case OBJ_TYPE_GOLD:
         obj_field_int32_set(obj, OBJ_F_ITEM_DESCRIPTION_UNKNOWN, description);
@@ -15892,11 +15930,11 @@ void sub_468930(int64_t obj, int description)
         break;
     case OBJ_TYPE_NPC:
         if (description >= BP_UNIQUE_NPC_BEGIN && description < BP_UNIQUE_NPC_END) {
-            sub_49B010(obj, description);
+            proto_init_unique_npc(obj, description);
         } else if (description >= BP_MONSTER_BEGIN && description < BP_MONSTER_END) {
-            sub_49B220(obj, description);
+            proto_init_monster(obj, description);
         } else {
-            sub_49AFF0(obj, description);
+            proto_init_npc(obj, description);
         }
         break;
     case OBJ_TYPE_TRAP:
@@ -15992,13 +16030,13 @@ void sub_468930(int64_t obj, int description)
 }
 
 // 0x49AFF0
-void sub_49AFF0(int64_t obj, int description)
+void proto_init_npc(int64_t obj, int description)
 {
-    sub_49B340(obj, description);
+    proto_load_critter_stats(obj, description);
 }
 
 // 0x49B010
-void sub_49B010(int64_t obj, int description)
+void proto_init_unique_npc(int64_t obj, int description)
 {
     tig_art_id_t art_id;
     Script scr;
@@ -16008,21 +16046,21 @@ void sub_49B010(int64_t obj, int description)
 
     switch (description) {
     case BP_BASIC_FEMALE_NPC:
-        sub_49AFF0(obj, 17081);
+        proto_init_npc(obj, 17081);
         obj_field_int32_set(obj, OBJ_F_CRITTER_DESCRIPTION_UNKNOWN, 27309);
         tig_art_unique_npc_id_create(11, 0, 0, 4, 0, 0, 0, &art_id);
         obj_field_int32_set(obj, OBJ_F_AID, art_id);
         obj_field_int32_set(obj, OBJ_F_CURRENT_AID, art_id);
         break;
     case BP_BASIC_MALE_NPC:
-        sub_49AFF0(obj, 17082);
+        proto_init_npc(obj, 17082);
         obj_field_int32_set(obj, OBJ_F_CRITTER_DESCRIPTION_UNKNOWN, 27310);
         tig_art_unique_npc_id_create(2, 0, 0, 4, 0, 0, 0, &art_id);
         obj_field_int32_set(obj, OBJ_F_AID, art_id);
         obj_field_int32_set(obj, OBJ_F_CURRENT_AID, art_id);
         break;
     case BP_PAPERBOY:
-        sub_49AFF0(obj, 17082);
+        proto_init_npc(obj, 17082);
         obj_field_int32_set(obj, OBJ_F_CRITTER_DESCRIPTION_UNKNOWN, 27311);
         scr.num = 1498;
         obj_arrayfield_script_set(obj, OBJ_F_SCRIPTS_IDX, SAP_DIALOG, &scr);
@@ -16030,21 +16068,21 @@ void sub_49B010(int64_t obj, int description)
         obj_arrayfield_script_set(obj, OBJ_F_SCRIPTS_IDX, SAP_FIRST_HEARTBEAT, &scr);
         break;
     case BP_SOUL_SLAVE:
-        sub_49AFF0(obj, 17082);
+        proto_init_npc(obj, 17082);
         scr.num = 30117;
         obj_arrayfield_script_set(obj, OBJ_F_SCRIPTS_IDX, SAP_HEARTBEAT, &scr);
         scr.num = 30118;
         obj_arrayfield_script_set(obj, OBJ_F_SCRIPTS_IDX, SAP_DYING, &scr);
         break;
     case BP_PALADIN_SLAVE:
-        sub_49AFF0(obj, 17082);
+        proto_init_npc(obj, 17082);
         scr.num = 30119;
         obj_arrayfield_script_set(obj, OBJ_F_SCRIPTS_IDX, SAP_HEARTBEAT, &scr);
         scr.num = 30120;
         obj_arrayfield_script_set(obj, OBJ_F_SCRIPTS_IDX, SAP_DYING, &scr);
         break;
     default:
-        sub_49B220(obj, description);
+        proto_init_monster(obj, description);
         break;
     }
 
@@ -16055,13 +16093,13 @@ void sub_49B010(int64_t obj, int description)
 }
 
 // 0x49B220
-void sub_49B220(int64_t obj, int description)
+void proto_init_monster(int64_t obj, int description)
 {
-    sub_49B340(obj, description);
+    proto_load_critter_stats(obj, description);
 }
 
 // 0x49B240
-void sub_49B240(int64_t obj, int f, int percent)
+void proto_adjust_field_percent(int64_t obj, int f, int percent)
 {
     int value;
 
@@ -16088,7 +16126,7 @@ int proto_get_description(int64_t obj)
 }
 
 // 0x49B2E0
-void sub_49B2E0(int64_t obj)
+void proto_adjust_worth_by_complexity(int64_t obj)
 {
     int complexity;
     int worth;
@@ -16100,8 +16138,14 @@ void sub_49B2E0(int64_t obj)
     }
 }
 
-// 0x49B340
-void sub_49B340(int64_t obj, int description)
+/**
+ * Loads a critter prototype's stats from the rules text files - npc.txt,
+ * unique.txt or monster.txt according to `description`'s range - by scanning
+ * for the matching stat block and applying it.
+ *
+ * 0x49B340
+ */
+void proto_load_critter_stats(int64_t obj, int description)
 {
     TigFile* stream;
     int type;
@@ -16129,15 +16173,15 @@ void sub_49B340(int64_t obj, int description)
         return;
     }
 
-    v1 = sub_49B5A0(stream, 0, type);
+    v1 = proto_parse_critter_stats(stream, 0, type);
     while (v1 != description && v1 != -1) {
-        v1 = sub_49B5A0(stream, 0, type);
+        v1 = proto_parse_critter_stats(stream, 0, type);
     }
 
     if (v1 != -1) {
         obj_field_int32_set(obj, OBJ_F_DESCRIPTION, description);
         obj_field_int32_set(obj, OBJ_F_CRITTER_DESCRIPTION_UNKNOWN, description);
-        sub_49B5A0(stream, obj, type);
+        proto_parse_critter_stats(stream, obj, type);
 
         exp = critter_xp_worth(obj);
         obj_field_int32_set(obj, OBJ_F_NPC_EXPERIENCE_WORTH, exp);
@@ -16173,7 +16217,7 @@ void sub_49B340(int64_t obj, int description)
 }
 
 // 0x49B5A0
-int sub_49B5A0(TigFile* stream, int64_t obj, int type)
+int proto_parse_critter_stats(TigFile* stream, int64_t obj, int type)
 {
     tig_art_id_t art_id;
     char str[1000];

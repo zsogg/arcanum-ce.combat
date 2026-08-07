@@ -674,7 +674,7 @@ void sub_572640(int64_t pc_obj, int64_t target_obj, int mode)
     if (mode == INVEN_UI_MODE_BARTER) {
         substitute_inventory_obj = critter_substitute_inventory_get(target_obj);
         if (substitute_inventory_obj != OBJ_HANDLE_NULL) {
-            prototype_obj = sub_468570(8);
+            prototype_obj = proto_get_first_by_type(8);
             gold_obj = sub_462540(substitute_inventory_obj, prototype_obj, 0);
             while (gold_obj != OBJ_HANDLE_NULL) {
                 amt = item_gold_get(gold_obj);

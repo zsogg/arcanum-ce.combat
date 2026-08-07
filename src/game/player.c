@@ -123,7 +123,7 @@ void player_create(void)
     int64_t y;
     int64_t loc;
 
-    qword_5D1150 = sub_468570(OBJ_TYPE_PC);
+    qword_5D1150 = proto_get_first_by_type(OBJ_TYPE_PC);
 
     map = map_current_map();
     if (map == 0
@@ -230,7 +230,7 @@ bool player_obj_create_player(PlayerCreateInfo* player_create_info)
     if (player_create_info->basic_prototype != -1) {
         player_pc_prototype_obj = obj_pool_perm_lookup(obj_get_id(proto_get_by_description(player_create_info->basic_prototype)));
     } else {
-        player_pc_prototype_obj = sub_468570(OBJ_TYPE_PC);
+        player_pc_prototype_obj = proto_get_first_by_type(OBJ_TYPE_PC);
     }
 
     if ((player_create_info->flags & PLAYER_CREATE_INFO_LOC) != 0) {
