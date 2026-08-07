@@ -13345,7 +13345,7 @@ bool anim_goal_move_to_tile(int64_t obj, int64_t loc)
 
         pkt.type = 4;
         pkt.subtype = 0;
-        sub_4F0640(obj, &(pkt.oid));
+        mp_obj_to_oid(obj, &(pkt.oid));
         pkt.loc = loc;
         tig_net_send_app_all(&pkt, sizeof(pkt));
 
@@ -13451,7 +13451,7 @@ bool sub_433A00(int64_t obj, int64_t loc, bool a3)
 
         pkt.type = 4;
         pkt.subtype = 2;
-        sub_4F0640(obj, &(pkt.oid));
+        mp_obj_to_oid(obj, &(pkt.oid));
         pkt.loc = loc;
 
         tig_net_send_app_all(&pkt, sizeof(pkt));
@@ -13517,7 +13517,7 @@ bool anim_goal_run_to_tile(int64_t obj, int64_t loc)
 
         pkt.type = 4;
         pkt.subtype = 1;
-        sub_4F0640(obj, &(pkt.oid));
+        mp_obj_to_oid(obj, &(pkt.oid));
         pkt.loc = loc;
 
         tig_net_send_app_all(&pkt, sizeof(pkt));

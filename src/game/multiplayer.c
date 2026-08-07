@@ -1225,7 +1225,7 @@ bool sub_4A2EC0(ObjectID item_oid, ObjectID parent_oid, int player)
     S5F0E1C* lock;
 
     item_obj = obj_pool_perm_lookup(item_oid);
-    sub_4F0690(parent_oid, &parent_obj);
+    mp_oid_to_obj(parent_oid, &parent_obj);
 
     if (obj_type_is_item(obj_field_int32_get(item_obj, OBJ_F_TYPE))) {
         if (item_parent(item_obj, &tmp_parent_obj)
@@ -1295,7 +1295,7 @@ void sub_4A30D0(ObjectID oid)
     int64_t obj;
     S5F0E1C* node;
 
-    sub_4F0690(oid, &obj);
+    mp_oid_to_obj(oid, &obj);
     if ((obj_field_int32_get(obj, OBJ_F_FLAGS) & OF_MULTIPLAYER_LOCK) != 0) {
         node = sub_4A3080(oid);
         if (node != NULL) {
@@ -1344,9 +1344,9 @@ void sub_4A3230(ObjectID oid, bool (*success_func)(void*), void* success_info, b
         int64_t parent_obj;
         ObjectID parent_oid;
 
-        sub_4F0690(oid, &item_obj);
+        mp_oid_to_obj(oid, &item_obj);
         item_parent(item_obj, &parent_obj);
-        sub_4F0640(parent_obj, &parent_oid);
+        mp_obj_to_oid(parent_obj, &parent_oid);
         if (tig_net_is_host()) {
             if (sub_4A2EC0(oid, parent_oid, 0)) {
                 if (success_func != NULL) {
@@ -1407,7 +1407,7 @@ void sub_4A33F0(int a1, int a2)
     for (player = 0; player < 8; player++) {
         if (tig_net_client_is_active(player)
             && stru_5E8AD0[player].field_8.type != OID_TYPE_NULL) {
-            sub_4F0690(stru_5E8AD0[player].field_8, &obj);
+            mp_oid_to_obj(stru_5E8AD0[player].field_8, &obj);
             map_precache_sectors(obj_field_int64_get(obj, OBJ_F_LOCATION));
         }
     }

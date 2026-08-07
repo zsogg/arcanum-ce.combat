@@ -620,8 +620,8 @@ bool item_transfer_ex(int64_t item_obj, int64_t critter_obj, int inventory_locat
         Packet28 pkt;
 
         pkt.type = 28;
-        sub_4F0640(item_obj, &(pkt.item_oid));
-        sub_4F0640(critter_obj, &(pkt.critter_oid));
+        mp_obj_to_oid(item_obj, &(pkt.item_oid));
+        mp_obj_to_oid(critter_obj, &(pkt.critter_oid));
         pkt.inventory_location = inventory_location;
         tig_net_send_app_all(&pkt, sizeof(pkt));
 
@@ -715,7 +715,7 @@ bool item_drop_ex(int64_t item_obj, int distance)
         Packet26 pkt;
 
         pkt.type = 26;
-        sub_4F0640(item_obj, &(pkt.oid));
+        mp_obj_to_oid(item_obj, &(pkt.oid));
         pkt.field_20 = distance;
         tig_net_send_app_all(&pkt, sizeof(pkt));
         return true;
@@ -3910,7 +3910,7 @@ void sub_466E50(int64_t obj, int64_t loc)
         Packet27 pkt;
 
         pkt.type = 27;
-        sub_4F0640(obj, &(pkt.oid));
+        mp_obj_to_oid(obj, &(pkt.oid));
         pkt.loc = loc;
         tig_net_send_app_all(&pkt, sizeof(pkt));
         return;
@@ -4109,9 +4109,9 @@ void item_perform_identify_service(int64_t item_obj, int64_t npc_obj, int64_t pc
         PacketPerformIdentifyService pkt;
 
         pkt.type = 125;
-        sub_4F0640(item_obj, &(pkt.item_oid));
-        sub_4F0640(npc_obj, &(pkt.npc_oid));
-        sub_4F0640(pc_obj, &(pkt.pc_oid));
+        mp_obj_to_oid(item_obj, &(pkt.item_oid));
+        mp_obj_to_oid(npc_obj, &(pkt.npc_oid));
+        mp_obj_to_oid(pc_obj, &(pkt.pc_oid));
         pkt.cost = cost;
         tig_net_send_app_all(&pkt, sizeof(pkt));
         return;

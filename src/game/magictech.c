@@ -1875,7 +1875,7 @@ void magictech_effect_summon(MagicTechSummonInfo* summon_info)
             object_locator_init(pkt.summon_info.field_0.obj, &(pkt.summon_info.field_0.locator));
             object_locator_init(pkt.summon_info.field_30.obj, &(pkt.summon_info.field_30.locator));
             summon_info->field_A0 = qword_5E75B8;
-            sub_4F0640(qword_5E75B8, &(pkt.summon_info.field_A8));
+            mp_obj_to_oid(qword_5E75B8, &(pkt.summon_info.field_A8));
             tig_net_send_app_all(&pkt, sizeof(pkt));
 
             if (obj_field_int32_get(obj, OBJ_F_TYPE) == OBJ_TYPE_SCENERY) {
@@ -2636,13 +2636,13 @@ void MTComponentObjFlag_ProcFunc(void)
         && tig_net_is_host()) {
         PacketMagicTechObjFlag pkt;
 
-        sub_4F0640(stru_5E6D28.target_obj, &(pkt.field_8));
-        sub_4F0640(stru_5E6D28.self_obj, &(pkt.self_oid));
+        mp_obj_to_oid(stru_5E6D28.target_obj, &(pkt.field_8));
+        mp_obj_to_oid(stru_5E6D28.self_obj, &(pkt.self_oid));
         pkt.fld = magictech_cur_component->data.obj_flag.flags_fld;
         pkt.value = magictech_cur_component->data.obj_flag.value;
         pkt.state = magictech_cur_component->data.obj_flag.state;
-        sub_4F0640(magictech_cur_run_info->parent_obj.obj, &(pkt.parent_oid));
-        sub_4F0640(magictech_cur_run_info->source_obj.obj, &(pkt.source_oid));
+        mp_obj_to_oid(magictech_cur_run_info->parent_obj.obj, &(pkt.parent_oid));
+        mp_obj_to_oid(magictech_cur_run_info->source_obj.obj, &(pkt.source_oid));
 
         tig_net_send_app_all(&pkt, sizeof(pkt));
     }
