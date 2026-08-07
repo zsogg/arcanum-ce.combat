@@ -161,7 +161,7 @@ void dialog_ui_start_dialog(int64_t pc_obj, int64_t npc_obj, int script_num, int
             return;
         }
 
-        if (entry->state.field_17E8 == 4) {
+        if (entry->state.status == DIALOG_STATUS_FLOAT_AND_END) {
             dialog_ui_npc_say(entry->state.npc_obj,
                 entry->state.pc_obj,
                 TB_TYPE_WHITE,
@@ -292,25 +292,25 @@ bool dialog_ui_process_option(DialogUiEntry* entry, int option)
     dialog_ui_speech_stop();
     sub_413130(&(entry->state), option);
 
-    switch (entry->state.field_17E8) {
-    case 0:
+    switch (entry->state.status) {
+    case DIALOG_STATUS_CONTINUE:
         dialog_ui_display(entry);
         break;
-    case 1:
+    case DIALOG_STATUS_RETURN_TO_SCRIPT:
         dialog_ui_end_dialog(entry->state.pc_obj, 0);
         dialog_ui_execute_script(entry, 0);
         break;
-    case 2:
+    case DIALOG_STATUS_RUN_SCRIPT_LINE:
         dialog_ui_end_dialog(entry->state.pc_obj, 0);
-        dialog_ui_execute_script(entry, entry->state.field_17EC);
+        dialog_ui_execute_script(entry, entry->state.status_num);
         break;
-    case 3:
+    case DIALOG_STATUS_BARTER:
         if (is_pc) {
             intgame_dialog_clear();
             inven_ui_open(entry->state.pc_obj, entry->state.npc_obj, INVEN_UI_MODE_BARTER);
         }
         break;
-    case 4:
+    case DIALOG_STATUS_FLOAT_AND_END:
         dialog_ui_npc_say(entry->state.npc_obj,
             entry->state.pc_obj,
             TB_TYPE_WHITE,
@@ -319,31 +319,31 @@ bool dialog_ui_process_option(DialogUiEntry* entry, int option)
             entry->state.speech_id);
         dialog_ui_end_dialog(entry->state.pc_obj, 0);
         break;
-    case 5:
+    case DIALOG_STATUS_CHAREDIT:
         if (is_pc) {
             intgame_dialog_clear();
             charedit_open(entry->state.npc_obj, CHAREDIT_MODE_PASSIVE);
         }
         break;
-    case 6:
+    case DIALOG_STATUS_WORLDMAP:
         if (is_pc) {
             intgame_dialog_clear();
             wmap_ui_open();
         }
         break;
-    case 7:
+    case DIALOG_STATUS_SCHEMATICS:
         if (is_pc) {
             intgame_dialog_clear();
             schematic_ui_toggle(entry->state.npc_obj, entry->state.pc_obj);
         }
         break;
-    case 8:
+    case DIALOG_STATUS_IDENTIFY:
         if (is_pc) {
             intgame_dialog_clear();
             ui_show_inven_npc_identify(entry->state.pc_obj, entry->state.npc_obj);
         }
         break;
-    case 9:
+    case DIALOG_STATUS_REPAIR:
         if (is_pc) {
             intgame_dialog_clear();
             inven_ui_open(entry->state.pc_obj, entry->state.npc_obj, INVEN_UI_MODE_NPC_REPAIR);
@@ -489,7 +489,7 @@ void dialog_ui_speech_start(int64_t npc_obj, int64_t pc_obj, int speech_id)
     }
 
     dialog_ui_speech_stop();
-    sub_418A00(speech_id, &v1, &v2);
+    dialog_speech_id_unpack(speech_id, &v1, &v2);
 
     gender = stat_level_get(pc_obj, STAT_GENDER) != 0 ? 'm' : 'f';
     snprintf(path, sizeof(path),

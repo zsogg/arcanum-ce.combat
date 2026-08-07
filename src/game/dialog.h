@@ -5,6 +5,29 @@
 #include "game/obj.h"
 #include "game/object.h"
 
+/**
+ * What the dialog engine has decided should happen next; consumed by the
+ * dialog UI after each processed option (see the switch in
+ * `dialog_ui_process_option`). The first three values are produced from a
+ * dialog file's {R} response field by `dialog_response_val_decode`, per
+ * Troika's Eventscripts.doc: positive is a dialog line to continue at, zero
+ * returns to the calling script, negative runs the given script line. The
+ * remaining values hand control to another screen; they are produced by the
+ * generated-dialog opcodes ({B:}, {L:}) and by the CE/SU/II/RI result actions.
+ */
+typedef enum DialogStatus {
+    DIALOG_STATUS_CONTINUE, // show reply + options; status_num is the dialog line
+    DIALOG_STATUS_RETURN_TO_SCRIPT, // end dialog, resume the calling script
+    DIALOG_STATUS_RUN_SCRIPT_LINE, // end dialog, run script line status_num
+    DIALOG_STATUS_BARTER, // open barter; status_num holds the pending response_val
+    DIALOG_STATUS_FLOAT_AND_END, // float the reply as a bubble and end without opening dialog
+    DIALOG_STATUS_CHAREDIT, // open the character sheet (passive)
+    DIALOG_STATUS_WORLDMAP, // open the world map
+    DIALOG_STATUS_SCHEMATICS, // open the schematics screen
+    DIALOG_STATUS_IDENTIFY, // open the identify-items screen
+    DIALOG_STATUS_REPAIR, // open the repair-items screen
+} DialogStatus;
+
 typedef struct DialogState {
     /* 0000 */ int dlg;
     /* 0008 */ int64_t pc_obj;
@@ -17,8 +40,8 @@ typedef struct DialogState {
     /* 0458 */ int speech_id;
     /* 045C */ int num_options;
     /* 0460 */ char options[5][1000];
-    /* 17E8 */ int field_17E8;
-    /* 17EC */ int field_17EC;
+    /* 17E8 */ int status;
+    /* 17EC */ int status_num;
     /* 17F0 */ int field_17F0[5];
     /* 1804 */ int field_1804[5];
     /* 1818 */ int field_1818[5];
@@ -68,6 +91,6 @@ void dialog_copy_npc_wont_repair_undamaged_msg(int64_t npc_obj, int64_t pc_obj, 
 void dialog_copy_npc_repair_msg(int64_t npc_obj, int64_t pc_obj, char* buffer);
 void dialog_check(void);
 void dialog_enable_numbers(void);
-void sub_418A00(int a1, int* a2, int* a3);
+void dialog_speech_id_unpack(int speech_id, int* script_num_ptr, int* line_ptr);
 
 #endif /* ARCANUM_GAME_DIALOG_H_ */
