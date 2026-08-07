@@ -3503,7 +3503,7 @@ void sub_54ED30(TargetDescriptor* td)
     }
 
     // 0x54F25B
-    if (!sub_44D500(&goal_data, pc_obj, anim)) {
+    if (!anim_goal_data_init_no_interrupt(&goal_data, pc_obj, anim)) {
         return;
     }
 

@@ -4246,7 +4246,7 @@ bool sub_4246E0(AnimRunInfo* run_info)
         return false;
     }
 
-    sub_44D4E0(&goal_data, obj, run_info->params[2].data);
+    anim_goal_data_init(&goal_data, obj, run_info->params[2].data);
 
     for (idx = 1; idx < AGDATA_COUNT; idx++) {
         goal_data.params[idx] = run_info->cur_stack_data->params[idx];
@@ -11257,7 +11257,7 @@ bool anim_fidget_timeevent_process(TimeEvent* timeevent)
 
                 object_set_current_aid(qword_5DE6D8, art_id);
 
-                sub_44D4E0(&goal_data, qword_5DE6D8, AG_ANIM_FIDGET);
+                anim_goal_data_init(&goal_data, qword_5DE6D8, AG_ANIM_FIDGET);
                 if (!anim_goal_add(&goal_data, NULL)) {
                     if (v1) {
                         art_id = tig_art_id_anim_set(art_id, TIG_ART_ANIM_STAND);
@@ -13062,7 +13062,7 @@ void sub_432D90(int64_t obj)
         tig_net_send_app_all(&pkt, sizeof(pkt));
     }
 
-    if (sub_44D4E0(&goal_data, blood_obj, AG_ANIMATE)) {
+    if (anim_goal_data_init(&goal_data, blood_obj, AG_ANIMATE)) {
         goal_data.params[AGDATA_ANIM_ID].data = blood_art_id;
         if (anim_goal_add(&goal_data, NULL)) {
             critter_decay_timeevent_schedule(blood_obj);
@@ -13231,12 +13231,12 @@ bool anim_goal_animate(int64_t obj, int anim)
     obj_type = obj_field_int32_get(obj, OBJ_F_TYPE);
     if (obj_type_is_critter(obj_type)
         && anim == 10
-        && sub_44D4E0(&goal_data, obj, AG_ANIMATE_KNEEL_MAGIC_HANDS)) {
+        && anim_goal_data_init(&goal_data, obj, AG_ANIMATE_KNEEL_MAGIC_HANDS)) {
         anim_goal_add(&goal_data, 0);
         return true;
     }
 
-    if (!sub_44D4E0(&goal_data, obj, AG_ANIMATE)) {
+    if (!anim_goal_data_init(&goal_data, obj, AG_ANIMATE)) {
         return false;
     }
 
@@ -13277,7 +13277,7 @@ bool anim_goal_rotate(int64_t obj, int rot)
         return true;
     }
 
-    if (!sub_44D4E0(&goal_data, obj, AG_ROTATE)) {
+    if (!anim_goal_data_init(&goal_data, obj, AG_ROTATE)) {
         return true;
     }
 
@@ -13309,7 +13309,7 @@ bool anim_goal_animate_loop(int64_t obj)
     goal_type = (obj_field_int32_get(obj, OBJ_F_SCENERY_FLAGS) & OSCF_IS_FIRE)
         ? AG_ANIMATE_LOOP_FIRE_DMG
         : AG_ANIMATE_LOOP;
-    sub_44D4E0(&goal_data, obj, goal_type);
+    anim_goal_data_init(&goal_data, obj, goal_type);
     goal_data.params[AGDATA_ANIM_ID].data = art_id;
     if (!anim_goal_add(&goal_data, &stru_5A1908)) {
         return false;
@@ -13363,7 +13363,7 @@ bool anim_goal_move_to_tile(int64_t obj, int64_t loc)
     }
 
     if (!anim_is_current_goal_type(obj, AG_MOVE_TO_TILE, &stru_5A1908)) {
-        sub_44D500(&goal_data, obj, AG_MOVE_TO_TILE);
+        anim_goal_data_init_no_interrupt(&goal_data, obj, AG_MOVE_TO_TILE);
         goal_data.params[AGDATA_TARGET_TILE].loc = loc;
         if (!anim_interrupt_all_goals_of_obj(obj, 3, false, false)) {
             return false;
@@ -13474,7 +13474,7 @@ bool sub_433A00(int64_t obj, int64_t loc, bool a3)
             return true;
         }
 
-        sub_44D500(&goal_data, obj, AG_MOVE_TO_TILE);
+        anim_goal_data_init_no_interrupt(&goal_data, obj, AG_MOVE_TO_TILE);
         goal_data.params[AGDATA_TARGET_TILE].loc = loc;
 
         // __FILE__: "C:\Troika\Code\Game\GameLibX\Anim.c"
@@ -13483,7 +13483,7 @@ bool sub_433A00(int64_t obj, int64_t loc, bool a3)
             return false;
         }
     } else {
-        sub_44D500(&goal_data, obj, AG_MOVE_TO_TILE);
+        anim_goal_data_init_no_interrupt(&goal_data, obj, AG_MOVE_TO_TILE);
         goal_data.params[AGDATA_TARGET_TILE].loc = loc;
 
         if (!anim_interrupt_all_goals_of_obj(obj, 3, false, false)) {
@@ -13530,7 +13530,7 @@ bool anim_goal_run_to_tile(int64_t obj, int64_t loc)
     }
 
     if (!anim_is_current_goal_type(obj, AG_RUN_TO_TILE, &stru_5A1908)) {
-        sub_44D500(&goal_data, obj, AG_RUN_TO_TILE);
+        anim_goal_data_init_no_interrupt(&goal_data, obj, AG_RUN_TO_TILE);
         goal_data.params[AGDATA_TARGET_TILE].loc = loc;
 
         if (!anim_interrupt_all_goals_of_obj(obj, 3, false, false)) {
@@ -13622,7 +13622,7 @@ bool sub_434030(int64_t obj, int64_t loc)
     }
 
     if (!anim_is_current_goal_type(obj, AG_RUN_TO_TILE, &stru_5A1908)) {
-        sub_44D500(&goal_data, obj, AG_RUN_TO_TILE);
+        anim_goal_data_init_no_interrupt(&goal_data, obj, AG_RUN_TO_TILE);
         goal_data.params[AGDATA_TARGET_TILE].loc = loc;
 
         if (!anim_interrupt_all_goals_of_obj(obj, 3, false, false)) {
@@ -13639,7 +13639,7 @@ bool sub_434030(int64_t obj, int64_t loc)
     run_info = &(anim_run_info[stru_5A1908.slot_num]);
     run_info->flags |= 0x40;
     if (run_info->goals[0].params[AGDATA_TARGET_TILE].loc != loc) {
-        sub_44D500(&goal_data, obj, 3);
+        anim_goal_data_init_no_interrupt(&goal_data, obj, 3);
         goal_data.params[AGDATA_TARGET_TILE].loc = loc;
 
         // __FILE__: C:\Troika\Code\Game\GameLibX\Anim.c
@@ -13661,7 +13661,7 @@ bool anim_goal_move_near_tile(int64_t source_obj, int64_t target_loc, int range)
     }
 
     if (!anim_is_current_goal_type(source_obj, AG_RUN_TO_TILE, &stru_5A1908)) {
-        if (sub_44D4E0(&goal_data, source_obj, AG_MOVE_NEAR_TILE)) {
+        if (anim_goal_data_init(&goal_data, source_obj, AG_MOVE_NEAR_TILE)) {
             goal_data.params[AGDATA_TARGET_TILE].loc = target_loc;
             goal_data.params[AGDATA_RANGE_DATA].data = range;
             if (anim_goal_add(&goal_data, &stru_5A1908)) {
@@ -13732,7 +13732,7 @@ bool anim_goal_run_near_tile(int64_t source_obj, int64_t target_loc, int range)
     }
 
     if (!anim_is_current_goal_type(source_obj, AG_RUN_TO_TILE, &stru_5A1908)) {
-        if (sub_44D4E0(&goal_data, source_obj, AG_RUN_NEAR_TILE)) {
+        if (anim_goal_data_init(&goal_data, source_obj, AG_RUN_NEAR_TILE)) {
             goal_data.params[AGDATA_TARGET_TILE].loc = target_loc;
             goal_data.params[AGDATA_RANGE_DATA].data = range;
             if (anim_goal_add(&goal_data, &stru_5A1908)) {
@@ -13835,7 +13835,7 @@ bool anim_goal_follow_obj(int64_t source_obj, int64_t target_obj)
         return false;
     }
 
-    if (!sub_44D500(&goal_data, source_obj, AG_FOLLOW)) {
+    if (!anim_goal_data_init_no_interrupt(&goal_data, source_obj, AG_FOLLOW)) {
         return false;
     }
 
@@ -13935,7 +13935,7 @@ bool anim_goal_flee(int64_t obj, int64_t from_obj)
         return false;
     }
 
-    if (!sub_44D4E0(&goal_data, obj, AG_FLEE)) {
+    if (!anim_goal_data_init(&goal_data, obj, AG_FLEE)) {
         return false;
     }
 
@@ -13995,7 +13995,7 @@ bool anim_goal_attack_ex(int64_t attacker_obj, int64_t target_obj, int sound_id)
         return false;
     }
 
-    if (!sub_44D500(&goal_data, attacker_obj, AG_ATTACK)) {
+    if (!anim_goal_data_init_no_interrupt(&goal_data, attacker_obj, AG_ATTACK)) {
         sub_4364D0(attacker_obj);
         return false;
     }
@@ -14059,7 +14059,7 @@ bool anim_goal_get_up(int64_t obj)
         return false;
     }
 
-    if (!sub_44D4E0(&goal_data, obj, AG_ANIM_GET_UP)) {
+    if (!anim_goal_data_init(&goal_data, obj, AG_ANIM_GET_UP)) {
         return false;
     }
 
@@ -14092,7 +14092,7 @@ bool anim_goal_knockback(int64_t target_obj, int rot, int range, int64_t source_
         }
     }
 
-    if (!sub_44D4E0(&goal_data, target_obj, AG_KNOCKBACK)) {
+    if (!anim_goal_data_init(&goal_data, target_obj, AG_KNOCKBACK)) {
         return false;
     }
 
@@ -14121,7 +14121,7 @@ bool anim_goal_throw_item(int64_t obj, int64_t item_obj, int64_t target_loc)
         return false;
     }
 
-    if (!sub_44D500(&goal_data, obj, AG_THROW_ITEM)) {
+    if (!anim_goal_data_init_no_interrupt(&goal_data, obj, AG_THROW_ITEM)) {
         return false;
     }
 
@@ -14152,7 +14152,7 @@ bool anim_goal_dying(int64_t obj, int anim)
         return false;
     }
 
-    if (!sub_44D4E0(&goal_data, obj, AG_DYING)) {
+    if (!anim_goal_data_init(&goal_data, obj, AG_DYING)) {
         return false;
     }
 
@@ -14178,7 +14178,7 @@ bool anim_goal_use_skill_on(int64_t obj, int64_t target_obj, int64_t item_obj, i
         return false;
     }
 
-    if (!sub_44D4E0(&goal_data, obj, AG_USE_SKILL_ON)) {
+    if (!anim_goal_data_init(&goal_data, obj, AG_USE_SKILL_ON)) {
         return false;
     }
 
@@ -14220,7 +14220,7 @@ bool anim_goal_use_item_on_obj_with_skill(int64_t obj, int64_t item_obj, int64_t
         return false;
     }
 
-    if (!sub_44D4E0(&goal_data, obj, AG_USE_ITEM_ON_OBJECT_WITH_SKILL)) {
+    if (!anim_goal_data_init(&goal_data, obj, AG_USE_ITEM_ON_OBJECT_WITH_SKILL)) {
         return false;
     }
 
@@ -14266,7 +14266,7 @@ bool anim_goal_use_item_on_obj(int64_t obj, int64_t target_obj, int64_t item_obj
         return false;
     }
 
-    if (!sub_44D4E0(&goal_data, obj, AG_USE_ITEM_ON_OBJECT)) {
+    if (!anim_goal_data_init(&goal_data, obj, AG_USE_ITEM_ON_OBJECT)) {
         return false;
     }
 
@@ -14311,7 +14311,7 @@ bool anim_goal_use_item_on_loc(int64_t obj, int64_t target_loc, int64_t item_obj
         return false;
     }
 
-    if (!sub_44D4E0(&goal_data, obj, AG_USE_ITEM_ON_TILE)) {
+    if (!anim_goal_data_init(&goal_data, obj, AG_USE_ITEM_ON_TILE)) {
         return false;
     }
 
@@ -14348,7 +14348,7 @@ bool anim_goal_pickup_item(int64_t obj, int64_t item_obj)
         return false;
     }
 
-    if (!sub_44D4E0(&goal_data, obj, AG_PICKUP_ITEM)) {
+    if (!anim_goal_data_init(&goal_data, obj, AG_PICKUP_ITEM)) {
         return false;
     }
 
@@ -14380,7 +14380,7 @@ bool anim_goal_animate_stunned(int64_t obj)
         return false;
     }
 
-    if (!sub_44D4E0(&goal_data, obj, AG_ANIMATE_STUNNED)) {
+    if (!anim_goal_data_init(&goal_data, obj, AG_ANIMATE_STUNNED)) {
         return false;
     }
 
@@ -14413,7 +14413,7 @@ bool anim_goal_projectile(int64_t source_obj, int64_t missile_obj, tig_art_id_t 
         return false;
     }
 
-    if (!sub_44D4E0(&goal_data, missile_obj, AG_PROJECTILE)) {
+    if (!anim_goal_data_init(&goal_data, missile_obj, AG_PROJECTILE)) {
         return false;
     }
 
@@ -14494,7 +14494,7 @@ bool anim_goal_knockdown(int64_t critter_obj)
         return false;
     }
 
-    if (!sub_44D4E0(&goal_data, critter_obj, AG_KNOCK_DOWN)) {
+    if (!anim_goal_data_init(&goal_data, critter_obj, AG_KNOCK_DOWN)) {
         return false;
     }
 
@@ -14569,7 +14569,7 @@ bool anim_goal_fidget(int64_t critter_obj)
         return false;
     }
 
-    if (!sub_44D4E0(&goal_data, critter_obj, AG_ANIM_FIDGET)) {
+    if (!anim_goal_data_init(&goal_data, critter_obj, AG_ANIM_FIDGET)) {
         return false;
     }
 
@@ -14631,7 +14631,7 @@ bool anim_goal_unconceal(int64_t critter_obj)
         return false;
     }
 
-    if (!sub_44D4E0(&goal_data, critter_obj, AG_UNCONCEAL)) {
+    if (!anim_goal_data_init(&goal_data, critter_obj, AG_UNCONCEAL)) {
         return false;
     }
 
@@ -14669,7 +14669,7 @@ bool anim_goal_wander(int64_t obj, int64_t tether_loc, int radius)
         source_obj = obj;
         if (sub_436720(&source_obj, &block_obj)) {
             anim_goal_please_move(block_obj, source_obj);
-        } else if (sub_44D4E0(&goal_data, obj, AG_WANDER)) {
+        } else if (anim_goal_data_init(&goal_data, obj, AG_WANDER)) {
             goal_data.params[AGDATA_RANGE_DATA].data = radius;
             goal_data.params[AGDATA_SCRATCH_VAL1].data = (int)LOCATION_GET_X(tether_loc);
             goal_data.params[AGDATA_SCRATCH_VAL2].data = (int)LOCATION_GET_Y(tether_loc);
@@ -14709,7 +14709,7 @@ bool anim_goal_wander_seek_darkness(int64_t obj, int64_t tether_loc, int radius)
         source_obj = obj;
         if (sub_436720(&source_obj, &block_obj)) {
             anim_goal_please_move(block_obj, source_obj);
-        } else if (sub_44D4E0(&goal_data, obj, AG_WANDER_SEEK_DARKNESS)) {
+        } else if (anim_goal_data_init(&goal_data, obj, AG_WANDER_SEEK_DARKNESS)) {
             goal_data.params[AGDATA_RANGE_DATA].data = radius;
             goal_data.params[AGDATA_SCRATCH_VAL1].data = (int)LOCATION_GET_X(tether_loc);
             goal_data.params[AGDATA_SCRATCH_VAL2].data = (int)LOCATION_GET_Y(tether_loc);
@@ -14735,7 +14735,7 @@ bool sub_436220(int64_t obj, int64_t target_obj, int64_t item_obj)
         return false;
     }
 
-    if (!sub_44D4E0(&goal_data, obj, AG_USE_SKILL_ON)) {
+    if (!anim_goal_data_init(&goal_data, obj, AG_USE_SKILL_ON)) {
         return false;
     }
 
@@ -14803,7 +14803,7 @@ bool anim_goal_please_move(int64_t obj, int64_t target_obj)
         return false;
     }
 
-    if (!sub_44D4E0(&goal_data, target_obj, AG_PLEASE_MOVE)) {
+    if (!anim_goal_data_init(&goal_data, target_obj, AG_PLEASE_MOVE)) {
         return false;
     }
 
@@ -15002,7 +15002,7 @@ bool anim_goal_attempt_spread_out(int64_t obj, int64_t target_obj)
         return false;
     }
 
-    if (!sub_44D500(&goal_data, obj, AG_ATTEMPT_SPREAD_OUT)) {
+    if (!anim_goal_data_init_no_interrupt(&goal_data, obj, AG_ATTEMPT_SPREAD_OUT)) {
         return false;
     }
 

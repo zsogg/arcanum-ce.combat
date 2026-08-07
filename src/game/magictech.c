@@ -2140,7 +2140,7 @@ void MTComponentAGoal_ProcFunc(void)
         break;
     default:
         if (magictech_cur_run_info->parent_obj.obj != OBJ_HANDLE_NULL
-            && sub_44D500(&goal_data, stru_5E6D28.target_obj, magictech_cur_component->data.agoal.goal)) {
+            && anim_goal_data_init_no_interrupt(&goal_data, stru_5E6D28.target_obj, magictech_cur_component->data.agoal.goal)) {
             goal_data.params[AGDATA_TARGET_OBJ].obj = magictech_cur_run_info->parent_obj.obj;
             if ((magictech_cur_component->data.agoal.subgoal & 1) != 0) {
                 // __FILE__: "C:\Troika\Code\Game\GameLibX\MagicTech.c"
@@ -4813,7 +4813,7 @@ void sub_455C30(MagicTechInvocation* mt_invocation)
             : AG_THROW_SPELL;
 
         if ((mt_invocation->flags & MAGICTECH_INVOCATION_FRIENDLY) != 0) {
-            if (sub_44D500(&goal_data, run_info->parent_obj.obj, AG_THROW_SPELL_FRIENDLY)) {
+            if (anim_goal_data_init_no_interrupt(&goal_data, run_info->parent_obj.obj, AG_THROW_SPELL_FRIENDLY)) {
                 goal_data.params[AGDATA_SPELL_DATA].data = run_info->id;
                 goal_data.params[AGDATA_TARGET_OBJ].obj = run_info->target_obj.obj;
                 goal_data.params[AGDATA_TARGET_TILE].obj = run_info->target_obj.loc;
@@ -4831,7 +4831,7 @@ void sub_455C30(MagicTechInvocation* mt_invocation)
         } else if (anim_is_current_goal_type(run_info->parent_obj.obj, AG_THROW_SPELL, &anim_id)) {
             if (num_goal_subslots_in_use(&anim_id) < 4
                 && !combat_turn_based_is_active()
-                && sub_44D500(&goal_data, run_info->parent_obj.obj, anim)) {
+                && anim_goal_data_init_no_interrupt(&goal_data, run_info->parent_obj.obj, anim)) {
                 goal_data.params[AGDATA_SPELL_DATA].data = run_info->id;
                 goal_data.params[AGDATA_TARGET_OBJ].obj = run_info->target_obj.obj;
                 goal_data.params[AGDATA_TARGET_TILE].obj = run_info->target_obj.loc;
@@ -4854,7 +4854,7 @@ void sub_455C30(MagicTechInvocation* mt_invocation)
                     return;
                 }
             }
-        } else if (sub_44D4E0(&goal_data, run_info->parent_obj.obj, anim)) {
+        } else if (anim_goal_data_init(&goal_data, run_info->parent_obj.obj, anim)) {
             goal_data.params[AGDATA_SPELL_DATA].data = run_info->id;
             goal_data.params[AGDATA_TARGET_OBJ].obj = run_info->target_obj.obj;
             goal_data.params[AGDATA_TARGET_TILE].obj = run_info->target_obj.loc;
@@ -4873,7 +4873,7 @@ void sub_455C30(MagicTechInvocation* mt_invocation)
 
             if (anim_goal_add(&goal_data, &anim_id)) {
                 if (info->casting_anim != -1) {
-                    if (sub_44D500(&goal_data, run_info->parent_obj.obj, AG_THROW_SPELL_W_CAST_ANIM_2NDARY)) {
+                    if (anim_goal_data_init_no_interrupt(&goal_data, run_info->parent_obj.obj, AG_THROW_SPELL_W_CAST_ANIM_2NDARY)) {
                         goal_data.params[AGDATA_SPELL_DATA].data = run_info->id;
                         goal_data.params[AGDATA_TARGET_OBJ].obj = run_info->target_obj.obj;
                         goal_data.params[AGDATA_TARGET_TILE].obj = run_info->target_obj.loc;

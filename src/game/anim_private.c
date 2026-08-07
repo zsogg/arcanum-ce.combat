@@ -611,8 +611,16 @@ int anim_find_next(int prev, int64_t obj)
     return -1;
 }
 
-// 0x44D3B0
-bool sub_44D3B0(AnimGoalData* goal_data, int64_t obj, int goal_type, bool a4)
+/**
+ * Fills `goal_data` with the defaults for a new goal of `goal_type` performed
+ * by `obj` (all other params null/-1/zero). When `interrupt` is set, also
+ * interrupts the animations `obj` is already running, at the new goal's
+ * priority. Callers follow up by setting goal-specific params and passing the
+ * struct to `anim_goal_add`.
+ *
+ * 0x44D3B0
+ */
+bool anim_goal_data_init_ex(AnimGoalData* goal_data, int64_t obj, int goal_type, bool interrupt)
 {
     AnimGoalNode* goal_node;
 
@@ -642,7 +650,7 @@ bool sub_44D3B0(AnimGoalData* goal_data, int64_t obj, int goal_type, bool a4)
     goal_data->params[AGDATA_SCRATCH_VAL6].data = 0;
     goal_data->params[AGDATA_SOUND_HANDLE].data = TIG_SOUND_HANDLE_INVALID;
 
-    if (!a4) {
+    if (!interrupt) {
         return true;
     }
 
@@ -654,15 +662,15 @@ bool sub_44D3B0(AnimGoalData* goal_data, int64_t obj, int goal_type, bool a4)
 }
 
 // 0x44D4E0
-bool sub_44D4E0(AnimGoalData* anim_data, int64_t obj, int goal_type)
+bool anim_goal_data_init(AnimGoalData* anim_data, int64_t obj, int goal_type)
 {
-    return sub_44D3B0(anim_data, obj, goal_type, true);
+    return anim_goal_data_init_ex(anim_data, obj, goal_type, true);
 }
 
 // 0x44D500
-bool sub_44D500(AnimGoalData* anim_data, int64_t obj, int goal_type)
+bool anim_goal_data_init_no_interrupt(AnimGoalData* anim_data, int64_t obj, int goal_type)
 {
-    return sub_44D3B0(anim_data, obj, goal_type, false);
+    return anim_goal_data_init_ex(anim_data, obj, goal_type, false);
 }
 
 // 0x44D520

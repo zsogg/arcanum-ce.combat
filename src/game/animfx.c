@@ -620,7 +620,7 @@ bool animfx_add(AnimFxNode* node)
                 }
             }
 
-            if (sub_44D500(&goal_data, node->obj, goal_type)) {
+            if (anim_goal_data_init_no_interrupt(&goal_data, node->obj, goal_type)) {
                 goal_data.params[AGDATA_ANIM_ID].data = eye_candy_art_id;
                 if ((node->flags & ANIMFX_PLAY_NO_ID) != 0) {
                     goal_data.params[AGDATA_SPELL_DATA].data = -1;
@@ -672,7 +672,7 @@ bool animfx_add(AnimFxNode* node)
                 }
 
                 if ((node->flags & ANIMFX_PLAY_DESTROY) != 0) {
-                    if (sub_44D500(&goal_data, node->obj, AG_DESTROY_OBJ)) {
+                    if (anim_goal_data_init_no_interrupt(&goal_data, node->obj, AG_DESTROY_OBJ)) {
 
                         // __FILE__: "C:\Troika\Code\Game\GameLibX\AnimFX.c"
                         // __LINE__: 798
