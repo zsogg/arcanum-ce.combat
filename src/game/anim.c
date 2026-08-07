@@ -7767,7 +7767,7 @@ bool AGapplyFireDmg(AnimRunInfo* run_info)
     object_list_location(source_loc, OBJ_TM_CRITTER | OBJ_TM_ITEM, &objects);
     node = objects.head;
     while (node != NULL) {
-        sub_4B2210(source_obj, node->obj, &combat);
+        combat_context_init(source_obj, node->obj, &combat);
         combat.field_30 = parent_obj;
         if ((run_info->cur_stack_data->params[AGDATA_FLAGS_DATA].data & 0x4000) != 0) {
             dam = 1;
@@ -11013,7 +11013,7 @@ bool AGupdateAnimMoveStraightKnockback(AnimRunInfo* run_info)
         if (new_loc != loc) {
             if (sub_42FD70(run_info, obj, &(run_info->path), loc, new_loc)) {
                 sub_43E770(obj, loc, 0, 0);
-                sub_4B2210(OBJ_HANDLE_NULL, obj, &combat);
+                combat_context_init(OBJ_HANDLE_NULL, obj, &combat);
                 combat.dam[DAMAGE_TYPE_NORMAL] = random_between(1, (run_info->path.max - run_info->path.curr) / 2);
                 combat.dam[DAMAGE_TYPE_FATIGUE] = random_between(1, (run_info->path.max - run_info->path.curr) / 2);
                 combat.field_30 = run_info->cur_stack_data->params[AGDATA_SCRATCH_OBJ].obj;

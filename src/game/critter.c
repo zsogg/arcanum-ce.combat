@@ -627,7 +627,7 @@ void critter_kill(int64_t obj)
         return;
     }
 
-    sub_4B2210(OBJ_HANDLE_NULL, obj, &combat);
+    combat_context_init(OBJ_HANDLE_NULL, obj, &combat);
     combat.dam_flags |= CDF_DEATH;
     combat_dmg(&combat);
 

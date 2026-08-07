@@ -694,7 +694,7 @@ void trigger_trap(int64_t obj, ScriptInvocation* invocation)
         magictech_invocation_run(&mt_invocation);
         return;
     case TRAP_SCRIPT_MECHANICAL:
-        sub_4B2210(invocation->attachee_obj, obj, &combat);
+        combat_context_init(invocation->attachee_obj, obj, &combat);
         combat.field_30 = sub_4BD950(invocation->attachee_obj);
         combat.flags |= CF_TRAP;
         combat.flags |= 0x300;
@@ -704,7 +704,7 @@ void trigger_trap(int64_t obj, ScriptInvocation* invocation)
     case TRAP_SCRIPT_ARROW:
         trap_source_obj = find_trap_source(invocation->attachee_obj, (invocation->script->hdr.counters >> 16) & 0xFF);
         if (trap_source_obj != OBJ_HANDLE_NULL) {
-            sub_4B2210(trap_source_obj, obj, &combat);
+            combat_context_init(trap_source_obj, obj, &combat);
             combat.field_30 = sub_4BD950(invocation->attachee_obj);
             combat.flags |= 0x300;
             combat.weapon_obj = OBJ_HANDLE_NULL;
@@ -713,7 +713,7 @@ void trigger_trap(int64_t obj, ScriptInvocation* invocation)
         }
         break;
     case TRAP_SCRIPT_BULLET:
-        sub_4B2210(invocation->attachee_obj, obj, &combat);
+        combat_context_init(invocation->attachee_obj, obj, &combat);
         combat.field_30 = sub_4BD950(invocation->attachee_obj);
         combat.flags |= CF_TRAP;
         combat.flags |= 0x300;
@@ -721,7 +721,7 @@ void trigger_trap(int64_t obj, ScriptInvocation* invocation)
         combat_dmg(&combat);
         break;
     case TRAP_SCRIPT_FIRE:
-        sub_4B2210(invocation->attachee_obj, obj, &combat);
+        combat_context_init(invocation->attachee_obj, obj, &combat);
         combat.field_30 = sub_4BD950(invocation->attachee_obj);
         combat.flags |= CF_TRAP;
         combat.flags |= 0x300;
@@ -729,7 +729,7 @@ void trigger_trap(int64_t obj, ScriptInvocation* invocation)
         combat_dmg(&combat);
         break;
     case TRAP_SCRIPT_ELECTRICAL:
-        sub_4B2210(invocation->attachee_obj, obj, &combat);
+        combat_context_init(invocation->attachee_obj, obj, &combat);
         combat.field_30 = sub_4BD950(invocation->attachee_obj);
         combat.flags |= CF_TRAP;
         combat.flags |= 0x300;
@@ -737,7 +737,7 @@ void trigger_trap(int64_t obj, ScriptInvocation* invocation)
         combat_dmg(&combat);
         break;
     case TRAP_SCRIPT_POISON:
-        sub_4B2210(invocation->attachee_obj, obj, &combat);
+        combat_context_init(invocation->attachee_obj, obj, &combat);
         combat.field_30 = sub_4BD950(invocation->attachee_obj);
         combat.flags |= CF_TRAP;
         combat.flags |= 0x300;

@@ -346,8 +346,18 @@ bool combat_load(GameLoadInfo* load_info)
     return true;
 }
 
-// 0x4B2210
-void sub_4B2210(int64_t attacker_obj, int64_t target_obj, CombatContext* combat)
+/**
+ * Initializes `combat` for an attack by `attacker_obj` on `target_obj`:
+ * resolves the attacker's wielded weapon (or uses the attacker itself as the
+ * weapon for traps and other non-critters) and its skill, zeroes all damage,
+ * and pre-sets the backstab and CF_RANGED flags. Either object may be
+ * OBJ_HANDLE_NULL - environmental damage passes a null attacker. Callers fill
+ * in damage amounts afterwards and hand the context to combat_dmg or
+ * combat_heal.
+ *
+ * 0x4B2210
+ */
+void combat_context_init(int64_t attacker_obj, int64_t target_obj, CombatContext* combat)
 {
     int type;
 
@@ -677,7 +687,7 @@ bool sub_4B2870(int64_t attacker_obj, int64_t target_obj, int64_t target_loc, in
     if (block_obj != OBJ_HANDLE_NULL) {
         CombatContext combat;
 
-        sub_4B2210(attacker_obj, block_obj, &combat);
+        combat_context_init(attacker_obj, block_obj, &combat);
 
         if (target_obj != OBJ_HANDLE_NULL) {
             combat.field_28 = target_obj;
@@ -1031,7 +1041,7 @@ void combat_process_melee_attack(CombatContext* combat)
 
         if ((obj_field_int32_get(combat->attacker_obj, OBJ_F_SPELL_FLAGS) & OSF_BODY_OF_FIRE) == 0
             && (obj_field_int32_get(combat->target_obj, OBJ_F_SPELL_FLAGS) & OSF_BODY_OF_FIRE) != 0) {
-            sub_4B2210(combat->target_obj, combat->attacker_obj, &body_of_fire);
+            combat_context_init(combat->target_obj, combat->attacker_obj, &body_of_fire);
             body_of_fire.dam[DAMAGE_TYPE_FIRE] = 5;
             combat_dmg(&body_of_fire);
         }
@@ -1120,7 +1130,7 @@ void sub_4B3BB0(int64_t attacker_obj, int64_t target_obj, int hit_loc)
 {
     CombatContext combat;
 
-    sub_4B2210(attacker_obj, target_obj, &combat);
+    combat_context_init(attacker_obj, target_obj, &combat);
     combat.hit_loc = hit_loc;
     combat.flags |= CF_WEAPON_WEAR;
     combat.flags |= 0x40000;
@@ -1139,7 +1149,7 @@ void combat_throw(int64_t attacker_obj, int64_t weapon_obj, int64_t target_obj, 
     }
 
     if (object_script_execute(attacker_obj, weapon_obj, target_obj, SAP_THROW, 0)) {
-        sub_4B2210(attacker_obj, target_obj, &combat);
+        combat_context_init(attacker_obj, target_obj, &combat);
         combat.hit_loc = hit_loc;
         combat.weapon_obj = weapon_obj;
         combat.skill = BASIC_SKILL_THROWING;
@@ -3563,7 +3573,7 @@ bool combat_consume_action_points(int64_t obj, int action_points)
     if (combat_action_points > 0
         && is_pc
         && critter_fatigue_current(obj) > 1) {
-        sub_4B2210(OBJ_HANDLE_NULL, obj, &combat);
+        combat_context_init(OBJ_HANDLE_NULL, obj, &combat);
         combat.flags |= 0x80;
         combat.dam[DAMAGE_TYPE_FATIGUE] = 2;
         combat_dmg(&combat);
