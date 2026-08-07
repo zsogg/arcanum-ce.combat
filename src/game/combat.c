@@ -3030,7 +3030,7 @@ void sub_4B7010(int64_t obj)
             ai_process(obj);
         }
 
-        if (!sub_423300(obj, NULL)) {
+        if (!anim_is_busy(obj, NULL)) {
             combat_action_points = 0;
             sub_4B7080();
         }

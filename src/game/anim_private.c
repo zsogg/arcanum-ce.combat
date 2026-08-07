@@ -209,7 +209,7 @@ void sub_44C840(AnimRunInfo* run_info, AnimGoalNode* goal_node)
     ASSERT(run_info != NULL); // pRunInfo != NULL
     ASSERT(goal_node != NULL); // pGoalNode != NULL
 
-    if (goal_node->priority_level >= 2 && !goal_node->field_8 && !sub_44C9A0(run_info)) {
+    if (goal_node->priority_level >= 2 && !goal_node->concurrent && !sub_44C9A0(run_info)) {
         ASSERT(animNumActiveGoals >= 0); // animNumActiveGoals >= 0
 
         animNumActiveGoals++;
@@ -222,7 +222,7 @@ void sub_44C8F0(AnimRunInfo* run_info, AnimGoalNode* goal_node)
     ASSERT(run_info != NULL); // pRunInfo != NULL
     ASSERT(goal_node != NULL); // pGoalNode != NULL
 
-    if (goal_node->priority_level >= 2 && !goal_node->field_8 && !sub_44C9A0(run_info)) {
+    if (goal_node->priority_level >= 2 && !goal_node->concurrent && !sub_44C9A0(run_info)) {
         ASSERT(animNumActiveGoals >= 1); // animNumActiveGoals >= 1
 
         if (animNumActiveGoals >= 1) {
@@ -658,7 +658,7 @@ bool anim_goal_data_init_ex(AnimGoalData* goal_data, int64_t obj, int goal_type,
 
     ASSERT(goal_node != NULL); // pGoalNode != NULL
 
-    return anim_interrupt_all_goals_of_obj(obj, goal_node->priority_level, goal_node->field_8, 1);
+    return anim_interrupt_all_goals_of_obj(obj, goal_node->priority_level, goal_node->concurrent, 1);
 }
 
 // 0x44D4E0
@@ -920,7 +920,7 @@ void sub_44E050(int64_t a1, int64_t a2)
     AnimID anim_id;
     AnimRunInfo* run_info;
 
-    if (sub_423300(a1, &anim_id)) {
+    if (anim_is_busy(a1, &anim_id)) {
         run_info = &(anim_run_info[anim_id.slot_num]);
         if (run_info->goals[0].type == AG_ATTACK
             || run_info->goals[1].type == AG_ATTEMPT_ATTACK) {
@@ -938,7 +938,7 @@ void sub_44E0E0(int64_t a1, int64_t a2)
     AnimID anim_id;
     AnimRunInfo* run_info;
 
-    if (sub_423300(a1, &anim_id)) {
+    if (anim_is_busy(a1, &anim_id)) {
         run_info = &(anim_run_info[anim_id.slot_num]);
         if (run_info->goals[0].type == AG_ATTACK
             || run_info->goals[1].type == AG_ATTEMPT_ATTACK) {
@@ -1029,7 +1029,7 @@ bool anim_interrupt(AnimID* anim_id, int priority)
             ASSERT(goal_node != NULL); // 4070, "pGoalNode != NULL"
 
             if (priority < PRIORITY_HIGHEST) {
-                if (goal_node->field_8) {
+                if (goal_node->concurrent) {
                     return true;
                 }
 
@@ -1102,7 +1102,7 @@ bool anim_interrupt_all_goals_of_type(int64_t obj, int goal_type, int next_goal_
 
         ASSERT(priority >= PRIORITY_NONE && priority <= PRIORITY_HIGHEST); // 4166, "(priorityLevel >= priorityNone)&&(priorityLevel <= priorityHighest)"
 
-        if (goal_node->field_8) {
+        if (goal_node->concurrent) {
             priority = PRIORITY_NONE;
         }
     } else {
@@ -1381,9 +1381,9 @@ bool anim_is_attacking(int64_t attacker_obj, AnimID* anim_id, int64_t target_obj
 }
 
 // 0x44EAD0
-bool sub_44EAD0(int index)
+bool anim_goal_type_is_concurrent(int index)
 {
-    return anim_goal_nodes[index]->field_8 == 1;
+    return anim_goal_nodes[index]->concurrent == 1;
 }
 
 // 0x44EB40

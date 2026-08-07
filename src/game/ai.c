@@ -358,7 +358,7 @@ bool sub_4A8570(Ai* ai)
         return false;
     }
 
-    if (sub_4233D0(ai->obj) > 2) {
+    if (anim_busy_priority(ai->obj) > 2) {
         return false;
     }
 
@@ -1068,7 +1068,7 @@ void sub_4A9AD0(int64_t attacker_obj, int64_t target_obj)
         }
     }
 
-    if (!sub_423300(attacker_obj, NULL) || anim_is_idle(attacker_obj)) {
+    if (!anim_is_busy(attacker_obj, NULL) || anim_is_idle(attacker_obj)) {
         if (combat_auto_attack_get(attacker_obj)) {
             if (!anim_is_current_goal_type(attacker_obj, AG_ATTEMPT_ATTACK, NULL)) {
                 anim_goal_attack(attacker_obj, target_obj);
@@ -2417,7 +2417,7 @@ void ai_action_perform_non_combat(Ai* ai)
 
         anim_goal_follow_obj(ai->obj, ai->leader_obj);
 
-        if (!sub_423300(ai->obj, NULL)) {
+        if (!anim_is_busy(ai->obj, NULL)) {
             rc = ai_check_follow(ai->obj, ai->leader_obj, true);
             if (rc != AI_FOLLOW_OK && critter_disband(ai->obj, false)) {
                 npc_flags = obj_field_int32_get(ai->obj, OBJ_F_NPC_FLAGS);

@@ -3457,7 +3457,7 @@ void anim_debug_enable(void)
 }
 
 // 0x423300
-bool sub_423300(int64_t obj, AnimID* anim_id)
+bool anim_is_busy(int64_t obj, AnimID* anim_id)
 {
     int prev = -1;
     int slot;
@@ -3470,7 +3470,7 @@ bool sub_423300(int64_t obj, AnimID* anim_id)
         goal_node = anim_goal_nodes[anim_run_info[slot].goals[0].type];
         ASSERT(goal_node != NULL); // 1345, "pGoalNode != NULL"
 
-        if (!goal_node->field_8) {
+        if (!goal_node->concurrent) {
             if (anim_id != NULL) {
                 *anim_id = anim_run_info[slot].id;
             }
@@ -3488,7 +3488,7 @@ bool sub_423300(int64_t obj, AnimID* anim_id)
 }
 
 // 0x4233D0
-int sub_4233D0(int64_t obj)
+int anim_busy_priority(int64_t obj)
 {
     int prev = -1;
     int slot;
@@ -3501,7 +3501,7 @@ int sub_4233D0(int64_t obj)
         goal_node = anim_goal_nodes[anim_run_info[slot].goals[0].type];
         ASSERT(goal_node != NULL); // 1383, "pGoalNode != NULL"
 
-        if (!goal_node->field_8) {
+        if (!goal_node->concurrent) {
             return goal_node->priority_level;
         }
 
@@ -3924,7 +3924,7 @@ int anim_goal_pending_active_goals_count(void)
 
                 if (run_info->goals[stack_index].type >= 0 && run_info->goals[stack_index].type < ANIM_GOAL_MAX) {
                     if (anim_goal_nodes[run_info->goals[stack_index].type]->priority_level >= 2
-                        && !anim_goal_nodes[run_info->goals[stack_index].type]->field_8) {
+                        && !anim_goal_nodes[run_info->goals[stack_index].type]->concurrent) {
                         cnt++;
                     }
                 } else {
@@ -4003,15 +4003,16 @@ bool anim_force_interrupt_all_goals_of_obj(int64_t obj)
  * `anim_interrupt_all_goals_of_type`, which filters by root goal type instead
  * of priority.
  *
- * `a3` mirrors `AnimGoalNode.field_8` of the goal about to start (see the
- * identical idiom in `anim_interrupt_all_goals_of_type`): when set, the sweep
- * runs at PRIORITY_NONE. `a4` suppresses the multiplayer broadcast (Packet9);
- * it is set when the caller is itself reacting to a remote event or performing
- * a local-only cleanup.
+ * `concurrent` mirrors `AnimGoalNode.concurrent` of the goal about to start
+ * (see the identical idiom in `anim_interrupt_all_goals_of_type`): a
+ * concurrent goal must not disturb the animations it will run alongside, so
+ * the sweep runs at PRIORITY_NONE. `a4` suppresses the multiplayer broadcast
+ * (Packet9); it is set when the caller is itself reacting to a remote event or
+ * performing a local-only cleanup.
  *
  * 0x424070
  */
-bool anim_interrupt_all_goals_of_obj(int64_t obj, int priority_level, bool a3, bool a4)
+bool anim_interrupt_all_goals_of_obj(int64_t obj, int priority_level, bool concurrent, bool a4)
 {
     int prev = -1;
     int slot;
@@ -4028,7 +4029,7 @@ bool anim_interrupt_all_goals_of_obj(int64_t obj, int priority_level, bool a3, b
             if (tig_net_is_host()) {
                 object_ref_init(obj, &(pkt.field_18));
                 pkt.priority_level = priority_level;
-                pkt.field_48 = a3;
+                pkt.field_48 = concurrent;
                 pkt.loc = obj_field_int64_get(obj, OBJ_F_LOCATION);
                 pkt.art_id = obj_field_int32_get(obj, OBJ_F_CURRENT_AID);
                 pkt.offset_x = obj_field_int32_get(obj, OBJ_F_OFFSET_X);
@@ -4037,7 +4038,7 @@ bool anim_interrupt_all_goals_of_obj(int64_t obj, int priority_level, bool a3, b
             } else {
                 object_ref_init(obj, &(pkt.field_18));
                 pkt.priority_level = priority_level;
-                pkt.field_48 = a3;
+                pkt.field_48 = concurrent;
                 pkt.loc = 0;
                 pkt.art_id = TIG_ART_ID_INVALID;
                 pkt.offset_x = 0;
@@ -4047,7 +4048,7 @@ bool anim_interrupt_all_goals_of_obj(int64_t obj, int priority_level, bool a3, b
         }
     }
 
-    if (a3) {
+    if (concurrent) {
         priority_level = PRIORITY_NONE;
     }
 
@@ -6327,7 +6328,7 @@ bool sub_4284F0(AnimRunInfo* run_info)
         return false;
     }
 
-    if (sub_423300(obj, NULL)) {
+    if (anim_is_busy(obj, NULL)) {
         return false;
     }
 
@@ -6633,7 +6634,7 @@ bool sub_428A10(AnimRunInfo* run_info)
     case OBJ_TYPE_PC:
     case OBJ_TYPE_NPC:
         if ((spell_flags & OSF_POLYMORPHED) != 0
-            || sub_423300(target_obj, NULL)) {
+            || anim_is_busy(target_obj, NULL)) {
             return false;
         }
         if (!tig_net_is_active()
@@ -11308,7 +11309,7 @@ int sub_4302D0(LocRect* loc_rect, ObjectList* objects)
 // 0x4303D0
 bool sub_4303D0(int64_t obj)
 {
-    if (!sub_423300(obj, 0)
+    if (!anim_is_busy(obj, 0)
         && !combat_critter_is_combat_mode_active(obj)
         && critter_is_active(obj)) {
         if (obj_field_int32_get(obj, OBJ_F_TYPE) == OBJ_TYPE_PC
@@ -13273,7 +13274,7 @@ bool anim_goal_rotate(int64_t obj, int rot)
         return true;
     }
 
-    if (sub_423300(obj, NULL)) {
+    if (anim_is_busy(obj, NULL)) {
         return true;
     }
 
@@ -13282,7 +13283,7 @@ bool anim_goal_rotate(int64_t obj, int rot)
     }
 
     goal_data.params[AGDATA_SCRATCH_VAL1].data = rot;
-    sub_423300(obj, &anim_id);
+    anim_is_busy(obj, &anim_id);
     if (!anim_goal_add(&goal_data, &anim_id)) {
         return false;
     }
@@ -13301,7 +13302,7 @@ bool anim_goal_animate_loop(int64_t obj)
         return false;
     }
 
-    if (sub_423300(obj, NULL)) {
+    if (anim_is_busy(obj, NULL)) {
         return false;
     }
 
@@ -13820,7 +13821,7 @@ bool anim_goal_follow_obj(int64_t source_obj, int64_t target_obj)
         return false;
     }
 
-    if (sub_423300(source_obj, &anim_id)) {
+    if (anim_is_busy(source_obj, &anim_id)) {
         run_info = &(anim_run_info[anim_id.slot_num]);
         if ((run_info->cur_stack_data->params[AGDATA_FLAGS_DATA].data & 0x1000) == 0) {
             if (run_info->cur_stack_data->type != AG_ANIM_FIDGET) {
@@ -14560,7 +14561,7 @@ bool anim_goal_fidget(int64_t critter_obj)
         return false;
     }
 
-    if (anim_is_fidgeting(critter_obj) || sub_423300(critter_obj, NULL)) {
+    if (anim_is_fidgeting(critter_obj) || anim_is_busy(critter_obj, NULL)) {
         return false;
     }
 
@@ -14627,7 +14628,7 @@ bool anim_goal_unconceal(int64_t critter_obj)
         return false;
     }
 
-    if (sub_423300(critter_obj, NULL)) {
+    if (anim_is_busy(critter_obj, NULL)) {
         return false;
     }
 
@@ -14665,7 +14666,7 @@ bool anim_goal_wander(int64_t obj, int64_t tether_loc, int radius)
         && radius > 0
         && obj_type_is_critter(obj_type)
         && critter_is_active(obj)
-        && !sub_423300(obj, NULL)) {
+        && !anim_is_busy(obj, NULL)) {
         source_obj = obj;
         if (sub_436720(&source_obj, &block_obj)) {
             anim_goal_please_move(block_obj, source_obj);
@@ -14705,7 +14706,7 @@ bool anim_goal_wander_seek_darkness(int64_t obj, int64_t tether_loc, int radius)
         && radius > 0
         && obj_type_is_critter(obj_type)
         && critter_is_active(obj)
-        && !sub_423300(obj, NULL)) {
+        && !anim_is_busy(obj, NULL)) {
         source_obj = obj;
         if (sub_436720(&source_obj, &block_obj)) {
             anim_goal_please_move(block_obj, source_obj);
@@ -15207,7 +15208,7 @@ void anim_speed_recalc(int64_t obj)
     AnimID anim_id;
 
     if (obj != OBJ_HANDLE_NULL
-        && sub_423300(obj, &anim_id)) {
+        && anim_is_busy(obj, &anim_id)) {
         notify_speed_recalc(&anim_id);
     }
 }

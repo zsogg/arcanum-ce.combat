@@ -658,7 +658,7 @@ bool combat_ui_message_filter(TigMessage* msg)
             obj = combat_turn_based_whos_turn_get();
             if (obj != OBJ_HANDLE_NULL
                 && player_is_local_pc_obj(obj)
-                && (!sub_423300(obj, &curr_anim_id)
+                && (!anim_is_busy(obj, &curr_anim_id)
                     || (anim_is_current_goal_type(obj, AG_ANIM_FIDGET, &fidget_anim_id)
                         && anim_id_is_equal(&curr_anim_id, &fidget_anim_id)))) {
                 combat_turn_based_next_subturn();
@@ -673,7 +673,7 @@ bool combat_ui_message_filter(TigMessage* msg)
             obj = combat_turn_based_whos_turn_get();
             if (obj != OBJ_HANDLE_NULL
                 && player_is_local_pc_obj(obj)
-                && (!sub_423300(obj, &curr_anim_id)
+                && (!anim_is_busy(obj, &curr_anim_id)
                     || (anim_is_current_goal_type(obj, AG_ANIM_FIDGET, &fidget_anim_id)
                         && anim_id_is_equal(&curr_anim_id, &fidget_anim_id)))) {
                 combat_turn_based_next_subturn();

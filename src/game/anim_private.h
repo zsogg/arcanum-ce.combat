@@ -124,7 +124,16 @@ typedef struct AnimGoalSubNode {
 typedef struct AnimGoalNode {
     /* 0000 */ int num_subnodes;
     /* 0004 */ int priority_level;
-    /* 0008 */ int field_8;
+    /**
+     * Goal runs alongside the object's other animations, outside the priority
+     * system: starting it does not interrupt them (`anim_goal_data_init_ex`
+     * sweeps at PRIORITY_NONE), nothing below PRIORITY_HIGHEST interrupts it
+     * (`anim_interrupt` reports success without touching it), and it does not
+     * make the object busy (`anim_is_busy`) or count toward
+     * `animNumActiveGoals`. Set for the eye-candy goals, floating text, door
+     * swings, spread-out nudges, and friendly-spell casts.
+     */
+    /* 0008 */ int concurrent;
     /* 000C */ int field_C;
     /* 0010 */ int field_10;
     /* 0014 */ int field_14[3];

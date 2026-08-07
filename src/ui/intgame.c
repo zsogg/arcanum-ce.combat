@@ -2759,12 +2759,12 @@ void intgame_process_event(TigMessage* msg)
                         && !critter_is_prone(pc_obj)) {
                         if (combat_critter_is_combat_mode_active(pc_obj)) {
                             if (anim_is_current_goal_type(pc_obj, AG_ANIM_FIDGET, NULL)
-                                || !sub_423300(pc_obj, 0)) {
+                                || !anim_is_busy(pc_obj, 0)) {
                                 intgame_combat_mode_toggle();
                             }
                         } else {
                             if (critter_is_concealed(pc_obj)
-                                && !sub_423300(pc_obj, NULL)) {
+                                && !anim_is_busy(pc_obj, NULL)) {
                                 critter_set_concealed(pc_obj, false);
                             }
                         }
@@ -2782,7 +2782,7 @@ void intgame_process_event(TigMessage* msg)
                                 pc_loc = obj_field_int64_get(pc_obj, OBJ_F_LOCATION);
                                 aid = obj_field_int32_get(pc_obj, OBJ_F_CURRENT_AID);
                                 rot = location_rot(pc_loc, loc);
-                                if (!sub_423300(pc_obj, 0)) {
+                                if (!anim_is_busy(pc_obj, 0)) {
                                     anim_goal_rotate(pc_obj, rot);
                                 } else if (anim_is_current_goal_type(pc_obj, AG_ANIM_FIDGET, NULL)) {
                                     object_set_current_aid(pc_obj, tig_art_id_rotation_set(aid, rot));
@@ -3576,7 +3576,7 @@ void sub_54ED30(TargetDescriptor* td)
         if (tig_net_is_active()) {
             return;
         }
-    } else if (sub_423300(pc_obj, &anim_id)) {
+    } else if (anim_is_busy(pc_obj, &anim_id)) {
         // 0x54F68E
         if (combat_turn_based_is_active()) {
             AnimID fidget_anim_id;

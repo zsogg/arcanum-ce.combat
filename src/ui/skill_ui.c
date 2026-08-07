@@ -268,7 +268,7 @@ void skill_ui_activate(TargetDescriptor* td, int64_t obj, int a3)
                 } else if (critter_is_dead(td->obj)) {
                     if (object_script_execute(obj, td->obj, obj, SAP_USE, 0)
                         && (spell_flags & OSF_POLYMORPHED) == 0
-                        && !sub_423300(td->obj, 0)) {
+                        && !anim_is_busy(td->obj, 0)) {
                         ui_show_inven_loot(obj, td->obj);
                     }
                 } else {
