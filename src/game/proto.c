@@ -18,6 +18,7 @@
 #include "game/spell.h"
 #include "game/stat.h"
 #include "game/tech.h"
+#include "game/uap.h"
 
 typedef enum ProtoField {
     PROTO_F_DESCRIPTION,
@@ -133,6 +134,34 @@ static int proto_description_end[OBJ_TYPE_COUNT] = {
     /*       OBJ_TYPE_MONSTER */ 27394,
     /*    OBJ_TYPE_UNIQUE_NPC */ 28472,
 };
+
+/**
+ * The exclusive upper bound of an object type's prototype description range.
+ *
+ * UAP (0x5B3884, 0x5B3894) widens two of them to cover prototypes its archives
+ * add: `OBJ_TYPE_GENERIC` gains 15213 and `OBJ_TYPE_MONSTER` gains 27394-27396.
+ *
+ * The generic one is visible without UAP's data even loaded: the stock
+ * `Rules\InvenSource.mes` already references basic prototype 15213, which the
+ * original bound excludes, so a clean run logs "Invalid prototype in
+ * [Rules\InvenSource.mes] ... basic prototype 15213" twice and empties the two
+ * sets that mention it. Turning the switch on clears those errors.
+ */
+static int proto_description_end_get(int object_type)
+{
+    if (uap_fixes_enabled()) {
+        switch (object_type) {
+        case OBJ_TYPE_GENERIC:
+            return 15214;
+        case OBJ_TYPE_MONSTER:
+            return 27397;
+        default:
+            break;
+        }
+    }
+
+    return proto_description_end[object_type];
+}
 
 // 0x5B389C
 static int race_to_body_type_tbl[RACE_COUNT] = {
@@ -383,7 +412,7 @@ bool proto_is_valid(int description)
         }
     }
 
-    return description >= proto_description_begin[object_type] && description < proto_description_end[object_type];
+    return description >= proto_description_begin[object_type] && description < proto_description_end_get(object_type);
 }
 
 /**
@@ -424,7 +453,7 @@ void proto_recreate_missing(bool* rescan_ptr)
     proto_id_list_create(&proto_ids, &proto_ids_cnt);
 
     for (type = 0; type < 20; type++) {
-        for (oname = proto_description_begin[type]; oname < proto_description_end[type]; oname++) {
+        for (oname = proto_description_begin[type]; oname < proto_description_end_get(type); oname++) {
             oid = proto_description_to_oid(oname);
             if (!proto_id_list_check(proto_ids, proto_ids_cnt, oid.d.a)) {
                 proto_recreate(oname);
@@ -501,7 +530,7 @@ void proto_deallocate_all(void)
     int description;
 
     for (object_type = 0; object_type < OBJ_TYPE_COUNT; object_type++) {
-        for (description = proto_description_begin[object_type]; description < proto_description_end[object_type]; description++) {
+        for (description = proto_description_begin[object_type]; description < proto_description_end_get(object_type); description++) {
             obj_deallocate(obj_pool_perm_lookup(proto_description_to_oid(description)));
         }
     }
