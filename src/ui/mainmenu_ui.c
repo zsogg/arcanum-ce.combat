@@ -1113,12 +1113,31 @@ static struct {
     /*     RACE_HUMAN */ { TIG_ART_CRITTER_BODY_TYPE_HUMAN, true },
     /*     RACE_DWARF */ { TIG_ART_CRITTER_BODY_TYPE_DWARF, false },
     /*       RACE_ELF */ { TIG_ART_CRITTER_BODY_TYPE_ELF, true },
+    // UAP (0x5C5188): "Half Elf PCs now use elven art instead of human's, just
+    // like all Half Elf NPCs." Substituted at the two
+    // `object_set_gender_and_race` call sites rather than here, so this table
+    // keeps matching the binary.
     /*  RACE_HALF_ELF */ { TIG_ART_CRITTER_BODY_TYPE_HUMAN, true },
     /*     RACE_GNOME */ { TIG_ART_CRITTER_BODY_TYPE_HALFLING, false },
     /*  RACE_HALFLING */ { TIG_ART_CRITTER_BODY_TYPE_HALFLING, false },
     /*  RACE_HALF_ORC */ { TIG_ART_CRITTER_BODY_TYPE_HUMAN, true },
     /* RACE_HALF_OGRE */ { TIG_ART_CRITTER_BODY_TYPE_HALF_OGRE, false },
 };
+
+/**
+ * The body type a newly created character of `race` is given.
+ *
+ * UAP (0x5C5188) changes only the Half Elf entry of `stru_5C5170`, from the
+ * human body type to the elven one.
+ */
+static int mainmenu_ui_race_body_type(int race)
+{
+    if (uap_fixes_enabled() && race == RACE_HALF_ELF) {
+        return TIG_ART_CRITTER_BODY_TYPE_ELF;
+    }
+
+    return stru_5C5170[race].body_type;
+}
 
 // 0x5C51B0
 static MainMenuButtonInfo mainmenu_ui_pregen_char_buttons[] = {
@@ -4068,7 +4087,7 @@ bool mainmenu_ui_new_char_set_gender(int64_t obj, int gender)
         return false;
     }
 
-    object_set_gender_and_race(obj, stru_5C5170[race].body_type, gender, race);
+    object_set_gender_and_race(obj, mainmenu_ui_race_body_type(race), gender, race);
     object_set_current_aid(obj, obj_field_int32_get(obj, OBJ_F_CURRENT_AID));
 
     if (portrait_find_first(obj, &portrait)) {
@@ -4152,7 +4171,7 @@ void mainmenu_ui_new_char_set_race(int64_t obj, int race)
             : GENDER_FEMALE;
     }
 
-    object_set_gender_and_race(obj, stru_5C5170[race].body_type, gender, race);
+    object_set_gender_and_race(obj, mainmenu_ui_race_body_type(race), gender, race);
     object_set_current_aid(obj, obj_field_int32_get(obj, OBJ_F_CURRENT_AID));
 
     if (portrait_find_first(obj, &portrait)) {

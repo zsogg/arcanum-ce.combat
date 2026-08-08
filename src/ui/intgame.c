@@ -531,6 +531,33 @@ static int intgame_race_icons[RACE_COUNT] = {
     /*       RACE_ORC */ 381, // racehorcicon.art
 };
 
+/**
+ * The message-window icon for a critter's race.
+ *
+ * UAP (0x5C6FC0): "Restored race icons for Dark Elves, Ogres and Orcs." The
+ * original has no art for those three and reuses the elf, half-ogre and
+ * half-orc icons; UAP points them at art of their own, which its archives
+ * ship. Substituted here rather than in `intgame_race_icons` so that table
+ * keeps matching the binary.
+ */
+static int intgame_race_icon(int race)
+{
+    if (uap_fixes_enabled()) {
+        switch (race) {
+        case RACE_DARK_ELF:
+            return 847;
+        case RACE_OGRE:
+            return 848;
+        case RACE_ORC:
+            return 849;
+        default:
+            break;
+        }
+    }
+
+    return intgame_race_icons[race];
+}
+
 // 0x5C6FCC
 static int intgame_alignment_icons[6] = {
     634, // "icon_lawfulevil.art"
@@ -6413,7 +6440,7 @@ bool intgame_examine_portrait(int64_t pc_obj, int64_t target_obj, int* portrait_
         }
 
         // Generic race-specific icon.
-        *portrait_ptr = intgame_race_icons[stat_level_get(target_obj, STAT_RACE)];
+        *portrait_ptr = intgame_race_icon(stat_level_get(target_obj, STAT_RACE));
         return false;
     default:
         return false;
