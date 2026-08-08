@@ -312,7 +312,7 @@ bool gameuilib_save(void)
 
     // Retrieve start position of the first module.
     tig_file_fgetpos(stream, &start_pos);
-    tig_debug_printf("\ngameuilib_save: Start Pos: %lu\n", start_pos);
+    tig_debug_printf("\ngameuilib_save: Start Pos: %lu\n", (unsigned long)start_pos);
 
     // Save each module's state.
     for (index = 0; index < MODULE_COUNT; index++) {
@@ -329,8 +329,8 @@ bool gameuilib_save(void)
             tig_debug_printf("gameuilib_save: Function %d (%s) wrote to: %lu, Total: (%lu)\n",
                 index,
                 gameuilib_modules[index].name,
-                pos,
-                pos - start_pos);
+                (unsigned long)pos,
+                (unsigned long)(pos - start_pos));
             start_pos = pos;
 
             // Write sentinel.
@@ -390,7 +390,7 @@ bool gameuilib_load(void)
 
     // Retrieve start position of the first module.
     tig_file_fgetpos(stream, &start_pos);
-    tig_debug_printf("gameuilib_load: Start Pos: %lu\n", start_pos);
+    tig_debug_printf("gameuilib_load: Start Pos: %lu\n", (unsigned long)start_pos);
 
     // Load each module's state.
     for (index = 0; index < MODULE_COUNT; index++) {
@@ -407,8 +407,8 @@ bool gameuilib_load(void)
             tig_debug_printf("gameuilib_load: Function %d (%s) read to: %lu, Total: (%lu)\n",
                 index,
                 gameuilib_modules[index].name,
-                pos,
-                pos - start_pos);
+                (unsigned long)pos,
+                (unsigned long)(pos - start_pos));
             start_pos = pos;
 
             // Read & verify sentinel.

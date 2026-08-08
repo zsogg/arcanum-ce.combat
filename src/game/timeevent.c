@@ -2008,8 +2008,8 @@ void timeevent_debug_node(TimeEventNode* node, int node_index)
         } else if ((dword_5B2794[index][TIMEEVENT_PARAM_TYPE_LOCATION] & stru_5B2188[node->te.type].flags) != 0) {
             tig_debug_printf(", D%d[%d x %d]loc",
                 index,
-                LOCATION_GET_X(node->te.params[index].location_value),
-                LOCATION_GET_Y(node->te.params[index].location_value));
+                (int)LOCATION_GET_X(node->te.params[index].location_value),
+                (int)LOCATION_GET_Y(node->te.params[index].location_value));
         } else if ((dword_5B2794[index][TIMEEVENT_PARAM_TYPE_FLOAT] & stru_5B2188[node->te.type].flags) != 0) {
             tig_debug_printf(", D%d[%f]loc",
                 index,

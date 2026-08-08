@@ -331,7 +331,11 @@ bool anim_goal_restart(AnimID* anim_id)
 
     if (!anim_id_to_run_info(anim_id, &run_info)) {
         anim_id_to_str(anim_id, str);
-        tig_debug_printf("Anim: anim_goal_restart: could not turn animID into a AnimRunInfo %s.\n");
+        // FIX: The %s had no argument, so printf dereferenced whatever
+        // followed in the argument list as a string. `str` was already
+        // filled by the anim_id_to_str call above, which is what the
+        // original passes.
+        tig_debug_printf("Anim: anim_goal_restart: could not turn animID into a AnimRunInfo %s.\n", str);
         return false;
     }
 

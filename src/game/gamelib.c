@@ -976,7 +976,7 @@ bool gamelib_save(const char* name, const char* description)
     }
 
     tig_file_fgetpos(stream, &start_pos);
-    tig_debug_printf("gamelib_save: Start Pos: %lu\n", start_pos);
+    tig_debug_printf("gamelib_save: Start Pos: %lu\n", (unsigned long)start_pos);
 
     ui_progressbar_update(1);
 
@@ -993,8 +993,8 @@ bool gamelib_save(const char* name, const char* description)
             duration = tig_timer_elapsed(time);
             tig_file_fgetpos(stream, &pos);
             tig_debug_printf(" wrote to: %lu, Total: (%lu), Time (ms): %d\n",
-                pos,
-                pos - start_pos,
+                (unsigned long)pos,
+                (unsigned long)(pos - start_pos),
                 duration);
             start_pos = pos;
 
@@ -1129,7 +1129,7 @@ bool gamelib_load(const char* name)
     load_info.stream = stream;
 
     tig_file_fgetpos(stream, &start_pos);
-    tig_debug_printf("gamelib_load: Start Pos: %lu\n", start_pos);
+    tig_debug_printf("gamelib_load: Start Pos: %lu\n", (unsigned long)start_pos);
 
     ui_progressbar_update(1);
 
@@ -1146,8 +1146,8 @@ bool gamelib_load(const char* name)
             duration = tig_timer_elapsed(time);
             tig_file_fgetpos(stream, &pos);
             tig_debug_printf(" read to: %lu, Total: (%lu), Time (ms): %d\n",
-                pos,
-                pos - start_pos,
+                (unsigned long)pos,
+                (unsigned long)(pos - start_pos),
                 duration);
             start_pos = pos;
 

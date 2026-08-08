@@ -405,8 +405,8 @@ bool map_save(TigFile* stream)
             int pos;
             tig_file_fgetpos(stream, &pos);
             tig_debug_printf(" wrote to: %lu, Total: (%lu), Time (ms): %d\n",
-                pos,
-                pos - start_pos,
+                (unsigned long)pos,
+                (unsigned long)(pos - start_pos),
                 tig_timer_elapsed(start));
             start_pos = pos;
 
@@ -490,8 +490,8 @@ bool map_load(GameLoadInfo* load_info)
             int pos;
             tig_file_fgetpos(load_info->stream, &pos);
             tig_debug_printf(" read to: %lu, Total: (%lu), Time (ms): %d\n",
-                pos,
-                start_pos - pos,
+                (unsigned long)pos,
+                (unsigned long)(start_pos - pos),
                 tig_timer_elapsed(start));
             start_pos = pos;
         }
@@ -1128,7 +1128,7 @@ bool map_preprocess_mobile(const char* name)
         if (!obj_write(stream, obj)) {
             // FIXME: Leaking `stream`.
             tig_file_list_destroy(&file_list);
-            tig_debug_printf("Error writing object to mobile objects file.\n", path);
+            tig_debug_printf("Error writing object to mobile objects file.\n");
             return false;
         }
 

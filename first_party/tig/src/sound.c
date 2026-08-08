@@ -340,7 +340,9 @@ int tig_sound_acquire_handle(TigSoundType type)
         abort();
     }
 
-    tig_debug_printf("No sound handle available for sound type %d! Current sounds are:\n");
+    // FIX: The %d had no argument, so this read past the end of the
+    // argument list. The original passes the requested type.
+    tig_debug_printf("No sound handle available for sound type %d! Current sounds are:\n", (int)type);
     for (index = 0; index < SOUND_HANDLE_MAX; index++) {
         // FIXME: This approach does not respect lower and upper bounds for the
         // requested sound type. Let's say we're out of music handles, it will

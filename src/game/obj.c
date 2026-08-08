@@ -3350,7 +3350,7 @@ bool object_field_write_if_dif(Object* object, int idx, ObjectFieldInfo* info)
     }
 
     if (!object_field_write(object, idx, info)) {
-        tig_debug_printf("object_field_write failed in object_field_write_if_dif trying to write field #%d\n", info - object_fields);
+        tig_debug_printf("object_field_write failed in object_field_write_if_dif trying to write field #%d\n", (int)(info - object_fields));
         return false;
     }
 
@@ -3370,7 +3370,7 @@ bool object_field_read_if_dif(Object* object, int idx, ObjectFieldInfo* info)
     }
 
     if (!object_field_read(object, idx, info)) {
-        tig_debug_printf("object_field_read failed in object_field_read_if_dif trying to read field #%d\n", info - object_fields);
+        tig_debug_printf("object_field_read failed in object_field_read_if_dif trying to read field #%d\n", (int)(info - object_fields));
         return false;
     }
 
@@ -5194,7 +5194,7 @@ bool sub_40D670(Object* object, int a2, ObjectFieldInfo* field_info)
     (void)a2;
 
     if ((object->field_4C[field_info->change_array_idx] & field_info->mask) != 0) {
-        tig_debug_printf("\t #%d", field_info - object_fields);
+        tig_debug_printf("\t #%d", (int)(field_info - object_fields));
     }
     return true;
 }
