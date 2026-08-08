@@ -222,7 +222,13 @@ static int dword_5B0BA0 = -1;
 // 0x5B0BA4
 static int magictech_cur_id = -1;
 
-// 0x4513FD
+/**
+ * FIX: This was annotated 0x4513FD, an address inside .text - the code that
+ * references the table rather than the table itself. The array is at .data
+ * 0x5B0BA8, located by matching its 25 function pointers against the exe.
+ *
+ * 0x5B0BA8
+ */
 static MagicTechProc magictech_procs[] = {
     MTComponentNoop_ProcFunc,
     MTComponentAGoal_ProcFunc,

@@ -162,7 +162,9 @@ static const char* level_scheme_misc[LEVEL_SCHEME_MISC_MAX] = {
  * Array of function pointers to get effective levels for miscellaneous
  * attributes.
  *
- * 0x4A7ABE
+ * FIX: was 0x4A7ABE, a .text address; the array is at .data 0x5B4DB0.
+ *
+ * 0x5B4DB0
  */
 static MiscGetter level_misc_attr_level_getters[LEVEL_SCHEME_MISC_MAX] = {
     object_hp_max,
@@ -172,7 +174,9 @@ static MiscGetter level_misc_attr_level_getters[LEVEL_SCHEME_MISC_MAX] = {
 /**
  * Array of function pointers to get base levels for miscellaneous attributes.
  *
- * 0x4A7AF3
+ * FIX: was 0x4A7AF3, a .text address; the array is at .data 0x5B4DB8.
+ *
+ * 0x5B4DB8
  */
 static MiscGetter level_misc_attr_base_getters[LEVEL_SCHEME_MISC_MAX] = {
     object_hp_pts_get,
@@ -182,7 +186,9 @@ static MiscGetter level_misc_attr_base_getters[LEVEL_SCHEME_MISC_MAX] = {
 /**
  * Array of function pointers to set base levels for miscellaneous attributes.
  *
- * 0x4A7AFE
+ * FIX: was 0x4A7AFE, a .text address; the array is at .data 0x5B4DC0.
+ *
+ * 0x5B4DC0
  */
 static MiscSetter level_misc_attr_base_setters[LEVEL_SCHEME_MISC_MAX] = {
     object_hp_pts_set,
