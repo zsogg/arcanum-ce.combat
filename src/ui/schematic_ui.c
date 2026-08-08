@@ -12,6 +12,7 @@
 #include "game/proto.h"
 #include "game/snd.h"
 #include "game/tech.h"
+#include "game/uap.h"
 #include "ui/intgame.h"
 #include "ui/tb_ui.h"
 
@@ -656,7 +657,10 @@ void schematic_ui_create(void)
     // Enable the PC lens.
     pc_lens.window_handle = schematic_ui_window;
     pc_lens.rect = &schematic_ui_pc_lens_rect;
-    tig_art_interface_id_create(231, 0, 0, 0, &(pc_lens.art_id));
+
+    // UAP (0x56D47E): art 367 instead of 231 - see the note in
+    // `written_ui_create` for the family.
+    tig_art_interface_id_create(uap_fixes_enabled() ? 367 : 231, 0, 0, 0, &(pc_lens.art_id));
     intgame_pc_lens_do(PC_LENS_MODE_PASSTHROUGH, &pc_lens);
 
     // Play sound effect for opening the UI.
