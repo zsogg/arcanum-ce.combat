@@ -15,6 +15,7 @@
 #include "game/script_name.h"
 #include "game/stat.h"
 #include "game/tb.h"
+#include "game/uap.h"
 #include "ui/charedit_ui.h"
 #include "ui/intgame.h"
 #include "ui/inven_ui.h"
@@ -322,7 +323,16 @@ bool dialog_ui_process_option(DialogUiEntry* entry, int option)
     case DIALOG_STATUS_CHAREDIT:
         if (is_pc) {
             intgame_dialog_clear();
-            charedit_open(entry->state.npc_obj, CHAREDIT_MODE_PASSIVE);
+            // UAP (0x567FA9): the dialog-driven character editor opens in the
+            // editable mode, the same PASSIVE -> ACTIVE swap 4f1bb76 made for
+            // the follower context menu. Both halves of "distribute their
+            // character points yourself" (changelog line 686) - a follower can
+            // be levelled either from the context menu or from a dialog option
+            // whose result code is DIALOG_STATUS_CHAREDIT.
+            charedit_open(entry->state.npc_obj,
+                uap_fixes_enabled()
+                    ? CHAREDIT_MODE_ACTIVE
+                    : CHAREDIT_MODE_PASSIVE);
         }
         break;
     case DIALOG_STATUS_WORLDMAP:

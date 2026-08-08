@@ -1189,6 +1189,21 @@ bool intgame_load(GameLoadInfo* load_info)
 
     intgame_counters_refresh();
     intgame_refresh_cursor();
+
+    // UAP (0x54A2EC): force the magic/tech button to be re-evaluated on load.
+    // `intgame_mt_button_enable` only does anything when the button is currently
+    // hidden, so one left showing from before the load stays visible even when
+    // the newly wielded weapon does not qualify for it. The patch retargets this
+    // call five bytes earlier into padding that calls
+    // `intgame_mt_button_disable` and then falls straight through into the
+    // enable, giving a hide-then-reconsider.
+    //
+    // Only this call site is retargeted; the one in
+    // `intgame_notify_item_inserted_or_removed` is left alone.
+    if (uap_fixes_enabled()) {
+        intgame_mt_button_disable();
+    }
+
     intgame_mt_button_enable();
 
     obj = player_get_local_pc_obj();
@@ -6789,7 +6804,8 @@ void sub_554830(int64_t a1, int64_t a2)
         window_handle = compact_ui_message_window_acquire();
     }
 
-    sub_554B00(window_handle, 582, 207, 57);
+    // UAP (0x554863): the icon drops two pixels, from y 57 to 59.
+    sub_554B00(window_handle, 582, 207, uap_fixes_enabled() ? 59 : 57);
 
     weapon_obj = item_wield_get(a1, ITEM_INV_LOC_WEAPON);
     skill = item_weapon_skill(weapon_obj);
