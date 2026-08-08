@@ -39,6 +39,7 @@
 #include "game/spell.h"
 #include "game/stat.h"
 #include "game/tech.h"
+#include "game/uap.h"
 #include "game/wallcheck.h"
 #include "ui/charedit_ui.h"
 #include "ui/dialog_ui.h"
@@ -124,8 +125,30 @@ int main(int argc, char** argv)
         anim_catch_up_enable();
     }
 
-    if (strstr(lpCmdLine, "-animdebug") != NULL) {
-        anim_debug_enable();
+    // UAP (0x401118): "Added a '-cheatmode' switch, which enables Troika's
+    // original cheat mode, see Documents\Cheat Mode.txt for an explanation on
+    // what it does."
+    //
+    // The patch reuses this handler wholesale - it repoints the string at
+    // 0x59A198 from "-animdebug" to "-cheatmode" and the call at 0x401118 from
+    // `anim_debug_enable` to `gamelib_cheat_level_set` - so `-animdebug` is
+    // gone from the patched build rather than sitting beside the new switch.
+    //
+    // NOTE: In the original binary `gamelib_cheat_level_set` (0x402CC0) stores
+    // a hardcoded 0 and `gamelib_cheat_level_get` (0x402CB0) is `xor eax, eax`,
+    // which is how Troika disabled cheat mode in the release build. UAP patches
+    // both back (0x402CC0's immediate becomes 3, 0x402CB0 reads the global);
+    // nothing is needed here because CE already implements the unstubbed pair,
+    // which is why CE's own `-2680`/`-0897`/`-4637` switches work where
+    // 1.0.7.4's do not. See HANDOFF, *UAP: what it changes, and where*.
+    if (uap_fixes_enabled()) {
+        if (strstr(lpCmdLine, "-cheatmode") != NULL) {
+            gamelib_cheat_level_set(3);
+        }
+    } else {
+        if (strstr(lpCmdLine, "-animdebug") != NULL) {
+            anim_debug_enable();
+        }
     }
 
     if (strstr(lpCmdLine, "-norandom") != NULL) {
