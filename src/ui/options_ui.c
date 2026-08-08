@@ -9,6 +9,7 @@
 #include "game/player.h"
 #include "game/skill.h"
 #include "game/tf.h"
+#include "game/uap.h"
 #include "ui/cyclic_ui.h"
 #include "ui/gameuilib.h"
 
@@ -63,6 +64,8 @@ static void options_ui_voice_volume_get(int* value_ptr, bool* enabled_ptr);
 static void options_ui_voice_volume_set(int value);
 static void options_ui_music_volume_get(int* value_ptr, bool* enabled_ptr);
 static void options_ui_music_volume_set(int value);
+static void options_ui_shadows_get(int* value_ptr, bool* enabled_ptr);
+static void options_ui_shadows_set(int value);
 
 /**
  * 0x5CCD38
@@ -128,6 +131,41 @@ static OptionsUiControlInfo options_ui_tab_controls_meta[OPTIONS_UI_TAB_COUNT][M
         { false, 0, 0, "", "", NULL, NULL },
         { false, 0, 0, "", "", NULL, NULL },
     },
+};
+
+/**
+ * Index of the first unused control on the "Video" tab.
+ *
+ * UAP (0x5CCEE4) fills this slot in with the "Shadows" toggle.
+ */
+#define OPTIONS_UI_VIDEO_SHADOWS 5
+
+/**
+ * UAP's "Shadows" control.
+ *
+ * UAP (0x5CCEE4): "The dynamic shadows option is now available in the options
+ * menu." The patch turns on the first dead row of the "Video" tab and points
+ * it at a getter/setter pair for the existing `shadows` setting - the one
+ * `light.c` registers and the `-shadows` debug key already toggles.
+ *
+ * It is kept out of `options_ui_tab_controls_meta` so that table keeps
+ * matching the binary byte for byte. Note the empty title: control titles come
+ * from `options_ui.mes` entry `index + 100 * (tab + 1)`, so this row reads
+ * entry 205, which UAP's own archives supply.
+ *
+ * UAP also has to relocate `options_ui_float_speed_get` to 0x589919 and repoint
+ * the "Float Speed" row at it, because it needs 0x5898E0 for the new getter.
+ * That is a pure code-layout consequence with no behaviour attached, so
+ * nothing here mirrors it.
+ */
+static OptionsUiControlInfo options_ui_uap_shadows_meta = {
+    true,
+    CYCLIC_UI_CONTROL_MESSAGE_FILE,
+    0,
+    "",
+    "mes\\OptionsOffOn.mes",
+    options_ui_shadows_get,
+    options_ui_shadows_set,
 };
 
 /**
@@ -205,6 +243,15 @@ void options_ui_start(OptionsUiTab tab, tig_window_handle_t window_handle, bool 
 
     for (index = 0; index < MAX_CONTROLS; index++) {
         meta = &(options_ui_tab_controls_meta[tab][index]);
+
+        // UAP (0x5CCEE4): substitute the "Shadows" control into the "Video"
+        // tab's first dead slot.
+        if (uap_fixes_enabled()
+            && tab == OPTIONS_UI_TAB_VIDEO
+            && index == OPTIONS_UI_VIDEO_SHADOWS) {
+            meta = &options_ui_uap_shadows_meta;
+        }
+
         if (!meta->active) {
             continue;
         }
@@ -690,4 +737,25 @@ void options_ui_music_volume_get(int* value_ptr, bool* enabled_ptr)
 void options_ui_music_volume_set(int value)
 {
     settings_set_value(&settings, MUSIC_VOLUME_KEY, value);
+}
+
+/**
+ * Called to retrieve the initial value and state of UAP's "Shadows".
+ *
+ * UAP (0x5898ED)
+ */
+void options_ui_shadows_get(int* value_ptr, bool* enabled_ptr)
+{
+    *value_ptr = settings_get_value(&settings, SHADOWS_KEY);
+    *enabled_ptr = true;
+}
+
+/**
+ * Called when the value of UAP's "Shadows" is changed.
+ *
+ * UAP (0x5898F4)
+ */
+void options_ui_shadows_set(int value)
+{
+    settings_set_value(&settings, SHADOWS_KEY, value);
 }
