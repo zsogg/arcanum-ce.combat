@@ -573,7 +573,13 @@ static AnimGoalNode anim_goal_node_open_door = {
         /*  1 */ { sub_4284A0, { AGDATA_SCRATCH_OBJ, -1 }, -1, 0x30000000, 0, 2, 0 },
         /*  2 */ { sub_4284F0, { AGDATA_SCRATCH_OBJ, -1 }, -1, 0x30000000, 0, 3, 0 },
         /*  3 */ { sub_428750, { AGDATA_SCRATCH_OBJ, AGDATA_SELF_OBJ }, -1, 0x71000000 | AG_ATTEMPT_OPEN_DOOR, 0, AG_RUN_TO_TILE, 0 },
-        /*  4 */ { sub_4287E0, { AGDATA_SELF_OBJ, AGDATA_SCRATCH_OBJ }, -1, 5, 0, 0x4000000 | AG_UNLOCK_DOOR, 0 },
+        // FIX: The success flow code was `0x4000000` (one zero short of the
+        // `0x40000000` push-goal bit), which no branch of the interpreter
+        // matches - it would leave the state unchanged with a zero delay and
+        // spin until the 100-iteration loop guard killed the animation. The
+        // binary has `0x4000000D` at 0x5A7068. Unreachable either way, since
+        // `sub_4287E0` always returns false.
+        /*  4 */ { sub_4287E0, { AGDATA_SELF_OBJ, AGDATA_SCRATCH_OBJ }, -1, 5, 0, 0x40000000 | AG_UNLOCK_DOOR, 0 },
         /*  5 */ { sub_428890, { AGDATA_SELF_OBJ, AGDATA_SCRATCH_OBJ }, -1, 0x90000000, 0, 0x40000000 | AG_PICKUP_ITEM, 0 },
         /*  6 */ { 0 },
         /*  7 */ { 0 },
