@@ -1936,6 +1936,33 @@ void map_enable_gender_check(void)
     map_gender_check_enabled = true;
 }
 
+/**
+ * Reports one gender/description mismatch found by `map_gender_check`.
+ *
+ * FIX: The four call sites this replaces each passed a format string with *two*
+ * `%I64d` conversions but only one argument, the packed location. The original
+ * pushes two zero-extended 64-bit values - the location's low half and its high
+ * half, that is its x and y (0x4124A4-0x4124A9) - so the second conversion in
+ * CE was reading whatever followed in the varargs list.
+ *
+ * `%I64d` is a Microsoft spelling with no meaning to glibc, which parses it as
+ * the GNU `%I` flag plus a field width of 64, so the numbers also came out
+ * padded across 64 columns. `%lld` is what the original prints on MSVC and is
+ * correct everywhere CE builds.
+ *
+ * NOTE: `%I64d` is used in about ten other `tig_debug_printf` calls across
+ * `sector.c`, `anim.c` and `map.c`. Those have the right argument counts, so
+ * they only mis-format rather than reading garbage - see HANDOFF.
+ */
+static void map_gender_check_report(const char* what, const char* name, int64_t location)
+{
+    tig_debug_printf("%s: %s at location %lld %lld\n",
+        what,
+        name,
+        (long long)location_get_x(location),
+        (long long)location_get_y(location));
+}
+
 // 0x412390
 void map_gender_check(void)
 {
@@ -1954,44 +1981,52 @@ void map_gender_check(void)
                 const int description = obj_field_int32_get(obj, OBJ_F_DESCRIPTION);
                 if (description >= BP_NPC_BEGIN && description < BP_NPC_END) {
                     const int actual_gender = stat_base_get(obj, STAT_GENDER);
-                    const int expected_gender = description % GENDER_COUNT;
-                    if (actual_gender == GENDER_MALE && expected_gender == GENDER_FEMALE) {
+
+                    // FIX: The description number's parity says which gender the
+                    // description is written for, but with the *opposite*
+                    // convention to `Gender`: odd is female, even is male. The
+                    // original tests `description % 2 != 0` for female
+                    // (0x412434) and `== 0` for male (0x412479).
+                    //
+                    // Comparing that parity against `GENDER_FEMALE` directly, as
+                    // this did, inverted the first branch: it reported a male
+                    // critter carrying a *male* description and could never
+                    // catch the male-with-female-description case the message
+                    // names. The `FIXME: Wrong condition above` note was
+                    // attached to the second branch, which matches the binary.
+                    const bool description_is_female = (description % GENDER_COUNT) != 0;
+
+                    if (actual_gender == GENDER_MALE && description_is_female) {
                         object_examine(obj, obj, name);
 
                         location = obj_field_int64_get(obj, OBJ_F_LOCATION);
-                        tig_debug_printf("Male character with female description: %s at location %I64d %I64d\n",
-                            name,
-                            location);
-                    } else if (actual_gender == GENDER_FEMALE && expected_gender == GENDER_FEMALE) {
-                        // FIXME: Wrong condition above.
+                        map_gender_check_report("Male character with female description", name, location);
+                    } else if (actual_gender == GENDER_FEMALE && !description_is_female) {
                         object_examine(obj, obj, name);
 
                         location = obj_field_int64_get(obj, OBJ_F_LOCATION);
-                        tig_debug_printf("Female character with male description: %s at location %I64d %I64d\n",
-                            name,
-                            location);
+                        map_gender_check_report("Female character with male description", name, location);
                     }
                 }
 
                 const int unknown_description = obj_field_int32_get(obj, OBJ_F_CRITTER_DESCRIPTION_UNKNOWN);
                 if (unknown_description >= BP_NPC_BEGIN && unknown_description < BP_NPC_END) {
                     const int actual_gender = stat_base_get(obj, STAT_GENDER);
-                    const int expected_gender = unknown_description % GENDER_COUNT;
-                    if (actual_gender == GENDER_MALE && expected_gender == GENDER_FEMALE) {
+
+                    // FIX: See the note on the description branch above - same
+                    // inverted parity test, same fix.
+                    const bool description_is_female = (unknown_description % GENDER_COUNT) != 0;
+
+                    if (actual_gender == GENDER_MALE && description_is_female) {
                         object_examine(obj, obj, name);
 
                         location = obj_field_int64_get(obj, OBJ_F_LOCATION);
-                        tig_debug_printf("Male character with female unknown description: %s at location %I64d %I64d\n",
-                            name,
-                            location);
-                    } else if (actual_gender == GENDER_FEMALE && expected_gender == GENDER_FEMALE) {
-                        // FIXME: Wrong condition above.
+                        map_gender_check_report("Male character with female unknown description", name, location);
+                    } else if (actual_gender == GENDER_FEMALE && !description_is_female) {
                         object_examine(obj, obj, name);
 
                         location = obj_field_int64_get(obj, OBJ_F_LOCATION);
-                        tig_debug_printf("Female character with male unknown description: %s at location %I64d %I64d\n",
-                            name,
-                            location);
+                        map_gender_check_report("Female character with male unknown description", name, location);
                     }
                 }
             }
