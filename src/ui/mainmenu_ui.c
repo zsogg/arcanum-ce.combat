@@ -26,6 +26,7 @@
 #include "game/stat.h"
 #include "game/teleport.h"
 #include "game/timeevent.h"
+#include "game/uap.h"
 #include "ui/broadcast_ui.h"
 #include "ui/charedit_ui.h"
 #include "ui/fate_ui.h"
@@ -436,6 +437,14 @@ static int dword_5C4030[2] = {
 
 // 0x5C4038
 static int dword_5C4038 = 171;
+
+/**
+ * UAP (0x5C4038) swaps the font art the main menu builds `dword_64C0CC` and
+ * `dword_64BC04` from - the menu-entry fonts and the one
+ * `mainmenu_ui_draw_version` pushes for the version banner. Art 226 rather
+ * than 171; UAP's archives ship it.
+ */
+#define MAINMENU_UI_UAP_FONT_ART 226
 
 // 0x5C403C
 static int dword_5C403C = 327;
@@ -1413,6 +1422,11 @@ bool mainmenu_ui_init(GameInitInfo* init_info)
 
     mainmenu_fonts_init();
 
+    // UAP (0x5C4038): see `MAINMENU_UI_UAP_FONT_ART`.
+    int menu_font_art = uap_fixes_enabled()
+        ? MAINMENU_UI_UAP_FONT_ART
+        : dword_5C4038;
+
     for (index = 0; index < 3; index++) {
         font_desc.flags = 0;
         if (index == 1) {
@@ -1432,12 +1446,12 @@ bool mainmenu_ui_init(GameInitInfo* init_info)
 
     for (index = 0; index < 3; index++) {
         font_desc.flags = 0;
-        tig_art_interface_id_create(dword_5C4038, 0, 0, 0, &(font_desc.art_id));
+        tig_art_interface_id_create(menu_font_art, 0, 0, 0, &(font_desc.art_id));
         font_desc.str = NULL;
         font_desc.color = tig_color_make(dword_64C42C[index], dword_64C42C[index], dword_64C42C[index]);
         tig_font_create(&font_desc, &(dword_64C0CC[0][index]));
 
-        tig_art_interface_id_create(dword_5C4038, 0, 0, 0, &(font_desc.art_id));
+        tig_art_interface_id_create(menu_font_art, 0, 0, 0, &(font_desc.art_id));
         font_desc.color = index < 2
             ? tig_color_make(dword_64C42C[index], dword_64C42C[index], dword_64C42C[index])
             : tig_color_make(240, 15, 15);
@@ -1446,12 +1460,12 @@ bool mainmenu_ui_init(GameInitInfo* init_info)
 
     for (index = 0; index < 3; index++) {
         font_desc.flags = 0;
-        tig_art_interface_id_create(dword_5C4038, 0, 0, 0, &(font_desc.art_id));
+        tig_art_interface_id_create(menu_font_art, 0, 0, 0, &(font_desc.art_id));
         font_desc.str = NULL;
         font_desc.color = tig_color_make(dword_5C4064[index], dword_5C4064[index], dword_5C4064[index]);
         tig_font_create(&font_desc, &(dword_64BC04[index]));
 
-        tig_art_interface_id_create(dword_5C4038, 0, 0, 0, &(font_desc.art_id));
+        tig_art_interface_id_create(menu_font_art, 0, 0, 0, &(font_desc.art_id));
         font_desc.color = index < 2
             ? tig_color_make(dword_5C4064[index], dword_5C4064[index], dword_5C4064[index])
             : tig_color_make(240, 15, 15);
@@ -2013,7 +2027,11 @@ void mainmenu_ui_draw_version(void)
     TigRect rect;
     char version[40];
 
-    if (settings_get_value(&settings, SHOW_VERSION_KEY) == 0) {
+    // UAP (0x541AF7): the `show version` test is defeated rather than removed -
+    // the patch retargets its branch to the instruction that follows it - so the
+    // banner is always drawn.
+    if (!uap_fixes_enabled()
+        && settings_get_value(&settings, SHOW_VERSION_KEY) == 0) {
         return;
     }
 
@@ -2021,10 +2039,19 @@ void mainmenu_ui_draw_version(void)
         return;
     }
 
-    rect.x = 10;
-    rect.y = 575;
-    rect.width = 400;
-    rect.height = 20;
+    if (uap_fixes_enabled()) {
+        // UAP (0x541ACD): the banner moves from the bottom-left corner to the
+        // top-right, and narrows to fit "Unofficial Patch 2.0.2".
+        rect.x = 680;
+        rect.y = 5;
+        rect.width = 120;
+        rect.height = 20;
+    } else {
+        rect.x = 10;
+        rect.y = 575;
+        rect.width = 400;
+        rect.height = 20;
+    }
 
     tig_font_push(dword_64BC04[0]);
     if (tig_window_text_write(mainmenu_ui_window_handle, version, &rect) != TIG_OK) {

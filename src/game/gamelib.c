@@ -1645,14 +1645,31 @@ void gamelib_redraw(void)
 bool gamelib_copy_version(char* long_version, char* short_version, char* locale)
 {
     if (long_version != NULL) {
-        snprintf(long_version,
-            GAMELIB_LONG_VERSION_LENGTH - 1,
-            "Arcanum %d.%d.%d.%d %s",
-            VERSION_MAJOR,
-            VERSION_MINOR,
-            VERSION_PATCH,
-            VERSION_BUILD,
-            gamelib_get_locale());
+        // UAP (0x59BC6C): the format string is overwritten in place with the
+        // literal "Unofficial Patch 2.0.2" - exactly as long as
+        // "Arcanum %d.%d.%d.%d %s", which is why it fits - leaving no
+        // conversions, so the version numbers and the locale are discarded.
+        //
+        // NOTE: `gamelib_init` logs this string at 0x402103, before
+        // `settings_init` and so before the switch can possibly be known, so
+        // the startup log line always reads "Arcanum 1.0.7.4 en" here where
+        // the patched binary's reads "Unofficial Patch 2.0.2". Unavoidable
+        // without moving the log call, which would change the faithful path.
+        // Only the main-menu banner differs in practice.
+        if (uap_fixes_enabled()) {
+            snprintf(long_version,
+                GAMELIB_LONG_VERSION_LENGTH - 1,
+                "Unofficial Patch 2.0.2");
+        } else {
+            snprintf(long_version,
+                GAMELIB_LONG_VERSION_LENGTH - 1,
+                "Arcanum %d.%d.%d.%d %s",
+                VERSION_MAJOR,
+                VERSION_MINOR,
+                VERSION_PATCH,
+                VERSION_BUILD,
+                gamelib_get_locale());
+        }
     }
 
     if (short_version != NULL) {
