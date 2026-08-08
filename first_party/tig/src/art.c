@@ -301,6 +301,15 @@ static TigArtCritterSize monster_specie_to_size_tbl[TIG_ART_MONSTER_SPECIE_COUNT
 // 0x5BEA14
 static bool tig_art_mirroring_enabled = true;
 
+/**
+ * Art changes from the Unofficial Arcanum Patch, off unless the game turns
+ * them on with `tig_art_uap_fixes_set`.
+ *
+ * TIG is the original engine layer and knows nothing about the patch, so the
+ * switch lives here as plain state and `uap_init` flips it.
+ */
+static bool tig_art_uap_fixes;
+
 // 0x5BEA18
 static int dword_5BEA18[4] = {
     6,
@@ -443,6 +452,17 @@ int tig_art_misc_id_create(unsigned int num, unsigned int palette, tig_art_id_t*
         | ((palette & (MAX_PALETTES - 1)) << ART_ID_PALETTE_SHIFT);
 
     return TIG_OK;
+}
+
+/**
+ * Turns the Unofficial Arcanum Patch's art behaviour on or off: mirroring is
+ * dropped, since the patch ships the frames the engine used to mirror, and
+ * monster armor 4 is remapped. Not part of the original engine.
+ */
+void tig_art_uap_fixes_set(bool enabled)
+{
+    tig_art_uap_fixes = enabled;
+    tig_art_mirroring_enabled = !enabled;
 }
 
 // 0x5021E0
@@ -1971,7 +1991,19 @@ tig_art_id_t tig_art_critter_id_armor_set(tig_art_id_t art_id, int value)
         }
         return (art_id & ~0xF00000) | (value << CRITTER_ID_ARMOR_SHIFT);
     case TIG_ART_TYPE_MONSTER:
-        if (value >= 8) {
+        // UAP (0x5040A3): monster armor 4 is remapped to 6, and the range
+        // check goes away with it - an out-of-range value now shifts into the
+        // id unchecked, which is how the patch left it.
+        //
+        // NOTE: The patched binary also writes the remapped value over its own
+        // saved `esi` (`mov [esp], eax` at 0x5040AB), so the caller gets that
+        // register clobbered on return. That is an artifact of hand-patching,
+        // not behaviour to reproduce.
+        if (tig_art_uap_fixes) {
+            if (value == 4) {
+                value += 2;
+            }
+        } else if (value >= 8) {
             tig_debug_println("Range exceeded in art set.");
             value = 0;
         }

@@ -21,6 +21,7 @@
 #include "game/tech.h"
 #include "game/tile.h"
 #include "game/timeevent.h"
+#include "game/uap.h"
 #include "game/ui.h"
 
 #define STAT_IS_VALID(stat) ((stat) >= 0 && (stat) < STAT_COUNT)
@@ -926,7 +927,11 @@ int stat_level_max(int64_t obj, int stat)
         }
         break;
     case RACE_HALF_ELF:
-        if (stat == STAT_DEXTERITY) {
+        // UAP (0x4B107C): half-elves inherit the elven beauty cap as well as
+        // the dexterity one. The patch retargets this arm's jump-table entry
+        // at the elven arm's second test rather than adding code.
+        if (stat == STAT_DEXTERITY
+            || (uap_fixes_enabled() && stat == STAT_BEAUTY)) {
             return 21;
         }
         break;

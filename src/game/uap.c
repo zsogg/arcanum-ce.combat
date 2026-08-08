@@ -1,5 +1,7 @@
 #include "game/uap.h"
 
+#include <tig/tig.h>
+
 #include "game/gamelib.h"
 #include "game/settings.h"
 
@@ -21,4 +23,7 @@ bool uap_fixes_enabled(void)
 void uap_fixes_changed(void)
 {
     uap_fixes = settings_get_value(&settings, UAP_FIXES_KEY) != 0;
+
+    // TIG sits below the game and cannot ask, so push the switch down to it.
+    tig_art_uap_fixes_set(uap_fixes);
 }
