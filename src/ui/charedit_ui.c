@@ -19,6 +19,7 @@
 #include "game/spell.h"
 #include "game/stat.h"
 #include "game/tech.h"
+#include "game/uap.h"
 #include "game/ui.h"
 #include "ui/intgame.h"
 #include "ui/schematic_ui.h"
@@ -424,6 +425,29 @@ static S5C8150 stru_5C88C0[7] = {
     { NULL, 549, 378, -1 },
     { NULL, 549, 411, -1 },
 };
+
+/**
+ * Aligns the tech tab's two schematic label columns to the active background.
+ *
+ * UAP (0x5C8858, 0x5C88C8) nudges the product-name column down 3 pixels and
+ * the component-list column down 5, to sit correctly on the tech-tab art its
+ * archives ship. Both columns are seven rows 33 pixels apart, so the whole
+ * change is a constant added to each `y`.
+ *
+ * Applied on every tech-tab redraw rather than once at init, so it stays
+ * correct if the switch is flipped between openings and cannot compound.
+ */
+static void charedit_apply_schematic_label_offsets(void)
+{
+    int index;
+    int product_dy = uap_fixes_enabled() ? 3 : 0;
+    int components_dy = uap_fixes_enabled() ? 5 : 0;
+
+    for (index = 0; index < 7; index++) {
+        stru_5C8850[index].y = 198 + 33 * index + product_dy;
+        stru_5C88C0[index].y = 213 + 33 * index + components_dy;
+    }
+}
 
 // 0x5C8930
 static TigRect stru_5C8930 = { 12, 10, 89, 89 };
@@ -1105,6 +1129,10 @@ bool charedit_open(int64_t obj, ChareditMode mode)
 
     // FIX: Use 222 ("char_pcc.art") instead of 198 ("pcwincvr.art") to match
     // character editor background.
+    //
+    // NOTE: Confirmed independently - UAP makes the identical substitution at
+    // 0x559DE8, so this is applied unconditionally rather than behind the
+    // `uap fixes` switch.
     tig_art_interface_id_create(222, 0, 0, 0, &(pc_lens.art_id));
 
     if (charedit_mode == CHAREDIT_MODE_ACTIVE || charedit_mode == CHAREDIT_MODE_PASSIVE) {
@@ -1152,7 +1180,12 @@ bool charedit_open(int64_t obj, ChareditMode mode)
     dword_64C824 = TIG_BUTTON_HANDLE_INVALID;
     dword_64CA5C = TIG_BUTTON_HANDLE_INVALID;
 
-    if (charedit_mode == CHAREDIT_MODE_PASSIVE
+    // UAP (0x559FEF): the prev/next-follower arrows move from the read-only
+    // mode to the editable one, because UAP's follower context menu now opens
+    // a party member's sheet with `CHAREDIT_MODE_ACTIVE` (see
+    // `follower_ui_message_filter`). Without this the arrows would disappear
+    // from the only screen that still shows them.
+    if (charedit_mode == (uap_fixes_enabled() ? CHAREDIT_MODE_ACTIVE : CHAREDIT_MODE_PASSIVE)
         && critter_leader_get(charedit_obj) == pc_obj
         && critter_follower_next(charedit_obj) != charedit_obj) {
         button_data.flags = TIG_BUTTON_MOMENTARY;
@@ -1249,7 +1282,26 @@ void charedit_refresh_basic_info(void)
     sub_55B880(charedit_window_handle, charedit_morph15_white_font, &(stru_5C8150[0]), NULL, -1, 3);
     sub_55B880(charedit_window_handle, charedit_morph15_yellow_font, &(stru_5C8150[3]), NULL, -1, 1);
 
-    if (obj_field_int32_get(charedit_obj, OBJ_F_TYPE) == OBJ_TYPE_PC) {
+    // UAP (0x55A29E, 0x55A2FC): a follower's sheet shows the same basic-info
+    // fields as the player's, the display half of "distribute their character
+    // points yourself".
+    //
+    // The patch gets there sideways because it cannot restructure in place. It
+    // flips `jne` to `jge` at 0x55A29E, so the `== OBJ_TYPE_PC` test now only
+    // catches types *below* `OBJ_TYPE_PC` - none of which ever reach a
+    // character sheet - which funnels every critter into the non-monstrous
+    // branch; then it rewrites that branch's second call from
+    // `(&stru_5C8150[7], 2)` to `(&stru_5C8150[4], 5)`, the PC branch's own
+    // call. The branch's first call, `(&stru_5C8150[4], 2)`, has no spare
+    // bytes to remove and is left redrawing two labels identically over
+    // themselves. Written out here without that redundant draw.
+    if (uap_fixes_enabled()) {
+        if (critter_is_monstrous(charedit_obj)) {
+            sub_55B880(charedit_window_handle, charedit_morph15_white_font, &(stru_5C8150[7]), NULL, -1, 2);
+        } else {
+            sub_55B880(charedit_window_handle, charedit_morph15_white_font, &(stru_5C8150[4]), NULL, -1, 5);
+        }
+    } else if (obj_field_int32_get(charedit_obj, OBJ_F_TYPE) == OBJ_TYPE_PC) {
         sub_55B880(charedit_window_handle, charedit_morph15_white_font, &(stru_5C8150[4]), NULL, -1, 5);
     } else if (critter_is_monstrous(charedit_obj)) {
         sub_55B880(charedit_window_handle, charedit_morph15_white_font, &(stru_5C8150[7]), NULL, -1, 2);
@@ -1297,7 +1349,14 @@ void charedit_refresh_basic_info(void)
     sub_55B880(charedit_window_handle, charedit_morph15_white_font, &(stru_5C8150[0]), &(labels[0]), -1, 3);
     sub_55B880(charedit_window_handle, charedit_morph15_yellow_font, &(stru_5C8150[3]), &(labels[3]), -1, 1);
 
-    if (obj_field_int32_get(charedit_obj, OBJ_F_TYPE) == OBJ_TYPE_PC) {
+    // UAP (0x55A542, 0x55A593): the same widening applied to the value column
+    // - `jne` becomes `jge` and the non-monstrous branch's count goes 2 -> 3,
+    // matching the PC branch.
+    if (uap_fixes_enabled()) {
+        if (!critter_is_monstrous(charedit_obj)) {
+            sub_55B880(charedit_window_handle, charedit_morph15_white_font, &(stru_5C8150[4]), &(labels[4]), -1, 3);
+        }
+    } else if (obj_field_int32_get(charedit_obj, OBJ_F_TYPE) == OBJ_TYPE_PC) {
         sub_55B880(charedit_window_handle, charedit_morph15_white_font, &(stru_5C8150[4]), &(labels[4]), -1, 3);
     } else if (!critter_is_monstrous(charedit_obj)) {
         sub_55B880(charedit_window_handle, charedit_morph15_white_font, &(stru_5C8150[4]), &(labels[4]), -1, 2);
@@ -2417,6 +2476,8 @@ void charedit_refresh_tech_win(void)
     for (index = 0; index < degree; index++) {
         charedit_draw_tech_degree_icon(index);
     }
+
+    charedit_apply_schematic_label_offsets();
 
     for (index = 1; index - 1 < 7; index++) {
         stru_5C8850[index - 1].str = schematic_ui_learned_schematic_product_name(charedit_selected_tech, index);
