@@ -501,7 +501,15 @@ void datetime_set_start_hour(int hour)
     }
 }
 
-// 0x5B2790
+/**
+ * FIX: This was annotated 0x5B2790, which is
+ * `datetime_start_time_in_milliseconds` itself - the address was copy-pasted
+ * from the global's own annotation. The real address is 0x45AD70, which the
+ * placeholder name already encodes, and 0x45AD70 is exactly
+ * `mov eax, ds:0x5B2790; ret`.
+ *
+ * 0x45AD70
+ */
 int sub_45AD70(void)
 {
     return datetime_start_time_in_milliseconds;

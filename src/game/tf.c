@@ -260,7 +260,15 @@ void tf_reset(void)
 /**
  * Called when the game shuts down.
  *
- * 0x4D5DC0
+ * FIX: This was annotated 0x4D5DC0, which is `tb_exit` - the address was
+ * copy-pasted from tb.c, where it is still correct. The real address is
+ * 0x4D50A0: that function tail-calls `tf_clear` and then loops
+ * tig_font_destroy over 0x602908..0x60291C, which is `tf_fonts` and its five
+ * TF_TYPE entries, while 0x4D5DC0 works on 0x602AD0, tb.c's own array.
+ * `map_modules[14].exit_func` in the original points at 0x4D50A0, which is how
+ * this surfaced - see arcanum-work/scripts/verify_tables_ptr.py.
+ *
+ * 0x4D50A0
  */
 void tf_exit(void)
 {

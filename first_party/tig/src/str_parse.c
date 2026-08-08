@@ -393,7 +393,17 @@ void tig_str_parse_flag_list(char** str, const char** keys, const unsigned int* 
     }
 }
 
-// 0x531FB0
+/**
+ * FIX: This was annotated 0x531FB0, which is the 32-bit
+ * `tig_str_parse_flag_list` above - the address was copy-pasted. The real
+ * address is 0x532160: that function has the same prologue but zeroes *both*
+ * halves of the out-param (`mov [eax],0` at 0x53216C and `mov [eax+4],0` at
+ * 0x532173), and it is the one that references
+ * "Tig StrParse: tig_str_parse_flag_list_64: ERROR: ..." at 0x5322E5. Troika's
+ * own debug string settles the ownership, as usual.
+ *
+ * 0x532160
+ */
 void tig_str_parse_flag_list_64(char** str, const char** keys, const uint64_t* values, int length, uint64_t* value)
 {
     *value = 0;
