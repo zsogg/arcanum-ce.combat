@@ -1617,11 +1617,20 @@ void mainmenu_ui_dismiss(void)
 }
 
 /**
- * Dismisses the whole main-menu layer and returns to gameplay: auto-equips a
- * fresh character, kicks off the new-game teleport (movies, fade, start map)
- * or resumes play, and redraws the in-game interface. `exiting` is set only
- * when the game itself is shutting down (`mainmenu_ui_exit`), which skips the
- * in-game UI redraw.
+ * Dismisses the whole main-menu layer and returns to gameplay. While the menu
+ * is up (`mainmenu_ui_active`) this auto-equips a fresh character and then
+ * either starts the new game - fade, both intro movies, teleport to the start
+ * map, first newspaper event, random encounter schedule - when
+ * `mainmenu_ui_start_new_game` is set, or simply resumes play. Callers that
+ * only mean "close the menu" must clear `mainmenu_ui_start_new_game` first.
+ *
+ * `exiting` is set only by `mainmenu_ui_exit`, i.e. when the game is shutting
+ * down. It suppresses `intgame_draw_bars` and the compact-interface toggle,
+ * but not `intgame_refresh_cursor`, `sub_5507D0` or `intgame_show`.
+ *
+ * NOTE: On the shutdown path those three still reach into Intgame, which
+ * `gameuilib_exit` tears down first - it walks `gameuilib_modules` in reverse
+ * and "Intgame" sits after "MainMenu-UI".
  *
  * 0x5412E0
  */

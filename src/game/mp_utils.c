@@ -157,7 +157,13 @@ void sub_4EDFF0(Packet99* pkt)
 {
     int64_t obj;
 
-    if (tig_net_is_host()) {
+    // FIXED: The host test was inverted. Packet 99 is only ever sent by the
+    // host (`sub_4EDF20` broadcasts it under `tig_net_is_host()`), so the
+    // recipient is always a client and the update must be applied when *not*
+    // hosting. The original bails out when the host bit is set:
+    // `mov al, ds:0x62ac6c; test al, 0x2; jne <ret>` at 0x4EDFF0, where bit
+    // 0x2 is `tig_net_is_host` (established by 0x4EDF20's own two tests).
+    if (!tig_net_is_host()) {
         obj = obj_pool_perm_lookup(pkt->oid);
         object_move_to(obj, pkt->location, pkt->dx, pkt->dy);
 

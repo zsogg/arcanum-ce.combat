@@ -75,7 +75,7 @@ static void object_list_vicinity_loc(int64_t loc, unsigned int flags, ObjectList
 static bool object_create_func(int64_t proto_obj, int64_t loc, int64_t* obj_ptr, ObjectID oid);
 static bool object_duplicate_func(int64_t proto_obj, int64_t loc, ObjectID* oids, int64_t* obj_ptr);
 static bool sub_442260(int64_t obj, int64_t loc);
-static void object_set_offsets(int64_t obj, int offset_x, int offset_y);
+static void object_set_offset_internal(int64_t obj, int offset_x, int offset_y);
 static void object_render_palette_clear(int64_t obj);
 static void sub_442D90(int64_t obj, ObjectRenderColors* colors);
 static TigPalette* object_render_palette_get(int64_t obj);
@@ -2232,9 +2232,11 @@ void object_get_rect(int64_t obj, unsigned int flags, TigRect* rect)
  * low-level positioning primitive under teleports, spawns, straight-line
  * movement updates and multiplayer position resets. Handles the sector
  * object-list bookkeeping (move within, or remove/insert across sector
- * boundaries), text/floater follow, screen rect invalidation, and the
- * light and animation notifications. Same-location calls reduce to
- * `object_set_offsets`.
+ * boundaries), text/floater follow, and screen rect invalidation, then
+ * moves the object's lights (`sub_4DD020`) and runs the arrival bookkeeping
+ * in `sub_444270` (wading, tile scripts, and - for the local PC - town map,
+ * roof, wall check, scroll centering and jump points). Same-location calls
+ * reduce to `object_set_offset_internal`.
  *
  * 0x43E770
  */
@@ -2255,7 +2257,7 @@ void object_move_to(int64_t obj, int64_t loc, int offset_x, int offset_y)
 
     cur_loc = obj_field_int64_get(obj, OBJ_F_LOCATION);
     if (cur_loc == loc) {
-        object_set_offsets(obj, offset_x, offset_y);
+        object_set_offset_internal(obj, offset_x, offset_y);
         return;
     }
 
@@ -2327,7 +2329,7 @@ bool object_teleported_timeevent_process(TimeEvent* timeevent)
 void object_set_offset(int64_t obj, int offset_x, int offset_y)
 {
     if ((obj_field_int32_get(obj, OBJ_F_FLAGS) & OF_DESTROYED) == 0) {
-        object_set_offsets(obj, offset_x, offset_y);
+        object_set_offset_internal(obj, offset_x, offset_y);
     }
 }
 
@@ -2793,7 +2795,7 @@ void object_inc_current_aid(int64_t obj)
             obj_field_int32_set(obj, OBJ_F_CURRENT_AID, next_aid);
             if (tig_art_frame_data(next_aid, &art_frame_data) == TIG_OK) {
                 if (art_frame_data.offset_x != 0 || art_frame_data.offset_y != 0) {
-                    object_set_offsets(obj,
+                    object_set_offset_internal(obj,
                         art_frame_data.offset_x + obj_field_int32_get(obj, OBJ_F_OFFSET_X),
                         art_frame_data.offset_y + obj_field_int32_get(obj, OBJ_F_OFFSET_Y));
                 }
@@ -2825,7 +2827,7 @@ void object_dec_current_aid(int64_t obj)
             obj_field_int32_set(obj, OBJ_F_CURRENT_AID, prev_aid);
             if (tig_art_frame_data(prev_aid, &art_frame_data) == TIG_OK) {
                 if (art_frame_data.offset_x != 0 || art_frame_data.offset_y != 0) {
-                    object_set_offsets(obj,
+                    object_set_offset_internal(obj,
                         art_frame_data.offset_x + obj_field_int32_get(obj, OBJ_F_OFFSET_X),
                         art_frame_data.offset_y + obj_field_int32_get(obj, OBJ_F_OFFSET_Y));
                 }
@@ -2970,7 +2972,7 @@ void object_cycle_rotation(int64_t obj)
             obj_field_int32_set(obj,
                 OBJ_F_RENDER_FLAGS,
                 obj_field_int32_get(obj, OBJ_F_RENDER_FLAGS) & ~ORF_08000000);
-            object_set_offsets(obj, 0, 0);
+            object_set_offset_internal(obj, 0, 0);
         }
     }
 }
@@ -4315,12 +4317,17 @@ bool sub_442260(int64_t obj, int64_t loc)
 }
 
 /**
- * Updates only `obj`'s pixel offsets within its current tile, with the same
- * follow/invalidate bookkeeping as `object_move_to`.
+ * Updates only `obj`'s pixel offsets within its current tile, doing the same
+ * text/floater follow as `object_move_to`. Unlike `object_move_to` it does no
+ * sector list bookkeeping beyond `objlist_move`, and the screen rect is
+ * invalidated by `sub_444270(obj, 0)` rather than here.
+ *
+ * Unlike the public `object_set_offset`, this does *not* check `OF_DESTROYED`
+ * - callers are responsible for that.
  *
  * 0x4423E0
  */
-void object_set_offsets(int64_t obj, int offset_x, int offset_y)
+void object_set_offset_internal(int64_t obj, int offset_x, int offset_y)
 {
     TigRect rect;
     int64_t loc;
@@ -4328,6 +4335,9 @@ void object_set_offsets(int64_t obj, int offset_x, int offset_y)
     int64_t sector_id;
     Sector* sector;
 
+    // NOTE: The result is unused - `sub_444270(obj, 0)` below recomputes the
+    // rect it invalidates. Faithful to the original, which also discards it
+    // (`push 0x7; call 0x43dfd0` at 0x4423F4).
     object_get_rect(obj, 0x7, &rect);
     loc = obj_field_int64_get(obj, OBJ_F_LOCATION);
     flags = obj_field_int32_get(obj, OBJ_F_FLAGS);
@@ -5361,8 +5371,13 @@ void sub_4445A0(int64_t a1, int64_t a2)
     int64_t loc;
 
     type = obj_field_int32_get(a2, OBJ_F_TYPE);
+    // FIXED: Was reading `OBJ_F_TYPE` and masking it with `OF_INVENTORY`
+    // (0x1000), which no object type can ever have, so the "skip items held
+    // in an inventory" guard was always true. The original reads field 0x13
+    // (`OBJ_F_FLAGS`) here - see `push 0x13; call 0x406ca0; test ah, 0x10` at
+    // 0x4445DB.
     if (obj_type_is_critter(type)
-        || (obj_type_is_item(type) && (obj_field_int32_get(a2, OBJ_F_TYPE) & OF_INVENTORY) == 0)) {
+        || (obj_type_is_item(type) && (obj_field_int32_get(a2, OBJ_F_FLAGS) & OF_INVENTORY) == 0)) {
         if (object_dist(a1, a2) > 1) {
             if (player_is_local_pc_obj(a1)) {
                 sub_4606C0(0);

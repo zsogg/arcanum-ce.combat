@@ -162,10 +162,14 @@ void animfx_exit(void)
 }
 
 /**
- * Initializes `node` for effect `fx_id` of `list` played on `obj`, with all
- * optional fields defaulted (no parent, no animation, no light/art capture,
- * default scale). Callers tweak fields as needed and hand the node to
- * `animfx_add` / `animfx_has` / `animfx_preload_art`.
+ * Initializes `node` for effect `fx_id` of `list` played on `obj`, with the
+ * input fields defaulted (no parent, no animation, no flags, no light/art
+ * capture, no rotation, default scale). Callers tweak fields as needed and
+ * hand the node to `animfx_add` / `animfx_has` / `animfx_preload_art`.
+ *
+ * The `overlay_*_index` members are *outputs*, written by `animfx_add` and
+ * `sub_4CD7A0` - and only on their success paths, so read them back only when
+ * the call returned true.
  *
  * 0x4CCD20
  */
@@ -185,6 +189,13 @@ void animfx_node_init(AnimFxList* list, AnimFxNode* node, int64_t obj, int mt_id
     node->sound_id = -1;
     node->rotation = 0;
     node->scale = 4;
+
+    // CE: The original leaves these three uninitialized, so a caller that
+    // reads them after an early-out from `animfx_add` sees stack garbage.
+    // Seed them with the same "none" sentinel those functions use.
+    node->overlay_fore_index = -1;
+    node->overlay_back_index = -1;
+    node->overlay_light_index = -1;
 }
 
 // 0x4CCD80
@@ -193,6 +204,15 @@ void animfx_preload_art(AnimFxNode* node)
     tig_art_id_t art_id;
 
     dword_601738 = node->list;
+
+    // CE: The original indexes `entries` unchecked here, unlike `animfx_has`
+    // and `animfx_add`. `magictech_preload_art` derives the id from a spell
+    // number, so an out-of-range spell read past the end of the list.
+    if (node->fx_id < 0 || node->fx_id >= dword_601738->num_effects) {
+        tig_debug_printf("AnimFX: animfx_preload_art: Warning: AnimFXID Out of Range: %d.\n", node->fx_id);
+        return;
+    }
+
     art_id = dword_601738->entries[node->fx_id].eye_candy_art_id;
     tig_art_touch(art_id);
     if ((dword_601738->entries[node->fx_id].flags & ANIMFX_LIST_ENTRY_BACKGROUND_OVERLAY) != 0) {
@@ -219,7 +239,10 @@ bool animfx_has(AnimFxNode* node)
         return false;
     }
 
-    if (node->fx_id >= dword_601738->num_effects) {
+    // CE: Added the lower bound - `anim_play_weapon_fx` derives the id from a
+    // prototype description and can go negative for a non-weapon in the weapon
+    // slot, which the original's one-sided test let through.
+    if (node->fx_id < 0 || node->fx_id >= dword_601738->num_effects) {
         tig_debug_printf("AnimFX: animfx_id_get: Warning: AnimFXID Out of Range: %d.\n", node->fx_id);
         return false;
     }
@@ -323,7 +346,10 @@ bool animfx_add(AnimFxNode* node)
         return false;
     }
 
-    if (node->fx_id >= dword_601738->num_effects) {
+    // CE: Added the lower bound - `anim_play_weapon_fx` derives the id from a
+    // prototype description and can go negative for a non-weapon in the weapon
+    // slot, which the original's one-sided test let through.
+    if (node->fx_id < 0 || node->fx_id >= dword_601738->num_effects) {
         tig_debug_printf("AnimFX: animfx_id_get: Warning: (Weapon?) AnimFXID Out of Range: %d.\n", node->fx_id);
         return false;
     }

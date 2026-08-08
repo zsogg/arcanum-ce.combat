@@ -4155,9 +4155,17 @@ bool convert_id_to_handle(void* entry, int index)
 /**
  * Number of 32-bit words in `object_type`'s change/presence bitmap arrays
  * (`field_48`/`field_4C`): the change_array_idx of the type's last field,
- * plus one. Item subtypes that define no fields of their own fall back to
- * the generic item (and ultimately object) tail field. Serialization walks
- * exactly this many words when reading or writing a bitmap.
+ * plus one. Serialization walks exactly this many words when reading or
+ * writing a bitmap.
+ *
+ * A type whose own tail field is not valid for it (change_array_idx of -1)
+ * falls back one level at a time: item subtypes to `OBJ_F_ITEM_PAD_I64AS_1`,
+ * PC/NPC to `OBJ_F_CRITTER_PAD_I64AS_1`, and any type still unresolved to the
+ * generic `OBJ_F_PAD_I64AS_1`.
+ *
+ * `OBJ_TYPE_NPC` is the one type that has no `_PAD_I64AS_1` of its own, hence
+ * the `OBJ_F_NPC_SHIT_LIST_IDX` case below - it is the last NPC field, but
+ * CE flags it as unverified against the original.
  *
  * 0x40C030
  */
@@ -4259,7 +4267,15 @@ int obj_type_change_array_len(ObjectType object_type)
         break;
     default:
         // NOTE: Original code returns `object_type`.
+        //
+        // FIXED: `assert` compiles out under `NDEBUG`, which left `v1`
+        // uninitialized in release builds. The value sizes `MALLOC`/`memcpy`
+        // calls fed by a type read straight out of a save file or a network
+        // packet, so falling back to the generic object bitmap length keeps
+        // release builds defined instead of allocating from stack garbage.
         assert(0);
+        v1 = -1;
+        break;
     }
 
     if (v1 == -1) {
