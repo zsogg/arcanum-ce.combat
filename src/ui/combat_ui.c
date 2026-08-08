@@ -5,6 +5,7 @@
 #include "game/hrp.h"
 #include "game/obj.h"
 #include "game/player.h"
+#include "game/uap.h"
 #include "ui/anim_ui.h"
 #include "ui/intgame.h"
 #include "ui/textedit_ui.h"
@@ -232,7 +233,9 @@ void combat_ui_create(void)
     }
 
     rect.x = 222;
-    rect.y = 412;
+
+    // UAP (0x56EDA7): the combat bar sits one pixel higher, y 412 -> 411.
+    rect.y = uap_fixes_enabled() ? 411 : 412;
     rect.width = art_frame_data.width;
     rect.height = art_frame_data.height;
 

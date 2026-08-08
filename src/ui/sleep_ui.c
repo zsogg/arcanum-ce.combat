@@ -450,6 +450,11 @@ bool sleep_ui_create(void)
 
     // Set up window properties.
     rect.x = 573;
+
+    // NOTE: 1.0.7.4 has 42 here (0x57B561); CE and UAP both have 41, so there
+    // is nothing to gate. One of three window coordinates where CE already
+    // carries UAP's value - see also `written_ui_frame` and
+    // `mainmenu_ui_window_partial_rect`, both 399 -> 400.
     rect.y = 41;
     rect.width = art_frame_data.width;
     rect.height = art_frame_data.height;

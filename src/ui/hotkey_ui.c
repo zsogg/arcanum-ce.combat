@@ -180,7 +180,10 @@ bool hotkey_ui_start(tig_window_handle_t primary_window_handle, TigRect* rect, t
             tig_art_frame_data(art_id, &art_frame_data);
 
             src_rect.x = dword_5CB4BC[0] - 2;
-            src_rect.y = 1;
+
+            // UAP (0x57D9BE): the compact-UI hotkey bar samples its background
+            // from the very top of the art, y 1 -> 0.
+            src_rect.y = uap_fixes_enabled() ? 0 : 1;
             src_rect.width = 411;
             src_rect.height = 37;
 

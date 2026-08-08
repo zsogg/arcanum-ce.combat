@@ -11,6 +11,7 @@
 #include "game/skill.h"
 #include "game/target.h"
 #include "game/trap.h"
+#include "game/uap.h"
 #include "ui/dialog_ui.h"
 #include "ui/intgame.h"
 #include "ui/inven_ui.h"
@@ -114,7 +115,11 @@ void item_ui_activate(int64_t owner_obj, int64_t item_obj)
         target_flags_set(*tgt_ptr);
         if (intgame_mode_set(INTGAME_MODE_ITEM)) {
             target_flags_set(*tgt_ptr);
-            if (obj_field_int32_get(qword_6810D8, OBJ_F_ITEM_MAGIC_TECH_COMPLEXITY) < 0) {
+            // UAP (0x571BE7): `jge` becomes `jg`, widening the test from
+            // "< 0" to "<= 0", so an item of neutral complexity gets the
+            // magickal targeting cursor too rather than keeping the default.
+            int complexity = obj_field_int32_get(qword_6810D8, OBJ_F_ITEM_MAGIC_TECH_COMPLEXITY);
+            if (uap_fixes_enabled() ? complexity <= 0 : complexity < 0) {
                 intgame_item_mode_cursor_set(620);
                 intgame_refresh_cursor();
             }
