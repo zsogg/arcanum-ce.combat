@@ -515,9 +515,12 @@ int proto_default_name(ObjectType object_type)
     case OBJ_TYPE_TRAP:
         return 10001;
     case OBJ_TYPE_MONSTER:
-        return 6401;
+        // UAP (0x46879C): monsters and unique NPCs fall back to the plain NPC
+        // generic name, 6400, instead of 6401 and 6402.
+        return uap_fixes_enabled() ? 6400 : 6401;
     case OBJ_TYPE_UNIQUE_NPC:
-        return 6402;
+        // UAP (0x4687A2): see above.
+        return uap_fixes_enabled() ? 6400 : 6402;
     default:
         return 0;
     }
@@ -16188,7 +16191,18 @@ void proto_load_critter_stats(int64_t obj, int description)
     if (description >= BP_MONSTER_BEGIN && description < BP_MONSTER_END) {
         stream = tig_file_fopen("rules\\monster.txt", "rt");
         type = 2;
-    } else if (description >= BP_UNIQUE_NPC_BEGIN && description < BP_UNIQUE_NPC_END) {
+        // UAP (0x49B381): the same bound `proto_description_end_get` widens for
+        // OBJ_TYPE_MONSTER, hardcoded a second time here. Without it the three
+        // prototypes UAP adds at 27394-27396 would pass `proto_description_valid`
+        // but never have their stats read out of `rules\unique.txt`.
+        //
+        // NOTE: the two tables label this range differently - `descriptions.h`
+        // calls 27309-27394 the UNIQUE_NPC range, `proto_description_begin`/
+        // `_end` file it under `OBJ_TYPE_MONSTER`. The binary settles which is
+        // which: 0x49B381 compares against 0x6B02 = 27394, the value held by
+        // both `BP_UNIQUE_NPC_END` and `proto_description_end[OBJ_TYPE_MONSTER]`.
+    } else if (description >= BP_UNIQUE_NPC_BEGIN
+        && description < (uap_fixes_enabled() ? 27397 : BP_UNIQUE_NPC_END)) {
         stream = tig_file_fopen("rules\\unique.txt", "rt");
         type = 1;
     } else if (description >= BP_NPC_BEGIN && description < BP_NPC_END) {
