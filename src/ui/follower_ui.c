@@ -12,10 +12,12 @@
 #include "game/portrait.h"
 #include "game/stat.h"
 #include "game/target.h"
+#include "game/uap.h"
 #include "ui/charedit_ui.h"
 #include "ui/dialog_ui.h"
 #include "ui/intgame.h"
 #include "ui/inven_ui.h"
+#include "ui/schematic_ui.h"
 #include "ui/tb_ui.h"
 
 /**
@@ -34,6 +36,20 @@ typedef enum FollowerUiCommand {
     FOLLOWER_UI_COMMAND_INVENTORY,
     FOLLOWER_UI_COMMAND_CHARACTER_SHEET,
     FOLLOWER_UI_COMMAND_COUNT,
+
+    /**
+     * UAP (0x56AFC4): "a 'schematics' option has been added to the party
+     * member context menu so that even the followers without this dialog
+     * option will still be able to craft items if they have invested into
+     * technology."
+     *
+     * The patch appends a ninth entry to the jump table at 0x56AFA4 and widens
+     * the switch bound at 0x56AAC5 from 7 to 8. Only reachable with the `uap
+     * fixes` switch on - use `follower_ui_command_count` rather than
+     * `FOLLOWER_UI_COMMAND_COUNT` for anything that must respect it.
+     */
+    FOLLOWER_UI_COMMAND_SCHEMATICS = FOLLOWER_UI_COMMAND_COUNT,
+    FOLLOWER_UI_UAP_COMMAND_COUNT,
 } FollowerUiCommand;
 
 /**
@@ -153,6 +169,13 @@ typedef enum FollowerUiButton {
  */
 #define FOLLOWER_UI_DROP_DOWN_MENU_ART 826
 
+/**
+ * UAP (0x56A4DB): the taller menu background that fits nine entries, used in
+ * place of `FOLLOWER_UI_DROP_DOWN_MENU_ART` once "Schematics" is present. The
+ * art itself ships in UAP's archives.
+ */
+#define FOLLOWER_UI_UAP_DROP_DOWN_MENU_ART 850
+
 static void follower_ui_create(int index);
 static bool follower_ui_message_filter(TigMessage* msg);
 static void follower_ui_drop_down_menu_create(int index);
@@ -163,6 +186,42 @@ static void follower_ui_toggle(void);
 static void update_toggle_button_visibility(void);
 static void update_scroll_buttons_visibility(void);
 static void follower_ui_drop_down_menu_refresh(int highlighted_cmd);
+
+/**
+ * The number of commands the drop-down context menu offers.
+ *
+ * UAP (0x56AAC5, 0x56B0D8, 0x56BA7E) raises every bound that walks the command
+ * list from eight to nine.
+ *
+ * NOTE: UAP does not raise all of them. The three scan loops inside
+ * `follower_ui_message_filter` (0x56AA2F, 0x56AA4B, 0x56AAAD) keep comparing
+ * the walking pointer against 0x67BC50, the end of the array's *old* home,
+ * even though their start pointers were repointed to the relocated array at
+ * 0x59ED26. Any button that is not a menu entry therefore sends the patched
+ * build scanning ~226,000 dwords of .data before giving up, and a stale dword
+ * that happens to equal the button handle reports a bogus command index. Not
+ * reproduced here - the over-scan has no meaning against a real C array, and
+ * the intended bound is unambiguous from the menu-building loop at 0x56B0D8,
+ * which UAP did update to 0x59ED4A (nine entries).
+ */
+static int follower_ui_command_count(void)
+{
+    return uap_fixes_enabled()
+        ? FOLLOWER_UI_UAP_COMMAND_COUNT
+        : FOLLOWER_UI_COMMAND_COUNT;
+}
+
+/**
+ * The background art for the drop-down context menu.
+ *
+ * UAP (0x56A4DB, 0x56B982) swaps in a taller frame to fit the ninth entry.
+ */
+static int follower_ui_drop_down_menu_art(void)
+{
+    return uap_fixes_enabled()
+        ? FOLLOWER_UI_UAP_DROP_DOWN_MENU_ART
+        : FOLLOWER_UI_DROP_DOWN_MENU_ART;
+}
 
 /**
  * Defines content frames for buttons managed by follower UI.
@@ -309,9 +368,16 @@ static mes_file_handle_t follower_ui_mes_file;
  * Button handles for the invisible hit-test buttons within the drop-down
  * context menu, one per `FollowerUiCommand` entry.
  *
+ * Sized for UAP's ninth command so the switch can be flipped at runtime; only
+ * `follower_ui_command_count` entries are ever populated. The original array
+ * is exactly eight handles wide, which is why UAP cannot grow it in place -
+ * `follower_ui_subordinate_obj` sits immediately after it at 0x67BC50 - and
+ * instead relocates the whole array to 0x59ED26, spare bytes in the middle of
+ * an obj.c debug string.
+ *
  * 0x67BC30
  */
-static tig_button_handle_t follower_ui_drop_menu_item_buttons[FOLLOWER_UI_COMMAND_COUNT];
+static tig_button_handle_t follower_ui_drop_menu_item_buttons[FOLLOWER_UI_UAP_COMMAND_COUNT];
 
 /**
  * Object handle of the follower targeted by the most recent right-click or
@@ -394,7 +460,7 @@ bool follower_ui_init(GameInitInfo* init_info)
     }
 
     // Determine the drop-down menu dimensions from the background art.
-    tig_art_interface_id_create(FOLLOWER_UI_DROP_DOWN_MENU_ART, 0, 0, 0, &art_id);
+    tig_art_interface_id_create(follower_ui_drop_down_menu_art(), 0, 0, 0, &art_id);
     tig_art_frame_data(art_id, &art_frame_data);
 
     // Each slot's drop-down opens immediately to the right of that slot.
@@ -660,7 +726,7 @@ bool follower_ui_message_filter(TigMessage* msg)
             switch (msg->data.button.state) {
             case TIG_BUTTON_STATE_MOUSE_INSIDE:
                 // Highlight the command entry the cursor is over.
-                for (index = 0; index < FOLLOWER_UI_COMMAND_COUNT; index++) {
+                for (index = 0; index < follower_ui_command_count(); index++) {
                     if (msg->data.button.button_handle == follower_ui_drop_menu_item_buttons[index]) {
                         follower_ui_drop_down_menu_refresh(index);
                         return true;
@@ -669,7 +735,7 @@ bool follower_ui_message_filter(TigMessage* msg)
                 return false;
             case TIG_BUTTON_STATE_MOUSE_OUTSIDE:
                 // Remove highlighting when cursor leaves a command entry.
-                for (index = 0; index < FOLLOWER_UI_COMMAND_COUNT; index++) {
+                for (index = 0; index < follower_ui_command_count(); index++) {
                     if (msg->data.button.button_handle == follower_ui_drop_menu_item_buttons[index]) {
                         follower_ui_drop_down_menu_refresh(-1);
                         return true;
@@ -678,7 +744,7 @@ bool follower_ui_message_filter(TigMessage* msg)
                 return false;
             case TIG_BUTTON_STATE_RELEASED:
                 // Execute the clicked command, then close the menu.
-                for (index = 0; index < FOLLOWER_UI_COMMAND_COUNT; index++) {
+                for (index = 0; index < follower_ui_command_count(); index++) {
                     if (msg->data.button.button_handle == follower_ui_drop_menu_item_buttons[index]) {
                         follower_ui_drop_down_menu_destroy();
                         switch (index) {
@@ -695,7 +761,21 @@ bool follower_ui_message_filter(TigMessage* msg)
                             }
                             break;
                         case FOLLOWER_UI_COMMAND_CHARACTER_SHEET:
-                            charedit_open(follower_ui_subordinate_obj, CHAREDIT_MODE_PASSIVE);
+                            // UAP (0x56AB73): "You can now disable your party
+                            // members auto-level scheme and distribute their
+                            // character points yourself if you so desire." The
+                            // patch opens the follower's sheet in the editable
+                            // mode instead of the read-only one.
+                            charedit_open(follower_ui_subordinate_obj,
+                                uap_fixes_enabled()
+                                    ? CHAREDIT_MODE_ACTIVE
+                                    : CHAREDIT_MODE_PASSIVE);
+                            break;
+                        case FOLLOWER_UI_COMMAND_SCHEMATICS:
+                            // UAP (0x56AAE5): the ninth command. Same
+                            // (subordinate, commander) argument order the
+                            // dialog option uses.
+                            schematic_ui_toggle(follower_ui_subordinate_obj, follower_ui_commander_obj);
                             break;
                         case FOLLOWER_UI_COMMAND_WAIT:
                             // Mind-controlled followers cannot be ordered to wait.
@@ -875,7 +955,7 @@ void follower_ui_drop_down_menu_create(int index)
     button_data.height = follower_ui_drop_down_menu_entry_rect.height;
     button_data.window_handle = follower_ui_drop_down_menu_window;
 
-    for (cmd = 0; cmd < FOLLOWER_UI_COMMAND_COUNT; cmd++) {
+    for (cmd = 0; cmd < follower_ui_command_count(); cmd++) {
         tig_button_create(&button_data, &(follower_ui_drop_menu_item_buttons[cmd]));
         button_data.y += FOLLOWER_UI_DROP_DOWN_MENU_ENTRY_HEIGHT;
     }
@@ -1301,10 +1381,10 @@ void follower_ui_drop_down_menu_refresh(int highlighted_cmd)
     MesFileEntry mes_file_entry;
     bool enabled;
 
-    follower_ui_draw(follower_ui_drop_down_menu_window, FOLLOWER_UI_DROP_DOWN_MENU_ART, 0, 0, 100, 100);
+    follower_ui_draw(follower_ui_drop_down_menu_window, follower_ui_drop_down_menu_art(), 0, 0, 100, 100);
 
     rect = follower_ui_drop_down_menu_entry_rect;
-    for (cmd = 0; cmd < FOLLOWER_UI_COMMAND_COUNT; cmd++) {
+    for (cmd = 0; cmd < follower_ui_command_count(); cmd++) {
         mes_file_entry.num = cmd;
         if (mes_search(follower_ui_mes_file, &mes_file_entry)) {
             // Determine whether this command is currently available.
