@@ -111,15 +111,126 @@ typedef enum AgDataType {
 
 struct AnimRunInfo;
 
+/**
+ * Flow codes.
+ *
+ * A goal's sub-node list is a little program. Each sub-node names a callback
+ * plus two `(state, delay)` pairs, and `anim_timeevent_process` picks the pair
+ * matching the callback's return value: `success_*` when it returns true,
+ * `failure_*` when it returns false.
+ *
+ * A state word with an empty top byte is a plain 1-based sub-node number - the
+ * interpreter jumps there with `current_state = state - 1`. Otherwise the top
+ * byte holds these flags, tested in the order they are listed here.
+ */
+
+/**
+ * Reset to sub-node 1 and stop processing this tick.
+ *
+ * On its own this restarts the goal after `delay`; the pop and terminate codes
+ * fold it in to end the tick once the stack has been unwound. A pop that finds
+ * a goal underneath clears the stop again and keeps interpreting the parent.
+ */
+#define ANIM_FLOW_YIELD 0x10000000
+
+/**
+ * Pop one goal off the stack - only when combined with `ANIM_FLOW_YIELD`, the
+ * interpreter tests both bits together.
+ */
+#define ANIM_FLOW_POP 0x20000000
+
+/**
+ * Pop two more goals, on top of the one `ANIM_FLOW_POP` removes. Only tested
+ * together with the full `ANIM_FLOW_POP_GOAL` pattern; used once, by
+ * `attempt_move_near`.
+ */
+#define ANIM_FLOW_POP_EXTRA 0x08000000
+
+/**
+ * Push the goal whose type is in the low 12 bits, and run it from its first
+ * sub-node. Combined with `ANIM_FLOW_POP_GOAL` this replaces the current goal
+ * rather than nesting under it.
+ */
+#define ANIM_FLOW_PUSH 0x40000000
+
+/**
+ * Unwind the whole stack: run every goal's cleanup callback (sub-node 15) from
+ * the top down and end the run. Only when combined with `ANIM_FLOW_YIELD`,
+ * again tested as a pair.
+ */
+#define ANIM_FLOW_KILL 0x80000000
+
+/**
+ * Modifiers read by the pop path only (`anim_pop_goal`), so they do nothing on a
+ * code that does not also pop.
+ *
+ * - `KEEP_PATH` leaves the run's path and its in-flight flags alone; without it
+ *   the pop zeroes `path.maxPathLength` and clears run flags 0x83C.
+ * - `RESET_PATH` additionally forces `path.flags` to 0x01.
+ * - `NO_CLEANUP` skips the popped goal's cleanup callback.
+ */
+#define ANIM_FLOW_KEEP_PATH 0x01000000
+#define ANIM_FLOW_RESET_PATH 0x02000000
+#define ANIM_FLOW_NO_CLEANUP 0x04000000
+
+/**
+ * The patterns the interpreter matches, rather than the raw bits: a code is a
+ * pop only if `ANIM_FLOW_POP` and `ANIM_FLOW_YIELD` are both set, and a
+ * terminate only if `ANIM_FLOW_KILL` and `ANIM_FLOW_YIELD` are both set.
+ */
+#define ANIM_FLOW_POP_GOAL (ANIM_FLOW_POP | ANIM_FLOW_YIELD)
+#define ANIM_FLOW_POP_3_GOALS (ANIM_FLOW_POP_EXTRA | ANIM_FLOW_POP_GOAL)
+#define ANIM_FLOW_REPLACE_GOAL (ANIM_FLOW_PUSH | ANIM_FLOW_POP_GOAL)
+#define ANIM_FLOW_TERMINATE (ANIM_FLOW_KILL | ANIM_FLOW_YIELD)
+
+/**
+ * A state word is a sub-node number when none of these bits are set; the goal
+ * type a push carries lives in the low 12 bits.
+ */
+#define ANIM_FLOW_MASK 0xFF000000
+#define ANIM_FLOW_GOAL_MASK 0xFFF
+
+/**
+ * Delays, in milliseconds, or one of these sentinels.
+ *
+ * `ANIM_DELAY_NONE` continues straight into the next sub-node in the same tick;
+ * anything else ends the tick and reschedules the run that far ahead.
+ */
+#define ANIM_DELAY_NONE 0
+#define ANIM_DELAY_PAUSE_TIME (-2) // `run_info->pause_time`
+#define ANIM_DELAY_CALLBACK (-3) // whatever the callback left in `anim_callback_delay`
+#define ANIM_DELAY_RANDOM (-4) // 0-300ms, and no delay at all on a network client
+
 typedef struct AnimGoalSubNode {
     /* 0000 */ bool (*func)(struct AnimRunInfo* run_info);
+
+    /**
+     * Which of the goal's own `AnimGoalData` slots feed `run_info->params[0]`
+     * and `[1]` before the callback runs: an `AGDATA_*` index, or -1 for none.
+     */
     /* 0004 */ int params[2];
-    /* 000C */ int field_C;
-    /* 0010 */ int field_10;
-    /* 0014 */ int field_14;
-    /* 0018 */ int field_18;
-    /* 001C */ int field_1C;
+
+    /**
+     * A constant handed to the callback as `run_info->params[2]`, so that one
+     * callback can serve several cells - the animation number for
+     * `AGbeginAnim*`, the goal type for a `anim_goal_data_init`, a skill or
+     * range for the skill checks. -1 where the callback ignores it.
+     */
+    /* 000C */ int literal_param;
+
+    /* 0010 */ int failure_state;
+    /* 0014 */ int failure_delay;
+    /* 0018 */ int success_state;
+    /* 001C */ int success_delay;
 } AnimGoalSubNode;
+
+/**
+ * Set on a goal node whose sub-node program never reaches an end on its own -
+ * the looping animations and floating text. `anim_goal_is_endless` reports
+ * these (and any run whose `AGDATA_FLAGS_DATA` carries 0x80), and they are kept
+ * out of `animNumActiveGoals`. See `anim_goal_is_endless`.
+ */
+#define ANIM_GOAL_NODE_ENDLESS 0x01
 
 typedef struct AnimGoalNode {
     /* 0000 */ int num_subnodes;
@@ -134,9 +245,37 @@ typedef struct AnimGoalNode {
      * swings, spread-out nudges, and friendly-spell casts.
      */
     /* 0008 */ int concurrent;
-    /* 000C */ int field_C;
-    /* 0010 */ int field_10;
-    /* 0014 */ int field_14[3];
+
+    /**
+     * The goal only plays something out - an animation, a reaction, a door
+     * swinging, floating text - as opposed to running an errand that has a
+     * destination or a target (moving, attacking, using, talking, casting).
+     *
+     * Two consumers, and they agree on the split: `anim_break_nodes_to_map`
+     * carries passive goals to the next map for a teleporting object and
+     * interrupts the rest, whose paths and targets would not survive the move;
+     * and `anim_is_running_non_passive_goal` reports a critter as occupied only
+     * when its bottom goal is not passive, which is what keeps
+     * `anim_goal_please_move` and the spread-out sweep from nudging a critter
+     * that is merely mid-animation.
+     */
+    /* 000C */ int passive;
+
+    /* 0010 */ int flags;
+
+    /**
+     * Goal types that count as this goal when looking for a running one, so
+     * that "is this critter already moving there" answers yes for
+     * `AG_MOVE_TO_TILE`, `AG_MOVE_NEAR_TILE` and `AG_RUN_TO_TILE` alike.
+     * Terminated by -1.
+     */
+    /* 0014 */ int equivalent_goals[3];
+
+    /**
+     * The goal's program, indexed by `run_info->current_state`. Sub-node 15
+     * (`subnodes[14]`) is the cleanup callback every unwind path runs; the
+     * others are reached only by the flow codes above.
+     */
     /* 0020 */ AnimGoalSubNode subnodes[15];
 } AnimGoalNode;
 
@@ -264,7 +403,7 @@ extern int dword_739E44;
 extern AnimRunInfo anim_run_info[216];
 
 void sub_44C840(AnimRunInfo* run_info, AnimGoalNode* goal_node);
-bool sub_44C9A0(AnimRunInfo* run_info);
+bool anim_goal_is_endless(AnimRunInfo* run_info);
 bool anim_private_init(GameInitInfo* init_info);
 void anim_private_exit(void);
 void anim_private_reset(void);
@@ -292,7 +431,7 @@ bool sub_44E6F0(int64_t obj, AnimGoalData* goal_data);
 bool anim_interrupt_all_goals_of_type(int64_t obj, int goal_type, int next_goal_type);
 bool sub_44E710(int64_t obj, AnimGoalData* goal_data, AnimID* anim_id);
 bool anim_is_current_goal_type(int64_t obj, int goal_type, AnimID* anim_id);
-bool sub_44E8C0(int64_t obj, AnimID* anim_id);
+bool anim_is_running_non_passive_goal(int64_t obj, AnimID* anim_id);
 bool anim_is_attacking(int64_t attacker_obj, AnimID* anim_id, int64_t target_obj);
 bool sub_44EB40(int64_t obj, int64_t from, int64_t to);
 void anim_path_init(AnimPath* path);

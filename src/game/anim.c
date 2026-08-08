@@ -43,7 +43,7 @@ static bool anim_run_info_load(AnimRunInfo* run_info, TigFile* stream);
 static bool anim_goal_data_load(AnimGoalData* goal_data, TigFile* stream);
 static bool anim_run_info_param_load(AnimRunInfoParam* param, ObjectLocator* a2, int type, TigFile* stream);
 static bool sub_423C80(AnimRunInfo* run_info, DateTime* a2, int delay);
-static void sub_423D10(AnimRunInfo* run_info, unsigned int* flags_ptr, AnimGoalNode** goal_node_ptr, AnimGoalData** goal_data_ptr, bool* a5);
+static void anim_pop_goal(AnimRunInfo* run_info, unsigned int* flags_ptr, AnimGoalNode** goal_node_ptr, AnimGoalData** goal_data_ptr, bool* a5);
 static int anim_goal_pending_active_goals_count(void);
 static bool sub_436220(int64_t obj, int64_t target_obj, int64_t item_obj);
 static bool sub_436720(int64_t* source_obj_ptr, int64_t* block_obj_ptr);
@@ -273,12 +273,12 @@ static AnimGoalNode anim_goal_node_animate = {
     0,
     { -1, -1, -1 },
     {
-        /*  1 */ { sub_42CA90, { AGDATA_SELF_OBJ, -1 }, -1, 2, 0, 3, 0 },
-        /*  2 */ { sub_42CC80, { AGDATA_SELF_OBJ, -1 }, -1, 0x30000000, -2, 0x10000000, -2 },
-        /*  3 */ { sub_426F10, { AGDATA_SELF_OBJ, -1 }, -1, 4, 0, 0x40000000 | AG_ANIM_GET_UP, 0 },
-        /*  4 */ { sub_426E80, { AGDATA_SELF_OBJ, -1 }, -1, 5, 0, 0x40000000 | AG_UNCONCEAL, 0 },
-        /*  5 */ { sub_42CB10, { AGDATA_SELF_OBJ, AGDATA_ANIM_ID }, -1, 6, 0, 0x10000000, 0 },
-        /*  6 */ { sub_433270, { AGDATA_SELF_OBJ, -1 }, 1, 0x90000000, 0, 0x90000000, 0 },
+        /*  1 */ { sub_42CA90, { AGDATA_SELF_OBJ, -1 }, -1, 2, ANIM_DELAY_NONE, 3, ANIM_DELAY_NONE },
+        /*  2 */ { sub_42CC80, { AGDATA_SELF_OBJ, -1 }, -1, ANIM_FLOW_POP_GOAL, ANIM_DELAY_PAUSE_TIME, ANIM_FLOW_YIELD, ANIM_DELAY_PAUSE_TIME },
+        /*  3 */ { sub_426F10, { AGDATA_SELF_OBJ, -1 }, -1, 4, ANIM_DELAY_NONE, ANIM_FLOW_PUSH | AG_ANIM_GET_UP, ANIM_DELAY_NONE },
+        /*  4 */ { sub_426E80, { AGDATA_SELF_OBJ, -1 }, -1, 5, ANIM_DELAY_NONE, ANIM_FLOW_PUSH | AG_UNCONCEAL, ANIM_DELAY_NONE },
+        /*  5 */ { sub_42CB10, { AGDATA_SELF_OBJ, AGDATA_ANIM_ID }, -1, 6, ANIM_DELAY_NONE, ANIM_FLOW_YIELD, ANIM_DELAY_NONE },
+        /*  6 */ { sub_433270, { AGDATA_SELF_OBJ, -1 }, 1, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE },
         /*  7 */ { 0 },
         /*  8 */ { 0 },
         /*  9 */ { 0 },
@@ -287,7 +287,7 @@ static AnimGoalNode anim_goal_node_animate = {
         /* 12 */ { 0 },
         /* 13 */ { 0 },
         /* 14 */ { 0 },
-        /* 15 */ { sub_42B090, { AGDATA_SELF_OBJ, -1 }, 1, 0, 0, 0, 0 },
+        /* 15 */ { sub_42B090, { AGDATA_SELF_OBJ, -1 }, 1, 0, ANIM_DELAY_NONE, 0, ANIM_DELAY_NONE },
     },
 };
 
@@ -300,10 +300,10 @@ static AnimGoalNode anim_goal_node_animate_loop = {
     1,
     { -1, -1, -1 },
     {
-        /*  1 */ { sub_42CA90, { AGDATA_SELF_OBJ, -1 }, -1, 2, 0, 4, 0 },
-        /*  2 */ { sub_42DCF0, { AGDATA_SELF_OBJ, -1 }, -1, 0x10000000, 800, 3, 0 },
-        /*  3 */ { AGupdateAnimLoopAnim, { AGDATA_SELF_OBJ, -1 }, -1, 0x10000000, -2, 0x10000000, -2 },
-        /*  4 */ { AGbeginAnimLoopAnim, { AGDATA_SELF_OBJ, AGDATA_ANIM_ID }, -1, 0x90000000, 0, 0x10000000, -2 },
+        /*  1 */ { sub_42CA90, { AGDATA_SELF_OBJ, -1 }, -1, 2, ANIM_DELAY_NONE, 4, ANIM_DELAY_NONE },
+        /*  2 */ { sub_42DCF0, { AGDATA_SELF_OBJ, -1 }, -1, ANIM_FLOW_YIELD, 800, 3, ANIM_DELAY_NONE },
+        /*  3 */ { AGupdateAnimLoopAnim, { AGDATA_SELF_OBJ, -1 }, -1, ANIM_FLOW_YIELD, ANIM_DELAY_PAUSE_TIME, ANIM_FLOW_YIELD, ANIM_DELAY_PAUSE_TIME },
+        /*  4 */ { AGbeginAnimLoopAnim, { AGDATA_SELF_OBJ, AGDATA_ANIM_ID }, -1, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE, ANIM_FLOW_YIELD, ANIM_DELAY_PAUSE_TIME },
         /*  5 */ { 0 },
         /*  6 */ { 0 },
         /*  7 */ { 0 },
@@ -314,7 +314,7 @@ static AnimGoalNode anim_goal_node_animate_loop = {
         /* 12 */ { 0 },
         /* 13 */ { 0 },
         /* 14 */ { 0 },
-        /* 15 */ { sub_42DED0, { -1, -1 }, 1, 0, 0, 0, 0 },
+        /* 15 */ { sub_42DED0, { -1, -1 }, 1, 0, ANIM_DELAY_NONE, 0, ANIM_DELAY_NONE },
     },
 };
 
@@ -327,11 +327,11 @@ static AnimGoalNode anim_goal_node_animate_fidget = {
     0,
     { -1, -1, -1 },
     {
-        /*  1 */ { sub_42CA90, { AGDATA_SELF_OBJ, -1 }, -1, 2, 0, 3, 0 },
-        /*  2 */ { sub_42CF40, { AGDATA_SELF_OBJ, -1 }, -1, 5, 0, 0x10000000, -2 },
-        /*  3 */ { sub_42CDF0, { AGDATA_SELF_OBJ, AGDATA_ANIM_ID }, -1, 4, 0, 0x10000000, -2 },
-        /*  4 */ { sub_433270, { AGDATA_SELF_OBJ, -1 }, 1, 0x90000000, 0, 0x90000000, 0 },
-        /*  5 */ { sub_4298D0, { AGDATA_SELF_OBJ, -1 }, -1, 0x90000000, 0, 3, 0 },
+        /*  1 */ { sub_42CA90, { AGDATA_SELF_OBJ, -1 }, -1, 2, ANIM_DELAY_NONE, 3, ANIM_DELAY_NONE },
+        /*  2 */ { sub_42CF40, { AGDATA_SELF_OBJ, -1 }, -1, 5, ANIM_DELAY_NONE, ANIM_FLOW_YIELD, ANIM_DELAY_PAUSE_TIME },
+        /*  3 */ { sub_42CDF0, { AGDATA_SELF_OBJ, AGDATA_ANIM_ID }, -1, 4, ANIM_DELAY_NONE, ANIM_FLOW_YIELD, ANIM_DELAY_PAUSE_TIME },
+        /*  4 */ { sub_433270, { AGDATA_SELF_OBJ, -1 }, 1, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE },
+        /*  5 */ { sub_4298D0, { AGDATA_SELF_OBJ, -1 }, -1, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE, 3, ANIM_DELAY_NONE },
         /*  6 */ { 0 },
         /*  7 */ { 0 },
         /*  8 */ { 0 },
@@ -341,7 +341,7 @@ static AnimGoalNode anim_goal_node_animate_fidget = {
         /* 12 */ { 0 },
         /* 13 */ { 0 },
         /* 14 */ { 0 },
-        /* 15 */ { sub_42B090, { AGDATA_SELF_OBJ, -1 }, 1, 0, 0, 0, 0 },
+        /* 15 */ { sub_42B090, { AGDATA_SELF_OBJ, -1 }, 1, 0, ANIM_DELAY_NONE, 0, ANIM_DELAY_NONE },
     },
 };
 
@@ -354,13 +354,13 @@ static AnimGoalNode anim_goal_node_move_to_tile = {
     0,
     { AG_MOVE_NEAR_TILE, AG_RUN_TO_TILE, -1 },
     {
-        /*  1 */ { sub_424D90, { AGDATA_SELF_OBJ, AGDATA_TARGET_TILE }, -1, 2, 0, 0x30000000, 0 },
-        /*  2 */ { sub_426F10, { AGDATA_SELF_OBJ, -1 }, -1, 3, 0, 0x40000000 | AG_ANIM_GET_UP, 0 },
-        /*  3 */ { sub_426E80, { AGDATA_SELF_OBJ, -1 }, -1, 4, 0, 0x40000000 | AG_UNCONCEAL, 0 },
-        /*  4 */ { sub_425740, { AGDATA_SELF_OBJ, -1 }, -1, 5, 0, 0x40000000 | AG_ATTEMPT_MOVE, 0 },
-        /*  5 */ { sub_426040, { AGDATA_SELF_OBJ, AGDATA_TARGET_TILE }, -1, 7, 0, 6, 0 },
-        /*  6 */ { sub_42C610, { -1, -1 }, -1, 0x90000000, 0, 0x40000000 | AG_ROTATE, 0 },
-        /*  7 */ { sub_4246D0, { -1, -1 }, -1, 0x90000000, 0, 0x50000000 | AG_MOVE_TO_PAUSE, 1000 },
+        /*  1 */ { sub_424D90, { AGDATA_SELF_OBJ, AGDATA_TARGET_TILE }, -1, 2, ANIM_DELAY_NONE, ANIM_FLOW_POP_GOAL, ANIM_DELAY_NONE },
+        /*  2 */ { sub_426F10, { AGDATA_SELF_OBJ, -1 }, -1, 3, ANIM_DELAY_NONE, ANIM_FLOW_PUSH | AG_ANIM_GET_UP, ANIM_DELAY_NONE },
+        /*  3 */ { sub_426E80, { AGDATA_SELF_OBJ, -1 }, -1, 4, ANIM_DELAY_NONE, ANIM_FLOW_PUSH | AG_UNCONCEAL, ANIM_DELAY_NONE },
+        /*  4 */ { sub_425740, { AGDATA_SELF_OBJ, -1 }, -1, 5, ANIM_DELAY_NONE, ANIM_FLOW_PUSH | AG_ATTEMPT_MOVE, ANIM_DELAY_NONE },
+        /*  5 */ { sub_426040, { AGDATA_SELF_OBJ, AGDATA_TARGET_TILE }, -1, 7, ANIM_DELAY_NONE, 6, ANIM_DELAY_NONE },
+        /*  6 */ { sub_42C610, { -1, -1 }, -1, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE, ANIM_FLOW_PUSH | AG_ROTATE, ANIM_DELAY_NONE },
+        /*  7 */ { sub_4246D0, { -1, -1 }, -1, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE, ANIM_FLOW_PUSH | ANIM_FLOW_YIELD | AG_MOVE_TO_PAUSE, 1000 },
         /*  8 */ { 0 },
         /*  9 */ { 0 },
         /* 10 */ { 0 },
@@ -368,7 +368,7 @@ static AnimGoalNode anim_goal_node_move_to_tile = {
         /* 12 */ { 0 },
         /* 13 */ { 0 },
         /* 14 */ { 0 },
-        /* 15 */ { sub_42B090, { AGDATA_SELF_OBJ, -1 }, 1, 0, 0, 0, 0 },
+        /* 15 */ { sub_42B090, { AGDATA_SELF_OBJ, -1 }, 1, 0, ANIM_DELAY_NONE, 0, ANIM_DELAY_NONE },
     },
 };
 
@@ -381,21 +381,21 @@ static AnimGoalNode anim_goal_node_run_to_tile = {
     0,
     { AG_MOVE_NEAR_TILE, AG_MOVE_TO_TILE, AG_RUN_NEAR_TILE },
     {
-        /*  1 */ { sub_42B940, { -1, -1 }, -1, 2, 0, 2, 0 },
-        /*  2 */ { sub_424D90, { AGDATA_SELF_OBJ, AGDATA_TARGET_TILE }, -1, 3, 0, 0x30000000, 0 },
-        /*  3 */ { sub_426F10, { AGDATA_SELF_OBJ, -1 }, -1, 4, 0, 0x40000000 | AG_ANIM_GET_UP, 0 },
-        /*  4 */ { sub_426E80, { AGDATA_SELF_OBJ, -1 }, -1, 5, 0, 0x40000000 | AG_UNCONCEAL, 0 },
-        /*  5 */ { sub_425740, { AGDATA_SELF_OBJ, -1 }, -1, 6, 0, 0x40000000 | AG_ATTEMPT_MOVE, 0 },
-        /*  6 */ { sub_426040, { AGDATA_SELF_OBJ, AGDATA_TARGET_TILE }, -1, 8, 0, 7, 0 },
-        /*  7 */ { sub_42C610, { -1, -1 }, -1, 0x90000000, 0, 0x40000000 | AG_ROTATE, 0 },
-        /*  8 */ { sub_4246D0, { -1, -1 }, -1, 0x90000000, 0, 0x50000000 | AG_MOVE_TO_PAUSE, 1000 },
+        /*  1 */ { sub_42B940, { -1, -1 }, -1, 2, ANIM_DELAY_NONE, 2, ANIM_DELAY_NONE },
+        /*  2 */ { sub_424D90, { AGDATA_SELF_OBJ, AGDATA_TARGET_TILE }, -1, 3, ANIM_DELAY_NONE, ANIM_FLOW_POP_GOAL, ANIM_DELAY_NONE },
+        /*  3 */ { sub_426F10, { AGDATA_SELF_OBJ, -1 }, -1, 4, ANIM_DELAY_NONE, ANIM_FLOW_PUSH | AG_ANIM_GET_UP, ANIM_DELAY_NONE },
+        /*  4 */ { sub_426E80, { AGDATA_SELF_OBJ, -1 }, -1, 5, ANIM_DELAY_NONE, ANIM_FLOW_PUSH | AG_UNCONCEAL, ANIM_DELAY_NONE },
+        /*  5 */ { sub_425740, { AGDATA_SELF_OBJ, -1 }, -1, 6, ANIM_DELAY_NONE, ANIM_FLOW_PUSH | AG_ATTEMPT_MOVE, ANIM_DELAY_NONE },
+        /*  6 */ { sub_426040, { AGDATA_SELF_OBJ, AGDATA_TARGET_TILE }, -1, 8, ANIM_DELAY_NONE, 7, ANIM_DELAY_NONE },
+        /*  7 */ { sub_42C610, { -1, -1 }, -1, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE, ANIM_FLOW_PUSH | AG_ROTATE, ANIM_DELAY_NONE },
+        /*  8 */ { sub_4246D0, { -1, -1 }, -1, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE, ANIM_FLOW_PUSH | ANIM_FLOW_YIELD | AG_MOVE_TO_PAUSE, 1000 },
         /*  9 */ { 0 },
         /* 10 */ { 0 },
         /* 11 */ { 0 },
         /* 12 */ { 0 },
         /* 13 */ { 0 },
         /* 14 */ { 0 },
-        /* 15 */ { sub_42B090, { AGDATA_SELF_OBJ, -1 }, 1, 0, 0, 0, 0 },
+        /* 15 */ { sub_42B090, { AGDATA_SELF_OBJ, -1 }, 1, 0, ANIM_DELAY_NONE, 0, ANIM_DELAY_NONE },
     },
 };
 
@@ -408,21 +408,21 @@ static AnimGoalNode anim_goal_node_attempt_move = {
     0,
     { -1, -1, -1 },
     {
-        /*  1 */ { sub_42CA90, { AGDATA_SELF_OBJ, -1 }, -1, 2, 0, 4, 0 },
-        /*  2 */ { sub_4270B0, { AGDATA_SELF_OBJ, -1 }, -1, 3, 0, 10, -4 },
-        /*  3 */ { sub_4305D0, { AGDATA_SELF_OBJ, -1 }, -1, 0x30000000, -2, 0x10000000, -2 },
-        /*  4 */ { sub_425740, { AGDATA_SELF_OBJ, -1 }, -1, 12, 0, 5, 0 },
-        /*  5 */ { sub_425430, { AGDATA_SELF_OBJ, -1 }, -1, 6, 0, 0x30000000, 0 },
-        /*  6 */ { sub_427640, { AGDATA_SELF_OBJ, -1 }, -1, 7, 0, 11, 0 },
-        /*  7 */ { sub_4272E0, { AGDATA_SELF_OBJ, -1 }, -1, 9, 0, 8, 0 },
-        /*  8 */ { sub_4284F0, { AGDATA_SCRATCH_OBJ, -1 }, -1, 9, 0, 0x52000000 | AG_OPEN_DOOR, 50 },
-        /*  9 */ { sub_42E9B0, { AGDATA_SELF_OBJ, -1 }, -1, 10, 0, 0x10000000, 0 },
-        /* 10 */ { sub_433270, { AGDATA_SELF_OBJ, -1 }, 1, 0x90000000, 0, 0x90000000, 0 },
-        /* 11 */ { sub_4288A0, { AGDATA_SELF_OBJ, AGDATA_SCRATCH_OBJ }, -1, 0x90000000, 0, 0x50000000 | AG_JUMP_WINDOW, 0 },
-        /* 12 */ { sub_4246D0, { -1, -1 }, -1, 0x90000000, 0, 0x50000000 | AG_MOVE_TO_PAUSE, 1000 },
+        /*  1 */ { sub_42CA90, { AGDATA_SELF_OBJ, -1 }, -1, 2, ANIM_DELAY_NONE, 4, ANIM_DELAY_NONE },
+        /*  2 */ { sub_4270B0, { AGDATA_SELF_OBJ, -1 }, -1, 3, ANIM_DELAY_NONE, 10, ANIM_DELAY_RANDOM },
+        /*  3 */ { sub_4305D0, { AGDATA_SELF_OBJ, -1 }, -1, ANIM_FLOW_POP_GOAL, ANIM_DELAY_PAUSE_TIME, ANIM_FLOW_YIELD, ANIM_DELAY_PAUSE_TIME },
+        /*  4 */ { sub_425740, { AGDATA_SELF_OBJ, -1 }, -1, 12, ANIM_DELAY_NONE, 5, ANIM_DELAY_NONE },
+        /*  5 */ { sub_425430, { AGDATA_SELF_OBJ, -1 }, -1, 6, ANIM_DELAY_NONE, ANIM_FLOW_POP_GOAL, ANIM_DELAY_NONE },
+        /*  6 */ { sub_427640, { AGDATA_SELF_OBJ, -1 }, -1, 7, ANIM_DELAY_NONE, 11, ANIM_DELAY_NONE },
+        /*  7 */ { sub_4272E0, { AGDATA_SELF_OBJ, -1 }, -1, 9, ANIM_DELAY_NONE, 8, ANIM_DELAY_NONE },
+        /*  8 */ { sub_4284F0, { AGDATA_SCRATCH_OBJ, -1 }, -1, 9, ANIM_DELAY_NONE, ANIM_FLOW_PUSH | ANIM_FLOW_YIELD | ANIM_FLOW_RESET_PATH | AG_OPEN_DOOR, 50 },
+        /*  9 */ { sub_42E9B0, { AGDATA_SELF_OBJ, -1 }, -1, 10, ANIM_DELAY_NONE, ANIM_FLOW_YIELD, ANIM_DELAY_NONE },
+        /* 10 */ { sub_433270, { AGDATA_SELF_OBJ, -1 }, 1, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE },
+        /* 11 */ { sub_4288A0, { AGDATA_SELF_OBJ, AGDATA_SCRATCH_OBJ }, -1, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE, ANIM_FLOW_PUSH | ANIM_FLOW_YIELD | AG_JUMP_WINDOW, ANIM_DELAY_NONE },
+        /* 12 */ { sub_4246D0, { -1, -1 }, -1, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE, ANIM_FLOW_PUSH | ANIM_FLOW_YIELD | AG_MOVE_TO_PAUSE, 1000 },
         /* 13 */ { 0 },
         /* 14 */ { 0 },
-        /* 15 */ { sub_430F20, { AGDATA_SELF_OBJ, -1 }, 1, 0, 0, 0, 0 },
+        /* 15 */ { sub_430F20, { AGDATA_SELF_OBJ, -1 }, 1, 0, ANIM_DELAY_NONE, 0, ANIM_DELAY_NONE },
     },
 };
 
@@ -435,9 +435,9 @@ static AnimGoalNode anim_goal_node_move_to_pause = {
     0,
     { -1, -1, -1 },
     {
-        /*  1 */ { sub_424D90, { AGDATA_SELF_OBJ, AGDATA_TARGET_TILE }, -1, 0x90000000, 0, 0x90000000, 0 },
-        /*  2 */ { sub_427710, { AGDATA_BLOCK_OBJ, -1 }, -1, 0x90000000, 0, 0x90000000, 1000 },
-        /*  3 */ { sub_427720, { AGDATA_BLOCK_OBJ, -1 }, -1, 0x90000000, 0, 0x90000000, 1000 },
+        /*  1 */ { sub_424D90, { AGDATA_SELF_OBJ, AGDATA_TARGET_TILE }, -1, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE },
+        /*  2 */ { sub_427710, { AGDATA_BLOCK_OBJ, -1 }, -1, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE, ANIM_FLOW_TERMINATE, 1000 },
+        /*  3 */ { sub_427720, { AGDATA_BLOCK_OBJ, -1 }, -1, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE, ANIM_FLOW_TERMINATE, 1000 },
         /*  4 */ { 0 },
         /*  5 */ { 0 },
         /*  6 */ { 0 },
@@ -449,7 +449,7 @@ static AnimGoalNode anim_goal_node_move_to_pause = {
         /* 12 */ { 0 },
         /* 13 */ { 0 },
         /* 14 */ { 0 },
-        /* 15 */ { NULL, { -1, -1 }, 1, 0, 0, 0, 0 },
+        /* 15 */ { NULL, { -1, -1 }, 1, 0, ANIM_DELAY_NONE, 0, ANIM_DELAY_NONE },
     },
 };
 
@@ -462,13 +462,13 @@ static AnimGoalNode anim_goal_node_move_near_tile = {
     0,
     { AG_RUN_TO_TILE, AG_MOVE_TO_TILE, AG_RUN_NEAR_TILE },
     {
-        /*  1 */ { sub_424D90, { AGDATA_SELF_OBJ, AGDATA_TARGET_TILE }, -1, 2, 0, 0x30000000, 0 },
-        /*  2 */ { sub_426F10, { AGDATA_SELF_OBJ, -1 }, -1, 3, 0, 0x40000000 | AG_ANIM_GET_UP, 0 },
-        /*  3 */ { sub_426E80, { AGDATA_SELF_OBJ, -1 }, -1, 4, 0, 0x40000000 | AG_UNCONCEAL, 0 },
-        /*  4 */ { sub_425740, { AGDATA_SELF_OBJ, -1 }, -1, 5, 0, 0x40000000 | AG_ATTEMPT_MOVE, 0 },
-        /*  5 */ { sub_427730, { AGDATA_SELF_OBJ, AGDATA_TARGET_TILE }, -1, 7, 0, 6, 0 },
-        /*  6 */ { sub_42C610, { -1, -1 }, -1, 0x90000000, 0, 0x40000000 | AG_ROTATE, 0 },
-        /*  7 */ { sub_4246D0, { -1, -1 }, -1, 0x90000000, 0, 0x50000000 | AG_MOVE_TO_PAUSE, 1000 },
+        /*  1 */ { sub_424D90, { AGDATA_SELF_OBJ, AGDATA_TARGET_TILE }, -1, 2, ANIM_DELAY_NONE, ANIM_FLOW_POP_GOAL, ANIM_DELAY_NONE },
+        /*  2 */ { sub_426F10, { AGDATA_SELF_OBJ, -1 }, -1, 3, ANIM_DELAY_NONE, ANIM_FLOW_PUSH | AG_ANIM_GET_UP, ANIM_DELAY_NONE },
+        /*  3 */ { sub_426E80, { AGDATA_SELF_OBJ, -1 }, -1, 4, ANIM_DELAY_NONE, ANIM_FLOW_PUSH | AG_UNCONCEAL, ANIM_DELAY_NONE },
+        /*  4 */ { sub_425740, { AGDATA_SELF_OBJ, -1 }, -1, 5, ANIM_DELAY_NONE, ANIM_FLOW_PUSH | AG_ATTEMPT_MOVE, ANIM_DELAY_NONE },
+        /*  5 */ { sub_427730, { AGDATA_SELF_OBJ, AGDATA_TARGET_TILE }, -1, 7, ANIM_DELAY_NONE, 6, ANIM_DELAY_NONE },
+        /*  6 */ { sub_42C610, { -1, -1 }, -1, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE, ANIM_FLOW_PUSH | AG_ROTATE, ANIM_DELAY_NONE },
+        /*  7 */ { sub_4246D0, { -1, -1 }, -1, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE, ANIM_FLOW_PUSH | ANIM_FLOW_YIELD | AG_MOVE_TO_PAUSE, 1000 },
         /*  8 */ { 0 },
         /*  9 */ { 0 },
         /* 10 */ { 0 },
@@ -476,7 +476,7 @@ static AnimGoalNode anim_goal_node_move_near_tile = {
         /* 12 */ { 0 },
         /* 13 */ { 0 },
         /* 14 */ { 0 },
-        /* 15 */ { sub_42B090, { AGDATA_SELF_OBJ, -1 }, 1, 0, 0, 0, 0 },
+        /* 15 */ { sub_42B090, { AGDATA_SELF_OBJ, -1 }, 1, 0, ANIM_DELAY_NONE, 0, ANIM_DELAY_NONE },
     },
 };
 
@@ -489,12 +489,12 @@ static AnimGoalNode anim_goal_node_move_near_obj = {
     0,
     { -1, -1, -1 },
     {
-        /*  1 */ { sub_425130, { AGDATA_SELF_OBJ, AGDATA_TARGET_OBJ }, -1, 2, 0, 0x30000000, 0 },
-        /*  2 */ { sub_426F10, { AGDATA_SELF_OBJ, -1 }, -1, 3, 0, 0x40000000 | AG_ANIM_GET_UP, 0 },
-        /*  3 */ { sub_426E80, { AGDATA_SELF_OBJ, -1 }, -1, 4, 0, 0x40000000 | AG_UNCONCEAL, 0 },
-        /*  4 */ { sub_425740, { AGDATA_SELF_OBJ, -1 }, -1, 5, 0, 0x40000000 | AG_ATTEMPT_MOVE_NEAR, 0 },
-        /*  5 */ { sub_427990, { AGDATA_SELF_OBJ, AGDATA_TARGET_OBJ }, -1, 6, 0, 0x40000000 | AG_ATTEMPT_MOVE_NEAR, 0 },
-        /*  6 */ { sub_4246D0, { -1, -1 }, -1, 0x90000000, 0, 0x50000000 | AG_MOVE_TO_PAUSE, 1000 },
+        /*  1 */ { sub_425130, { AGDATA_SELF_OBJ, AGDATA_TARGET_OBJ }, -1, 2, ANIM_DELAY_NONE, ANIM_FLOW_POP_GOAL, ANIM_DELAY_NONE },
+        /*  2 */ { sub_426F10, { AGDATA_SELF_OBJ, -1 }, -1, 3, ANIM_DELAY_NONE, ANIM_FLOW_PUSH | AG_ANIM_GET_UP, ANIM_DELAY_NONE },
+        /*  3 */ { sub_426E80, { AGDATA_SELF_OBJ, -1 }, -1, 4, ANIM_DELAY_NONE, ANIM_FLOW_PUSH | AG_UNCONCEAL, ANIM_DELAY_NONE },
+        /*  4 */ { sub_425740, { AGDATA_SELF_OBJ, -1 }, -1, 5, ANIM_DELAY_NONE, ANIM_FLOW_PUSH | AG_ATTEMPT_MOVE_NEAR, ANIM_DELAY_NONE },
+        /*  5 */ { sub_427990, { AGDATA_SELF_OBJ, AGDATA_TARGET_OBJ }, -1, 6, ANIM_DELAY_NONE, ANIM_FLOW_PUSH | AG_ATTEMPT_MOVE_NEAR, ANIM_DELAY_NONE },
+        /*  6 */ { sub_4246D0, { -1, -1 }, -1, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE, ANIM_FLOW_PUSH | ANIM_FLOW_YIELD | AG_MOVE_TO_PAUSE, 1000 },
         /*  7 */ { 0 },
         /*  8 */ { 0 },
         /*  9 */ { 0 },
@@ -503,7 +503,7 @@ static AnimGoalNode anim_goal_node_move_near_obj = {
         /* 12 */ { 0 },
         /* 13 */ { 0 },
         /* 14 */ { 0 },
-        /* 15 */ { sub_42B090, { AGDATA_SELF_OBJ, -1 }, 1, 0, 0, 0, 0 },
+        /* 15 */ { sub_42B090, { AGDATA_SELF_OBJ, -1 }, 1, 0, ANIM_DELAY_NONE, 0, ANIM_DELAY_NONE },
     },
 };
 
@@ -516,10 +516,10 @@ static AnimGoalNode anim_goal_node_move_straight = {
     0,
     { -1, -1, -1 },
     {
-        /*  1 */ { sub_424D90, { AGDATA_SELF_OBJ, AGDATA_TARGET_TILE }, -1, 2, 0, 0x30000000, 0 },
-        /*  2 */ { sub_425740, { AGDATA_SELF_OBJ, -1 }, -1, 3, 0, 0x40000000 | AG_ATTEMPT_MOVE_STRAIGHT, 0 },
-        /*  3 */ { sub_426840, { AGDATA_SELF_OBJ, AGDATA_TARGET_TILE }, -1, 4, 0, 0x40000000 | AG_ATTEMPT_MOVE_STRAIGHT, 0 },
-        /*  4 */ { sub_4246D0, { -1, -1 }, -1, 0x90000000, 0, 0x50000000 | AG_MOVE_TO_PAUSE, 1000 },
+        /*  1 */ { sub_424D90, { AGDATA_SELF_OBJ, AGDATA_TARGET_TILE }, -1, 2, ANIM_DELAY_NONE, ANIM_FLOW_POP_GOAL, ANIM_DELAY_NONE },
+        /*  2 */ { sub_425740, { AGDATA_SELF_OBJ, -1 }, -1, 3, ANIM_DELAY_NONE, ANIM_FLOW_PUSH | AG_ATTEMPT_MOVE_STRAIGHT, ANIM_DELAY_NONE },
+        /*  3 */ { sub_426840, { AGDATA_SELF_OBJ, AGDATA_TARGET_TILE }, -1, 4, ANIM_DELAY_NONE, ANIM_FLOW_PUSH | AG_ATTEMPT_MOVE_STRAIGHT, ANIM_DELAY_NONE },
+        /*  4 */ { sub_4246D0, { -1, -1 }, -1, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE, ANIM_FLOW_PUSH | ANIM_FLOW_YIELD | AG_MOVE_TO_PAUSE, 1000 },
         /*  5 */ { 0 },
         /*  6 */ { 0 },
         /*  7 */ { 0 },
@@ -530,7 +530,7 @@ static AnimGoalNode anim_goal_node_move_straight = {
         /* 12 */ { 0 },
         /* 13 */ { 0 },
         /* 14 */ { 0 },
-        /* 15 */ { NULL, { -1, -1 }, 1, 0, 0, 0, 0 },
+        /* 15 */ { NULL, { -1, -1 }, 1, 0, ANIM_DELAY_NONE, 0, ANIM_DELAY_NONE },
     },
 };
 
@@ -543,9 +543,9 @@ static AnimGoalNode anim_goal_node_attempt_move_straight = {
     0,
     { -1, -1, -1 },
     {
-        /*  1 */ { sub_42CA90, { AGDATA_SELF_OBJ, -1 }, -1, 2, 0, 3, 0 },
-        /*  2 */ { AGupdateAnimMoveStraight, { AGDATA_SELF_OBJ, -1 }, -1, 0x30000000, -2, 0x10000000, -3 },
-        /*  3 */ { AGbeginAnimMoveStraight, { AGDATA_SELF_OBJ, -1 }, -1, 0x90000000, 0, 0x10000000, 0 },
+        /*  1 */ { sub_42CA90, { AGDATA_SELF_OBJ, -1 }, -1, 2, ANIM_DELAY_NONE, 3, ANIM_DELAY_NONE },
+        /*  2 */ { AGupdateAnimMoveStraight, { AGDATA_SELF_OBJ, -1 }, -1, ANIM_FLOW_POP_GOAL, ANIM_DELAY_PAUSE_TIME, ANIM_FLOW_YIELD, ANIM_DELAY_CALLBACK },
+        /*  3 */ { AGbeginAnimMoveStraight, { AGDATA_SELF_OBJ, -1 }, -1, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE, ANIM_FLOW_YIELD, ANIM_DELAY_NONE },
         /*  4 */ { 0 },
         /*  5 */ { 0 },
         /*  6 */ { 0 },
@@ -557,7 +557,7 @@ static AnimGoalNode anim_goal_node_attempt_move_straight = {
         /* 12 */ { 0 },
         /* 13 */ { 0 },
         /* 14 */ { 0 },
-        /* 15 */ { NULL, { -1, -1 }, 1, 0, 0, 0, 0 },
+        /* 15 */ { NULL, { -1, -1 }, 1, 0, ANIM_DELAY_NONE, 0, ANIM_DELAY_NONE },
     },
 };
 
@@ -570,17 +570,17 @@ static AnimGoalNode anim_goal_node_open_door = {
     0,
     { -1, -1, -1 },
     {
-        /*  1 */ { sub_4284A0, { AGDATA_SCRATCH_OBJ, -1 }, -1, 0x30000000, 0, 2, 0 },
-        /*  2 */ { sub_4284F0, { AGDATA_SCRATCH_OBJ, -1 }, -1, 0x30000000, 0, 3, 0 },
-        /*  3 */ { sub_428750, { AGDATA_SCRATCH_OBJ, AGDATA_SELF_OBJ }, -1, 0x71000000 | AG_ATTEMPT_OPEN_DOOR, 0, AG_RUN_TO_TILE, 0 },
+        /*  1 */ { sub_4284A0, { AGDATA_SCRATCH_OBJ, -1 }, -1, ANIM_FLOW_POP_GOAL, ANIM_DELAY_NONE, 2, ANIM_DELAY_NONE },
+        /*  2 */ { sub_4284F0, { AGDATA_SCRATCH_OBJ, -1 }, -1, ANIM_FLOW_POP_GOAL, ANIM_DELAY_NONE, 3, ANIM_DELAY_NONE },
+        /*  3 */ { sub_428750, { AGDATA_SCRATCH_OBJ, AGDATA_SELF_OBJ }, -1, ANIM_FLOW_REPLACE_GOAL | ANIM_FLOW_KEEP_PATH | AG_ATTEMPT_OPEN_DOOR, ANIM_DELAY_NONE, 4, ANIM_DELAY_NONE },
         // FIX: The success flow code was `0x4000000` (one zero short of the
         // `0x40000000` push-goal bit), which no branch of the interpreter
         // matches - it would leave the state unchanged with a zero delay and
         // spin until the 100-iteration loop guard killed the animation. The
         // binary has `0x4000000D` at 0x5A7068. Unreachable either way, since
         // `sub_4287E0` always returns false.
-        /*  4 */ { sub_4287E0, { AGDATA_SELF_OBJ, AGDATA_SCRATCH_OBJ }, -1, 5, 0, 0x40000000 | AG_UNLOCK_DOOR, 0 },
-        /*  5 */ { sub_428890, { AGDATA_SELF_OBJ, AGDATA_SCRATCH_OBJ }, -1, 0x90000000, 0, 0x40000000 | AG_PICKUP_ITEM, 0 },
+        /*  4 */ { sub_4287E0, { AGDATA_SELF_OBJ, AGDATA_SCRATCH_OBJ }, -1, 5, ANIM_DELAY_NONE, ANIM_FLOW_PUSH | AG_UNLOCK_DOOR, ANIM_DELAY_NONE },
+        /*  5 */ { sub_428890, { AGDATA_SELF_OBJ, AGDATA_SCRATCH_OBJ }, -1, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE, ANIM_FLOW_PUSH | AG_PICKUP_ITEM, ANIM_DELAY_NONE },
         /*  6 */ { 0 },
         /*  7 */ { 0 },
         /*  8 */ { 0 },
@@ -590,7 +590,7 @@ static AnimGoalNode anim_goal_node_open_door = {
         /* 12 */ { 0 },
         /* 13 */ { 0 },
         /* 14 */ { 0 },
-        /* 15 */ { NULL, { -1, -1 }, 1, 0, 0, 0, 0 },
+        /* 15 */ { NULL, { -1, -1 }, 1, 0, ANIM_DELAY_NONE, 0, ANIM_DELAY_NONE },
     },
 };
 
@@ -603,21 +603,21 @@ static AnimGoalNode anim_goal_node_attempt_open_door = {
     0,
     { -1, -1, -1 },
     {
-        /*  1 */ { sub_4284A0, { AGDATA_SCRATCH_OBJ, -1 }, -1, 0x30000000, 0, 2, 0 },
-        /*  2 */ { sub_4284F0, { AGDATA_SCRATCH_OBJ, -1 }, -1, 0x90000000, 0, 3, 0 },
-        /*  3 */ { sub_428690, { AGDATA_SELF_OBJ, AGDATA_SCRATCH_OBJ }, -1, 0x90000000, 0, 4, 0 },
-        /*  4 */ { sub_428750, { AGDATA_SCRATCH_OBJ, AGDATA_SELF_OBJ }, -1, 6, 0, 5, 0 },
-        /*  5 */ { sub_4287E0, { AGDATA_SELF_OBJ, AGDATA_SCRATCH_OBJ }, -1, 0x90000000, 0, 0x70000000 | AG_UNLOCK_DOOR, 0 },
-        /*  6 */ { sub_428A10, { AGDATA_SELF_OBJ, AGDATA_SCRATCH_OBJ }, -1, 0x90000000, 0, 7, 0 },
-        /*  7 */ { sub_428550, { AGDATA_SCRATCH_OBJ, AGDATA_SELF_OBJ }, -1, 0x90000000, 0, 8, 0 },
-        /*  8 */ { sub_4246E0, { AGDATA_SCRATCH_OBJ, AGDATA_SELF_OBJ }, AG_ANIMATE_DOOR_OPEN, 0x90000000, 0, 0x31000000, 0 },
+        /*  1 */ { sub_4284A0, { AGDATA_SCRATCH_OBJ, -1 }, -1, ANIM_FLOW_POP_GOAL, ANIM_DELAY_NONE, 2, ANIM_DELAY_NONE },
+        /*  2 */ { sub_4284F0, { AGDATA_SCRATCH_OBJ, -1 }, -1, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE, 3, ANIM_DELAY_NONE },
+        /*  3 */ { sub_428690, { AGDATA_SELF_OBJ, AGDATA_SCRATCH_OBJ }, -1, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE, 4, ANIM_DELAY_NONE },
+        /*  4 */ { sub_428750, { AGDATA_SCRATCH_OBJ, AGDATA_SELF_OBJ }, -1, 6, ANIM_DELAY_NONE, 5, ANIM_DELAY_NONE },
+        /*  5 */ { sub_4287E0, { AGDATA_SELF_OBJ, AGDATA_SCRATCH_OBJ }, -1, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE, ANIM_FLOW_REPLACE_GOAL | AG_UNLOCK_DOOR, ANIM_DELAY_NONE },
+        /*  6 */ { sub_428A10, { AGDATA_SELF_OBJ, AGDATA_SCRATCH_OBJ }, -1, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE, 7, ANIM_DELAY_NONE },
+        /*  7 */ { sub_428550, { AGDATA_SCRATCH_OBJ, AGDATA_SELF_OBJ }, -1, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE, 8, ANIM_DELAY_NONE },
+        /*  8 */ { sub_4246E0, { AGDATA_SCRATCH_OBJ, AGDATA_SELF_OBJ }, AG_ANIMATE_DOOR_OPEN, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE, ANIM_FLOW_POP_GOAL | ANIM_FLOW_KEEP_PATH, ANIM_DELAY_NONE },
         /*  9 */ { 0 },
         /* 10 */ { 0 },
         /* 11 */ { 0 },
         /* 12 */ { 0 },
         /* 13 */ { 0 },
         /* 14 */ { 0 },
-        /* 15 */ { NULL, { -1, -1 }, 1, 0, 0, 0, 0 },
+        /* 15 */ { NULL, { -1, -1 }, 1, 0, ANIM_DELAY_NONE, 0, ANIM_DELAY_NONE },
     },
 };
 
@@ -630,21 +630,21 @@ static AnimGoalNode anim_goal_node_jump_window = {
     0,
     { -1, -1, -1 },
     {
-        /*  1 */ { sub_42CA90, { AGDATA_SELF_OBJ, -1 }, -1, 2, 0, 3, 0 },
-        /*  2 */ { AGupdateAnimJump, { AGDATA_SELF_OBJ, -1 }, -1, 6, -2, 7, 0 },
-        /*  3 */ { sub_42BD40, { AGDATA_SELF_OBJ, -1 }, 0xD, 0x90000000, 0, 4, 0 },
-        /*  4 */ { sub_42C780, { AGDATA_SELF_OBJ, -1 }, -1, 0x90000000, 0, 11, 0 },
-        /*  5 */ { AGbeginAnimJump, { AGDATA_SELF_OBJ, AGDATA_ANIM_ID }, -1, 10, 0, 0x10000000, 0 },
-        /*  6 */ { sub_42BD40, { AGDATA_SELF_OBJ, -1 }, 1, 0x90000000, 0, 9, 0 },
-        /*  7 */ { sub_42CAA0, { AGDATA_SELF_OBJ, AGDATA_ANIM_ID }, -1, 0x10000000, -2, 8, 0 },
-        /*  8 */ { sub_42F000, { AGDATA_SELF_OBJ, AGDATA_ANIM_ID }, -1, 0x10000000, -2, 0x10000000, -2 },
-        /*  9 */ { sub_42F140, { AGDATA_SELF_OBJ, AGDATA_ANIM_ID }, -1, 0x90000000, 0, 0x31000000, 0 },
-        /* 10 */ { sub_433270, { AGDATA_SELF_OBJ, -1 }, 1, 0x90000000, 0, 0x90000000, 0 },
-        /* 11 */ { sub_4284F0, { AGDATA_SCRATCH_OBJ, -1 }, -1, 5, 0, 0x52000000 | AG_OPEN_DOOR, 50 },
+        /*  1 */ { sub_42CA90, { AGDATA_SELF_OBJ, -1 }, -1, 2, ANIM_DELAY_NONE, 3, ANIM_DELAY_NONE },
+        /*  2 */ { AGupdateAnimJump, { AGDATA_SELF_OBJ, -1 }, -1, 6, ANIM_DELAY_PAUSE_TIME, 7, ANIM_DELAY_NONE },
+        /*  3 */ { sub_42BD40, { AGDATA_SELF_OBJ, -1 }, 0xD, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE, 4, ANIM_DELAY_NONE },
+        /*  4 */ { sub_42C780, { AGDATA_SELF_OBJ, -1 }, -1, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE, 11, ANIM_DELAY_NONE },
+        /*  5 */ { AGbeginAnimJump, { AGDATA_SELF_OBJ, AGDATA_ANIM_ID }, -1, 10, ANIM_DELAY_NONE, ANIM_FLOW_YIELD, ANIM_DELAY_NONE },
+        /*  6 */ { sub_42BD40, { AGDATA_SELF_OBJ, -1 }, 1, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE, 9, ANIM_DELAY_NONE },
+        /*  7 */ { sub_42CAA0, { AGDATA_SELF_OBJ, AGDATA_ANIM_ID }, -1, ANIM_FLOW_YIELD, ANIM_DELAY_PAUSE_TIME, 8, ANIM_DELAY_NONE },
+        /*  8 */ { sub_42F000, { AGDATA_SELF_OBJ, AGDATA_ANIM_ID }, -1, ANIM_FLOW_YIELD, ANIM_DELAY_PAUSE_TIME, ANIM_FLOW_YIELD, ANIM_DELAY_PAUSE_TIME },
+        /*  9 */ { sub_42F140, { AGDATA_SELF_OBJ, AGDATA_ANIM_ID }, -1, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE, ANIM_FLOW_POP_GOAL | ANIM_FLOW_KEEP_PATH, ANIM_DELAY_NONE },
+        /* 10 */ { sub_433270, { AGDATA_SELF_OBJ, -1 }, 1, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE },
+        /* 11 */ { sub_4284F0, { AGDATA_SCRATCH_OBJ, -1 }, -1, 5, ANIM_DELAY_NONE, ANIM_FLOW_PUSH | ANIM_FLOW_YIELD | ANIM_FLOW_RESET_PATH | AG_OPEN_DOOR, 50 },
         /* 12 */ { 0 },
         /* 13 */ { 0 },
         /* 14 */ { 0 },
-        /* 15 */ { NULL, { -1, -1 }, 1, 0, 0, 0, 0 },
+        /* 15 */ { NULL, { -1, -1 }, 1, 0, ANIM_DELAY_NONE, 0, ANIM_DELAY_NONE },
     },
 };
 
@@ -657,21 +657,21 @@ static AnimGoalNode anim_goal_node_pickup_item = {
     0,
     { -1, -1, -1 },
     {
-        /*  1 */ { sub_429370, { AGDATA_SELF_OBJ, AGDATA_TARGET_OBJ }, -1, 2, 0, 0x90000000, 0 },
-        /*  2 */ { sub_429380, { AGDATA_TARGET_OBJ, -1 }, -1, 0x90000000, 0, 3, 0 },
-        /*  3 */ { sub_424D90, { AGDATA_SELF_OBJ, 0x20 }, -1, 4, 0, 0x40000000 | AG_ATTEMPT_PICKUP, 0 },
-        /*  4 */ { sub_429390, { AGDATA_SELF_OBJ, 1 }, -1, 0x90000000, 0, 5, 0 },
-        /*  5 */ { sub_4293A0, { AGDATA_TARGET_OBJ, -1 }, -1, 6, 0, 10, 0 },
-        /*  6 */ { sub_4293B0, { AGDATA_NULL_OBJ, -1 }, -1, 0x40000000 | AG_KILL, 0, 7, 0 },
-        /*  7 */ { sub_4293C0, { AGDATA_NULL_OBJ, -1 }, -1, 8, 0, 0x40000000 | AG_PICKPOCKET, 0 },
-        /*  8 */ { sub_429420, { AGDATA_SELF_OBJ, AGDATA_NULL_OBJ }, -1, 9, 0, 0x40000000 | AG_KILL, 0 },
-        /*  9 */ { sub_429430, { AGDATA_SELF_OBJ, AGDATA_NULL_OBJ }, -1, 0x90000000, 0, 0x40000000 | AG_PICKPOCKET, 0 },
-        /* 10 */ { sub_42BEA0, { -1, -1 }, 0, 0x90000000, 0, 0x40000000 | AG_MOVE_NEAR_OBJ, 0 },
+        /*  1 */ { sub_429370, { AGDATA_SELF_OBJ, AGDATA_TARGET_OBJ }, -1, 2, ANIM_DELAY_NONE, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE },
+        /*  2 */ { sub_429380, { AGDATA_TARGET_OBJ, -1 }, -1, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE, 3, ANIM_DELAY_NONE },
+        /*  3 */ { sub_424D90, { AGDATA_SELF_OBJ, 0x20 }, -1, 4, ANIM_DELAY_NONE, ANIM_FLOW_PUSH | AG_ATTEMPT_PICKUP, ANIM_DELAY_NONE },
+        /*  4 */ { sub_429390, { AGDATA_SELF_OBJ, 1 }, -1, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE, 5, ANIM_DELAY_NONE },
+        /*  5 */ { sub_4293A0, { AGDATA_TARGET_OBJ, -1 }, -1, 6, ANIM_DELAY_NONE, 10, ANIM_DELAY_NONE },
+        /*  6 */ { sub_4293B0, { AGDATA_NULL_OBJ, -1 }, -1, ANIM_FLOW_PUSH | AG_KILL, ANIM_DELAY_NONE, 7, ANIM_DELAY_NONE },
+        /*  7 */ { sub_4293C0, { AGDATA_NULL_OBJ, -1 }, -1, 8, ANIM_DELAY_NONE, ANIM_FLOW_PUSH | AG_PICKPOCKET, ANIM_DELAY_NONE },
+        /*  8 */ { sub_429420, { AGDATA_SELF_OBJ, AGDATA_NULL_OBJ }, -1, 9, ANIM_DELAY_NONE, ANIM_FLOW_PUSH | AG_KILL, ANIM_DELAY_NONE },
+        /*  9 */ { sub_429430, { AGDATA_SELF_OBJ, AGDATA_NULL_OBJ }, -1, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE, ANIM_FLOW_PUSH | AG_PICKPOCKET, ANIM_DELAY_NONE },
+        /* 10 */ { sub_42BEA0, { -1, -1 }, 0, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE, ANIM_FLOW_PUSH | AG_MOVE_NEAR_OBJ, ANIM_DELAY_NONE },
         /* 11 */ { 0 },
         /* 12 */ { 0 },
         /* 13 */ { 0 },
         /* 14 */ { 0 },
-        /* 15 */ { NULL, { -1, -1 }, 1, 0, 0, 0, 0 },
+        /* 15 */ { NULL, { -1, -1 }, 1, 0, ANIM_DELAY_NONE, 0, ANIM_DELAY_NONE },
     },
 };
 
@@ -684,8 +684,8 @@ static AnimGoalNode anim_goal_node_attempt_pickup = {
     0,
     { -1, -1, -1 },
     {
-        /*  1 */ { sub_42A9B0, { AGDATA_SELF_OBJ, AGDATA_TARGET_OBJ }, -1, 2, 0, 2, 0 },
-        /*  2 */ { sub_42BD40, { AGDATA_SELF_OBJ, -1 }, 0, 0x90000000, 0, 0x90000000, 0 },
+        /*  1 */ { sub_42A9B0, { AGDATA_SELF_OBJ, AGDATA_TARGET_OBJ }, -1, 2, ANIM_DELAY_NONE, 2, ANIM_DELAY_NONE },
+        /*  2 */ { sub_42BD40, { AGDATA_SELF_OBJ, -1 }, 0, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE },
         /*  3 */ { 0 },
         /*  4 */ { 0 },
         /*  5 */ { 0 },
@@ -698,7 +698,7 @@ static AnimGoalNode anim_goal_node_attempt_pickup = {
         /* 12 */ { 0 },
         /* 13 */ { 0 },
         /* 14 */ { 0 },
-        /* 15 */ { NULL, { -1, -1 }, 1, 0, 0, 0, 0 },
+        /* 15 */ { NULL, { -1, -1 }, 1, 0, ANIM_DELAY_NONE, 0, ANIM_DELAY_NONE },
     },
 };
 
@@ -711,7 +711,7 @@ static AnimGoalNode anim_goal_node_pickpocket = {
     0,
     { -1, -1, -1 },
     {
-        /*  1 */ { sub_42BE80, { -1, -1 }, SKILL_PICK_POCKET, 0x90000000, 0, 0x40000000 | AG_USE_SKILL_ON, 0 },
+        /*  1 */ { sub_42BE80, { -1, -1 }, SKILL_PICK_POCKET, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE, ANIM_FLOW_PUSH | AG_USE_SKILL_ON, ANIM_DELAY_NONE },
         /*  2 */ { 0 },
         /*  3 */ { 0 },
         /*  4 */ { 0 },
@@ -725,7 +725,7 @@ static AnimGoalNode anim_goal_node_pickpocket = {
         /* 12 */ { 0 },
         /* 13 */ { 0 },
         /* 14 */ { 0 },
-        /* 15 */ { NULL, { -1, -1 }, 1, 0, 0, 0, 0 },
+        /* 15 */ { NULL, { -1, -1 }, 1, 0, ANIM_DELAY_NONE, 0, ANIM_DELAY_NONE },
     },
 };
 
@@ -738,21 +738,21 @@ static AnimGoalNode anim_goal_node_attack = {
     0,
     { AG_ATTEMPT_ATTACK, -1, -1 },
     {
-        /*  1 */ { sub_429450, { AGDATA_TARGET_OBJ, -1 }, -1, 0x30000000, 0, 2, 0 },
-        /*  2 */ { sub_4294A0, { AGDATA_SELF_OBJ, AGDATA_TARGET_OBJ }, -1, 0x90000000, 0, 3, 0 },
-        /*  3 */ { sub_426F10, { AGDATA_SELF_OBJ, -1 }, -1, 4, 0, 0x40000000 | AG_ANIM_GET_UP, 0 },
-        /*  4 */ { sub_426E80, { AGDATA_SELF_OBJ, -1 }, -1, 5, 0, 0x40000000 | AG_UNCONCEAL, 0 },
-        /*  5 */ { sub_429960, { AGDATA_SELF_OBJ, AGDATA_TARGET_OBJ }, -1, 6, 0, 0x74000000 | AG_ATTEMPT_ATTACK, 0 },
-        /*  6 */ { sub_42BEA0, { -1, -1 }, 1, 0x90000000, 0, 7, 0 },
-        /*  7 */ { sub_425130, { AGDATA_SELF_OBJ, 1 }, -1, 0x40000000 | AG_MOVE_NEAR_OBJ_COMBAT, 0, 8, 0 },
-        /*  8 */ { sub_4246D0, { -1, -1 }, -1, 0x90000000, 0, 0x50000000 | AG_MOVE_TO_PAUSE, 1000 },
+        /*  1 */ { sub_429450, { AGDATA_TARGET_OBJ, -1 }, -1, ANIM_FLOW_POP_GOAL, ANIM_DELAY_NONE, 2, ANIM_DELAY_NONE },
+        /*  2 */ { sub_4294A0, { AGDATA_SELF_OBJ, AGDATA_TARGET_OBJ }, -1, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE, 3, ANIM_DELAY_NONE },
+        /*  3 */ { sub_426F10, { AGDATA_SELF_OBJ, -1 }, -1, 4, ANIM_DELAY_NONE, ANIM_FLOW_PUSH | AG_ANIM_GET_UP, ANIM_DELAY_NONE },
+        /*  4 */ { sub_426E80, { AGDATA_SELF_OBJ, -1 }, -1, 5, ANIM_DELAY_NONE, ANIM_FLOW_PUSH | AG_UNCONCEAL, ANIM_DELAY_NONE },
+        /*  5 */ { sub_429960, { AGDATA_SELF_OBJ, AGDATA_TARGET_OBJ }, -1, 6, ANIM_DELAY_NONE, ANIM_FLOW_REPLACE_GOAL | ANIM_FLOW_NO_CLEANUP | AG_ATTEMPT_ATTACK, ANIM_DELAY_NONE },
+        /*  6 */ { sub_42BEA0, { -1, -1 }, 1, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE, 7, ANIM_DELAY_NONE },
+        /*  7 */ { sub_425130, { AGDATA_SELF_OBJ, 1 }, -1, ANIM_FLOW_PUSH | AG_MOVE_NEAR_OBJ_COMBAT, ANIM_DELAY_NONE, 8, ANIM_DELAY_NONE },
+        /*  8 */ { sub_4246D0, { -1, -1 }, -1, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE, ANIM_FLOW_PUSH | ANIM_FLOW_YIELD | AG_MOVE_TO_PAUSE, 1000 },
         /*  9 */ { 0 },
         /* 10 */ { 0 },
         /* 11 */ { 0 },
         /* 12 */ { 0 },
         /* 13 */ { 0 },
         /* 14 */ { 0 },
-        /* 15 */ { sub_42B090, { 0, -1 }, 1, 0, 0, 0, 0 },
+        /* 15 */ { sub_42B090, { 0, -1 }, 1, 0, ANIM_DELAY_NONE, 0, ANIM_DELAY_NONE },
     },
 };
 
@@ -765,21 +765,21 @@ static AnimGoalNode anim_goal_node_attempt_attack = {
     0,
     { AG_ATTACK, AG_KILL, -1 },
     {
-        /*  1 */ { sub_42CA90, { AGDATA_SELF_OBJ, -1 }, -1, 2, 0, 3, 0 },
-        /*  2 */ { AGupdateAnimAttack, { AGDATA_SELF_OBJ, -1 }, -1, 9, 0, 7, 0 },
-        /*  3 */ { sub_42C0F0, { AGDATA_SELF_OBJ, AGDATA_TARGET_OBJ }, -1, 10, 0, 4, 0 },
-        /*  4 */ { sub_429960, { AGDATA_SELF_OBJ, AGDATA_TARGET_OBJ }, -1, 12, 0, 5, 0 },
-        /*  5 */ { sub_42B9C0, { AGDATA_SELF_OBJ, AGDATA_TARGET_OBJ }, -1, 10, 0, 6, 0 },
-        /*  6 */ { AGbeginAnimAttack, { AGDATA_SELF_OBJ, AGDATA_ANIM_ID }, -1, 10, 0, 0x10000000, 0 },
-        /*  7 */ { sub_42CAA0, { AGDATA_SELF_OBJ, AGDATA_ANIM_ID }, -1, 0x10000000, -2, 13, 0 },
-        /*  8 */ { sub_42A630, { AGDATA_SELF_OBJ, AGDATA_TARGET_OBJ }, -1, 10, 0, 0x10000000, -2 },
-        /*  9 */ { sub_42A930, { AGDATA_SELF_OBJ, -1 }, -1, 10, 0, 10, 0 },
-        /* 10 */ { sub_42BD40, { AGDATA_SELF_OBJ, -1 }, 0, 11, 0, 11, 0 },
-        /* 11 */ { sub_432D50, { AGDATA_SELF_OBJ, -1 }, -1, 12, 0, 12, 0 },
-        /* 12 */ { sub_429760, { AGDATA_SELF_OBJ, AGDATA_TARGET_OBJ }, -1, 0x30000000, 0, 0x74000000 | AG_ATTACK, 5 },
-        /* 13 */ { sub_429960, { AGDATA_SELF_OBJ, AGDATA_TARGET_OBJ }, -1, 12, 0, 8, 0 },
+        /*  1 */ { sub_42CA90, { AGDATA_SELF_OBJ, -1 }, -1, 2, ANIM_DELAY_NONE, 3, ANIM_DELAY_NONE },
+        /*  2 */ { AGupdateAnimAttack, { AGDATA_SELF_OBJ, -1 }, -1, 9, ANIM_DELAY_NONE, 7, ANIM_DELAY_NONE },
+        /*  3 */ { sub_42C0F0, { AGDATA_SELF_OBJ, AGDATA_TARGET_OBJ }, -1, 10, ANIM_DELAY_NONE, 4, ANIM_DELAY_NONE },
+        /*  4 */ { sub_429960, { AGDATA_SELF_OBJ, AGDATA_TARGET_OBJ }, -1, 12, ANIM_DELAY_NONE, 5, ANIM_DELAY_NONE },
+        /*  5 */ { sub_42B9C0, { AGDATA_SELF_OBJ, AGDATA_TARGET_OBJ }, -1, 10, ANIM_DELAY_NONE, 6, ANIM_DELAY_NONE },
+        /*  6 */ { AGbeginAnimAttack, { AGDATA_SELF_OBJ, AGDATA_ANIM_ID }, -1, 10, ANIM_DELAY_NONE, ANIM_FLOW_YIELD, ANIM_DELAY_NONE },
+        /*  7 */ { sub_42CAA0, { AGDATA_SELF_OBJ, AGDATA_ANIM_ID }, -1, ANIM_FLOW_YIELD, ANIM_DELAY_PAUSE_TIME, 13, ANIM_DELAY_NONE },
+        /*  8 */ { sub_42A630, { AGDATA_SELF_OBJ, AGDATA_TARGET_OBJ }, -1, 10, ANIM_DELAY_NONE, ANIM_FLOW_YIELD, ANIM_DELAY_PAUSE_TIME },
+        /*  9 */ { sub_42A930, { AGDATA_SELF_OBJ, -1 }, -1, 10, ANIM_DELAY_NONE, 10, ANIM_DELAY_NONE },
+        /* 10 */ { sub_42BD40, { AGDATA_SELF_OBJ, -1 }, 0, 11, ANIM_DELAY_NONE, 11, ANIM_DELAY_NONE },
+        /* 11 */ { sub_432D50, { AGDATA_SELF_OBJ, -1 }, -1, 12, ANIM_DELAY_NONE, 12, ANIM_DELAY_NONE },
+        /* 12 */ { sub_429760, { AGDATA_SELF_OBJ, AGDATA_TARGET_OBJ }, -1, ANIM_FLOW_POP_GOAL, ANIM_DELAY_NONE, ANIM_FLOW_REPLACE_GOAL | ANIM_FLOW_NO_CLEANUP | AG_ATTACK, 5 },
+        /* 13 */ { sub_429960, { AGDATA_SELF_OBJ, AGDATA_TARGET_OBJ }, -1, 12, ANIM_DELAY_NONE, 8, ANIM_DELAY_NONE },
         /* 14 */ { 0 },
-        /* 15 */ { sub_42B090, { AGDATA_SELF_OBJ, -1 }, 1, 0, 0, 0, 0 },
+        /* 15 */ { sub_42B090, { AGDATA_SELF_OBJ, -1 }, 1, 0, ANIM_DELAY_NONE, 0, ANIM_DELAY_NONE },
     },
 };
 
@@ -792,13 +792,13 @@ static AnimGoalNode anim_goal_node_kill = {
     0,
     { AG_ATTEMPT_ATTACK, -1, -1 },
     {
-        /*  1 */ { sub_429450, { AGDATA_TARGET_OBJ, -1 }, -1, 0x30000000, 0, 2, 0 },
-        /*  2 */ { sub_426F10, { AGDATA_SELF_OBJ, -1 }, -1, 3, 0, 0x40000000 | AG_ANIM_GET_UP, 0 },
-        /*  3 */ { sub_426E80, { AGDATA_SELF_OBJ, -1 }, -1, 4, 0, 0x40000000 | AG_UNCONCEAL, 0 },
-        /*  4 */ { sub_4294A0, { AGDATA_SELF_OBJ, AGDATA_TARGET_OBJ }, -1, 0x90000000, 0, 5, 0 },
-        /*  5 */ { sub_429B40, { AGDATA_SELF_OBJ, AGDATA_TARGET_OBJ }, -1, 0x40000000 | AG_PICK_WEAPON, 0, 6, 0 },
-        /*  6 */ { sub_429960, { AGDATA_SELF_OBJ, AGDATA_TARGET_OBJ }, -1, 7, 0, 0x40000000 | AG_ATTEMPT_ATTACK, 0 },
-        /*  7 */ { sub_42BEA0, { -1, -1 }, 1, 0x90000000, 0, 0x40000000 | AG_MOVE_NEAR_OBJ, 0 },
+        /*  1 */ { sub_429450, { AGDATA_TARGET_OBJ, -1 }, -1, ANIM_FLOW_POP_GOAL, ANIM_DELAY_NONE, 2, ANIM_DELAY_NONE },
+        /*  2 */ { sub_426F10, { AGDATA_SELF_OBJ, -1 }, -1, 3, ANIM_DELAY_NONE, ANIM_FLOW_PUSH | AG_ANIM_GET_UP, ANIM_DELAY_NONE },
+        /*  3 */ { sub_426E80, { AGDATA_SELF_OBJ, -1 }, -1, 4, ANIM_DELAY_NONE, ANIM_FLOW_PUSH | AG_UNCONCEAL, ANIM_DELAY_NONE },
+        /*  4 */ { sub_4294A0, { AGDATA_SELF_OBJ, AGDATA_TARGET_OBJ }, -1, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE, 5, ANIM_DELAY_NONE },
+        /*  5 */ { sub_429B40, { AGDATA_SELF_OBJ, AGDATA_TARGET_OBJ }, -1, ANIM_FLOW_PUSH | AG_PICK_WEAPON, ANIM_DELAY_NONE, 6, ANIM_DELAY_NONE },
+        /*  6 */ { sub_429960, { AGDATA_SELF_OBJ, AGDATA_TARGET_OBJ }, -1, 7, ANIM_DELAY_NONE, ANIM_FLOW_PUSH | AG_ATTEMPT_ATTACK, ANIM_DELAY_NONE },
+        /*  7 */ { sub_42BEA0, { -1, -1 }, 1, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE, ANIM_FLOW_PUSH | AG_MOVE_NEAR_OBJ, ANIM_DELAY_NONE },
         /*  8 */ { 0 },
         /*  9 */ { 0 },
         /* 10 */ { 0 },
@@ -806,7 +806,7 @@ static AnimGoalNode anim_goal_node_kill = {
         /* 12 */ { 0 },
         /* 13 */ { 0 },
         /* 14 */ { 0 },
-        /* 15 */ { sub_42B090, { AGDATA_SELF_OBJ, -1 }, 1, 0, 0, 0, 0 },
+        /* 15 */ { sub_42B090, { AGDATA_SELF_OBJ, -1 }, 1, 0, ANIM_DELAY_NONE, 0, ANIM_DELAY_NONE },
     },
 };
 
@@ -819,12 +819,12 @@ static AnimGoalNode anim_goal_node_talk = {
     0,
     { -1, -1, -1 },
     {
-        /*  1 */ { sub_42ACD0, { AGDATA_SELF_OBJ, AGDATA_TARGET_OBJ }, -1, 0x30000000, 0, 2, 0 },
-        /*  2 */ { sub_426F10, { AGDATA_SELF_OBJ, -1 }, -1, 3, 0, 0x40000000 | AG_ANIM_GET_UP, 0 },
-        /*  3 */ { sub_426E80, { AGDATA_SELF_OBJ, -1 }, -1, 4, 0, 0x40000000 | AG_UNCONCEAL, 0 },
-        /*  4 */ { sub_42AE10, { AGDATA_SELF_OBJ, AGDATA_TARGET_OBJ }, -1, 6, 0, 5, 0 },
-        /*  5 */ { sub_42AF00, { AGDATA_SELF_OBJ, AGDATA_TARGET_OBJ }, -1, 0x90000000, 0, 0x30000000, 0 },
-        /*  6 */ { sub_42BEA0, { -1, -1 }, 1, 0x90000000, 0, 0x40000000 | AG_MOVE_NEAR_OBJ, 0 },
+        /*  1 */ { sub_42ACD0, { AGDATA_SELF_OBJ, AGDATA_TARGET_OBJ }, -1, ANIM_FLOW_POP_GOAL, ANIM_DELAY_NONE, 2, ANIM_DELAY_NONE },
+        /*  2 */ { sub_426F10, { AGDATA_SELF_OBJ, -1 }, -1, 3, ANIM_DELAY_NONE, ANIM_FLOW_PUSH | AG_ANIM_GET_UP, ANIM_DELAY_NONE },
+        /*  3 */ { sub_426E80, { AGDATA_SELF_OBJ, -1 }, -1, 4, ANIM_DELAY_NONE, ANIM_FLOW_PUSH | AG_UNCONCEAL, ANIM_DELAY_NONE },
+        /*  4 */ { sub_42AE10, { AGDATA_SELF_OBJ, AGDATA_TARGET_OBJ }, -1, 6, ANIM_DELAY_NONE, 5, ANIM_DELAY_NONE },
+        /*  5 */ { sub_42AF00, { AGDATA_SELF_OBJ, AGDATA_TARGET_OBJ }, -1, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE, ANIM_FLOW_POP_GOAL, ANIM_DELAY_NONE },
+        /*  6 */ { sub_42BEA0, { -1, -1 }, 1, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE, ANIM_FLOW_PUSH | AG_MOVE_NEAR_OBJ, ANIM_DELAY_NONE },
         /*  7 */ { 0 },
         /*  8 */ { 0 },
         /*  9 */ { 0 },
@@ -833,7 +833,7 @@ static AnimGoalNode anim_goal_node_talk = {
         /* 12 */ { 0 },
         /* 13 */ { 0 },
         /* 14 */ { 0 },
-        /* 15 */ { NULL, { -1, -1 }, 1, 0, 0, 0, 0 },
+        /* 15 */ { NULL, { -1, -1 }, 1, 0, ANIM_DELAY_NONE, 0, ANIM_DELAY_NONE },
     },
 };
 
@@ -846,10 +846,10 @@ static AnimGoalNode anim_goal_node_chase = {
     0,
     { -1, -1, -1 },
     {
-        /*  1 */ { sub_42B940, { -1, -1 }, -1, 2, 0, 2, 0 },
-        /*  2 */ { sub_42BF40, { AGDATA_SELF_OBJ, -1 }, -1, 0x90000000, 0, 3, 0 },
-        /*  3 */ { sub_425130, { AGDATA_SELF_OBJ, AGDATA_TARGET_OBJ }, -1, 0x40000000 | AG_MOVE_NEAR_OBJ, 0, 4, 0 },
-        /*  4 */ { sub_433270, { AGDATA_SELF_OBJ, -1 }, 1, 0x90000000, 0, 0x10000000, 100 },
+        /*  1 */ { sub_42B940, { -1, -1 }, -1, 2, ANIM_DELAY_NONE, 2, ANIM_DELAY_NONE },
+        /*  2 */ { sub_42BF40, { AGDATA_SELF_OBJ, -1 }, -1, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE, 3, ANIM_DELAY_NONE },
+        /*  3 */ { sub_425130, { AGDATA_SELF_OBJ, AGDATA_TARGET_OBJ }, -1, ANIM_FLOW_PUSH | AG_MOVE_NEAR_OBJ, ANIM_DELAY_NONE, 4, ANIM_DELAY_NONE },
+        /*  4 */ { sub_433270, { AGDATA_SELF_OBJ, -1 }, 1, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE, ANIM_FLOW_YIELD, 100 },
         /*  5 */ { 0 },
         /*  6 */ { 0 },
         /*  7 */ { 0 },
@@ -860,7 +860,7 @@ static AnimGoalNode anim_goal_node_chase = {
         /* 12 */ { 0 },
         /* 13 */ { 0 },
         /* 14 */ { 0 },
-        /* 15 */ { NULL, { -1, -1 }, 1, 0, 0, 0, 0 },
+        /* 15 */ { NULL, { -1, -1 }, 1, 0, ANIM_DELAY_NONE, 0, ANIM_DELAY_NONE },
     },
 };
 
@@ -873,11 +873,11 @@ static AnimGoalNode anim_goal_node_follow = {
     0,
     { AG_RUN_NEAR_OBJ, AG_MOVE_NEAR_OBJ, -1 },
     {
-        /*  1 */ { sub_42BF40, { AGDATA_SELF_OBJ, -1 }, -1, 0x90000000, 0, 2, 0 },
-        /*  2 */ { sub_42BFD0, { AGDATA_SELF_OBJ, AGDATA_TARGET_OBJ }, -1, 3, 0, 3, 0 },
-        /*  3 */ { sub_425130, { AGDATA_SELF_OBJ, AGDATA_TARGET_OBJ }, -1, 4, 0, 5, 0 },
-        /*  4 */ { sub_425340, { AGDATA_SELF_OBJ, AGDATA_TARGET_OBJ }, -1, 0x70000000 | AG_RUN_NEAR_OBJ, 0, 0x70000000 | AG_MOVE_NEAR_OBJ, 0 },
-        /*  5 */ { sub_433270, { AGDATA_SELF_OBJ, -1 }, 1, 0x90000000, 0, 0x10000000, 100 },
+        /*  1 */ { sub_42BF40, { AGDATA_SELF_OBJ, -1 }, -1, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE, 2, ANIM_DELAY_NONE },
+        /*  2 */ { sub_42BFD0, { AGDATA_SELF_OBJ, AGDATA_TARGET_OBJ }, -1, 3, ANIM_DELAY_NONE, 3, ANIM_DELAY_NONE },
+        /*  3 */ { sub_425130, { AGDATA_SELF_OBJ, AGDATA_TARGET_OBJ }, -1, 4, ANIM_DELAY_NONE, 5, ANIM_DELAY_NONE },
+        /*  4 */ { sub_425340, { AGDATA_SELF_OBJ, AGDATA_TARGET_OBJ }, -1, ANIM_FLOW_REPLACE_GOAL | AG_RUN_NEAR_OBJ, ANIM_DELAY_NONE, ANIM_FLOW_REPLACE_GOAL | AG_MOVE_NEAR_OBJ, ANIM_DELAY_NONE },
+        /*  5 */ { sub_433270, { AGDATA_SELF_OBJ, -1 }, 1, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE, ANIM_FLOW_YIELD, 100 },
         /*  6 */ { 0 },
         /*  7 */ { 0 },
         /*  8 */ { 0 },
@@ -887,7 +887,7 @@ static AnimGoalNode anim_goal_node_follow = {
         /* 12 */ { 0 },
         /* 13 */ { 0 },
         /* 14 */ { 0 },
-        /* 15 */ { NULL, { -1, -1 }, 1, 0, 0, 0, 0 },
+        /* 15 */ { NULL, { -1, -1 }, 1, 0, ANIM_DELAY_NONE, 0, ANIM_DELAY_NONE },
     },
 };
 
@@ -900,10 +900,10 @@ static AnimGoalNode anim_goal_node_flee = {
     0,
     { -1, -1, -1 },
     {
-        /*  1 */ { sub_42B940, { -1, -1 }, -1, 2, 0, 2, 0 },
-        /*  2 */ { sub_42BEA0, { -1, -1 }, 9, 0x90000000, 0, 3, 0 },
-        /*  3 */ { sub_425130, { AGDATA_SELF_OBJ, AGDATA_TARGET_OBJ }, -1, 4, 0, 0x40000000 | AG_MOVE_AWAY_FROM_OBJ, 0 },
-        /*  4 */ { sub_433270, { AGDATA_SELF_OBJ, -1 }, 1, 0x90000000, 0, 0x30000000, -2 },
+        /*  1 */ { sub_42B940, { -1, -1 }, -1, 2, ANIM_DELAY_NONE, 2, ANIM_DELAY_NONE },
+        /*  2 */ { sub_42BEA0, { -1, -1 }, 9, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE, 3, ANIM_DELAY_NONE },
+        /*  3 */ { sub_425130, { AGDATA_SELF_OBJ, AGDATA_TARGET_OBJ }, -1, 4, ANIM_DELAY_NONE, ANIM_FLOW_PUSH | AG_MOVE_AWAY_FROM_OBJ, ANIM_DELAY_NONE },
+        /*  4 */ { sub_433270, { AGDATA_SELF_OBJ, -1 }, 1, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE, ANIM_FLOW_POP_GOAL, ANIM_DELAY_PAUSE_TIME },
         /*  5 */ { 0 },
         /*  6 */ { 0 },
         /*  7 */ { 0 },
@@ -914,7 +914,7 @@ static AnimGoalNode anim_goal_node_flee = {
         /* 12 */ { 0 },
         /* 13 */ { 0 },
         /* 14 */ { 0 },
-        /* 15 */ { NULL, { -1, -1 }, 1, 0, 0, 0, 0 },
+        /* 15 */ { NULL, { -1, -1 }, 1, 0, ANIM_DELAY_NONE, 0, ANIM_DELAY_NONE },
     },
 };
 
@@ -927,21 +927,21 @@ static AnimGoalNode anim_goal_node_throw_spell = {
     0,
     { AG_ATTEMPT_SPELL, -1, -1 },
     {
-        /*  1 */ { sub_429440, { AGDATA_TARGET_OBJ, -1 }, -1, 10, 0, 2, 0 },
-        /*  2 */ { sub_426F10, { AGDATA_SELF_OBJ, -1 }, -1, 3, 0, 0x40000000 | AG_ANIM_GET_UP, 0 },
-        /*  3 */ { sub_426E80, { AGDATA_SELF_OBJ, -1 }, -1, 4, 0, 0x40000000 | AG_UNCONCEAL, 0 },
-        /*  4 */ { sub_429B50, { AGDATA_SELF_OBJ, AGDATA_TARGET_OBJ }, -1, 8, 0, 5, 0 },
-        /*  5 */ { sub_429BB0, { AGDATA_SELF_OBJ, AGDATA_TARGET_OBJ }, -1, 0x40000000 | AG_PICK_WEAPON, 0, 6, 0 },
-        /*  6 */ { sub_429BC0, { AGDATA_SELF_OBJ, AGDATA_TARGET_OBJ }, -1, 10, 0, 9, 0 },
-        /*  7 */ { sub_42BEA0, { -1, -1 }, AGDATA_ANIM_ID, 10, 0, 0x40000000 | AG_MOVE_NEAR_OBJ, 0 },
-        /*  8 */ { AGendAnimEyeCandy, { AGDATA_SELF_OBJ, -1 }, -1, 10, 0, 10, 0 },
-        /*  9 */ { sub_42C850, { AGDATA_SELF_OBJ, AGDATA_TARGET_OBJ }, -1, 10, 0, 0x70000000 | AG_ATTEMPT_SPELL, 0 },
-        /* 10 */ { sub_429CD0, { AGDATA_SELF_OBJ, AGDATA_SPELL_DATA }, 1, 0x90000000, 0, 0x90000000, 0 },
+        /*  1 */ { sub_429440, { AGDATA_TARGET_OBJ, -1 }, -1, 10, ANIM_DELAY_NONE, 2, ANIM_DELAY_NONE },
+        /*  2 */ { sub_426F10, { AGDATA_SELF_OBJ, -1 }, -1, 3, ANIM_DELAY_NONE, ANIM_FLOW_PUSH | AG_ANIM_GET_UP, ANIM_DELAY_NONE },
+        /*  3 */ { sub_426E80, { AGDATA_SELF_OBJ, -1 }, -1, 4, ANIM_DELAY_NONE, ANIM_FLOW_PUSH | AG_UNCONCEAL, ANIM_DELAY_NONE },
+        /*  4 */ { sub_429B50, { AGDATA_SELF_OBJ, AGDATA_TARGET_OBJ }, -1, 8, ANIM_DELAY_NONE, 5, ANIM_DELAY_NONE },
+        /*  5 */ { sub_429BB0, { AGDATA_SELF_OBJ, AGDATA_TARGET_OBJ }, -1, ANIM_FLOW_PUSH | AG_PICK_WEAPON, ANIM_DELAY_NONE, 6, ANIM_DELAY_NONE },
+        /*  6 */ { sub_429BC0, { AGDATA_SELF_OBJ, AGDATA_TARGET_OBJ }, -1, 10, ANIM_DELAY_NONE, 9, ANIM_DELAY_NONE },
+        /*  7 */ { sub_42BEA0, { -1, -1 }, AGDATA_ANIM_ID, 10, ANIM_DELAY_NONE, ANIM_FLOW_PUSH | AG_MOVE_NEAR_OBJ, ANIM_DELAY_NONE },
+        /*  8 */ { AGendAnimEyeCandy, { AGDATA_SELF_OBJ, -1 }, -1, 10, ANIM_DELAY_NONE, 10, ANIM_DELAY_NONE },
+        /*  9 */ { sub_42C850, { AGDATA_SELF_OBJ, AGDATA_TARGET_OBJ }, -1, 10, ANIM_DELAY_NONE, ANIM_FLOW_REPLACE_GOAL | AG_ATTEMPT_SPELL, ANIM_DELAY_NONE },
+        /* 10 */ { sub_429CD0, { AGDATA_SELF_OBJ, AGDATA_SPELL_DATA }, 1, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE },
         /* 11 */ { 0 },
         /* 12 */ { 0 },
         /* 13 */ { 0 },
         /* 14 */ { 0 },
-        /* 15 */ { sub_42B090, { AGDATA_SELF_OBJ, -1 }, 1, 0, 0, 0, 0 },
+        /* 15 */ { sub_42B090, { AGDATA_SELF_OBJ, -1 }, 1, 0, ANIM_DELAY_NONE, 0, ANIM_DELAY_NONE },
     },
 };
 
@@ -954,21 +954,21 @@ static AnimGoalNode anim_goal_node_attempt_spell = {
     0,
     { AG_THROW_SPELL, -1, -1 },
     {
-        /*  1 */ { sub_431320, { AGDATA_SELF_OBJ, -1 }, -1, 2, 0, 11, 0 },
-        /*  2 */ { AGupdateAnimEyeCandy, { AGDATA_SELF_OBJ, -1 }, -1, 8, -2, 4, 0 },
-        /*  3 */ { AGbeginAnimEyeCandy, { AGDATA_SELF_OBJ, -1 }, -1, 12, 0, 0x10000000, 0 },
-        /*  4 */ { sub_42CAA0, { AGDATA_SELF_OBJ, AGDATA_ANIM_ID }, -1, 0x10000000, -2, 5, 0 },
-        /*  5 */ { sub_429C40, { AGDATA_SPELL_DATA, -1 }, -1, 9, 0, 6, 0 },
-        /*  6 */ { sub_424820, { AGDATA_SELF_OBJ, AGDATA_SELF_TILE }, 5, 8, 0, 7, 0 },
-        /*  7 */ { sub_4246E0, { AGDATA_SCRATCH_OBJ, AGDATA_SELF_OBJ }, AG_SHOOT_SPELL, 0x90000000, -2, 0x10000000, -2 },
-        /*  8 */ { AGendAnimEyeCandy, { AGDATA_SELF_OBJ, -1 }, -1, 0x90000000, 0, 0x30000000, 0 },
-        /*  9 */ { sub_429C80, { AGDATA_SPELL_DATA, -1 }, -1, 8, 0, 0x10000000, 0 },
-        /* 10 */ { sub_433270, { AGDATA_SELF_OBJ, -1 }, 1, 0x90000000, 0, 0x90000000, 0 },
-        /* 11 */ { sub_429F00, { AGDATA_SPELL_DATA, -1 }, -1, 12, 0, 3, 0 },
-        /* 12 */ { sub_429C80, { AGDATA_SPELL_DATA, -1 }, -1, 0x90000000, 0, 0x90000000, 0 },
+        /*  1 */ { sub_431320, { AGDATA_SELF_OBJ, -1 }, -1, 2, ANIM_DELAY_NONE, 11, ANIM_DELAY_NONE },
+        /*  2 */ { AGupdateAnimEyeCandy, { AGDATA_SELF_OBJ, -1 }, -1, 8, ANIM_DELAY_PAUSE_TIME, 4, ANIM_DELAY_NONE },
+        /*  3 */ { AGbeginAnimEyeCandy, { AGDATA_SELF_OBJ, -1 }, -1, 12, ANIM_DELAY_NONE, ANIM_FLOW_YIELD, ANIM_DELAY_NONE },
+        /*  4 */ { sub_42CAA0, { AGDATA_SELF_OBJ, AGDATA_ANIM_ID }, -1, ANIM_FLOW_YIELD, ANIM_DELAY_PAUSE_TIME, 5, ANIM_DELAY_NONE },
+        /*  5 */ { sub_429C40, { AGDATA_SPELL_DATA, -1 }, -1, 9, ANIM_DELAY_NONE, 6, ANIM_DELAY_NONE },
+        /*  6 */ { sub_424820, { AGDATA_SELF_OBJ, AGDATA_SELF_TILE }, 5, 8, ANIM_DELAY_NONE, 7, ANIM_DELAY_NONE },
+        /*  7 */ { sub_4246E0, { AGDATA_SCRATCH_OBJ, AGDATA_SELF_OBJ }, AG_SHOOT_SPELL, ANIM_FLOW_TERMINATE, ANIM_DELAY_PAUSE_TIME, ANIM_FLOW_YIELD, ANIM_DELAY_PAUSE_TIME },
+        /*  8 */ { AGendAnimEyeCandy, { AGDATA_SELF_OBJ, -1 }, -1, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE, ANIM_FLOW_POP_GOAL, ANIM_DELAY_NONE },
+        /*  9 */ { sub_429C80, { AGDATA_SPELL_DATA, -1 }, -1, 8, ANIM_DELAY_NONE, ANIM_FLOW_YIELD, ANIM_DELAY_NONE },
+        /* 10 */ { sub_433270, { AGDATA_SELF_OBJ, -1 }, 1, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE },
+        /* 11 */ { sub_429F00, { AGDATA_SPELL_DATA, -1 }, -1, 12, ANIM_DELAY_NONE, 3, ANIM_DELAY_NONE },
+        /* 12 */ { sub_429C80, { AGDATA_SPELL_DATA, -1 }, -1, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE },
         /* 13 */ { 0 },
         /* 14 */ { 0 },
-        /* 15 */ { sub_429CD0, { AGDATA_SELF_OBJ, AGDATA_SPELL_DATA }, 1, 0, 0, 0, 0 },
+        /* 15 */ { sub_429CD0, { AGDATA_SELF_OBJ, AGDATA_SPELL_DATA }, 1, 0, ANIM_DELAY_NONE, 0, ANIM_DELAY_NONE },
     },
 };
 
@@ -981,21 +981,21 @@ static AnimGoalNode anim_goal_node_shoot_spell = {
     0,
     { -1, -1, -1 },
     {
-        /*  1 */ { sub_424D90, { AGDATA_SELF_OBJ, AGDATA_FORCE_TARGET_TILE }, -1, 2, 0, 4, 0 },
-        /*  2 */ { sub_425740, { AGDATA_SELF_OBJ, -1 }, -1, AG_MOVE_TO_TILE, 0, 8, 0 },
-        /*  3 */ { sub_426840, { AGDATA_SELF_OBJ, AGDATA_FORCE_TARGET_TILE }, -1, 0x90000000, 0, 8, 0 },
-        /*  4 */ { sub_42A180, { AGDATA_SELF_OBJ, 1 }, -1, AG_MOVE_STRAIGHT, 0, 5, 0 },
-        /*  5 */ { sub_429C80, { AGDATA_SPELL_DATA, -1 }, -1, 0x90000000, 0, 6, 0 },
-        /*  6 */ { sub_424D00, { AGDATA_SELF_OBJ, -1 }, -1, 0x90000000, 0, 0x30000000, 0 },
-        /*  7 */ { sub_42A200, { AGDATA_SELF_OBJ, AGDATA_SPELL_DATA }, -1, 6, 0, 6, 0 },
-        /*  8 */ { sub_429ED0, { AGDATA_SPELL_DATA, -1 }, -1, 0x90000000, 0, 0x40000000 | AG_ATTEMPT_MOVE_STRAIGHT_SPELL, 0 },
-        /*  9 */ { sub_42BEC0, { AGDATA_TARGET_OBJ, -1 }, -1, 0x30000000, 0, 1, 0 },
+        /*  1 */ { sub_424D90, { AGDATA_SELF_OBJ, AGDATA_FORCE_TARGET_TILE }, -1, 2, ANIM_DELAY_NONE, 4, ANIM_DELAY_NONE },
+        /*  2 */ { sub_425740, { AGDATA_SELF_OBJ, -1 }, -1, 3, ANIM_DELAY_NONE, 8, ANIM_DELAY_NONE },
+        /*  3 */ { sub_426840, { AGDATA_SELF_OBJ, AGDATA_FORCE_TARGET_TILE }, -1, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE, 8, ANIM_DELAY_NONE },
+        /*  4 */ { sub_42A180, { AGDATA_SELF_OBJ, 1 }, -1, 9, ANIM_DELAY_NONE, 5, ANIM_DELAY_NONE },
+        /*  5 */ { sub_429C80, { AGDATA_SPELL_DATA, -1 }, -1, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE, 6, ANIM_DELAY_NONE },
+        /*  6 */ { sub_424D00, { AGDATA_SELF_OBJ, -1 }, -1, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE, ANIM_FLOW_POP_GOAL, ANIM_DELAY_NONE },
+        /*  7 */ { sub_42A200, { AGDATA_SELF_OBJ, AGDATA_SPELL_DATA }, -1, 6, ANIM_DELAY_NONE, 6, ANIM_DELAY_NONE },
+        /*  8 */ { sub_429ED0, { AGDATA_SPELL_DATA, -1 }, -1, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE, ANIM_FLOW_PUSH | AG_ATTEMPT_MOVE_STRAIGHT_SPELL, ANIM_DELAY_NONE },
+        /*  9 */ { sub_42BEC0, { AGDATA_TARGET_OBJ, -1 }, -1, ANIM_FLOW_POP_GOAL, ANIM_DELAY_NONE, 1, ANIM_DELAY_NONE },
         /* 10 */ { 0 },
         /* 11 */ { 0 },
         /* 12 */ { 0 },
         /* 13 */ { 0 },
         /* 14 */ { 0 },
-        /* 15 */ { sub_429E70, { AGDATA_SELF_OBJ, AGDATA_SPELL_DATA }, 1, 0, 0, 0, 0 },
+        /* 15 */ { sub_429E70, { AGDATA_SELF_OBJ, AGDATA_SPELL_DATA }, 1, 0, ANIM_DELAY_NONE, 0, ANIM_DELAY_NONE },
     },
 };
 
@@ -1008,10 +1008,10 @@ static AnimGoalNode anim_goal_node_hit_by_spell = {
     0,
     { -1, -1, -1 },
     {
-        /*  1 */ { sub_42CA90, { AGDATA_SELF_OBJ, -1 }, -1, 2, 0, 3, 0 },
-        /*  2 */ { sub_42FEC0, { AGDATA_SELF_OBJ, -1 }, -1, 0x30000000, -2, 0x10000000, -2 },
-        /*  3 */ { sub_42FEB0, { AGDATA_SELF_OBJ, AGDATA_ANIM_DATA }, -1, 4, 0, 0x10000000, 0 },
-        /*  4 */ { sub_433270, { AGDATA_SELF_OBJ, -1 }, 1, 0x90000000, 0, 0x90000000, 0 },
+        /*  1 */ { sub_42CA90, { AGDATA_SELF_OBJ, -1 }, -1, 2, ANIM_DELAY_NONE, 3, ANIM_DELAY_NONE },
+        /*  2 */ { sub_42FEC0, { AGDATA_SELF_OBJ, -1 }, -1, ANIM_FLOW_POP_GOAL, ANIM_DELAY_PAUSE_TIME, ANIM_FLOW_YIELD, ANIM_DELAY_PAUSE_TIME },
+        /*  3 */ { sub_42FEB0, { AGDATA_SELF_OBJ, AGDATA_ANIM_DATA }, -1, 4, ANIM_DELAY_NONE, ANIM_FLOW_YIELD, ANIM_DELAY_NONE },
+        /*  4 */ { sub_433270, { AGDATA_SELF_OBJ, -1 }, 1, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE },
         /*  5 */ { 0 },
         /*  6 */ { 0 },
         /*  7 */ { 0 },
@@ -1022,7 +1022,7 @@ static AnimGoalNode anim_goal_node_hit_by_spell = {
         /* 12 */ { 0 },
         /* 13 */ { 0 },
         /* 14 */ { 0 },
-        /* 15 */ { NULL, { -1, -1 }, 1, 0, 0, 0, 0 },
+        /* 15 */ { NULL, { -1, -1 }, 1, 0, ANIM_DELAY_NONE, 0, ANIM_DELAY_NONE },
     },
 };
 
@@ -1035,12 +1035,12 @@ static AnimGoalNode anim_goal_node_hit_by_weapon = {
     0,
     { -1, -1, -1 },
     {
-        /*  1 */ { sub_42CA90, { AGDATA_SELF_OBJ, -1 }, -1, 2, 0, 3, 0 },
-        /*  2 */ { sub_42CC80, { AGDATA_SELF_OBJ, -1 }, -1, 5, -2, 0x10000000, -2 },
-        /*  3 */ { sub_42BD40, { AGDATA_SELF_OBJ, -1 }, 23, 0x90000000, 0, 4, 0 },
-        /*  4 */ { sub_42CB10, { AGDATA_SELF_OBJ, AGDATA_ANIM_ID }, -1, 6, 0, 0x10000000, 0 },
-        /*  5 */ { sub_42BD40, { AGDATA_SELF_OBJ, -1 }, 0, 0x90000000, 0, 0x90000000, 0 },
-        /*  6 */ { sub_433270, { AGDATA_SELF_OBJ, -1 }, 1, 0x90000000, 0, 0x90000000, 0 },
+        /*  1 */ { sub_42CA90, { AGDATA_SELF_OBJ, -1 }, -1, 2, ANIM_DELAY_NONE, 3, ANIM_DELAY_NONE },
+        /*  2 */ { sub_42CC80, { AGDATA_SELF_OBJ, -1 }, -1, 5, ANIM_DELAY_PAUSE_TIME, ANIM_FLOW_YIELD, ANIM_DELAY_PAUSE_TIME },
+        /*  3 */ { sub_42BD40, { AGDATA_SELF_OBJ, -1 }, 23, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE, 4, ANIM_DELAY_NONE },
+        /*  4 */ { sub_42CB10, { AGDATA_SELF_OBJ, AGDATA_ANIM_ID }, -1, 6, ANIM_DELAY_NONE, ANIM_FLOW_YIELD, ANIM_DELAY_NONE },
+        /*  5 */ { sub_42BD40, { AGDATA_SELF_OBJ, -1 }, 0, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE },
+        /*  6 */ { sub_433270, { AGDATA_SELF_OBJ, -1 }, 1, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE },
         /*  7 */ { 0 },
         /*  8 */ { 0 },
         /*  9 */ { 0 },
@@ -1049,7 +1049,7 @@ static AnimGoalNode anim_goal_node_hit_by_weapon = {
         /* 12 */ { 0 },
         /* 13 */ { 0 },
         /* 14 */ { 0 },
-        /* 15 */ { NULL, { -1, -1 }, 1, 0, 0, 0, 0 },
+        /* 15 */ { NULL, { -1, -1 }, 1, 0, ANIM_DELAY_NONE, 0, ANIM_DELAY_NONE },
     },
 };
 
@@ -1062,21 +1062,21 @@ static AnimGoalNode anim_goal_node_dying = {
     0,
     { -1, -1, -1 },
     {
-        /*  1 */ { sub_42CA90, { AGDATA_SELF_OBJ, -1 }, -1, 2, 0, 3, 0 },
-        /*  2 */ { AGupdateAnimDying, { AGDATA_SELF_OBJ, -1 }, -1, 7, 0, 0x10000000, -2 },
-        /*  3 */ { sub_426F10, { AGDATA_SELF_OBJ, -1 }, -1, 4, 0, 7, 0 },
-        /*  4 */ { sub_426E80, { AGDATA_SELF_OBJ, -1 }, -1, 5, 0, 5, 0 },
-        /*  5 */ { sub_42BC10, { AGDATA_SELF_OBJ, -1 }, -1, 7, 0, 6, 0 },
-        /*  6 */ { AGbeginAnimDying, { AGDATA_SELF_OBJ, AGDATA_ANIM_ID }, -1, 7, 0, 0x10000000, 0 },
-        /*  7 */ { sub_42FED0, { AGDATA_SELF_OBJ, -1 }, -1, 8, 0, 9, 0 },
-        /*  8 */ { sub_433270, { AGDATA_SELF_OBJ, -1 }, 1, 0x90000000, 0, 0x90000000, 0 },
-        /*  9 */ { sub_42FF40, { AGDATA_SELF_OBJ, -1 }, -1, 0x90000000, 0, 0x90000000, 0 },
+        /*  1 */ { sub_42CA90, { AGDATA_SELF_OBJ, -1 }, -1, 2, ANIM_DELAY_NONE, 3, ANIM_DELAY_NONE },
+        /*  2 */ { AGupdateAnimDying, { AGDATA_SELF_OBJ, -1 }, -1, 7, ANIM_DELAY_NONE, ANIM_FLOW_YIELD, ANIM_DELAY_PAUSE_TIME },
+        /*  3 */ { sub_426F10, { AGDATA_SELF_OBJ, -1 }, -1, 4, ANIM_DELAY_NONE, 7, ANIM_DELAY_NONE },
+        /*  4 */ { sub_426E80, { AGDATA_SELF_OBJ, -1 }, -1, 5, ANIM_DELAY_NONE, 5, ANIM_DELAY_NONE },
+        /*  5 */ { sub_42BC10, { AGDATA_SELF_OBJ, -1 }, -1, 7, ANIM_DELAY_NONE, 6, ANIM_DELAY_NONE },
+        /*  6 */ { AGbeginAnimDying, { AGDATA_SELF_OBJ, AGDATA_ANIM_ID }, -1, 7, ANIM_DELAY_NONE, ANIM_FLOW_YIELD, ANIM_DELAY_NONE },
+        /*  7 */ { sub_42FED0, { AGDATA_SELF_OBJ, -1 }, -1, 8, ANIM_DELAY_NONE, 9, ANIM_DELAY_NONE },
+        /*  8 */ { sub_433270, { AGDATA_SELF_OBJ, -1 }, 1, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE },
+        /*  9 */ { sub_42FF40, { AGDATA_SELF_OBJ, -1 }, -1, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE },
         /* 10 */ { 0 },
         /* 11 */ { 0 },
         /* 12 */ { 0 },
         /* 13 */ { 0 },
         /* 14 */ { 0 },
-        /* 15 */ { sub_42FFE0, { AGDATA_SELF_OBJ, -1 }, 1, 0, 0, 0, 0 },
+        /* 15 */ { sub_42FFE0, { AGDATA_SELF_OBJ, -1 }, 1, 0, ANIM_DELAY_NONE, 0, ANIM_DELAY_NONE },
     },
 };
 
@@ -1089,7 +1089,7 @@ static AnimGoalNode anim_goal_node_destroy_obj = {
     0,
     { -1, -1, -1 },
     {
-        /*  1 */ { sub_424D00, { AGDATA_SELF_OBJ, -1 }, -1, 0x90000000, 0, 0x90000000, 0 },
+        /*  1 */ { sub_424D00, { AGDATA_SELF_OBJ, -1 }, -1, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE },
         /*  2 */ { 0 },
         /*  3 */ { 0 },
         /*  4 */ { 0 },
@@ -1103,7 +1103,7 @@ static AnimGoalNode anim_goal_node_destroy_obj = {
         /* 12 */ { 0 },
         /* 13 */ { 0 },
         /* 14 */ { 0 },
-        /* 15 */ { NULL, { -1, -1 }, 1, 0, 0, 0, 0 },
+        /* 15 */ { NULL, { -1, -1 }, 1, 0, ANIM_DELAY_NONE, 0, ANIM_DELAY_NONE },
     },
 };
 
@@ -1116,13 +1116,13 @@ static AnimGoalNode anim_goal_node_use_skill_on = {
     0,
     { -1, -1, -1 },
     {
-        /*  1 */ { sub_42BEA0, { -1, -1 }, 1, 0x90000000, 0, 2, 0 },
-        /*  2 */ { sub_425130, { AGDATA_SELF_OBJ, 1 }, 1, 3, 0, 5, 0 },
-        /*  3 */ { sub_425740, { AGDATA_SELF_OBJ, -1 }, -1, 4, 0, 0x40000000 | AG_ATTEMPT_MOVE, 0 },
-        /*  4 */ { sub_427990, { AGDATA_SELF_OBJ, 1 }, -1, 6, 0, 0x40000000 | AG_ATTEMPT_MOVE, 0 },
-        /*  5 */ { sub_42A490, { AGDATA_SELF_OBJ, AGDATA_SKILL_DATA }, 1, 7, 0, 0x70000000 | AG_USE_PICKLOCK_SKILL_ON, 0 },
-        /*  6 */ { sub_4246D0, { -1, -1 }, -1, 0x90000000, 0, 0x50000000 | AG_MOVE_TO_PAUSE, 1000 },
-        /*  7 */ { sub_42A440, { AGDATA_SELF_OBJ, AGDATA_SKILL_DATA }, 1, 0x70000000 | AG_ATTEMPT_USE_SKILL_ON, 0, 0x70000000 | AG_ATTEMPT_USE_PICKPOCKET_SKILL_ON, 0 },
+        /*  1 */ { sub_42BEA0, { -1, -1 }, 1, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE, 2, ANIM_DELAY_NONE },
+        /*  2 */ { sub_425130, { AGDATA_SELF_OBJ, 1 }, 1, 3, ANIM_DELAY_NONE, 5, ANIM_DELAY_NONE },
+        /*  3 */ { sub_425740, { AGDATA_SELF_OBJ, -1 }, -1, 4, ANIM_DELAY_NONE, ANIM_FLOW_PUSH | AG_ATTEMPT_MOVE, ANIM_DELAY_NONE },
+        /*  4 */ { sub_427990, { AGDATA_SELF_OBJ, 1 }, -1, 6, ANIM_DELAY_NONE, ANIM_FLOW_PUSH | AG_ATTEMPT_MOVE, ANIM_DELAY_NONE },
+        /*  5 */ { sub_42A490, { AGDATA_SELF_OBJ, AGDATA_SKILL_DATA }, 1, 7, ANIM_DELAY_NONE, ANIM_FLOW_REPLACE_GOAL | AG_USE_PICKLOCK_SKILL_ON, ANIM_DELAY_NONE },
+        /*  6 */ { sub_4246D0, { -1, -1 }, -1, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE, ANIM_FLOW_PUSH | ANIM_FLOW_YIELD | AG_MOVE_TO_PAUSE, 1000 },
+        /*  7 */ { sub_42A440, { AGDATA_SELF_OBJ, AGDATA_SKILL_DATA }, 1, ANIM_FLOW_REPLACE_GOAL | AG_ATTEMPT_USE_SKILL_ON, ANIM_DELAY_NONE, ANIM_FLOW_REPLACE_GOAL | AG_ATTEMPT_USE_PICKPOCKET_SKILL_ON, ANIM_DELAY_NONE },
         /*  8 */ { 0 },
         /*  9 */ { 0 },
         /* 10 */ { 0 },
@@ -1130,7 +1130,7 @@ static AnimGoalNode anim_goal_node_use_skill_on = {
         /* 12 */ { 0 },
         /* 13 */ { 0 },
         /* 14 */ { 0 },
-        /* 15 */ { sub_42B090, { AGDATA_SELF_OBJ, -1 }, 1, 0, 0, 0, 0 },
+        /* 15 */ { sub_42B090, { AGDATA_SELF_OBJ, -1 }, 1, 0, ANIM_DELAY_NONE, 0, ANIM_DELAY_NONE },
     },
 };
 
@@ -1143,21 +1143,21 @@ static AnimGoalNode anim_goal_node_attempt_use_skill_on = {
     0,
     { -1, -1, -1 },
     {
-        /*  1 */ { sub_42CA90, { AGDATA_SELF_OBJ, -1 }, -1, 2, 0, 3, 0 },
-        /*  2 */ { sub_42CC80, { AGDATA_SELF_OBJ, -1 }, -1, 8, -2, 6, 0 },
-        /*  3 */ { sub_42C0F0, { AGDATA_SELF_OBJ, AGDATA_TARGET_OBJ }, -1, 0x90000000, 0, 4, 0 },
-        /*  4 */ { sub_42BD40, { AGDATA_SELF_OBJ, -1 }, 0xC, 0x90000000, 0, 5, 0 },
-        /*  5 */ { sub_42CB10, { AGDATA_SELF_OBJ, AGDATA_ANIM_ID }, -1, 9, 0, 0x10000000, 0 },
-        /*  6 */ { sub_42CAA0, { AGDATA_SELF_OBJ, AGDATA_ANIM_ID }, -1, 0x10000000, -2, 7, 0 },
-        /*  7 */ { sub_42A2A0, { AGDATA_SELF_OBJ, AGDATA_TARGET_OBJ }, -1, 0x90000000, 0, 0x10000000, -2 },
-        /*  8 */ { sub_42BD40, { AGDATA_SELF_OBJ, -1 }, 0, 0x90000000, 0, 0x30000000, 0 },
-        /*  9 */ { sub_433270, { AGDATA_SELF_OBJ, -1 }, 1, 0x90000000, 0, 0x90000000, 0 },
+        /*  1 */ { sub_42CA90, { AGDATA_SELF_OBJ, -1 }, -1, 2, ANIM_DELAY_NONE, 3, ANIM_DELAY_NONE },
+        /*  2 */ { sub_42CC80, { AGDATA_SELF_OBJ, -1 }, -1, 8, ANIM_DELAY_PAUSE_TIME, 6, ANIM_DELAY_NONE },
+        /*  3 */ { sub_42C0F0, { AGDATA_SELF_OBJ, AGDATA_TARGET_OBJ }, -1, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE, 4, ANIM_DELAY_NONE },
+        /*  4 */ { sub_42BD40, { AGDATA_SELF_OBJ, -1 }, 0xC, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE, 5, ANIM_DELAY_NONE },
+        /*  5 */ { sub_42CB10, { AGDATA_SELF_OBJ, AGDATA_ANIM_ID }, -1, 9, ANIM_DELAY_NONE, ANIM_FLOW_YIELD, ANIM_DELAY_NONE },
+        /*  6 */ { sub_42CAA0, { AGDATA_SELF_OBJ, AGDATA_ANIM_ID }, -1, ANIM_FLOW_YIELD, ANIM_DELAY_PAUSE_TIME, 7, ANIM_DELAY_NONE },
+        /*  7 */ { sub_42A2A0, { AGDATA_SELF_OBJ, AGDATA_TARGET_OBJ }, -1, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE, ANIM_FLOW_YIELD, ANIM_DELAY_PAUSE_TIME },
+        /*  8 */ { sub_42BD40, { AGDATA_SELF_OBJ, -1 }, 0, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE, ANIM_FLOW_POP_GOAL, ANIM_DELAY_NONE },
+        /*  9 */ { sub_433270, { AGDATA_SELF_OBJ, -1 }, 1, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE },
         /* 10 */ { 0 },
         /* 11 */ { 0 },
         /* 12 */ { 0 },
         /* 13 */ { 0 },
         /* 14 */ { 0 },
-        /* 15 */ { sub_42B090, { AGDATA_SELF_OBJ, -1 }, 1, 0, 0, 0, 0 },
+        /* 15 */ { sub_42B090, { AGDATA_SELF_OBJ, -1 }, 1, 0, ANIM_DELAY_NONE, 0, ANIM_DELAY_NONE },
     },
 };
 
@@ -1170,12 +1170,12 @@ static AnimGoalNode anim_goal_node_skill_conceal = {
     0,
     { -1, -1, -1 },
     {
-        /*  1 */ { sub_42CA90, { AGDATA_SELF_OBJ, -1 }, -1, 2, 0, 3, 0 },
-        /*  2 */ { sub_42CC80, { AGDATA_SELF_OBJ, -1 }, -1, 5, -2, 0x10000000, -2 },
-        /*  3 */ { sub_42BD40, { AGDATA_SELF_OBJ, -1 }, 5, 0x90000000, 0, 4, 0 },
-        /*  4 */ { sub_42CB10, { AGDATA_SELF_OBJ, AGDATA_ANIM_ID }, -1, 6, 0, 0x10000000, 0 },
-        /*  5 */ { sub_42BD40, { AGDATA_SELF_OBJ, -1 }, 5, 0x90000000, 0, 0x90000000, 0 },
-        /*  6 */ { sub_433270, { AGDATA_SELF_OBJ, -1 }, 1, 0x90000000, 0, 0x90000000, 0 },
+        /*  1 */ { sub_42CA90, { AGDATA_SELF_OBJ, -1 }, -1, 2, ANIM_DELAY_NONE, 3, ANIM_DELAY_NONE },
+        /*  2 */ { sub_42CC80, { AGDATA_SELF_OBJ, -1 }, -1, 5, ANIM_DELAY_PAUSE_TIME, ANIM_FLOW_YIELD, ANIM_DELAY_PAUSE_TIME },
+        /*  3 */ { sub_42BD40, { AGDATA_SELF_OBJ, -1 }, 5, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE, 4, ANIM_DELAY_NONE },
+        /*  4 */ { sub_42CB10, { AGDATA_SELF_OBJ, AGDATA_ANIM_ID }, -1, 6, ANIM_DELAY_NONE, ANIM_FLOW_YIELD, ANIM_DELAY_NONE },
+        /*  5 */ { sub_42BD40, { AGDATA_SELF_OBJ, -1 }, 5, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE },
+        /*  6 */ { sub_433270, { AGDATA_SELF_OBJ, -1 }, 1, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE },
         /*  7 */ { 0 },
         /*  8 */ { 0 },
         /*  9 */ { 0 },
@@ -1184,7 +1184,7 @@ static AnimGoalNode anim_goal_node_skill_conceal = {
         /* 12 */ { 0 },
         /* 13 */ { 0 },
         /* 14 */ { 0 },
-        /* 15 */ { NULL, { -1, -1 }, 1, 0, 0, 0, 0 },
+        /* 15 */ { NULL, { -1, -1 }, 1, 0, ANIM_DELAY_NONE, 0, ANIM_DELAY_NONE },
     },
 };
 
@@ -1197,13 +1197,13 @@ static AnimGoalNode anim_goal_node_projectile = {
     0,
     { -1, -1, -1 },
     {
-        /*  1 */ { sub_42CA90, { AGDATA_SELF_OBJ, -1 }, -1, 2, 0, 3, 0 },
-        /*  2 */ { sub_42F6A0, { AGDATA_SELF_OBJ, AGDATA_TARGET_OBJ }, -1, 0x30000000, 0, 0x10000000, -3 },
-        /*  3 */ { sub_424D90, { AGDATA_SELF_OBJ, AGDATA_TARGET_TILE }, -1, 4, 0, 0x30000000, 0 },
-        /*  4 */ { sub_424BC0, { AGDATA_SELF_OBJ, AGDATA_TARGET_OBJ }, -1, 0x30000000, 0, 5, 0 },
-        /*  5 */ { sub_425740, { AGDATA_SELF_OBJ, -1 }, -1, 6, 0, 7, 0 },
-        /*  6 */ { sub_4269D0, { AGDATA_SELF_OBJ, AGDATA_TARGET_TILE }, -1, 0x30000000, 0, 7, 0 },
-        /*  7 */ { sub_42F5C0, { AGDATA_SELF_OBJ, -1 }, -1, 0x30000000, 0, 0x10000000, 0 },
+        /*  1 */ { sub_42CA90, { AGDATA_SELF_OBJ, -1 }, -1, 2, ANIM_DELAY_NONE, 3, ANIM_DELAY_NONE },
+        /*  2 */ { sub_42F6A0, { AGDATA_SELF_OBJ, AGDATA_TARGET_OBJ }, -1, ANIM_FLOW_POP_GOAL, ANIM_DELAY_NONE, ANIM_FLOW_YIELD, ANIM_DELAY_CALLBACK },
+        /*  3 */ { sub_424D90, { AGDATA_SELF_OBJ, AGDATA_TARGET_TILE }, -1, 4, ANIM_DELAY_NONE, ANIM_FLOW_POP_GOAL, ANIM_DELAY_NONE },
+        /*  4 */ { sub_424BC0, { AGDATA_SELF_OBJ, AGDATA_TARGET_OBJ }, -1, ANIM_FLOW_POP_GOAL, ANIM_DELAY_NONE, 5, ANIM_DELAY_NONE },
+        /*  5 */ { sub_425740, { AGDATA_SELF_OBJ, -1 }, -1, 6, ANIM_DELAY_NONE, 7, ANIM_DELAY_NONE },
+        /*  6 */ { sub_4269D0, { AGDATA_SELF_OBJ, AGDATA_TARGET_TILE }, -1, ANIM_FLOW_POP_GOAL, ANIM_DELAY_NONE, 7, ANIM_DELAY_NONE },
+        /*  7 */ { sub_42F5C0, { AGDATA_SELF_OBJ, -1 }, -1, ANIM_FLOW_POP_GOAL, ANIM_DELAY_NONE, ANIM_FLOW_YIELD, ANIM_DELAY_NONE },
         /*  8 */ { 0 },
         /*  9 */ { 0 },
         /* 10 */ { 0 },
@@ -1211,7 +1211,7 @@ static AnimGoalNode anim_goal_node_projectile = {
         /* 12 */ { 0 },
         /* 13 */ { 0 },
         /* 14 */ { 0 },
-        /* 15 */ { sub_42CAC0, { -1, -1 }, 1, 0, 0, 0, 0 },
+        /* 15 */ { sub_42CAC0, { -1, -1 }, 1, 0, ANIM_DELAY_NONE, 0, ANIM_DELAY_NONE },
     },
 };
 
@@ -1224,21 +1224,21 @@ static AnimGoalNode anim_goal_node_throw_item = {
     0,
     { -1, -1, -1 },
     {
-        /*  1 */ { sub_42CA90, { AGDATA_SELF_OBJ, -1 }, -1, 2, 0, 3, 0 },
-        /*  2 */ { sub_42CC80, { AGDATA_SELF_OBJ, -1 }, -1, 8, -2, 6, 0 },
-        /*  3 */ { sub_42BD40, { AGDATA_SELF_OBJ, -1 }, 14, 8, 0, 4, 0 },
-        /*  4 */ { sub_42C390, { AGDATA_SELF_OBJ, AGDATA_TARGET_TILE }, -1, 8, 0, 5, 0 },
-        /*  5 */ { sub_42CB10, { AGDATA_SELF_OBJ, AGDATA_ANIM_ID }, -1, 8, 0, 0x10000000, 0 },
-        /*  6 */ { sub_42CAA0, { AGDATA_SELF_OBJ, AGDATA_ANIM_ID }, -1, 0x10000000, -2, 7, 0 },
-        /*  7 */ { sub_42AB90, { AGDATA_SELF_OBJ, AGDATA_SCRATCH_OBJ }, 5, 8, 0, 0x10000000, -2 },
-        /*  8 */ { sub_42BD40, { AGDATA_SELF_OBJ, -1 }, 0, 9, 0, 9, 0 },
-        /*  9 */ { sub_433270, { AGDATA_SELF_OBJ, -1 }, 1, 0x90000000, 0, 0x90000000, 0 },
+        /*  1 */ { sub_42CA90, { AGDATA_SELF_OBJ, -1 }, -1, 2, ANIM_DELAY_NONE, 3, ANIM_DELAY_NONE },
+        /*  2 */ { sub_42CC80, { AGDATA_SELF_OBJ, -1 }, -1, 8, ANIM_DELAY_PAUSE_TIME, 6, ANIM_DELAY_NONE },
+        /*  3 */ { sub_42BD40, { AGDATA_SELF_OBJ, -1 }, 14, 8, ANIM_DELAY_NONE, 4, ANIM_DELAY_NONE },
+        /*  4 */ { sub_42C390, { AGDATA_SELF_OBJ, AGDATA_TARGET_TILE }, -1, 8, ANIM_DELAY_NONE, 5, ANIM_DELAY_NONE },
+        /*  5 */ { sub_42CB10, { AGDATA_SELF_OBJ, AGDATA_ANIM_ID }, -1, 8, ANIM_DELAY_NONE, ANIM_FLOW_YIELD, ANIM_DELAY_NONE },
+        /*  6 */ { sub_42CAA0, { AGDATA_SELF_OBJ, AGDATA_ANIM_ID }, -1, ANIM_FLOW_YIELD, ANIM_DELAY_PAUSE_TIME, 7, ANIM_DELAY_NONE },
+        /*  7 */ { sub_42AB90, { AGDATA_SELF_OBJ, AGDATA_SCRATCH_OBJ }, 5, 8, ANIM_DELAY_NONE, ANIM_FLOW_YIELD, ANIM_DELAY_PAUSE_TIME },
+        /*  8 */ { sub_42BD40, { AGDATA_SELF_OBJ, -1 }, 0, 9, ANIM_DELAY_NONE, 9, ANIM_DELAY_NONE },
+        /*  9 */ { sub_433270, { AGDATA_SELF_OBJ, -1 }, 1, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE },
         /* 10 */ { 0 },
         /* 11 */ { 0 },
         /* 12 */ { 0 },
         /* 13 */ { 0 },
         /* 14 */ { 0 },
-        /* 15 */ { sub_42B440, { AGDATA_SELF_OBJ, -1 }, 1, 0, 0, 0, 0 },
+        /* 15 */ { sub_42B440, { AGDATA_SELF_OBJ, -1 }, 1, 0, ANIM_DELAY_NONE, 0, ANIM_DELAY_NONE },
     },
 };
 
@@ -1251,12 +1251,12 @@ static AnimGoalNode anim_goal_node_use_object = {
     0,
     { -1, -1, -1 },
     {
-        /*  1 */ { sub_428930, { AGDATA_SELF_OBJ, AGDATA_TARGET_OBJ }, -1, 0x90000000, 0, 2, 0 },
-        /*  2 */ { sub_425130, { AGDATA_SELF_OBJ, AGDATA_TARGET_OBJ }, -1, 0x40000000 | AG_MOVE_NEAR_OBJ, 0, 3, 0 },
-        /*  3 */ { sub_4284A0, { AGDATA_TARGET_OBJ, -1 }, -1, 4, 0, 5, 0 },
-        /*  4 */ { sub_428A10, { AGDATA_SELF_OBJ, AGDATA_TARGET_OBJ }, -1, 0x90000000, 0, 0x90000000, 0 },
-        /*  5 */ { sub_42BE50, { AGDATA_TARGET_OBJ, -1 }, -1, 0x90000000, 0, 6, 0 },
-        /*  6 */ { sub_4284F0, { AGDATA_TARGET_OBJ, -1 }, -1, 0x70000000 | AG_CLOSE_DOOR, 0, 0x70000000 | AG_OPEN_DOOR, 0 },
+        /*  1 */ { sub_428930, { AGDATA_SELF_OBJ, AGDATA_TARGET_OBJ }, -1, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE, 2, ANIM_DELAY_NONE },
+        /*  2 */ { sub_425130, { AGDATA_SELF_OBJ, AGDATA_TARGET_OBJ }, -1, ANIM_FLOW_PUSH | AG_MOVE_NEAR_OBJ, ANIM_DELAY_NONE, 3, ANIM_DELAY_NONE },
+        /*  3 */ { sub_4284A0, { AGDATA_TARGET_OBJ, -1 }, -1, 4, ANIM_DELAY_NONE, 5, ANIM_DELAY_NONE },
+        /*  4 */ { sub_428A10, { AGDATA_SELF_OBJ, AGDATA_TARGET_OBJ }, -1, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE },
+        /*  5 */ { sub_42BE50, { AGDATA_TARGET_OBJ, -1 }, -1, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE, 6, ANIM_DELAY_NONE },
+        /*  6 */ { sub_4284F0, { AGDATA_TARGET_OBJ, -1 }, -1, ANIM_FLOW_REPLACE_GOAL | AG_CLOSE_DOOR, ANIM_DELAY_NONE, ANIM_FLOW_REPLACE_GOAL | AG_OPEN_DOOR, ANIM_DELAY_NONE },
         /*  7 */ { 0 },
         /*  8 */ { 0 },
         /*  9 */ { 0 },
@@ -1265,7 +1265,7 @@ static AnimGoalNode anim_goal_node_use_object = {
         /* 12 */ { 0 },
         /* 13 */ { 0 },
         /* 14 */ { 0 },
-        /* 15 */ { NULL, { -1, -1 }, 1, 0, 0, 0, 0 },
+        /* 15 */ { NULL, { -1, -1 }, 1, 0, ANIM_DELAY_NONE, 0, ANIM_DELAY_NONE },
     },
 };
 
@@ -1278,9 +1278,9 @@ static AnimGoalNode anim_goal_node_use_item_on_object = {
     0,
     { -1, -1, -1 },
     {
-        /*  1 */ { sub_42BEA0, { -1, -1 }, 1, 0x90000000, 0, 2, 0 },
-        /*  2 */ { sub_425130, { AGDATA_SELF_OBJ, AGDATA_TARGET_OBJ }, -1, 0x40000000 | AG_MOVE_NEAR_OBJ, 0, 3, 0 },
-        /*  3 */ { sub_428CD0, { AGDATA_SELF_OBJ, AGDATA_TARGET_OBJ }, -1, 0x90000000, 0, 0x90000000, 0 },
+        /*  1 */ { sub_42BEA0, { -1, -1 }, 1, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE, 2, ANIM_DELAY_NONE },
+        /*  2 */ { sub_425130, { AGDATA_SELF_OBJ, AGDATA_TARGET_OBJ }, -1, ANIM_FLOW_PUSH | AG_MOVE_NEAR_OBJ, ANIM_DELAY_NONE, 3, ANIM_DELAY_NONE },
+        /*  3 */ { sub_428CD0, { AGDATA_SELF_OBJ, AGDATA_TARGET_OBJ }, -1, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE },
         /*  4 */ { 0 },
         /*  5 */ { 0 },
         /*  6 */ { 0 },
@@ -1292,7 +1292,7 @@ static AnimGoalNode anim_goal_node_use_item_on_object = {
         /* 12 */ { 0 },
         /* 13 */ { 0 },
         /* 14 */ { 0 },
-        /* 15 */ { NULL, { -1, -1 }, 1, 0, 0, 0, 0 },
+        /* 15 */ { NULL, { -1, -1 }, 1, 0, ANIM_DELAY_NONE, 0, ANIM_DELAY_NONE },
     },
 };
 
@@ -1305,9 +1305,9 @@ static AnimGoalNode anim_goal_node_use_item_on_object_with_skill = {
     0,
     { -1, -1, -1 },
     {
-        /*  1 */ { sub_42BEA0, { -1, -1 }, 1, 0x90000000, 0, 2, 0 },
-        /*  2 */ { sub_425130, { AGDATA_SELF_OBJ, AGDATA_TARGET_OBJ }, -1, 0x40000000 | AG_MOVE_NEAR_OBJ, 0, 3, 0 },
-        /*  3 */ { sub_428E10, { AGDATA_SELF_OBJ, AGDATA_TARGET_OBJ }, -1, 0x90000000, 0, 0x90000000, 0 },
+        /*  1 */ { sub_42BEA0, { -1, -1 }, 1, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE, 2, ANIM_DELAY_NONE },
+        /*  2 */ { sub_425130, { AGDATA_SELF_OBJ, AGDATA_TARGET_OBJ }, -1, ANIM_FLOW_PUSH | AG_MOVE_NEAR_OBJ, ANIM_DELAY_NONE, 3, ANIM_DELAY_NONE },
+        /*  3 */ { sub_428E10, { AGDATA_SELF_OBJ, AGDATA_TARGET_OBJ }, -1, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE },
         /*  4 */ { 0 },
         /*  5 */ { 0 },
         /*  6 */ { 0 },
@@ -1319,7 +1319,7 @@ static AnimGoalNode anim_goal_node_use_item_on_object_with_skill = {
         /* 12 */ { 0 },
         /* 13 */ { 0 },
         /* 14 */ { 0 },
-        /* 15 */ { NULL, { -1, -1 }, 1, 0, 0, 0, 0 },
+        /* 15 */ { NULL, { -1, -1 }, 1, 0, ANIM_DELAY_NONE, 0, ANIM_DELAY_NONE },
     },
 };
 
@@ -1332,9 +1332,9 @@ static AnimGoalNode anim_goal_node_use_item_on_tile = {
     0,
     { -1, -1, -1 },
     {
-        /*  1 */ { sub_42BEA0, { -1, -1 }, 1, 0x90000000, 0, 2, 0 },
-        /*  2 */ { sub_425270, { AGDATA_SELF_OBJ, AGDATA_TARGET_TILE }, -1, 0x40000000 | AG_MOVE_NEAR_TILE, 0, 3, 0 },
-        /*  3 */ { sub_429040, { AGDATA_SELF_OBJ, AGDATA_TARGET_TILE }, -1, 0x90000000, 0, 0x90000000, 0 },
+        /*  1 */ { sub_42BEA0, { -1, -1 }, 1, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE, 2, ANIM_DELAY_NONE },
+        /*  2 */ { sub_425270, { AGDATA_SELF_OBJ, AGDATA_TARGET_TILE }, -1, ANIM_FLOW_PUSH | AG_MOVE_NEAR_TILE, ANIM_DELAY_NONE, 3, ANIM_DELAY_NONE },
+        /*  3 */ { sub_429040, { AGDATA_SELF_OBJ, AGDATA_TARGET_TILE }, -1, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE },
         /*  4 */ { 0 },
         /*  5 */ { 0 },
         /*  6 */ { 0 },
@@ -1346,7 +1346,7 @@ static AnimGoalNode anim_goal_node_use_item_on_tile = {
         /* 12 */ { 0 },
         /* 13 */ { 0 },
         /* 14 */ { 0 },
-        /* 15 */ { NULL, { -1, -1 }, 1, 0, 0, 0, 0 },
+        /* 15 */ { NULL, { -1, -1 }, 1, 0, ANIM_DELAY_NONE, 0, ANIM_DELAY_NONE },
     },
 };
 
@@ -1359,9 +1359,9 @@ static AnimGoalNode anim_goal_node_use_item_on_tile_with_skill = {
     0,
     { -1, -1, -1 },
     {
-        /*  1 */ { sub_42BEA0, { -1, -1 }, 1, 0x90000000, 0, 2, 0 },
-        /*  2 */ { sub_425270, { AGDATA_SELF_OBJ, AGDATA_TARGET_TILE }, -1, 0x40000000 | AG_MOVE_NEAR_TILE, 0, 3, 0 },
-        /*  3 */ { sub_429160, { AGDATA_SELF_OBJ, AGDATA_TARGET_TILE }, -1, 0x90000000, 0, 0x90000000, 0 },
+        /*  1 */ { sub_42BEA0, { -1, -1 }, 1, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE, 2, ANIM_DELAY_NONE },
+        /*  2 */ { sub_425270, { AGDATA_SELF_OBJ, AGDATA_TARGET_TILE }, -1, ANIM_FLOW_PUSH | AG_MOVE_NEAR_TILE, ANIM_DELAY_NONE, 3, ANIM_DELAY_NONE },
+        /*  3 */ { sub_429160, { AGDATA_SELF_OBJ, AGDATA_TARGET_TILE }, -1, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE },
         /*  4 */ { 0 },
         /*  5 */ { 0 },
         /*  6 */ { 0 },
@@ -1373,7 +1373,7 @@ static AnimGoalNode anim_goal_node_use_item_on_tile_with_skill = {
         /* 12 */ { 0 },
         /* 13 */ { 0 },
         /* 14 */ { 0 },
-        /* 15 */ { NULL, { -1, -1 }, 1, 0, 0, 0, 0 },
+        /* 15 */ { NULL, { -1, -1 }, 1, 0, ANIM_DELAY_NONE, 0, ANIM_DELAY_NONE },
     },
 };
 
@@ -1386,10 +1386,10 @@ static AnimGoalNode anim_goal_node_knockback = {
     0,
     { -1, -1, -1 },
     {
-        /*  1 */ { sub_424D90, { AGDATA_SELF_OBJ, AGDATA_TARGET_TILE }, -1, 2, 0, 0x30000000, 0 },
-        /*  2 */ { sub_425740, { AGDATA_SELF_OBJ, -1 }, -1, 3, 0, 0x40000000 | AG_ATTEMPT_MOVE_STRAIGHT_KNOCKBACK, 0 },
-        /*  3 */ { sub_4268F0, { AGDATA_SELF_OBJ, AGDATA_TARGET_TILE }, -1, 4, 0, 0x40000000 | AG_ATTEMPT_MOVE_STRAIGHT_KNOCKBACK, 0 },
-        /*  4 */ { sub_42FEA0, { AGDATA_SELF_OBJ, -1 }, -1, 0x90000000, 0, 0x90000000, 0 },
+        /*  1 */ { sub_424D90, { AGDATA_SELF_OBJ, AGDATA_TARGET_TILE }, -1, 2, ANIM_DELAY_NONE, ANIM_FLOW_POP_GOAL, ANIM_DELAY_NONE },
+        /*  2 */ { sub_425740, { AGDATA_SELF_OBJ, -1 }, -1, 3, ANIM_DELAY_NONE, ANIM_FLOW_PUSH | AG_ATTEMPT_MOVE_STRAIGHT_KNOCKBACK, ANIM_DELAY_NONE },
+        /*  3 */ { sub_4268F0, { AGDATA_SELF_OBJ, AGDATA_TARGET_TILE }, -1, 4, ANIM_DELAY_NONE, ANIM_FLOW_PUSH | AG_ATTEMPT_MOVE_STRAIGHT_KNOCKBACK, ANIM_DELAY_NONE },
+        /*  4 */ { sub_42FEA0, { AGDATA_SELF_OBJ, -1 }, -1, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE },
         /*  5 */ { 0 },
         /*  6 */ { 0 },
         /*  7 */ { 0 },
@@ -1400,7 +1400,7 @@ static AnimGoalNode anim_goal_node_knockback = {
         /* 12 */ { 0 },
         /* 13 */ { 0 },
         /* 14 */ { 0 },
-        /* 15 */ { NULL, { -1, -1 }, 1, 0, 0, 0, 0 },
+        /* 15 */ { NULL, { -1, -1 }, 1, 0, ANIM_DELAY_NONE, 0, ANIM_DELAY_NONE },
     },
 };
 
@@ -1413,10 +1413,10 @@ static AnimGoalNode anim_goal_node_floating = {
     1,
     { -1, -1, -1 },
     {
-        /*  1 */ { sub_431130, { AGDATA_SELF_OBJ, -1 }, -1, 2, 0, 3, 0 },
-        /*  2 */ { sub_431150, { AGDATA_SELF_OBJ, -1 }, -1, 4, 100, 0x10000000, 100 },
-        /*  3 */ { sub_4311F0, { AGDATA_SELF_OBJ, -1 }, -1, 0x90000000, 0, 0x10000000, 0 },
-        /*  4 */ { sub_431290, { AGDATA_SELF_OBJ, -1 }, -1, 0x90000000, 0, 0x90000000, 0 },
+        /*  1 */ { sub_431130, { AGDATA_SELF_OBJ, -1 }, -1, 2, ANIM_DELAY_NONE, 3, ANIM_DELAY_NONE },
+        /*  2 */ { sub_431150, { AGDATA_SELF_OBJ, -1 }, -1, 4, 100, ANIM_FLOW_YIELD, 100 },
+        /*  3 */ { sub_4311F0, { AGDATA_SELF_OBJ, -1 }, -1, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE, ANIM_FLOW_YIELD, ANIM_DELAY_NONE },
+        /*  4 */ { sub_431290, { AGDATA_SELF_OBJ, -1 }, -1, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE },
         /*  5 */ { 0 },
         /*  6 */ { 0 },
         /*  7 */ { 0 },
@@ -1427,7 +1427,7 @@ static AnimGoalNode anim_goal_node_floating = {
         /* 12 */ { 0 },
         /* 13 */ { 0 },
         /* 14 */ { 0 },
-        /* 15 */ { NULL, { -1, -1 }, 1, 0, 0, 0, 0 },
+        /* 15 */ { NULL, { -1, -1 }, 1, 0, ANIM_DELAY_NONE, 0, ANIM_DELAY_NONE },
     },
 };
 
@@ -1440,10 +1440,10 @@ static AnimGoalNode anim_goal_node_eye_candy = {
     0,
     { -1, -1, -1 },
     {
-        /*  1 */ { sub_431320, { AGDATA_SELF_OBJ, -1 }, -1, 2, 0, 3, 0 },
-        /*  2 */ { AGupdateAnimEyeCandy, { AGDATA_SELF_OBJ, -1 }, -1, 4, 0, 0x10000000, -2 },
-        /*  3 */ { AGbeginAnimEyeCandy, { AGDATA_SELF_OBJ, -1 }, -1, 0x90000000, 0, 0x10000000, -2 },
-        /*  4 */ { AGendAnimEyeCandy, { AGDATA_SELF_OBJ, -1 }, -1, 3, 0, 0x30000000, 0 },
+        /*  1 */ { sub_431320, { AGDATA_SELF_OBJ, -1 }, -1, 2, ANIM_DELAY_NONE, 3, ANIM_DELAY_NONE },
+        /*  2 */ { AGupdateAnimEyeCandy, { AGDATA_SELF_OBJ, -1 }, -1, 4, ANIM_DELAY_NONE, ANIM_FLOW_YIELD, ANIM_DELAY_PAUSE_TIME },
+        /*  3 */ { AGbeginAnimEyeCandy, { AGDATA_SELF_OBJ, -1 }, -1, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE, ANIM_FLOW_YIELD, ANIM_DELAY_PAUSE_TIME },
+        /*  4 */ { AGendAnimEyeCandy, { AGDATA_SELF_OBJ, -1 }, -1, 3, ANIM_DELAY_NONE, ANIM_FLOW_POP_GOAL, ANIM_DELAY_NONE },
         /*  5 */ { 0 },
         /*  6 */ { 0 },
         /*  7 */ { 0 },
@@ -1454,7 +1454,7 @@ static AnimGoalNode anim_goal_node_eye_candy = {
         /* 12 */ { 0 },
         /* 13 */ { 0 },
         /* 14 */ { 0 },
-        /* 15 */ { sub_431B20, { AGDATA_SELF_OBJ, -1 }, 1, 0, 0, 0, 0 },
+        /* 15 */ { sub_431B20, { AGDATA_SELF_OBJ, -1 }, 1, 0, ANIM_DELAY_NONE, 0, ANIM_DELAY_NONE },
     },
 };
 
@@ -1467,10 +1467,10 @@ static AnimGoalNode anim_goal_node_eye_candy_reverse = {
     0,
     { -1, -1, -1 },
     {
-        /*  1 */ { sub_431320, { AGDATA_SELF_OBJ, -1 }, -1, 2, 0, 3, 0 },
-        /*  2 */ { AGupdateAnimEyeCandyReverse, { AGDATA_SELF_OBJ, -1 }, -1, 4, 0, 0x10000000, -2 },
-        /*  3 */ { AGbeginAnimEyeCandyReverse, { AGDATA_SELF_OBJ, -1 }, -1, 0x90000000, 0, 0x10000000, -2 },
-        /*  4 */ { AGendAnimEyeCandyReverse, { AGDATA_SELF_OBJ, -1 }, -1, 3, 0, 0x30000000, 0 },
+        /*  1 */ { sub_431320, { AGDATA_SELF_OBJ, -1 }, -1, 2, ANIM_DELAY_NONE, 3, ANIM_DELAY_NONE },
+        /*  2 */ { AGupdateAnimEyeCandyReverse, { AGDATA_SELF_OBJ, -1 }, -1, 4, ANIM_DELAY_NONE, ANIM_FLOW_YIELD, ANIM_DELAY_PAUSE_TIME },
+        /*  3 */ { AGbeginAnimEyeCandyReverse, { AGDATA_SELF_OBJ, -1 }, -1, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE, ANIM_FLOW_YIELD, ANIM_DELAY_PAUSE_TIME },
+        /*  4 */ { AGendAnimEyeCandyReverse, { AGDATA_SELF_OBJ, -1 }, -1, 3, ANIM_DELAY_NONE, ANIM_FLOW_POP_GOAL, ANIM_DELAY_NONE },
         /*  5 */ { 0 },
         /*  6 */ { 0 },
         /*  7 */ { 0 },
@@ -1481,7 +1481,7 @@ static AnimGoalNode anim_goal_node_eye_candy_reverse = {
         /* 12 */ { 0 },
         /* 13 */ { 0 },
         /* 14 */ { 0 },
-        /* 15 */ { sub_431B20, { AGDATA_SELF_OBJ, -1 }, 1, 0, 0, 0, 0 },
+        /* 15 */ { sub_431B20, { AGDATA_SELF_OBJ, -1 }, 1, 0, ANIM_DELAY_NONE, 0, ANIM_DELAY_NONE },
     },
 };
 
@@ -1494,12 +1494,12 @@ static AnimGoalNode anim_goal_node_eye_candy_callback = {
     0,
     { -1, -1, -1 },
     {
-        /*  1 */ { sub_431320, { AGDATA_SELF_OBJ, -1 }, -1, 2, 0, 3, 0 },
-        /*  2 */ { AGupdateAnimEyeCandy, { AGDATA_SELF_OBJ, -1 }, -1, 4, 0, 5, 0 },
-        /*  3 */ { AGbeginAnimEyeCandy, { AGDATA_SELF_OBJ, -1 }, -1, 0x90000000, 0, 0x10000000, -2 },
-        /*  4 */ { AGendAnimEyeCandy, { AGDATA_SELF_OBJ, -1 }, -1, 3, 0, 0x30000000, 0 },
-        /*  5 */ { sub_42CAA0, { AGDATA_SELF_OBJ, AGDATA_ANIM_ID }, -1, 0x10000000, -2, 6, 0 },
-        /*  6 */ { AGexecuteMagicTechCallback, { AGDATA_SPELL_DATA, -1 }, -1, 4, 0, 0x10000000, -2 },
+        /*  1 */ { sub_431320, { AGDATA_SELF_OBJ, -1 }, -1, 2, ANIM_DELAY_NONE, 3, ANIM_DELAY_NONE },
+        /*  2 */ { AGupdateAnimEyeCandy, { AGDATA_SELF_OBJ, -1 }, -1, 4, ANIM_DELAY_NONE, 5, ANIM_DELAY_NONE },
+        /*  3 */ { AGbeginAnimEyeCandy, { AGDATA_SELF_OBJ, -1 }, -1, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE, ANIM_FLOW_YIELD, ANIM_DELAY_PAUSE_TIME },
+        /*  4 */ { AGendAnimEyeCandy, { AGDATA_SELF_OBJ, -1 }, -1, 3, ANIM_DELAY_NONE, ANIM_FLOW_POP_GOAL, ANIM_DELAY_NONE },
+        /*  5 */ { sub_42CAA0, { AGDATA_SELF_OBJ, AGDATA_ANIM_ID }, -1, ANIM_FLOW_YIELD, ANIM_DELAY_PAUSE_TIME, 6, ANIM_DELAY_NONE },
+        /*  6 */ { AGexecuteMagicTechCallback, { AGDATA_SPELL_DATA, -1 }, -1, 4, ANIM_DELAY_NONE, ANIM_FLOW_YIELD, ANIM_DELAY_PAUSE_TIME },
         /*  7 */ { 0 },
         /*  8 */ { 0 },
         /*  9 */ { 0 },
@@ -1508,7 +1508,7 @@ static AnimGoalNode anim_goal_node_eye_candy_callback = {
         /* 12 */ { 0 },
         /* 13 */ { 0 },
         /* 14 */ { 0 },
-        /* 15 */ { sub_431B20, { AGDATA_SELF_OBJ, -1 }, 1, 0, 0, 0, 0 },
+        /* 15 */ { sub_431B20, { AGDATA_SELF_OBJ, -1 }, 1, 0, ANIM_DELAY_NONE, 0, ANIM_DELAY_NONE },
     },
 };
 
@@ -1521,12 +1521,12 @@ static AnimGoalNode anim_goal_node_eye_candy_reverse_callback = {
     0,
     { -1, -1, -1 },
     {
-        /*  1 */ { sub_431320, { AGDATA_SELF_OBJ, -1 }, -1, 2, 0, 3, 0 },
-        /*  2 */ { AGupdateAnimEyeCandyReverse, { AGDATA_SELF_OBJ, -1 }, -1, 4, 0, 5, 0 },
-        /*  3 */ { AGbeginAnimEyeCandyReverse, { AGDATA_SELF_OBJ, -1 }, -1, 0x90000000, 0, 0x10000000, -2 },
-        /*  4 */ { AGendAnimEyeCandyReverse, { AGDATA_SELF_OBJ, -1 }, -1, 3, 0, 0x30000000, 0 },
-        /*  5 */ { sub_42CAA0, { AGDATA_SELF_OBJ, AGDATA_ANIM_ID }, -1, 0x10000000, -2, 6, 0 },
-        /*  6 */ { AGexecuteMagicTechCallback, { AGDATA_SPELL_DATA, -1 }, -1, 4, 0, 0x10000000, -2 },
+        /*  1 */ { sub_431320, { AGDATA_SELF_OBJ, -1 }, -1, 2, ANIM_DELAY_NONE, 3, ANIM_DELAY_NONE },
+        /*  2 */ { AGupdateAnimEyeCandyReverse, { AGDATA_SELF_OBJ, -1 }, -1, 4, ANIM_DELAY_NONE, 5, ANIM_DELAY_NONE },
+        /*  3 */ { AGbeginAnimEyeCandyReverse, { AGDATA_SELF_OBJ, -1 }, -1, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE, ANIM_FLOW_YIELD, ANIM_DELAY_PAUSE_TIME },
+        /*  4 */ { AGendAnimEyeCandyReverse, { AGDATA_SELF_OBJ, -1 }, -1, 3, ANIM_DELAY_NONE, ANIM_FLOW_POP_GOAL, ANIM_DELAY_NONE },
+        /*  5 */ { sub_42CAA0, { AGDATA_SELF_OBJ, AGDATA_ANIM_ID }, -1, ANIM_FLOW_YIELD, ANIM_DELAY_PAUSE_TIME, 6, ANIM_DELAY_NONE },
+        /*  6 */ { AGexecuteMagicTechCallback, { AGDATA_SPELL_DATA, -1 }, -1, 4, ANIM_DELAY_NONE, ANIM_FLOW_YIELD, ANIM_DELAY_PAUSE_TIME },
         /*  7 */ { 0 },
         /*  8 */ { 0 },
         /*  9 */ { 0 },
@@ -1535,7 +1535,7 @@ static AnimGoalNode anim_goal_node_eye_candy_reverse_callback = {
         /* 12 */ { 0 },
         /* 13 */ { 0 },
         /* 14 */ { 0 },
-        /* 15 */ { sub_431B20, { AGDATA_SELF_OBJ, -1 }, 1, 0, 0, 0, 0 },
+        /* 15 */ { sub_431B20, { AGDATA_SELF_OBJ, -1 }, 1, 0, ANIM_DELAY_NONE, 0, ANIM_DELAY_NONE },
     },
 };
 
@@ -1548,8 +1548,8 @@ static AnimGoalNode anim_goal_node_close_door = {
     0,
     { -1, -1, -1 },
     {
-        /*  1 */ { sub_4284A0, { AGDATA_SCRATCH_OBJ, -1 }, -1, 0x30000000, 0, 2, 0 },
-        /*  2 */ { sub_4284F0, { AGDATA_SCRATCH_OBJ, -1 }, -1, 0x70000000 | AG_ATTEMPT_CLOSE_DOOR, 0, 0x90000000, 0 },
+        /*  1 */ { sub_4284A0, { AGDATA_SCRATCH_OBJ, -1 }, -1, ANIM_FLOW_POP_GOAL, ANIM_DELAY_NONE, 2, ANIM_DELAY_NONE },
+        /*  2 */ { sub_4284F0, { AGDATA_SCRATCH_OBJ, -1 }, -1, ANIM_FLOW_REPLACE_GOAL | AG_ATTEMPT_CLOSE_DOOR, ANIM_DELAY_NONE, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE },
         /*  3 */ { 0 },
         /*  4 */ { 0 },
         /*  5 */ { 0 },
@@ -1562,7 +1562,7 @@ static AnimGoalNode anim_goal_node_close_door = {
         /* 12 */ { 0 },
         /* 13 */ { 0 },
         /* 14 */ { 0 },
-        /* 15 */ { NULL, { -1, -1 }, 1, 0, 0, 0, 0 },
+        /* 15 */ { NULL, { -1, -1 }, 1, 0, ANIM_DELAY_NONE, 0, ANIM_DELAY_NONE },
     },
 };
 
@@ -1575,10 +1575,10 @@ static AnimGoalNode anim_goal_node_attempt_close_door = {
     0,
     { -1, -1, -1 },
     {
-        /*  1 */ { sub_4284A0, { AGDATA_SCRATCH_OBJ, -1 }, -1, 0x30000000, 0, 2, 0 },
-        /*  2 */ { sub_4284F0, { AGDATA_SCRATCH_OBJ, -1 }, -1, 3, 0, 0x90000000, 0 },
-        /*  3 */ { sub_428620, { AGDATA_SCRATCH_OBJ, 0 }, -1, 0x90000000, 0, 4, 0 },
-        /*  4 */ { sub_4246E0, { AGDATA_SCRATCH_OBJ, 0 }, AG_ANIMATE_DOOR_CLOSED, 0x90000000, 0, 0x30000000, 0 },
+        /*  1 */ { sub_4284A0, { AGDATA_SCRATCH_OBJ, -1 }, -1, ANIM_FLOW_POP_GOAL, ANIM_DELAY_NONE, 2, ANIM_DELAY_NONE },
+        /*  2 */ { sub_4284F0, { AGDATA_SCRATCH_OBJ, -1 }, -1, 3, ANIM_DELAY_NONE, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE },
+        /*  3 */ { sub_428620, { AGDATA_SCRATCH_OBJ, 0 }, -1, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE, 4, ANIM_DELAY_NONE },
+        /*  4 */ { sub_4246E0, { AGDATA_SCRATCH_OBJ, 0 }, AG_ANIMATE_DOOR_CLOSED, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE, ANIM_FLOW_POP_GOAL, ANIM_DELAY_NONE },
         /*  5 */ { 0 },
         /*  6 */ { 0 },
         /*  7 */ { 0 },
@@ -1589,7 +1589,7 @@ static AnimGoalNode anim_goal_node_attempt_close_door = {
         /* 12 */ { 0 },
         /* 13 */ { 0 },
         /* 14 */ { 0 },
-        /* 15 */ { NULL, { -1, -1 }, 1, 0, 0, 0, 0 },
+        /* 15 */ { NULL, { -1, -1 }, 1, 0, ANIM_DELAY_NONE, 0, ANIM_DELAY_NONE },
     },
 };
 
@@ -1602,10 +1602,10 @@ static AnimGoalNode anim_goal_node_animate_reverse = {
     0,
     { -1, -1, -1 },
     {
-        /*  1 */ { sub_42CA90, { AGDATA_SELF_OBJ, -1 }, -1, 2, 0, 3, 0 },
-        /*  2 */ { AGupdateAnimAnimReverse, { AGDATA_SELF_OBJ, -1 }, -1, 0x30000000, -2, 0x10000000, -2 },
-        /*  3 */ { AGbeginAnimAnimReverse, { AGDATA_SELF_OBJ, AGDATA_ANIM_ID }, -1, 4, 0, 0x10000000, 0 },
-        /*  4 */ { sub_433270, { AGDATA_SELF_OBJ, -1 }, 1, 0x90000000, 0, 0x90000000, 0 },
+        /*  1 */ { sub_42CA90, { AGDATA_SELF_OBJ, -1 }, -1, 2, ANIM_DELAY_NONE, 3, ANIM_DELAY_NONE },
+        /*  2 */ { AGupdateAnimAnimReverse, { AGDATA_SELF_OBJ, -1 }, -1, ANIM_FLOW_POP_GOAL, ANIM_DELAY_PAUSE_TIME, ANIM_FLOW_YIELD, ANIM_DELAY_PAUSE_TIME },
+        /*  3 */ { AGbeginAnimAnimReverse, { AGDATA_SELF_OBJ, AGDATA_ANIM_ID }, -1, 4, ANIM_DELAY_NONE, ANIM_FLOW_YIELD, ANIM_DELAY_NONE },
+        /*  4 */ { sub_433270, { AGDATA_SELF_OBJ, -1 }, 1, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE },
         /*  5 */ { 0 },
         /*  6 */ { 0 },
         /*  7 */ { 0 },
@@ -1616,7 +1616,7 @@ static AnimGoalNode anim_goal_node_animate_reverse = {
         /* 12 */ { 0 },
         /* 13 */ { 0 },
         /* 14 */ { 0 },
-        /* 15 */ { sub_42B090, { AGDATA_SELF_OBJ, -1 }, 1, 0, 0, 0, 0 },
+        /* 15 */ { sub_42B090, { AGDATA_SELF_OBJ, -1 }, 1, 0, ANIM_DELAY_NONE, 0, ANIM_DELAY_NONE },
     },
 };
 
@@ -1629,13 +1629,13 @@ static AnimGoalNode anim_goal_node_move_away_from_obj = {
     0,
     { -1, -1, -1 },
     {
-        /*  1 */ { sub_426F10, { AGDATA_SELF_OBJ, -1 }, -1, 2, 0, 0x40000000 | AG_ANIM_GET_UP, 0 },
-        /*  2 */ { sub_426E80, { AGDATA_SELF_OBJ, -1 }, -1, 3, 0, 0x40000000 | AG_UNCONCEAL, 0 },
-        /*  3 */ { sub_425130, { AGDATA_SELF_OBJ, AGDATA_TARGET_OBJ }, -1, 0x30000000, 0, 5, 0 },
-        /*  4 */ { sub_425740, { AGDATA_SELF_OBJ, -1 }, -1, 5, 0, 0x40000000 | AG_ATTEMPT_MOVE, 0 },
-        /*  5 */ { sub_426A80, { AGDATA_SELF_OBJ, AGDATA_TARGET_OBJ }, -1, 6, 0, 0x40000000 | AG_ATTEMPT_MOVE, 0 },
-        /*  6 */ { sub_42C240, { AGDATA_SELF_OBJ, AGDATA_TARGET_OBJ }, -1, 0x90000000, 0, 7, 0 },
-        /*  7 */ { sub_4293D0, { AGDATA_SELF_OBJ, -1 }, -1, 0x90000000, 0, 0x90000000, 0 },
+        /*  1 */ { sub_426F10, { AGDATA_SELF_OBJ, -1 }, -1, 2, ANIM_DELAY_NONE, ANIM_FLOW_PUSH | AG_ANIM_GET_UP, ANIM_DELAY_NONE },
+        /*  2 */ { sub_426E80, { AGDATA_SELF_OBJ, -1 }, -1, 3, ANIM_DELAY_NONE, ANIM_FLOW_PUSH | AG_UNCONCEAL, ANIM_DELAY_NONE },
+        /*  3 */ { sub_425130, { AGDATA_SELF_OBJ, AGDATA_TARGET_OBJ }, -1, ANIM_FLOW_POP_GOAL, ANIM_DELAY_NONE, 5, ANIM_DELAY_NONE },
+        /*  4 */ { sub_425740, { AGDATA_SELF_OBJ, -1 }, -1, 5, ANIM_DELAY_NONE, ANIM_FLOW_PUSH | AG_ATTEMPT_MOVE, ANIM_DELAY_NONE },
+        /*  5 */ { sub_426A80, { AGDATA_SELF_OBJ, AGDATA_TARGET_OBJ }, -1, 6, ANIM_DELAY_NONE, ANIM_FLOW_PUSH | AG_ATTEMPT_MOVE, ANIM_DELAY_NONE },
+        /*  6 */ { sub_42C240, { AGDATA_SELF_OBJ, AGDATA_TARGET_OBJ }, -1, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE, 7, ANIM_DELAY_NONE },
+        /*  7 */ { sub_4293D0, { AGDATA_SELF_OBJ, -1 }, -1, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE },
         /*  8 */ { 0 },
         /*  9 */ { 0 },
         /* 10 */ { 0 },
@@ -1643,7 +1643,7 @@ static AnimGoalNode anim_goal_node_move_away_from_obj = {
         /* 12 */ { 0 },
         /* 13 */ { 0 },
         /* 14 */ { 0 },
-        /* 15 */ { sub_42B090, { AGDATA_SELF_OBJ, -1 }, 1, 0, 0, 0, 0 },
+        /* 15 */ { sub_42B090, { AGDATA_SELF_OBJ, -1 }, 1, 0, ANIM_DELAY_NONE, 0, ANIM_DELAY_NONE },
     },
 };
 
@@ -1656,7 +1656,7 @@ static AnimGoalNode anim_goal_node_rotate = {
     0,
     { -1, -1, -1 },
     {
-        /*  1 */ { AGperformRotateAnim, { AGDATA_SELF_OBJ, AGDATA_SCRATCH_VAL1 }, -1, 0x30000000, 0, 0x10000000, 30 },
+        /*  1 */ { AGperformRotateAnim, { AGDATA_SELF_OBJ, AGDATA_SCRATCH_VAL1 }, -1, ANIM_FLOW_POP_GOAL, ANIM_DELAY_NONE, ANIM_FLOW_YIELD, 30 },
         /*  2 */ { 0 },
         /*  3 */ { 0 },
         /*  4 */ { 0 },
@@ -1670,7 +1670,7 @@ static AnimGoalNode anim_goal_node_rotate = {
         /* 12 */ { 0 },
         /* 13 */ { 0 },
         /* 14 */ { 0 },
-        /* 15 */ { sub_42C650, { AGDATA_SELF_OBJ, AGDATA_SCRATCH_VAL1 }, -1, 0, 0, 0, 0 },
+        /* 15 */ { sub_42C650, { AGDATA_SELF_OBJ, AGDATA_SCRATCH_VAL1 }, -1, 0, ANIM_DELAY_NONE, 0, ANIM_DELAY_NONE },
     },
 };
 
@@ -1683,11 +1683,11 @@ static AnimGoalNode anim_goal_node_unconceal = {
     0,
     { -1, -1, -1 },
     {
-        /*  1 */ { sub_42CA90, { AGDATA_SELF_OBJ, -1 }, -1, 2, 0, 3, 0 },
-        /*  2 */ { AGupdateAnimAnimReverse, { AGDATA_SELF_OBJ, -1 }, -1, 0x30000000, -2, 0x10000000, -2 },
-        /*  3 */ { sub_42E6B0, { AGDATA_SELF_OBJ, -1 }, -1, 5, 0, 4, 0 },
-        /*  4 */ { AGbeginAnimAnimReverse, { AGDATA_SELF_OBJ, AGDATA_ANIM_ID }, -1, 5, 0, 0x10000000, 0 },
-        /*  5 */ { sub_433270, { AGDATA_SELF_OBJ, -1 }, 1, 0x90000000, 0, 0x90000000, 0 },
+        /*  1 */ { sub_42CA90, { AGDATA_SELF_OBJ, -1 }, -1, 2, ANIM_DELAY_NONE, 3, ANIM_DELAY_NONE },
+        /*  2 */ { AGupdateAnimAnimReverse, { AGDATA_SELF_OBJ, -1 }, -1, ANIM_FLOW_POP_GOAL, ANIM_DELAY_PAUSE_TIME, ANIM_FLOW_YIELD, ANIM_DELAY_PAUSE_TIME },
+        /*  3 */ { sub_42E6B0, { AGDATA_SELF_OBJ, -1 }, -1, 5, ANIM_DELAY_NONE, 4, ANIM_DELAY_NONE },
+        /*  4 */ { AGbeginAnimAnimReverse, { AGDATA_SELF_OBJ, AGDATA_ANIM_ID }, -1, 5, ANIM_DELAY_NONE, ANIM_FLOW_YIELD, ANIM_DELAY_NONE },
+        /*  5 */ { sub_433270, { AGDATA_SELF_OBJ, -1 }, 1, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE },
         /*  6 */ { 0 },
         /*  7 */ { 0 },
         /*  8 */ { 0 },
@@ -1697,7 +1697,7 @@ static AnimGoalNode anim_goal_node_unconceal = {
         /* 12 */ { 0 },
         /* 13 */ { 0 },
         /* 14 */ { 0 },
-        /* 15 */ { sub_42AFB0, { AGDATA_SELF_OBJ, -1 }, 1, 0, 0, 0, 0 },
+        /* 15 */ { sub_42AFB0, { AGDATA_SELF_OBJ, -1 }, 1, 0, ANIM_DELAY_NONE, 0, ANIM_DELAY_NONE },
     },
 };
 
@@ -1710,21 +1710,21 @@ static AnimGoalNode anim_goal_node_run_near_tile = {
     0,
     { AG_MOVE_NEAR_TILE, AG_RUN_TO_TILE, -1 },
     {
-        /*  1 */ { sub_42B940, { -1, -1 }, -1, 2, 0, 2, 0 },
-        /*  2 */ { sub_424D90, { AGDATA_SELF_OBJ, AGDATA_TARGET_TILE }, -1, 3, 0, 0x30000000, 0 },
-        /*  3 */ { sub_426F10, { AGDATA_SELF_OBJ, -1 }, -1, 4, 0, 0x40000000 | AG_ANIM_GET_UP, 0 },
-        /*  4 */ { sub_426E80, { AGDATA_SELF_OBJ, -1 }, -1, 5, 0, 0x40000000 | AG_UNCONCEAL, 0 },
-        /*  5 */ { sub_425740, { AGDATA_SELF_OBJ, -1 }, -1, 6, 0, 0x40000000 | AG_ATTEMPT_MOVE, 0 },
-        /*  6 */ { sub_427730, { AGDATA_SELF_OBJ, AGDATA_TARGET_TILE }, -1, 8, 0, 7, 0 },
-        /*  7 */ { sub_42C610, { -1, -1 }, -1, 0x90000000, 0, 0x40000000 | AG_ROTATE, 0 },
-        /*  8 */ { sub_4246D0, { -1, -1 }, -1, 0x90000000, 0, 0x50000000 | AG_MOVE_TO_PAUSE, 1000 },
+        /*  1 */ { sub_42B940, { -1, -1 }, -1, 2, ANIM_DELAY_NONE, 2, ANIM_DELAY_NONE },
+        /*  2 */ { sub_424D90, { AGDATA_SELF_OBJ, AGDATA_TARGET_TILE }, -1, 3, ANIM_DELAY_NONE, ANIM_FLOW_POP_GOAL, ANIM_DELAY_NONE },
+        /*  3 */ { sub_426F10, { AGDATA_SELF_OBJ, -1 }, -1, 4, ANIM_DELAY_NONE, ANIM_FLOW_PUSH | AG_ANIM_GET_UP, ANIM_DELAY_NONE },
+        /*  4 */ { sub_426E80, { AGDATA_SELF_OBJ, -1 }, -1, 5, ANIM_DELAY_NONE, ANIM_FLOW_PUSH | AG_UNCONCEAL, ANIM_DELAY_NONE },
+        /*  5 */ { sub_425740, { AGDATA_SELF_OBJ, -1 }, -1, 6, ANIM_DELAY_NONE, ANIM_FLOW_PUSH | AG_ATTEMPT_MOVE, ANIM_DELAY_NONE },
+        /*  6 */ { sub_427730, { AGDATA_SELF_OBJ, AGDATA_TARGET_TILE }, -1, 8, ANIM_DELAY_NONE, 7, ANIM_DELAY_NONE },
+        /*  7 */ { sub_42C610, { -1, -1 }, -1, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE, ANIM_FLOW_PUSH | AG_ROTATE, ANIM_DELAY_NONE },
+        /*  8 */ { sub_4246D0, { -1, -1 }, -1, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE, ANIM_FLOW_PUSH | ANIM_FLOW_YIELD | AG_MOVE_TO_PAUSE, 1000 },
         /*  9 */ { 0 },
         /* 10 */ { 0 },
         /* 11 */ { 0 },
         /* 12 */ { 0 },
         /* 13 */ { 0 },
         /* 14 */ { 0 },
-        /* 15 */ { sub_42B090, { AGDATA_SELF_OBJ, -1 }, 1, 0, 0, 0, 0 },
+        /* 15 */ { sub_42B090, { AGDATA_SELF_OBJ, -1 }, 1, 0, ANIM_DELAY_NONE, 0, ANIM_DELAY_NONE },
     },
 };
 
@@ -1737,13 +1737,13 @@ static AnimGoalNode anim_goal_node_run_near_obj = {
     0,
     { -1, -1, -1 },
     {
-        /*  1 */ { sub_42B940, { -1, -1 }, -1, 2, 0, 2, 0 },
-        /*  2 */ { sub_425130, { AGDATA_SELF_OBJ, AGDATA_TARGET_OBJ }, -1, 3, 0, 0x30000000, 0 },
-        /*  3 */ { sub_426F10, { AGDATA_SELF_OBJ, -1 }, -1, 4, 0, 0x40000000 | AG_ANIM_GET_UP, 0 },
-        /*  4 */ { sub_426E80, { AGDATA_SELF_OBJ, -1 }, -1, 5, 0, 0x40000000 | AG_UNCONCEAL, 0 },
-        /*  5 */ { sub_425740, { AGDATA_SELF_OBJ, -1 }, -1, 6, 0, 0x40000000 | AG_ATTEMPT_MOVE, 0 },
-        /*  6 */ { sub_427990, { AGDATA_SELF_OBJ, AGDATA_TARGET_OBJ }, -1, 7, 0, 0x40000000 | AG_ATTEMPT_MOVE, 0 },
-        /*  7 */ { sub_4246D0, { -1, -1 }, -1, 0x90000000, 0, 0x50000000 | AG_MOVE_TO_PAUSE, 1000 },
+        /*  1 */ { sub_42B940, { -1, -1 }, -1, 2, ANIM_DELAY_NONE, 2, ANIM_DELAY_NONE },
+        /*  2 */ { sub_425130, { AGDATA_SELF_OBJ, AGDATA_TARGET_OBJ }, -1, 3, ANIM_DELAY_NONE, ANIM_FLOW_POP_GOAL, ANIM_DELAY_NONE },
+        /*  3 */ { sub_426F10, { AGDATA_SELF_OBJ, -1 }, -1, 4, ANIM_DELAY_NONE, ANIM_FLOW_PUSH | AG_ANIM_GET_UP, ANIM_DELAY_NONE },
+        /*  4 */ { sub_426E80, { AGDATA_SELF_OBJ, -1 }, -1, 5, ANIM_DELAY_NONE, ANIM_FLOW_PUSH | AG_UNCONCEAL, ANIM_DELAY_NONE },
+        /*  5 */ { sub_425740, { AGDATA_SELF_OBJ, -1 }, -1, 6, ANIM_DELAY_NONE, ANIM_FLOW_PUSH | AG_ATTEMPT_MOVE, ANIM_DELAY_NONE },
+        /*  6 */ { sub_427990, { AGDATA_SELF_OBJ, AGDATA_TARGET_OBJ }, -1, 7, ANIM_DELAY_NONE, ANIM_FLOW_PUSH | AG_ATTEMPT_MOVE, ANIM_DELAY_NONE },
+        /*  7 */ { sub_4246D0, { -1, -1 }, -1, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE, ANIM_FLOW_PUSH | ANIM_FLOW_YIELD | AG_MOVE_TO_PAUSE, 1000 },
         /*  8 */ { 0 },
         /*  9 */ { 0 },
         /* 10 */ { 0 },
@@ -1751,7 +1751,7 @@ static AnimGoalNode anim_goal_node_run_near_obj = {
         /* 12 */ { 0 },
         /* 13 */ { 0 },
         /* 14 */ { 0 },
-        /* 15 */ { sub_42B090, { AGDATA_SELF_OBJ, -1 }, 1, 0, 0, 0, 0 },
+        /* 15 */ { sub_42B090, { AGDATA_SELF_OBJ, -1 }, 1, 0, ANIM_DELAY_NONE, 0, ANIM_DELAY_NONE },
     },
 };
 
@@ -1764,13 +1764,13 @@ static AnimGoalNode anim_goal_node_animate_stunned = {
     0,
     { -1, -1, -1 },
     {
-        /*  1 */ { sub_42CA90, { AGDATA_SELF_OBJ, -1 }, -1, 2, 0, 3, 0 },
-        /*  2 */ { AGupdateStunAnim, { AGDATA_SELF_OBJ, -1 }, -1, 7, 0, 0x10000000, -2 },
-        /*  3 */ { sub_426F10, { AGDATA_SELF_OBJ, -1 }, -1, 4, 0, 0x40000000 | AG_ANIM_GET_UP, 0 },
-        /*  4 */ { sub_426E80, { AGDATA_SELF_OBJ, -1 }, -1, 5, 0, 0x40000000 | AG_UNCONCEAL, 0 },
-        /*  5 */ { AGbeginStunAnim, { AGDATA_SELF_OBJ, AGDATA_ANIM_ID }, -1, 6, 0, 0x10000000, 0 },
-        /*  6 */ { sub_433270, { AGDATA_SELF_OBJ, -1 }, 1, 0x90000000, 0, 0x90000000, 0 },
-        /*  7 */ { AGendAnimStunAnim, { AGDATA_SELF_OBJ, -1 }, -1, 5, 0, 0x90000000, 0 },
+        /*  1 */ { sub_42CA90, { AGDATA_SELF_OBJ, -1 }, -1, 2, ANIM_DELAY_NONE, 3, ANIM_DELAY_NONE },
+        /*  2 */ { AGupdateStunAnim, { AGDATA_SELF_OBJ, -1 }, -1, 7, ANIM_DELAY_NONE, ANIM_FLOW_YIELD, ANIM_DELAY_PAUSE_TIME },
+        /*  3 */ { sub_426F10, { AGDATA_SELF_OBJ, -1 }, -1, 4, ANIM_DELAY_NONE, ANIM_FLOW_PUSH | AG_ANIM_GET_UP, ANIM_DELAY_NONE },
+        /*  4 */ { sub_426E80, { AGDATA_SELF_OBJ, -1 }, -1, 5, ANIM_DELAY_NONE, ANIM_FLOW_PUSH | AG_UNCONCEAL, ANIM_DELAY_NONE },
+        /*  5 */ { AGbeginStunAnim, { AGDATA_SELF_OBJ, AGDATA_ANIM_ID }, -1, 6, ANIM_DELAY_NONE, ANIM_FLOW_YIELD, ANIM_DELAY_NONE },
+        /*  6 */ { sub_433270, { AGDATA_SELF_OBJ, -1 }, 1, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE },
+        /*  7 */ { AGendAnimStunAnim, { AGDATA_SELF_OBJ, -1 }, -1, 5, ANIM_DELAY_NONE, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE },
         /*  8 */ { 0 },
         /*  9 */ { 0 },
         /* 10 */ { 0 },
@@ -1778,7 +1778,7 @@ static AnimGoalNode anim_goal_node_animate_stunned = {
         /* 12 */ { 0 },
         /* 13 */ { 0 },
         /* 14 */ { 0 },
-        /* 15 */ { sub_42B250, { AGDATA_SELF_OBJ, -1 }, 1, 0, 0, 0, 0 },
+        /* 15 */ { sub_42B250, { AGDATA_SELF_OBJ, -1 }, 1, 0, ANIM_DELAY_NONE, 0, ANIM_DELAY_NONE },
     },
 };
 
@@ -1791,11 +1791,11 @@ static AnimGoalNode anim_goal_node_eye_candy_end_callback = {
     0,
     { -1, -1, -1 },
     {
-        /*  1 */ { sub_431320, { AGDATA_SELF_OBJ, -1 }, -1, 2, 0, 3, 0 },
-        /*  2 */ { AGupdateAnimEyeCandy, { AGDATA_SELF_OBJ, -1 }, -1, 4, 0, 0x10000000, -2 },
-        /*  3 */ { AGbeginAnimEyeCandy, { AGDATA_SELF_OBJ, -1 }, -1, 0x90000000, 0, 0x10000000, 0 },
-        /*  4 */ { AGexecuteMagicTechEndCallback, { AGDATA_SPELL_DATA, -1 }, -1, 5, 0, 5, 0 },
-        /*  5 */ { AGendAnimEyeCandy, { AGDATA_SELF_OBJ, -1 }, -1, 0x30000000, 0, 0x30000000, 0 },
+        /*  1 */ { sub_431320, { AGDATA_SELF_OBJ, -1 }, -1, 2, ANIM_DELAY_NONE, 3, ANIM_DELAY_NONE },
+        /*  2 */ { AGupdateAnimEyeCandy, { AGDATA_SELF_OBJ, -1 }, -1, 4, ANIM_DELAY_NONE, ANIM_FLOW_YIELD, ANIM_DELAY_PAUSE_TIME },
+        /*  3 */ { AGbeginAnimEyeCandy, { AGDATA_SELF_OBJ, -1 }, -1, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE, ANIM_FLOW_YIELD, ANIM_DELAY_NONE },
+        /*  4 */ { AGexecuteMagicTechEndCallback, { AGDATA_SPELL_DATA, -1 }, -1, 5, ANIM_DELAY_NONE, 5, ANIM_DELAY_NONE },
+        /*  5 */ { AGendAnimEyeCandy, { AGDATA_SELF_OBJ, -1 }, -1, ANIM_FLOW_POP_GOAL, ANIM_DELAY_NONE, ANIM_FLOW_POP_GOAL, ANIM_DELAY_NONE },
         /*  6 */ { 0 },
         /*  7 */ { 0 },
         /*  8 */ { 0 },
@@ -1805,7 +1805,7 @@ static AnimGoalNode anim_goal_node_eye_candy_end_callback = {
         /* 12 */ { 0 },
         /* 13 */ { 0 },
         /* 14 */ { 0 },
-        /* 15 */ { sub_431B20, { AGDATA_SELF_OBJ, -1 }, 1, 0, 0, 0, 0 },
+        /* 15 */ { sub_431B20, { AGDATA_SELF_OBJ, -1 }, 1, 0, ANIM_DELAY_NONE, 0, ANIM_DELAY_NONE },
     },
 };
 
@@ -1818,11 +1818,11 @@ static AnimGoalNode anim_goal_node_eye_candy_reverse_end_callback = {
     0,
     { -1, -1, -1 },
     {
-        /*  1 */ { sub_431320, { AGDATA_SELF_OBJ, -1 }, -1, 2, 0, 3, 0 },
-        /*  2 */ { AGupdateAnimEyeCandyReverse, { AGDATA_SELF_OBJ, -1 }, -1, 4, 0, 0x10000000, -2 },
-        /*  3 */ { AGbeginAnimEyeCandyReverse, { AGDATA_SELF_OBJ, -1 }, -1, 0x90000000, 0, 0x10000000, 0 },
-        /*  4 */ { AGexecuteMagicTechEndCallback, { AGDATA_SPELL_DATA, -1 }, -1, 5, 0, 5, 0 },
-        /*  5 */ { AGendAnimEyeCandyReverse, { AGDATA_SELF_OBJ, -1 }, -1, 0x30000000, 0, 0x30000000, 0 },
+        /*  1 */ { sub_431320, { AGDATA_SELF_OBJ, -1 }, -1, 2, ANIM_DELAY_NONE, 3, ANIM_DELAY_NONE },
+        /*  2 */ { AGupdateAnimEyeCandyReverse, { AGDATA_SELF_OBJ, -1 }, -1, 4, ANIM_DELAY_NONE, ANIM_FLOW_YIELD, ANIM_DELAY_PAUSE_TIME },
+        /*  3 */ { AGbeginAnimEyeCandyReverse, { AGDATA_SELF_OBJ, -1 }, -1, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE, ANIM_FLOW_YIELD, ANIM_DELAY_NONE },
+        /*  4 */ { AGexecuteMagicTechEndCallback, { AGDATA_SPELL_DATA, -1 }, -1, 5, ANIM_DELAY_NONE, 5, ANIM_DELAY_NONE },
+        /*  5 */ { AGendAnimEyeCandyReverse, { AGDATA_SELF_OBJ, -1 }, -1, ANIM_FLOW_POP_GOAL, ANIM_DELAY_NONE, ANIM_FLOW_POP_GOAL, ANIM_DELAY_NONE },
         /*  6 */ { 0 },
         /*  7 */ { 0 },
         /*  8 */ { 0 },
@@ -1832,7 +1832,7 @@ static AnimGoalNode anim_goal_node_eye_candy_reverse_end_callback = {
         /* 12 */ { 0 },
         /* 13 */ { 0 },
         /* 14 */ { 0 },
-        /* 15 */ { sub_431B20, { AGDATA_SELF_OBJ, -1 }, 1, 0, 0, 0, 0 },
+        /* 15 */ { sub_431B20, { AGDATA_SELF_OBJ, -1 }, 1, 0, ANIM_DELAY_NONE, 0, ANIM_DELAY_NONE },
     },
 };
 
@@ -1845,12 +1845,12 @@ static AnimGoalNode anim_goal_node_animate_kneel_magic_hands = {
     0,
     { -1, -1, -1 },
     {
-        /*  1 */ { sub_42CA90, { AGDATA_SELF_OBJ, -1 }, -1, 2, 0, 3, 0 },
-        /*  2 */ { AGupdateKneelMagicHandsAnim, { AGDATA_SELF_OBJ, -1 }, -1, 0x70000000 | AG_ANIMATE_REVERSE, 0, 0x10000000, -2 },
-        /*  3 */ { sub_426F10, { AGDATA_SELF_OBJ, -1 }, -1, 4, 0, 0x40000000 | AG_ANIM_GET_UP, 0 },
-        /*  4 */ { sub_426E80, { AGDATA_SELF_OBJ, -1 }, -1, 5, 0, 0x40000000 | AG_UNCONCEAL, 0 },
-        /*  5 */ { AGbeginKneelMagicHandsAnim, { AGDATA_SELF_OBJ, -1 }, -1, 6, 0, 0x10000000, 0 },
-        /*  6 */ { sub_433270, { AGDATA_SELF_OBJ, -1 }, 1, 0x90000000, 0, 0x90000000, 0 },
+        /*  1 */ { sub_42CA90, { AGDATA_SELF_OBJ, -1 }, -1, 2, ANIM_DELAY_NONE, 3, ANIM_DELAY_NONE },
+        /*  2 */ { AGupdateKneelMagicHandsAnim, { AGDATA_SELF_OBJ, -1 }, -1, ANIM_FLOW_REPLACE_GOAL | AG_ANIMATE_REVERSE, ANIM_DELAY_NONE, ANIM_FLOW_YIELD, ANIM_DELAY_PAUSE_TIME },
+        /*  3 */ { sub_426F10, { AGDATA_SELF_OBJ, -1 }, -1, 4, ANIM_DELAY_NONE, ANIM_FLOW_PUSH | AG_ANIM_GET_UP, ANIM_DELAY_NONE },
+        /*  4 */ { sub_426E80, { AGDATA_SELF_OBJ, -1 }, -1, 5, ANIM_DELAY_NONE, ANIM_FLOW_PUSH | AG_UNCONCEAL, ANIM_DELAY_NONE },
+        /*  5 */ { AGbeginKneelMagicHandsAnim, { AGDATA_SELF_OBJ, -1 }, -1, 6, ANIM_DELAY_NONE, ANIM_FLOW_YIELD, ANIM_DELAY_NONE },
+        /*  6 */ { sub_433270, { AGDATA_SELF_OBJ, -1 }, 1, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE },
         /*  7 */ { 0 },
         /*  8 */ { 0 },
         /*  9 */ { 0 },
@@ -1859,7 +1859,7 @@ static AnimGoalNode anim_goal_node_animate_kneel_magic_hands = {
         /* 12 */ { 0 },
         /* 13 */ { 0 },
         /* 14 */ { 0 },
-        /* 15 */ { NULL, { -1, -1 }, 1, 0, 0, 0, 0 },
+        /* 15 */ { NULL, { -1, -1 }, 1, 0, ANIM_DELAY_NONE, 0, ANIM_DELAY_NONE },
     },
 };
 
@@ -1872,21 +1872,21 @@ static AnimGoalNode anim_goal_node_attempt_move_near = {
     0,
     { -1, -1, -1 },
     {
-        /*  1 */ { sub_42CA90, { AGDATA_SELF_OBJ, -1 }, -1, 2, 0, 4, 0 },
-        /*  2 */ { sub_4270B0, { AGDATA_SELF_OBJ, -1 }, -1, 3, 0, 10, -4 },
-        /*  3 */ { sub_4305D0, { AGDATA_SELF_OBJ, -1 }, -1, 0x30000000, -2, 0x10000000, -2 },
-        /*  4 */ { sub_425740, { AGDATA_SELF_OBJ, -1 }, -1, 12, 0, 5, 0 },
-        /*  5 */ { sub_4254C0, { AGDATA_SELF_OBJ, AGDATA_TARGET_OBJ }, -1, 6, 0, 0x30000000, 0 },
-        /*  6 */ { sub_427640, { AGDATA_SELF_OBJ, -1 }, -1, 7, 0, 0xB, 0 },
-        /*  7 */ { sub_4272E0, { AGDATA_SELF_OBJ, -1 }, -1, 9, 0, 8, 0 },
-        /*  8 */ { sub_4284F0, { AGDATA_SCRATCH_OBJ, -1 }, -1, 9, 0, 0x52000000 | AG_OPEN_DOOR, 50 },
-        /*  9 */ { sub_42E9B0, { AGDATA_SELF_OBJ, -1 }, -1, 10, 0, 0x10000000, 0 },
-        /* 10 */ { sub_433270, { AGDATA_SELF_OBJ, -1 }, 1, 0x30000000, 0, 0x30000000, 0 },
-        /* 11 */ { sub_4288A0, { AGDATA_SELF_OBJ, AGDATA_SCRATCH_OBJ }, -1, 0x90000000, 0, 0x50000000 | AG_JUMP_WINDOW, 0 },
-        /* 12 */ { sub_4246D0, { -1, -1 }, -1, 0x90000000, 0, 0x50000000 | AG_MOVE_TO_PAUSE, 1000 },
+        /*  1 */ { sub_42CA90, { AGDATA_SELF_OBJ, -1 }, -1, 2, ANIM_DELAY_NONE, 4, ANIM_DELAY_NONE },
+        /*  2 */ { sub_4270B0, { AGDATA_SELF_OBJ, -1 }, -1, 3, ANIM_DELAY_NONE, 10, ANIM_DELAY_RANDOM },
+        /*  3 */ { sub_4305D0, { AGDATA_SELF_OBJ, -1 }, -1, ANIM_FLOW_POP_GOAL, ANIM_DELAY_PAUSE_TIME, ANIM_FLOW_YIELD, ANIM_DELAY_PAUSE_TIME },
+        /*  4 */ { sub_425740, { AGDATA_SELF_OBJ, -1 }, -1, 12, ANIM_DELAY_NONE, 5, ANIM_DELAY_NONE },
+        /*  5 */ { sub_4254C0, { AGDATA_SELF_OBJ, AGDATA_TARGET_OBJ }, -1, 6, ANIM_DELAY_NONE, ANIM_FLOW_POP_GOAL, ANIM_DELAY_NONE },
+        /*  6 */ { sub_427640, { AGDATA_SELF_OBJ, -1 }, -1, 7, ANIM_DELAY_NONE, 11, ANIM_DELAY_NONE },
+        /*  7 */ { sub_4272E0, { AGDATA_SELF_OBJ, -1 }, -1, 9, ANIM_DELAY_NONE, 8, ANIM_DELAY_NONE },
+        /*  8 */ { sub_4284F0, { AGDATA_SCRATCH_OBJ, -1 }, -1, 9, ANIM_DELAY_NONE, ANIM_FLOW_PUSH | ANIM_FLOW_YIELD | ANIM_FLOW_RESET_PATH | AG_OPEN_DOOR, 50 },
+        /*  9 */ { sub_42E9B0, { AGDATA_SELF_OBJ, -1 }, -1, 10, ANIM_DELAY_NONE, ANIM_FLOW_YIELD, ANIM_DELAY_NONE },
+        /* 10 */ { sub_433270, { AGDATA_SELF_OBJ, -1 }, 1, ANIM_FLOW_POP_GOAL, ANIM_DELAY_NONE, ANIM_FLOW_POP_GOAL, ANIM_DELAY_NONE },
+        /* 11 */ { sub_4288A0, { AGDATA_SELF_OBJ, AGDATA_SCRATCH_OBJ }, -1, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE, ANIM_FLOW_PUSH | ANIM_FLOW_YIELD | AG_JUMP_WINDOW, ANIM_DELAY_NONE },
+        /* 12 */ { sub_4246D0, { -1, -1 }, -1, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE, ANIM_FLOW_PUSH | ANIM_FLOW_YIELD | AG_MOVE_TO_PAUSE, 1000 },
         /* 13 */ { 0 },
         /* 14 */ { 0 },
-        /* 15 */ { sub_430F20, { AGDATA_SELF_OBJ, -1 }, 1, 0, 0, 0, 0 },
+        /* 15 */ { sub_430F20, { AGDATA_SELF_OBJ, -1 }, 1, 0, ANIM_DELAY_NONE, 0, ANIM_DELAY_NONE },
     },
 };
 
@@ -1899,10 +1899,10 @@ static AnimGoalNode anim_goal_node_knock_down = {
     0,
     { -1, -1, -1 },
     {
-        /*  1 */ { sub_42CA90, { AGDATA_SELF_OBJ, -1 }, -1, 2, 0, 3, 0 },
-        /*  2 */ { sub_42CC80, { AGDATA_SELF_OBJ, -1 }, -1, 4, 0, 0x10000000, -2 },
-        /*  3 */ { AGbeginKnockDownAnim, { AGDATA_SELF_OBJ, -1 }, -1, 0x90000000, 0, 0x10000000, 0 },
-        /*  4 */ { sub_42E460, { AGDATA_SELF_OBJ, -1 }, -1, 0x30000000, 0, 0x70000000 | AG_ANIM_GET_UP, 200 },
+        /*  1 */ { sub_42CA90, { AGDATA_SELF_OBJ, -1 }, -1, 2, ANIM_DELAY_NONE, 3, ANIM_DELAY_NONE },
+        /*  2 */ { sub_42CC80, { AGDATA_SELF_OBJ, -1 }, -1, 4, ANIM_DELAY_NONE, ANIM_FLOW_YIELD, ANIM_DELAY_PAUSE_TIME },
+        /*  3 */ { AGbeginKnockDownAnim, { AGDATA_SELF_OBJ, -1 }, -1, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE, ANIM_FLOW_YIELD, ANIM_DELAY_NONE },
+        /*  4 */ { sub_42E460, { AGDATA_SELF_OBJ, -1 }, -1, ANIM_FLOW_POP_GOAL, ANIM_DELAY_NONE, ANIM_FLOW_REPLACE_GOAL | AG_ANIM_GET_UP, 200 },
         /*  5 */ { 0 },
         /*  6 */ { 0 },
         /*  7 */ { 0 },
@@ -1913,7 +1913,7 @@ static AnimGoalNode anim_goal_node_knock_down = {
         /* 12 */ { 0 },
         /* 13 */ { 0 },
         /* 14 */ { 0 },
-        /* 15 */ { NULL, { -1, -1 }, 1, 0, 0, 0, 0 },
+        /* 15 */ { NULL, { -1, -1 }, 1, 0, ANIM_DELAY_NONE, 0, ANIM_DELAY_NONE },
     },
 };
 
@@ -1926,10 +1926,10 @@ static AnimGoalNode anim_goal_node_anim_get_up = {
     0,
     { -1, -1, -1 },
     {
-        /*  1 */ { sub_42CA90, { AGDATA_SELF_OBJ, -1 }, -1, 2, 0, 3, 0 },
-        /*  2 */ { sub_42CC80, { AGDATA_SELF_OBJ, -1 }, -1, 0x30000000, 0, 0x10000000, -2 },
-        /*  3 */ { AGbeginGetUpAnim, { AGDATA_SELF_OBJ, -1 }, -1, 4, 0, 0x10000000, 0 },
-        /*  4 */ { sub_433270, { AGDATA_SELF_OBJ, -1 }, 1, 0x90000000, 0, 0x90000000, 0 },
+        /*  1 */ { sub_42CA90, { AGDATA_SELF_OBJ, -1 }, -1, 2, ANIM_DELAY_NONE, 3, ANIM_DELAY_NONE },
+        /*  2 */ { sub_42CC80, { AGDATA_SELF_OBJ, -1 }, -1, ANIM_FLOW_POP_GOAL, ANIM_DELAY_NONE, ANIM_FLOW_YIELD, ANIM_DELAY_PAUSE_TIME },
+        /*  3 */ { AGbeginGetUpAnim, { AGDATA_SELF_OBJ, -1 }, -1, 4, ANIM_DELAY_NONE, ANIM_FLOW_YIELD, ANIM_DELAY_NONE },
+        /*  4 */ { sub_433270, { AGDATA_SELF_OBJ, -1 }, 1, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE },
         /*  5 */ { 0 },
         /*  6 */ { 0 },
         /*  7 */ { 0 },
@@ -1940,7 +1940,7 @@ static AnimGoalNode anim_goal_node_anim_get_up = {
         /* 12 */ { 0 },
         /* 13 */ { 0 },
         /* 14 */ { 0 },
-        /* 15 */ { sub_42B090, { AGDATA_SELF_OBJ, -1 }, 1, 0, 0, 0, 0 },
+        /* 15 */ { sub_42B090, { AGDATA_SELF_OBJ, -1 }, 1, 0, ANIM_DELAY_NONE, 0, ANIM_DELAY_NONE },
     },
 };
 
@@ -1953,9 +1953,9 @@ static AnimGoalNode anim_goal_node_attempt_move_straight_knockback = {
     0,
     { -1, -1, -1 },
     {
-        /*  1 */ { sub_42CA90, { AGDATA_SELF_OBJ, -1 }, -1, 2, 0, 3, 0 },
-        /*  2 */ { AGupdateAnimMoveStraightKnockback, { AGDATA_SELF_OBJ, -1 }, -1, 0x90000000, 0, 0x10000000, -3 },
-        /*  3 */ { AGbeginAnimMoveStraight, { AGDATA_SELF_OBJ, -1 }, -1, 0x90000000, 0, 0x10000000, 0 },
+        /*  1 */ { sub_42CA90, { AGDATA_SELF_OBJ, -1 }, -1, 2, ANIM_DELAY_NONE, 3, ANIM_DELAY_NONE },
+        /*  2 */ { AGupdateAnimMoveStraightKnockback, { AGDATA_SELF_OBJ, -1 }, -1, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE, ANIM_FLOW_YIELD, ANIM_DELAY_CALLBACK },
+        /*  3 */ { AGbeginAnimMoveStraight, { AGDATA_SELF_OBJ, -1 }, -1, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE, ANIM_FLOW_YIELD, ANIM_DELAY_NONE },
         /*  4 */ { 0 },
         /*  5 */ { 0 },
         /*  6 */ { 0 },
@@ -1967,7 +1967,7 @@ static AnimGoalNode anim_goal_node_attempt_move_straight_knockback = {
         /* 12 */ { 0 },
         /* 13 */ { 0 },
         /* 14 */ { 0 },
-        /* 15 */ { NULL, { -1, -1 }, 1, 0, 0, 0, 0 },
+        /* 15 */ { NULL, { -1, -1 }, 1, 0, ANIM_DELAY_NONE, 0, ANIM_DELAY_NONE },
     },
 };
 
@@ -1980,7 +1980,7 @@ static AnimGoalNode anim_goal_node_wander = {
     0,
     { AG_MOVE_NEAR_TILE, -1, -1 },
     {
-        /*  1 */ { sub_425930, { AGDATA_SELF_OBJ, -1 }, -1, 0x10000000, 300, 0x70000000 | AG_MOVE_NEAR_TILE, 300 },
+        /*  1 */ { sub_425930, { AGDATA_SELF_OBJ, -1 }, -1, ANIM_FLOW_YIELD, 300, ANIM_FLOW_REPLACE_GOAL | AG_MOVE_NEAR_TILE, 300 },
         /*  2 */ { 0 },
         /*  3 */ { 0 },
         /*  4 */ { 0 },
@@ -1994,7 +1994,7 @@ static AnimGoalNode anim_goal_node_wander = {
         /* 12 */ { 0 },
         /* 13 */ { 0 },
         /* 14 */ { 0 },
-        /* 15 */ { NULL, { -1, -1 }, 1, 0, 0, 0, 0 },
+        /* 15 */ { NULL, { -1, -1 }, 1, 0, ANIM_DELAY_NONE, 0, ANIM_DELAY_NONE },
     },
 };
 
@@ -2007,7 +2007,7 @@ static AnimGoalNode anim_goal_node_wander_seek_darkness = {
     0,
     { AG_MOVE_NEAR_TILE, -1, -1 },
     {
-        /*  1 */ { sub_425D60, { AGDATA_SELF_OBJ, -1 }, -1, 0x10000000, 300, 0x70000000 | AG_MOVE_NEAR_TILE, 300 },
+        /*  1 */ { sub_425D60, { AGDATA_SELF_OBJ, -1 }, -1, ANIM_FLOW_YIELD, 300, ANIM_FLOW_REPLACE_GOAL | AG_MOVE_NEAR_TILE, 300 },
         /*  2 */ { 0 },
         /*  3 */ { 0 },
         /*  4 */ { 0 },
@@ -2021,7 +2021,7 @@ static AnimGoalNode anim_goal_node_wander_seek_darkness = {
         /* 12 */ { 0 },
         /* 13 */ { 0 },
         /* 14 */ { 0 },
-        /* 15 */ { NULL, { -1, -1 }, 1, 0, 0, 0, 0 },
+        /* 15 */ { NULL, { -1, -1 }, 1, 0, ANIM_DELAY_NONE, 0, ANIM_DELAY_NONE },
     },
 };
 
@@ -2034,13 +2034,13 @@ static AnimGoalNode anim_goal_node_use_picklock_skill_on = {
     0,
     { -1, -1, -1 },
     {
-        /*  1 */ { sub_42CA90, { AGDATA_SELF_OBJ, -1 }, -1, 2, 0, 3, 0 },
-        /*  2 */ { AGupdateAnimPickLock, { AGDATA_SELF_OBJ, -1 }, -1, 6, -2, 0x10000000, -2 },
-        /*  3 */ { sub_42C0F0, { AGDATA_SELF_OBJ, AGDATA_TARGET_OBJ }, -1, 0x90000000, 0, 4, 0 },
-        /*  4 */ { sub_42BD40, { AGDATA_SELF_OBJ, -1 }, 0xC, 0x90000000, 0, 5, 0 },
-        /*  5 */ { AGbeginAnimPickLock, { AGDATA_SELF_OBJ, AGDATA_ANIM_ID }, -1, 7, 0, 0x10000000, -2 },
-        /*  6 */ { sub_42A4E0, { AGDATA_SELF_OBJ, AGDATA_TARGET_OBJ }, -1, 0x90000000, 0, 0x10000000, -2 },
-        /*  7 */ { sub_42BD40, { AGDATA_SELF_OBJ, -1 }, 0, 0x90000000, 0, 0x30000000, 0 },
+        /*  1 */ { sub_42CA90, { AGDATA_SELF_OBJ, -1 }, -1, 2, ANIM_DELAY_NONE, 3, ANIM_DELAY_NONE },
+        /*  2 */ { AGupdateAnimPickLock, { AGDATA_SELF_OBJ, -1 }, -1, 6, ANIM_DELAY_PAUSE_TIME, ANIM_FLOW_YIELD, ANIM_DELAY_PAUSE_TIME },
+        /*  3 */ { sub_42C0F0, { AGDATA_SELF_OBJ, AGDATA_TARGET_OBJ }, -1, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE, 4, ANIM_DELAY_NONE },
+        /*  4 */ { sub_42BD40, { AGDATA_SELF_OBJ, -1 }, 0xC, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE, 5, ANIM_DELAY_NONE },
+        /*  5 */ { AGbeginAnimPickLock, { AGDATA_SELF_OBJ, AGDATA_ANIM_ID }, -1, 7, ANIM_DELAY_NONE, ANIM_FLOW_YIELD, ANIM_DELAY_PAUSE_TIME },
+        /*  6 */ { sub_42A4E0, { AGDATA_SELF_OBJ, AGDATA_TARGET_OBJ }, -1, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE, ANIM_FLOW_YIELD, ANIM_DELAY_PAUSE_TIME },
+        /*  7 */ { sub_42BD40, { AGDATA_SELF_OBJ, -1 }, 0, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE, ANIM_FLOW_POP_GOAL, ANIM_DELAY_NONE },
         /*  8 */ { 0 },
         /*  9 */ { 0 },
         /* 10 */ { 0 },
@@ -2048,7 +2048,7 @@ static AnimGoalNode anim_goal_node_use_picklock_skill_on = {
         /* 12 */ { 0 },
         /* 13 */ { 0 },
         /* 14 */ { 0 },
-        /* 15 */ { sub_42B090, { AGDATA_SELF_OBJ, -1 }, 1, 0, 0, 0, 0 },
+        /* 15 */ { sub_42B090, { AGDATA_SELF_OBJ, -1 }, 1, 0, ANIM_DELAY_NONE, 0, ANIM_DELAY_NONE },
     },
 };
 
@@ -2061,21 +2061,21 @@ static AnimGoalNode anim_goal_node_please_move = {
     0,
     { AG_MOVE_NEAR_TILE, AG_RUN_TO_TILE, AG_MOVE_TO_TILE },
     {
-        /*  1 */ { sub_424E00, { AGDATA_SELF_OBJ, AGDATA_TARGET_TILE }, -1, 0x30000000, 0, 2, -3 },
-        /*  2 */ { sub_424D90, { AGDATA_SELF_OBJ, AGDATA_TARGET_TILE }, -1, 3, 0, 0x30000000, 0 },
-        /*  3 */ { sub_426F10, { AGDATA_SELF_OBJ, -1 }, -1, 4, 0, 0x40000000 | AG_ANIM_GET_UP, 0 },
-        /*  4 */ { sub_426E80, { AGDATA_SELF_OBJ, -1 }, -1, 5, 0, 0x40000000 | AG_UNCONCEAL, 0 },
-        /*  5 */ { sub_425740, { AGDATA_SELF_OBJ, -1 }, -1, 6, 0, 0x40000000 | AG_ATTEMPT_MOVE, 0 },
-        /*  6 */ { sub_426040, { AGDATA_SELF_OBJ, AGDATA_TARGET_TILE }, -1, 8, 0, 7, 0 },
-        /*  7 */ { sub_42C610, { -1, -1 }, -1, 0x90000000, 0, 0x40000000 | AG_ROTATE, 0 },
-        /*  8 */ { sub_4246D0, { -1, -1 }, -1, 0x90000000, 0, 0x50000000 | AG_MOVE_TO_PAUSE, 1000 },
+        /*  1 */ { sub_424E00, { AGDATA_SELF_OBJ, AGDATA_TARGET_TILE }, -1, ANIM_FLOW_POP_GOAL, ANIM_DELAY_NONE, 2, ANIM_DELAY_CALLBACK },
+        /*  2 */ { sub_424D90, { AGDATA_SELF_OBJ, AGDATA_TARGET_TILE }, -1, 3, ANIM_DELAY_NONE, ANIM_FLOW_POP_GOAL, ANIM_DELAY_NONE },
+        /*  3 */ { sub_426F10, { AGDATA_SELF_OBJ, -1 }, -1, 4, ANIM_DELAY_NONE, ANIM_FLOW_PUSH | AG_ANIM_GET_UP, ANIM_DELAY_NONE },
+        /*  4 */ { sub_426E80, { AGDATA_SELF_OBJ, -1 }, -1, 5, ANIM_DELAY_NONE, ANIM_FLOW_PUSH | AG_UNCONCEAL, ANIM_DELAY_NONE },
+        /*  5 */ { sub_425740, { AGDATA_SELF_OBJ, -1 }, -1, 6, ANIM_DELAY_NONE, ANIM_FLOW_PUSH | AG_ATTEMPT_MOVE, ANIM_DELAY_NONE },
+        /*  6 */ { sub_426040, { AGDATA_SELF_OBJ, AGDATA_TARGET_TILE }, -1, 8, ANIM_DELAY_NONE, 7, ANIM_DELAY_NONE },
+        /*  7 */ { sub_42C610, { -1, -1 }, -1, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE, ANIM_FLOW_PUSH | AG_ROTATE, ANIM_DELAY_NONE },
+        /*  8 */ { sub_4246D0, { -1, -1 }, -1, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE, ANIM_FLOW_PUSH | ANIM_FLOW_YIELD | AG_MOVE_TO_PAUSE, 1000 },
         /*  9 */ { 0 },
         /* 10 */ { 0 },
         /* 11 */ { 0 },
         /* 12 */ { 0 },
         /* 13 */ { 0 },
         /* 14 */ { 0 },
-        /* 15 */ { sub_42B090, { AGDATA_SELF_OBJ, -1 }, 1, 0, 0, 0, 0 },
+        /* 15 */ { sub_42B090, { AGDATA_SELF_OBJ, -1 }, 1, 0, ANIM_DELAY_NONE, 0, ANIM_DELAY_NONE },
     },
 };
 
@@ -2088,11 +2088,11 @@ static AnimGoalNode anim_goal_node_attempt_spread_out = {
     0,
     { AG_RUN_NEAR_OBJ, AG_MOVE_NEAR_OBJ, -1 },
     {
-        /*  1 */ { sub_42BF40, { AGDATA_SELF_OBJ, -1 }, -1, 0x90000000, 0, 2, 0 },
-        /*  2 */ { sub_42BFD0, { AGDATA_SELF_OBJ, AGDATA_TARGET_OBJ }, -1, 3, 0, 0x40000000 | AG_MOVE_AWAY_FROM_OBJ, 0 },
-        /*  3 */ { sub_425130, { AGDATA_SELF_OBJ, AGDATA_TARGET_OBJ }, -1, 4, 0, 5, 0 },
-        /*  4 */ { sub_425340, { AGDATA_SELF_OBJ, AGDATA_TARGET_OBJ }, -1, 0x70000000 | AG_RUN_NEAR_OBJ, 0, 0x70000000 | AG_MOVE_NEAR_OBJ, 0 },
-        /*  5 */ { sub_433270, { AGDATA_SELF_OBJ, -1 }, 1, 0x90000000, 0, 0x10000000, 100 },
+        /*  1 */ { sub_42BF40, { AGDATA_SELF_OBJ, -1 }, -1, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE, 2, ANIM_DELAY_NONE },
+        /*  2 */ { sub_42BFD0, { AGDATA_SELF_OBJ, AGDATA_TARGET_OBJ }, -1, 3, ANIM_DELAY_NONE, ANIM_FLOW_PUSH | AG_MOVE_AWAY_FROM_OBJ, ANIM_DELAY_NONE },
+        /*  3 */ { sub_425130, { AGDATA_SELF_OBJ, AGDATA_TARGET_OBJ }, -1, 4, ANIM_DELAY_NONE, 5, ANIM_DELAY_NONE },
+        /*  4 */ { sub_425340, { AGDATA_SELF_OBJ, AGDATA_TARGET_OBJ }, -1, ANIM_FLOW_REPLACE_GOAL | AG_RUN_NEAR_OBJ, ANIM_DELAY_NONE, ANIM_FLOW_REPLACE_GOAL | AG_MOVE_NEAR_OBJ, ANIM_DELAY_NONE },
+        /*  5 */ { sub_433270, { AGDATA_SELF_OBJ, -1 }, 1, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE, ANIM_FLOW_YIELD, 100 },
         /*  6 */ { 0 },
         /*  7 */ { 0 },
         /*  8 */ { 0 },
@@ -2102,7 +2102,7 @@ static AnimGoalNode anim_goal_node_attempt_spread_out = {
         /* 12 */ { 0 },
         /* 13 */ { 0 },
         /* 14 */ { 0 },
-        /* 15 */ { NULL, { -1, -1 }, 1, 0, 0, 0, 0 },
+        /* 15 */ { NULL, { -1, -1 }, 1, 0, ANIM_DELAY_NONE, 0, ANIM_DELAY_NONE },
     },
 };
 
@@ -2115,10 +2115,10 @@ static AnimGoalNode anim_goal_node_animate_door_open = {
     0,
     { -1, -1, -1 },
     {
-        /*  1 */ { sub_42CA90, { AGDATA_SELF_OBJ, -1 }, -1, 2, 0, 3, 0 },
-        /*  2 */ { AGupdateAnimOpenDoor, { AGDATA_SELF_OBJ, -1 }, -1, 4, 0, 0x10000000, -2 },
-        /*  3 */ { AGbeginAnimOpenDoor, { AGDATA_SELF_OBJ, AGDATA_ANIM_ID }, -1, 0x30000000, 0, 0x10000000, -2 },
-        /*  4 */ { sub_42B790, { AGDATA_SELF_OBJ, -1 }, -1, 0x30000000, 0, 0x70000000 | AG_PEND_CLOSING_DOOR, 1500 },
+        /*  1 */ { sub_42CA90, { AGDATA_SELF_OBJ, -1 }, -1, 2, ANIM_DELAY_NONE, 3, ANIM_DELAY_NONE },
+        /*  2 */ { AGupdateAnimOpenDoor, { AGDATA_SELF_OBJ, -1 }, -1, 4, ANIM_DELAY_NONE, ANIM_FLOW_YIELD, ANIM_DELAY_PAUSE_TIME },
+        /*  3 */ { AGbeginAnimOpenDoor, { AGDATA_SELF_OBJ, AGDATA_ANIM_ID }, -1, ANIM_FLOW_POP_GOAL, ANIM_DELAY_NONE, ANIM_FLOW_YIELD, ANIM_DELAY_PAUSE_TIME },
+        /*  4 */ { sub_42B790, { AGDATA_SELF_OBJ, -1 }, -1, ANIM_FLOW_POP_GOAL, ANIM_DELAY_NONE, ANIM_FLOW_REPLACE_GOAL | AG_PEND_CLOSING_DOOR, 1500 },
         /*  5 */ { 0 },
         /*  6 */ { 0 },
         /*  7 */ { 0 },
@@ -2129,7 +2129,7 @@ static AnimGoalNode anim_goal_node_animate_door_open = {
         /* 12 */ { 0 },
         /* 13 */ { 0 },
         /* 14 */ { 0 },
-        /* 15 */ { sub_42B640, { AGDATA_SELF_OBJ, -1 }, 1, 0, 0, 0, 0 },
+        /* 15 */ { sub_42B640, { AGDATA_SELF_OBJ, -1 }, 1, 0, ANIM_DELAY_NONE, 0, ANIM_DELAY_NONE },
     },
 };
 
@@ -2142,9 +2142,9 @@ static AnimGoalNode anim_goal_node_animate_door_closed = {
     0,
     { -1, -1, -1 },
     {
-        /*  1 */ { sub_42CA90, { AGDATA_SELF_OBJ, -1 }, -1, 2, 0, 3, 0 },
-        /*  2 */ { AGupdateAnimCloseDoor, { AGDATA_SELF_OBJ, -1 }, -1, 0x30000000, -2, 0x10000000, -2 },
-        /*  3 */ { AGbeginAnimCloseDoor, { AGDATA_SELF_OBJ, AGDATA_ANIM_ID }, -1, 0x30000000, 0, 0x10000000, -2 },
+        /*  1 */ { sub_42CA90, { AGDATA_SELF_OBJ, -1 }, -1, 2, ANIM_DELAY_NONE, 3, ANIM_DELAY_NONE },
+        /*  2 */ { AGupdateAnimCloseDoor, { AGDATA_SELF_OBJ, -1 }, -1, ANIM_FLOW_POP_GOAL, ANIM_DELAY_PAUSE_TIME, ANIM_FLOW_YIELD, ANIM_DELAY_PAUSE_TIME },
+        /*  3 */ { AGbeginAnimCloseDoor, { AGDATA_SELF_OBJ, AGDATA_ANIM_ID }, -1, ANIM_FLOW_POP_GOAL, ANIM_DELAY_NONE, ANIM_FLOW_YIELD, ANIM_DELAY_PAUSE_TIME },
         /*  4 */ { 0 },
         /*  5 */ { 0 },
         /*  6 */ { 0 },
@@ -2156,7 +2156,7 @@ static AnimGoalNode anim_goal_node_animate_door_closed = {
         /* 12 */ { 0 },
         /* 13 */ { 0 },
         /* 14 */ { 0 },
-        /* 15 */ { sub_42B6F0, { AGDATA_SELF_OBJ, -1 }, 1, 0, 0, 0, 0 },
+        /* 15 */ { sub_42B6F0, { AGDATA_SELF_OBJ, -1 }, 1, 0, ANIM_DELAY_NONE, 0, ANIM_DELAY_NONE },
     },
 };
 
@@ -2169,7 +2169,7 @@ static AnimGoalNode anim_goal_node_pend_closing_door = {
     0,
     { -1, -1, -1 },
     {
-        /*  1 */ { sub_42B7F0, { AGDATA_SELF_OBJ, -1 }, -1, 0x10000000, 1500, 0x70000000 | AG_ANIMATE_DOOR_CLOSED, 1500 },
+        /*  1 */ { sub_42B7F0, { AGDATA_SELF_OBJ, -1 }, -1, ANIM_FLOW_YIELD, 1500, ANIM_FLOW_REPLACE_GOAL | AG_ANIMATE_DOOR_CLOSED, 1500 },
         /*  2 */ { 0 },
         /*  3 */ { 0 },
         /*  4 */ { 0 },
@@ -2183,7 +2183,7 @@ static AnimGoalNode anim_goal_node_pend_closing_door = {
         /* 12 */ { 0 },
         /* 13 */ { 0 },
         /* 14 */ { 0 },
-        /* 15 */ { NULL, { -1, -1 }, 1, 0, 0, 0, 0 },
+        /* 15 */ { NULL, { -1, -1 }, 1, 0, ANIM_DELAY_NONE, 0, ANIM_DELAY_NONE },
     },
 };
 
@@ -2196,21 +2196,21 @@ static AnimGoalNode anim_goal_node_throw_spell_friendly = {
     0,
     { AG_ATTEMPT_SPELL, -1, -1 },
     {
-        /*  1 */ { sub_429440, { AGDATA_TARGET_OBJ, -1 }, -1, 0x30000000, 0, 2, 0 },
-        /*  2 */ { sub_426F10, { AGDATA_SELF_OBJ, -1 }, -1, 3, 0, 3, 0 },
-        /*  3 */ { sub_426E80, { AGDATA_SELF_OBJ, -1 }, -1, 4, 0, 4, 0 },
-        /*  4 */ { sub_429B50, { AGDATA_SELF_OBJ, AGDATA_TARGET_OBJ }, -1, 8, 0, 5, 0 },
-        /*  5 */ { sub_429BB0, { AGDATA_SELF_OBJ, AGDATA_TARGET_OBJ }, -1, 0x40000000 | AG_PICK_WEAPON, 0, 6, 0 },
-        /*  6 */ { sub_429BC0, { AGDATA_SELF_OBJ, AGDATA_TARGET_OBJ }, -1, 0x90000000, 0, 9, 0 },
-        /*  7 */ { sub_42BEA0, { -1, -1 }, 8, 0x90000000, 0, 0x40000000 | AG_MOVE_NEAR_OBJ, 0 },
-        /*  8 */ { AGendAnimEyeCandy, { AGDATA_SELF_OBJ, -1 }, -1, 0x90000000, 0, 0x90000000, 0 },
-        /*  9 */ { sub_4246C0, { -1, -1 }, -1, 0x90000000, 0, 0x70000000 | AG_ATTEMPT_SPELL, 0 },
+        /*  1 */ { sub_429440, { AGDATA_TARGET_OBJ, -1 }, -1, ANIM_FLOW_POP_GOAL, ANIM_DELAY_NONE, 2, ANIM_DELAY_NONE },
+        /*  2 */ { sub_426F10, { AGDATA_SELF_OBJ, -1 }, -1, 3, ANIM_DELAY_NONE, 3, ANIM_DELAY_NONE },
+        /*  3 */ { sub_426E80, { AGDATA_SELF_OBJ, -1 }, -1, 4, ANIM_DELAY_NONE, 4, ANIM_DELAY_NONE },
+        /*  4 */ { sub_429B50, { AGDATA_SELF_OBJ, AGDATA_TARGET_OBJ }, -1, 8, ANIM_DELAY_NONE, 5, ANIM_DELAY_NONE },
+        /*  5 */ { sub_429BB0, { AGDATA_SELF_OBJ, AGDATA_TARGET_OBJ }, -1, ANIM_FLOW_PUSH | AG_PICK_WEAPON, ANIM_DELAY_NONE, 6, ANIM_DELAY_NONE },
+        /*  6 */ { sub_429BC0, { AGDATA_SELF_OBJ, AGDATA_TARGET_OBJ }, -1, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE, 9, ANIM_DELAY_NONE },
+        /*  7 */ { sub_42BEA0, { -1, -1 }, 8, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE, ANIM_FLOW_PUSH | AG_MOVE_NEAR_OBJ, ANIM_DELAY_NONE },
+        /*  8 */ { AGendAnimEyeCandy, { AGDATA_SELF_OBJ, -1 }, -1, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE },
+        /*  9 */ { sub_4246C0, { -1, -1 }, -1, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE, ANIM_FLOW_REPLACE_GOAL | AG_ATTEMPT_SPELL, ANIM_DELAY_NONE },
         /* 10 */ { 0 },
         /* 11 */ { 0 },
         /* 12 */ { 0 },
         /* 13 */ { 0 },
         /* 14 */ { 0 },
-        /* 15 */ { NULL, { -1, -1 }, 1, 0, 0, 0, 0 },
+        /* 15 */ { NULL, { -1, -1 }, 1, 0, ANIM_DELAY_NONE, 0, ANIM_DELAY_NONE },
     },
 };
 
@@ -2223,21 +2223,21 @@ static AnimGoalNode anim_goal_node_attempt_spell_friendly = {
     0,
     { AG_THROW_SPELL, -1, -1 },
     {
-        /*  1 */ { sub_431320, { AGDATA_SELF_OBJ, -1 }, -1, 2, 0, 11, 0 },
-        /*  2 */ { AGupdateAnimEyeCandy, { AGDATA_SELF_OBJ, -1 }, -1, 8, -2, 4, 0 },
-        /*  3 */ { AGbeginAnimEyeCandy, { AGDATA_SELF_OBJ, -1 }, -1, 12, 0, 0x10000000, 0 },
-        /*  4 */ { sub_42CAA0, { AGDATA_SELF_OBJ, AGDATA_ANIM_ID }, -1, 0x10000000, -2, 5, 0 },
-        /*  5 */ { sub_429C40, { AGDATA_SPELL_DATA, -1 }, -1, 9, 0, 6, 0 },
-        /*  6 */ { sub_424820, { AGDATA_SELF_OBJ, AGDATA_SELF_TILE }, 5, 8, 0, 7, 0 },
-        /*  7 */ { sub_4246E0, { AGDATA_SCRATCH_OBJ, AGDATA_SELF_OBJ }, AG_SHOOT_SPELL, 0x90000000, -2, 0x10000000, -2 },
-        /*  8 */ { AGendAnimEyeCandy, { AGDATA_SELF_OBJ, -1 }, -1, 0x90000000, 0, 0x30000000, 0 },
-        /*  9 */ { sub_429C80, { AGDATA_SPELL_DATA, -1 }, -1, 8, 0, 0x10000000, 0 },
-        /* 10 */ { sub_4246C0, { AGDATA_SELF_OBJ, -1 }, 1, 0x90000000, 0, 0x90000000, 0 },
-        /* 11 */ { sub_429F00, { AGDATA_SPELL_DATA, -1 }, -1, 12, 0, 3, 0 },
-        /* 12 */ { sub_429C80, { AGDATA_SPELL_DATA, -1 }, -1, 0x90000000, 0, 0x90000000, 0 },
+        /*  1 */ { sub_431320, { AGDATA_SELF_OBJ, -1 }, -1, 2, ANIM_DELAY_NONE, 11, ANIM_DELAY_NONE },
+        /*  2 */ { AGupdateAnimEyeCandy, { AGDATA_SELF_OBJ, -1 }, -1, 8, ANIM_DELAY_PAUSE_TIME, 4, ANIM_DELAY_NONE },
+        /*  3 */ { AGbeginAnimEyeCandy, { AGDATA_SELF_OBJ, -1 }, -1, 12, ANIM_DELAY_NONE, ANIM_FLOW_YIELD, ANIM_DELAY_NONE },
+        /*  4 */ { sub_42CAA0, { AGDATA_SELF_OBJ, AGDATA_ANIM_ID }, -1, ANIM_FLOW_YIELD, ANIM_DELAY_PAUSE_TIME, 5, ANIM_DELAY_NONE },
+        /*  5 */ { sub_429C40, { AGDATA_SPELL_DATA, -1 }, -1, 9, ANIM_DELAY_NONE, 6, ANIM_DELAY_NONE },
+        /*  6 */ { sub_424820, { AGDATA_SELF_OBJ, AGDATA_SELF_TILE }, 5, 8, ANIM_DELAY_NONE, 7, ANIM_DELAY_NONE },
+        /*  7 */ { sub_4246E0, { AGDATA_SCRATCH_OBJ, AGDATA_SELF_OBJ }, AG_SHOOT_SPELL, ANIM_FLOW_TERMINATE, ANIM_DELAY_PAUSE_TIME, ANIM_FLOW_YIELD, ANIM_DELAY_PAUSE_TIME },
+        /*  8 */ { AGendAnimEyeCandy, { AGDATA_SELF_OBJ, -1 }, -1, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE, ANIM_FLOW_POP_GOAL, ANIM_DELAY_NONE },
+        /*  9 */ { sub_429C80, { AGDATA_SPELL_DATA, -1 }, -1, 8, ANIM_DELAY_NONE, ANIM_FLOW_YIELD, ANIM_DELAY_NONE },
+        /* 10 */ { sub_4246C0, { AGDATA_SELF_OBJ, -1 }, 1, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE },
+        /* 11 */ { sub_429F00, { AGDATA_SPELL_DATA, -1 }, -1, 12, ANIM_DELAY_NONE, 3, ANIM_DELAY_NONE },
+        /* 12 */ { sub_429C80, { AGDATA_SPELL_DATA, -1 }, -1, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE },
         /* 13 */ { 0 },
         /* 14 */ { 0 },
-        /* 15 */ { sub_429CD0, { AGDATA_SELF_OBJ, AGDATA_SPELL_DATA }, 1, 0, 0, 0, 0 },
+        /* 15 */ { sub_429CD0, { AGDATA_SELF_OBJ, AGDATA_SPELL_DATA }, 1, 0, ANIM_DELAY_NONE, 0, ANIM_DELAY_NONE },
     },
 };
 
@@ -2250,11 +2250,11 @@ static AnimGoalNode anim_goal_node_eye_candy_fire_dmg = {
     1,
     { -1, -1, -1 },
     {
-        /*  1 */ { sub_431320, { AGDATA_SELF_OBJ, -1 }, -1, 2, 0, 3, 0 },
-        /*  2 */ { AGupdateAnimEyeCandyFireDmg, { AGDATA_SELF_OBJ, AGDATA_PARENT_OBJ }, -1, 4, 0, 0x10000000, -2 },
-        /*  3 */ { AGbeginAnimEyeCandy, { AGDATA_SELF_OBJ, -1 }, -1, 0x90000000, 0, 5, 0 },
-        /*  4 */ { AGendAnimEyeCandy, { AGDATA_SELF_OBJ, -1 }, -1, 3, 0, 0x30000000, 0 },
-        /*  5 */ { AGapplyFireDmg, { AGDATA_SELF_OBJ, AGDATA_PARENT_OBJ }, -1, 0x90000000, 0, 0x10000000, -2 },
+        /*  1 */ { sub_431320, { AGDATA_SELF_OBJ, -1 }, -1, 2, ANIM_DELAY_NONE, 3, ANIM_DELAY_NONE },
+        /*  2 */ { AGupdateAnimEyeCandyFireDmg, { AGDATA_SELF_OBJ, AGDATA_PARENT_OBJ }, -1, 4, ANIM_DELAY_NONE, ANIM_FLOW_YIELD, ANIM_DELAY_PAUSE_TIME },
+        /*  3 */ { AGbeginAnimEyeCandy, { AGDATA_SELF_OBJ, -1 }, -1, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE, 5, ANIM_DELAY_NONE },
+        /*  4 */ { AGendAnimEyeCandy, { AGDATA_SELF_OBJ, -1 }, -1, 3, ANIM_DELAY_NONE, ANIM_FLOW_POP_GOAL, ANIM_DELAY_NONE },
+        /*  5 */ { AGapplyFireDmg, { AGDATA_SELF_OBJ, AGDATA_PARENT_OBJ }, -1, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE, ANIM_FLOW_YIELD, ANIM_DELAY_PAUSE_TIME },
         /*  6 */ { 0 },
         /*  7 */ { 0 },
         /*  8 */ { 0 },
@@ -2264,7 +2264,7 @@ static AnimGoalNode anim_goal_node_eye_candy_fire_dmg = {
         /* 12 */ { 0 },
         /* 13 */ { 0 },
         /* 14 */ { 0 },
-        /* 15 */ { sub_431B20, { AGDATA_SELF_OBJ, -1 }, 1, 0, 0, 0, 0 },
+        /* 15 */ { sub_431B20, { AGDATA_SELF_OBJ, -1 }, 1, 0, ANIM_DELAY_NONE, 0, ANIM_DELAY_NONE },
     },
 };
 
@@ -2277,11 +2277,11 @@ static AnimGoalNode anim_goal_node_eye_candy_reverse_fire_dmg = {
     1,
     { -1, -1, -1 },
     {
-        /*  1 */ { sub_431320, { AGDATA_SELF_OBJ, -1 }, -1, 2, 0, 3, 0 },
-        /*  2 */ { AGupdateAnimEyeCandyReverseFireDmg, { AGDATA_SELF_OBJ, AGDATA_PARENT_OBJ }, -1, 4, 0, 0x10000000, -2 },
-        /*  3 */ { AGbeginAnimEyeCandyReverse, { AGDATA_SELF_OBJ, -1 }, -1, 0x90000000, 0, 5, 0 },
-        /*  4 */ { AGendAnimEyeCandyReverse, { AGDATA_SELF_OBJ, -1 }, -1, 3, 0, 0x30000000, 0 },
-        /*  5 */ { AGapplyFireDmg, { AGDATA_SELF_OBJ, AGDATA_PARENT_OBJ }, -1, 0x90000000, 0, 0x10000000, -2 },
+        /*  1 */ { sub_431320, { AGDATA_SELF_OBJ, -1 }, -1, 2, ANIM_DELAY_NONE, 3, ANIM_DELAY_NONE },
+        /*  2 */ { AGupdateAnimEyeCandyReverseFireDmg, { AGDATA_SELF_OBJ, AGDATA_PARENT_OBJ }, -1, 4, ANIM_DELAY_NONE, ANIM_FLOW_YIELD, ANIM_DELAY_PAUSE_TIME },
+        /*  3 */ { AGbeginAnimEyeCandyReverse, { AGDATA_SELF_OBJ, -1 }, -1, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE, 5, ANIM_DELAY_NONE },
+        /*  4 */ { AGendAnimEyeCandyReverse, { AGDATA_SELF_OBJ, -1 }, -1, 3, ANIM_DELAY_NONE, ANIM_FLOW_POP_GOAL, ANIM_DELAY_NONE },
+        /*  5 */ { AGapplyFireDmg, { AGDATA_SELF_OBJ, AGDATA_PARENT_OBJ }, -1, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE, ANIM_FLOW_YIELD, ANIM_DELAY_PAUSE_TIME },
         /*  6 */ { 0 },
         /*  7 */ { 0 },
         /*  8 */ { 0 },
@@ -2291,7 +2291,7 @@ static AnimGoalNode anim_goal_node_eye_candy_reverse_fire_dmg = {
         /* 12 */ { 0 },
         /* 13 */ { 0 },
         /* 14 */ { 0 },
-        /* 15 */ { sub_431B20, { AGDATA_SELF_OBJ, -1 }, 1, 0, 0, 0, 0 },
+        /* 15 */ { sub_431B20, { AGDATA_SELF_OBJ, -1 }, 1, 0, ANIM_DELAY_NONE, 0, ANIM_DELAY_NONE },
     },
 };
 
@@ -2304,11 +2304,11 @@ static AnimGoalNode anim_goal_node_animate_loop_fire_dmg = {
     1,
     { -1, -1, -1 },
     {
-        /*  1 */ { sub_42CA90, { AGDATA_SELF_OBJ, -1 }, -1, 2, 0, 4, 0 },
-        /*  2 */ { sub_42DCF0, { AGDATA_SELF_OBJ, -1 }, -1, 0x10000000, 800, 3, 0 },
-        /*  3 */ { AGupdateAnimLoopAnim, { AGDATA_SELF_OBJ, -1 }, -1, 5, 0, 0x10000000, -2 },
-        /*  4 */ { AGbeginAnimLoopAnim, { AGDATA_SELF_OBJ, AGDATA_ANIM_ID }, -1, 0x90000000, 0, 5, 0 },
-        /*  5 */ { AGapplyFireDmg, { AGDATA_SELF_OBJ, AGDATA_PARENT_OBJ }, -1, 0x90000000, 0, 0x10000000, -2 },
+        /*  1 */ { sub_42CA90, { AGDATA_SELF_OBJ, -1 }, -1, 2, ANIM_DELAY_NONE, 4, ANIM_DELAY_NONE },
+        /*  2 */ { sub_42DCF0, { AGDATA_SELF_OBJ, -1 }, -1, ANIM_FLOW_YIELD, 800, 3, ANIM_DELAY_NONE },
+        /*  3 */ { AGupdateAnimLoopAnim, { AGDATA_SELF_OBJ, -1 }, -1, 5, ANIM_DELAY_NONE, ANIM_FLOW_YIELD, ANIM_DELAY_PAUSE_TIME },
+        /*  4 */ { AGbeginAnimLoopAnim, { AGDATA_SELF_OBJ, AGDATA_ANIM_ID }, -1, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE, 5, ANIM_DELAY_NONE },
+        /*  5 */ { AGapplyFireDmg, { AGDATA_SELF_OBJ, AGDATA_PARENT_OBJ }, -1, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE, ANIM_FLOW_YIELD, ANIM_DELAY_PAUSE_TIME },
         /*  6 */ { 0 },
         /*  7 */ { 0 },
         /*  8 */ { 0 },
@@ -2318,7 +2318,7 @@ static AnimGoalNode anim_goal_node_animate_loop_fire_dmg = {
         /* 12 */ { 0 },
         /* 13 */ { 0 },
         /* 14 */ { 0 },
-        /* 15 */ { sub_42DED0, { -1, -1 }, 1, 0, 0, 0, 0 },
+        /* 15 */ { sub_42DED0, { -1, -1 }, 1, 0, ANIM_DELAY_NONE, 0, ANIM_DELAY_NONE },
     },
 };
 
@@ -2331,9 +2331,9 @@ static AnimGoalNode anim_goal_node_attempt_move_straight_spell = {
     0,
     { -1, -1, -1 },
     {
-        /*  1 */ { sub_42CA90, { AGDATA_SELF_OBJ, -1 }, -1, 2, 0, 3, 0 },
-        /*  2 */ { AGupdateAnimMoveStraight, { AGDATA_SELF_OBJ, -1 }, -1, 0x30000000, -2, 0x10000000, -3 },
-        /*  3 */ { AGbeginAnimMoveStraight, { AGDATA_SELF_OBJ, -1 }, -1, 0x90000000, 0, 0x10000000, 0 },
+        /*  1 */ { sub_42CA90, { AGDATA_SELF_OBJ, -1 }, -1, 2, ANIM_DELAY_NONE, 3, ANIM_DELAY_NONE },
+        /*  2 */ { AGupdateAnimMoveStraight, { AGDATA_SELF_OBJ, -1 }, -1, ANIM_FLOW_POP_GOAL, ANIM_DELAY_PAUSE_TIME, ANIM_FLOW_YIELD, ANIM_DELAY_CALLBACK },
+        /*  3 */ { AGbeginAnimMoveStraight, { AGDATA_SELF_OBJ, -1 }, -1, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE, ANIM_FLOW_YIELD, ANIM_DELAY_NONE },
         /*  4 */ { 0 },
         /*  5 */ { 0 },
         /*  6 */ { 0 },
@@ -2345,7 +2345,7 @@ static AnimGoalNode anim_goal_node_attempt_move_straight_spell = {
         /* 12 */ { 0 },
         /* 13 */ { 0 },
         /* 14 */ { 0 },
-        /* 15 */ { NULL, { -1, -1 }, 1, 0, 0, 0, 0 },
+        /* 15 */ { NULL, { -1, -1 }, 1, 0, ANIM_DELAY_NONE, 0, ANIM_DELAY_NONE },
     },
 };
 
@@ -2358,21 +2358,21 @@ static AnimGoalNode anim_goal_node_move_near_obj_combat = {
     0,
     { -1, -1, -1 },
     {
-        /*  1 */ { sub_425130, { AGDATA_SELF_OBJ, AGDATA_TARGET_OBJ }, -1, 2, 0, 0x30000000, 0 },
-        /*  2 */ { sub_426F10, { AGDATA_SELF_OBJ, -1 }, -1, 3, 0, 0x40000000 | AG_ANIM_GET_UP, 0 },
-        /*  3 */ { sub_426E80, { AGDATA_SELF_OBJ, -1 }, -1, 4, 0, 0x40000000 | AG_UNCONCEAL, 0 },
-        /*  4 */ { sub_425740, { AGDATA_SELF_OBJ, -1 }, -1, 5, 0, 7, 0 },
-        /*  5 */ { sub_4280D0, { AGDATA_SELF_OBJ, AGDATA_TARGET_OBJ }, -1, 6, 0, 7, 0 },
-        /*  6 */ { sub_4246D0, { -1, -1 }, -1, 0x90000000, 0, 0x50000000 | AG_MOVE_TO_PAUSE, 1000 },
-        /*  7 */ { sub_4296D0, { AGDATA_SELF_OBJ, -1 }, -1, 8, 0, 8, 0 },
-        /*  8 */ { sub_429AD0, { AGDATA_SELF_OBJ, -1 }, -1, 0x40000000 | AG_ATTEMPT_MOVE_NEAR, 0, 0x40000000 | AG_ATTEMPT_MOVE_NEAR_COMBAT, 0 },
+        /*  1 */ { sub_425130, { AGDATA_SELF_OBJ, AGDATA_TARGET_OBJ }, -1, 2, ANIM_DELAY_NONE, ANIM_FLOW_POP_GOAL, ANIM_DELAY_NONE },
+        /*  2 */ { sub_426F10, { AGDATA_SELF_OBJ, -1 }, -1, 3, ANIM_DELAY_NONE, ANIM_FLOW_PUSH | AG_ANIM_GET_UP, ANIM_DELAY_NONE },
+        /*  3 */ { sub_426E80, { AGDATA_SELF_OBJ, -1 }, -1, 4, ANIM_DELAY_NONE, ANIM_FLOW_PUSH | AG_UNCONCEAL, ANIM_DELAY_NONE },
+        /*  4 */ { sub_425740, { AGDATA_SELF_OBJ, -1 }, -1, 5, ANIM_DELAY_NONE, 7, ANIM_DELAY_NONE },
+        /*  5 */ { sub_4280D0, { AGDATA_SELF_OBJ, AGDATA_TARGET_OBJ }, -1, 6, ANIM_DELAY_NONE, 7, ANIM_DELAY_NONE },
+        /*  6 */ { sub_4246D0, { -1, -1 }, -1, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE, ANIM_FLOW_PUSH | ANIM_FLOW_YIELD | AG_MOVE_TO_PAUSE, 1000 },
+        /*  7 */ { sub_4296D0, { AGDATA_SELF_OBJ, -1 }, -1, 8, ANIM_DELAY_NONE, 8, ANIM_DELAY_NONE },
+        /*  8 */ { sub_429AD0, { AGDATA_SELF_OBJ, -1 }, -1, ANIM_FLOW_PUSH | AG_ATTEMPT_MOVE_NEAR, ANIM_DELAY_NONE, ANIM_FLOW_PUSH | AG_ATTEMPT_MOVE_NEAR_COMBAT, ANIM_DELAY_NONE },
         /*  9 */ { 0 },
         /* 10 */ { 0 },
         /* 11 */ { 0 },
         /* 12 */ { 0 },
         /* 13 */ { 0 },
         /* 14 */ { 0 },
-        /* 15 */ { sub_42B090, { AGDATA_SELF_OBJ, -1 }, 1, 0, 0, 0, 0 },
+        /* 15 */ { sub_42B090, { AGDATA_SELF_OBJ, -1 }, 1, 0, ANIM_DELAY_NONE, 0, ANIM_DELAY_NONE },
     },
 };
 
@@ -2385,21 +2385,21 @@ static AnimGoalNode anim_goal_node_attempt_move_near_combat = {
     0,
     { -1, -1, -1 },
     {
-        /*  1 */ { sub_42CA90, { AGDATA_SELF_OBJ, -1 }, -1, 2, 0, 4, 0 },
-        /*  2 */ { sub_4270B0, { AGDATA_SELF_OBJ, -1 }, -1, 3, 0, 10, -4 },
-        /*  3 */ { sub_4305D0, { AGDATA_SELF_OBJ, -1 }, -1, 0x30000000, -2, 0x10000000, -2 },
-        /*  4 */ { sub_425740, { AGDATA_SELF_OBJ, -1 }, -1, 12, 0, 5, 0 },
-        /*  5 */ { sub_425590, { AGDATA_SELF_OBJ, AGDATA_TARGET_OBJ }, -1, 6, 0, 0x38000000, 0 },
-        /*  6 */ { sub_427640, { AGDATA_SELF_OBJ, -1 }, -1, 7, 0, 11, 0 },
-        /*  7 */ { sub_4272E0, { AGDATA_SELF_OBJ, -1 }, -1, 9, 0, 8, 0 },
-        /*  8 */ { sub_4284F0, { AGDATA_SCRATCH_OBJ, -1 }, -1, 9, 0, 0x52000000 | AG_OPEN_DOOR, 50 },
-        /*  9 */ { sub_42E9B0, { AGDATA_SELF_OBJ, -1 }, -1, 10, 0, 0x10000000, 0 },
-        /* 10 */ { sub_433270, { AGDATA_SELF_OBJ, -1 }, 1, 0x90000000, 0, 0x90000000, 0 },
-        /* 11 */ { sub_4288A0, { AGDATA_SELF_OBJ, AGDATA_SCRATCH_OBJ }, -1, 0x90000000, 0, 0x50000000 | AG_JUMP_WINDOW, 0 },
-        /* 12 */ { sub_4246D0, { -1, -1 }, -1, 0x90000000, 0, 0x50000000 | AG_MOVE_TO_PAUSE, 1000 },
+        /*  1 */ { sub_42CA90, { AGDATA_SELF_OBJ, -1 }, -1, 2, ANIM_DELAY_NONE, 4, ANIM_DELAY_NONE },
+        /*  2 */ { sub_4270B0, { AGDATA_SELF_OBJ, -1 }, -1, 3, ANIM_DELAY_NONE, 10, ANIM_DELAY_RANDOM },
+        /*  3 */ { sub_4305D0, { AGDATA_SELF_OBJ, -1 }, -1, ANIM_FLOW_POP_GOAL, ANIM_DELAY_PAUSE_TIME, ANIM_FLOW_YIELD, ANIM_DELAY_PAUSE_TIME },
+        /*  4 */ { sub_425740, { AGDATA_SELF_OBJ, -1 }, -1, 12, ANIM_DELAY_NONE, 5, ANIM_DELAY_NONE },
+        /*  5 */ { sub_425590, { AGDATA_SELF_OBJ, AGDATA_TARGET_OBJ }, -1, 6, ANIM_DELAY_NONE, ANIM_FLOW_POP_3_GOALS, ANIM_DELAY_NONE },
+        /*  6 */ { sub_427640, { AGDATA_SELF_OBJ, -1 }, -1, 7, ANIM_DELAY_NONE, 11, ANIM_DELAY_NONE },
+        /*  7 */ { sub_4272E0, { AGDATA_SELF_OBJ, -1 }, -1, 9, ANIM_DELAY_NONE, 8, ANIM_DELAY_NONE },
+        /*  8 */ { sub_4284F0, { AGDATA_SCRATCH_OBJ, -1 }, -1, 9, ANIM_DELAY_NONE, ANIM_FLOW_PUSH | ANIM_FLOW_YIELD | ANIM_FLOW_RESET_PATH | AG_OPEN_DOOR, 50 },
+        /*  9 */ { sub_42E9B0, { AGDATA_SELF_OBJ, -1 }, -1, 10, ANIM_DELAY_NONE, ANIM_FLOW_YIELD, ANIM_DELAY_NONE },
+        /* 10 */ { sub_433270, { AGDATA_SELF_OBJ, -1 }, 1, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE },
+        /* 11 */ { sub_4288A0, { AGDATA_SELF_OBJ, AGDATA_SCRATCH_OBJ }, -1, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE, ANIM_FLOW_PUSH | ANIM_FLOW_YIELD | AG_JUMP_WINDOW, ANIM_DELAY_NONE },
+        /* 12 */ { sub_4246D0, { -1, -1 }, -1, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE, ANIM_FLOW_PUSH | ANIM_FLOW_YIELD | AG_MOVE_TO_PAUSE, 1000 },
         /* 13 */ { 0 },
         /* 14 */ { 0 },
-        /* 15 */ { sub_430F20, { AGDATA_SELF_OBJ, -1 }, 1, 0, 0, 0, 0 },
+        /* 15 */ { sub_430F20, { AGDATA_SELF_OBJ, -1 }, 1, 0, ANIM_DELAY_NONE, 0, ANIM_DELAY_NONE },
     },
 };
 
@@ -2412,12 +2412,12 @@ static AnimGoalNode anim_goal_node_use_container = {
     0,
     { -1, -1, -1 },
     {
-        /*  1 */ { sub_428930, { AGDATA_SELF_OBJ, AGDATA_TARGET_OBJ }, -1, 0x90000000, 0, 2, 0 },
-        /*  2 */ { sub_425130, { AGDATA_SELF_OBJ, AGDATA_TARGET_OBJ }, -1, 0x40000000 | AG_MOVE_NEAR_OBJ, 0, 3, 0 },
-        /*  3 */ { sub_4284A0, { AGDATA_TARGET_OBJ, -1 }, -1, 4, 0, 5, 0 },
-        /*  4 */ { sub_428A10, { AGDATA_SELF_OBJ, AGDATA_TARGET_OBJ }, -1, 0x90000000, 0, 0x90000000, 0 },
-        /*  5 */ { sub_42BE50, { AGDATA_TARGET_OBJ, -1 }, -1, 0x90000000, 0, 6, 0 },
-        /*  6 */ { sub_4284F0, { AGDATA_TARGET_OBJ, -1 }, -1, 0x70000000 | AG_CLOSE_DOOR, 0, 0x70000000 | AG_OPEN_DOOR, 0 },
+        /*  1 */ { sub_428930, { AGDATA_SELF_OBJ, AGDATA_TARGET_OBJ }, -1, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE, 2, ANIM_DELAY_NONE },
+        /*  2 */ { sub_425130, { AGDATA_SELF_OBJ, AGDATA_TARGET_OBJ }, -1, ANIM_FLOW_PUSH | AG_MOVE_NEAR_OBJ, ANIM_DELAY_NONE, 3, ANIM_DELAY_NONE },
+        /*  3 */ { sub_4284A0, { AGDATA_TARGET_OBJ, -1 }, -1, 4, ANIM_DELAY_NONE, 5, ANIM_DELAY_NONE },
+        /*  4 */ { sub_428A10, { AGDATA_SELF_OBJ, AGDATA_TARGET_OBJ }, -1, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE },
+        /*  5 */ { sub_42BE50, { AGDATA_TARGET_OBJ, -1 }, -1, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE, 6, ANIM_DELAY_NONE },
+        /*  6 */ { sub_4284F0, { AGDATA_TARGET_OBJ, -1 }, -1, ANIM_FLOW_REPLACE_GOAL | AG_CLOSE_DOOR, ANIM_DELAY_NONE, ANIM_FLOW_REPLACE_GOAL | AG_OPEN_DOOR, ANIM_DELAY_NONE },
         /*  7 */ { 0 },
         /*  8 */ { 0 },
         /*  9 */ { 0 },
@@ -2426,7 +2426,7 @@ static AnimGoalNode anim_goal_node_use_container = {
         /* 12 */ { 0 },
         /* 13 */ { 0 },
         /* 14 */ { 0 },
-        /* 15 */ { NULL, { -1, -1 }, 1, 0, 0, 0, 0 },
+        /* 15 */ { NULL, { -1, -1 }, 1, 0, ANIM_DELAY_NONE, 0, ANIM_DELAY_NONE },
     },
 };
 
@@ -2439,21 +2439,21 @@ static AnimGoalNode anim_goal_node_throw_spell_w_cast_anim = {
     0,
     { AG_ATTEMPT_SPELL, -1, -1 },
     {
-        /*  1 */ { sub_429440, { AGDATA_TARGET_OBJ, -1 }, -1, 10, 0, 2, 0 },
-        /*  2 */ { sub_426F10, { AGDATA_SELF_OBJ, -1 }, -1, 3, 0, 0x40000000 | AG_ANIM_GET_UP, 0 },
-        /*  3 */ { sub_426E80, { AGDATA_SELF_OBJ, -1 }, -1, 4, 0, 0x40000000 | AG_UNCONCEAL, 0 },
-        /*  4 */ { sub_429B50, { AGDATA_SELF_OBJ, AGDATA_TARGET_OBJ }, -1, 8, 0, 5, 0 },
-        /*  5 */ { sub_429BB0, { AGDATA_SELF_OBJ, AGDATA_TARGET_OBJ }, -1, 0x40000000 | AG_PICK_WEAPON, 0, 6, 0 },
-        /*  6 */ { sub_429BC0, { AGDATA_SELF_OBJ, AGDATA_TARGET_OBJ }, -1, 10, 0, 9, 0 },
-        /*  7 */ { sub_42BEA0, { -1, -1 }, 8, 10, 0, 0x40000000 | AG_MOVE_NEAR_OBJ, 0 },
-        /*  8 */ { AGendAnimEyeCandy, { AGDATA_SELF_OBJ, -1 }, -1, 10, 0, 10, 0 },
-        /*  9 */ { sub_42C850, { AGDATA_SELF_OBJ, AGDATA_TARGET_OBJ }, -1, 10, 0, 0x70000000 | AG_ATTEMPT_SPELL_W_CAST_ANIM, 0 },
-        /* 10 */ { sub_429CD0, { AGDATA_SELF_OBJ, AGDATA_SPELL_DATA }, 1, 0x90000000, 0, 0x90000000, 0 },
+        /*  1 */ { sub_429440, { AGDATA_TARGET_OBJ, -1 }, -1, 10, ANIM_DELAY_NONE, 2, ANIM_DELAY_NONE },
+        /*  2 */ { sub_426F10, { AGDATA_SELF_OBJ, -1 }, -1, 3, ANIM_DELAY_NONE, ANIM_FLOW_PUSH | AG_ANIM_GET_UP, ANIM_DELAY_NONE },
+        /*  3 */ { sub_426E80, { AGDATA_SELF_OBJ, -1 }, -1, 4, ANIM_DELAY_NONE, ANIM_FLOW_PUSH | AG_UNCONCEAL, ANIM_DELAY_NONE },
+        /*  4 */ { sub_429B50, { AGDATA_SELF_OBJ, AGDATA_TARGET_OBJ }, -1, 8, ANIM_DELAY_NONE, 5, ANIM_DELAY_NONE },
+        /*  5 */ { sub_429BB0, { AGDATA_SELF_OBJ, AGDATA_TARGET_OBJ }, -1, ANIM_FLOW_PUSH | AG_PICK_WEAPON, ANIM_DELAY_NONE, 6, ANIM_DELAY_NONE },
+        /*  6 */ { sub_429BC0, { AGDATA_SELF_OBJ, AGDATA_TARGET_OBJ }, -1, 10, ANIM_DELAY_NONE, 9, ANIM_DELAY_NONE },
+        /*  7 */ { sub_42BEA0, { -1, -1 }, 8, 10, ANIM_DELAY_NONE, ANIM_FLOW_PUSH | AG_MOVE_NEAR_OBJ, ANIM_DELAY_NONE },
+        /*  8 */ { AGendAnimEyeCandy, { AGDATA_SELF_OBJ, -1 }, -1, 10, ANIM_DELAY_NONE, 10, ANIM_DELAY_NONE },
+        /*  9 */ { sub_42C850, { AGDATA_SELF_OBJ, AGDATA_TARGET_OBJ }, -1, 10, ANIM_DELAY_NONE, ANIM_FLOW_REPLACE_GOAL | AG_ATTEMPT_SPELL_W_CAST_ANIM, ANIM_DELAY_NONE },
+        /* 10 */ { sub_429CD0, { AGDATA_SELF_OBJ, AGDATA_SPELL_DATA }, 1, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE },
         /* 11 */ { 0 },
         /* 12 */ { 0 },
         /* 13 */ { 0 },
         /* 14 */ { 0 },
-        /* 15 */ { sub_42B090, { AGDATA_SELF_OBJ, -1 }, 1, 0, 0, 0, 0 },
+        /* 15 */ { sub_42B090, { AGDATA_SELF_OBJ, -1 }, 1, 0, ANIM_DELAY_NONE, 0, ANIM_DELAY_NONE },
     },
 };
 
@@ -2466,21 +2466,21 @@ static AnimGoalNode anim_goal_node_attempt_spell_w_cast_anim = {
     0,
     { AG_THROW_SPELL, -1, -1 },
     {
-        /*  1 */ { sub_42CA90, { AGDATA_SELF_OBJ, -1 }, -1, 2, 0, 11, 0 },
-        /*  2 */ { sub_42CC80, { AGDATA_SELF_OBJ, -1 }, -1, 8, -2, 4, 0 },
-        /*  3 */ { sub_4246C0, { AGDATA_SELF_OBJ, -1 }, -1, 13, 0, 0x10000000, 0 },
-        /*  4 */ { sub_42CAA0, { AGDATA_SELF_OBJ, AGDATA_ANIM_ID }, -1, 0x10000000, -2, 5, 0 },
-        /*  5 */ { sub_429C40, { AGDATA_SPELL_DATA, -1 }, -1, 9, 0, 6, 0 },
-        /*  6 */ { sub_424820, { AGDATA_SELF_OBJ, AGDATA_SELF_TILE }, 5, 8, 0, 7, 0 },
-        /*  7 */ { sub_4246E0, { AGDATA_SCRATCH_OBJ, AGDATA_SELF_OBJ }, AG_SHOOT_SPELL, 0x90000000, -2, 0x10000000, -2 },
-        /*  8 */ { sub_4246C0, { AGDATA_SELF_OBJ, -1 }, -1, 0x90000000, 0, 0x30000000, 0 },
-        /*  9 */ { sub_429C80, { AGDATA_SPELL_DATA, -1 }, -1, 8, 0, 0x10000000, 0 },
-        /* 10 */ { sub_433270, { AGDATA_SELF_OBJ, -1 }, 1, 0x90000000, 0, 0x90000000, 0 },
-        /* 11 */ { sub_4246C0, { AGDATA_SPELL_DATA, -1 }, -1, 13, 0, 12, 0 },
-        /* 12 */ { sub_42A010, { AGDATA_SELF_OBJ, AGDATA_ANIM_ID_PREVIOUS }, -1, 13, 0, 3, 0 },
-        /* 13 */ { sub_429C80, { AGDATA_SPELL_DATA, -1 }, -1, 0x90000000, 0, 0x90000000, 0 },
-        /* 14 */ { sub_4246C0, { AGDATA_SELF_OBJ, -1 }, -1, 8, -2, 4, 0 },
-        /* 15 */ { sub_429CD0, { AGDATA_SELF_OBJ, AGDATA_SPELL_DATA }, 1, 0, 0, 0, 0 },
+        /*  1 */ { sub_42CA90, { AGDATA_SELF_OBJ, -1 }, -1, 2, ANIM_DELAY_NONE, 11, ANIM_DELAY_NONE },
+        /*  2 */ { sub_42CC80, { AGDATA_SELF_OBJ, -1 }, -1, 8, ANIM_DELAY_PAUSE_TIME, 4, ANIM_DELAY_NONE },
+        /*  3 */ { sub_4246C0, { AGDATA_SELF_OBJ, -1 }, -1, 13, ANIM_DELAY_NONE, ANIM_FLOW_YIELD, ANIM_DELAY_NONE },
+        /*  4 */ { sub_42CAA0, { AGDATA_SELF_OBJ, AGDATA_ANIM_ID }, -1, ANIM_FLOW_YIELD, ANIM_DELAY_PAUSE_TIME, 5, ANIM_DELAY_NONE },
+        /*  5 */ { sub_429C40, { AGDATA_SPELL_DATA, -1 }, -1, 9, ANIM_DELAY_NONE, 6, ANIM_DELAY_NONE },
+        /*  6 */ { sub_424820, { AGDATA_SELF_OBJ, AGDATA_SELF_TILE }, 5, 8, ANIM_DELAY_NONE, 7, ANIM_DELAY_NONE },
+        /*  7 */ { sub_4246E0, { AGDATA_SCRATCH_OBJ, AGDATA_SELF_OBJ }, AG_SHOOT_SPELL, ANIM_FLOW_TERMINATE, ANIM_DELAY_PAUSE_TIME, ANIM_FLOW_YIELD, ANIM_DELAY_PAUSE_TIME },
+        /*  8 */ { sub_4246C0, { AGDATA_SELF_OBJ, -1 }, -1, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE, ANIM_FLOW_POP_GOAL, ANIM_DELAY_NONE },
+        /*  9 */ { sub_429C80, { AGDATA_SPELL_DATA, -1 }, -1, 8, ANIM_DELAY_NONE, ANIM_FLOW_YIELD, ANIM_DELAY_NONE },
+        /* 10 */ { sub_433270, { AGDATA_SELF_OBJ, -1 }, 1, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE },
+        /* 11 */ { sub_4246C0, { AGDATA_SPELL_DATA, -1 }, -1, 13, ANIM_DELAY_NONE, 12, ANIM_DELAY_NONE },
+        /* 12 */ { sub_42A010, { AGDATA_SELF_OBJ, AGDATA_ANIM_ID_PREVIOUS }, -1, 13, ANIM_DELAY_NONE, 3, ANIM_DELAY_NONE },
+        /* 13 */ { sub_429C80, { AGDATA_SPELL_DATA, -1 }, -1, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE },
+        /* 14 */ { sub_4246C0, { AGDATA_SELF_OBJ, -1 }, -1, 8, ANIM_DELAY_PAUSE_TIME, 4, ANIM_DELAY_NONE },
+        /* 15 */ { sub_429CD0, { AGDATA_SELF_OBJ, AGDATA_SPELL_DATA }, 1, 0, ANIM_DELAY_NONE, 0, ANIM_DELAY_NONE },
     },
 };
 
@@ -2493,11 +2493,11 @@ static AnimGoalNode anim_goal_node_throw_spell_w_cast_anim_secondary = {
     0,
     { -1, -1, -1 },
     {
-        /*  1 */ { sub_431320, { AGDATA_SELF_OBJ, -1 }, -1, 2, 0, 3, 0 },
-        /*  2 */ { AGupdateAnimEyeCandy, { AGDATA_SELF_OBJ, -1 }, -1, 5, 0, 0x10000000, -2 },
-        /*  3 */ { sub_429F00, { AGDATA_SPELL_DATA, -1 }, -1, 0x90000000, 0, 4, -2 },
-        /*  4 */ { AGbeginAnimEyeCandy, { AGDATA_SELF_OBJ, -1 }, -1, 0x90000000, 0, 0x10000000, -2 },
-        /*  5 */ { AGendAnimEyeCandy, { AGDATA_SELF_OBJ, -1 }, -1, 3, 0, 0x30000000, 0 },
+        /*  1 */ { sub_431320, { AGDATA_SELF_OBJ, -1 }, -1, 2, ANIM_DELAY_NONE, 3, ANIM_DELAY_NONE },
+        /*  2 */ { AGupdateAnimEyeCandy, { AGDATA_SELF_OBJ, -1 }, -1, 5, ANIM_DELAY_NONE, ANIM_FLOW_YIELD, ANIM_DELAY_PAUSE_TIME },
+        /*  3 */ { sub_429F00, { AGDATA_SPELL_DATA, -1 }, -1, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE, 4, ANIM_DELAY_PAUSE_TIME },
+        /*  4 */ { AGbeginAnimEyeCandy, { AGDATA_SELF_OBJ, -1 }, -1, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE, ANIM_FLOW_YIELD, ANIM_DELAY_PAUSE_TIME },
+        /*  5 */ { AGendAnimEyeCandy, { AGDATA_SELF_OBJ, -1 }, -1, 3, ANIM_DELAY_NONE, ANIM_FLOW_POP_GOAL, ANIM_DELAY_NONE },
         /*  6 */ { 0 },
         /*  7 */ { 0 },
         /*  8 */ { 0 },
@@ -2507,7 +2507,7 @@ static AnimGoalNode anim_goal_node_throw_spell_w_cast_anim_secondary = {
         /* 12 */ { 0 },
         /* 13 */ { 0 },
         /* 14 */ { 0 },
-        /* 15 */ { sub_431B20, { AGDATA_SELF_OBJ, -1 }, 1, 0, 0, 0, 0 },
+        /* 15 */ { sub_431B20, { AGDATA_SELF_OBJ, -1 }, 1, 0, ANIM_DELAY_NONE, 0, ANIM_DELAY_NONE },
     },
 };
 
@@ -2520,10 +2520,10 @@ static AnimGoalNode anim_goal_node_back_off_from = {
     0,
     { -1, -1, -1 },
     {
-        /*  1 */ { sub_42B940, { -1, -1 }, -1, 2, 0, 2, 0 },
-        /*  2 */ { sub_42BEA0, { -1, -1 }, 9, 0x90000000, 0, 3, 0 },
-        /*  3 */ { sub_425130, { AGDATA_SELF_OBJ, AGDATA_TARGET_OBJ }, -1, 4, 0, 0x40000000 | AG_MOVE_AWAY_FROM_OBJ, 0 },
-        /*  4 */ { sub_433270, { AGDATA_SELF_OBJ, -1 }, 1, 0x90000000, 0, 0x30000000, -2 },
+        /*  1 */ { sub_42B940, { -1, -1 }, -1, 2, ANIM_DELAY_NONE, 2, ANIM_DELAY_NONE },
+        /*  2 */ { sub_42BEA0, { -1, -1 }, 9, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE, 3, ANIM_DELAY_NONE },
+        /*  3 */ { sub_425130, { AGDATA_SELF_OBJ, AGDATA_TARGET_OBJ }, -1, 4, ANIM_DELAY_NONE, ANIM_FLOW_PUSH | AG_MOVE_AWAY_FROM_OBJ, ANIM_DELAY_NONE },
+        /*  4 */ { sub_433270, { AGDATA_SELF_OBJ, -1 }, 1, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE, ANIM_FLOW_POP_GOAL, ANIM_DELAY_PAUSE_TIME },
         /*  5 */ { 0 },
         /*  6 */ { 0 },
         /*  7 */ { 0 },
@@ -2534,7 +2534,7 @@ static AnimGoalNode anim_goal_node_back_off_from = {
         /* 12 */ { 0 },
         /* 13 */ { 0 },
         /* 14 */ { 0 },
-        /* 15 */ { NULL, { -1, -1 }, 1, 0, 0, 0, 0 },
+        /* 15 */ { NULL, { -1, -1 }, 1, 0, ANIM_DELAY_NONE, 0, ANIM_DELAY_NONE },
     },
 };
 
@@ -2547,21 +2547,21 @@ static AnimGoalNode anim_goal_node_attempt_use_pickpocket_skill_on = {
     0,
     { -1, -1, -1 },
     {
-        /*  1 */ { sub_42CA90, { AGDATA_SELF_OBJ, -1 }, -1, 2, 0, 3, 0 },
-        /*  2 */ { sub_42CC80, { AGDATA_SELF_OBJ, -1 }, -1, 8, -2, 0x10000000, -2 },
-        /*  3 */ { sub_42C0F0, { AGDATA_SELF_OBJ, AGDATA_TARGET_OBJ }, -1, 0x90000000, 0, 4, 0 },
-        /*  4 */ { sub_42A2A0, { AGDATA_SELF_OBJ, AGDATA_TARGET_OBJ }, -1, 0x90000000, 0, 5, 0 },
-        /*  5 */ { sub_42A430, { AGDATA_SELF_OBJ, AGDATA_TARGET_OBJ }, -1, 6, 0, 8, 0 },
-        /*  6 */ { sub_42BD40, { AGDATA_SELF_OBJ, -1 }, 0xC, 0x90000000, 0, 7, 0 },
-        /*  7 */ { sub_42CB10, { AGDATA_SELF_OBJ, AGDATA_ANIM_ID }, -1, 9, 0, 0x10000000, 0 },
-        /*  8 */ { sub_42BD40, { AGDATA_SELF_OBJ, -1 }, 0, 0x90000000, 0, 0x30000000, 0 },
-        /*  9 */ { sub_433270, { AGDATA_SELF_OBJ, -1 }, 1, 0x90000000, 0, 0x90000000, 0 },
+        /*  1 */ { sub_42CA90, { AGDATA_SELF_OBJ, -1 }, -1, 2, ANIM_DELAY_NONE, 3, ANIM_DELAY_NONE },
+        /*  2 */ { sub_42CC80, { AGDATA_SELF_OBJ, -1 }, -1, 8, ANIM_DELAY_PAUSE_TIME, ANIM_FLOW_YIELD, ANIM_DELAY_PAUSE_TIME },
+        /*  3 */ { sub_42C0F0, { AGDATA_SELF_OBJ, AGDATA_TARGET_OBJ }, -1, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE, 4, ANIM_DELAY_NONE },
+        /*  4 */ { sub_42A2A0, { AGDATA_SELF_OBJ, AGDATA_TARGET_OBJ }, -1, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE, 5, ANIM_DELAY_NONE },
+        /*  5 */ { sub_42A430, { AGDATA_SELF_OBJ, AGDATA_TARGET_OBJ }, -1, 6, ANIM_DELAY_NONE, 8, ANIM_DELAY_NONE },
+        /*  6 */ { sub_42BD40, { AGDATA_SELF_OBJ, -1 }, 0xC, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE, 7, ANIM_DELAY_NONE },
+        /*  7 */ { sub_42CB10, { AGDATA_SELF_OBJ, AGDATA_ANIM_ID }, -1, 9, ANIM_DELAY_NONE, ANIM_FLOW_YIELD, ANIM_DELAY_NONE },
+        /*  8 */ { sub_42BD40, { AGDATA_SELF_OBJ, -1 }, 0, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE, ANIM_FLOW_POP_GOAL, ANIM_DELAY_NONE },
+        /*  9 */ { sub_433270, { AGDATA_SELF_OBJ, -1 }, 1, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE },
         /* 10 */ { 0 },
         /* 11 */ { 0 },
         /* 12 */ { 0 },
         /* 13 */ { 0 },
         /* 14 */ { 0 },
-        /* 15 */ { sub_42B090, { AGDATA_SELF_OBJ, -1 }, 1, 0, 0, 0, 0 },
+        /* 15 */ { sub_42B090, { AGDATA_SELF_OBJ, -1 }, 1, 0, ANIM_DELAY_NONE, 0, ANIM_DELAY_NONE },
     },
 };
 
@@ -2704,8 +2704,15 @@ static int dword_5DE6C0;
 // 0x5DE6C4
 static int dword_5DE6C4;
 
+/**
+ * The delay a sub-node callback asks the interpreter for, in milliseconds,
+ * picked up by the `ANIM_DELAY_CALLBACK` sentinel in the goal tables.
+ *
+ * The movement callbacks set it: 35ms between animation steps, 1000ms after
+ * asking a blocking critter to move aside, 0 to carry straight on.
+ */
 // 0x5DE6CC
-static int dword_5DE6CC;
+static int anim_callback_delay;
 
 // NOTE: It's `bool`, but needs to be 4 byte integer because of saving/reading
 // compatibility.
@@ -3265,7 +3272,7 @@ void anim_break_nodes_to_map(const char* map)
         run_info = &(anim_run_info[idx]);
         if ((run_info->flags & 0x1) != 0) {
             if (!teleport_is_teleporting_obj(run_info->anim_obj)
-                || !anim_goal_nodes[run_info->goals[0].type]->field_C) {
+                || !anim_goal_nodes[run_info->goals[0].type]->passive) {
                 anim_interrupt(&(run_info->id), PRIORITY_HIGHEST);
             } else if (anim_run_info_save(run_info, stream)) {
                 cnt++;
@@ -3692,25 +3699,27 @@ bool anim_timeevent_process(TimeEvent* timeevent)
             break;
         }
 
-        state_change = rc ? goal_subnode->field_18 : goal_subnode->field_10;
-        delay = rc ? goal_subnode->field_1C : goal_subnode->field_14;
+        state_change = rc ? goal_subnode->success_state : goal_subnode->failure_state;
+        delay = rc ? goal_subnode->success_delay : goal_subnode->failure_delay;
 
-        if ((state_change & 0xFF000000) != 0) {
-            if ((state_change & 0x10000000) != 0) {
+        if ((state_change & ANIM_FLOW_MASK) != 0) {
+            if ((state_change & ANIM_FLOW_YIELD) != 0) {
                 run_info->current_state = 0;
                 err = true;
             }
 
-            if ((state_change & 0x38000000) == 0x38000000) {
-                sub_423D10(run_info, &state_change, &goal_node, &goal_data, &err);
-                sub_423D10(run_info, &state_change, &goal_node, &goal_data, &err);
+            // NOTE: The two pops here are on top of the one below, which this
+            // pattern also matches - `ANIM_FLOW_POP_3_GOALS` pops three goals.
+            if ((state_change & ANIM_FLOW_POP_3_GOALS) == ANIM_FLOW_POP_3_GOALS) {
+                anim_pop_goal(run_info, &state_change, &goal_node, &goal_data, &err);
+                anim_pop_goal(run_info, &state_change, &goal_node, &goal_data, &err);
             }
 
-            if ((state_change & 0x30000000) == 0x30000000) {
-                sub_423D10(run_info, &state_change, &goal_node, &goal_data, &err);
+            if ((state_change & ANIM_FLOW_POP_GOAL) == ANIM_FLOW_POP_GOAL) {
+                anim_pop_goal(run_info, &state_change, &goal_node, &goal_data, &err);
             }
 
-            if ((state_change & 0x40000000) != 0) {
+            if ((state_change & ANIM_FLOW_PUSH) != 0) {
                 if (run_info->current_goal < 7) {
                     run_info->current_state = 0;
                     run_info->current_goal++;
@@ -3718,11 +3727,14 @@ bool anim_timeevent_process(TimeEvent* timeevent)
                     goal_data = &(run_info->goals[run_info->current_goal]);
                     run_info->cur_stack_data = goal_data;
 
-                    if (run_info->current_goal > 0 && (state_change & 0x30000000) != 0x30000000) {
+                    // A replace reuses the data the pop just left behind at
+                    // this depth; a plain push starts from a copy of the
+                    // caller's.
+                    if (run_info->current_goal > 0 && (state_change & ANIM_FLOW_POP_GOAL) != ANIM_FLOW_POP_GOAL) {
                         *goal_data = run_info->goals[run_info->current_goal - 1];
                     }
 
-                    goal_data->type = state_change & 0xFFF;
+                    goal_data->type = state_change & ANIM_FLOW_GOAL_MASK;
                     goal_node = anim_goal_nodes[goal_data->type];
                     sub_44C840(run_info, goal_node);
                     anim_validate_active_goals("Running: PushGoal");
@@ -3741,7 +3753,7 @@ bool anim_timeevent_process(TimeEvent* timeevent)
                 }
             }
 
-            if ((state_change & 0x90000000) == 0x90000000) {
+            if ((state_change & ANIM_FLOW_TERMINATE) == ANIM_FLOW_TERMINATE) {
                 run_info->flags |= 0x02;
                 if (combat_turn_based_is_active() && !player_is_local_pc_obj(run_info->anim_obj)) {
                     combat_consume_action_points(run_info->anim_obj, combat_required_action_points_get());
@@ -3775,19 +3787,19 @@ bool anim_timeevent_process(TimeEvent* timeevent)
             run_info->current_state = state_change - 1;
         }
 
-        if (delay != 0) {
+        if (delay != ANIM_DELAY_NONE) {
             err = true;
-            if (delay == -2) {
+            if (delay == ANIM_DELAY_PAUSE_TIME) {
                 delay = run_info->pause_time.milliseconds;
                 break;
             }
 
-            if (delay == -3) {
-                delay = dword_5DE6CC;
+            if (delay == ANIM_DELAY_CALLBACK) {
+                delay = anim_callback_delay;
                 break;
             }
 
-            if (delay != -4) {
+            if (delay != ANIM_DELAY_RANDOM) {
                 break;
             }
 
@@ -3857,26 +3869,30 @@ bool sub_423C80(AnimRunInfo* run_info, DateTime* a2, int delay)
 }
 
 // 0x423D10
-void sub_423D10(AnimRunInfo* run_info, unsigned int* flags_ptr, AnimGoalNode** goal_node_ptr, AnimGoalData** goal_data_ptr, bool* a5)
+void anim_pop_goal(AnimRunInfo* run_info, unsigned int* state_change_ptr, AnimGoalNode** goal_node_ptr, AnimGoalData** goal_data_ptr, bool* err_ptr)
 {
+    // Popping the bottom goal ends the run, unless the flow code pushes a
+    // replacement on the way out.
     if (run_info->current_goal == 0
-        && (*flags_ptr & 0x40000000) == 0) {
+        && (*state_change_ptr & ANIM_FLOW_PUSH) == 0) {
         run_info->flags |= 0x02;
     }
 
+    // NOTE: The first test is dead - the caller only reaches here with
+    // `ANIM_FLOW_POP_GOAL` set, which is inside `ANIM_FLOW_REPLACE_GOAL`.
     if ((*goal_node_ptr)->subnodes[14].func != NULL
-        && ((*flags_ptr & 0x70000000) == 0
-            || (*flags_ptr & 0x4000000) == 0)
+        && ((*state_change_ptr & ANIM_FLOW_REPLACE_GOAL) == 0
+            || (*state_change_ptr & ANIM_FLOW_NO_CLEANUP) == 0)
         && anim_recover_handles(run_info, &((*goal_node_ptr)->subnodes[14]))) {
         (*goal_node_ptr)->subnodes[14].func(run_info);
     }
 
-    if ((*flags_ptr & 0x1000000) == 0) {
+    if ((*state_change_ptr & ANIM_FLOW_KEEP_PATH) == 0) {
         run_info->path.maxPathLength = 0;
         run_info->flags &= ~0x83C;
     }
 
-    if ((*flags_ptr & 0x2000000) != 0) {
+    if ((*state_change_ptr & ANIM_FLOW_RESET_PATH) != 0) {
         run_info->path.flags = 0x01;
     }
 
@@ -3887,9 +3903,9 @@ void sub_423D10(AnimRunInfo* run_info, unsigned int* flags_ptr, AnimGoalNode** g
     if (run_info->current_goal >= 0) {
         run_info->cur_stack_data = *goal_data_ptr = &(run_info->goals[run_info->current_goal]);
         *goal_node_ptr = anim_goal_nodes[(*goal_data_ptr)->type];
-        *a5 = false;
+        *err_ptr = false;
     } else {
-        if ((*flags_ptr & 0x40000000) == 0) {
+        if ((*state_change_ptr & ANIM_FLOW_PUSH) == 0) {
             run_info->flags |= 0x02;
         }
     }
@@ -4114,7 +4130,7 @@ bool anim_goal_interrupt_all_for_tb_combat(void)
     for (index = 0; index < 216; index++) {
         run_info = &(anim_run_info[index]);
         if ((run_info->flags & 0x1) != 0
-            && !sub_44C9A0(run_info)
+            && !anim_goal_is_endless(run_info)
             && !anim_interrupt(&(run_info->id), PRIORITY_3)) {
             tig_debug_printf("Anim: anim_goal_interrupt_all_for_tb_combat: ERROR: Failed to interrupt slot: %d!\n", index);
         }
@@ -4471,7 +4487,7 @@ bool sub_424E00(AnimRunInfo* run_info)
 
     // TODO: Unclear if it checks loc or obj.
     if (run_info->params[1].loc != 0) {
-        dword_5DE6CC = 0;
+        anim_callback_delay = 0;
         return true;
     }
 
@@ -4508,7 +4524,7 @@ bool sub_424E00(AnimRunInfo* run_info)
     for (idx = rot; idx < 8; idx++) {
         if (adjacent_locs[idx] != target_loc) {
             if (anim_goal_please_move(source_obj, adjacent_objs[idx])) {
-                dword_5DE6CC = 1000;
+                anim_callback_delay = 1000;
                 run_info->cur_stack_data->params[AGDATA_TARGET_TILE].loc = adjacent_locs[idx];
                 return true;
             }
@@ -4518,7 +4534,7 @@ bool sub_424E00(AnimRunInfo* run_info)
     for (idx = 0; idx < rot; idx++) {
         if (adjacent_locs[idx] != target_loc) {
             if (anim_goal_please_move(source_obj, adjacent_objs[idx])) {
-                dword_5DE6CC = 1000;
+                anim_callback_delay = 1000;
                 run_info->cur_stack_data->params[AGDATA_TARGET_TILE].loc = adjacent_locs[idx];
                 return true;
             }
@@ -10784,11 +10800,11 @@ bool AGupdateAnimMoveStraight(AnimRunInfo* run_info)
     ASSERT(obj != OBJ_HANDLE_NULL); // 11385, "obj != OBJ_HANDLE_NULL"
 
     v1 = run_info->cur_stack_data->params[AGDATA_SCRATCH_VAL5].data;
-    dword_5DE6CC = 35;
+    anim_callback_delay = 35;
 
     if (v1 == 0) {
         v1 = 4;
-        dword_5DE6CC = 35;
+        anim_callback_delay = 35;
     }
 
     if (obj == OBJ_HANDLE_NULL) {
@@ -10890,10 +10906,10 @@ bool sub_42F6A0(AnimRunInfo* run_info)
     ASSERT(projectile_obj != OBJ_HANDLE_NULL); // 11496, "projObj != OBJ_HANDLE_NULL"
 
     cnt = run_info->cur_stack_data->params[AGDATA_SCRATCH_VAL5].data;
-    dword_5DE6CC = 35;
+    anim_callback_delay = 35;
     if (cnt == 0) {
         cnt = 4;
-        dword_5DE6CC = 35;
+        anim_callback_delay = 35;
     }
 
     if (projectile_obj == OBJ_HANDLE_NULL) {
@@ -10989,7 +11005,7 @@ bool AGupdateAnimMoveStraightKnockback(AnimRunInfo* run_info)
 
     ASSERT(obj != OBJ_HANDLE_NULL); // 11622, "obj != OBJ_HANDLE_NULL"
 
-    dword_5DE6CC = 35;
+    anim_callback_delay = 35;
 
     if (obj == OBJ_HANDLE_NULL) {
         run_info->flags &= ~0x10;
@@ -14815,7 +14831,7 @@ bool anim_goal_please_move(int64_t obj, int64_t target_obj)
         return false;
     }
 
-    if (sub_44E8C0(target_obj, NULL)) {
+    if (anim_is_running_non_passive_goal(target_obj, NULL)) {
         return false;
     }
 
@@ -14858,7 +14874,7 @@ void sub_4364D0(int64_t obj)
         obj_node = critters.head;
         while (obj_node != NULL) {
             if (!critter_is_dead(obj_node->obj)
-                && !sub_44E8C0(obj_node->obj, NULL)) {
+                && !anim_is_running_non_passive_goal(obj_node->obj, NULL)) {
                 cnt++;
             }
             obj_node = obj_node->next;
@@ -14868,7 +14884,7 @@ void sub_4364D0(int64_t obj)
             obj_node = critters.head;
             while (obj_node != NULL) {
                 if (!critter_is_dead(obj_node->obj)
-                    && !sub_44E8C0(obj_node->obj, NULL)) {
+                    && !anim_is_running_non_passive_goal(obj_node->obj, NULL)) {
                     new_node = object_node_create();
                     new_node->obj = obj_node->obj;
 
@@ -14951,7 +14967,7 @@ bool sub_436720(int64_t* source_obj_ptr, int64_t* block_obj_ptr)
 
     if (source_obj_ptr == NULL
         || *source_obj_ptr == OBJ_HANDLE_NULL
-        || sub_44E8C0(*source_obj_ptr, NULL)) {
+        || anim_is_running_non_passive_goal(*source_obj_ptr, NULL)) {
         return false;
     }
 
@@ -14961,7 +14977,7 @@ bool sub_436720(int64_t* source_obj_ptr, int64_t* block_obj_ptr)
     node = objects.head;
     while (node != NULL) {
         if (!critter_is_dead(node->obj)
-            && !sub_44E8C0(node->obj, NULL)) {
+            && !anim_is_running_non_passive_goal(node->obj, NULL)) {
             cnt++;
         }
         node = node->next;
@@ -14972,7 +14988,7 @@ bool sub_436720(int64_t* source_obj_ptr, int64_t* block_obj_ptr)
         node = objects.head;
         while (node != NULL) {
             if (!critter_is_dead(node->obj)
-                && !sub_44E8C0(node->obj, NULL)
+                && !anim_is_running_non_passive_goal(node->obj, NULL)
                 && obj_field_int32_get(node->obj, OBJ_F_TYPE) == OBJ_TYPE_NPC
                 && node->obj != *source_obj_ptr) {
                 break;

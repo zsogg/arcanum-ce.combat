@@ -209,7 +209,7 @@ void sub_44C840(AnimRunInfo* run_info, AnimGoalNode* goal_node)
     ASSERT(run_info != NULL); // pRunInfo != NULL
     ASSERT(goal_node != NULL); // pGoalNode != NULL
 
-    if (goal_node->priority_level >= 2 && !goal_node->concurrent && !sub_44C9A0(run_info)) {
+    if (goal_node->priority_level >= 2 && !goal_node->concurrent && !anim_goal_is_endless(run_info)) {
         ASSERT(animNumActiveGoals >= 0); // animNumActiveGoals >= 0
 
         animNumActiveGoals++;
@@ -222,7 +222,7 @@ void sub_44C8F0(AnimRunInfo* run_info, AnimGoalNode* goal_node)
     ASSERT(run_info != NULL); // pRunInfo != NULL
     ASSERT(goal_node != NULL); // pGoalNode != NULL
 
-    if (goal_node->priority_level >= 2 && !goal_node->concurrent && !sub_44C9A0(run_info)) {
+    if (goal_node->priority_level >= 2 && !goal_node->concurrent && !anim_goal_is_endless(run_info)) {
         ASSERT(animNumActiveGoals >= 1); // animNumActiveGoals >= 1
 
         if (animNumActiveGoals >= 1) {
@@ -232,7 +232,7 @@ void sub_44C8F0(AnimRunInfo* run_info, AnimGoalNode* goal_node)
 }
 
 // 0x44C9A0
-bool sub_44C9A0(AnimRunInfo* run_info)
+bool anim_goal_is_endless(AnimRunInfo* run_info)
 {
     ASSERT(run_info != NULL); // pRunInfo != NULL
 
@@ -252,7 +252,7 @@ bool sub_44C9A0(AnimRunInfo* run_info)
         run_info->cur_stack_data = &(run_info->goals[run_info->current_goal]);
     }
 
-    return (anim_goal_nodes[run_info->cur_stack_data->type]->field_10 & 0x1) != 0
+    return (anim_goal_nodes[run_info->cur_stack_data->type]->flags & ANIM_GOAL_NODE_ENDLESS) != 0
         || (run_info->cur_stack_data->params[AGDATA_FLAGS_DATA].data & 0x80) != 0;
 }
 
@@ -908,7 +908,7 @@ bool anim_recover_handles(AnimRunInfo* run_info, AnimGoalSubNode* goal_subnode)
             }
         }
 
-        run_info->params[2].data = goal_subnode->field_C;
+        run_info->params[2].data = goal_subnode->literal_param;
     }
 
     return true;
@@ -1206,7 +1206,7 @@ bool sub_44E710(int64_t obj, AnimGoalData* goal_data, AnimID* anim_id)
             for (idx = -1; idx < 3; idx++) {
                 goal_type = idx == -1
                     ? goal_data->type
-                    : goal_node->field_14[idx];
+                    : goal_node->equivalent_goals[idx];
                 if (goal_type == -1) {
                     break;
                 }
@@ -1275,11 +1275,11 @@ bool anim_is_current_goal_type(int64_t obj, int goal_type, AnimID* anim_id)
     goal_node = anim_goal_nodes[goal_type];
 
     for (idx = 0; idx < 3; idx++) {
-        if (goal_node->field_14[idx] == -1) {
+        if (goal_node->equivalent_goals[idx] == -1) {
             break;
         }
 
-        if (goal_node->field_14[idx] == run_info->goals[0].type) {
+        if (goal_node->equivalent_goals[idx] == run_info->goals[0].type) {
             if (anim_id != NULL) {
                 *anim_id = run_info->id;
             }
@@ -1292,7 +1292,7 @@ bool anim_is_current_goal_type(int64_t obj, int goal_type, AnimID* anim_id)
 }
 
 // 0x44E8C0
-bool sub_44E8C0(int64_t obj, AnimID* anim_id)
+bool anim_is_running_non_passive_goal(int64_t obj, AnimID* anim_id)
 {
     int slot;
 
@@ -1302,7 +1302,7 @@ bool sub_44E8C0(int64_t obj, AnimID* anim_id)
 
     slot = anim_find_first(obj);
     while (slot != -1) {
-        if (!anim_goal_nodes[anim_run_info[slot].goals[0].type]->field_C) {
+        if (!anim_goal_nodes[anim_run_info[slot].goals[0].type]->passive) {
             if (anim_id != NULL) {
                 *anim_id = anim_run_info[slot].id;
             }
@@ -1341,7 +1341,7 @@ bool anim_is_attacking(int64_t attacker_obj, AnimID* anim_id, int64_t target_obj
 
     for (idx = -1; idx < 3; idx++) {
         if (idx != -1) {
-            goal_type = goal_node->field_14[idx];
+            goal_type = goal_node->equivalent_goals[idx];
         }
 
         if (goal_type == -1) {
