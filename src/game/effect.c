@@ -7,11 +7,17 @@
 #include "game/skill.h"
 #include "game/stat.h"
 #include "game/tech.h"
+#include "game/uap.h"
 
 /**
  * Defines the maximum number of effects per effect type.
  */
 #define EFFECT_LIST_CAPACITY 400
+
+// UAP (0x4E9A0F): the patch raises the effect id range from 400 to 1000 so
+// that its own entries in `rules\\effect.mes` have somewhere to live. Both the
+// allocation and the parse loop move together.
+#define UAP_EFFECT_LIST_CAPACITY 1000
 
 typedef enum EffectSpecial {
     EFFECT_SPECIAL_MAX_HIT_POINTS,
@@ -266,16 +272,18 @@ bool effect_init(GameInitInfo* init_info)
         return false;
     }
 
-    // Allocate memory for typed effect arrays.
-    effect_stat_effects = (Effect*)CALLOC(EFFECT_LIST_CAPACITY, sizeof(*effect_stat_effects));
-    effect_basic_skill_effects = (Effect*)CALLOC(EFFECT_LIST_CAPACITY, sizeof(*effect_basic_skill_effects));
-    effect_tech_skill_effects = (Effect*)CALLOC(EFFECT_LIST_CAPACITY, sizeof(*effect_tech_skill_effects));
-    effect_resistance_effects = (Effect*)CALLOC(EFFECT_LIST_CAPACITY, sizeof(*effect_resistance_effects));
-    effect_tech_effects = (Effect*)CALLOC(EFFECT_LIST_CAPACITY, sizeof(*effect_tech_effects));
-    effect_special_effects = (Effect*)CALLOC(EFFECT_LIST_CAPACITY, sizeof(*effect_special_effects));
+    int capacity = uap_fixes_enabled() ? UAP_EFFECT_LIST_CAPACITY : EFFECT_LIST_CAPACITY;
 
-    // Parse effects from engine-wide range (50-400).
-    for (mes_file_entry.num = 50; mes_file_entry.num < 400; mes_file_entry.num++) {
+    // Allocate memory for typed effect arrays.
+    effect_stat_effects = (Effect*)CALLOC(capacity, sizeof(*effect_stat_effects));
+    effect_basic_skill_effects = (Effect*)CALLOC(capacity, sizeof(*effect_basic_skill_effects));
+    effect_tech_skill_effects = (Effect*)CALLOC(capacity, sizeof(*effect_tech_skill_effects));
+    effect_resistance_effects = (Effect*)CALLOC(capacity, sizeof(*effect_resistance_effects));
+    effect_tech_effects = (Effect*)CALLOC(capacity, sizeof(*effect_tech_effects));
+    effect_special_effects = (Effect*)CALLOC(capacity, sizeof(*effect_special_effects));
+
+    // Parse effects from engine-wide range (50 to the capacity).
+    for (mes_file_entry.num = 50; mes_file_entry.num < capacity; mes_file_entry.num++) {
         if (mes_search(mes_file, &mes_file_entry)) {
             effect_parse(mes_file_entry.num, mes_file_entry.str);
         }

@@ -11,6 +11,8 @@
 #include "game/spell.h"
 #include "game/stat.h"
 #include "game/tech.h"
+#include "game/timeevent.h"
+#include "game/uap.h"
 
 #define OBJ_FILE_VERSION 119
 
@@ -1742,6 +1744,18 @@ int obj_arrayfield_int32_get(int64_t obj, int fld, int index)
     }
 
     obj_arrayfield_fetch(object, fld, index, &value);
+
+    // UAP (0x407322): "Added aging, every year everyone's age stat gets
+    // increased by 1." A year is 360 days, the same divisor
+    // `datetime_current_year` uses.
+    //
+    // NOTE: The patch hooks this generic accessor and tests the index alone,
+    // so it adds the elapsed years to *any* array field read at index 25, not
+    // only the basic stats where `STAT_AGE` lives. Reproduced as-is.
+    if (uap_fixes_enabled() && index == STAT_AGE) {
+        value += timeevent_current_datetime().days / 360;
+    }
+
     obj_unlock(obj);
 
     return value;

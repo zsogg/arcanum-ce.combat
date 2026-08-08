@@ -37,6 +37,7 @@
 #include "game/stat.h"
 #include "game/tf.h"
 #include "game/trap.h"
+#include "game/uap.h"
 #include "game/ui.h"
 
 static void turn_based_changed(void);
@@ -1787,9 +1788,21 @@ void combat_dmg(CombatContext* combat)
             hp_ratio_before = ai_object_hp_ratio(combat->target_obj);
         }
 
-        mes_file_entry.num = 1; // "HT"
-        mes_get_msg(combat_mes_file, &mes_file_entry);
-        snprintf(str, sizeof(str), "%s %d", mes_file_entry.str, dam);
+        // The original clears the string here (0x4B504D) even though the
+        // `snprintf` below always overwrites it - dead in the unpatched flow,
+        // but the UAP fix skips that `snprintf` and leaves this the only
+        // initialization.
+        str[0] = '\0';
+
+        // UAP (0x4B5054): a blow the target shrugged off no longer floats
+        // "HT 0" over its head - with nothing written here, the `str[0]`
+        // guard below suppresses the message. A hit that only cost fatigue
+        // still floats its "FT" part, which the fatigue block appends.
+        if (!uap_fixes_enabled() || dam > 0) {
+            mes_file_entry.num = 1; // "HT"
+            mes_get_msg(combat_mes_file, &mes_file_entry);
+            snprintf(str, sizeof(str), "%s %d", mes_file_entry.str, dam);
+        }
 
         combat->total_dam = dam;
 
@@ -1923,7 +1936,11 @@ void combat_dmg(CombatContext* combat)
         }
         object_hp_damage_set(combat->target_obj, hp_dam);
 
-        if (tf_level_get() == TF_LEVEL_VERBOSE) {
+        // UAP (0x4B4679): do not float a damage number over an object that
+        // took no damage - hitting a door or a container that shrugs the blow
+        // off used to announce "HT 0".
+        if ((!uap_fixes_enabled() || dam > 0)
+            && tf_level_get() == TF_LEVEL_VERBOSE) {
             mes_file_entry.num = 1; // "HT"
             mes_get_msg(combat_mes_file, &mes_file_entry);
 

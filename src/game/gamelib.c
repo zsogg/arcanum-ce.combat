@@ -69,6 +69,7 @@
 #include "game/timeevent.h"
 #include "game/townmap.h"
 #include "game/trap.h"
+#include "game/uap.h"
 #include "game/ui.h"
 #include "game/wall.h"
 #include "game/wallcheck.h"
@@ -325,6 +326,8 @@ bool gamelib_init(GameInitInfo* init_info)
 
     settings_register(&settings, DIFFICULTY_KEY, "1", difficulty_changed);
     difficulty_changed();
+
+    uap_init();
 
     gamelib_mod_loaded = false;
     gamelib_load_data();

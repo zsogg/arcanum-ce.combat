@@ -239,6 +239,7 @@ set(SRCS
     "src/game/townmap.h"
     "src/game/trap.c"
     "src/game/trap.h"
+    "src/game/uap.c"
     "src/game/ui.c"
     "src/game/ui.h"
     "src/game/walkmask.c"
