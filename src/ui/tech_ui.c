@@ -3,6 +3,7 @@
 #include "game/player.h"
 #include "game/stat.h"
 #include "game/tech.h"
+#include "game/uap.h"
 #include "ui/charedit_ui.h"
 #include "ui/intgame.h"
 
@@ -22,7 +23,15 @@ void tech_ui_inc_degree(int64_t obj, int tech)
     degree = tech_degree_get(obj, tech);
     cost = tech_degree_cost_get(degree + 1);
     points = stat_level_get(obj, STAT_UNSPENT_POINTS);
-    is_pc = player_is_local_pc_obj(obj);
+    // UAP (0x589A6F): "You can now disable your party members auto-level
+    // scheme and distribute their character points yourself if you so
+    // desire." The patch redirects this call to 0x40DA0E - the
+    // `mov eax, 1; ret` tail inside `player_is_local_pc_obj` - so the test is
+    // unconditionally true. `is_pc` gates only the character editor's
+    // feedback (error floaters, `charedit_refresh`, the message-window
+    // clear), so without it a follower's +/- buttons apply the change but
+    // never redraw it.
+    is_pc = uap_fixes_enabled() || player_is_local_pc_obj(obj);
 
     // Check if there are enough character points to increment the degree.
     if (cost > points) {
@@ -70,7 +79,15 @@ void tech_ui_dec_degree(int64_t obj, int tech)
     degree = tech_degree_get(obj, tech);
     cost = tech_degree_cost_get(degree);
     points = stat_level_get(obj, STAT_UNSPENT_POINTS);
-    is_pc = player_is_local_pc_obj(obj);
+    // UAP (0x589B3A): "You can now disable your party members auto-level
+    // scheme and distribute their character points yourself if you so
+    // desire." The patch redirects this call to 0x40DA0E - the
+    // `mov eax, 1; ret` tail inside `player_is_local_pc_obj` - so the test is
+    // unconditionally true. `is_pc` gates only the character editor's
+    // feedback (error floaters, `charedit_refresh`, the message-window
+    // clear), so without it a follower's +/- buttons apply the change but
+    // never redraw it.
+    is_pc = uap_fixes_enabled() || player_is_local_pc_obj(obj);
 
     // Attempt to decrease the technology degree.
     if (tech_degree_dec(obj, tech) < degree) {

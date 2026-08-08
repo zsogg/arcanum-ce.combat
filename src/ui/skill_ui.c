@@ -11,6 +11,7 @@
 #include "game/stat.h"
 #include "game/target.h"
 #include "game/tf.h"
+#include "game/uap.h"
 #include "ui/charedit_ui.h"
 #include "ui/dialog_ui.h"
 #include "ui/intgame.h"
@@ -658,7 +659,15 @@ void skill_ui_inc_skill(int64_t obj, int skill)
     int cost;
     int points;
 
-    is_pc = player_is_local_pc_obj(obj);
+    // UAP (0x57ACE1): "You can now disable your party members auto-level
+    // scheme and distribute their character points yourself if you so
+    // desire." The patch redirects this call to 0x40DA0E - the
+    // `mov eax, 1; ret` tail inside `player_is_local_pc_obj` - so the test is
+    // unconditionally true. `is_pc` gates only the character editor's
+    // feedback (error floaters, `charedit_refresh`, the message-window
+    // clear), so without it a follower's +/- buttons apply the change but
+    // never redraw it.
+    is_pc = uap_fixes_enabled() || player_is_local_pc_obj(obj);
     if (IS_TECH_SKILL(skill)) {
         skill = GET_TECH_SKILL(skill);
         base = tech_skill_points_get(obj, skill);
@@ -733,7 +742,15 @@ void skill_ui_dec_skill(int64_t obj, int skill)
     int cost;
     int points;
 
-    is_pc = player_is_local_pc_obj(obj);
+    // UAP (0x57AEC1): "You can now disable your party members auto-level
+    // scheme and distribute their character points yourself if you so
+    // desire." The patch redirects this call to 0x40DA0E - the
+    // `mov eax, 1; ret` tail inside `player_is_local_pc_obj` - so the test is
+    // unconditionally true. `is_pc` gates only the character editor's
+    // feedback (error floaters, `charedit_refresh`, the message-window
+    // clear), so without it a follower's +/- buttons apply the change but
+    // never redraw it.
+    is_pc = uap_fixes_enabled() || player_is_local_pc_obj(obj);
     if (IS_TECH_SKILL(skill)) {
         skill = GET_TECH_SKILL(skill);
         base = tech_skill_points_get(obj, skill);
