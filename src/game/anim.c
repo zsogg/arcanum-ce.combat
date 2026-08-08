@@ -10968,9 +10968,9 @@ bool AGupdateAnimProjectileMoveStraight(AnimRunInfo* run_info)
         new_loc_y = projectile_loc_y + offset_y + 20;
 
         if (!location_at(new_loc_x, new_loc_y, &new_loc)) {
-            tig_debug_printf("Anim: AGupdateAnimProjectileMoveStraight: ERROR: location_at() failed: Loc: (%I64d x %I64d)!\n",
-                new_loc_x,
-                new_loc_y);
+            tig_debug_printf("Anim: AGupdateAnimProjectileMoveStraight: ERROR: location_at() failed: Loc: (%lld x %lld)!\n",
+                (long long)new_loc_x,
+                (long long)new_loc_y);
             ASSERT(0); // 11594, "0"
             return false;
         }
@@ -11494,18 +11494,18 @@ bool AGupdateAnimMove(AnimRunInfo* run_info)
 
             distance = location_dist(run_info->path.field_E8, loc);
             object_examine(obj, obj, str);
-            tig_debug_printf("AGUpdateAnimMove: ERROR %s (%I64d tiles away @ %I64d, %I64d) are more than\n",
+            tig_debug_printf("AGUpdateAnimMove: ERROR %s (%lld tiles away @ %lld, %lld) are more than\n",
                 str,
-                distance,
-                LOCATION_GET_X(loc),
-                LOCATION_GET_Y(loc));
-            tig_debug_printf("                  anim_path_data.curr(%d) tiles away from where you started (%I64d,%I64d)\n",
+                (long long)distance,
+                (long long)LOCATION_GET_X(loc),
+                (long long)LOCATION_GET_Y(loc));
+            tig_debug_printf("                  anim_path_data.curr(%d) tiles away from where you started (%lld,%lld)\n",
                 run_info->path.curr,
-                LOCATION_GET_X(run_info->path.field_E8),
-                LOCATION_GET_Y(run_info->path.field_E8));
+                (long long)LOCATION_GET_X(run_info->path.field_E8),
+                (long long)LOCATION_GET_Y(run_info->path.field_E8));
 
             sub_437C50(run_info, run_info->path.curr, &x, &y);
-            tig_debug_printf("                  interrupting your animation at %I64d, %I64d\n", x, y);
+            tig_debug_printf("                  interrupting your animation at %lld, %lld\n", (long long)x, (long long)y);
 
             art_id = obj_field_int32_get(obj, OBJ_F_CURRENT_AID);
             if (critter_is_concealed(art_id)) {

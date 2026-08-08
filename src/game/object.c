@@ -2042,11 +2042,11 @@ void object_get_rect(int64_t obj, unsigned int flags, TigRect* rect)
         }
     } else {
         tig_debug_println("Error:  object_get_rect found object with location outside the limits for the current map");
-        tig_debug_printf("        x: 0x%I64x  y: 0x%I64x\n        limit_x: 0x%I64x  limit_y: 0x%I64x\n",
-            LOCATION_GET_X(loc),
-            LOCATION_GET_Y(loc),
-            limit_x,
-            limit_y);
+        tig_debug_printf("        x: 0x%llx  y: 0x%llx\n        limit_x: 0x%llx  limit_y: 0x%llx\n",
+            (unsigned long long)LOCATION_GET_X(loc),
+            (unsigned long long)LOCATION_GET_Y(loc),
+            (unsigned long long)limit_x,
+            (unsigned long long)limit_y);
 
         loc_x = 0;
         loc_y = 0;

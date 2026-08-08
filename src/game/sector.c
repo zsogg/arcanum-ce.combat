@@ -912,8 +912,8 @@ bool sector_lock(int64_t id, Sector** sector_ptr)
                 return false;
             }
 
-            tig_debug_printf("Sector cache full, removing oldest (%I64u)...\n",
-                sector_cache_entries[sector_cache_indexes[oldest]].sector.id);
+            tig_debug_printf("Sector cache full, removing oldest (%llu)...\n",
+                (unsigned long long)sector_cache_entries[sector_cache_indexes[oldest]].sector.id);
 
             sector_save_func(&(sector_cache_entries[sector_cache_indexes[oldest]].sector));
             sector_cache_evict(&(sector_cache_entries[sector_cache_indexes[oldest]].sector));
@@ -949,7 +949,7 @@ bool sector_lock(int64_t id, Sector** sector_ptr)
         cache_entry->sector.datetime = datetime;
 
         if (!sector_load_func(id, &(cache_entry->sector))) {
-            tig_debug_printf("Error: attempt to lock sector %I64u in cache failed due to error in load.  This is bad.  Help.\n", id);
+            tig_debug_printf("Error: attempt to lock sector %llu in cache failed due to error in load.  This is bad.  Help.\n", (unsigned long long)id);
             in_sector_lock = false;
             return false;
         }
@@ -1472,15 +1472,15 @@ bool sector_load_game(int64_t id, Sector* sector)
             v2 = id;
 
             if (!tig_file_exists(sec_path, NULL)) {
-                tig_debug_printf("Sector: ERROR loading %s terrain sector while attempting to load sector %I64d\n",
+                tig_debug_printf("Sector: ERROR loading %s terrain sector while attempting to load sector %lld\n",
                     sec_path,
-                    id);
+                    (long long)id);
                 terrain_fill(sector);
                 generated = true;
             }
         }
     } else {
-        tig_debug_printf("Sector %I64u is beyond the demo limits\n", id);
+        tig_debug_printf("Sector %llu is beyond the demo limits\n", (unsigned long long)id);
         terrain_sector_path(id, sec_path);
         v2 = id;
 

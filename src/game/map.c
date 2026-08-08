@@ -986,9 +986,9 @@ void map_flush(unsigned int flags)
             stream = tig_file_fopen(path, "wt");
             if (stream != NULL) {
                 tig_file_fprintf(stream,
-                    "%I64d\n%I64d\n",
-                    LOCATION_GET_X(map_starting_loc),
-                    LOCATION_GET_Y(map_starting_loc));
+                    "%lld\n%lld\n",
+                    (long long)LOCATION_GET_X(map_starting_loc),
+                    (long long)LOCATION_GET_Y(map_starting_loc));
             } else {
                 tig_debug_printf("Error could not open map start location file for writing %s\n", path);
             }

@@ -16,6 +16,7 @@
 #include "game/gsound.h"
 #include "game/item.h"
 #include "game/light_scheme.h"
+#include "game/location.h"
 #include "game/map.h"
 #include "game/mes.h"
 #include "game/mp_utils.h"
@@ -7124,11 +7125,20 @@ void sub_45A760(int64_t obj, const char* msg)
 
     if (obj != OBJ_HANDLE_NULL) {
         object_examine(obj, obj, buffer);
-        tig_debug_printf("\t%s: %s(%I64d), Loc: [%I64d x %I64d]\n",
+        // FIX: The `Loc: [%lld x %lld]` pair was passed the whole packed
+        // location twice instead of its x and y, so both numbers came out as
+        // the packed value. The original splits it: it fetches the field once
+        // for the low half (0x45A78D) and again for the high half (0x45A796),
+        // pushing x zero-extended and y sign-extended (0x45A79F-0x45A7A2).
+        //
+        // Same defect family as the one fixed in `map_gender_check` - the
+        // `%I64d` spelling hid it, since glibc renders that as a 64-column
+        // `%d` and the output looked like padding rather than a wrong value.
+        tig_debug_printf("\t%s: %s(%lld), Loc: [%lld x %lld]\n",
             msg,
             buffer,
-            obj,
-            obj_field_int64_get(obj, OBJ_F_LOCATION),
-            obj_field_int64_get(obj, OBJ_F_LOCATION));
+            (long long)obj,
+            (long long)LOCATION_GET_X(obj_field_int64_get(obj, OBJ_F_LOCATION)),
+            (long long)LOCATION_GET_Y(obj_field_int64_get(obj, OBJ_F_LOCATION)));
     }
 }

@@ -2001,10 +2001,10 @@ void timeevent_debug_node(TimeEventNode* node, int node_index)
             } else {
                 strcpy(object_name, "<INVALIDATED OBJ>");
             }
-            tig_debug_printf(", D%d[%s(%I64d)]obj",
+            tig_debug_printf(", D%d[%s(%lld)]obj",
                 index,
                 object_name,
-                node->te.params[index].object_value);
+                (long long)node->te.params[index].object_value);
         } else if ((dword_5B2794[index][TIMEEVENT_PARAM_TYPE_LOCATION] & stru_5B2188[node->te.type].flags) != 0) {
             tig_debug_printf(", D%d[%d x %d]loc",
                 index,
