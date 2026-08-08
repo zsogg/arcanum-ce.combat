@@ -504,10 +504,24 @@ void main_loop(void)
                         }
                         break;
                     case SDL_SCANCODE_F8:
+                    case SDL_SCANCODE_F9: {
+                        // UAP (0x401863): "moved Quick Load from F8 to F9 to
+                        // prevent accidental presses since Quick Save is F7."
+                        // The patch changes the single scancode this case
+                        // compares against, so exactly one of the two keys is
+                        // live at a time.
+                        SDL_Scancode quick_load_key = uap_fixes_enabled()
+                            ? SDL_SCANCODE_F9
+                            : SDL_SCANCODE_F8;
+                        if (message.data.keyboard.scancode != quick_load_key) {
+                            break;
+                        }
+
                         mainmenu_ui_feedback_loading();
                         sub_543220();
                         mainmenu_ui_feedback_loading_completed();
                         break;
+                    }
                     case SDL_SCANCODE_F11:
                         if (gamelib_cheat_level_get() >= 3) {
                             for (index = 0; index < SPELL_COUNT; index++) {
