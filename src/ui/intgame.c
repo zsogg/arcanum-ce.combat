@@ -2718,7 +2718,15 @@ void intgame_process_event(TigMessage* msg)
         && !msg->data.keyboard.pressed
         && msg->data.keyboard.scancode >= SDL_SCANCODE_1
         && msg->data.keyboard.scancode <= SDL_SCANCODE_0) {
-        sub_57F1D0(msg->data.keyboard.scancode - SDL_SCANCODE_1);
+        // UAP (0x57F155): the number-row hotkeys do nothing while a dialog is
+        // up - the same guard as `hotkey_ui_process_event`, and the reason for
+        // it: the digit keys pick dialog options, so without this they fired a
+        // hotkey at the same time. The patch redirects this call into ten bytes
+        // of padding before `button_create_no_art` that tail-jumps to
+        // `sub_57F1D0` only when no dialog handler is installed.
+        if (!uap_fixes_enabled() || !intgame_dialog_is_active()) {
+            sub_57F1D0(msg->data.keyboard.scancode - SDL_SCANCODE_1);
+        }
     }
 
     switch (intgame_mode_get()) {
@@ -5956,6 +5964,18 @@ bool intgame_dialog_begin(bool (*func)(TigMessage* msg))
     intgame_mode_set(INTGAME_MODE_DIALOG);
 
     return true;
+}
+
+/**
+ * Whether a dialog-style modal event handler is currently installed.
+ *
+ * CE: exposed for the two UAP hotkey guards, which test
+ * `intgame_dialog_process_event_func` (0x64C6CC) directly from inside caves.
+ * One of those guards lives in `hotkey_ui.c`, which cannot see this static.
+ */
+bool intgame_dialog_is_active(void)
+{
+    return intgame_dialog_process_event_func != NULL;
 }
 
 // 0x553350

@@ -10,6 +10,7 @@
 #include "game/player.h"
 #include "game/sfx.h"
 #include "game/spell.h"
+#include "game/uap.h"
 #include "ui/intgame.h"
 #include "ui/inven_ui.h"
 #include "ui/mainmenu_ui.h"
@@ -313,6 +314,22 @@ void sub_57DC20(void)
 bool hotkey_ui_process_event(TigMessage* msg)
 {
     int index;
+
+    // UAP (0x57DC57): hotkeys do nothing while a dialog is up. The patch has
+    // no room inside this function, so it writes the test into the nine bytes
+    // of padding immediately *before* it and retargets the two callers -
+    // `sub_54B5D0` (0x54B603) and `iso_interface_message_filter` (0x54C913) -
+    // nine bytes earlier, which changes only the low byte of each `call`. That
+    // is what those two 1-byte rows in the worklist are.
+    //
+    // NOTE: the patch's early-out jumps to the bare `ret` at 0x57DCB5, leaving
+    // `eax` untouched rather than zeroing it. It is still a well-defined
+    // `false` only because both callers reach the call with `eax` already
+    // zero - each has just tested a previous handler's result and not taken
+    // the branch. Returning `false` explicitly here is what it means.
+    if (uap_fixes_enabled() && intgame_dialog_is_active()) {
+        return false;
+    }
 
     switch (msg->type) {
     case TIG_MESSAGE_BUTTON:
