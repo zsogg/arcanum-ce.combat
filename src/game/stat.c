@@ -893,6 +893,22 @@ int stat_level_min(int64_t obj, int stat)
 {
     (void)obj;
 
+    if (uap_fixes_enabled()) {
+        switch (stat) {
+        case STAT_HEAL_RATE:
+            // UAP (0x5B51C4): "CN1 doesn't result in heal rate of 0 anymore."
+            return 1;
+        case STAT_AGE:
+            // UAP (0x5B51F8): the floor of 20 goes away. This is the companion
+            // to the aging change in `obj_arrayfield_int32_get` - with elapsed
+            // years added on every read, a base age is no longer the character's
+            // apparent age and has no reason to be held at adulthood.
+            return 0;
+        default:
+            break;
+        }
+    }
+
     return stat_min_values[stat];
 }
 
@@ -960,6 +976,12 @@ int stat_level_max(int64_t obj, int stat)
             return 22;
         }
         break;
+    }
+
+    // UAP (0x5B5258): "Unspent character points no longer cap at 56, you can
+    // now store as many as you want." 10000 in place of 56.
+    if (uap_fixes_enabled() && stat == STAT_UNSPENT_POINTS) {
+        return 10000;
     }
 
     return stat_max_values[stat];
