@@ -37,6 +37,19 @@ typedef enum MainMenuType {
     MM_TYPE_5,
 } MainMenuType;
 
+/**
+ * NOTE: This enum is a *compressed* renumbering of the original's, not a
+ * transcription of it. The values agree up to `MM_WINDOW_OPTIONS` (6), but the
+ * credits window is 25 in the original where it is 16 here - visible as the one
+ * differing byte in `mainmenu_ui_mainmenu_no_multiplayer_buttons` against the
+ * exe. `MM_WINDOW_26` keeps the original's number in its *name* while holding
+ * the value 17.
+ *
+ * `main_menu_window_info` is compressed to match, so CE is self-consistent; the
+ * only cost is that window numbers here cannot be compared against the binary.
+ * Recorded because `arcanum-work/scripts/verify_tables.py` flags the resulting
+ * byte difference on every run.
+ */
 typedef enum MainMenuWindowType {
     MM_WINDOW_0,
     MM_WINDOW_1,

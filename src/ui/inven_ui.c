@@ -110,7 +110,20 @@ static TigRect inven_ui_inventory_paperdoll_inv_slot_rects[9] = {
     /*     BOOTS */ { 150, 331, 64, 64 },
 };
 
-// 0x5CACE8
+/**
+ * NOTE: Every `x` in this table and in `inven_ui_barter_pc_summary_rects` and
+ * `inven_ui_barter_pc_total_stat_rects` is exactly 3 less than the value at the
+ * same offset in the original - 14 of 14, with every `y`, `width` and `height`
+ * matching, and no compensating offset anywhere in this file. The NPC-side
+ * counterparts are byte-identical to the original.
+ *
+ * That uniformity rules out a transcription slip, so it reads as a deliberate
+ * 3-pixel nudge of the barter screen's PC panel, but it carries no explanation.
+ * Left as it stands; recorded here so a future sweep does not mistake it for an
+ * error. Found by `arcanum-work/scripts/verify_tables.py`.
+ *
+ * 0x5CACE8
+ */
 static TigRect inven_ui_barter_pc_paperdoll_inv_slot_rects[9] = {
     /*    HELMET */ { 496, 107, 64, 64 },
     /*     RING1 */ { 592, 107, 32, 32 },
