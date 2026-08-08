@@ -3375,6 +3375,25 @@ bool combat_check_action_points(int64_t obj, int required_action_points)
         return true;
     }
 
+    // UAP (0x4B77BD): while an item is being dragged in the inventory UI, the
+    // requirement becomes a flat 4 - the cost the engine charges elsewhere for
+    // one discrete action (`combat_check_cast_spell`, `combat_check_use_skill`
+    // and `item_ui_activate` all pass a bare 4) - instead of whatever the
+    // caller worked out. So a drag is not blocked by, say, the movement cost
+    // `combat_check_move_to` computed.
+    //
+    // Note this overrides *every* caller while a drag is in progress,
+    // including the `combat_check_action_points(obj, 0)` "can this critter act
+    // at all" queries, which start demanding 4 points. That is what the patch
+    // does; it hooks the shared function rather than the call sites.
+    //
+    // The patch reads `inven_ui_drag_item_obj` directly. This file cannot -
+    // see `uap_drag_item_query_set` for why the query is installed from the UI
+    // side instead.
+    if (uap_fixes_enabled() && uap_drag_item_active()) {
+        required_action_points = 4;
+    }
+
     combat_required_action_points = required_action_points;
 
     is_pc = player_is_local_pc_obj(obj);

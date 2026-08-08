@@ -3,11 +3,13 @@
 #include <tig/tig.h>
 
 #include "game/gamelib.h"
+#include "game/obj.h"
 #include "game/settings.h"
 
 static void uap_fixes_changed(void);
 
 static bool uap_fixes;
+static UapDragItemQuery uap_drag_item_query;
 
 void uap_init(void)
 {
@@ -18,6 +20,22 @@ void uap_init(void)
 bool uap_fixes_enabled(void)
 {
     return uap_fixes;
+}
+
+void uap_drag_item_query_set(UapDragItemQuery query)
+{
+    uap_drag_item_query = query;
+}
+
+bool uap_drag_item_active(void)
+{
+    // NOTE: The patch compares only the low dword of the handle
+    // (`cmp DWORD PTR ds:0x6810E0, 0`). A handle whose low half is zero while
+    // its high half is not would read as "not dragging" there and as
+    // "dragging" here. Not reproduced - the whole-handle test is what the
+    // patch means, and CE has no notion of half a handle.
+    return uap_drag_item_query != NULL
+        && uap_drag_item_query() != OBJ_HANDLE_NULL;
 }
 
 void uap_fixes_changed(void)

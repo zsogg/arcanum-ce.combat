@@ -25,6 +25,7 @@
 #include "game/spell.h"
 #include "game/stat.h"
 #include "game/target.h"
+#include "game/uap.h"
 #include "ui/hotkey_ui.h"
 #include "ui/intgame.h"
 #include "ui/item_ui.h"
@@ -442,12 +443,20 @@ bool inven_ui_init(GameInitInfo* init_info)
     tig_art_interface_id_create(171, 0, 0, 0, &(font.art_id));
     tig_font_create(&font, &dword_68345C);
 
+    // CE: Let the game layer see the drag state. One UAP change needs it from
+    // `combat_check_action_points`, which cannot include this header - see
+    // `uap_drag_item_query_set`. Installed unconditionally so the switch can be
+    // flipped at runtime; nothing reads it unless `uap fixes` is on.
+    uap_drag_item_query_set(inven_ui_drag_item_obj_get);
+
     return true;
 }
 
 // 0x572190
 void inven_ui_exit(void)
 {
+    uap_drag_item_query_set(NULL);
+
     tig_font_destroy(dword_682418);
     tig_font_destroy(dword_682C74);
     tig_font_destroy(dword_681390);
