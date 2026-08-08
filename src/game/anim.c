@@ -31,6 +31,7 @@
 #include "game/tile.h"
 #include "game/timeevent.h"
 #include "game/trap.h"
+#include "game/uap.h"
 #include "game/ui.h"
 
 static bool sub_421CE0(AnimID* anim_id, AnimRunInfo* run_info);
@@ -13260,6 +13261,14 @@ bool anim_spend_action_points(AnimRunInfo* run_info)
     if (obj == OBJ_HANDLE_NULL) {
         ASSERT(obj != OBJ_HANDLE_NULL); // obj != OBJ_HANDLE_NULL
         return false;
+    }
+
+    // UAP (0x4332C0, 0x4332C2): the local PC stops being exempt, and the cost
+    // doubles from 2 to 4. The patch NOPs the `jne` that skipped the charge for
+    // the player and rewrites the pushed immediate, so in the patched build
+    // every critter - the player included - pays 4.
+    if (uap_fixes_enabled()) {
+        return combat_consume_action_points(obj, 4);
     }
 
     if (player_is_local_pc_obj(run_info->anim_obj)) {

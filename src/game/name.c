@@ -4,6 +4,7 @@
 
 #include "game/a_name.h"
 #include "game/mes.h"
+#include "game/uap.h"
 
 static void name_missing_art_init(void);
 static bool name_missing_art_load(void);
@@ -700,7 +701,18 @@ tig_art_id_t name_normalize_aid(tig_art_id_t aid)
                 weapon = 0;
                 shield = 0;
             } else if (anim == TIG_ART_ANIM_WALK) {
-                shield = 0;
+                // UAP (0x41D6AB, 0x41D78A, 0x41D858): a walking critter keeps
+                // its shield. Vanilla blanks it here because the shield-while-
+                // walking art is missing; UAP ships that art, so the workaround
+                // goes away.
+                //
+                // The compiler emitted this tail three times, which is why the
+                // worklist shows three 1-byte runs in this function - each is
+                // the same `jne` turned into a `jmp`. One edit here covers all
+                // three.
+                if (!uap_fixes_enabled()) {
+                    shield = 0;
+                }
             }
         }
 

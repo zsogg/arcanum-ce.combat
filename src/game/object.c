@@ -37,6 +37,7 @@
 #include "game/timeevent.h"
 #include "game/townmap.h"
 #include "game/trap.h"
+#include "game/uap.h"
 #include "game/ui.h"
 #include "game/wall.h"
 #include "game/wallcheck.h"
@@ -1720,10 +1721,15 @@ int object_get_resistance(int64_t obj, int resistance_type, bool a2)
         }
 
         value = effect_adjust_resistance(obj, resistance_type, value);
-        if (obj_type == OBJ_TYPE_NPC) {
-            if (critter_is_monstrous(obj)) {
-                return value;
-            }
+
+        // UAP (0x43D80E): "Monsters, animals, undead and mechanical critters now
+        // have their resistances capped at 95%, like all other critters."
+        // Monstrous NPCs returned here early, skipping the 0..95 clamp below;
+        // the patch NOPs the branch so every critter reaches it.
+        if (!uap_fixes_enabled()
+            && obj_type == OBJ_TYPE_NPC
+            && critter_is_monstrous(obj)) {
+            return value;
         }
     }
 
