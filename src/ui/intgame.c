@@ -39,6 +39,7 @@
 #include "game/tc.h"
 #include "game/tech.h"
 #include "game/timeevent.h"
+#include "game/uap.h"
 #include "ui/anim_ui.h"
 #include "ui/broadcast_ui.h"
 #include "ui/charedit_ui.h"
@@ -5519,6 +5520,33 @@ void intgame_message_refresh(bool play_sound)
     }
 }
 
+/**
+ * Picks the message-window icon for a skill message by the skill's group.
+ *
+ * UAP (0x5581B6): the patch has no room inside `intgame_message_draw`, so it
+ * repoints the `UI_MSG_TYPE_SKILL` entry of the switch table at 0x5532FC into
+ * the padding behind `wmap_rnd_init` and rejoins the original code at
+ * 0x552DC3. The bracket boundaries there are the raw skill numbers 3, 7 and
+ * 11, which are exactly the ends of the three basic-skill groups; anything
+ * from `BASIC_SKILL_COUNT` up is a tech skill.
+ */
+static int intgame_uap_skill_icon(int skill)
+{
+    if (skill <= BASIC_SKILL_THROWING) {
+        return 799; // Combat
+    }
+
+    if (skill <= BASIC_SKILL_SPOT_TRAP) {
+        return 800; // Thieving
+    }
+
+    if (skill <= BASIC_SKILL_PERSUATION) {
+        return 801; // Social
+    }
+
+    return 802; // Technological
+}
+
 // 0x5529C0
 void intgame_message_draw(tig_window_handle_t window_handle, UiMessage* ui_message, bool play_sound)
 {
@@ -5689,7 +5717,14 @@ void intgame_message_draw(tig_window_handle_t window_handle, UiMessage* ui_messa
         break;
     }
     case UI_MSG_TYPE_SKILL:
-        intgame_message_window_draw_image(window_handle, intgame_message_icons[UI_MSG_TYPE_FEEDBACK]);
+        // UAP (0x552DBD): "Restored original skill icons (Combat, Thieving,
+        // Social and Technological)." Instead of the one generic Arcanum icon
+        // every skill message shares, the patch picks a per-group icon; the
+        // four art ids ride in UAP's own archives.
+        intgame_message_window_draw_image(window_handle,
+            uap_fixes_enabled()
+                ? intgame_uap_skill_icon(ui_message->field_8)
+                : intgame_message_icons[UI_MSG_TYPE_FEEDBACK]);
         intgame_message_window_write_text(window_handle,
             IS_TECH_SKILL(ui_message->field_8)
                 ? tech_skill_name(GET_TECH_SKILL(ui_message->field_8))
