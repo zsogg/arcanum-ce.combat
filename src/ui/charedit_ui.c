@@ -193,7 +193,7 @@ static struct {
 };
 
 // 0x5C7F88
-static S5C87D0 stru_5C7F88[10] = {
+static S5C87D0 charedit_stats_plus_buttons[10] = {
     { 465, 144, TIG_BUTTON_HANDLE_INVALID, CHAREDIT_STAT_HP_PTS_MAXIMUM },
     { 465, 214, TIG_BUTTON_HANDLE_INVALID, CHAREDIT_STAT_FATIGUE_PTS_MAXIMUM },
     { 224, 117, TIG_BUTTON_HANDLE_INVALID, CHAREDIT_STAT_STRENGTH_BASE },
@@ -207,7 +207,7 @@ static S5C87D0 stru_5C7F88[10] = {
 };
 
 // 0x5C8028
-static S5C87D0 stru_5C8028[10] = {
+static S5C87D0 charedit_stats_minus_buttons[10] = {
     { 409, 144, TIG_BUTTON_HANDLE_INVALID, CHAREDIT_STAT_HP_PTS_MAXIMUM },
     { 409, 214, TIG_BUTTON_HANDLE_INVALID, CHAREDIT_STAT_FATIGUE_PTS_MAXIMUM },
     { 170, 117, TIG_BUTTON_HANDLE_INVALID, CHAREDIT_STAT_STRENGTH_BASE },
@@ -221,7 +221,7 @@ static S5C87D0 stru_5C8028[10] = {
 };
 
 // 0x5C80C8
-static int dword_5C80C8[] = {
+static int charedit_stat_hints[] = {
     106,
     107,
     109,
@@ -235,7 +235,7 @@ static int dword_5C80C8[] = {
 };
 
 // 0x5C8124
-static int dword_5C8124[] = {
+static int charedit_stat_row_to_stat[] = {
     -1,
     -1,
     STAT_STRENGTH,
@@ -458,7 +458,7 @@ static void charedit_apply_schematic_label_offsets(void)
 }
 
 // 0x5C8930
-static TigRect stru_5C8930 = { 12, 10, 89, 89 };
+static TigRect charedit_portrait_lens_rect = { 12, 10, 89, 89 };
 
 // 0x5C8940
 static S5C8150 charedit_alignment_aptitude_labels[3] = {
@@ -468,10 +468,10 @@ static S5C8150 charedit_alignment_aptitude_labels[3] = {
 };
 
 // 0x5C8970
-static TigRect stru_5C8970 = { 756, 68, 30, 16 };
+static TigRect charedit_aptitude_top_bg_rect = { 756, 68, 30, 16 };
 
 // 0x5C8980
-static TigRect stru_5C8980 = { 756, 367, 30, 16 };
+static TigRect charedit_aptitude_bottom_bg_rect = { 756, 367, 30, 16 };
 
 // 0x5C8E40
 static S5C8150 charedit_scheme_name_label = { 0, -620, 125, 0 };
@@ -498,7 +498,7 @@ static S5C8150 charedit_scheme_list_labels[15] = {
 // 0x5C8990
 static UiMessage charedit_error_msg = { UI_MSG_TYPE_EXCLAMATION, 0, 0, 0, 0 };
 
-static S5C8CA8 stru_5C89A8[32] = {
+static S5C8CA8 charedit_hint_areas[32] = {
     { 141, 21, 66, 66, 0x64, TIG_BUTTON_HANDLE_INVALID },
     { 212, 15, 243, 75, 0x65, TIG_BUTTON_HANDLE_INVALID },
     { 15, 138, 85, 85, 0x66, TIG_BUTTON_HANDLE_INVALID },
@@ -554,7 +554,7 @@ static S5C8CA8 charedit_tech_degree_buttons[DEGREE_COUNT] = {
 };
 
 // 0x5C8DC8
-static S5C8CA8 stru_5C8DC8[5] = {
+static S5C8CA8 charedit_spell_hover_areas[5] = {
     { 521, 142, 196, 35, 0, TIG_BUTTON_HANDLE_INVALID },
     { 521, 190, 196, 35, 0, TIG_BUTTON_HANDLE_INVALID },
     { 521, 237, 196, 35, 0, TIG_BUTTON_HANDLE_INVALID },
@@ -563,7 +563,7 @@ static S5C8CA8 stru_5C8DC8[5] = {
 };
 
 // 0x5C8F40
-static TigRect stru_5C8F40 = { 209, 60, 17, 255 };
+static TigRect charedit_scheme_scrollbar_rect = { 209, 60, 17, 255 };
 
 // 0x5C8F50
 static S5C8150 charedit_stat_value_label = { NULL, 0, 0, -1 };
@@ -610,7 +610,7 @@ static S5C8150 charedit_tech_header_labels[3] = {
 };
 
 // 0x5C8FF8
-static int dword_5C8FF8[5] = {
+static int charedit_spell_row_x[5] = {
     521,
     521,
     521,
@@ -618,8 +618,15 @@ static int dword_5C8FF8[5] = {
     521,
 };
 
+// NOTE: Only [0..4] are ever indexed - the five spell rows, paired with
+// charedit_spell_row_x. The six values after them read as a second group (an x
+// of 621, then five more ys on a slightly different pitch), but nothing
+// references them: 0x5C900C has exactly one reference in the original, from
+// 0x55CA70, and 0x5C9020 onwards has none. Dead data in the shipped game, kept
+// here so the declaration still spans what the original allocated.
+//
 // 0x5C900C
-static int dword_5C900C[11] = {
+static int charedit_spell_row_y[11] = {
     186,
     234,
     281,
@@ -996,11 +1003,11 @@ bool charedit_open(int64_t obj, ChareditMode mode)
     tig_art_interface_id_create(24, 0, 0, 0, &button_data.art_id);
     for (index = 0; index < 10; index++) {
         if (charedit_mode == CHAREDIT_MODE_PASSIVE) {
-            stru_5C7F88[index].button_handle = TIG_BUTTON_HANDLE_INVALID;
+            charedit_stats_plus_buttons[index].button_handle = TIG_BUTTON_HANDLE_INVALID;
         } else {
-            button_data.x = stru_5C7F88[index].x;
-            button_data.y = stru_5C7F88[index].y;
-            if (tig_button_create(&button_data, &(stru_5C7F88[index].button_handle))) {
+            button_data.x = charedit_stats_plus_buttons[index].x;
+            button_data.y = charedit_stats_plus_buttons[index].y;
+            if (tig_button_create(&button_data, &(charedit_stats_plus_buttons[index].button_handle))) {
                 intgame_big_window_unlock();
                 charedit_obj = OBJ_HANDLE_NULL;
                 return false;
@@ -1011,11 +1018,11 @@ bool charedit_open(int64_t obj, ChareditMode mode)
     tig_art_interface_id_create(23, 0, 0, 0, &button_data.art_id);
     for (index = 0; index < 10; index++) {
         if (charedit_mode == CHAREDIT_MODE_PASSIVE) {
-            stru_5C8028[index].button_handle = TIG_BUTTON_HANDLE_INVALID;
+            charedit_stats_minus_buttons[index].button_handle = TIG_BUTTON_HANDLE_INVALID;
         } else {
-            button_data.x = stru_5C8028[index].x;
-            button_data.y = stru_5C8028[index].y;
-            if (tig_button_create(&button_data, &(stru_5C8028[index].button_handle))) {
+            button_data.x = charedit_stats_minus_buttons[index].x;
+            button_data.y = charedit_stats_minus_buttons[index].y;
+            if (tig_button_create(&button_data, &(charedit_stats_minus_buttons[index].button_handle))) {
                 intgame_big_window_unlock();
                 charedit_obj = OBJ_HANDLE_NULL;
                 return false;
@@ -1026,7 +1033,7 @@ bool charedit_open(int64_t obj, ChareditMode mode)
     charedit_refresh_basic_info();
 
     if (intgame_examine_portrait(pc_obj, charedit_obj, &portrait)) {
-        portrait_draw_native(charedit_obj, portrait, charedit_window_handle, stru_5C89A8[0].x, stru_5C89A8[0].y);
+        portrait_draw_native(charedit_obj, portrait, charedit_window_handle, charedit_hint_areas[0].x, charedit_hint_areas[0].y);
     } else {
         tig_art_interface_id_create(portrait, 0, 0, 0, &art_id);
         tig_art_frame_data(art_id, &art_frame_data);
@@ -1036,8 +1043,8 @@ bool charedit_open(int64_t obj, ChareditMode mode)
         src_rect.width = art_frame_data.width;
         src_rect.height = art_frame_data.height;
 
-        dst_rect.x = stru_5C89A8[0].x;
-        dst_rect.y = stru_5C89A8[0].y;
+        dst_rect.x = charedit_hint_areas[0].x;
+        dst_rect.y = charedit_hint_areas[0].y;
         dst_rect.width = art_frame_data.width;
         dst_rect.height = art_frame_data.height;
 
@@ -1133,7 +1140,7 @@ bool charedit_open(int64_t obj, ChareditMode mode)
     location_origin_set(obj_field_int64_get(charedit_obj, OBJ_F_LOCATION));
 
     pc_lens.window_handle = charedit_window_handle;
-    pc_lens.rect = &stru_5C8930;
+    pc_lens.rect = &charedit_portrait_lens_rect;
 
     // FIX: Use 222 ("char_pcc.art") instead of 198 ("pcwincvr.art") to match
     // character editor background.
@@ -1178,11 +1185,11 @@ bool charedit_open(int64_t obj, ChareditMode mode)
     button_data.art_id = TIG_ART_ID_INVALID;
 
     for (index = 0; index < 32; index++) {
-        button_data.x = stru_5C89A8[index].x;
-        button_data.y = stru_5C89A8[index].y;
-        button_data.width = stru_5C89A8[index].width;
-        button_data.height = stru_5C89A8[index].height;
-        tig_button_create(&button_data, &stru_5C89A8[index].button_handle);
+        button_data.x = charedit_hint_areas[index].x;
+        button_data.y = charedit_hint_areas[index].y;
+        button_data.width = charedit_hint_areas[index].width;
+        button_data.height = charedit_hint_areas[index].height;
+        tig_button_create(&button_data, &charedit_hint_areas[index].button_handle);
     }
 
     dword_64C824 = TIG_BUTTON_HANDLE_INVALID;
@@ -1406,20 +1413,20 @@ bool charedit_window_message_filter(TigMessage* msg)
             }
 
             for (index = 0; index < 32; index++) {
-                if (msg->data.button.button_handle == stru_5C89A8[index].button_handle) {
-                    charedit_hint = stru_5C89A8[index].field_10;
+                if (msg->data.button.button_handle == charedit_hint_areas[index].button_handle) {
+                    charedit_hint = charedit_hint_areas[index].field_10;
                     return true;
                 }
             }
 
             for (index = 0; index < 10; index++) {
-                if (msg->data.button.button_handle == stru_5C7F88[index].button_handle) {
-                    charedit_hint = dword_5C80C8[index];
+                if (msg->data.button.button_handle == charedit_stats_plus_buttons[index].button_handle) {
+                    charedit_hint = charedit_stat_hints[index];
                     return true;
                 }
 
-                if (msg->data.button.button_handle == stru_5C8028[index].button_handle) {
-                    charedit_hint = dword_5C80C8[index];
+                if (msg->data.button.button_handle == charedit_stats_minus_buttons[index].button_handle) {
+                    charedit_hint = charedit_stat_hints[index];
                     return true;
                 }
             }
@@ -1436,7 +1443,7 @@ bool charedit_window_message_filter(TigMessage* msg)
             }
 
             for (index = 0; index < 32; index++) {
-                if (msg->data.button.button_handle == stru_5C89A8[index].button_handle) {
+                if (msg->data.button.button_handle == charedit_hint_areas[index].button_handle) {
                     charedit_hint = -1;
                     intgame_message_window_clear();
                     return true;
@@ -1444,8 +1451,8 @@ bool charedit_window_message_filter(TigMessage* msg)
             }
 
             for (index = 0; index < 10; index++) {
-                if (msg->data.button.button_handle == stru_5C7F88[index].button_handle
-                    || msg->data.button.button_handle == stru_5C8028[index].button_handle) {
+                if (msg->data.button.button_handle == charedit_stats_plus_buttons[index].button_handle
+                    || msg->data.button.button_handle == charedit_stats_minus_buttons[index].button_handle) {
                     charedit_hint = -1;
                     intgame_message_window_clear();
                     return true;
@@ -1467,8 +1474,8 @@ bool charedit_window_message_filter(TigMessage* msg)
             return false;
         case TIG_BUTTON_STATE_PRESSED:
             for (index = 0; index < 10; index++) {
-                if (msg->data.button.button_handle == stru_5C7F88[index].button_handle) {
-                    param = stru_5C7F88[index].art_num;
+                if (msg->data.button.button_handle == charedit_stats_plus_buttons[index].button_handle) {
+                    param = charedit_stats_plus_buttons[index].art_num;
                     value = charedit_stat_value_get(charedit_obj, param) + 1;
                     if (param == CHAREDIT_STAT_HP_PTS_MAXIMUM || param == CHAREDIT_STAT_FATIGUE_PTS_MAXIMUM) {
                         cost = 1;
@@ -1503,8 +1510,8 @@ bool charedit_window_message_filter(TigMessage* msg)
                     return true;
                 }
 
-                if (msg->data.button.button_handle == stru_5C8028[index].button_handle) {
-                    param = stru_5C8028[index].art_num;
+                if (msg->data.button.button_handle == charedit_stats_minus_buttons[index].button_handle) {
+                    param = charedit_stats_minus_buttons[index].art_num;
                     value = charedit_stat_value_get(charedit_obj, param);
                     if (value == charedit_initial_stat_values[param]) {
                         charedit_error_msg.str = charedit_errors[CHAREDIT_ERR_STAT_AT_ACCEPTED_LEVEL];
@@ -1529,8 +1536,8 @@ bool charedit_window_message_filter(TigMessage* msg)
                             return true;
                         }
 
-                        if (dword_5C8124[index] != -1
-                            && !skill_check_stat(charedit_obj, dword_5C8124[index], value - 1)) {
+                        if (charedit_stat_row_to_stat[index] != -1
+                            && !skill_check_stat(charedit_obj, charedit_stat_row_to_stat[index], value - 1)) {
                             charedit_error_msg.str = charedit_errors[CHAREDIT_ERR_STAT_SKILL_PREREQUISITE];
                             intgame_message_window_display_msg(&charedit_error_msg);
                             return true;
@@ -1668,7 +1675,7 @@ void charedit_show_hint(int hint)
 
     if (hint >= 109 && hint <= 116) {
         ui_message.type = UI_MSG_TYPE_STAT;
-        ui_message.field_8 = dword_5C8124[hint - 109 + 2];
+        ui_message.field_8 = charedit_stat_row_to_stat[hint - 109 + 2];
         value = stat_base_get(charedit_obj, ui_message.field_8);
         if (value < stat_level_max(charedit_obj, ui_message.field_8)) {
             ui_message.field_C = stat_cost(value + 1);
@@ -2682,8 +2689,8 @@ void sub_55CA70(int a1, int a2)
             art_blit_info.palette = tmp_palette;
         }
 
-        dst_rect.x = dword_5C8FF8[a1] - 503;
-        dst_rect.y = dword_5C900C[a1] - 104;
+        dst_rect.x = charedit_spell_row_x[a1] - 503;
+        dst_rect.y = charedit_spell_row_y[a1] - 104;
         dst_rect.width = art_frame_data.width;
         dst_rect.height = art_frame_data.height;
 
@@ -2739,8 +2746,8 @@ void charedit_refresh_spells_win(void)
     spell_minus_bid = TIG_BUTTON_HANDLE_INVALID;
 
     for (index = 0; index < 5; index++) {
-        if (stru_5C8DC8[index].button_handle != TIG_BUTTON_HANDLE_INVALID) {
-            tig_button_destroy(stru_5C8DC8[index].button_handle);
+        if (charedit_spell_hover_areas[index].button_handle != TIG_BUTTON_HANDLE_INVALID) {
+            tig_button_destroy(charedit_spell_hover_areas[index].button_handle);
         }
     }
 
@@ -2813,8 +2820,8 @@ void charedit_refresh_spells_win(void)
     if (v1 > cnt) {
         if (charedit_mode != CHAREDIT_MODE_PASSIVE) {
             tig_art_interface_id_create(647, 0, 0, 0, &(button_data.art_id));
-            button_data.x = dword_5C8FF8[v1 - 1] - 503;
-            button_data.y = dword_5C900C[v1 - 1] - 104;
+            button_data.x = charedit_spell_row_x[v1 - 1] - 503;
+            button_data.y = charedit_spell_row_y[v1 - 1] - 104;
 
             rc = tig_button_create(&button_data, &spell_plus_bid);
             if (rc != TIG_OK) {
@@ -2829,8 +2836,8 @@ void charedit_refresh_spells_win(void)
             || charedit_mode == CHAREDIT_MODE_3
             || charedit_initial_college_levels[dword_64E024] < cnt)) {
         tig_art_interface_id_create(648, 0, 0, 0, &(button_data.art_id));
-        button_data.x = dword_5C8FF8[cnt - 1] - 503;
-        button_data.y = dword_5C900C[cnt - 1] - 104;
+        button_data.x = charedit_spell_row_x[cnt - 1] - 503;
+        button_data.y = charedit_spell_row_y[cnt - 1] - 104;
 
         rc = tig_button_create(&button_data, &spell_minus_bid);
         if (rc != TIG_OK) {
@@ -2845,12 +2852,12 @@ void charedit_refresh_spells_win(void)
     button_data.art_id = TIG_ART_ID_INVALID;
 
     for (index = 0; index < 5; index++) {
-        button_data.x = stru_5C8DC8[index].x - 503;
-        button_data.y = stru_5C8DC8[index].y - 63;
-        button_data.width = stru_5C8DC8[index].width;
-        button_data.height = stru_5C8DC8[index].height;
+        button_data.x = charedit_spell_hover_areas[index].x - 503;
+        button_data.y = charedit_spell_hover_areas[index].y - 63;
+        button_data.width = charedit_spell_hover_areas[index].width;
+        button_data.height = charedit_spell_hover_areas[index].height;
 
-        rc = tig_button_create(&button_data, &(stru_5C8DC8[index].button_handle));
+        rc = tig_button_create(&button_data, &(charedit_spell_hover_areas[index].button_handle));
         if (rc != TIG_OK) {
             tig_debug_printf("spells_print_all: ERROR: failed to create Hover Help Spell Start: %d!\n", rc);
         }
@@ -3280,7 +3287,7 @@ bool charedit_spells_win_message_filter(TigMessage* msg)
             }
 
             for (index = 0; index < 5; index++) {
-                if (msg->data.button.button_handle == stru_5C8DC8[index].button_handle) {
+                if (msg->data.button.button_handle == charedit_spell_hover_areas[index].button_handle) {
                     charedit_spells_hint = 2000 + 5 * dword_64E024 + index;
                     return true;
                 }
@@ -3309,7 +3316,7 @@ bool charedit_spells_win_message_filter(TigMessage* msg)
             }
 
             for (index = 0; index < 5; index++) {
-                if (msg->data.button.button_handle == stru_5C8DC8[index].button_handle) {
+                if (msg->data.button.button_handle == charedit_spell_hover_areas[index].button_handle) {
                     charedit_spells_hint = -1;
                     intgame_message_window_clear();
                     return true;
@@ -3754,13 +3761,13 @@ void charedit_refresh_alignment_aptitude_bars(void)
 
     tig_art_interface_id_create(22, 0, 0, 0, &(art_blit_info.art_id));
 
-    art_blit_info.src_rect = &stru_5C8970;
-    art_blit_info.dst_rect = &stru_5C8970;
+    art_blit_info.src_rect = &charedit_aptitude_top_bg_rect;
+    art_blit_info.dst_rect = &charedit_aptitude_top_bg_rect;
     art_blit_info.flags = 0;
     tig_window_blit_art(charedit_window_handle, &art_blit_info);
 
-    art_blit_info.src_rect = &stru_5C8980;
-    art_blit_info.dst_rect = &stru_5C8980;
+    art_blit_info.src_rect = &charedit_aptitude_bottom_bg_rect;
+    art_blit_info.dst_rect = &charedit_aptitude_bottom_bg_rect;
     tig_window_blit_art(charedit_window_handle, &art_blit_info);
 
     charedit_draw_text_rows(charedit_window_handle, charedit_cloister18_white_font, charedit_alignment_aptitude_labels, labels, -1, 3);
@@ -3802,9 +3809,9 @@ void sub_55EFF0(void)
         } else {
             sb.max_value = 0;
         }
-        sb.scrollbar_rect = stru_5C8F40;
+        sb.scrollbar_rect = charedit_scheme_scrollbar_rect;
         sb.min_value = 0;
-        sb.content_rect.width = stru_5C8F40.width + 160;
+        sb.content_rect.width = charedit_scheme_scrollbar_rect.width + 160;
         sb.content_rect.x = 23;
         sb.content_rect.y = 66;
         sb.content_rect.height = 240;
