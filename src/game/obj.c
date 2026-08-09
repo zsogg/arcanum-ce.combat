@@ -135,7 +135,7 @@ static bool obj_field_debug_print_dif(Object* object, int a2, ObjectFieldInfo* f
 static int64_t obj_get_prototype_handle(Object* object);
 
 // 0x59BE00
-static int dword_59BE00[] = {
+static int obj_type_field_starts[] = {
     OBJ_F_BEGIN,
     OBJ_F_WALL_BEGIN,
     OBJ_F_PORTAL_BEGIN,
@@ -3506,12 +3506,12 @@ void sub_40A740(int fld, int* start_ptr, int* length_ptr)
     int index;
 
     for (index = 20; index >= 0; index--) {
-        if (dword_59BE00[index] < fld) {
+        if (obj_type_field_starts[index] < fld) {
             break;
         }
     }
 
-    *start_ptr = dword_59BE00[index];
+    *start_ptr = obj_type_field_starts[index];
     *length_ptr = 0;
     if (*start_ptr + 1 < fld) {
         index = fld - (*start_ptr + 1);
@@ -3528,7 +3528,7 @@ int sub_40A790(int a1)
     int index;
 
     for (index = 0; index < 21; index++) {
-        if (dword_59BE00[index] == a1) {
+        if (obj_type_field_starts[index] == a1) {
             return index;
         }
     }

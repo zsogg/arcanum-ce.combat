@@ -35,7 +35,7 @@ static bool skill_ui_lock(int64_t source_obj, int64_t target_obj, bool success);
 static bool skill_ui_no_lock(int64_t source_obj);
 
 // 0x5CB220
-static int dword_5CB220[FOUR] = {
+static int skill_ui_button_art_nums[FOUR] = {
     279,
     280,
     282,
@@ -43,7 +43,7 @@ static int dword_5CB220[FOUR] = {
 };
 
 // 0x5CB230
-static int dword_5CB230[FOUR] = {
+static int skill_ui_icon_art_nums[FOUR] = {
     279,
     280,
     282,
@@ -51,7 +51,7 @@ static int dword_5CB230[FOUR] = {
 };
 
 // 0x5CB240
-static int dword_5CB240[FOUR] = {
+static int skill_ui_skills[FOUR] = {
     SKILL_PROWLING,
     SKILL_PICK_POCKET,
     SKILL_DISARM_TRAPS,
@@ -59,7 +59,7 @@ static int dword_5CB240[FOUR] = {
 };
 
 // 0x5CB250
-static uint64_t qword_5CB250[FOUR] = {
+static uint64_t skill_ui_target_flags[FOUR] = {
     TGT_SELF,
     TGT_OBJ_NO_ST_CRITTER_ANIMAL | TGT_OBJ_T_CRITTER | TGT_OBJECT,
     TGT_TILE | TGT_OBJECT,
@@ -70,7 +70,7 @@ static uint64_t qword_5CB250[FOUR] = {
 static int dword_5CB270 = -1;
 
 // 0x683478
-static char* dword_683478[FOUR];
+static char* skill_ui_names[FOUR];
 
 // 0x683488
 static mes_file_handle_t skill_ui_mes_file;
@@ -105,7 +105,7 @@ bool skill_ui_init(GameInitInfo* init_info)
     for (index = 0; index < FOUR; index++) {
         mes_file_entry.num = 100 + index;
         mes_get_msg(skill_ui_mes_file, &mes_file_entry);
-        dword_683478[index] = mes_file_entry.str;
+        skill_ui_names[index] = mes_file_entry.str;
     }
 
     return true;
@@ -124,15 +124,15 @@ void skill_ui_exit(void)
 }
 
 // 0x579F50
-int sub_579F50(int index)
+int skill_ui_button_art_num(int index)
 {
-    return index >= 0 && index < FOUR ? dword_5CB220[index] : dword_5CB220[0];
+    return index >= 0 && index < FOUR ? skill_ui_button_art_nums[index] : skill_ui_button_art_nums[0];
 }
 
 // 0x579F70
-int sub_579F70(int index)
+int skill_ui_icon_art_num(int index)
 {
-    return index >= 0 && index < FOUR ? dword_5CB230[index] : dword_5CB230[0];
+    return index >= 0 && index < FOUR ? skill_ui_icon_art_nums[index] : skill_ui_icon_art_nums[0];
 }
 
 // 0x579F90
@@ -166,7 +166,7 @@ void sub_579FA0(int64_t obj, int type)
     qword_683490 = obj;
     dword_5CB270 = type;
 
-    if ((qword_5CB250[type] & 0x2000000) != 0
+    if ((skill_ui_target_flags[type] & 0x2000000) != 0
         || intgame_mode_set(INTGAME_MODE_MAIN)) {
         skill_ui_preprocess(obj, type);
     }
@@ -183,7 +183,7 @@ void skill_ui_preprocess(int64_t obj, int type)
     qword_683490 = obj;
     dword_5CB270 = type;
 
-    tgt = qword_5CB250[type];
+    tgt = skill_ui_target_flags[type];
     skill_invocation_init(&skill_invocation);
 
     switch (type) {
@@ -333,9 +333,9 @@ void sub_57A620(SkillInvocation* skill_invocation)
 }
 
 // 0x57A6A0
-int sub_57A6A0(int index)
+int skill_ui_skill(int index)
 {
-    return dword_5CB240[index];
+    return skill_ui_skills[index];
 }
 
 // 0x57A6B0
@@ -350,7 +350,7 @@ int skill_ui_skill_for_action(int a1, TargetDescriptor* td)
     int v1;
     int complexity;
 
-    v1 = dword_5CB240[a1];
+    v1 = skill_ui_skills[a1];
     if (v1 == -1) {
         complexity = obj_field_int32_get(td->obj, OBJ_F_ITEM_MAGIC_TECH_COMPLEXITY);
         if (a1 == 3 && complexity >= 20) {
@@ -362,9 +362,9 @@ int skill_ui_skill_for_action(int a1, TargetDescriptor* td)
 }
 
 // 0x57A700
-char* sub_57A700(int index)
+char* skill_ui_name(int index)
 {
-    return dword_683478[index];
+    return skill_ui_names[index];
 }
 
 // 0x57A710

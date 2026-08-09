@@ -112,7 +112,7 @@ static int combat_material_damage_reduction_tbl[MATERIAL_COUNT] = {
 };
 
 // 0x5B57FC
-static int dword_5B57FC[2] = {
+static int combat_multishot_offsets[2] = {
     0,
     10,
 };
@@ -1122,7 +1122,7 @@ void combat_process_ranged_attack(CombatContext* combat)
     }
 
     for (arrow = 0; arrow < num_arrows; arrow++) {
-        combat_create_projectile(combat, loc, dword_5B57FC[arrow], dword_5B57FC[arrow], missile_art_id);
+        combat_create_projectile(combat, loc, combat_multishot_offsets[arrow], combat_multishot_offsets[arrow], missile_art_id);
     }
 }
 

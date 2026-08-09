@@ -3768,7 +3768,7 @@ bool anim_timeevent_process(TimeEvent* timeevent)
                     tig_debug_printf("Anim: ERROR: Attempt to PushGoal: Goal Stack too LARGE!!!  Killing the Animation Slot: AnimID: %s!\n", str);
 
                     for (int idx = 0; idx < run_info->current_goal; idx++) {
-                        tig_debug_printf("\t[%d]: Goal: %s\n", idx, off_5A164C[run_info->goals[idx].type]);
+                        tig_debug_printf("\t[%d]: Goal: %s\n", idx, anim_goal_names[run_info->goals[idx].type]);
                     }
 
                     run_info->current_state = 0;

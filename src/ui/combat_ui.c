@@ -43,7 +43,7 @@ static tig_art_id_t combat_ui_ap_bar_loading_indicator_art_id = TIG_ART_ID_INVAL
 static UiButtonInfo combat_ui_end_turn_button_info = { 320, 9, 297, TIG_BUTTON_HANDLE_INVALID };
 
 // 0x5CAA48
-static int dword_5CAA48[TWENTY] = {
+static int combat_ui_knob_x[TWENTY] = {
     22,
     35,
     48,
@@ -517,7 +517,7 @@ void sub_56F430(int a1)
 
         art_blit_info.art_id = combat_ui_ap_icon_art_ids[AP_COLOR_GREEN];
         while (green > 0) {
-            dst_rect.x = dword_5CAA48[knob];
+            dst_rect.x = combat_ui_knob_x[knob];
             tig_window_blit_art(combat_ui_ap_bar_window_handle, &art_blit_info);
             green--;
             knob++;
@@ -525,7 +525,7 @@ void sub_56F430(int a1)
 
         art_blit_info.art_id = combat_ui_ap_icon_art_ids[AP_COLOR_ORANGE];
         while (orange > 0) {
-            dst_rect.x = dword_5CAA48[knob];
+            dst_rect.x = combat_ui_knob_x[knob];
             tig_window_blit_art(combat_ui_ap_bar_window_handle, &art_blit_info);
             orange--;
             knob++;
@@ -533,7 +533,7 @@ void sub_56F430(int a1)
 
         art_blit_info.art_id = combat_ui_ap_icon_art_ids[AP_COLOR_RED];
         while (red > 0) {
-            dst_rect.x = dword_5CAA48[knob];
+            dst_rect.x = combat_ui_knob_x[knob];
             tig_window_blit_art(combat_ui_ap_bar_window_handle, &art_blit_info);
             red--;
             knob++;
@@ -586,7 +586,7 @@ void combat_ui_refresh(void)
             src_rect.width = art_frame_data.width;
             src_rect.height = art_frame_data.height;
 
-            dst_rect.x = dword_5CAA48[dword_680EB4];
+            dst_rect.x = combat_ui_knob_x[dword_680EB4];
             dst_rect.y = 10;
             dst_rect.width = art_frame_data.width;
             dst_rect.height = art_frame_data.height;
@@ -597,10 +597,10 @@ void combat_ui_refresh(void)
             blit_info.dst_rect = &dst_rect;
             tig_window_blit_art(combat_ui_ap_bar_window_handle, &blit_info);
 
-            dst_rect.x = dword_5CAA48[dword_680EB4 - 7 < 0 ? dword_680EB4 + TWENTY - 7 : dword_680EB4 - 7];
+            dst_rect.x = combat_ui_knob_x[dword_680EB4 - 7 < 0 ? dword_680EB4 + TWENTY - 7 : dword_680EB4 - 7];
             tig_window_blit_art(combat_ui_ap_bar_window_handle, &blit_info);
 
-            dst_rect.x = dword_5CAA48[dword_680EB4 + 7 >= TWENTY ? dword_680EB4 - TWENTY + 7 : dword_680EB4 + 7];
+            dst_rect.x = combat_ui_knob_x[dword_680EB4 + 7 >= TWENTY ? dword_680EB4 - TWENTY + 7 : dword_680EB4 + 7];
             tig_window_blit_art(combat_ui_ap_bar_window_handle, &blit_info);
         }
 

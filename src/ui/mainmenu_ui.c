@@ -694,7 +694,7 @@ static MainMenuButtonInfo mainmenu_ui_load_game_buttons[] = {
 };
 
 // 0x5C45D8
-static MainMenuButtonInfo stru_5C45D8 = {
+static MainMenuButtonInfo mainmenu_ui_load_game_texttoggle_button = {
     499,
     82,
     747, // texttoggle.art
@@ -792,7 +792,7 @@ static MainMenuButtonInfo mainmenu_ui_save_game_buttons[] = {
 };
 
 // 0x5C4838
-static MainMenuButtonInfo stru_5C4838 = {
+static MainMenuButtonInfo mainmenu_ui_save_game_texttoggle_button = {
     499,
     82,
     747,
@@ -1081,6 +1081,14 @@ static MainMenuButtonInfo mainmenu_ui_new_char_name_button = {
     0,
 };
 
+// NOTE: These two keep their placeholder names because nothing uses them.
+// Unreferenced in CE and in the original - 0x5C50D0 and 0x5C5100 have no
+// references at all - so no window ever built a button from either. They are a
+// pair at x=22, y=272 and y=322, on the 50px pitch this file's menu rows use
+// and with every other field neutral (-1 art, -1 window, no handler), which
+// reads like two menu entries that were laid out and then cut. Nothing says
+// what they would have been.
+//
 // 0x5C50D0
 static MainMenuButtonInfo stru_5C50D0 = {
     22,
@@ -2357,7 +2365,7 @@ void mainmenu_ui_load_game_create(void)
 
     mainmenu_ui_create_window_func(false);
 
-    if (!main_menu_button_create_ex(&stru_5C45D8, 0, 0, 0x2)) {
+    if (!main_menu_button_create_ex(&mainmenu_ui_load_game_texttoggle_button, 0, 0, 0x2)) {
         tig_debug_printf("MainMenu-UI: mainmenu_ui_create_load_game: ERROR: Failed to create button.\n");
         exit(EXIT_FAILURE);
     }
@@ -2475,7 +2483,7 @@ bool mainmenu_ui_load_game_execute(int btn)
 // 0x542420
 bool mainmenu_ui_load_game_button_pressed(tig_button_handle_t button_handle)
 {
-    if (button_handle != stru_5C45D8.button_handle) {
+    if (button_handle != mainmenu_ui_load_game_texttoggle_button.button_handle) {
         return false;
     }
 
@@ -2506,7 +2514,7 @@ bool mainmenu_ui_load_game_button_released(tig_button_handle_t button_handle)
         return true;
     }
 
-    if (button_handle == stru_5C45D8.button_handle) {
+    if (button_handle == mainmenu_ui_load_game_texttoggle_button.button_handle) {
         dword_5C4790 = 1;
         window->refresh_func(&stru_5C46C0);
         return true;
@@ -3071,7 +3079,7 @@ void mainmenu_ui_save_game_create(void)
     window->top_index = 0;
     mainmenu_ui_create_window_func(false);
 
-    if (!main_menu_button_create_ex(&stru_5C4838, 0, 0, 2)) {
+    if (!main_menu_button_create_ex(&mainmenu_ui_save_game_texttoggle_button, 0, 0, 2)) {
         tig_debug_printf("MainMenu-UI: mainmenu_ui_create_save_game: ERROR: Failed to create button.\n");
         exit(EXIT_FAILURE);
     }
@@ -3239,7 +3247,7 @@ bool mainmenu_ui_save_game_execute(int btn)
 // 0x543850
 bool mainmenu_ui_save_game_button_pressed(tig_button_handle_t button_handle)
 {
-    if (button_handle != stru_5C4838.button_handle) {
+    if (button_handle != mainmenu_ui_save_game_texttoggle_button.button_handle) {
         return false;
     }
 
@@ -3269,7 +3277,7 @@ bool mainmenu_ui_save_game_button_released(tig_button_handle_t button_handle)
         return true;
     }
 
-    if (button_handle == stru_5C4838.button_handle) {
+    if (button_handle == mainmenu_ui_save_game_texttoggle_button.button_handle) {
         dword_5C4790 = 1;
         window->refresh_func(&stru_5C46C0);
         return true;
@@ -5305,10 +5313,10 @@ bool mainmenu_ui_message_filter(TigMessage* msg)
             }
 
             if (v2 == 0) {
-                if (msg->data.button.button_handle == stru_5C45D8.button_handle) {
-                    v2 = stru_5C45D8.field_2C;
-                } else if (msg->data.button.button_handle == stru_5C4838.button_handle) {
-                    v2 = stru_5C4838.field_2C;
+                if (msg->data.button.button_handle == mainmenu_ui_load_game_texttoggle_button.button_handle) {
+                    v2 = mainmenu_ui_load_game_texttoggle_button.field_2C;
+                } else if (msg->data.button.button_handle == mainmenu_ui_save_game_texttoggle_button.button_handle) {
+                    v2 = mainmenu_ui_save_game_texttoggle_button.field_2C;
                 } else {
                     return false;
                 }
@@ -5357,10 +5365,10 @@ bool mainmenu_ui_message_filter(TigMessage* msg)
             }
 
             if (v2 == 0) {
-                if (msg->data.button.button_handle == stru_5C45D8.button_handle) {
-                    v2 = stru_5C45D8.field_2C;
-                } else if (msg->data.button.button_handle == stru_5C4838.button_handle) {
-                    v2 = stru_5C4838.field_2C;
+                if (msg->data.button.button_handle == mainmenu_ui_load_game_texttoggle_button.button_handle) {
+                    v2 = mainmenu_ui_load_game_texttoggle_button.field_2C;
+                } else if (msg->data.button.button_handle == mainmenu_ui_save_game_texttoggle_button.button_handle) {
+                    v2 = mainmenu_ui_save_game_texttoggle_button.field_2C;
                 } else {
                     return false;
                 }

@@ -77,13 +77,13 @@ static void light_render_internal(GameDrawInfo* draw_info);
 static void sub_4DF1D0(TigRect* rect);
 
 // 0x5B9044
-static int dword_5B9044[] = {
+static int light_sample_offsets_x[] = {
     0,
     40,
 };
 
 // 0x5B904C
-static int dword_5B904C[] = {
+static int light_sample_offsets_y[] = {
     0,
     20,
 };
@@ -2426,8 +2426,8 @@ void light_render_internal(GameDrawInfo* draw_info)
                                 for (int x = (int)loc_x; x <= max_x; x += 80) {
                                     for (int i = 0; i < 2; i++) {
                                         for (int j = 0; j < 2; j++) {
-                                            int lx = x + dword_5B9044[j];
-                                            int ly = y + dword_5B904C[i];
+                                            int lx = x + light_sample_offsets_x[j];
+                                            int ly = y + light_sample_offsets_y[i];
                                             unsigned int color;
 
                                             if (lx >= rect_node->rect.x

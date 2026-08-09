@@ -3965,7 +3965,7 @@ bool sub_5501C0(void)
     }
 
     for (index = 0; index < 4; index++) {
-        intgame_skill_buttons[index].art_num = sub_579F50(index);
+        intgame_skill_buttons[index].art_num = skill_ui_button_art_num(index);
         if (intgame_skill_buttons[index].art_num != -1) {
             intgame_button_create(&(intgame_skill_buttons[index]));
         }
@@ -4067,7 +4067,7 @@ void iso_interface_window_disable(RotatingWindowType window_type)
         break;
     case ROTWIN_TYPE_SKILLS:
         for (index = 0; index < 4; index++) {
-            if (sub_579F50(index) != -1) {
+            if (skill_ui_button_art_num(index) != -1) {
                 tig_button_hide(intgame_skill_buttons[index].button_handle);
             }
         }
@@ -4212,10 +4212,10 @@ void intgame_message_window_display_skill(int value)
     UiMessage ui_message;
 
     if (intgame_iso_window_type != ROTWIN_TYPE_MSG) {
-        intgame_message_window_write_text_centered(sub_57A700(value), &(intgame_rotwin_text_frame[intgame_iso_window_type].rect));
+        intgame_message_window_write_text_centered(skill_ui_name(value), &(intgame_rotwin_text_frame[intgame_iso_window_type].rect));
     } else {
         ui_message.type = UI_MSG_TYPE_SKILL;
-        ui_message.field_8 = sub_57A6A0(value);
+        ui_message.field_8 = skill_ui_skill(value);
         ui_message.field_C = 0;
         intgame_message_window_display_msg(&ui_message);
     }
@@ -4678,7 +4678,7 @@ void iso_interface_window_enable(RotatingWindowType window_type)
         break;
     case ROTWIN_TYPE_SKILLS:
         for (index = 0; index < 4; index++) {
-            if (sub_579F50(index) != -1) {
+            if (skill_ui_button_art_num(index) != -1) {
                 tig_button_show(intgame_skill_buttons[index].button_handle);
             }
         }

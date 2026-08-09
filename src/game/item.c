@@ -92,10 +92,10 @@ static unsigned int item_race_to_armor_size_tbl[RACE_COUNT] = {
 };
 
 // 0x5B32EC
-static int dword_5B32EC = 15;
+static int item_attack_effectiveness_weight = 15;
 
 // 0x5B32F0
-static int dword_5B32F0[] = {
+static int item_attack_damage_weight_tbl[] = {
     12,
     12,
     18,
@@ -2391,8 +2391,8 @@ int item_total_attack(int64_t critter_obj)
         effectiveness = basic_skill_effectiveness(critter_obj, GET_BASIC_SKILL(skill), OBJ_HANDLE_NULL);
     }
 
-    v3 = effectiveness * dword_5B32EC;
-    v2 = dword_5B32EC;
+    v3 = effectiveness * item_attack_effectiveness_weight;
+    v2 = item_attack_effectiveness_weight;
 
     for (damage_type = 0; damage_type < DAMAGE_TYPE_COUNT; damage_type++) {
         item_weapon_damage(weapon_obj,
@@ -2403,8 +2403,8 @@ int item_total_attack(int64_t critter_obj)
             &min_dam,
             &max_dam);
 
-        v3 += dword_5B32F0[damage_type] * ((min_dam + max_dam) / 2);
-        v2 += dword_5B32F0[damage_type];
+        v3 += item_attack_damage_weight_tbl[damage_type] * ((min_dam + max_dam) / 2);
+        v2 += item_attack_damage_weight_tbl[damage_type];
     }
 
     return v3 / (v2 + 6);

@@ -24,7 +24,7 @@ static const char* off_5A1064 = "art";
 static const char* off_5A1068 = "art\\missing.dat";
 
 // 0x5A106C
-static int dword_5A106C[] = {
+static int name_check_bits[] = {
     1,
     2,
     4,
@@ -93,7 +93,7 @@ static TigArtWeaponType name_check_weapons[] = {
 };
 
 // 0x5A1150
-static TigArtAnim dword_5A1150[] = {
+static TigArtAnim name_check_fallback_anims[] = {
     TIG_ART_ANIM_WALK,
     TIG_ART_ANIM_WALK,
     TIG_ART_ANIM_STAND,
@@ -428,7 +428,7 @@ void name_missing_art_init(void)
         for (idx = 0; idx < 19; idx++) {
             for (num = 0; num < num_critter_art; num++) {
                 if (tig_art_critter_id_create(num & 1, num / 2, 0, 0, 0, 4, name_check_anims[idx], name_check_weapons[idx], 0, &aid) != TIG_OK) {
-                    missing_critter_art[num] |= dword_5A106C[idx];
+                    missing_critter_art[num] |= name_check_bits[idx];
                     tig_debug_printf("Unable to create valid art id for critter %d (%s%c) using animation %d (%c%c)\n",
                         num,
                         name_body_type_strs[num / 2],
@@ -437,7 +437,7 @@ void name_missing_art_init(void)
                         name_weapon_type_codes[name_check_weapons[idx]],
                         'a' + name_check_anims[idx]);
                 } else if (tig_art_exists(aid) != TIG_OK) {
-                    missing_critter_art[num] |= dword_5A106C[idx];
+                    missing_critter_art[num] |= name_check_bits[idx];
                     tig_debug_printf("Missing art for critter %d (%s%c) using animation %d (%c%c)\n",
                         num,
                         name_body_type_strs[num / 2],
@@ -450,7 +450,7 @@ void name_missing_art_init(void)
 
             for (num = 0; num < num_monster_art; num++) {
                 if (tig_art_monster_id_create(num, 0, 0, 0, 4, name_check_anims[idx], name_check_weapons[idx], 0, &aid) != TIG_OK) {
-                    missing_monster_art[num] |= dword_5A106C[idx];
+                    missing_monster_art[num] |= name_check_bits[idx];
 
                     mes_file_entry.num = num;
                     mes_get_msg(name_monster_mes_file, &mes_file_entry);
@@ -462,7 +462,7 @@ void name_missing_art_init(void)
                         name_weapon_type_codes[name_check_weapons[idx]],
                         'a' + name_check_anims[idx]);
                 } else if (tig_art_exists(aid) != TIG_OK) {
-                    missing_monster_art[num] |= dword_5A106C[idx];
+                    missing_monster_art[num] |= name_check_bits[idx];
 
                     mes_file_entry.num = num;
                     mes_get_msg(name_monster_mes_file, &mes_file_entry);
@@ -478,7 +478,7 @@ void name_missing_art_init(void)
 
             for (num = 0; num < num_unique_npc_art; num++) {
                 if (tig_art_unique_npc_id_create(num, 0, 0, 4, name_check_anims[idx], name_check_weapons[idx], 0, &aid) != TIG_OK) {
-                    missing_unique_npc_art[num] |= dword_5A106C[idx];
+                    missing_unique_npc_art[num] |= name_check_bits[idx];
 
                     mes_file_entry.num = num;
                     mes_get_msg(name_unique_npc_mes_file, &mes_file_entry);
@@ -490,7 +490,7 @@ void name_missing_art_init(void)
                         name_weapon_type_codes[name_check_weapons[idx]],
                         'a' + name_check_anims[idx]);
                 } else if (tig_art_exists(aid) != TIG_OK) {
-                    missing_unique_npc_art[num] |= dword_5A106C[idx];
+                    missing_unique_npc_art[num] |= name_check_bits[idx];
 
                     mes_file_entry.num = num;
                     mes_get_msg(name_monster_mes_file, &mes_file_entry);
@@ -846,11 +846,11 @@ void fix_missing_art(int num, int cnt, unsigned int* missing, int* anim_ptr, int
     }
 
     for (idx = 0; idx < 19; idx++) {
-        if ((dword_5A106C[idx] & missing[num]) != 0
+        if ((name_check_bits[idx] & missing[num]) != 0
             && *anim_ptr == name_check_anims[idx]
             && (*anim_ptr != 21
                 || *weapon_ptr == name_check_weapons[idx])) {
-            *anim_ptr = dword_5A1150[idx];
+            *anim_ptr = name_check_fallback_anims[idx];
             if (*anim_ptr == 1) {
                 if ((missing[num] & 0x1) != 0) {
                     *weapon_ptr = 0;

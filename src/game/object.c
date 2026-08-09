@@ -99,7 +99,7 @@ static void object_location_changed(int64_t obj, int a2);
 static void object_lighting_changed(void);
 
 // 0x5A548C
-static int dword_5A548C[8] = {
+static int object_scale_percents[8] = {
     50,
     63,
     75,
@@ -662,7 +662,7 @@ void object_draw(GameDrawInfo* draw_info)
 
                                                                         int scale_type = tig_art_eye_candy_id_scale_get(art_id);
                                                                         int overlay_scale = scale_type != 4
-                                                                            ? scale * dword_5A548C[scale_type] / 100
+                                                                            ? scale * object_scale_percents[scale_type] / 100
                                                                             : scale;
 
                                                                         if (scale_type != 100) {
@@ -2122,7 +2122,7 @@ void object_get_rect(int64_t obj, unsigned int flags, TigRect* rect)
                         && tig_art_frame_data(art_id, &art_frame_data) == TIG_OK) {
                         int scale_type = tig_art_eye_candy_id_scale_get(art_id);
                         int overlay_scale = scale_type != 4
-                            ? scale * dword_5A548C[scale_type] / 100
+                            ? scale * object_scale_percents[scale_type] / 100
                             : scale;
 
                         hot_x = art_frame_data.hot_x;
@@ -4867,7 +4867,7 @@ void sub_443620(unsigned int flags, int scale, int x, int y, tig_art_id_t art_id
     if (tig_art_type(art_id) == TIG_ART_TYPE_EYE_CANDY) {
         scale_type = tig_art_eye_candy_id_scale_get(art_id);
         if (scale_type != 4) {
-            scale = scale * dword_5A548C[scale_type] / 100;
+            scale = scale * object_scale_percents[scale_type] / 100;
         }
     }
 

@@ -21,7 +21,7 @@ static void anim_goal_data_debug(AnimGoalData* goal_data);
 static void anim_run_info_debug(AnimRunInfo* run_info);
 
 // 0x5A164C
-const char* off_5A164C[] = {
+const char* anim_goal_names[] = {
     "ag_animate",
     "ag_animate_loop",
     "ag_anim_fidget",
@@ -112,7 +112,7 @@ const char* off_5A164C[] = {
 };
 
 // 0x5B0530
-static const char* off_5B0530[] = {
+static const char* anim_goal_data_names[] = {
     "AGDATA_SELF_OBJ",
     "AGDATA_TARGET_OBJ",
     "AGDATA_BLOCK_OBJ",
@@ -1487,7 +1487,7 @@ void anim_goal_data_debug(AnimGoalData* goal_data)
     int idx;
     char str[256];
 
-    tig_debug_printf("    goal_type: %s(%d)\n", off_5A164C[goal_data->type], goal_data->type);
+    tig_debug_printf("    goal_type: %s(%d)\n", anim_goal_names[goal_data->type], goal_data->type);
 
     for (idx = 0; idx < AGDATA_COUNT; idx++) {
         if (idx < 5) {
@@ -1497,12 +1497,12 @@ void anim_goal_data_debug(AnimGoalData* goal_data)
                 } else {
                     strcpy(str, "INVALID_OBJ_HANDLE");
                 }
-                tig_debug_printf("    params[ %s ] = %s\n", off_5B0530[idx], str);
+                tig_debug_printf("    params[ %s ] = %s\n", anim_goal_data_names[idx], str);
             }
         } else if (idx == AGDATA_TARGET_TILE) {
             if (goal_data->params[idx].loc != 0) {
                 tig_debug_printf("    params[ %s ] = X:%d, Y:%d\n",
-                    off_5B0530[idx],
+                    anim_goal_data_names[idx],
                     (int)LOCATION_GET_X(goal_data->params[idx].loc),
                     (int)LOCATION_GET_Y(goal_data->params[idx].loc));
             }
@@ -1510,7 +1510,7 @@ void anim_goal_data_debug(AnimGoalData* goal_data)
             if (goal_data->params[idx].data != 0
                 && goal_data->params[idx].data != -1) {
                 tig_debug_printf("    params[ %s ] = %d\n",
-                    off_5B0530[idx],
+                    anim_goal_data_names[idx],
                     goal_data->params[idx].data);
             }
         }

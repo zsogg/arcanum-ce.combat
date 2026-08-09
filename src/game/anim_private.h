@@ -388,7 +388,7 @@ typedef struct AnimRunInfo {
     /* 0D34 */ int field_D34;
 } AnimRunInfo;
 
-extern const char* off_5A164C[];
+extern const char* anim_goal_names[];
 extern int dword_5A5978;
 extern int anim_goal_data_param_types[AGDATA_COUNT];
 extern bool dword_5E34F4;

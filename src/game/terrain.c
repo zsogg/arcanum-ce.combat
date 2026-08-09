@@ -47,7 +47,7 @@ static bool sub_4E9580(TigFile* stream);
 static bool sub_4E9680(TigFile* stream);
 
 // 0x5B9968
-static int64_t qword_5B9968[] = {
+static int64_t terrain_transition_codes[] = {
     -1,
     1,
     (2 << 26) | 1,
@@ -66,6 +66,13 @@ static int64_t qword_5B9968[] = {
     -1,
 };
 
+// NOTE: Unreferenced, so it keeps its placeholder name. Nothing in CE reads it,
+// and 0x5B99E8 has no references in the original either, so no code ever gave
+// the values a meaning. The contents (1, 3, 2, 6, 4, 12, 8, 9) are corner-mask
+// bit pairs of the same family terrain_transition_codes is indexed by, which
+// suggests an abandoned second path through the transition lookup - but that is
+// inference, and a name would state it as fact.
+//
 // 0x5B99E8
 static int dword_5B99E8[] = {
     1,
@@ -396,14 +403,14 @@ void terrain_sector_path(int64_t sector_id, char* path)
         strcpy(path, "terrain\\");
         strcat(path, to);
     } else {
-        v4 = qword_5B9968[v2];
+        v4 = terrain_transition_codes[v2];
         if (v4 != -1) {
             from = terrain_base_name(base);
             to = terrain_base_name(v1);
         } else {
             from = terrain_base_name(v1);
             to = terrain_base_name(base);
-            v4 = qword_5B9968[15 - v2];
+            v4 = terrain_transition_codes[15 - v2];
         }
 
         strcpy(path, "terrain\\");

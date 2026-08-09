@@ -26,7 +26,7 @@ static void sub_57EE30(int64_t a1, int inventory_location);
 static bool button_create_no_art(UiButtonInfo* button_info, int width, int height);
 
 // 0x5CB494
-static int dword_5CB494[10] = {
+static int hotkey_ui_art_nums[10] = {
     173,
     174,
     175,
@@ -40,7 +40,7 @@ static int dword_5CB494[10] = {
 };
 
 // 0x5CB4BC
-static int dword_5CB4BC[10] = {
+static int hotkey_ui_slot_x[10] = {
     198,
     237,
     276,
@@ -96,7 +96,7 @@ bool hotkey_ui_init(GameInitInfo* init_info)
     hotkey_primary_window_handle = TIG_WINDOW_HANDLE_INVALID;
     hotkey_secondary_window_handle = TIG_WINDOW_HANDLE_INVALID;
 
-    if (tig_art_interface_id_create(dword_5CB494[0], 0, 0, 0, &art_id) != TIG_OK) {
+    if (tig_art_interface_id_create(hotkey_ui_art_nums[0], 0, 0, 0, &art_id) != TIG_OK) {
         tig_debug_printf("hotkey_ui_init: ERROR: tig_art_interface_id_create failed!\n");
         exit(EXIT_FAILURE);
     }
@@ -109,7 +109,7 @@ bool hotkey_ui_init(GameInitInfo* init_info)
         hotkey = &(stru_683518[index]);
         hotkey->type = HOTKEY_SKILL;
         hotkey->data = intgame_recent_action_default_skill(index);
-        intgame_recent_action_button_get(index)->art_num = sub_579F70(hotkey->data);
+        intgame_recent_action_button_get(index)->art_num = skill_ui_icon_art_num(hotkey->data);
     }
 
     for (index = 0; index < 10; index++) {
@@ -117,9 +117,9 @@ bool hotkey_ui_init(GameInitInfo* init_info)
         hotkey_ui_clear_slot(hotkey);
         hotkey->slot = index;
         hotkey->data = -1;
-        hotkey->info.art_num = dword_5CB494[index];
+        hotkey->info.art_num = hotkey_ui_art_nums[index];
         hotkey->info.button_handle = TIG_BUTTON_HANDLE_INVALID;
-        hotkey->info.x = dword_5CB4BC[index] - stru_6835C8.x;
+        hotkey->info.x = hotkey_ui_slot_x[index] - stru_6835C8.x;
         hotkey->info.y = 445;
     }
 
@@ -155,7 +155,7 @@ bool hotkey_ui_start(tig_window_handle_t primary_window_handle, TigRect* rect, t
     hotkey_primary_window_handle = primary_window_handle;
     hotkey_secondary_window_handle = secondary_window_handle;
 
-    if (tig_art_interface_id_create(dword_5CB494[0], 0, 0, 0, &art_id) != TIG_OK) {
+    if (tig_art_interface_id_create(hotkey_ui_art_nums[0], 0, 0, 0, &art_id) != TIG_OK) {
         tig_debug_printf("hotkey_ui_start: ERROR: tig_art_interface_id_create failed!\n");
         exit(EXIT_FAILURE);
     }
@@ -169,7 +169,7 @@ bool hotkey_ui_start(tig_window_handle_t primary_window_handle, TigRect* rect, t
         for (index = 0; index < 2; index++) {
             hotkey = &(stru_683518[index]);
             intgame_recent_action_button_get(index)->art_num = hotkey->type == 2 || hotkey->type != 3
-                ? sub_579F70(hotkey->data)
+                ? skill_ui_icon_art_num(hotkey->data)
                 : spell_icon(hotkey->data);
             intgame_button_create_ex(hotkey_secondary_window_handle, &stru_6835C8, intgame_recent_action_button_get(index), 0x1);
         }
@@ -179,7 +179,7 @@ bool hotkey_ui_start(tig_window_handle_t primary_window_handle, TigRect* rect, t
         if (tig_art_interface_id_create(184, 0, 0, 0, &art_id) == TIG_OK) {
             tig_art_frame_data(art_id, &art_frame_data);
 
-            src_rect.x = dword_5CB4BC[0] - 2;
+            src_rect.x = hotkey_ui_slot_x[0] - 2;
 
             // UAP (0x57D9BE): the compact-UI hotkey bar samples its background
             // from the very top of the art, y 1 -> 0.
@@ -202,7 +202,7 @@ bool hotkey_ui_start(tig_window_handle_t primary_window_handle, TigRect* rect, t
 
     for (index = 0; index < 10; index++) {
         hotkey = &(stru_6835E0[index]);
-        hotkey->info.x = dword_5CB4BC[index] - stru_6835C8.x;
+        hotkey->info.x = hotkey_ui_slot_x[index] - stru_6835C8.x;
         hotkey->info.y = 445;
         intgame_hotkey_refresh(index);
 
@@ -250,7 +250,7 @@ void hotkey_ui_reset_recent_actions(void)
         hotkey_ui_clear_slot(&(stru_683518[index]));
         stru_683518[index].type = HOTKEY_SKILL;
         stru_683518[index].data = intgame_recent_action_default_skill(index);
-        intgame_recent_action_button_get(index)->art_num = sub_579F70(stru_683518[index].data);
+        intgame_recent_action_button_get(index)->art_num = skill_ui_icon_art_num(stru_683518[index].data);
 
         button_handle = intgame_recent_action_button_get(index)->button_handle;
         if (button_handle != TIG_BUTTON_HANDLE_INVALID) {
@@ -467,7 +467,7 @@ bool intgame_load_hotkey(Hotkey* hotkey, TigFile* stream)
             return false;
         }
 
-        hotkey->info.art_num = sub_579F70(hotkey->data);
+        hotkey->info.art_num = skill_ui_icon_art_num(hotkey->data);
         tig_art_interface_id_create(hotkey->info.art_num, 0, 0, 0, &(hotkey->art_id));
         hotkey->count = -1;
 
@@ -538,7 +538,7 @@ void intgame_hotkey_refresh(int index)
 
     hotkey = &(stru_6835E0[index]);
 
-    if (tig_art_interface_id_create(dword_5CB494[0], 0, 0, 0, &art_id) == TIG_OK) {
+    if (tig_art_interface_id_create(hotkey_ui_art_nums[0], 0, 0, 0, &art_id) == TIG_OK) {
         tig_art_frame_data(art_id, &art_frame_data);
 
         src_rect.x = 0;
@@ -561,7 +561,7 @@ void intgame_hotkey_refresh(int index)
         }
         tig_window_blit_art(hotkey_primary_window_handle, &art_blit_info);
     } else {
-        tig_debug_printf("Intgame: intgame_hotkey_refresh: ERROR: Can't find Interface Art: %d!\n", dword_5CB494[0]);
+        tig_debug_printf("Intgame: intgame_hotkey_refresh: ERROR: Can't find Interface Art: %d!\n", hotkey_ui_art_nums[0]);
     }
 
     if ((hotkey->flags & HOTKEY_DRAGGED) == 0
@@ -652,16 +652,16 @@ int sub_57E460(void)
     rect.x = 0;
     hrp_apply(&rect, GRAVITY_CENTER_HORIZONTAL | GRAVITY_BOTTOM);
 
-    if (mouse_state.x < rect.x + dword_5CB4BC[0] - 5
+    if (mouse_state.x < rect.x + hotkey_ui_slot_x[0] - 5
         || mouse_state.y < rect.y
-        || mouse_state.x >= rect.x + dword_5CB4BC[9] + dword_5CB4BC[0] - 5 + 32
+        || mouse_state.x >= rect.x + hotkey_ui_slot_x[9] + hotkey_ui_slot_x[0] - 5 + 32
         || mouse_state.y >= rect.y + 37) {
         return 11;
     }
 
     for (index = 0; index < 10; index++) {
-        if (mouse_state.x >= rect.x + dword_5CB4BC[index]
-            && mouse_state.x < rect.x + dword_5CB4BC[index] + 32
+        if (mouse_state.x >= rect.x + hotkey_ui_slot_x[index]
+            && mouse_state.x < rect.x + hotkey_ui_slot_x[index] + 32
             && mouse_state.y < rect.y + 37) {
             break;
         }
@@ -753,7 +753,7 @@ bool hotkey_ui_begin_drag(void)
             case HOTKEY_SKILL:
                 stru_683950.type = hotkey->type;
                 stru_683950.data = hotkey->data;
-                tig_art_interface_id_create(sub_579F70(stru_683950.data), 0, 0, 0, &art_id);
+                tig_art_interface_id_create(skill_ui_icon_art_num(stru_683950.data), 0, 0, 0, &art_id);
                 break;
             case HOTKEY_SPELL:
                 stru_683950.type = hotkey->type;
@@ -796,7 +796,7 @@ bool hotkey_ui_begin_drag(void)
         if (index < 4) {
             stru_683950.type = HOTKEY_SKILL;
             stru_683950.data = index;
-            tig_art_interface_id_create(sub_579F70(index), 0, 0, 0, &art_id);
+            tig_art_interface_id_create(skill_ui_icon_art_num(index), 0, 0, 0, &art_id);
             intgame_hotkey_mouse_load(art_id, true);
             hotkey_ui_dragging = true;
             return true;
@@ -956,7 +956,7 @@ bool sub_57E8D0(TigMessageMouseEvent mouse_event)
             break;
         case HOTKEY_SKILL:
             hotkey->data = stru_683950.data;
-            hotkey->info.art_num = sub_579F70(stru_683950.data);
+            hotkey->info.art_num = skill_ui_icon_art_num(stru_683950.data);
             tig_art_interface_id_create(hotkey->info.art_num, 0, 0, 0, &(hotkey->art_id));
             break;
         case HOTKEY_SPELL:
@@ -1129,7 +1129,7 @@ void sub_57EFA0(int type, int data, int64_t item_obj)
             && stru_683518[0].data == data) {
             return;
         }
-        tig_art_interface_id_create(sub_579F70(data), 0, 0, 0, &new_art_id);
+        tig_art_interface_id_create(skill_ui_icon_art_num(data), 0, 0, 0, &new_art_id);
         break;
     case HOTKEY_SPELL:
         if (stru_683518[0].type == HOTKEY_SPELL
@@ -1304,7 +1304,7 @@ void intgame_hotkeys_recover(void)
 
             hotkey->type = HOTKEY_SKILL;
             hotkey->data = intgame_recent_action_default_skill(index);
-            intgame_recent_action_button_get(index)->art_num = sub_579F70(hotkey->data);
+            intgame_recent_action_button_get(index)->art_num = skill_ui_icon_art_num(hotkey->data);
 
             button_handle = intgame_recent_action_button_get(index)->button_handle;
             if (button_handle != TIG_BUTTON_HANDLE_INVALID) {

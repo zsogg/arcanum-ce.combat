@@ -28,7 +28,7 @@ static void sub_57C470(void);
 static int dword_5CB3A0 = 10000;
 
 // 0x5CB3A8
-static S5CB3A8 stru_5CB3A8[FIVE] = {
+static S5CB3A8 spell_ui_maintain_slots[FIVE] = {
     { -1, 0 },
     { -1, 0 },
     { -1, 0 },
@@ -73,8 +73,8 @@ bool spell_ui_save(TigFile* stream)
     int index;
 
     for (index = 0; index < FIVE; index++) {
-        if (tig_file_fwrite(&(stru_5CB3A8[index].mt_id), sizeof(stru_5CB3A8[index].mt_id), 1, stream) != 1) return false;
-        if (tig_file_fwrite(&(stru_5CB3A8[index].field_4), sizeof(stru_5CB3A8[index].field_4), 1, stream) != 1) return false;
+        if (tig_file_fwrite(&(spell_ui_maintain_slots[index].mt_id), sizeof(spell_ui_maintain_slots[index].mt_id), 1, stream) != 1) return false;
+        if (tig_file_fwrite(&(spell_ui_maintain_slots[index].field_4), sizeof(spell_ui_maintain_slots[index].field_4), 1, stream) != 1) return false;
     }
 
     return true;
@@ -86,11 +86,11 @@ bool spell_ui_load(GameLoadInfo* load_info)
     int index;
 
     for (index = 0; index < FIVE; index++) {
-        if (tig_file_fread(&(stru_5CB3A8[index].mt_id), sizeof(stru_5CB3A8[index].mt_id), 1, load_info->stream) != 1) return false;
-        if (tig_file_fread(&(stru_5CB3A8[index].field_4), sizeof(stru_5CB3A8[index].field_4), 1, load_info->stream) != 1) return false;
+        if (tig_file_fread(&(spell_ui_maintain_slots[index].mt_id), sizeof(spell_ui_maintain_slots[index].mt_id), 1, load_info->stream) != 1) return false;
+        if (tig_file_fread(&(spell_ui_maintain_slots[index].field_4), sizeof(spell_ui_maintain_slots[index].field_4), 1, load_info->stream) != 1) return false;
 
-        if (stru_5CB3A8[index].field_4) {
-            intgame_spell_maintain_art_set(index, magictech_spell_icon_art_id_get(stru_5CB3A8[index].mt_id));
+        if (spell_ui_maintain_slots[index].field_4) {
+            intgame_spell_maintain_art_set(index, magictech_spell_icon_art_id_get(spell_ui_maintain_slots[index].mt_id));
         }
     }
 
@@ -344,11 +344,11 @@ bool spell_ui_maintain_add(int mt_id)
     cnt = stat_level_get(pc_obj, STAT_INTELLIGENCE) / 4;
 
     for (index = 0; index < cnt; index++) {
-        if (stru_5CB3A8[index].field_4 == 1 && stru_5CB3A8[index].mt_id == mt_id) {
+        if (spell_ui_maintain_slots[index].field_4 == 1 && spell_ui_maintain_slots[index].mt_id == mt_id) {
             return true;
         }
 
-        if (stru_5CB3A8[index].mt_id == -1 && candidate == -1) {
+        if (spell_ui_maintain_slots[index].mt_id == -1 && candidate == -1) {
             candidate = index;
         }
     }
@@ -357,8 +357,8 @@ bool spell_ui_maintain_add(int mt_id)
         return false;
     }
 
-    stru_5CB3A8[candidate].mt_id = mt_id;
-    stru_5CB3A8[candidate].field_4 = 1;
+    spell_ui_maintain_slots[candidate].mt_id = mt_id;
+    spell_ui_maintain_slots[candidate].field_4 = 1;
     intgame_spell_maintain_art_set(candidate, magictech_spell_icon_art_id_get(mt_id));
 
     return true;
@@ -374,15 +374,15 @@ void spell_ui_maintain_end(int mt_id)
     }
 
     for (index = 0; index < FIVE; index++) {
-        if (stru_5CB3A8[index].mt_id == mt_id
-            && stru_5CB3A8[index].field_4 >= 1) {
+        if (spell_ui_maintain_slots[index].mt_id == mt_id
+            && spell_ui_maintain_slots[index].field_4 >= 1) {
             break;
         }
     }
 
     if (index < FIVE) {
-        stru_5CB3A8[index].mt_id = -1;
-        stru_5CB3A8[index].field_4 = 0;
+        spell_ui_maintain_slots[index].mt_id = -1;
+        spell_ui_maintain_slots[index].field_4 = 0;
         intgame_spell_maintain_art_set(index, TIG_ART_ID_INVALID);
     }
 }
@@ -391,17 +391,17 @@ void spell_ui_maintain_end(int mt_id)
 void spell_ui_maintain_click(int slot)
 {
 
-    if (stru_5CB3A8[slot].mt_id == -1) {
+    if (spell_ui_maintain_slots[slot].mt_id == -1) {
         return;
     }
 
-    if (stru_5CB3A8[slot].field_4 != 1) {
+    if (spell_ui_maintain_slots[slot].field_4 != 1) {
         return;
     }
 
-    stru_5CB3A8[slot].field_4 = 2;
+    spell_ui_maintain_slots[slot].field_4 = 2;
 
-    magictech_interrupt(stru_5CB3A8[slot].mt_id);
+    magictech_interrupt(spell_ui_maintain_slots[slot].mt_id);
 }
 
 // 0x57C3F0
@@ -413,11 +413,11 @@ void spell_ui_maintain_hover(int slot)
     // FIXME: Unused.
     player_get_local_pc_obj();
 
-    if (stru_5CB3A8[slot].field_4 != 1) {
+    if (spell_ui_maintain_slots[slot].field_4 != 1) {
         return;
     }
 
-    if (!magictech_id_to_run_info(stru_5CB3A8[slot].mt_id, &run_info)) {
+    if (!magictech_id_to_run_info(spell_ui_maintain_slots[slot].mt_id, &run_info)) {
         return;
     }
 
@@ -444,8 +444,8 @@ void sub_57C470(void)
     int index;
 
     for (index = 0; index < FIVE; index++) {
-        stru_5CB3A8[index].mt_id = -1;
-        stru_5CB3A8[index].field_4 = 0;
+        spell_ui_maintain_slots[index].mt_id = -1;
+        spell_ui_maintain_slots[index].field_4 = 0;
         intgame_spell_maintain_art_set(index, TIG_ART_ID_INVALID);
     }
 
@@ -483,7 +483,7 @@ void spell_ui_maintain_refresh(void)
 // 0x57C520
 bool spell_ui_maintain_has(int slot)
 {
-    return stru_5CB3A8[slot].field_4 != 0;
+    return spell_ui_maintain_slots[slot].field_4 != 0;
 }
 
 // 0x57C540

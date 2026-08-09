@@ -53,7 +53,7 @@ unsigned int animfx_play_flags_lookup_tbl_values[ANIMFX_PLAY_COUNT] = {
 };
 
 // 0x5B76A8
-static const char* off_5B76A8[] = {
+static const char* animfx_flag_names[] = {
     "overlay_f",
     "overlay_b",
     "overlay_fb",
@@ -65,7 +65,7 @@ static const char* off_5B76A8[] = {
 };
 
 // 0x5B76C8
-static unsigned int dword_5B76C8[] = {
+static unsigned int animfx_flag_values[] = {
     ANIMFX_LIST_ENTRY_FOREGROUND_OVERLAY,
     ANIMFX_LIST_ENTRY_BACKGROUND_OVERLAY,
     ANIMFX_LIST_ENTRY_ANY_OVERLAY,
@@ -76,10 +76,10 @@ static unsigned int dword_5B76C8[] = {
     ANIMFX_LIST_ENTRY_CAN_AUTOSCALE,
 };
 
-static_assert(SDL_arraysize(off_5B76A8) == SDL_arraysize(dword_5B76C8), "wrong size");
+static_assert(SDL_arraysize(animfx_flag_names) == SDL_arraysize(animfx_flag_values), "wrong size");
 
 // 0x5B76E8
-static const char* off_5B76E8[] = {
+static const char* animfx_blend_names[] = {
     "none",
     "add",
     "sub",
@@ -89,7 +89,7 @@ static const char* off_5B76E8[] = {
     "alphS",
 };
 
-static_assert(SDL_arraysize(off_5B76E8) == BLEND_COUNT, "wrong size");
+static_assert(SDL_arraysize(animfx_blend_names) == BLEND_COUNT, "wrong size");
 
 // 0x5B7704
 static const char* effect_type_names[EFFECT_TYPE_COUNT] = {
@@ -98,7 +98,7 @@ static const char* effect_type_names[EFFECT_TYPE_COUNT] = {
 };
 
 // 0x5B770C
-static int dword_5B770C[] = {
+static int animfx_scale_percents[] = {
     50,
     62,
     75,
@@ -109,10 +109,10 @@ static int dword_5B770C[] = {
     200,
 };
 
-static_assert(SDL_arraysize(dword_5B770C) == SCALE_COUNT, "wrong size");
+static_assert(SDL_arraysize(animfx_scale_percents) == SCALE_COUNT, "wrong size");
 
 // 0x5B772C
-static int dword_5B772C[] = {
+static int animfx_scale_values[] = {
     0,
     1,
     2,
@@ -123,7 +123,7 @@ static int dword_5B772C[] = {
     7,
 };
 
-static_assert(SDL_arraysize(dword_5B772C) == SCALE_COUNT, "wrong size");
+static_assert(SDL_arraysize(animfx_scale_values) == SCALE_COUNT, "wrong size");
 
 // 0x601700
 static AnimID stru_601700;
@@ -1125,22 +1125,22 @@ void animfx_build_eye_candy_effect(int index, char* str)
         if (tig_str_parse_named_value(&curr, "Scale:", &scale_key)) {
             int scale_index;
             for (scale_index = 0; scale_index < SCALE_COUNT; scale_index++) {
-                if (dword_5B770C[scale_index] == scale_key) {
+                if (animfx_scale_percents[scale_index] == scale_key) {
                     break;
                 }
             }
 
             if (scale_index < SCALE_COUNT) {
-                scale = dword_5B772C[scale_index];
+                scale = animfx_scale_values[scale_index];
             } else {
                 tig_debug_printf("animfx_build_eye_candy_effect: Error: scale out of range!\n");
-                scale = dword_5B772C[0];
+                scale = animfx_scale_values[0];
             }
 
             entry->flags |= ANIMFX_LIST_ENTRY_CAN_AUTOSCALE;
         }
 
-        tig_str_match_named_str_to_list(&curr, "Blend:", off_5B76E8, BLEND_COUNT, &blend);
+        tig_str_match_named_str_to_list(&curr, "Blend:", animfx_blend_names, BLEND_COUNT, &blend);
 
         if (tig_str_parse_named_value(&curr, "Sound:", &sound)) {
             entry->sound = sound;
@@ -1163,7 +1163,7 @@ void animfx_build_eye_candy_effect(int index, char* str)
             }
         }
 
-        tig_str_parse_named_flag_list(&curr, "Flags:", off_5B76A8, dword_5B76C8, sizeof(off_5B76A8) / sizeof(off_5B76A8[0]), &(entry->flags));
+        tig_str_parse_named_flag_list(&curr, "Flags:", animfx_flag_names, animfx_flag_values, sizeof(animfx_flag_names) / sizeof(animfx_flag_names[0]), &(entry->flags));
 
         // TODO: Find constants.
         int type = ((entry->flags & ANIMFX_LIST_ENTRY_ANY_OVERLAY) != 0)

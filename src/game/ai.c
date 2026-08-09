@@ -150,7 +150,7 @@ static int64_t ai_shitlist_get(int64_t obj);
 #define concealed_to_loudness(concealed) ((concealed) ? LOUDNESS_SILENT : LOUDNESS_NORMAL)
 
 // 0x5B5088
-static DateTime stru_5B5088[6] = {
+static DateTime ai_wait_durations[6] = {
     { .days = 0, .milliseconds = 0 },
     { .milliseconds = 900000 },
     { .milliseconds = 7200000 },
@@ -1479,7 +1479,7 @@ void ai_npc_wait(int64_t obj)
         }
 
         if (wait < 6) {
-            datetime = stru_5B5088[wait];
+            datetime = ai_wait_durations[wait];
             timeevent.type = TIMEEVENT_TYPE_NPC_WAIT_HERE;
             timeevent_add_delay(&timeevent, &datetime);
         }
