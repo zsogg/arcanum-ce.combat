@@ -6041,7 +6041,7 @@ void mainmenu_ui_feedback_loading_completed(void)
 }
 
 // 0x549820
-tig_window_handle_t sub_549820(void)
+tig_window_handle_t mainmenu_ui_window_handle_get(void)
 {
     return mainmenu_ui_window_handle;
 }

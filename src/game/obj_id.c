@@ -9,9 +9,9 @@
 
 static bool sub_4E67A0(TigGuid* guid, const char* str);
 static bool sub_4E6970(ObjectID_P* p, const char* str);
-static bool sub_4E6A60(int* value_ptr, const char* str);
-static bool sub_4E6AA0(int* value_ptr, const char* str, size_t length);
-static bool sub_4E6B00(char* dst, const char* src, size_t length);
+static bool objid_a_from_str(int* value_ptr, const char* str);
+static bool objid_parse_hex(int* value_ptr, const char* str, size_t length);
+static bool objid_copy_hex(char* dst, const char* src, size_t length);
 
 // 0x4E62A0
 void objid_create_guid(ObjectID* oid)
@@ -157,7 +157,7 @@ bool objid_id_from_str(ObjectID* oid, const char* str)
     switch (str[0]) {
     case 'A':
         temp_oid.type = OID_TYPE_A;
-        if (!sub_4E6A60(&(temp_oid.d.a), str)) {
+        if (!objid_a_from_str(&(temp_oid.d.a), str)) {
             return false;
         }
         break;
@@ -199,7 +199,7 @@ bool sub_4E67A0(TigGuid* guid, const char* str)
     if (str[0] != 'G' || str[1] != '_') return false;
     str += 2;
 
-    if (!sub_4E6AA0(&value, str, 8)) return false;
+    if (!objid_parse_hex(&value, str, 8)) return false;
     guid->data[0] = (value >> 24) & 0xFF;
     guid->data[1] = (value >> 16) & 0xFF;
     guid->data[2] = (value >> 8) & 0xFF;
@@ -209,7 +209,7 @@ bool sub_4E67A0(TigGuid* guid, const char* str)
     if (str[0] != '_') return false;
     str++;
 
-    if (!sub_4E6AA0(&value, str, 4)) return false;
+    if (!objid_parse_hex(&value, str, 4)) return false;
     guid->data[4] = (value >> 8) & 0xFF;
     guid->data[5] = value & 0xFF;
     str += 4;
@@ -217,7 +217,7 @@ bool sub_4E67A0(TigGuid* guid, const char* str)
     if (str[0] != '_') return false;
     str++;
 
-    if (!sub_4E6AA0(&value, str, 4)) return false;
+    if (!objid_parse_hex(&value, str, 4)) return false;
     guid->data[6] = (value >> 8) & 0xFF;
     guid->data[7] = value & 0xFF;
     str += 4;
@@ -225,38 +225,38 @@ bool sub_4E67A0(TigGuid* guid, const char* str)
     if (str[0] != '_') return false;
     str++;
 
-    if (!sub_4E6AA0(&value, str, 2)) return false;
+    if (!objid_parse_hex(&value, str, 2)) return false;
     guid->data[8] = value;
     str += 2;
 
-    if (!sub_4E6AA0(&value, str, 2)) return false;
+    if (!objid_parse_hex(&value, str, 2)) return false;
     guid->data[9] = value;
     str += 2;
 
     if (str[0] != '_') return false;
     str++;
 
-    if (!sub_4E6AA0(&value, str, 2)) return false;
+    if (!objid_parse_hex(&value, str, 2)) return false;
     guid->data[10] = value;
     str += 2;
 
-    if (!sub_4E6AA0(&value, str, 2)) return false;
+    if (!objid_parse_hex(&value, str, 2)) return false;
     guid->data[11] = value;
     str += 2;
 
-    if (!sub_4E6AA0(&value, str, 2)) return false;
+    if (!objid_parse_hex(&value, str, 2)) return false;
     guid->data[12] = value;
     str += 2;
 
-    if (!sub_4E6AA0(&value, str, 2)) return false;
+    if (!objid_parse_hex(&value, str, 2)) return false;
     guid->data[13] = value;
     str += 2;
 
-    if (!sub_4E6AA0(&value, str, 2)) return false;
+    if (!objid_parse_hex(&value, str, 2)) return false;
     guid->data[14] = value;
     str += 2;
 
-    if (!sub_4E6AA0(&value, str, 2)) return false;
+    if (!objid_parse_hex(&value, str, 2)) return false;
     guid->data[15] = value;
 
     return true;
@@ -275,30 +275,30 @@ bool sub_4E6970(ObjectID_P* p, const char* str)
     }
 
     str += 2;
-    if (!sub_4E6AA0(&x, str, 8)) {
+    if (!objid_parse_hex(&x, str, 8)) {
         return false;
     }
 
     str += 8;
     if (str[0] != '_') return false;
-    if (!sub_4E6AA0(&y, str, 8)) return false;
+    if (!objid_parse_hex(&y, str, 8)) return false;
     p->location = location_make(x, y);
 
     str += 8;
     if (str[0] != '_') return false;
-    if (!sub_4E6AA0(&temp_id, str, 8)) return false;
+    if (!objid_parse_hex(&temp_id, str, 8)) return false;
     p->temp_id = temp_id;
 
     str += 8;
     if (str[0] != '_') return false;
-    if (!sub_4E6AA0(&map, str, 8)) return false;
+    if (!objid_parse_hex(&map, str, 8)) return false;
     p->map = map;
 
     return true;
 }
 
 // 0x4E6A60
-bool sub_4E6A60(int* value_ptr, const char* str)
+bool objid_a_from_str(int* value_ptr, const char* str)
 {
     int value;
 
@@ -306,7 +306,7 @@ bool sub_4E6A60(int* value_ptr, const char* str)
         return false;
     }
 
-    if (!sub_4E6AA0(&value, str + 2, 8)) {
+    if (!objid_parse_hex(&value, str + 2, 8)) {
         return false;
     }
 
@@ -315,13 +315,13 @@ bool sub_4E6A60(int* value_ptr, const char* str)
 }
 
 // 0x4E6AA0
-bool sub_4E6AA0(int* value_ptr, const char* str, size_t length)
+bool objid_parse_hex(int* value_ptr, const char* str, size_t length)
 {
     char temp[12];
     char* end;
     int value;
 
-    if (!sub_4E6B00(temp, str, length)) {
+    if (!objid_copy_hex(temp, str, length)) {
         return false;
     }
 
@@ -335,7 +335,7 @@ bool sub_4E6AA0(int* value_ptr, const char* str, size_t length)
 }
 
 // 0x4E6B00
-bool sub_4E6B00(char* dst, const char* src, size_t length)
+bool objid_copy_hex(char* dst, const char* src, size_t length)
 {
     size_t index;
 

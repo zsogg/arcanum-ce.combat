@@ -832,7 +832,7 @@ bool follower_ui_message_filter(TigMessage* msg)
                     object_ref_validate(&follower_ui_followers[follower_ui_top_index + index]);
                     follower_ui_subordinate_obj = follower_ui_followers[follower_ui_top_index + index].obj;
                     if (follower_ui_subordinate_obj != OBJ_HANDLE_NULL) {
-                        sub_57CD60(follower_ui_commander_obj, follower_ui_subordinate_obj, str);
+                        tb_ui_build_examine_text(follower_ui_commander_obj, follower_ui_subordinate_obj, str);
                         intgame_examine_object(follower_ui_commander_obj, follower_ui_subordinate_obj, str);
                         object_hover_obj_set(follower_ui_subordinate_obj);
                     }

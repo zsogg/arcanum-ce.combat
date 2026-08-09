@@ -105,7 +105,7 @@ void mainmenu_ui_feedback_saving_completed(void);
 void mainmenu_ui_feedback_cannot_save_in_tb(void);
 void mainmenu_ui_feedback_loading(void);
 void mainmenu_ui_feedback_loading_completed(void);
-tig_window_handle_t sub_549820(void);
+tig_window_handle_t mainmenu_ui_window_handle_get(void);
 void mainmenu_ui_window_type_set(MainMenuWindowType window_type);
 mes_file_handle_t mainmenu_ui_mes_file(void);
 tig_font_handle_t mainmenu_ui_font(MainMenuFont font, MainMenuColor color);

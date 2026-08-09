@@ -71,7 +71,7 @@ static bool sub_425760(int64_t obj, int64_t loc, int64_t adjacent_loc, int rot);
 static void sub_4257E0(int64_t obj, unsigned int* flags_ptr);
 static bool sub_425840(int64_t a1, int64_t a2, int64_t a3, int a4, int64_t a5);
 static bool anim_create_wander_path(AnimRunInfo* run_info);
-static bool sub_425BF0(PathCreateInfo* path_create_info, bool a2);
+static bool anim_set_path_flags(PathCreateInfo* path_create_info, bool a2);
 static bool anim_create_wander_dark_path(AnimRunInfo* run_info);
 static bool anim_create_path_to_tile(AnimRunInfo* run_info);
 static void anim_create_path_max_length(int64_t a1, const char* msg, int value);
@@ -4913,7 +4913,7 @@ bool anim_create_wander_path(AnimRunInfo* run_info)
     path_create_info.rotations = run_info->path.rotations;
     path_create_info.flags = 0;
 
-    if (sub_425BF0(&path_create_info, 1)) {
+    if (anim_set_path_flags(&path_create_info, 1)) {
         run_info->path.max = path_make(&path_create_info);
     } else {
         run_info->path.max = 0;
@@ -4921,7 +4921,7 @@ bool anim_create_wander_path(AnimRunInfo* run_info)
 
     if (run_info->path.max == 0 || run_info->path.max > range) {
         path_create_info.flags = PATH_FLAG_0x0001;
-        if (!sub_425BF0(&path_create_info, 1)) {
+        if (!anim_set_path_flags(&path_create_info, 1)) {
             if (!player_is_pc_obj(obj)) {
                 combat_turn_based_end_critter_turn(obj);
             }
@@ -4951,7 +4951,7 @@ bool anim_create_wander_path(AnimRunInfo* run_info)
 }
 
 // 0x425BF0
-bool sub_425BF0(PathCreateInfo* path_create_info, bool a2)
+bool anim_set_path_flags(PathCreateInfo* path_create_info, bool a2)
 {
     ASSERT(path_create_info != NULL); // 3923, "pPathData != NULL"
     ASSERT(path_create_info->obj != OBJ_HANDLE_NULL); // 3924, "pPathData->movingObj != OBJ_HANDLE_NULL"
@@ -5038,7 +5038,7 @@ bool anim_create_wander_dark_path(AnimRunInfo* run_info)
     path_create_info.rotations = run_info->path.rotations;
     path_create_info.flags = 0;
 
-    if (sub_425BF0(&path_create_info, 1)) {
+    if (anim_set_path_flags(&path_create_info, 1)) {
         run_info->path.max = path_make(&path_create_info);
     } else {
         run_info->path.max = 0;
@@ -5046,7 +5046,7 @@ bool anim_create_wander_dark_path(AnimRunInfo* run_info)
 
     if (run_info->path.max == 0 || run_info->path.max > range) {
         path_create_info.flags = PATH_FLAG_0x0001;
-        if (!sub_425BF0(&path_create_info, 1)) {
+        if (!anim_set_path_flags(&path_create_info, 1)) {
             if (!player_is_pc_obj(obj)) {
                 combat_turn_based_end_critter_turn(obj);
             }
@@ -5320,7 +5320,7 @@ bool sub_426560(int64_t obj, int64_t from, int64_t to, AnimPath* path, unsigned 
     path_create_info.rotations = rotations;
     path_create_info.flags = flags;
 
-    if (sub_425BF0(&path_create_info, true)) {
+    if (anim_set_path_flags(&path_create_info, true)) {
         path->max = path_make(&path_create_info);
     } else {
         path->max = 0;
@@ -5535,7 +5535,7 @@ bool anim_create_path_away_from_obj(AnimRunInfo* run_info)
     path_create_info.rotations = rotations;
     path_create_info.flags = path_create_flags;
 
-    if (!sub_425BF0(&path_create_info, true)) {
+    if (!anim_set_path_flags(&path_create_info, true)) {
         if (!player_is_pc_obj(source_obj)) {
             combat_turn_based_end_critter_turn(source_obj);
         }
@@ -5989,7 +5989,7 @@ bool anim_create_path_near_tile(AnimRunInfo* run_info)
 
     if ((run_info->flags & 0x4000) == 0) {
         path_create_info.flags = 0;
-        if (sub_425BF0(&path_create_info, true)) {
+        if (anim_set_path_flags(&path_create_info, true)) {
             run_info->path.max = path_make(&path_create_info);
         } else {
             run_info->path.max = 0;
@@ -6002,7 +6002,7 @@ bool anim_create_path_near_tile(AnimRunInfo* run_info)
 
     if (run_info->path.max == 0) {
         path_create_info.flags = PATH_FLAG_0x0001;
-        if (sub_425BF0(&path_create_info, true)) {
+        if (anim_set_path_flags(&path_create_info, true)) {
             run_info->path.max = path_make(&path_create_info);
             run_info->path.field_E8 = path_create_info.from;
             run_info->path.field_F0 = path_create_info.to;
@@ -6097,7 +6097,7 @@ bool anim_create_path_near_obj(AnimRunInfo* run_info)
         path_create_info.flags &= ~PATH_FLAG_0x0001;
     }
 
-    if (sub_425BF0(&path_create_info, false)) {
+    if (anim_set_path_flags(&path_create_info, false)) {
         run_info->path.max = path_make(&path_create_info);
     } else {
         run_info->path.max = 0;
@@ -6122,7 +6122,7 @@ bool anim_create_path_near_obj(AnimRunInfo* run_info)
         && (run_info->flags & 0x4000) == 0) {
         path_create_info.flags = path_create_flags;
 
-        if (!sub_425BF0(&path_create_info, true)) {
+        if (!anim_set_path_flags(&path_create_info, true)) {
             if (!player_is_pc_obj(source_obj)) {
                 combat_turn_based_end_critter_turn(source_obj);
             }
@@ -6174,7 +6174,7 @@ bool anim_create_path_near_obj(AnimRunInfo* run_info)
     path_create_info.max_rotations = max_rotations;
     path_create_info.flags = (run_info->flags & 0x4000) != 0 ? PATH_FLAG_0x0001 : 0;
 
-    if (sub_425BF0(&path_create_info, true)) {
+    if (anim_set_path_flags(&path_create_info, true)) {
         run_info->path.max = path_make(&path_create_info);
     } else {
         run_info->path.max = 0;
@@ -6199,7 +6199,7 @@ bool anim_create_path_near_obj(AnimRunInfo* run_info)
 
     path_create_info.flags = PATH_FLAG_0x0001;
 
-    if (!sub_425BF0(&path_create_info, true)) {
+    if (!anim_set_path_flags(&path_create_info, true)) {
         if (!player_is_pc_obj(source_obj)) {
             combat_turn_based_end_critter_turn(source_obj);
         }
@@ -6288,7 +6288,7 @@ bool anim_create_path_near_obj_combat(AnimRunInfo* run_info)
         path_create_info.flags &= ~PATH_FLAG_0x0001;
     }
 
-    if (sub_425BF0(&path_create_info, false)) {
+    if (anim_set_path_flags(&path_create_info, false)) {
         run_info->path.max = path_make(&path_create_info);
     } else {
         run_info->path.max = 0;
@@ -6313,7 +6313,7 @@ bool anim_create_path_near_obj_combat(AnimRunInfo* run_info)
     }
 
     path_create_info.flags = path_create_flags;
-    if (!sub_425BF0(&path_create_info, false)) {
+    if (!anim_set_path_flags(&path_create_info, false)) {
         if (!player_is_pc_obj(source_obj)) {
             combat_turn_based_end_critter_turn(source_obj);
         }

@@ -822,7 +822,7 @@ bool hotkey_ui_begin_drag(void)
 // 0x57E8B0
 void hotkey_ui_cancel_drag(void)
 {
-    sub_575770();
+    inven_ui_drop_dragged_item();
     intgame_refresh_cursor();
     hotkey_ui_dragging = false;
     hotkey_ui_dragging_index = -1;
@@ -858,7 +858,7 @@ bool sub_57E8D0(TigMessageMouseEvent mouse_event)
         if (item_parent(stru_683950.item_obj.obj, &parent_obj)
             && !player_is_local_pc_obj(parent_obj)) {
             hotkey_ui_dragging = false;
-            sub_575770();
+            inven_ui_drop_dragged_item();
             intgame_refresh_cursor();
             hotkey_ui_dragging_index = -1;
             return false;
@@ -868,7 +868,7 @@ bool sub_57E8D0(TigMessageMouseEvent mouse_event)
         if (obj_type == OBJ_TYPE_AMMO
             || obj_type == OBJ_TYPE_GOLD) {
             hotkey_ui_dragging = false;
-            sub_575770();
+            inven_ui_drop_dragged_item();
             intgame_refresh_cursor();
             hotkey_ui_dragging_index = -1;
             return false;
@@ -883,7 +883,7 @@ bool sub_57E8D0(TigMessageMouseEvent mouse_event)
             intgame_message_window_display_msg(&ui_message);
 
             hotkey_ui_dragging = false;
-            sub_575770();
+            inven_ui_drop_dragged_item();
             intgame_refresh_cursor();
             hotkey_ui_dragging_index = -1;
             return false;

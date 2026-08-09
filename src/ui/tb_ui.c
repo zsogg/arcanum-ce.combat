@@ -65,7 +65,7 @@ bool tb_ui_init(GameInitInfo* init_info)
 
     callbacks.display_warning = display_warning;
     callbacks.display_msg = intgame_message_window_display_msg;
-    callbacks.field_58 = sub_57CCF0;
+    callbacks.field_58 = tb_ui_examine_object;
     callbacks.spell_add = spell_ui_add;
     callbacks.spell_maintain_add = spell_ui_maintain_add;
     callbacks.spell_maintain_end = spell_ui_maintain_end;
@@ -126,7 +126,7 @@ bool tb_ui_init(GameInitInfo* init_info)
     callbacks.field_FC = sub_549310;
     callbacks.refresh_cursor = intgame_refresh_cursor;
     callbacks.field_104 = sub_57A6C0;
-    callbacks.field_108 = sub_575770;
+    callbacks.field_108 = inven_ui_drop_dragged_item;
     callbacks.wmap_rnd_timeevent_process = wmap_rnd_timeevent_process;
     callbacks.queue_slide = slide_ui_enqueue;
     callbacks.gameuilib_mod_load = gameuilib_mod_load;
@@ -235,11 +235,11 @@ void refresh_fatigue_bar(int64_t obj)
         anim_ui_event_add(ANIM_UI_EVENT_TYPE_UPDATE_FATIGUE_BAR, -1);
 
         if (!critter_is_active(obj)) {
-            sub_575770();
+            inven_ui_drop_dragged_item();
         }
     }
     if (object_hover_obj_get() == obj) {
-        sub_57CCF0(player_get_local_pc_obj(), obj);
+        tb_ui_examine_object(player_get_local_pc_obj(), obj);
     }
     follower_ui_update_obj(obj);
 }
@@ -259,18 +259,18 @@ void sub_57CC70(int64_t a1, int64_t a2)
 }
 
 // 0x57CCF0
-void sub_57CCF0(int64_t source_obj, int64_t target_obj)
+void tb_ui_examine_object(int64_t source_obj, int64_t target_obj)
 {
     char buffer[2000];
 
-    if (sub_57CD60(source_obj, target_obj, buffer)) {
+    if (tb_ui_build_examine_text(source_obj, target_obj, buffer)) {
         intgame_examine_object(source_obj, target_obj, buffer);
         sub_557370(source_obj, target_obj);
     }
 }
 
 // 0x57CD60
-bool sub_57CD60(int64_t source_obj, int64_t target_obj, char* buffer)
+bool tb_ui_build_examine_text(int64_t source_obj, int64_t target_obj, char* buffer)
 {
     if (!player_is_local_pc_obj(source_obj)) {
         return false;

@@ -2096,7 +2096,7 @@ bool sub_54B5D0(TigMessage* msg)
                         intgame_message_history_scroll_up();
                         return true;
                     }
-                    sub_575770();
+                    inven_ui_drop_dragged_item();
                     intgame_refresh_cursor();
                     return true;
                 }
@@ -2105,7 +2105,7 @@ bool sub_54B5D0(TigMessage* msg)
                         intgame_message_history_scroll_down();
                         return true;
                     }
-                    sub_575770();
+                    inven_ui_drop_dragged_item();
                     intgame_refresh_cursor();
                     return true;
                 }
@@ -2771,7 +2771,7 @@ void intgame_process_event(TigMessage* msg)
                                     intgame_refresh_cursor();
                                     anim_goal_throw_item(pc_obj, v2, td.loc);
                                 } else {
-                                    sub_575770();
+                                    inven_ui_drop_dragged_item();
                                 }
                             }
                         } else if (critter_is_active(pc_obj)
@@ -2843,7 +2843,7 @@ void intgame_process_event(TigMessage* msg)
                     }
 
                     if (inven_ui_drag_item_obj_get() != OBJ_HANDLE_NULL) {
-                        sub_575770();
+                        inven_ui_drop_dragged_item();
                         intgame_refresh_cursor();
                     }
                 }
@@ -3275,7 +3275,7 @@ void intgame_combat_mode_toggle(void)
         object_hover_obj_set(OBJ_HANDLE_NULL);
         object_hover_obj_set(obj);
         if (obj != OBJ_HANDLE_NULL) {
-            sub_57CCF0(pc_obj, obj);
+            tb_ui_examine_object(pc_obj, obj);
         }
     }
 }
@@ -3293,7 +3293,7 @@ void sub_54ECD0(void)
 
     object_hover_obj_set(qword_64C690);
     object_hover_obj_set(OBJ_HANDLE_NULL);
-    sub_57CCF0(player_get_local_pc_obj(), qword_64C690);
+    tb_ui_examine_object(player_get_local_pc_obj(), qword_64C690);
 }
 
 // TODO: Lots of jumps, check.
@@ -3814,7 +3814,7 @@ void intgame_hotkey_activate(Hotkey* hotkey)
                     v1 = inven_ui_drag_item_obj_get();
                     if (v1 != v2) {
                         if (v1 != OBJ_HANDLE_NULL) {
-                            sub_575770();
+                            inven_ui_drop_dragged_item();
                         }
                         inven_ui_destroy();
                         sub_573740(v2, true);
@@ -3918,7 +3918,7 @@ void intgame_hotkey_highlight(Hotkey* hotkey)
         // Should be unreachable.
         break;
     case HOTKEY_ITEM:
-        sub_57CCF0(player_get_local_pc_obj(), hotkey->item_obj.obj);
+        tb_ui_examine_object(player_get_local_pc_obj(), hotkey->item_obj.obj);
         break;
     case HOTKEY_SKILL:
         intgame_message_window_display_skill(hotkey->data);
@@ -4612,9 +4612,9 @@ void iso_interface_refresh(void)
     if (intgame_iso_window_type == ROTWIN_TYPE_MSG) {
         if (pc_obj != OBJ_HANDLE_NULL) {
             if (qword_64C690 != OBJ_HANDLE_NULL) {
-                sub_57CCF0(pc_obj, qword_64C690);
+                tb_ui_examine_object(pc_obj, qword_64C690);
             } else if ((obj = object_hover_obj_get()) != OBJ_HANDLE_NULL) {
-                sub_57CCF0(pc_obj, obj);
+                tb_ui_examine_object(pc_obj, obj);
             } else {
                 intgame_message_refresh(false);
             }
@@ -4884,7 +4884,7 @@ void sub_551910(TigMessage* msg)
         if (!map_is_clearing_objects()) {
             if (target_pick_at_screen_xy_ex(msg->data.mouse.x, msg->data.mouse.y, &td, qword_5C7280, intgame_fullscreen)) {
                 if (!td.is_loc) {
-                    sub_57CCF0(player_get_local_pc_obj(), td.obj);
+                    tb_ui_examine_object(player_get_local_pc_obj(), td.obj);
                     object_hover_obj_set(td.obj);
                 }
             } else if (combat_turn_based_is_active()
@@ -5065,7 +5065,7 @@ bool intgame_mode_set(IntgameMode mode)
         case INTGAME_MODE_ITEM:
             item_ui_deactivate();
             if (inven_ui_drag_item_obj_get() != OBJ_HANDLE_NULL) {
-                sub_575770();
+                inven_ui_drop_dragged_item();
                 intgame_refresh_cursor();
             }
             break;
@@ -5120,7 +5120,7 @@ bool intgame_mode_set(IntgameMode mode)
 
         if (v1) {
             if (inven_ui_drag_item_obj_get() != OBJ_HANDLE_NULL) {
-                sub_575770();
+                inven_ui_drop_dragged_item();
             }
         }
 
@@ -6310,7 +6310,7 @@ void sub_553A70(TigMessage* msg)
 
     if (target_pick_at_screen_xy_ex(msg->data.mouse.x, msg->data.mouse.y, &td, qword_5C7280, intgame_fullscreen)) {
         if (obj != td.obj) {
-            sub_57CCF0(player_get_local_pc_obj(), td.obj);
+            tb_ui_examine_object(player_get_local_pc_obj(), td.obj);
             object_hover_obj_set(td.obj);
         }
     } else {
@@ -6319,7 +6319,7 @@ void sub_553A70(TigMessage* msg)
                 if (obj_handle_is_valid(qword_64C690)) {
                     object_hover_obj_set(qword_64C690);
                     object_hover_obj_set(OBJ_HANDLE_NULL);
-                    sub_57CCF0(player_get_local_pc_obj(), qword_64C690);
+                    tb_ui_examine_object(player_get_local_pc_obj(), qword_64C690);
                 }
                 qword_64C690 = OBJ_HANDLE_NULL;
             }
@@ -8252,7 +8252,7 @@ void sub_5570A0(int64_t obj)
 {
     qword_64C690 = obj;
     if (qword_64C690 != OBJ_HANDLE_NULL) {
-        sub_57CCF0(player_get_local_pc_obj(), qword_64C690);
+        tb_ui_examine_object(player_get_local_pc_obj(), qword_64C690);
     }
 }
 
@@ -8305,7 +8305,7 @@ void intgame_refresh_health_bar(int64_t obj)
     }
 
     if (object_hover_obj_get() == obj || qword_64C690 == obj) {
-        sub_57CCF0(player_get_local_pc_obj(), obj);
+        tb_ui_examine_object(player_get_local_pc_obj(), obj);
     }
 
     follower_ui_update_obj(obj);
@@ -8527,7 +8527,7 @@ void sub_557790(int64_t obj)
 {
     if (obj != OBJ_HANDLE_NULL
         && obj == object_hover_obj_get()) {
-        sub_57CCF0(player_get_local_pc_obj(), obj);
+        tb_ui_examine_object(player_get_local_pc_obj(), obj);
     }
 }
 

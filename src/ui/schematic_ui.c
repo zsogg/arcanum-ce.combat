@@ -723,7 +723,7 @@ bool schematic_ui_message_filter(TigMessage* msg)
             // Check mouse hover over "component 1" button.
             if (msg->data.button.button_handle == schematic_ui_component1_button) {
                 if (schematic_ui_component1_obj != OBJ_HANDLE_NULL) {
-                    sub_57CCF0(schematic_ui_secondary_obj, schematic_ui_component1_obj);
+                    tb_ui_examine_object(schematic_ui_secondary_obj, schematic_ui_component1_obj);
                 }
                 return true;
             }
@@ -731,7 +731,7 @@ bool schematic_ui_message_filter(TigMessage* msg)
             // Check mouse hover over "component 2" button.
             if (msg->data.button.button_handle == schematic_ui_component2_button) {
                 if (schematic_ui_component2_obj != OBJ_HANDLE_NULL) {
-                    sub_57CCF0(schematic_ui_secondary_obj, schematic_ui_component2_obj);
+                    tb_ui_examine_object(schematic_ui_secondary_obj, schematic_ui_component2_obj);
                 }
                 return true;
             }
