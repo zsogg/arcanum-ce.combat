@@ -514,15 +514,15 @@ bool inven_ui_open(int64_t pc_obj, int64_t target_obj, int mode)
         return true;
     }
 
-    if (!sub_572370(pc_obj, target_obj, mode)) {
+    if (!inven_ui_can_open(pc_obj, target_obj, mode)) {
         return false;
     }
 
-    if (!sub_572510(pc_obj, target_obj, mode)) {
+    if (!inven_ui_enter_mode(pc_obj, target_obj, mode)) {
         return false;
     }
 
-    sub_572640(pc_obj, target_obj, mode);
+    inven_ui_prepare_target(pc_obj, target_obj, mode);
     return inven_ui_create(pc_obj, target_obj, mode);
 }
 
@@ -543,7 +543,7 @@ bool sub_572340(void)
 }
 
 // 0x572370
-bool sub_572370(int64_t pc_obj, int64_t target_obj, int mode)
+bool inven_ui_can_open(int64_t pc_obj, int64_t target_obj, int mode)
 {
     int rot;
     tig_art_id_t old_art_id;
@@ -622,7 +622,7 @@ bool sub_572370(int64_t pc_obj, int64_t target_obj, int mode)
 }
 
 // 0x572510
-bool sub_572510(int64_t pc_obj, int64_t target_obj, int mode)
+bool inven_ui_enter_mode(int64_t pc_obj, int64_t target_obj, int mode)
 {
     if (!intgame_mode_set(INTGAME_MODE_MAIN)) {
         return false;
@@ -681,7 +681,7 @@ bool sub_572510(int64_t pc_obj, int64_t target_obj, int mode)
 }
 
 // 0x572640
-void sub_572640(int64_t pc_obj, int64_t target_obj, int mode)
+void inven_ui_prepare_target(int64_t pc_obj, int64_t target_obj, int mode)
 {
     int64_t substitute_inventory_obj;
     int64_t prototype_obj;

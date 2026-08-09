@@ -668,38 +668,38 @@ int64_t ui_inven_target_obj_get(void)
 }
 
 // 0x460C30
-void sub_460C30(int64_t a1)
+void ui_refresh_examine(int64_t a1)
 {
-    if (ui_callbacks.field_130 != NULL) {
-        ui_callbacks.field_130(a1);
+    if (ui_callbacks.refresh_examine != NULL) {
+        ui_callbacks.refresh_examine(a1);
     }
 }
 
 // 0x460C50
-int sub_460C50(int64_t a1, int64_t a2, int a3)
+int ui_can_open_inven(int64_t a1, int64_t a2, int a3)
 {
-    if (ui_callbacks.field_134 != NULL) {
-        return ui_callbacks.field_134(a1, a2, a3);
+    if (ui_callbacks.can_open_inven != NULL) {
+        return ui_callbacks.can_open_inven(a1, a2, a3);
     } else {
         return 0;
     }
 }
 
 // 0x460C80
-int sub_460C80(int64_t a1, int64_t a2, int a3)
+int ui_enter_inven_mode(int64_t a1, int64_t a2, int a3)
 {
-    if (ui_callbacks.field_138 != NULL) {
-        return ui_callbacks.field_138(a1, a2, a3);
+    if (ui_callbacks.enter_inven_mode != NULL) {
+        return ui_callbacks.enter_inven_mode(a1, a2, a3);
     } else {
         return 0;
     }
 }
 
 // 0x460CB0
-void sub_460CB0(int64_t a1, int64_t a2, int a3)
+void ui_prepare_inven_target(int64_t a1, int64_t a2, int a3)
 {
-    if (ui_callbacks.field_13C != NULL) {
-        ui_callbacks.field_13C(a1, a2, a3);
+    if (ui_callbacks.prepare_inven_target != NULL) {
+        ui_callbacks.prepare_inven_target(a1, a2, a3);
     }
 }
 

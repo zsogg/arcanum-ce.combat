@@ -8527,7 +8527,7 @@ void intgame_feedback_msg(int index)
 }
 
 // 0x557790
-void sub_557790(int64_t obj)
+void intgame_refresh_examine(int64_t obj)
 {
     if (obj != OBJ_HANDLE_NULL
         && obj == object_hover_obj_get()) {

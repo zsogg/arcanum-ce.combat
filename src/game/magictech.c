@@ -4222,7 +4222,7 @@ void magictech_component_obj_flag(int64_t obj, int64_t a2, int fld, int a4, int 
                 v17 = true;
 
                 if (!v16) {
-                    sub_460C30(obj);
+                    ui_refresh_examine(obj);
                     return;
                 }
             }
@@ -4238,7 +4238,7 @@ void magictech_component_obj_flag(int64_t obj, int64_t a2, int fld, int a4, int 
                 v17 = true;
 
                 if (!v16) {
-                    sub_460C30(obj);
+                    ui_refresh_examine(obj);
                     return;
                 }
             }
@@ -4249,7 +4249,7 @@ void magictech_component_obj_flag(int64_t obj, int64_t a2, int fld, int a4, int 
     obj_field_int32_set(obj, fld, flags);
 
     if (v17) {
-        sub_460C30(obj);
+        ui_refresh_examine(obj);
     }
 }
 

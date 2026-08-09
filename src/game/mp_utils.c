@@ -373,7 +373,7 @@ void sub_4EE5E0(Packet100* pkt)
         switch (pkt->d.z.field_3C) {
         case 0:
             if (tig_net_is_host()) {
-                if (sub_460C50(v1, v2, pkt->d.z.field_38)) {
+                if (ui_can_open_inven(v1, v2, pkt->d.z.field_38)) {
                     new_pkt = *pkt;
                     new_pkt.d.z.field_3C = 1;
                     tig_net_send_app(&new_pkt, sizeof(new_pkt), sub_52A530());
@@ -382,7 +382,7 @@ void sub_4EE5E0(Packet100* pkt)
             break;
         case 1:
             if (tig_net_is_host()) {
-                if (sub_460C80(v1, v2, pkt->d.z.field_38)) {
+                if (ui_enter_inven_mode(v1, v2, pkt->d.z.field_38)) {
                     new_pkt = *pkt;
                     new_pkt.d.z.field_3C = 2;
                     tig_net_send_app_all(&new_pkt, sizeof(new_pkt));
@@ -391,7 +391,7 @@ void sub_4EE5E0(Packet100* pkt)
             break;
         case 2:
             if (tig_net_is_host()) {
-                sub_460CB0(v1, v2, pkt->d.z.field_38);
+                ui_prepare_inven_target(v1, v2, pkt->d.z.field_38);
 
                 new_pkt = *pkt;
                 new_pkt.d.z.field_3C = 3;

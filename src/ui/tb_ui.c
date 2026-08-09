@@ -135,10 +135,10 @@ bool tb_ui_init(GameInitInfo* init_info)
     callbacks.confirm_overwrite_char = tb_ui_confirm_overwrite_char;
     callbacks.schematic_info_get = schematic_ui_info_get;
     callbacks.inven_target_obj_get = inven_ui_target_obj_get;
-    callbacks.field_130 = sub_557790;
-    callbacks.field_134 = sub_572370;
-    callbacks.field_138 = sub_572510;
-    callbacks.field_13C = sub_572640;
+    callbacks.refresh_examine = intgame_refresh_examine;
+    callbacks.can_open_inven = inven_ui_can_open;
+    callbacks.enter_inven_mode = inven_ui_enter_mode;
+    callbacks.prepare_inven_target = inven_ui_prepare_target;
     callbacks.inven_create = inven_ui_create;
     callbacks.field_150 = NULL;
     callbacks.field_144 = NULL;

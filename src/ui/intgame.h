@@ -142,7 +142,7 @@ void sub_557370(int64_t source_obj, int64_t target_obj);
 void intgame_there_is_nothing_to_loot(void);
 void sub_5576B0(void);
 void intgame_feedback_msg(int index);
-void sub_557790(int64_t obj);
+void intgame_refresh_examine(int64_t obj);
 unsigned int intgame_get_iso_window_flags(void);
 void intgame_set_iso_window_flags(unsigned int flags);
 void intgame_set_iso_window_width(int width);
