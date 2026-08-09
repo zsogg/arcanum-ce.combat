@@ -2570,7 +2570,7 @@ bool ai_use_grenade(Ai* ai, int64_t distance)
     }
 
     loc = obj_field_int64_get(ai->danger_source, OBJ_F_LOCATION);
-    sub_4ADE00(ai->obj, loc, &block_obj);
+    ai_line_of_fire_cost(ai->obj, loc, &block_obj);
     if (block_obj != 0) {
         return false;
     }
@@ -3306,7 +3306,7 @@ int ai_check_upset_attacking(int64_t source_obj, int64_t target_obj, int64_t lea
 }
 
 // 0x4ADE00
-int sub_4ADE00(int64_t source_obj, int64_t target_loc, int64_t* block_obj_ptr)
+int ai_line_of_fire_cost(int64_t source_obj, int64_t target_loc, int64_t* block_obj_ptr)
 {
     int64_t source_loc;
     int64_t source_loc_x;
@@ -3674,7 +3674,7 @@ int sub_4AE720(int64_t attacker_obj, int64_t item_obj, int64_t target_obj, int s
         int64_t block_obj;
         int64_t target_obj_loc = obj_field_int64_get(target_obj, OBJ_F_LOCATION);
 
-        if (sub_4ADE00(attacker_obj, target_obj_loc, &block_obj) >= 100
+        if (ai_line_of_fire_cost(attacker_obj, target_obj_loc, &block_obj) >= 100
             || (block_obj != OBJ_HANDLE_NULL && block_obj != target_obj)) {
             return 5;
         }
@@ -4070,7 +4070,7 @@ int ai_can_see(int64_t source_obj, int64_t target_obj)
     }
 
     target_loc = obj_field_int64_get(target_obj, OBJ_F_LOCATION);
-    sub_4ADE00(source_obj, target_loc, &block_obj);
+    ai_line_of_fire_cost(source_obj, target_loc, &block_obj);
     if (block_obj != OBJ_HANDLE_NULL) {
         extra_dist++;
     }

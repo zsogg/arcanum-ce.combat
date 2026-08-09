@@ -872,7 +872,7 @@ int sub_4B3170(CombatContext* combat)
         if ((combat->flags & CF_RANGED) != 0) {
             int64_t blocking_obj;
 
-            sub_4ADE00(combat->attacker_obj, combat->target_loc, &blocking_obj);
+            ai_line_of_fire_cost(combat->attacker_obj, combat->target_loc, &blocking_obj);
             if (blocking_obj != OBJ_HANDLE_NULL) {
                 combat->target_obj = blocking_obj;
             }

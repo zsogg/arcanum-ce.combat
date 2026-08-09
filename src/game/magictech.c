@@ -5174,7 +5174,7 @@ bool magictech_check_los(MagicTechInvocation* mt_invocation)
     }
 
     if (loc != 0) {
-        if (sub_4ADE00(mt_invocation->parent_obj.obj, loc, &blocking_obj) >= 100) {
+        if (ai_line_of_fire_cost(mt_invocation->parent_obj.obj, loc, &blocking_obj) >= 100) {
             return false;
         }
 

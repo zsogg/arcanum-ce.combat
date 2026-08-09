@@ -111,27 +111,27 @@ static void object_transient_field_copy(Object* dst, Object* src, int fld);
 static void object_transient_field_dealloc(Object* object, int fld);
 static bool object_proto_enumerate_fields(Object* object, ObjectProtoEnumerateFieldsCallback callback);
 static bool object_proto_enumerate_fields_func(Object* obj, int begin, int end, ObjectProtoEnumerateFieldsCallback callback);
-static int sub_40CB40(Object* object, int fld);
+static int obj_field_simple_index(Object* object, int fld);
 static bool object_inst_field_dealloc(Object* object, int storage_idx, ObjectFieldInfo* info);
 static bool object_inst_enumerate_overridden_fields(Object* object, ObjectInstEnumerateFieldsCallback callback);
 static bool object_inst_enumerate_overridden_fields_func(Object* object, int begin, int end, ObjectInstEnumerateFieldsCallback callback);
 static bool object_inst_enumerate_available_fields(Object* object, ObjectInstEnumerateFieldsCallback callback);
 static bool object_inst_enumerate_available_fields_func(Object* object, int begin, int end, ObjectInstEnumerateFieldsCallback callback);
-static int sub_40D230(Object* object, int fld);
+static int obj_field_changed_index(Object* object, int fld);
 static void sub_40D2A0(Object* object, int fld);
 static bool obj_field_is_changed(Object* object, int fld);
 static bool sub_40D350(Object* object, int fld);
 static void obj_field_set_changed(Object* object, int fld, bool enabled);
 static void obj_field_info_set_changed(Object* object, ObjectFieldInfo* info, int enabled);
 static bool sub_40D3D0(Object* object, int fld);
-static void sub_40D400(Object* object, int fld, bool enabled);
+static void obj_field_set_dif(Object* object, int fld, bool enabled);
 static void sub_40D450(Object* object, int fld);
 static void sub_40D470(Object* object, int fld);
 static bool obj_version_write_file(TigFile* stream);
 static bool obj_version_read_file(TigFile* stream);
 static void obj_version_write_mem(WriteBuffer* wb);
 static bool obj_version_read_mem(uint8_t** data);
-static bool sub_40D670(Object* object, int a2, ObjectFieldInfo* field_info);
+static bool obj_field_debug_print_dif(Object* object, int a2, ObjectFieldInfo* field_info);
 static int64_t obj_get_prototype_handle(Object* object);
 
 // 0x59BE00
@@ -797,7 +797,7 @@ void sub_405790(int64_t obj)
     tig_debug_printf("{{ Difs on object w/ aid:");
     obj_debug_aid(obj_field_int32_get(obj, OBJ_F_AID));
     if (object->modified) {
-        object_inst_enumerate_overridden_fields(object, sub_40D670);
+        object_inst_enumerate_overridden_fields(object, obj_field_debug_print_dif);
         obj_unlock(obj);
         tig_debug_println(" }}");
     } else {
@@ -2084,19 +2084,19 @@ void obj_field_reset(int64_t obj, int fld)
     if (object_field_valid(object->type, fld)) {
         if (object->prototype_oid.type == OID_TYPE_BLOCKED) {
             object_proto_field_dealloc(object, fld);
-            sub_40D400(object, fld, true);
+            obj_field_set_dif(object, fld, true);
             obj_unlock(obj);
         } else if (fld > OBJ_F_TRANSIENT_BEGIN) {
             object_transient_field_dealloc(object, fld);
             obj_unlock(obj);
         } else {
             if (obj_field_is_changed(object, fld)) {
-                object_inst_field_dealloc(object, sub_40D230(object, fld), &(object_fields[fld]));
-                sub_40D400(object, fld, true);
+                object_inst_field_dealloc(object, obj_field_changed_index(object, fld), &(object_fields[fld]));
+                obj_field_set_dif(object, fld, true);
             } else {
                 sub_40D450(object, fld);
                 obj_field_set_changed(object, fld, true);
-                sub_40D400(object, fld, true);
+                obj_field_set_dif(object, fld, true);
             }
             object->modified = true;
             obj_unlock(obj);
@@ -2402,23 +2402,23 @@ void obj_field_store(Object* object, int fld, void* value_ptr)
     int storage_idx;
 
     if (object->prototype_oid.type == OID_TYPE_BLOCKED) {
-        storage_idx = sub_40CB40(object, fld);
+        storage_idx = obj_field_simple_index(object, fld);
         store_op.ptr = &(object->data[storage_idx]);
-        sub_40D400(object, fld, true);
+        obj_field_set_dif(object, fld, true);
     } else if (fld > OBJ_F_TRANSIENT_BEGIN && fld < OBJ_F_TRANSIENT_END) {
         storage_idx = fld - OBJ_F_TRANSIENT_BEGIN - 1;
         store_op.ptr = &(object->transient_properties[storage_idx]);
     } else {
         if (obj_field_is_changed(object, fld)) {
-            storage_idx = sub_40D230(object, fld);
+            storage_idx = obj_field_changed_index(object, fld);
             store_op.ptr = &(object->data[storage_idx]);
-            sub_40D400(object, fld, true);
+            obj_field_set_dif(object, fld, true);
         } else {
             sub_40D450(object, fld);
             obj_field_set_changed(object, fld, true);
-            storage_idx = sub_40D230(object, fld);
+            storage_idx = obj_field_changed_index(object, fld);
             store_op.ptr = &(object->data[storage_idx]);
-            sub_40D400(object, fld, true);
+            obj_field_set_dif(object, fld, true);
         }
         object->modified = true;
     }
@@ -2453,9 +2453,9 @@ void obj_arrayfield_store(Object* object, int fld, int index, void* value_ptr)
     int storage_idx;
 
     if (object->prototype_oid.type == OID_TYPE_BLOCKED) {
-        storage_idx = sub_40CB40(object, fld);
+        storage_idx = obj_field_simple_index(object, fld);
         store_op.ptr = &(object->data[storage_idx]);
-        sub_40D400(object, fld, true);
+        obj_field_set_dif(object, fld, true);
     } else if (fld > OBJ_F_TRANSIENT_BEGIN && fld < OBJ_F_TRANSIENT_END) {
         storage_idx = fld - OBJ_F_TRANSIENT_BEGIN - 1;
         store_op.ptr = &(object->transient_properties[storage_idx]);
@@ -2465,9 +2465,9 @@ void obj_arrayfield_store(Object* object, int fld, int index, void* value_ptr)
                 sub_40D2A0(object, fld);
             }
         }
-        storage_idx = sub_40D230(object, fld);
+        storage_idx = obj_field_changed_index(object, fld);
         store_op.ptr = &(object->data[storage_idx]);
-        sub_40D400(object, fld, true);
+        obj_field_set_dif(object, fld, true);
         object->modified = true;
     }
 
@@ -2513,14 +2513,14 @@ void obj_field_fetch(Object* object, int fld, void* value_ptr)
 
     fetch_op.type = object_fields[fld].type;
     if (object->prototype_oid.type == OID_TYPE_BLOCKED) {
-        storage_idx = sub_40CB40(object, fld);
+        storage_idx = obj_field_simple_index(object, fld);
         fetch_op.ptr = &(object->data[storage_idx]);
         obj_data_fetch(&fetch_op);
     } else if (fld > OBJ_F_TRANSIENT_BEGIN && fld < OBJ_F_TRANSIENT_END) {
         fetch_op.ptr = &(object->transient_properties[fld - OBJ_F_TRANSIENT_BEGIN - 1]);
         obj_data_fetch(&fetch_op);
     } else if (obj_field_is_changed(object, fld)) {
-        storage_idx = sub_40D230(object, fld);
+        storage_idx = obj_field_changed_index(object, fld);
         fetch_op.ptr = &(object->data[storage_idx]);
         obj_data_fetch(&fetch_op);
     } else {
@@ -2529,7 +2529,7 @@ void obj_field_fetch(Object* object, int fld, void* value_ptr)
 
         proto_handle = obj_get_prototype_handle(object);
         proto = obj_lock(proto_handle);
-        storage_idx = sub_40CB40(proto, fld);
+        storage_idx = obj_field_simple_index(proto, fld);
         fetch_op.ptr = &(proto->data[storage_idx]);
         obj_data_fetch(&fetch_op);
         obj_unlock(proto_handle);
@@ -2564,7 +2564,7 @@ void obj_arrayfield_fetch(Object* object, int fld, int index, void* value)
     fetch_op.type = object_fields[fld].type;
 
     if (object->prototype_oid.type == OID_TYPE_BLOCKED) {
-        storage_idx = sub_40CB40(object, fld);
+        storage_idx = obj_field_simple_index(object, fld);
         fetch_op.ptr = &(object->data[storage_idx]);
         obj_data_fetch(&fetch_op);
     } else if (fld > OBJ_F_TRANSIENT_BEGIN && fld < OBJ_F_TRANSIENT_END) {
@@ -2572,7 +2572,7 @@ void obj_arrayfield_fetch(Object* object, int fld, int index, void* value)
         fetch_op.ptr = &(object->transient_properties[storage_idx]);
         obj_data_fetch(&fetch_op);
     } else if (sub_40D350(object, fld)) {
-        storage_idx = sub_40D230(object, fld);
+        storage_idx = obj_field_changed_index(object, fld);
         fetch_op.ptr = &(object->data[storage_idx]);
         obj_data_fetch(&fetch_op);
     } else {
@@ -2581,7 +2581,7 @@ void obj_arrayfield_fetch(Object* object, int fld, int index, void* value)
 
         proto_handle = obj_get_prototype_handle(object);
         proto = obj_lock(proto_handle);
-        storage_idx = sub_40CB40(proto, fld);
+        storage_idx = obj_field_simple_index(proto, fld);
         fetch_op.ptr = &(proto->data[storage_idx]);
         obj_data_fetch(&fetch_op);
         obj_unlock(proto_handle);
@@ -2621,7 +2621,7 @@ void sub_408D60(Object* object, int fld, int* value_ptr)
     v1.type = object_fields[fld].type;
 
     if (object->prototype_oid.type == OID_TYPE_BLOCKED) {
-        v1.ptr = &(object->data[sub_40CB40(object, fld)]);
+        v1.ptr = &(object->data[obj_field_simple_index(object, fld)]);
         *value_ptr = obj_data_count_idx(&v1);
     } else {
         if (fld > OBJ_F_TRANSIENT_BEGIN && fld < OBJ_F_TRANSIENT_END) {
@@ -2630,12 +2630,12 @@ void sub_408D60(Object* object, int fld, int* value_ptr)
         }
 
         if (obj_field_is_changed(object, fld)) {
-            v1.ptr = &(object->data[sub_40D230(object, fld)]);
+            v1.ptr = &(object->data[obj_field_changed_index(object, fld)]);
             *value_ptr = obj_data_count_idx(&v1);
         } else {
             proto_handle = obj_get_prototype_handle(object);
             proto = obj_lock(proto_handle);
-            v1.ptr = &(proto->data[sub_40CB40(proto, fld)]);
+            v1.ptr = &(proto->data[obj_field_simple_index(proto, fld)]);
             *value_ptr = obj_data_count_idx(&v1);
             obj_unlock(proto_handle);
         }
@@ -2648,8 +2648,8 @@ void sub_408E70(Object* object, int fld, int value)
     ObjDataDescriptor v1;
 
     if (object->prototype_oid.type == OID_TYPE_BLOCKED) {
-        v1.ptr = &(object->data[sub_40CB40(object, fld)]);
-        sub_40D400(object, fld, true);
+        v1.ptr = &(object->data[obj_field_simple_index(object, fld)]);
+        obj_field_set_dif(object, fld, true);
     } else if (fld > OBJ_F_TRANSIENT_BEGIN && fld < OBJ_F_TRANSIENT_END) {
         v1.ptr = &(object->transient_properties[fld - OBJ_F_TRANSIENT_BEGIN - 1]);
     } else {
@@ -2659,8 +2659,8 @@ void sub_408E70(Object* object, int fld, int value)
             }
         }
 
-        v1.ptr = &(object->data[sub_40D230(object, fld)]);
-        sub_40D400(object, fld, true);
+        v1.ptr = &(object->data[obj_field_changed_index(object, fld)]);
+        obj_field_set_dif(object, fld, true);
         object->modified = true;
     }
 
@@ -2675,7 +2675,7 @@ bool sub_408F40(Object* object, int fld, SizeableArray*** ptr, int64_t* proto_ha
     Object* proto;
 
     if (object->prototype_oid.type == OID_TYPE_BLOCKED) {
-        *ptr = (SizeableArray**)(&(object->data[sub_40CB40(object, fld)]));
+        *ptr = (SizeableArray**)(&(object->data[obj_field_simple_index(object, fld)]));
         return false;
     }
 
@@ -2685,14 +2685,14 @@ bool sub_408F40(Object* object, int fld, SizeableArray*** ptr, int64_t* proto_ha
     }
 
     if (obj_field_is_changed(object, fld)) {
-        *ptr = (SizeableArray**)(&(object->data[sub_40D230(object, fld)]));
+        *ptr = (SizeableArray**)(&(object->data[obj_field_changed_index(object, fld)]));
         return false;
     }
 
     *proto_handle_ptr = obj_get_prototype_handle(object);
 
     proto = obj_lock(*proto_handle_ptr);
-    *ptr = (SizeableArray**)(&(proto->data[sub_40CB40(proto, fld)]));
+    *ptr = (SizeableArray**)(&(proto->data[obj_field_simple_index(proto, fld)]));
 
     return true;
 }
@@ -4664,7 +4664,7 @@ bool object_proto_enumerate_fields_func(Object* obj, int begin, int end, ObjectP
 }
 
 // 0x40CB40
-int sub_40CB40(Object* object, int fld)
+int obj_field_simple_index(Object* object, int fld)
 {
     (void)object;
 
@@ -5016,7 +5016,7 @@ bool object_inst_enumerate_available_fields_func(Object* object, int begin, int 
 }
 
 // 0x40D230
-int sub_40D230(Object* object, int fld)
+int obj_field_changed_index(Object* object, int fld)
 {
     int v1 = 0;
     int index;
@@ -5042,10 +5042,10 @@ void sub_40D2A0(Object* object, int fld)
     obj_field_set_changed(object, fld, true);
 
     prototype = obj_lock(obj_get_prototype_handle(object));
-    v2 = sub_40CB40(prototype, fld);
+    v2 = obj_field_simple_index(prototype, fld);
     v1.type = object_fields[fld].type;
     v1.ptr = &(prototype->data[v2]);
-    v3 = sub_40D230(object, fld);
+    v3 = obj_field_changed_index(object, fld);
     obj_data_copy(&v1, &(object->data[v3]));
 }
 
@@ -5090,7 +5090,7 @@ bool sub_40D3D0(Object* object, int fld)
 }
 
 // 0x40D400
-void sub_40D400(Object* object, int fld, bool enabled)
+void obj_field_set_dif(Object* object, int fld, bool enabled)
 {
     if (enabled) {
         object->field_4C[object_fields[fld].change_array_idx] |= object_fields[fld].mask;
@@ -5102,7 +5102,7 @@ void sub_40D400(Object* object, int fld, bool enabled)
 // 0x40D450
 void sub_40D450(Object* object, int fld)
 {
-    sub_40D470(object, sub_40D230(object, fld));
+    sub_40D470(object, obj_field_changed_index(object, fld));
 }
 
 // 0x40D470
@@ -5127,7 +5127,7 @@ void sub_40D4D0(Object* object, int fld)
     ObjDataDescriptor v2;
     int index;
 
-    v1 = sub_40D230(object, fld);
+    v1 = obj_field_changed_index(object, fld);
     v2.type = object_fields[fld].type;
     v2.ptr = &(object->data[v1]);
     obj_data_reset(&v2);
@@ -5195,7 +5195,7 @@ int64_t obj_get_prototype_handle(Object* object)
 }
 
 // 0x40D670
-bool sub_40D670(Object* object, int a2, ObjectFieldInfo* field_info)
+bool obj_field_debug_print_dif(Object* object, int a2, ObjectFieldInfo* field_info)
 {
     (void)a2;
 

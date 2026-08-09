@@ -148,7 +148,7 @@ void ai_timeevent_clear(int64_t obj);
 int ai_can_speak(int64_t npc_obj, int64_t pc_obj, bool a3);
 int ai_check_follow(int64_t npc_obj, int64_t pc_obj, bool ignore_charisma_limits);
 void sub_4AD790(int64_t obj, int a2);
-int sub_4ADE00(int64_t source_obj, int64_t target_loc, int64_t* block_obj_ptr);
+int ai_line_of_fire_cost(int64_t source_obj, int64_t target_loc, int64_t* block_obj_ptr);
 void ai_switch_weapon(int64_t obj);
 void ai_calc_party_size_and_level(int64_t obj, int* cnt_ptr, int* lvl_ptr);
 int ai_check_kos(int64_t source_obj, int64_t target_obj);

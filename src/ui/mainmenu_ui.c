@@ -63,7 +63,7 @@ typedef struct S64B870 {
 static void mainmenu_ui_dismiss_ex(bool exiting);
 static TigWindowModalDialogChoice mainmenu_ui_confirm(int num);
 static void sub_541830(char* dst, const char* src);
-static void sub_5418A0(char* str, TigRect* rect, tig_font_handle_t font, unsigned int flags);
+static void mainmenu_ui_draw_text(char* str, TigRect* rect, tig_font_handle_t font, unsigned int flags);
 static void mainmenu_ui_create_mainmenu(void);
 static void mainmenu_ui_draw_version(void);
 static bool mainmenu_ui_press_mainmenu_in_play(tig_button_handle_t button_handle);
@@ -85,7 +85,7 @@ static void mainmenu_ui_load_game_mouse_up(int a1, int a2);
 static void sub_542560(void);
 static void mainmenu_ui_load_game_refresh(TigRect* rect);
 static void sub_542D00(char* str, TigRect* rect, tig_font_handle_t font);
-static void sub_542DF0(char* str, TigRect* rect, tig_font_handle_t font);
+static void mainmenu_ui_draw_centered_text(char* str, TigRect* rect, tig_font_handle_t font);
 static void sub_542EA0(char* str, TigRect* rect, tig_font_handle_t font);
 static void mmUITextWriteCenteredToArray(char* str, TigRect* rects, int cnt, tig_font_handle_t font);
 static char* sub_543040(int index);
@@ -1990,7 +1990,7 @@ void sub_541830(char* dst, const char* src)
 }
 
 // 0x5418A0
-void sub_5418A0(char* str, TigRect* rect, tig_font_handle_t font, unsigned int flags)
+void mainmenu_ui_draw_text(char* str, TigRect* rect, tig_font_handle_t font, unsigned int flags)
 {
     TigVideoBuffer* vb;
     TigRect text_rect;
@@ -2661,7 +2661,7 @@ void mainmenu_ui_load_game_refresh(TigRect* rect)
 
                 if (mainmenu_ui_gsi.version == 25) {
                     if (dword_5C4790) {
-                        sub_542DF0(mainmenu_ui_gsi.pc_name, &stru_5C46D0, font);
+                        mainmenu_ui_draw_centered_text(mainmenu_ui_gsi.pc_name, &stru_5C46D0, font);
                         if (mainmenu_ui_gsi.pc_portrait != 0) {
                             portrait_draw_native(OBJ_HANDLE_NULL,
                                 mainmenu_ui_gsi.pc_portrait,
@@ -2673,9 +2673,9 @@ void mainmenu_ui_load_game_refresh(TigRect* rect)
                         mes_file_entry.num = 5051; // "Level %d"
                         mes_get_msg(mainmenu_ui_mainmenu_mes_file, &mes_file_entry);
                         snprintf(str, sizeof(str), mes_file_entry.str, mainmenu_ui_gsi.pc_level);
-                        sub_542DF0(str, &stru_5C4720, font);
+                        mainmenu_ui_draw_centered_text(str, &stru_5C4720, font);
 
-                        sub_542DF0(mainmenu_ui_gsi.description, &stru_5C4730, font);
+                        mainmenu_ui_draw_centered_text(mainmenu_ui_gsi.description, &stru_5C4730, font);
 
                         if (map_by_type(MAP_TYPE_START_MAP) == mainmenu_ui_gsi.map) {
                             area = area_get_nearest_area_in_range(mainmenu_ui_gsi.pc_location, true);
@@ -2691,7 +2691,7 @@ void mainmenu_ui_load_game_refresh(TigRect* rect)
                             area_name = mes_file_entry.str;
                         }
 
-                        sub_542DF0(area_name, &stru_5C46F0, font);
+                        mainmenu_ui_draw_centered_text(area_name, &stru_5C46F0, font);
 
                         datetime_format_date(&(mainmenu_ui_gsi.datetime), str, sizeof(str));
                         sub_542EA0(str, &stru_5C4710, font);
@@ -2707,7 +2707,7 @@ void mainmenu_ui_load_game_refresh(TigRect* rect)
                 } else {
                     mes_file_entry.num = 5004; // "Version Mismatch!"
                     mes_get_msg(mainmenu_ui_mainmenu_mes_file, &mes_file_entry);
-                    sub_542DF0(mes_file_entry.str, &stru_5C46D0, font);
+                    mainmenu_ui_draw_centered_text(mes_file_entry.str, &stru_5C46D0, font);
                 }
                 tig_font_pop();
             } else {
@@ -2717,7 +2717,7 @@ void mainmenu_ui_load_game_refresh(TigRect* rect)
                 tig_font_push(font);
                 mes_file_entry.num = 5005; // "Empty"
                 mes_get_msg(mainmenu_ui_mainmenu_mes_file, &mes_file_entry);
-                sub_542DF0(mes_file_entry.str, &stru_5C46D0, font);
+                mainmenu_ui_draw_centered_text(mes_file_entry.str, &stru_5C46D0, font);
                 tig_font_pop();
             }
         } else {
@@ -2765,7 +2765,7 @@ void sub_542D00(char* str, TigRect* rect, tig_font_handle_t font)
     text_rect = *rect;
 
     if (font_desc.width < rect->width) {
-        sub_5418A0(str, &text_rect, font, 0);
+        mainmenu_ui_draw_text(str, &text_rect, font, 0);
         return;
     }
 
@@ -2776,15 +2776,15 @@ void sub_542D00(char* str, TigRect* rect, tig_font_handle_t font)
     tig_font_measure(&font_desc);
 
     text_rect.width -= font_desc.width;
-    sub_5418A0(str, &text_rect, font, 1);
+    mainmenu_ui_draw_text(str, &text_rect, font, 1);
 
     text_rect.x += font_desc.width;
     text_rect.width = font_desc.width;
-    sub_5418A0(off_5C407C, &text_rect, font, 0);
+    mainmenu_ui_draw_text(off_5C407C, &text_rect, font, 0);
 }
 
 // 0x542DF0
-void sub_542DF0(char* str, TigRect* rect, tig_font_handle_t font)
+void mainmenu_ui_draw_centered_text(char* str, TigRect* rect, tig_font_handle_t font)
 {
     TigFont font_desc;
     TigRect text_rect;
@@ -2801,7 +2801,7 @@ void sub_542DF0(char* str, TigRect* rect, tig_font_handle_t font)
         text_rect.width = font_desc.width + 20;
     }
 
-    sub_5418A0(str, &text_rect, font, 0);
+    mainmenu_ui_draw_text(str, &text_rect, font, 0);
 }
 
 // 0x542EA0
@@ -2822,7 +2822,7 @@ void sub_542EA0(char* str, TigRect* rect, tig_font_handle_t font)
         text_rect.width = font_desc.width + 10;
     }
 
-    sub_5418A0(str, &text_rect, font, 0);
+    mainmenu_ui_draw_text(str, &text_rect, font, 0);
 }
 
 // 0x542F50
@@ -2846,7 +2846,7 @@ void mmUITextWriteCenteredToArray(char* str, TigRect* rects, int cnt, tig_font_h
         if (font_desc.width < text_rect.width) {
             text_rect.x += (text_rect.width - font_desc.width) / 2;
             text_rect.width = font_desc.width;
-            sub_5418A0(curr, &text_rect, font, 0);
+            mainmenu_ui_draw_text(curr, &text_rect, font, 0);
             rects++;
             cnt--;
 
@@ -3410,7 +3410,7 @@ void mainmenu_ui_save_game_refresh(TigRect* rect)
                 tig_font_push(font);
 
                 if (dword_5C4790) {
-                    sub_542DF0(mainmenu_ui_gsi.pc_name, &stru_5C46D0, font);
+                    mainmenu_ui_draw_centered_text(mainmenu_ui_gsi.pc_name, &stru_5C46D0, font);
                     if (mainmenu_ui_gsi.pc_portrait != 0) {
                         portrait_draw_native(OBJ_HANDLE_NULL,
                             mainmenu_ui_gsi.pc_portrait,
@@ -3422,9 +3422,9 @@ void mainmenu_ui_save_game_refresh(TigRect* rect)
                     mes_file_entry.num = 5051; // "Level %d"
                     mes_get_msg(mainmenu_ui_mainmenu_mes_file, &mes_file_entry);
                     snprintf(str, sizeof(str), mes_file_entry.str, mainmenu_ui_gsi.pc_level);
-                    sub_542DF0(str, &stru_5C4720, font);
+                    mainmenu_ui_draw_centered_text(str, &stru_5C4720, font);
 
-                    sub_542DF0(mainmenu_ui_gsi.description, &stru_5C4730, font);
+                    mainmenu_ui_draw_centered_text(mainmenu_ui_gsi.description, &stru_5C4730, font);
 
                     if (map_by_type(MAP_TYPE_START_MAP) == mainmenu_ui_gsi.map) {
                         area = area_get_nearest_area_in_range(mainmenu_ui_gsi.pc_location, true);
@@ -3440,7 +3440,7 @@ void mainmenu_ui_save_game_refresh(TigRect* rect)
                         area_name = mes_file_entry.str;
                     }
 
-                    sub_542DF0(area_name, &stru_5C46F0, font);
+                    mainmenu_ui_draw_centered_text(area_name, &stru_5C46F0, font);
 
                     datetime_format_date(&(mainmenu_ui_gsi.datetime), str, sizeof(str));
                     sub_542EA0(str, &stru_5C4710, font);
@@ -3462,7 +3462,7 @@ void mainmenu_ui_save_game_refresh(TigRect* rect)
                 tig_font_push(font);
                 mes_file_entry.num = 5005; // "Empty"
                 mes_get_msg(mainmenu_ui_mainmenu_mes_file, &mes_file_entry);
-                sub_542DF0(mes_file_entry.str, &stru_5C46D0, font);
+                mainmenu_ui_draw_centered_text(mes_file_entry.str, &stru_5C46D0, font);
                 tig_font_pop();
             }
         } else {
@@ -3518,7 +3518,7 @@ void sub_544100(const char* str, TigRect* rect, tig_font_handle_t font)
     if (font_desc.width < rect->width) {
         text_rect.x += (rect->width - font_desc.width) / 2;
         text_rect.width = font_desc.width;
-        sub_5418A0(mutable_str, &text_rect, font, 0);
+        mainmenu_ui_draw_text(mutable_str, &text_rect, font, 0);
     }
 
     // CE: There's a bug in the original game regarding cursor positioning. It
@@ -3546,7 +3546,7 @@ void sub_544100(const char* str, TigRect* rect, tig_font_handle_t font)
     text_rect.width = font_desc.width;
 
     // Put I-beam into the right place.
-    sub_5418A0(mutable_str, &text_rect, font, 0);
+    mainmenu_ui_draw_text(mutable_str, &text_rect, font, 0);
 
     tig_font_pop();
 }
@@ -3814,7 +3814,7 @@ void mainmenu_ui_new_char_refresh(TigRect* rect)
         if (textedit_ui_is_focused()) {
             sub_544100(str, &mainmenu_ui_shared_char_name_rect, dword_64C218[1]);
         } else {
-            sub_542DF0(str, &mainmenu_ui_shared_char_name_rect, dword_64C218[1]);
+            mainmenu_ui_draw_centered_text(str, &mainmenu_ui_shared_char_name_rect, dword_64C218[1]);
         }
     }
 }
@@ -3860,7 +3860,7 @@ void mmUISharedCharRefreshFunc(int64_t obj, TigRect* rect)
         if (tig_window_fill(mainmenu_ui_window_handle, &mainmenu_ui_shared_char_gender_rect, tig_color_make(0, 0, 0)) == TIG_OK) {
             mes_file_entry.num = 740 + gender; // "Female", "Male"
             mes_get_msg(mainmenu_ui_mainmenu_mes_file, &mes_file_entry);
-            sub_542DF0(mes_file_entry.str, &mainmenu_ui_shared_char_gender_rect, font);
+            mainmenu_ui_draw_centered_text(mes_file_entry.str, &mainmenu_ui_shared_char_gender_rect, font);
         }
     }
 
@@ -3872,7 +3872,7 @@ void mmUISharedCharRefreshFunc(int64_t obj, TigRect* rect)
         if (tig_window_fill(mainmenu_ui_window_handle, &mainmenu_ui_shared_char_race_rect, tig_color_make(0, 0, 0)) == TIG_OK) {
             mes_file_entry.num = 720 + race; // "Human", "Dwarf", "Elf", etc.
             mes_get_msg(mainmenu_ui_mainmenu_mes_file, &mes_file_entry);
-            sub_542DF0(mes_file_entry.str, &mainmenu_ui_shared_char_race_rect, font);
+            mainmenu_ui_draw_centered_text(mes_file_entry.str, &mainmenu_ui_shared_char_race_rect, font);
         }
     }
 
@@ -3883,7 +3883,7 @@ void mmUISharedCharRefreshFunc(int64_t obj, TigRect* rect)
             && rect->y < mainmenu_ui_shared_char_background_rect.y + mainmenu_ui_shared_char_background_rect.height)) {
         if (tig_window_fill(mainmenu_ui_window_handle, &mainmenu_ui_shared_char_background_rect, tig_color_make(0, 0, 0)) == TIG_OK) {
             background = background_text_get(obj);
-            sub_542DF0(background_description_get_name(background),
+            mainmenu_ui_draw_centered_text(background_description_get_name(background),
                 &mainmenu_ui_shared_char_background_rect,
                 font);
         }
@@ -3902,7 +3902,7 @@ void mmUISharedCharRefreshFunc(int64_t obj, TigRect* rect)
                 mes_file_entry.num = 742 + gender;
                 mes_get_msg(mainmenu_ui_mainmenu_mes_file, &mes_file_entry);
                 if (mes_file_entry.str[0] != '\0') {
-                    sub_542DF0(mes_file_entry.str, &mainmenu_ui_shared_char_desc_body_rect, font);
+                    mainmenu_ui_draw_centered_text(mes_file_entry.str, &mainmenu_ui_shared_char_desc_body_rect, font);
                 } else {
                     tig_debug_printf("MainMenu-UI: mmUISharedCharRefreshFunc: ERROR: Failed to find Racial Description!\n");
                 }
@@ -3912,7 +3912,7 @@ void mmUISharedCharRefreshFunc(int64_t obj, TigRect* rect)
                 if (background > 1000 && mainmenu_ui_new_char_hover_mode == MMUI_NEW_CHAR_HOVER_MODE_BACKGROUND) {
                     font = dword_64C210[0];
                     tig_font_push(font);
-                    sub_542DF0(background_description_get_body(background),
+                    mainmenu_ui_draw_centered_text(background_description_get_body(background),
                         &mainmenu_ui_shared_char_desc_view_rect,
                         font);
                     tig_font_pop();
@@ -3922,7 +3922,7 @@ void mmUISharedCharRefreshFunc(int64_t obj, TigRect* rect)
                     mes_file_entry.num = 745; // "Race"
                     mes_get_msg(mainmenu_ui_mainmenu_mes_file, &mes_file_entry);
                     if (mes_file_entry.str[0] != '\0') {
-                        sub_542DF0(mes_file_entry.str, &mainmenu_ui_shared_char_desc_title_rect, font);
+                        mainmenu_ui_draw_centered_text(mes_file_entry.str, &mainmenu_ui_shared_char_desc_title_rect, font);
                     } else {
                         tig_debug_printf("MainMenu-UI: mmUISharedCharRefreshFunc: ERROR: Failed to find Racial Description!\n");
                     }
@@ -3933,7 +3933,7 @@ void mmUISharedCharRefreshFunc(int64_t obj, TigRect* rect)
                     mes_file_entry.num = 770 + 2 * race + gender;
                     mes_get_msg(mainmenu_ui_mainmenu_mes_file, &mes_file_entry);
                     if (mes_file_entry.str[0] != '\0') {
-                        sub_542DF0(mes_file_entry.str, &mainmenu_ui_shared_char_desc_body_rect, font);
+                        mainmenu_ui_draw_centered_text(mes_file_entry.str, &mainmenu_ui_shared_char_desc_body_rect, font);
                     } else {
                         tig_debug_printf("MainMenu-UI: mmUISharedCharRefreshFunc: ERROR: Failed to find Racial Description!\n");
                     }
@@ -3953,7 +3953,7 @@ void mmUISharedCharRefreshFunc(int64_t obj, TigRect* rect)
         if (tig_window_fill(mainmenu_ui_window_handle, &mainmenu_ui_shared_char_stats_title_rect, tig_color_make(0, 0, 0)) == TIG_OK) {
             mes_file_entry.num = 739; // "Initial Stats"
             mes_get_msg(mainmenu_ui_mainmenu_mes_file, &mes_file_entry);
-            sub_542DF0(mes_file_entry.str,
+            mainmenu_ui_draw_centered_text(mes_file_entry.str,
                 &mainmenu_ui_shared_char_stats_title_rect,
                 font);
         }
@@ -3967,7 +3967,7 @@ void mmUISharedCharRefreshFunc(int64_t obj, TigRect* rect)
                     "%s: %d",
                     stat_short_name(dword_5C5130[index]),
                     stat_level_get(obj, dword_5C5130[index]));
-                sub_5418A0(str, &(stru_5C4F50[index]), font, 0);
+                mainmenu_ui_draw_text(str, &(stru_5C4F50[index]), font, 0);
             }
         }
         tig_font_pop();
@@ -4366,7 +4366,7 @@ void mainmenu_ui_pregen_char_refresh(TigRect* rect)
         if (tig_window_fill(mainmenu_ui_window_handle, &mainmenu_ui_shared_char_name_rect, tig_color_make(0, 0, 0)) == TIG_OK) {
             obj_field_string_get(qword_64C460, OBJ_F_PC_PLAYER_NAME, &name);
             if (name != NULL) {
-                sub_542DF0(name, &mainmenu_ui_shared_char_name_rect, dword_64C218[1]);
+                mainmenu_ui_draw_centered_text(name, &mainmenu_ui_shared_char_name_rect, dword_64C218[1]);
                 FREE(name);
             }
         }

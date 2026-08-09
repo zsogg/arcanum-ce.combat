@@ -749,7 +749,7 @@ bool item_drop_ex(int64_t item_obj, int distance)
     }
 
     item_remove(item_obj);
-    sub_466E50(item_obj, loc);
+    item_drop_at_loc(item_obj, loc);
 
     if (obj_type == OBJ_TYPE_NPC) {
         switch (obj_field_int32_get(item_obj, OBJ_F_TYPE)) {
@@ -1775,7 +1775,7 @@ bool sub_463540(int64_t container_obj)
 
             loc = obj_field_int64_get(container_obj, OBJ_F_LOCATION);
             object_destroy(container_obj);
-            sub_466E50(item_obj, loc);
+            item_drop_at_loc(item_obj, loc);
             rc = true;
         }
     }
@@ -1855,7 +1855,7 @@ void sub_463730(int64_t obj, bool a2)
 
         if (!sub_467E70()) {
             if (a2) {
-                sub_466E50(item_obj, loc);
+                item_drop_at_loc(item_obj, loc);
             } else {
                 object_drop(item_obj, loc);
             }
@@ -1902,7 +1902,7 @@ void sub_463860(int64_t obj, bool a2)
             if ((spell_flags & OSF_SUMMONED) == 0
                 && (item_flags & OIF_NO_DISPLAY) == 0) {
                 if (a2) {
-                    sub_466E50(item_obj, loc);
+                    item_drop_at_loc(item_obj, loc);
                 } else {
                     object_drop(item_obj, loc);
                 }
@@ -1950,7 +1950,7 @@ void sub_4639E0(int64_t obj, bool a2)
             item_force_remove(item_obj, obj);
 
             if (a2) {
-                sub_466E50(item_obj, loc);
+                item_drop_at_loc(item_obj, loc);
             } else {
                 object_drop(item_obj, loc);
             }
@@ -3903,7 +3903,7 @@ void item_remove(int64_t item_obj)
 }
 
 // 0x466E50
-void sub_466E50(int64_t obj, int64_t loc)
+void item_drop_at_loc(int64_t obj, int64_t loc)
 {
     if (tig_net_is_active()
         && !tig_net_is_host()) {

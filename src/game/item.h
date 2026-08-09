@@ -141,7 +141,7 @@ void item_insert(int64_t item_obj, int64_t parent_obj, int inventory_location);
 void sub_466D60(int64_t obj);
 int item_check_remove(int64_t obj);
 void item_remove(int64_t item_obj);
-void sub_466E50(int64_t obj, int64_t loc);
+void item_drop_at_loc(int64_t obj, int64_t loc);
 void item_arrange_inventory(int64_t parent_obj, bool vertical);
 void item_error_msg(int64_t obj, int reason);
 void item_perform_identify_service(int64_t item_obj, int64_t npc_obj, int64_t pc_obj, int cost);

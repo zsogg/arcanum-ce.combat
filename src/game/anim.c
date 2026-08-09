@@ -4759,7 +4759,7 @@ bool anim_finish_move_near_combat(AnimRunInfo* run_info)
             return false;
         }
 
-        if (sub_4ADE00(source_obj, target_loc, &v1) < 26
+        if (ai_line_of_fire_cost(source_obj, target_loc, &v1) < 26
             && (v1 == OBJ_HANDLE_NULL || v1 == target_obj)) {
             weapon_obj = combat_critter_weapon(source_obj);
             if (weapon_obj != OBJ_HANDLE_NULL) {
@@ -7079,7 +7079,7 @@ bool anim_can_reach_target(int64_t source_obj, int64_t target_obj)
 
     target_loc = obj_field_int64_get(target_obj, OBJ_F_LOCATION);
 
-    sub_4ADE00(source_obj, target_loc, &v1);
+    ai_line_of_fire_cost(source_obj, target_loc, &v1);
 
     if (v1 != OBJ_HANDLE_NULL && v1 != target_obj) {
         path.flags = 0;
@@ -7254,7 +7254,7 @@ bool anim_target_in_weapon_range(AnimRunInfo* run_info)
         return false;
     }
 
-    if (sub_4ADE00(source_obj, target_loc, &v1) >= 26) {
+    if (ai_line_of_fire_cost(source_obj, target_loc, &v1) >= 26) {
         return false;
     }
 
@@ -8393,7 +8393,7 @@ bool anim_cleanup_throw_item(AnimRunInfo* run_info)
                     if (inventory_location != -1) {
                         item_insert(item_obj, obj, inventory_location);
                     } else {
-                        sub_466E50(item_obj, obj_field_int64_get(obj, OBJ_F_LOCATION));
+                        item_drop_at_loc(item_obj, obj_field_int64_get(obj, OBJ_F_LOCATION));
                     }
                 }
             }

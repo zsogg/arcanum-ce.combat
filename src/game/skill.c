@@ -2376,7 +2376,7 @@ int skill_invocation_difficulty(SkillInvocation* skill_invocation)
 
         // Check for obstructions between source and target.
         int64_t blocking_obj;
-        int v2 = sub_4ADE00(source_obj, skill_invocation->target_loc, &blocking_obj);
+        int v2 = ai_line_of_fire_cost(source_obj, skill_invocation->target_loc, &blocking_obj);
         if (blocking_obj != OBJ_HANDLE_NULL) {
             // Target is blocked.
             difficulty += 1000000;
@@ -2513,7 +2513,7 @@ int skill_invocation_difficulty(SkillInvocation* skill_invocation)
         if ((skill_invocation->flags & SKILL_INVOCATION_CHECK_SEEING) != 0) {
             // Check for blocking objects when hiding from a target.
             int64_t blocking_obj;
-            int v6 = sub_4ADE00(target_obj,
+            int v6 = ai_line_of_fire_cost(target_obj,
                 obj_field_int64_get(source_obj, OBJ_F_LOCATION),
                 &blocking_obj);
             if (blocking_obj != OBJ_HANDLE_NULL) {

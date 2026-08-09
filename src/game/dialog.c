@@ -2054,7 +2054,7 @@ bool dialog_perform_actions(DialogState* a1, char* a2, int a3)
                     item_parent(item_obj, &parent_obj);
                     if (parent_obj != a1->pc_obj) {
                         item_remove(item_obj);
-                        sub_466E50(item_obj, obj_field_int64_get(a1->pc_obj, OBJ_F_LOCATION));
+                        item_drop_at_loc(item_obj, obj_field_int64_get(a1->pc_obj, OBJ_F_LOCATION));
                     }
                 }
             } else {
@@ -2078,7 +2078,7 @@ bool dialog_perform_actions(DialogState* a1, char* a2, int a3)
                     if (parent_obj != a1->npc_obj) {
                         if (critter_pc_leader_get(a1->npc_obj) != OBJ_HANDLE_NULL) {
                             item_remove(item_obj);
-                            sub_466E50(item_obj, obj_field_int64_get(a1->npc_obj, OBJ_F_LOCATION));
+                            item_drop_at_loc(item_obj, obj_field_int64_get(a1->npc_obj, OBJ_F_LOCATION));
                         } else {
                             object_destroy(item_obj);
                         }
