@@ -8152,7 +8152,7 @@ bool anim_begin_dialog(AnimRunInfo* run_info)
 
     if (!tig_net_is_active()
         || tig_net_is_host()) {
-        sub_460410(source_obj, target_obj);
+        ui_talk_to(source_obj, target_obj);
     }
 
     // NOTE: Returns `false` on every path, and so does 0x42AF00 in the exe, so

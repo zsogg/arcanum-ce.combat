@@ -33,24 +33,24 @@
 #include "ui/wmap_ui.h"
 #include "ui/written_ui.h"
 
-static void sub_57CAE0(void);
+static void tb_ui_refresh_interface(void);
 static void tb_inven_ui_update(int64_t obj);
-static void sub_57CAF0(int64_t obj);
+static void tb_ui_notify_object_destroyed(int64_t obj);
 static void show_inven_loot(int64_t pc_obj, int64_t target_obj);
 static void show_inven_identify(int64_t pc_obj, int64_t target_obj);
 static void show_inven_npc_identify(int64_t pc_obj, int64_t target_obj);
 static void display_warning(char* str);
 static void refresh_fatigue_bar(int64_t obj);
-static void sub_57CC70(int64_t a1, int64_t a2);
+static void tb_ui_talk_to(int64_t a1, int64_t a2);
 static void end_death(void);
 static void end_game(void);
-static void sub_57CDF0(int a1);
+static void tb_ui_clear_hotkey(int a1);
 static void tb_ui_refresh_counters(void);
 static void tb_ui_reset_interface(void);
 static void tb_ui_item_spell_activate(int64_t obj, void* a2, int a3);
 static void handle_sector_changed(int64_t sec, int64_t obj);
 static void charedit_error_msg(int type, int param);
-static void sub_57CF70(int64_t a1, int64_t a2);
+static void tb_ui_open_charedit_passive(int64_t a1, int64_t a2);
 static void sub_57CFA0(void);
 static bool sub_57CFB0(void);
 static bool sub_57D080(void);
@@ -70,13 +70,13 @@ bool tb_ui_init(GameInitInfo* init_info)
     callbacks.spell_maintain_add = spell_ui_maintain_add;
     callbacks.spell_maintain_end = spell_ui_maintain_end;
     callbacks.spell_maintain_refresh = spell_ui_maintain_refresh;
-    callbacks.field_0 = sub_57CAE0;
-    callbacks.field_4 = sub_57CAF0;
+    callbacks.refresh_interface = tb_ui_refresh_interface;
+    callbacks.notify_object_destroyed = tb_ui_notify_object_destroyed;
     callbacks.update_inven = tb_inven_ui_update;
     callbacks.field_C = NULL;
     callbacks.refresh_fatigue_bar = refresh_fatigue_bar;
     callbacks.refresh_health_bar = intgame_refresh_health_bar;
-    callbacks.field_18 = sub_5570A0;
+    callbacks.set_examine_obj = intgame_set_examine_obj;
     callbacks.notify_item_inserted_or_removed = intgame_notify_item_inserted_or_removed;
     callbacks.show_inven_loot = show_inven_loot;
     callbacks.show_inven_identify = show_inven_identify;
@@ -85,18 +85,18 @@ bool tb_ui_init(GameInitInfo* init_info)
     callbacks.skill_activate = skill_ui_activate;
     callbacks.adjust_skill = skill_ui_adjust_skill;
     callbacks.set_skill_training = skill_ui_set_training;
-    callbacks.field_3C = sub_57CC70;
+    callbacks.talk_to = tb_ui_talk_to;
     callbacks.is_in_dialog = dialog_ui_is_in_dialog;
     callbacks.end_death = end_death;
     callbacks.end_game = end_game;
-    callbacks.field_64 = sub_57CDF0;
-    callbacks.field_68 = sub_57EDF0;
-    callbacks.field_6C = sub_57EED0;
+    callbacks.clear_hotkey = tb_ui_clear_hotkey;
+    callbacks.set_item_location = hotkey_ui_set_item_location;
+    callbacks.assign_item_hotkey = hotkey_ui_assign_item;
     callbacks.reset_interface = tb_ui_reset_interface;
     callbacks.refresh_counters = tb_ui_refresh_counters;
     callbacks.item_spell_activate = tb_ui_item_spell_activate;
     callbacks.wants_mainmenu_set = gameuilib_wants_mainmenu_set;
-    callbacks.field_84 = sub_557730;
+    callbacks.feedback_msg = intgame_feedback_msg;
     callbacks.written_start_obj = written_ui_start_obj;
     callbacks.written_start_type = written_ui_start_type;
     callbacks.item_activate = item_ui_activate;
@@ -114,7 +114,7 @@ bool tb_ui_init(GameInitInfo* init_info)
     callbacks.wmap_select = wmap_ui_select;
     callbacks.schematic_process = schematic_ui_process;
     callbacks.schematic_feedback = schematic_ui_feedback;
-    callbacks.field_D0 = sub_57CF70;
+    callbacks.open_charedit_passive = tb_ui_open_charedit_passive;
     callbacks.field_D4 = sub_578EA0;
     callbacks.field_D8 = sub_573630;
     callbacks.field_DC = sub_57CFA0;
@@ -175,14 +175,14 @@ void tb_inven_ui_update(int64_t obj)
 }
 
 // 0x57CAE0
-void sub_57CAE0(void)
+void tb_ui_refresh_interface(void)
 {
     iso_interface_refresh();
     charedit_refresh();
 }
 
 // 0x57CAF0
-void sub_57CAF0(int64_t obj)
+void tb_ui_notify_object_destroyed(int64_t obj)
 {
     inven_ui_notify_object_destroyed(obj);
     dialog_ui_notify_object_destroyed(obj);
@@ -245,7 +245,7 @@ void refresh_fatigue_bar(int64_t obj)
 }
 
 // 0x57CC70
-void sub_57CC70(int64_t a1, int64_t a2)
+void tb_ui_talk_to(int64_t a1, int64_t a2)
 {
     int64_t danger_source_obj;
 
@@ -298,9 +298,9 @@ void end_game(void)
 }
 
 // 0x57CDF0
-void sub_57CDF0(int a1)
+void tb_ui_clear_hotkey(int a1)
 {
-    sub_57EF90(a1);
+    hotkey_ui_clear(a1);
 }
 
 // 0x57CE00
@@ -394,7 +394,7 @@ void charedit_error_msg(int type, int param)
 }
 
 // 0x57CF70
-void sub_57CF70(int64_t a1, int64_t a2)
+void tb_ui_open_charedit_passive(int64_t a1, int64_t a2)
 {
     if (player_is_local_pc_obj(a1)) {
         charedit_open(a2, CHAREDIT_MODE_PASSIVE);

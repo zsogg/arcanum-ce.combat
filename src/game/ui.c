@@ -52,16 +52,16 @@ bool ui_timeevent_process(TimeEvent* timeevent)
  */
 void ui_refresh_interface(void)
 {
-    if (ui_callbacks.field_0 != NULL) {
-        ui_callbacks.field_0();
+    if (ui_callbacks.refresh_interface != NULL) {
+        ui_callbacks.refresh_interface();
     }
 }
 
 // 0x4601D0
-void sub_4601D0(int64_t obj)
+void ui_notify_object_destroyed(int64_t obj)
 {
-    if (ui_callbacks.field_4 != NULL) {
-        ui_callbacks.field_4(obj);
+    if (ui_callbacks.notify_object_destroyed != NULL) {
+        ui_callbacks.notify_object_destroyed(obj);
     }
 }
 
@@ -90,10 +90,10 @@ void ui_refresh_fatigue_bar(int64_t obj)
 }
 
 // 0x460280
-void sub_460280(int64_t obj)
+void ui_set_examine_obj(int64_t obj)
 {
-    if (ui_callbacks.field_18 != NULL) {
-        ui_callbacks.field_18(obj);
+    if (ui_callbacks.set_examine_obj != NULL) {
+        ui_callbacks.set_examine_obj(obj);
     }
 }
 
@@ -162,10 +162,10 @@ void ui_set_skill_training(int64_t obj, int skill, int training)
 }
 
 // 0x460410
-void sub_460410(int64_t a1, int64_t a2)
+void ui_talk_to(int64_t a1, int64_t a2)
 {
-    if (ui_callbacks.field_3C != NULL) {
-        ui_callbacks.field_3C(a1, a2);
+    if (ui_callbacks.talk_to != NULL) {
+        ui_callbacks.talk_to(a1, a2);
     }
 }
 
@@ -238,26 +238,26 @@ void ui_end_game(void)
 }
 
 // 0x460540
-void sub_460540(int a1)
+void ui_clear_hotkey(int a1)
 {
-    if (ui_callbacks.field_64 != NULL) {
-        ui_callbacks.field_64(a1);
+    if (ui_callbacks.clear_hotkey != NULL) {
+        ui_callbacks.clear_hotkey(a1);
     }
 }
 
 // 0x460560
-void sub_460560(int64_t a1, int64_t a2, int a3)
+void ui_set_item_location(int64_t a1, int64_t a2, int a3)
 {
-    if (ui_callbacks.field_68 != NULL) {
-        ui_callbacks.field_68(a1, a2, a3);
+    if (ui_callbacks.set_item_location != NULL) {
+        ui_callbacks.set_item_location(a1, a2, a3);
     }
 }
 
 // 0x460590
-int sub_460590(int64_t a1, int a2)
+int ui_assign_item_hotkey(int64_t a1, int a2)
 {
-    if (ui_callbacks.field_6C != NULL) {
-        return ui_callbacks.field_6C(a1, a2);
+    if (ui_callbacks.assign_item_hotkey != NULL) {
+        return ui_callbacks.assign_item_hotkey(a1, a2);
     } else {
         return 0;
     }
@@ -337,10 +337,10 @@ void sub_460650(UiMessage* ui_message, unsigned int milliseconds)
 }
 
 // 0x4606C0
-void sub_4606C0(int a1)
+void ui_feedback_msg(int a1)
 {
-    if (ui_callbacks.field_84 != NULL) {
-        ui_callbacks.field_84(a1);
+    if (ui_callbacks.feedback_msg != NULL) {
+        ui_callbacks.feedback_msg(a1);
     }
 }
 
@@ -489,10 +489,10 @@ void ui_schematic_feedback(bool success, int64_t primary_obj, int64_t secondary_
 }
 
 // 0x460930
-void sub_460930(int64_t a1, int64_t a2)
+void ui_open_charedit_passive(int64_t a1, int64_t a2)
 {
-    if (ui_callbacks.field_D0 != NULL) {
-        ui_callbacks.field_D0(a1, a2);
+    if (ui_callbacks.open_charedit_passive != NULL) {
+        ui_callbacks.open_charedit_passive(a1, a2);
     }
 }
 

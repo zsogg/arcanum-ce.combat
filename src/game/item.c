@@ -3763,7 +3763,7 @@ void item_insert(int64_t item_obj, int64_t parent_obj, int inventory_location)
         ui_toggle_primary_button(UI_PRIMARY_BUTTON_INVENTORY, true);
 
         if (IS_HOTKEY_INV_LOC(inventory_location)) {
-            sub_460590(item_obj, inventory_location);
+            ui_assign_item_hotkey(item_obj, inventory_location);
         }
 
         ui_notify_item_inserted_or_removed(item_obj, false, inventory_location);
@@ -4351,7 +4351,7 @@ void item_force_remove(int64_t item_obj, int64_t parent_obj)
         item_unequipped(item_obj, parent_obj, inventory_location);
     } else if (IS_HOTKEY_INV_LOC(inventory_location)) {
         if (is_pc) {
-            sub_460540(inventory_location - 2000);
+            ui_clear_hotkey(inventory_location - 2000);
         }
     }
 

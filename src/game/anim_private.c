@@ -497,7 +497,7 @@ bool mp_deallocate_run_index(AnimID* anim_id)
         if (run_info->goals[0].type == AG_ATTACK
             || run_info->goals[0].type == AG_ATTEMPT_ATTACK) {
             if (player_is_local_pc_obj(run_info->anim_obj)) {
-                sub_460280(OBJ_HANDLE_NULL);
+                ui_set_examine_obj(OBJ_HANDLE_NULL);
             }
         }
 
@@ -755,7 +755,7 @@ bool anim_goal_add_func(AnimGoalData* goal_data, AnimID* anim_id, bool a3, unsig
     if ((goal_data->type == AG_ATTACK
             || goal_data->type == AG_ATTEMPT_ATTACK)
         && player_is_local_pc_obj(run_info->anim_obj)) {
-        sub_460280(run_info->goals[0].params[AGDATA_TARGET_OBJ].obj);
+        ui_set_examine_obj(run_info->goals[0].params[AGDATA_TARGET_OBJ].obj);
     }
 
     timeevent.type = TIMEEVENT_TYPE_ANIM;

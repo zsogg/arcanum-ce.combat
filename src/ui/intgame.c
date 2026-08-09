@@ -1068,7 +1068,7 @@ void intgame_reset(void)
     iso_interface_window_swap(ROTWIN_TYPE_MSG);
 
     for (index = 0; index < 10; index++) {
-        sub_57F210(index);
+        hotkey_ui_clear_index(index);
     }
 
     intgame_map_button = UI_PRIMARY_BUTTON_TOWNMAP;
@@ -8252,7 +8252,7 @@ void intgame_mt_button_disable(void)
 }
 
 // 0x5570A0
-void sub_5570A0(int64_t obj)
+void intgame_set_examine_obj(int64_t obj)
 {
     qword_64C690 = obj;
     if (qword_64C690 != OBJ_HANDLE_NULL) {
@@ -8269,7 +8269,7 @@ void intgame_notify_item_inserted_or_removed(int64_t item_obj, bool removed, int
     for (index = 0; index < 10; index++) {
         hotkey = sub_57F240(index);
         if (removed && hotkey->item_obj.obj == item_obj) {
-            sub_57EF90(index);
+            hotkey_ui_clear(index);
         }
 
         if (hotkey->type == HOTKEY_ITEM
@@ -8511,7 +8511,7 @@ void sub_5576B0(void)
 }
 
 // 0x557730
-void sub_557730(int index)
+void intgame_feedback_msg(int index)
 {
     MesFileEntry mes_file_entry;
     UiMessage ui_message;

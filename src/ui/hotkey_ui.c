@@ -934,7 +934,7 @@ bool sub_57E8D0(TigMessageMouseEvent mouse_event)
 
         hotkey->count = -1;
         if (hotkey->info.button_handle != TIG_BUTTON_HANDLE_INVALID) {
-            sub_57F210(index);
+            hotkey_ui_clear_index(index);
         }
 
         hotkey->type = stru_683950.type;
@@ -1003,7 +1003,7 @@ bool sub_57E8D0(TigMessageMouseEvent mouse_event)
         // I assume the "destruction tab" refers to the round metal element to
         // the right of the hotkey bar, but it was never implemented.
         if (hotkey_ui_dragging_index != -1) {
-            sub_57F210(hotkey_ui_dragging_index);
+            hotkey_ui_clear_index(hotkey_ui_dragging_index);
         }
     }
 
@@ -1044,7 +1044,7 @@ bool sub_57EDA0(TigMessageMouseEvent mouse_event)
 }
 
 // 0x57EDF0
-void sub_57EDF0(int64_t obj, int64_t a2, int a3)
+void hotkey_ui_set_item_location(int64_t obj, int64_t a2, int a3)
 {
     if (player_is_local_pc_obj(obj)) {
         sub_57EE30(a2, a3);
@@ -1072,11 +1072,11 @@ void sub_57EE30(int64_t obj, int inventory_location)
     }
 
     item_location_set(obj, inventory_location);
-    sub_57EED0(obj, inventory_location);
+    hotkey_ui_assign_item(obj, inventory_location);
 }
 
 // 0x57EED0
-bool sub_57EED0(int64_t obj, int inventory_location)
+bool hotkey_ui_assign_item(int64_t obj, int inventory_location)
 {
     int64_t v1 = OBJ_HANDLE_NULL;
     Hotkey* hotkey;
@@ -1103,9 +1103,9 @@ bool sub_57EED0(int64_t obj, int inventory_location)
 }
 
 // 0x57EF90
-void sub_57EF90(int index)
+void hotkey_ui_clear(int index)
 {
-    sub_57F210(index);
+    hotkey_ui_clear_index(index);
 }
 
 // 0x57EFA0
@@ -1209,7 +1209,7 @@ void sub_57F1D0(int index)
 }
 
 // 0x57F210
-void sub_57F210(int index)
+void hotkey_ui_clear_index(int index)
 {
     hotkey_ui_clear_slot(&(stru_6835E0[index]));
     intgame_hotkey_refresh(index);
@@ -1320,7 +1320,7 @@ void intgame_hotkeys_recover(void)
             if (hotkey->item_obj.obj != OBJ_HANDLE_NULL) {
                 if (!object_ref_validate(&(hotkey->item_obj))) {
                     tig_debug_printf("Intgame: intgame_hotkeys_recover: ERROR: Item Hotkey %d failed to recover!\n", index);
-                    sub_57F210(index);
+                    hotkey_ui_clear_index(index);
                 }
             }
         }

@@ -510,7 +510,7 @@ void sub_4D3E20(int64_t obj)
         sub_45F710(obj);
     }
     ai_timeevent_clear(obj);
-    sub_4601D0(obj);
+    ui_notify_object_destroyed(obj);
     object_remove_from_sector(obj);
 }
 

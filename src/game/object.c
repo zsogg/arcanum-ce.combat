@@ -1324,7 +1324,7 @@ void object_destroy(int64_t obj)
 
     anim_force_interrupt_all_goals_of_obj(obj);
     magictech_interrupt_runs_for_obj(obj);
-    sub_4601D0(obj);
+    ui_notify_object_destroyed(obj);
     sub_443770(obj);
 
     if (obj_type == OBJ_TYPE_WALL) {
@@ -1418,7 +1418,7 @@ void object_delete(int64_t obj)
     anim_force_interrupt_all_goals_of_obj(obj);
     magictech_interrupt_runs_for_obj(obj);
     ai_timeevent_clear(obj);
-    sub_4601D0(obj);
+    ui_notify_object_destroyed(obj);
     sub_443770(obj);
     obj_deallocate(obj);
 }
@@ -5386,7 +5386,7 @@ void sub_4445A0(int64_t a1, int64_t a2)
         || (obj_type_is_item(type) && (obj_field_int32_get(a2, OBJ_F_FLAGS) & OF_INVENTORY) == 0)) {
         if (object_dist(a1, a2) > 1) {
             if (player_is_local_pc_obj(a1)) {
-                sub_4606C0(0);
+                ui_feedback_msg(0);
             }
         } else {
             loc = obj_field_int64_get(a1, OBJ_F_LOCATION);
