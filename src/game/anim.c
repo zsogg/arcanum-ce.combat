@@ -63,8 +63,8 @@ static bool sub_424E00(AnimRunInfo* run_info);
 static bool anim_target_in_range(AnimRunInfo* run_info);
 static bool anim_tile_in_range(AnimRunInfo* run_info);
 static bool anim_target_in_walk_range(AnimRunInfo* run_info);
-static bool sub_425430(AnimRunInfo* run_info);
-static bool sub_4254C0(AnimRunInfo* run_info);
+static bool anim_finish_move(AnimRunInfo* run_info);
+static bool anim_finish_move_near(AnimRunInfo* run_info);
 static bool sub_425590(AnimRunInfo* run_info);
 static bool anim_has_path(AnimRunInfo* run_info);
 static bool sub_425760(int64_t obj, int64_t loc, int64_t adjacent_loc, int rot);
@@ -96,9 +96,9 @@ static bool anim_create_path_near_obj(AnimRunInfo* run_info);
 static bool sub_4280D0(AnimRunInfo* run_info);
 static bool anim_is_portal(AnimRunInfo* run_info);
 static bool anim_portal_is_closed_and_idle(AnimRunInfo* run_info);
-static bool sub_428550(AnimRunInfo* run_info);
+static bool anim_try_open_portal(AnimRunInfo* run_info);
 static bool anim_portal_is_operable(AnimRunInfo* run_info);
-static bool sub_428690(AnimRunInfo* run_info);
+static bool anim_can_open_portal(AnimRunInfo* run_info);
 static bool anim_cannot_open_portal(AnimRunInfo* run_info);
 static bool anim_attempt_open_portal(AnimRunInfo* run_info);
 static bool sub_428890(AnimRunInfo* run_info);
@@ -115,18 +115,18 @@ static bool sub_429390(AnimRunInfo* run_info);
 static bool sub_4293A0(AnimRunInfo* run_info);
 static bool sub_4293B0(AnimRunInfo* run_info);
 static bool sub_4293C0(AnimRunInfo* run_info);
-static bool sub_4293D0(AnimRunInfo* run_info);
+static bool anim_set_no_flee(AnimRunInfo* run_info);
 static bool sub_429420(AnimRunInfo* run_info);
 static bool sub_429430(AnimRunInfo* run_info);
 static bool sub_429440(AnimRunInfo* run_info);
 static bool anim_target_is_alive(AnimRunInfo* run_info);
 static bool anim_can_attack_target(AnimRunInfo* run_info);
 static bool anim_can_reach_target(int64_t source_obj, int64_t target_obj);
-static bool sub_4296D0(AnimRunInfo* run_info);
+static bool anim_play_queued_sfx(AnimRunInfo* run_info);
 static bool sub_429760(AnimRunInfo* run_info);
 static bool anim_should_fidget(AnimRunInfo* run_info);
 static bool anim_target_in_weapon_range(AnimRunInfo* run_info);
-static bool sub_429AD0(AnimRunInfo* run_info);
+static bool anim_wields_ranged_weapon(AnimRunInfo* run_info);
 static bool sub_429B40(AnimRunInfo* run_info);
 static bool anim_pay_spell_cost(AnimRunInfo* run_info);
 static bool sub_429BB0(AnimRunInfo* run_info);
@@ -160,10 +160,10 @@ static bool sub_42AFB0(AnimRunInfo* run_info);
 static bool anim_cleanup_stand_anim(AnimRunInfo* run_info);
 static bool sub_42B250(AnimRunInfo* run_info);
 static bool sub_42B440(AnimRunInfo* run_info);
-static bool sub_42B640(AnimRunInfo* run_info);
-static bool sub_42B6F0(AnimRunInfo* run_info);
-static bool sub_42B790(AnimRunInfo* run_info);
-static bool sub_42B7F0(AnimRunInfo* run_info);
+static bool anim_cleanup_door_open(AnimRunInfo* run_info);
+static bool anim_cleanup_door_closed(AnimRunInfo* run_info);
+static bool anim_portal_is_not_sticky(AnimRunInfo* run_info);
+static bool anim_doorway_is_clear(AnimRunInfo* run_info);
 static bool anim_try_run(AnimRunInfo* run_info);
 static bool sub_42B9C0(AnimRunInfo* run_info);
 static bool AGsetObjArtDeathAnim(AnimRunInfo* run_info);
@@ -175,11 +175,11 @@ static bool anim_update_target_tile(AnimRunInfo* run_info);
 static bool anim_set_follow_range(AnimRunInfo* run_info);
 static bool anim_is_crowding_target(AnimRunInfo* run_info);
 static bool anim_face_target(AnimRunInfo* run_info);
-static bool sub_42C240(AnimRunInfo* run_info);
-static bool sub_42C390(AnimRunInfo* run_info);
+static bool anim_face_away_from_target(AnimRunInfo* run_info);
+static bool anim_face_target_tile(AnimRunInfo* run_info);
 static bool AGperformRotateAnim(AnimRunInfo* run_info);
 static bool anim_set_rotation_from_path(AnimRunInfo* run_info);
-static bool sub_42C650(AnimRunInfo* run_info);
+static bool anim_cleanup_rotate(AnimRunInfo* run_info);
 static bool anim_face_path_direction(AnimRunInfo* run_info);
 static bool anim_face_spell_target(AnimRunInfo* run_info);
 static bool anim_is_not_animating(AnimRunInfo* run_info);
@@ -210,7 +210,7 @@ static bool AGupdateKneelMagicHandsAnim(AnimRunInfo* run_info);
 static bool anim_is_conscious(AnimRunInfo* run_info);
 static bool AGbeginKnockDownAnim(AnimRunInfo* run_info);
 static bool AGbeginGetUpAnim(AnimRunInfo* run_info);
-static bool sub_42E6B0(AnimRunInfo* run_info);
+static bool anim_save_current_aid(AnimRunInfo* run_info);
 static bool AGbeginAnimAnimReverse(AnimRunInfo* run_info);
 static bool AGupdateAnimAnimReverse(AnimRunInfo* run_info);
 static bool AGbeginAnimMove(AnimRunInfo* run_info);
@@ -235,7 +235,7 @@ static int sub_4302D0(LocRect* loc_rect, ObjectList* objects);
 static bool sub_4303D0(int64_t obj);
 static bool AGupdateAnimMove(AnimRunInfo* run_info);
 static bool anim_cleanup_move_path(AnimRunInfo* run_info);
-static int sub_430FC0(AnimRunInfo* run_info);
+static int anim_spend_move_cost(AnimRunInfo* run_info);
 static bool anim_float_not_started(AnimRunInfo* run_info);
 static bool anim_float_bob(AnimRunInfo* run_info);
 static bool anim_float_begin(AnimRunInfo* run_info);
@@ -413,7 +413,7 @@ static AnimGoalNode anim_goal_node_attempt_move = {
         /*  2 */ { anim_next_step_blocked, { AGDATA_SELF_OBJ, -1 }, -1, 3, ANIM_DELAY_NONE, 10, ANIM_DELAY_RANDOM },
         /*  3 */ { AGupdateAnimMove, { AGDATA_SELF_OBJ, -1 }, -1, ANIM_FLOW_POP_GOAL, ANIM_DELAY_PAUSE_TIME, ANIM_FLOW_YIELD, ANIM_DELAY_PAUSE_TIME },
         /*  4 */ { anim_has_path, { AGDATA_SELF_OBJ, -1 }, -1, 12, ANIM_DELAY_NONE, 5, ANIM_DELAY_NONE },
-        /*  5 */ { sub_425430, { AGDATA_SELF_OBJ, -1 }, -1, 6, ANIM_DELAY_NONE, ANIM_FLOW_POP_GOAL, ANIM_DELAY_NONE },
+        /*  5 */ { anim_finish_move, { AGDATA_SELF_OBJ, -1 }, -1, 6, ANIM_DELAY_NONE, ANIM_FLOW_POP_GOAL, ANIM_DELAY_NONE },
         /*  6 */ { anim_find_blocking_wall, { AGDATA_SELF_OBJ, -1 }, -1, 7, ANIM_DELAY_NONE, 11, ANIM_DELAY_NONE },
         /*  7 */ { anim_find_blocking_door, { AGDATA_SELF_OBJ, -1 }, -1, 9, ANIM_DELAY_NONE, 8, ANIM_DELAY_NONE },
         /*  8 */ { anim_portal_is_closed_and_idle, { AGDATA_SCRATCH_OBJ, -1 }, -1, 9, ANIM_DELAY_NONE, ANIM_FLOW_PUSH | ANIM_FLOW_YIELD | ANIM_FLOW_RESET_PATH | AG_OPEN_DOOR, 50 },
@@ -606,11 +606,11 @@ static AnimGoalNode anim_goal_node_attempt_open_door = {
     {
         /*  1 */ { anim_is_portal, { AGDATA_SCRATCH_OBJ, -1 }, -1, ANIM_FLOW_POP_GOAL, ANIM_DELAY_NONE, 2, ANIM_DELAY_NONE },
         /*  2 */ { anim_portal_is_closed_and_idle, { AGDATA_SCRATCH_OBJ, -1 }, -1, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE, 3, ANIM_DELAY_NONE },
-        /*  3 */ { sub_428690, { AGDATA_SELF_OBJ, AGDATA_SCRATCH_OBJ }, -1, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE, 4, ANIM_DELAY_NONE },
+        /*  3 */ { anim_can_open_portal, { AGDATA_SELF_OBJ, AGDATA_SCRATCH_OBJ }, -1, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE, 4, ANIM_DELAY_NONE },
         /*  4 */ { anim_cannot_open_portal, { AGDATA_SCRATCH_OBJ, AGDATA_SELF_OBJ }, -1, 6, ANIM_DELAY_NONE, 5, ANIM_DELAY_NONE },
         /*  5 */ { anim_attempt_open_portal, { AGDATA_SELF_OBJ, AGDATA_SCRATCH_OBJ }, -1, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE, ANIM_FLOW_REPLACE_GOAL | AG_UNLOCK_DOOR, ANIM_DELAY_NONE },
         /*  6 */ { anim_use_object, { AGDATA_SELF_OBJ, AGDATA_SCRATCH_OBJ }, -1, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE, 7, ANIM_DELAY_NONE },
-        /*  7 */ { sub_428550, { AGDATA_SCRATCH_OBJ, AGDATA_SELF_OBJ }, -1, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE, 8, ANIM_DELAY_NONE },
+        /*  7 */ { anim_try_open_portal, { AGDATA_SCRATCH_OBJ, AGDATA_SELF_OBJ }, -1, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE, 8, ANIM_DELAY_NONE },
         /*  8 */ { anim_add_parented_goal, { AGDATA_SCRATCH_OBJ, AGDATA_SELF_OBJ }, AG_ANIMATE_DOOR_OPEN, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE, ANIM_FLOW_POP_GOAL | ANIM_FLOW_KEEP_PATH, ANIM_DELAY_NONE },
         /*  9 */ { 0 },
         /* 10 */ { 0 },
@@ -1228,7 +1228,7 @@ static AnimGoalNode anim_goal_node_throw_item = {
         /*  1 */ { anim_is_not_animating, { AGDATA_SELF_OBJ, -1 }, -1, 2, ANIM_DELAY_NONE, 3, ANIM_DELAY_NONE },
         /*  2 */ { anim_advance_frame, { AGDATA_SELF_OBJ, -1 }, -1, 8, ANIM_DELAY_PAUSE_TIME, 6, ANIM_DELAY_NONE },
         /*  3 */ { AGsetObjArtAnim, { AGDATA_SELF_OBJ, -1 }, 14, 8, ANIM_DELAY_NONE, 4, ANIM_DELAY_NONE },
-        /*  4 */ { sub_42C390, { AGDATA_SELF_OBJ, AGDATA_TARGET_TILE }, -1, 8, ANIM_DELAY_NONE, 5, ANIM_DELAY_NONE },
+        /*  4 */ { anim_face_target_tile, { AGDATA_SELF_OBJ, AGDATA_TARGET_TILE }, -1, 8, ANIM_DELAY_NONE, 5, ANIM_DELAY_NONE },
         /*  5 */ { AGbeginAnimAnim, { AGDATA_SELF_OBJ, AGDATA_ANIM_ID }, -1, 8, ANIM_DELAY_NONE, ANIM_FLOW_YIELD, ANIM_DELAY_NONE },
         /*  6 */ { anim_reached_action_frame, { AGDATA_SELF_OBJ, AGDATA_ANIM_ID }, -1, ANIM_FLOW_YIELD, ANIM_DELAY_PAUSE_TIME, 7, ANIM_DELAY_NONE },
         /*  7 */ { sub_42AB90, { AGDATA_SELF_OBJ, AGDATA_SCRATCH_OBJ }, 5, 8, ANIM_DELAY_NONE, ANIM_FLOW_YIELD, ANIM_DELAY_PAUSE_TIME },
@@ -1635,8 +1635,8 @@ static AnimGoalNode anim_goal_node_move_away_from_obj = {
         /*  3 */ { anim_target_in_range, { AGDATA_SELF_OBJ, AGDATA_TARGET_OBJ }, -1, ANIM_FLOW_POP_GOAL, ANIM_DELAY_NONE, 5, ANIM_DELAY_NONE },
         /*  4 */ { anim_has_path, { AGDATA_SELF_OBJ, -1 }, -1, 5, ANIM_DELAY_NONE, ANIM_FLOW_PUSH | AG_ATTEMPT_MOVE, ANIM_DELAY_NONE },
         /*  5 */ { sub_426A80, { AGDATA_SELF_OBJ, AGDATA_TARGET_OBJ }, -1, 6, ANIM_DELAY_NONE, ANIM_FLOW_PUSH | AG_ATTEMPT_MOVE, ANIM_DELAY_NONE },
-        /*  6 */ { sub_42C240, { AGDATA_SELF_OBJ, AGDATA_TARGET_OBJ }, -1, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE, 7, ANIM_DELAY_NONE },
-        /*  7 */ { sub_4293D0, { AGDATA_SELF_OBJ, -1 }, -1, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE },
+        /*  6 */ { anim_face_away_from_target, { AGDATA_SELF_OBJ, AGDATA_TARGET_OBJ }, -1, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE, 7, ANIM_DELAY_NONE },
+        /*  7 */ { anim_set_no_flee, { AGDATA_SELF_OBJ, -1 }, -1, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE },
         /*  8 */ { 0 },
         /*  9 */ { 0 },
         /* 10 */ { 0 },
@@ -1671,7 +1671,7 @@ static AnimGoalNode anim_goal_node_rotate = {
         /* 12 */ { 0 },
         /* 13 */ { 0 },
         /* 14 */ { 0 },
-        /* 15 */ { sub_42C650, { AGDATA_SELF_OBJ, AGDATA_SCRATCH_VAL1 }, -1, 0, ANIM_DELAY_NONE, 0, ANIM_DELAY_NONE },
+        /* 15 */ { anim_cleanup_rotate, { AGDATA_SELF_OBJ, AGDATA_SCRATCH_VAL1 }, -1, 0, ANIM_DELAY_NONE, 0, ANIM_DELAY_NONE },
     },
 };
 
@@ -1686,7 +1686,7 @@ static AnimGoalNode anim_goal_node_unconceal = {
     {
         /*  1 */ { anim_is_not_animating, { AGDATA_SELF_OBJ, -1 }, -1, 2, ANIM_DELAY_NONE, 3, ANIM_DELAY_NONE },
         /*  2 */ { AGupdateAnimAnimReverse, { AGDATA_SELF_OBJ, -1 }, -1, ANIM_FLOW_POP_GOAL, ANIM_DELAY_PAUSE_TIME, ANIM_FLOW_YIELD, ANIM_DELAY_PAUSE_TIME },
-        /*  3 */ { sub_42E6B0, { AGDATA_SELF_OBJ, -1 }, -1, 5, ANIM_DELAY_NONE, 4, ANIM_DELAY_NONE },
+        /*  3 */ { anim_save_current_aid, { AGDATA_SELF_OBJ, -1 }, -1, 5, ANIM_DELAY_NONE, 4, ANIM_DELAY_NONE },
         /*  4 */ { AGbeginAnimAnimReverse, { AGDATA_SELF_OBJ, AGDATA_ANIM_ID }, -1, 5, ANIM_DELAY_NONE, ANIM_FLOW_YIELD, ANIM_DELAY_NONE },
         /*  5 */ { anim_spend_action_points, { AGDATA_SELF_OBJ, -1 }, 1, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE },
         /*  6 */ { 0 },
@@ -1877,7 +1877,7 @@ static AnimGoalNode anim_goal_node_attempt_move_near = {
         /*  2 */ { anim_next_step_blocked, { AGDATA_SELF_OBJ, -1 }, -1, 3, ANIM_DELAY_NONE, 10, ANIM_DELAY_RANDOM },
         /*  3 */ { AGupdateAnimMove, { AGDATA_SELF_OBJ, -1 }, -1, ANIM_FLOW_POP_GOAL, ANIM_DELAY_PAUSE_TIME, ANIM_FLOW_YIELD, ANIM_DELAY_PAUSE_TIME },
         /*  4 */ { anim_has_path, { AGDATA_SELF_OBJ, -1 }, -1, 12, ANIM_DELAY_NONE, 5, ANIM_DELAY_NONE },
-        /*  5 */ { sub_4254C0, { AGDATA_SELF_OBJ, AGDATA_TARGET_OBJ }, -1, 6, ANIM_DELAY_NONE, ANIM_FLOW_POP_GOAL, ANIM_DELAY_NONE },
+        /*  5 */ { anim_finish_move_near, { AGDATA_SELF_OBJ, AGDATA_TARGET_OBJ }, -1, 6, ANIM_DELAY_NONE, ANIM_FLOW_POP_GOAL, ANIM_DELAY_NONE },
         /*  6 */ { anim_find_blocking_wall, { AGDATA_SELF_OBJ, -1 }, -1, 7, ANIM_DELAY_NONE, 11, ANIM_DELAY_NONE },
         /*  7 */ { anim_find_blocking_door, { AGDATA_SELF_OBJ, -1 }, -1, 9, ANIM_DELAY_NONE, 8, ANIM_DELAY_NONE },
         /*  8 */ { anim_portal_is_closed_and_idle, { AGDATA_SCRATCH_OBJ, -1 }, -1, 9, ANIM_DELAY_NONE, ANIM_FLOW_PUSH | ANIM_FLOW_YIELD | ANIM_FLOW_RESET_PATH | AG_OPEN_DOOR, 50 },
@@ -2119,7 +2119,7 @@ static AnimGoalNode anim_goal_node_animate_door_open = {
         /*  1 */ { anim_is_not_animating, { AGDATA_SELF_OBJ, -1 }, -1, 2, ANIM_DELAY_NONE, 3, ANIM_DELAY_NONE },
         /*  2 */ { AGupdateAnimOpenDoor, { AGDATA_SELF_OBJ, -1 }, -1, 4, ANIM_DELAY_NONE, ANIM_FLOW_YIELD, ANIM_DELAY_PAUSE_TIME },
         /*  3 */ { AGbeginAnimOpenDoor, { AGDATA_SELF_OBJ, AGDATA_ANIM_ID }, -1, ANIM_FLOW_POP_GOAL, ANIM_DELAY_NONE, ANIM_FLOW_YIELD, ANIM_DELAY_PAUSE_TIME },
-        /*  4 */ { sub_42B790, { AGDATA_SELF_OBJ, -1 }, -1, ANIM_FLOW_POP_GOAL, ANIM_DELAY_NONE, ANIM_FLOW_REPLACE_GOAL | AG_PEND_CLOSING_DOOR, 1500 },
+        /*  4 */ { anim_portal_is_not_sticky, { AGDATA_SELF_OBJ, -1 }, -1, ANIM_FLOW_POP_GOAL, ANIM_DELAY_NONE, ANIM_FLOW_REPLACE_GOAL | AG_PEND_CLOSING_DOOR, 1500 },
         /*  5 */ { 0 },
         /*  6 */ { 0 },
         /*  7 */ { 0 },
@@ -2130,7 +2130,7 @@ static AnimGoalNode anim_goal_node_animate_door_open = {
         /* 12 */ { 0 },
         /* 13 */ { 0 },
         /* 14 */ { 0 },
-        /* 15 */ { sub_42B640, { AGDATA_SELF_OBJ, -1 }, 1, 0, ANIM_DELAY_NONE, 0, ANIM_DELAY_NONE },
+        /* 15 */ { anim_cleanup_door_open, { AGDATA_SELF_OBJ, -1 }, 1, 0, ANIM_DELAY_NONE, 0, ANIM_DELAY_NONE },
     },
 };
 
@@ -2157,7 +2157,7 @@ static AnimGoalNode anim_goal_node_animate_door_closed = {
         /* 12 */ { 0 },
         /* 13 */ { 0 },
         /* 14 */ { 0 },
-        /* 15 */ { sub_42B6F0, { AGDATA_SELF_OBJ, -1 }, 1, 0, ANIM_DELAY_NONE, 0, ANIM_DELAY_NONE },
+        /* 15 */ { anim_cleanup_door_closed, { AGDATA_SELF_OBJ, -1 }, 1, 0, ANIM_DELAY_NONE, 0, ANIM_DELAY_NONE },
     },
 };
 
@@ -2170,7 +2170,7 @@ static AnimGoalNode anim_goal_node_pend_closing_door = {
     0,
     { -1, -1, -1 },
     {
-        /*  1 */ { sub_42B7F0, { AGDATA_SELF_OBJ, -1 }, -1, ANIM_FLOW_YIELD, 1500, ANIM_FLOW_REPLACE_GOAL | AG_ANIMATE_DOOR_CLOSED, 1500 },
+        /*  1 */ { anim_doorway_is_clear, { AGDATA_SELF_OBJ, -1 }, -1, ANIM_FLOW_YIELD, 1500, ANIM_FLOW_REPLACE_GOAL | AG_ANIMATE_DOOR_CLOSED, 1500 },
         /*  2 */ { 0 },
         /*  3 */ { 0 },
         /*  4 */ { 0 },
@@ -2365,8 +2365,8 @@ static AnimGoalNode anim_goal_node_move_near_obj_combat = {
         /*  4 */ { anim_has_path, { AGDATA_SELF_OBJ, -1 }, -1, 5, ANIM_DELAY_NONE, 7, ANIM_DELAY_NONE },
         /*  5 */ { sub_4280D0, { AGDATA_SELF_OBJ, AGDATA_TARGET_OBJ }, -1, 6, ANIM_DELAY_NONE, 7, ANIM_DELAY_NONE },
         /*  6 */ { anim_is_not_turn_based, { -1, -1 }, -1, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE, ANIM_FLOW_PUSH | ANIM_FLOW_YIELD | AG_MOVE_TO_PAUSE, 1000 },
-        /*  7 */ { sub_4296D0, { AGDATA_SELF_OBJ, -1 }, -1, 8, ANIM_DELAY_NONE, 8, ANIM_DELAY_NONE },
-        /*  8 */ { sub_429AD0, { AGDATA_SELF_OBJ, -1 }, -1, ANIM_FLOW_PUSH | AG_ATTEMPT_MOVE_NEAR, ANIM_DELAY_NONE, ANIM_FLOW_PUSH | AG_ATTEMPT_MOVE_NEAR_COMBAT, ANIM_DELAY_NONE },
+        /*  7 */ { anim_play_queued_sfx, { AGDATA_SELF_OBJ, -1 }, -1, 8, ANIM_DELAY_NONE, 8, ANIM_DELAY_NONE },
+        /*  8 */ { anim_wields_ranged_weapon, { AGDATA_SELF_OBJ, -1 }, -1, ANIM_FLOW_PUSH | AG_ATTEMPT_MOVE_NEAR, ANIM_DELAY_NONE, ANIM_FLOW_PUSH | AG_ATTEMPT_MOVE_NEAR_COMBAT, ANIM_DELAY_NONE },
         /*  9 */ { 0 },
         /* 10 */ { 0 },
         /* 11 */ { 0 },
@@ -4651,13 +4651,13 @@ bool anim_target_in_walk_range(AnimRunInfo* run_info)
 }
 
 // 0x425430
-bool sub_425430(AnimRunInfo* run_info)
+bool anim_finish_move(AnimRunInfo* run_info)
 {
     if ((run_info->path.flags & 0xC) == 0) {
         return false;
     }
 
-    sub_430FC0(run_info);
+    anim_spend_move_cost(run_info);
 
     if (run_info->current_goal > 0) {
         run_info->goals[run_info->current_goal - 1].params[AGDATA_SCRATCH_VAL4].data = run_info->cur_stack_data->params[AGDATA_SCRATCH_VAL4].data;
@@ -4678,7 +4678,7 @@ bool sub_425430(AnimRunInfo* run_info)
 }
 
 // 0x4254C0
-bool sub_4254C0(AnimRunInfo* run_info)
+bool anim_finish_move_near(AnimRunInfo* run_info)
 {
     if (run_info->params[1].obj != OBJ_HANDLE_NULL
         && run_info->cur_stack_data->params[AGDATA_TARGET_TILE].loc != obj_field_int64_get(run_info->params[1].obj, OBJ_F_LOCATION)) {
@@ -4689,7 +4689,7 @@ bool sub_4254C0(AnimRunInfo* run_info)
         return false;
     }
 
-    sub_430FC0(run_info);
+    anim_spend_move_cost(run_info);
 
     if (run_info->current_goal > 0) {
         run_info->goals[run_info->current_goal - 1].params[AGDATA_SCRATCH_VAL4].data = run_info->cur_stack_data->params[AGDATA_SCRATCH_VAL4].data;
@@ -4752,7 +4752,7 @@ bool sub_425590(AnimRunInfo* run_info)
         return false;
     }
 
-    sub_430FC0(run_info);
+    anim_spend_move_cost(run_info);
 
     if (run_info->current_goal > 0) {
         // TODO: Check.
@@ -6363,7 +6363,7 @@ bool anim_portal_is_closed_and_idle(AnimRunInfo* run_info)
 }
 
 // 0x428550
-bool sub_428550(AnimRunInfo* run_info)
+bool anim_try_open_portal(AnimRunInfo* run_info)
 {
     int64_t door_obj;
     int64_t self_obj;
@@ -6422,7 +6422,7 @@ bool anim_portal_is_operable(AnimRunInfo* run_info)
 }
 
 // 0x428690
-bool sub_428690(AnimRunInfo* run_info)
+bool anim_can_open_portal(AnimRunInfo* run_info)
 {
     int64_t source_obj;
     int64_t portal_obj;
@@ -6914,7 +6914,7 @@ bool sub_4293C0(AnimRunInfo* run_info)
 }
 
 // 0x4293D0
-bool sub_4293D0(AnimRunInfo* run_info)
+bool anim_set_no_flee(AnimRunInfo* run_info)
 {
     int64_t critter_obj;
 
@@ -7043,7 +7043,7 @@ bool anim_can_reach_target(int64_t source_obj, int64_t target_obj)
 }
 
 // 0x4296D0
-bool sub_4296D0(AnimRunInfo* run_info)
+bool anim_play_queued_sfx(AnimRunInfo* run_info)
 {
     int64_t self_obj;
     int goal;
@@ -7210,7 +7210,7 @@ bool anim_target_in_weapon_range(AnimRunInfo* run_info)
 }
 
 // 0x429AD0
-bool sub_429AD0(AnimRunInfo* run_info)
+bool anim_wields_ranged_weapon(AnimRunInfo* run_info)
 {
     int64_t source_obj;
     int64_t weapon_obj;
@@ -8363,7 +8363,7 @@ bool sub_42B440(AnimRunInfo* run_info)
 }
 
 // 0x42B640
-bool sub_42B640(AnimRunInfo* run_info)
+bool anim_cleanup_door_open(AnimRunInfo* run_info)
 {
     int64_t door_obj;
 
@@ -8395,7 +8395,9 @@ bool sub_42B640(AnimRunInfo* run_info)
         return false;
     }
 
-    // NOTE: Why twice?
+    // NOTE: Why twice? Unclear, but it is Troika's - 0x42B640 in the exe emits
+    // the same two back-to-back `portal_toggle` calls on this branch. Faithful,
+    // so left alone.
     portal_toggle(door_obj);
     portal_toggle(door_obj);
 
@@ -8403,7 +8405,7 @@ bool sub_42B640(AnimRunInfo* run_info)
 }
 
 // 0x42B6F0
-bool sub_42B6F0(AnimRunInfo* run_info)
+bool anim_cleanup_door_closed(AnimRunInfo* run_info)
 {
     int64_t door_obj;
 
@@ -8441,7 +8443,7 @@ bool sub_42B6F0(AnimRunInfo* run_info)
 }
 
 // 0x42B790
-bool sub_42B790(AnimRunInfo* run_info)
+bool anim_portal_is_not_sticky(AnimRunInfo* run_info)
 {
     int64_t door_obj;
 
@@ -8457,7 +8459,7 @@ bool sub_42B790(AnimRunInfo* run_info)
 }
 
 // 0x42B7F0
-bool sub_42B7F0(AnimRunInfo* run_info)
+bool anim_doorway_is_clear(AnimRunInfo* run_info)
 {
     int64_t door_obj;
     ObjectList objects;
@@ -8873,7 +8875,7 @@ bool anim_face_target(AnimRunInfo* run_info)
 }
 
 // 0x42C240
-bool sub_42C240(AnimRunInfo* run_info)
+bool anim_face_away_from_target(AnimRunInfo* run_info)
 {
     int64_t source_obj;
     int64_t target_obj;
@@ -8920,7 +8922,7 @@ bool sub_42C240(AnimRunInfo* run_info)
 }
 
 // 0x42C390
-bool sub_42C390(AnimRunInfo* run_info)
+bool anim_face_target_tile(AnimRunInfo* run_info)
 {
     int64_t source_obj;
     int64_t source_loc;
@@ -9036,7 +9038,7 @@ bool anim_set_rotation_from_path(AnimRunInfo* run_info)
 }
 
 // 0x42C650
-bool sub_42C650(AnimRunInfo* run_info)
+bool anim_cleanup_rotate(AnimRunInfo* run_info)
 {
     int64_t obj;
     int new_rot;
@@ -10326,7 +10328,7 @@ bool AGbeginGetUpAnim(AnimRunInfo* run_info)
 }
 
 // 0x42E6B0
-bool sub_42E6B0(AnimRunInfo* run_info)
+bool anim_save_current_aid(AnimRunInfo* run_info)
 {
     int64_t obj;
 
@@ -10504,7 +10506,7 @@ bool AGbeginAnimMove(AnimRunInfo* run_info)
     if (sub_4B8040(obj)) {
         loc = obj_field_int64_get(obj, OBJ_F_LOCATION);
         while (combat_action_points_get() > 0) {
-            if (!sub_430FC0(run_info)) {
+            if (!anim_spend_move_cost(run_info)) {
                 break;
             }
 
@@ -11689,7 +11691,7 @@ bool AGupdateAnimMove(AnimRunInfo* run_info)
                 }
             }
 
-            if (!sub_430FC0(run_info)) {
+            if (!anim_spend_move_cost(run_info)) {
                 return false;
             }
         }
@@ -11749,7 +11751,7 @@ bool anim_cleanup_move_path(AnimRunInfo* run_info)
 }
 
 // 0x430FC0
-int sub_430FC0(AnimRunInfo* run_info)
+int anim_spend_move_cost(AnimRunInfo* run_info)
 {
     int64_t obj;
     int action_points;
