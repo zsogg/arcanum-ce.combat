@@ -113,14 +113,20 @@ static int object_scale_percents[8] = {
 // 0x5A54AC
 static unsigned int object_blit_flags = TIG_ART_BLT_BLEND_ALPHA_CONST;
 
+// NOTE: Write-only, so both keep placeholder names. object_init and
+// object_resize compute them from the iso window - half its span in 40x20 tiles
+// plus a two-tile margin - and nothing ever reads them back, in CE or in the
+// original (0x5E2E60 and 0x5E2F50 have writes and no reads). The expression
+// says what they hold; nothing says what they were for.
+//
 // 0x5E2E60
 static int64_t qword_5E2E60;
 
 // 0x5E2E68
-int dword_5E2E68;
+int object_hover_overlay_frame;
 
 // 0x5E2E6C
-int dword_5E2E6C;
+int object_hover_underlay_frame;
 
 // 0x5E2E70
 static TigRectListNode* object_dirty_rects_head;
@@ -132,7 +138,7 @@ static ObjectBlitInfo* object_pending_blits;
 static tig_color_t object_reaction_colors[REACTION_COUNT];
 
 // 0x5E2E94
-bool dword_5E2E94;
+bool object_hover_animating;
 
 // 0x5E2E98
 static TigRect object_iso_content_rect;
@@ -159,7 +165,7 @@ static int object_hover_overlay_fps;
 static int object_hover_underlay_fps;
 
 // 0x5E2EC8
-static unsigned int dword_5E2EC8;
+static unsigned int object_nodraw_flags;
 
 // 0x5E2ECC
 tig_art_id_t object_hover_overlay_art_id;
@@ -177,7 +183,7 @@ static int object_blit_queue_capacity;
 static tig_window_handle_t object_iso_window_handle;
 
 // 0x5E2F28
-static bool dword_5E2F28;
+static bool object_hide_inactive;
 
 // 0x5E2F2C
 static bool object_lighting;
@@ -198,10 +204,14 @@ static int64_t qword_5E2F50;
 static bool object_editor;
 
 // 0x5E2F60
-ObjectLocator stru_5E2F60;
+ObjectLocator object_hover_locator;
 
+// Object-flag masks that exclude objects from the two filter tests below. Both
+// are set only by `object_hide_inactive_toggle`, which nothing calls, so both
+// stay zero and both tests always pass - see the NOTE on that function.
+//
 // 0x5E2F88
-static unsigned int dword_5E2F88;
+static unsigned int object_skip_flags;
 
 // 0x5E2F8C
 static ObjectBlitRectInfo* object_pending_rects;
@@ -210,7 +220,7 @@ static ObjectBlitRectInfo* object_pending_rects;
 int64_t object_hover_obj;
 
 // 0x5E2F98
-static int dword_5E2F98;
+static int object_list_outstanding_count;
 
 /**
  * Flag indicating whether the "highlight interactive objects" mode is on.
@@ -254,8 +264,8 @@ bool object_init(GameInitInfo* init_info)
         return false;
     }
 
-    tig_art_interface_id_create(467, dword_5E2E6C, 1, 0, &object_hover_underlay_art_id);
-    tig_art_interface_id_create(468, dword_5E2E68, 1, 0, &object_hover_overlay_art_id);
+    tig_art_interface_id_create(467, object_hover_underlay_frame, 1, 0, &object_hover_underlay_art_id);
+    tig_art_interface_id_create(468, object_hover_overlay_frame, 1, 0, &object_hover_overlay_art_id);
 
     tig_art_anim_data(object_hover_underlay_art_id, &art_anim_data);
     object_hover_underlay_fps = 1000 / art_anim_data.fps;
@@ -264,12 +274,12 @@ bool object_init(GameInitInfo* init_info)
     object_hover_overlay_fps = 1000 / art_anim_data.fps;
 
     if (object_editor) {
-        dword_5E2F88 = 0;
-        dword_5E2EC8 = 0;
-        dword_5E2F28 = 0;
+        object_skip_flags = 0;
+        object_nodraw_flags = 0;
+        object_hide_inactive = 0;
     } else {
-        dword_5E2F88 = OF_DESTROYED | OF_OFF;
-        dword_5E2EC8 = OF_DONTDRAW;
+        object_skip_flags = OF_DESTROYED | OF_OFF;
+        object_nodraw_flags = OF_DONTDRAW;
     }
 
     object_hardware_accelerated = tig_video_3d_check_initialized() == TIG_OK;
@@ -332,10 +342,10 @@ void object_exit(void)
 void object_ping(tig_timestamp_t timestamp)
 {
     // 0x5E2F40
-    static tig_timestamp_t dword_5E2F40;
+    static tig_timestamp_t object_hover_underlay_last_time;
 
     // 0x5E2E58
-    static tig_timestamp_t dword_5E2E58;
+    static tig_timestamp_t object_hover_overlay_last_time;
 
     TigRect rect;
     TigRect bounds;
@@ -355,19 +365,19 @@ void object_ping(tig_timestamp_t timestamp)
     unsigned int render_flags;
     TigRect obj_rect;
 
-    if (tig_timer_between(dword_5E2F40, timestamp) >= object_hover_underlay_fps) {
+    if (tig_timer_between(object_hover_underlay_last_time, timestamp) >= object_hover_underlay_fps) {
         object_hover_underlay_art_id = tig_art_id_frame_inc(object_hover_underlay_art_id);
-        dword_5E2F40 = timestamp;
-        if (dword_5E2E94) {
+        object_hover_underlay_last_time = timestamp;
+        if (object_hover_animating) {
             sub_443880(&rect, object_hover_underlay_art_id);
             object_iso_invalidate_rect(&rect);
         }
     }
 
-    if (tig_timer_between(dword_5E2E58, timestamp) >= object_hover_overlay_fps) {
+    if (tig_timer_between(object_hover_overlay_last_time, timestamp) >= object_hover_overlay_fps) {
         object_hover_overlay_art_id = tig_art_id_frame_inc(object_hover_overlay_art_id);
-        dword_5E2E58 = timestamp;
-        if (dword_5E2E94) {
+        object_hover_overlay_last_time = timestamp;
+        if (object_hover_animating) {
             sub_443880(&rect, object_hover_overlay_art_id);
             object_iso_invalidate_rect(&rect);
         }
@@ -462,22 +472,29 @@ void object_type_toggle(int obj_type)
     object_type_visibility[obj_type] = !object_type_visibility[obj_type];
 }
 
+// NOTE: This flag and its two accessors are unreachable in the shipped game -
+// nothing calls either function, in CE or in the original (0x43AAA0 and
+// 0x43AAB0 have no references). It therefore stays false, which leaves
+// `object_skip_flags` and `object_nodraw_flags` at zero, which in turn makes
+// both of the filter tests that read them always pass. Faithful, not a bug, but
+// worth knowing before treating either mask as live.
+//
 // 0x43AAA0
-bool sub_43AAA0(void)
+bool object_hide_inactive_get(void)
 {
-    return dword_5E2F28;
+    return object_hide_inactive;
 }
 
 // 0x43AAB0
-void sub_43AAB0(void)
+void object_hide_inactive_toggle(void)
 {
-    dword_5E2F28 = !dword_5E2F28;
-    if (dword_5E2F28) {
-        dword_5E2F88 = OF_DESTROYED | OF_OFF;
-        dword_5E2EC8 = OF_DONTDRAW;
+    object_hide_inactive = !object_hide_inactive;
+    if (object_hide_inactive) {
+        object_skip_flags = OF_DESTROYED | OF_OFF;
+        object_nodraw_flags = OF_DONTDRAW;
     } else {
-        dword_5E2F88 = 0;
-        dword_5E2EC8 = 0;
+        object_skip_flags = 0;
+        object_nodraw_flags = 0;
     }
 }
 
@@ -563,7 +580,7 @@ void object_draw(GameDrawInfo* draw_info)
                                     obj_type = obj_field_int32_get(obj_node->obj, OBJ_F_TYPE);
                                     if (object_type_visibility[obj_type]) {
                                         obj_flags = obj_field_int32_get(obj_node->obj, OBJ_F_FLAGS);
-                                        if ((dword_5E2F88 & obj_flags) == 0) {
+                                        if ((object_skip_flags & obj_flags) == 0) {
                                             if (obj_type != OBJ_TYPE_WALL
                                                 || (obj_field_int32_get(obj_node->obj, OBJ_F_WALL_FLAGS) & (OWAF_TRANS_LEFT | OWAF_TRANS_RIGHT)) == 0
                                                 || object_render_check_rotation(obj_node->obj)
@@ -702,7 +719,7 @@ void object_draw(GameDrawInfo* draw_info)
 
                                                 // 0x43B9FD
                                                 if (((obj_flags & OF_INVISIBLE) == 0 || is_detecting_invisible)
-                                                    && (dword_5E2EC8 & obj_flags) == 0) {
+                                                    && (object_nodraw_flags & obj_flags) == 0) {
                                                     art_blit_info.flags = TIG_ART_BLT_BLEND_COLOR_CONST | TIG_ART_BLT_BLEND_SUB;
                                                     art_blit_info.src_rect = &src_rect;
                                                     art_blit_info.dst_rect = &dst_rect;
@@ -973,12 +990,12 @@ void object_hover_obj_set(int64_t obj)
             object_iso_invalidate_rect(&rect);
         }
 
-        dword_5E2E94 = false;
+        object_hover_animating = false;
         object_hover_obj = obj;
         object_hover_color = tig_color_make(255, 255, 255);
 
-        tig_art_interface_id_create(467, dword_5E2E6C, 1, 0, &object_hover_underlay_art_id);
-        tig_art_interface_id_create(468, dword_5E2E68, 1, 0, &object_hover_overlay_art_id);
+        tig_art_interface_id_create(467, object_hover_underlay_frame, 1, 0, &object_hover_underlay_art_id);
+        tig_art_interface_id_create(468, object_hover_overlay_frame, 1, 0, &object_hover_overlay_art_id);
 
         if (object_hover_obj != OBJ_HANDLE_NULL) {
             type = obj_field_int32_get(object_hover_obj, OBJ_F_TYPE);
@@ -987,11 +1004,11 @@ void object_hover_obj_set(int64_t obj)
                     pc_obj = player_get_local_pc_obj();
                     if (pc_obj == OBJ_HANDLE_NULL) {
                         object_hover_obj = OBJ_HANDLE_NULL;
-                        object_locator_init(OBJ_HANDLE_NULL, &stru_5E2F60);
+                        object_locator_init(OBJ_HANDLE_NULL, &object_hover_locator);
                         return;
                     }
 
-                    dword_5E2E94 = true;
+                    object_hover_animating = true;
 
                     if (type == OBJ_TYPE_NPC) {
                         reaction_level = reaction_get(object_hover_obj, pc_obj);
@@ -999,8 +1016,8 @@ void object_hover_obj_set(int64_t obj)
                         object_hover_color = object_reaction_colors[reaction_type];
 
                         if (combat_critter_is_combat_mode_active(pc_obj)) {
-                            tig_art_interface_id_create(555, dword_5E2E6C, 1, 0, &object_hover_underlay_art_id);
-                            tig_art_interface_id_create(555, dword_5E2E68, 1, 0, &object_hover_overlay_art_id);
+                            tig_art_interface_id_create(555, object_hover_underlay_frame, 1, 0, &object_hover_underlay_art_id);
+                            tig_art_interface_id_create(555, object_hover_overlay_frame, 1, 0, &object_hover_overlay_art_id);
                         }
                     }
                 }
@@ -1011,7 +1028,7 @@ void object_hover_obj_set(int64_t obj)
             }
         }
 
-        object_locator_init(object_hover_obj, &stru_5E2F60);
+        object_locator_init(object_hover_obj, &object_hover_locator);
     }
 }
 
@@ -1022,7 +1039,7 @@ int64_t object_hover_obj_get(void)
         return OBJ_HANDLE_NULL;
     }
 
-    if (!object_locator_validate(&object_hover_obj, &stru_5E2F60)) {
+    if (!object_locator_validate(&object_hover_obj, &object_hover_locator)) {
         object_hover_obj_set(OBJ_HANDLE_NULL);
         return OBJ_HANDLE_NULL;
     }
@@ -1039,7 +1056,7 @@ void sub_43C5C0(GameDrawInfo* draw_info)
     TigRect dst_rect;
     TigRectListNode* node;
 
-    if (dword_5E2E94) {
+    if (object_hover_animating) {
         if (sub_443880(&rect, object_hover_underlay_art_id)) {
             art_blit_info.flags = TIG_ART_BLT_BLEND_ADD | TIG_ART_BLT_BLEND_COLOR_CONST;
             art_blit_info.art_id = object_hover_underlay_art_id;
@@ -1077,7 +1094,7 @@ void sub_43C690(GameDrawInfo* draw_info)
         return;
     }
 
-    if (dword_5E2E94) {
+    if (object_hover_animating) {
         TigRect rect;
 
         if (sub_443880(&rect, object_hover_overlay_art_id)) {
@@ -1876,7 +1893,7 @@ bool sub_43D9F0(int x, int y, int64_t* obj_ptr, unsigned int flags)
                             // FIX: Original code writes obj flags into `flags`
                             // parameter, which probably leads to wrong results.
                             obj_flags = obj_field_int32_get(obj_node->obj, OBJ_F_FLAGS);
-                            if ((dword_5E2F88 & obj_flags) != 0) {
+                            if ((object_skip_flags & obj_flags) != 0) {
                                 continue;
                             }
 
@@ -2018,7 +2035,7 @@ void object_get_rect(int64_t obj, unsigned int flags, TigRect* rect)
     TigRect extra_rect;
 
     obj_flags = obj_field_int32_get(obj, OBJ_F_FLAGS);
-    if ((flags & 0x8) == 0 && (obj_flags & dword_5E2F88) != 0) {
+    if ((flags & 0x8) == 0 && (obj_flags & object_skip_flags) != 0) {
         rect->x = 0;
         rect->y = 0;
         rect->width = 0;
@@ -3380,7 +3397,7 @@ void object_list_location(int64_t loc, unsigned int flags, ObjectList* objects)
 
             node = sector->objects.heads[tile_id_from_loc(loc)];
             while (node != NULL) {
-                if ((dword_5E2F88 & obj_field_int32_get(node->obj, OBJ_F_FLAGS)) == 0
+                if ((object_skip_flags & obj_field_int32_get(node->obj, OBJ_F_FLAGS)) == 0
                     && types[obj_field_int32_get(node->obj, OBJ_F_TYPE)]) {
                     new_node = object_node_create();
                     new_node->obj = node->obj;
@@ -3401,7 +3418,7 @@ void object_list_location(int64_t loc, unsigned int flags, ObjectList* objects)
                 if (!sub_43D940(obj)
                     && (obj_field_int32_get(obj, OBJ_F_FLAGS) & OF_INVENTORY) == 0
                     && obj_field_int64_get(obj, OBJ_F_LOCATION) == loc
-                    && (dword_5E2F88 & obj_field_int32_get(obj, OBJ_F_FLAGS)) == 0
+                    && (object_skip_flags & obj_field_int32_get(obj, OBJ_F_FLAGS)) == 0
                     && types[obj_field_int32_get(obj, OBJ_F_TYPE)]) {
                     new_node = object_node_create();
                     new_node->obj = obj;
@@ -3414,7 +3431,7 @@ void object_list_location(int64_t loc, unsigned int flags, ObjectList* objects)
         }
     }
 
-    dword_5E2F98++;
+    object_list_outstanding_count++;
     return;
 }
 
@@ -3477,7 +3494,7 @@ void object_list_rect(LocRect* loc_rect, unsigned int flags, ObjectList* objects
                     do {
                         if (!sub_43D940(obj)
                             && (obj_field_int32_get(obj, OBJ_F_FLAGS) & OF_INVENTORY) == 0
-                            && (dword_5E2F88 & obj_field_int32_get(obj, OBJ_F_FLAGS)) == 0
+                            && (object_skip_flags & obj_field_int32_get(obj, OBJ_F_FLAGS)) == 0
                             && types[obj_field_int32_get(obj, OBJ_F_TYPE)]) {
                             loc = obj_field_int64_get(obj, OBJ_F_LOCATION);
                             if (LOCATION_GET_X(loc) >= loc_rect->x1
@@ -3515,7 +3532,7 @@ void object_list_rect(LocRect* loc_rect, unsigned int flags, ObjectList* objects
                         for (v4 = 0; v4 < v2->num_hor_tiles[row]; v4++) {
                             obj_node = sectors[row]->objects.heads[indexes[row]];
                             while (obj_node != NULL) {
-                                if ((dword_5E2F88 & obj_field_int32_get(obj_node->obj, OBJ_F_FLAGS)) == 0
+                                if ((object_skip_flags & obj_field_int32_get(obj_node->obj, OBJ_F_FLAGS)) == 0
                                     && types[obj_field_int32_get(obj_node->obj, OBJ_F_TYPE)]) {
                                     new_node = object_node_create();
                                     new_node->obj = obj_node->obj;
@@ -3536,7 +3553,7 @@ void object_list_rect(LocRect* loc_rect, unsigned int flags, ObjectList* objects
         }
     }
 
-    dword_5E2F98++;
+    object_list_outstanding_count++;
 }
 
 // 0x440FC0
@@ -3593,7 +3610,7 @@ void object_list_destroy(ObjectList* objects)
         sector_unlock(objects->sectors[index]);
     }
 
-    --dword_5E2F98;
+    --object_list_outstanding_count;
 }
 
 // 0x441140
@@ -3664,7 +3681,7 @@ void object_list_followers(int64_t obj, ObjectList* objects)
         parent_ptr = &((*parent_ptr)->next);
     }
 
-    ++dword_5E2F98;
+    ++object_list_outstanding_count;
 }
 
 // 0x441260
@@ -3726,7 +3743,7 @@ void object_list_party(int64_t obj, ObjectList* objects)
 
     objects->head = node;
 
-    ++dword_5E2F98;
+    ++object_list_outstanding_count;
 }
 
 // 0x4413E0
@@ -4929,7 +4946,7 @@ bool sub_4437E0(TigRect* rect)
         return false;
     }
 
-    if (!dword_5E2E94) {
+    if (!object_hover_animating) {
         object_get_rect(object_hover_obj, 0, rect);
         return true;
     }

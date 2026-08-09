@@ -94,13 +94,13 @@ typedef struct ObjectList {
     /* 0050 */ ObjectNode* head;
 } ObjectList;
 
-extern int dword_5E2E68;
-extern int dword_5E2E6C;
-extern bool dword_5E2E94;
+extern int object_hover_overlay_frame;
+extern int object_hover_underlay_frame;
+extern bool object_hover_animating;
 extern tig_art_id_t object_hover_underlay_art_id;
 extern tig_color_t object_hover_color;
 extern tig_art_id_t object_hover_overlay_art_id;
-extern ObjectLocator stru_5E2F60;
+extern ObjectLocator object_hover_locator;
 extern int64_t object_hover_obj;
 
 bool object_init(GameInitInfo* init_info);
