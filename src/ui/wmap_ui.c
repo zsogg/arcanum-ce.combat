@@ -255,12 +255,12 @@ static void wmap_ui_textedit_on_change(TextEdit* textedit);
 static void wmap_ui_edit_note(int id);
 static bool wmap_ui_str_has_content(const char* str);
 static bool wmap_ui_add_waypoint(WmapCoords* coords);
-static bool sub_564780(WmapCoords* coords, int* idx_ptr);
+static bool wmap_ui_waypoint_at_coords(WmapCoords* coords, int* idx_ptr);
 static void sub_564830(int a1, WmapCoords* coords);
-static void sub_564840(int a1);
+static void wmap_ui_remove_waypoint(int a1);
 static void sub_5648E0(int a1, int a2, bool a3);
-static void sub_564940(void);
-static void sub_564970(WmapRouteWaypoint* wp);
+static void wmap_ui_snap_selected_waypoint(void);
+static void wmap_ui_snap_waypoint_to_area(WmapRouteWaypoint* wp);
 static void sub_5649C0(void);
 static void sub_5649D0(int a1);
 static bool wmap_ui_travel_to_loc(int64_t loc);
@@ -1708,7 +1708,7 @@ bool wmap_ui_state_set(WmapUiState state)
 
         switch (wmap_ui_state) {
         case WMAP_UI_STATE_1:
-            sub_564940();
+            wmap_ui_snap_selected_waypoint();
             refresh = true;
             break;
         case WMAP_UI_STATE_MOVING:
@@ -1822,7 +1822,7 @@ bool wmap_ui_message_filter(TigMessage* msg)
                 switch (wmap_ui_state) {
                 case WMAP_UI_STATE_NORMAL: {
                     if (wmap_ui_routes[WMAP_ROUTE_TYPE_WORLD].field_3C8) {
-                        if (sub_564780(&stru_64E7E8, &dword_5C9AD8)) {
+                        if (wmap_ui_waypoint_at_coords(&stru_64E7E8, &dword_5C9AD8)) {
                             sub_5649D0(wmap_ui_routes[WMAP_ROUTE_TYPE_WORLD].waypoints[dword_5C9AD8].field_4);
                             wmap_ui_state_set(WMAP_UI_STATE_1);
                             wmap_ui_routes[WMAP_ROUTE_TYPE_WORLD].field_3C8 = 0;
@@ -1874,7 +1874,7 @@ bool wmap_ui_message_filter(TigMessage* msg)
                 switch (wmap_ui_state) {
                 case WMAP_UI_STATE_NORMAL:
                     if (wmap_ui_routes[WMAP_ROUTE_TYPE_TOWN].field_3C8) {
-                        if (sub_564780(&stru_64E7E8, &dword_5C9AD8)) {
+                        if (wmap_ui_waypoint_at_coords(&stru_64E7E8, &dword_5C9AD8)) {
                             sub_5649D0(wmap_ui_routes[WMAP_ROUTE_TYPE_TOWN].waypoints[dword_5C9AD8].field_4);
                             wmap_ui_routes[WMAP_ROUTE_TYPE_TOWN].field_3C8 = 0;
                             return true;
@@ -1993,7 +1993,7 @@ bool wmap_ui_message_filter(TigMessage* msg)
             }
 
             if (dword_5C9AD8 >= 0) {
-                sub_564840(dword_5C9AD8);
+                wmap_ui_remove_waypoint(dword_5C9AD8);
                 if (dword_5C9AD8 >= wmap_ui_routes[route_type].length) {
                     dword_5C9AD8 = wmap_ui_routes[route_type].length - 1;
                 }
@@ -3275,8 +3275,8 @@ void wmap_ui_note_calc_rect(WmapNote* note)
     note->field_18.height = 50;
 }
 
-// NOTE: Four empty hooks, and all four are empty in the shipped game rather
-// than emptied here - 0x563D80, 0x5642E0, 0x5649C0 and 0x5649D0 are each a bare
+// NOTE: Five empty hooks, and all five are empty in the shipped game rather
+// than emptied here - 0x563D80, 0x5642E0, 0x564830, 0x5649C0 and 0x5649D0 are each a bare
 // `return` in the exe. They are called for real, so they are hooks Troika
 // stubbed rather than dead code, and an empty body gives nothing to name from.
 // Left as `sub_`, same as the anim goal table's constant stubs.
@@ -3694,7 +3694,7 @@ bool wmap_ui_add_waypoint(WmapCoords* coords)
 }
 
 // 0x564780
-bool sub_564780(WmapCoords* coords, int* idx_ptr)
+bool wmap_ui_waypoint_at_coords(WmapCoords* coords, int* idx_ptr)
 {
     WmapRouteType route_type;
     int dx;
@@ -3728,7 +3728,7 @@ void sub_564830(int a1, WmapCoords* coords)
 }
 
 // 0x564840
-void sub_564840(int a1)
+void wmap_ui_remove_waypoint(int a1)
 {
     WmapRouteType route_type;
     int index;
@@ -3752,6 +3752,11 @@ void sub_564840(int a1)
     }
 }
 
+// NOTE: Left unnamed. It sets `waypoints[a1].field_4`, and that field goes
+// nowhere: it is initialised to -1, written only here, and read only to be
+// handed to sub_5649D0 - which is one of the empty hooks above. So the value is
+// write-only in the shipped game, and there is nothing to say what it meant.
+//
 // 0x5648E0
 void sub_5648E0(int a1, int a2, bool a3)
 {
@@ -3777,15 +3782,15 @@ void sub_5648E0(int a1, int a2, bool a3)
 }
 
 // 0x564940
-void sub_564940(void)
+void wmap_ui_snap_selected_waypoint(void)
 {
     if (dword_5C9AD8 != -1 && wmap_ui_mode != WMAP_UI_MODE_TOWN) {
-        sub_564970(&(wmap_ui_routes[WMAP_ROUTE_TYPE_WORLD].waypoints[dword_5C9AD8]));
+        wmap_ui_snap_waypoint_to_area(&(wmap_ui_routes[WMAP_ROUTE_TYPE_WORLD].waypoints[dword_5C9AD8]));
     }
 }
 
 // 0x564970
-void sub_564970(WmapRouteWaypoint* wp)
+void wmap_ui_snap_waypoint_to_area(WmapRouteWaypoint* wp)
 {
     int area;
 
@@ -3936,12 +3941,12 @@ bool wmap_ui_bkg_process_callback(TimeEvent* timeevent)
         if (dword_65E968 >= wmap_ui_routes[WMAP_ROUTE_TYPE_WORLD].waypoints[0].start + wmap_ui_routes[WMAP_ROUTE_TYPE_WORLD].waypoints[0].steps) {
             v0 = true;
 
-            sub_564840(0);
+            wmap_ui_remove_waypoint(0);
 
             if (wmap_ui_routes[WMAP_ROUTE_TYPE_WORLD].length > 0) {
                 if (!sub_565140()) {
                     while (wmap_ui_routes[WMAP_ROUTE_TYPE_WORLD].length > 0) {
-                        sub_564840(0);
+                        wmap_ui_remove_waypoint(0);
                     }
 
                     wmap_ui_travel_to_loc(loc);
