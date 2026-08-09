@@ -615,31 +615,35 @@ bool ui_gameuilib_mod_load(void)
 }
 
 // 0x460BB0
-int sub_460BB0(void)
+int ui_confirm_save_char(void)
 {
-    if (ui_callbacks.field_11C != NULL) {
-        return ui_callbacks.field_11C();
+    if (ui_callbacks.confirm_save_char != NULL) {
+        return ui_callbacks.confirm_save_char();
     } else {
         return 0;
     }
 }
 
 // 0x460BC0
-int sub_460BC0(void)
+int ui_confirm_export_char(void)
 {
-    // FIXME: Checks the wrong callback for NULL.
-    if (ui_callbacks.field_11C != NULL) {
-        return ui_callbacks.field_120();
+    // NOTE: Checks the wrong callback for NULL, and Troika's - `ui_callbacks`
+    // is at 0x5E8658, so 0x460BC0 tests 0x5E8774 (+0x11C, confirm_save_char)
+    // and calls 0x5E8778 (+0x120, confirm_export_char). Harmless in practice
+    // because tb_ui installs both, but it would call through NULL if only the
+    // export one were ever left unset. Faithful, so left alone.
+    if (ui_callbacks.confirm_save_char != NULL) {
+        return ui_callbacks.confirm_export_char();
     } else {
         return 0;
     }
 }
 
 // 0x460BE0
-int sub_460BE0(const char* a1, const char* a2)
+int ui_confirm_overwrite_char(const char* a1, const char* a2)
 {
-    if (ui_callbacks.field_124 != NULL) {
-        return ui_callbacks.field_124(a1, a2);
+    if (ui_callbacks.confirm_overwrite_char != NULL) {
+        return ui_callbacks.confirm_overwrite_char(a1, a2);
     } else {
         return 0;
     }

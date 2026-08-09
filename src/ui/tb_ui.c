@@ -52,9 +52,9 @@ static void handle_sector_changed(int64_t sec, int64_t obj);
 static void charedit_error_msg(int type, int param);
 static void tb_ui_open_charedit_passive(int64_t a1, int64_t a2);
 static void tb_ui_cancel_item_drag(void);
-static bool sub_57CFB0(void);
-static bool sub_57D080(void);
-static bool sub_57D150(const char* name, const char* a2);
+static bool tb_ui_confirm_save_char(void);
+static bool tb_ui_confirm_export_char(void);
+static bool tb_ui_confirm_overwrite_char(const char* name, const char* a2);
 
 // 0x57C6E0
 bool tb_ui_init(GameInitInfo* init_info)
@@ -130,9 +130,9 @@ bool tb_ui_init(GameInitInfo* init_info)
     callbacks.wmap_rnd_timeevent_process = wmap_rnd_timeevent_process;
     callbacks.queue_slide = slide_ui_enqueue;
     callbacks.gameuilib_mod_load = gameuilib_mod_load;
-    callbacks.field_11C = sub_57CFB0;
-    callbacks.field_120 = sub_57D080;
-    callbacks.field_124 = sub_57D150;
+    callbacks.confirm_save_char = tb_ui_confirm_save_char;
+    callbacks.confirm_export_char = tb_ui_confirm_export_char;
+    callbacks.confirm_overwrite_char = tb_ui_confirm_overwrite_char;
     callbacks.schematic_info_get = schematic_ui_info_get;
     callbacks.inven_target_obj_get = inven_ui_target_obj_get;
     callbacks.field_130 = sub_557790;
@@ -409,7 +409,7 @@ void tb_ui_cancel_item_drag(void)
 }
 
 // 0x57CFB0
-bool sub_57CFB0(void)
+bool tb_ui_confirm_save_char(void)
 {
     mes_file_handle_t mes_file;
     MesFileEntry mes_file_entry;
@@ -444,7 +444,7 @@ bool sub_57CFB0(void)
 }
 
 // 0x57D080
-bool sub_57D080(void)
+bool tb_ui_confirm_export_char(void)
 {
     mes_file_handle_t mes_file;
     MesFileEntry mes_file_entry;
@@ -479,7 +479,7 @@ bool sub_57D080(void)
 }
 
 // 0x57D150
-bool sub_57D150(const char* name, const char* a2)
+bool tb_ui_confirm_overwrite_char(const char* name, const char* a2)
 {
     mes_file_handle_t mes_file;
     MesFileEntry mes_file_entry;
@@ -499,7 +499,18 @@ bool sub_57D150(const char* name, const char* a2)
     mes_get_msg(mes_file, &mes_file_entry);
     modal_info.keys[TIG_WINDOW_MODAL_DIALOG_CHOICE_CANCEL] = mes_file_entry.str[0];
 
-    mes_file_entry.num = 1902; // "The character %s already exists. Do you wish to overwrite the file?""
+    // FIX: Was 1902, which is "Do you wish to save your character?" - the entry
+    // the save prompt above uses. 0x57D150 fetches 0x770, i.e. 1904, and its
+    // two siblings fetch 0x76E and 0x76F for 1902 and 1903, so the numbering is
+    // consecutive and this was the odd one out. The comment had been written to
+    // match the wrong number, which hid it.
+    //
+    // The visible effect was a misleading prompt on a destructive action:
+    // exporting over an existing character asked "Do you wish to save your
+    // character?" instead of warning about the overwrite, and confirming still
+    // overwrote. The name went missing too, since 1902 has no %s for snprintf
+    // to substitute.
+    mes_file_entry.num = 1904; // "The character %s already exists. Do you wish to overwrite the file?"
     mes_get_msg(mes_file, &mes_file_entry);
     snprintf(buffer, sizeof(buffer), mes_file_entry.str, name);
     modal_info.text = buffer;

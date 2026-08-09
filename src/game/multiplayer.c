@@ -902,7 +902,7 @@ bool multiplayer_timeevent_process(TimeEvent* timeevent)
         snprintf(path, sizeof(path), "Players\\%s.mpc", str);
         anim_interrupt_all_goals_of_obj(player_get_local_pc_obj(), PRIORITY_HIGHEST, false, true);
 
-        if (sub_460BB0()) {
+        if (ui_confirm_save_char()) {
             save_char(path, player_get_local_pc_obj());
         }
 
@@ -1534,7 +1534,7 @@ bool sub_4A38B0(bool (*func)(tig_button_handle_t), tig_button_handle_t button_ha
 
         objid_id_to_str(oidstr, obj_get_id(player_get_local_pc_obj()));
         snprintf(path, sizeof(path), "Players\\%s.mpc", oidstr);
-        if (sub_460BB0()) {
+        if (ui_confirm_save_char()) {
             save_char(path, player_get_local_pc_obj());
         }
 
@@ -2989,10 +2989,10 @@ bool sub_4A6470(int64_t pc_obj)
     snprintf(path, sizeof(path), "Players\\%s.mpc", oidstr);
     anim_interrupt_all_goals_of_obj(player_get_local_pc_obj(), PRIORITY_HIGHEST, false, true);
 
-    if (sub_460BC0()) {
+    if (ui_confirm_export_char()) {
         if (tig_file_exists(path, NULL)) {
             object_examine(pc_obj, pc_obj, str);
-            if (!sub_460BE0(str, oidstr)) {
+            if (!ui_confirm_overwrite_char(str, oidstr)) {
                 return false;
             }
         }
