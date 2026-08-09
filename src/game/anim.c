@@ -427,6 +427,10 @@ static AnimGoalNode anim_goal_node_attempt_move = {
     },
 };
 
+// Sub-node 1 terminates on both of its edges, so this goal ends the moment it
+// starts and sub-nodes 2 and 3 - a pair of stubs - are unreachable. Runs start
+// at sub-node 1 and the only other way to move is a numeric jump from the
+// table, and nothing jumps here. Troika's: the table matches the exe exactly.
 // 0x5A65D0
 static AnimGoalNode anim_goal_node_move_to_pause = {
     3,
@@ -649,6 +653,23 @@ static AnimGoalNode anim_goal_node_jump_window = {
     },
 };
 
+// Eight of this goal's ten sub-nodes call a stub that ignores its arguments and
+// returns a constant, so most of the program is decided before it runs. Folding
+// those constants in leaves:
+//
+//     1 -> 2 -> 3 -> at the item?  push AG_ATTEMPT_PICKUP
+//                    otherwise     4 -> 5 -> 10 -> push AG_MOVE_NEAR_OBJ
+//
+// which is the whole behaviour: pick the item up if you are standing on it,
+// walk to it if you are not. Sub-nodes 1, 2, 4 and 5 are unconditional
+// pass-throughs, and 6 through 9 cannot be reached at all, because 5 always
+// jumps to 10.
+//
+// The dead block is the interesting part. Its edges push AG_KILL and
+// AG_PICKPOCKET, so picking an item up off a critter once escalated to killing
+// or robbing them. That design is gone; only the wiring is left. This is
+// Troika's, not a porting artifact - verify_goal_table.py matches all 10,880
+// table fields against the exe's static data.
 // 0x5A75D0
 static AnimGoalNode anim_goal_node_pickup_item = {
     10,
@@ -6877,6 +6898,29 @@ bool anim_use_item_on_tile_with_skill(AnimRunInfo* run_info)
     return true;
 }
 
+// The goal table names 18 callbacks that ignore their arguments and return a
+// constant. They are deliberately left as `sub_` here.
+//
+// Every other callback in the table has been given a name from its body; these
+// have no body to name. Calling one `anim_pickup_item_check_target` would
+// invent a meaning the code does not have, in a port whose value is that its
+// names can be trusted. What they do is fixed by the constant alone: a stub
+// that returns true can only take its cell's success edge, one that returns
+// false only the failure edge, so each is an unconditional transition written
+// as a call.
+//
+// The full set, with the constant each returns:
+//
+//   true   sub_4246C0  sub_427720  sub_429380  sub_429390  sub_4293A0
+//          sub_429440  sub_429B40  sub_429BB0  sub_42FEA0
+//   false  sub_427710  sub_428890  sub_429370  sub_4293B0  sub_4293C0
+//          sub_429420  sub_429430  sub_42FEB0  sub_42FEC0
+//
+// Folding the constants into the tables makes three blocks unreachable, all of
+// them Troika's own: pickup_item 6-9 and move_to_pause 2-3, documented on those
+// goal nodes, and attempt_spell_w_cast_anim sub-node 14, whose own stub is
+// reached only from a cell that jumps past it.
+//
 // 0x429370
 bool sub_429370(AnimRunInfo* run_info)
 {
