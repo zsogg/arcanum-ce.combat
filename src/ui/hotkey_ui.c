@@ -784,15 +784,15 @@ bool hotkey_ui_begin_drag(void)
         index = sub_557CF0();
         if (index < 5) {
             stru_683950.type = HOTKEY_SPELL;
-            stru_683950.data = index + 5 * sub_557AB0();
-            sub_557AC0(sub_557AB0(), index, &button_info);
+            stru_683950.data = index + 5 * intgame_selected_college_get();
+            intgame_spell_button_get(intgame_selected_college_get(), index, &button_info);
             tig_art_interface_id_create(button_info.art_num, 0, 0, 0, &art_id);
             intgame_hotkey_mouse_load(art_id, true);
             hotkey_ui_dragging = true;
             return true;
         }
 
-        index = sub_557B60();
+        index = intgame_skill_button_at_mouse();
         if (index < 4) {
             stru_683950.type = HOTKEY_SKILL;
             stru_683950.data = index;
@@ -804,9 +804,9 @@ bool hotkey_ui_begin_drag(void)
 
         index = sub_557C00();
         if (index < 5) {
-            spl = mt_item_spell(sub_557B00(), index);
+            spl = mt_item_spell(intgame_magictech_item_get(), index);
             stru_683950.type = HOTKEY_ITEM_SPELL;
-            object_ref_init(sub_557B00(), &(stru_683950.item_obj));
+            object_ref_init(intgame_magictech_item_get(), &(stru_683950.item_obj));
             stru_683950.data = spl;
             stru_683950.info.art_num = spell_icon(spl);
             tig_art_interface_id_create(stru_683950.info.art_num, 0, 0, 0, &art_id);

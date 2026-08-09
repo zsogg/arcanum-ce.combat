@@ -143,7 +143,7 @@ static bool handle_button_unhover(TigMessage* msg);
 static void intgame_center_on_player(void);
 static void intgame_combat_mode_toggle(void);
 static void sub_54ECD0(void);
-static void sub_54ED30(TargetDescriptor* td);
+static void intgame_perform_action_on_target(TargetDescriptor* td);
 static void sub_550000(int64_t critter_obj, Hotkey* a2, int inventory_location);
 static bool sub_5501C0(void);
 static bool intgame_rotwin_button_draw_progress(RotatingWindowType window_type, int progress);
@@ -169,7 +169,7 @@ static bool sub_552050(int x, int y, TargetDescriptor* td);
 static void sub_5520D0(RotatingWindowType window_type, int step);
 static void iso_interface_window_swap(RotatingWindowType window_type);
 static void intgame_clock_refresh(void);
-static void sub_552740(int64_t obj, ChareditMode mode);
+static void intgame_open_charedit(int64_t obj, ChareditMode mode);
 static void intgame_message_history_add(UiMessage* ui_message);
 static void intgame_message_history_scroll_up(void);
 static void intgame_message_history_scroll_down(void);
@@ -2060,7 +2060,7 @@ bool intgame_process_message(TigMessage* msg)
             }
 
             if (msg->data.button.button_handle == intgame_primary_buttons[INTGAME_PRIMARY_BUTTON_CHAR].button_handle) {
-                sub_552740(player_get_local_pc_obj(), CHAREDIT_MODE_ACTIVE);
+                intgame_open_charedit(player_get_local_pc_obj(), CHAREDIT_MODE_ACTIVE);
                 return true;
             }
 
@@ -2564,7 +2564,7 @@ bool intgame_process_message(TigMessage* msg)
                 gsound_play_sfx(0, 1);
                 return true;
             case SDLK_C:
-                sub_552740(player_get_local_pc_obj(), CHAREDIT_MODE_ACTIVE);
+                intgame_open_charedit(player_get_local_pc_obj(), CHAREDIT_MODE_ACTIVE);
                 gsound_play_sfx(0, 1);
                 return true;
             case SDLK_F:
@@ -2790,7 +2790,7 @@ void intgame_process_event(TigMessage* msg)
                             dword_64C6D8 = true;
                         }
                     } else if (!dword_64C6D8) {
-                        sub_54ED30(&td);
+                        intgame_perform_action_on_target(&td);
                     }
                 }
                 break;
@@ -3193,7 +3193,7 @@ void sub_54EA80(TargetDescriptor* td)
             }
             break;
         default:
-            sub_54ED30(td);
+            intgame_perform_action_on_target(td);
             break;
         }
     }
@@ -3299,7 +3299,7 @@ void sub_54ECD0(void)
 // TODO: Lots of jumps, check.
 //
 // 0x54ED30
-void sub_54ED30(TargetDescriptor* td)
+void intgame_perform_action_on_target(TargetDescriptor* td)
 {
     int64_t pc_obj;
     int64_t item_obj = OBJ_HANDLE_NULL;
@@ -5464,7 +5464,7 @@ bool intgame_clock_process_callback(TimeEvent* timeevent)
 }
 
 // 0x552740
-void sub_552740(int64_t obj, ChareditMode mode)
+void intgame_open_charedit(int64_t obj, ChareditMode mode)
 {
     if (!intgame_iso_interface_created) {
         return;
@@ -8665,13 +8665,13 @@ RotatingWindowType iso_interface_window_get_3(void)
 }
 
 // 0x557AB0
-int sub_557AB0(void)
+int intgame_selected_college_get(void)
 {
     return dword_64C530;
 }
 
 // 0x557AC0
-void sub_557AC0(int clg, int lvl, UiButtonInfo* button_info)
+void intgame_spell_button_get(int clg, int lvl, UiButtonInfo* button_info)
 {
     if (button_info != NULL) {
         *button_info = intgame_spell_buttons[clg * 5 + lvl];
@@ -8679,7 +8679,7 @@ void sub_557AC0(int clg, int lvl, UiButtonInfo* button_info)
 }
 
 // 0x557B00
-int64_t sub_557B00(void)
+int64_t intgame_magictech_item_get(void)
 {
     return qword_64C688;
 }
@@ -8710,7 +8710,7 @@ int intgame_recent_action_default_skill(int index)
 }
 
 // 0x557B60
-int sub_557B60(void)
+int intgame_skill_button_at_mouse(void)
 {
     TigMouseState mouse_state;
     TigWindowData window_data;
@@ -8726,10 +8726,22 @@ int sub_557B60(void)
     tig_mouse_get_state(&mouse_state);
 
     // Check if mouse position is within rotating window bounds.
+    //
+    // FIX: The right-hand bound tested `mouse_state.y` against
+    // `rect.x + rect.width`, so x was never bounded on the right at all and y
+    // was compared against a horizontal limit. A hover right of the window
+    // could register as a button, and once the window sits low enough that a
+    // legitimate y exceeds `rect.x + rect.width` - which a taller screen makes
+    // easy - every hover inside it is rejected instead.
+    //
+    // This whole test is CE's, not Troika's: 0x557B60 subtracts a fixed origin
+    // from DAT_005C63A0/A4 and does no bounds check, because the original
+    // window could not move. Substituting the live rect is right for a
+    // resizable window; the typo came with it.
     if (tig_window_data(dword_64C4F8[1], &window_data) != TIG_OK
         || mouse_state.x < window_data.rect.x
         || mouse_state.y < window_data.rect.y
-        || mouse_state.y >= window_data.rect.x + window_data.rect.width
+        || mouse_state.x >= window_data.rect.x + window_data.rect.width
         || mouse_state.y >= window_data.rect.y + window_data.rect.height) {
         return 4;
     }
