@@ -209,12 +209,12 @@ static bool wmap_ui_state_set(WmapUiState state);
 static void wmap_ui_coords_to_loc(WmapCoords* coords, int64_t* loc_ptr);
 static bool wmap_ui_teleport(int64_t loc);
 static bool wmap_ui_message_filter(TigMessage* msg);
-static bool sub_5627B0(WmapCoords* coords);
+static bool wmap_ui_can_travel_to_coords(WmapCoords* coords);
 static bool sub_5627F0(int64_t loc);
-static void sub_562800(int id);
+static void wmap_ui_add_area_note(int id);
 static void wmap_ui_draw_coords(WmapCoords* coords);
 static void wmap_ui_navigate(int x, int y);
-static void sub_562AF0(int x, int y);
+static void wmap_ui_edge_scroll(int x, int y);
 static void wmap_ui_mode_set(WmapUiMode mode);
 static bool wmap_load_townmap_info(void);
 static void sub_562F90(WmapTile* a1);
@@ -235,7 +235,7 @@ static void wmap_ui_scroll_internal(int direction, int scale);
 static void wmap_world_xy_to_coords(int x, int y, WmapCoords* coords);
 static void wmap_continent_xy_to_coords(int x, int y, WmapCoords* coords);
 static void wmap_town_xy_to_coords(int x, int y, WmapCoords* coords);
-static bool sub_563C60(WmapNote* note);
+static bool wmap_ui_add_note(WmapNote* note);
 static void sub_563D50(WmapNote* note);
 static void sub_563D80(int a1, int a2);
 static WmapNote* wmap_ui_find_note(int id);
@@ -275,7 +275,7 @@ static int wmap_ui_compass_arrow_frame_get(void);
 static bool sub_565140(void);
 static void sub_565170(WmapCoords* coords);
 static void wmap_continent_refresh(void);
-static void sub_5656B0(int x, int y, WmapCoords* coords);
+static void wmap_continent_scale_coords(int x, int y, WmapCoords* coords);
 static void wmap_world_refresh_rect(TigRect* rect);
 static bool sub_565CF0(WmapNote* note);
 static void sub_565D00(WmapNote* note, TigRect* a2, TigRect* a3);
@@ -1596,7 +1596,7 @@ bool wmap_ui_create(void)
 
     for (index = area_count() - 1; index > 0; index--) {
         if (area_is_known(player_get_local_pc_obj(), index)) {
-            sub_562800(index);
+            wmap_ui_add_area_note(index);
         }
     }
 
@@ -1829,7 +1829,7 @@ bool wmap_ui_message_filter(TigMessage* msg)
                             return true;
                         }
 
-                        if (sub_5627B0(&stru_64E7E8) && sub_5643E0(&stru_64E7E8)) {
+                        if (wmap_ui_can_travel_to_coords(&stru_64E7E8) && sub_5643E0(&stru_64E7E8)) {
                             dword_5C9AD8 = wmap_ui_routes[WMAP_ROUTE_TYPE_WORLD].length - 1;
                             wmap_ui_state_set(WMAP_UI_STATE_1);
                             wmap_ui_routes[WMAP_ROUTE_TYPE_WORLD].field_3C8 = 0;
@@ -1846,9 +1846,9 @@ bool wmap_ui_message_filter(TigMessage* msg)
                         return true;
                     }
 
-                    sub_562AF0(msg->data.mouse.x, msg->data.mouse.y);
+                    wmap_ui_edge_scroll(msg->data.mouse.x, msg->data.mouse.y);
 
-                    if (!sub_5627B0(&stru_64E7E8)) {
+                    if (!wmap_ui_can_travel_to_coords(&stru_64E7E8)) {
                         return true;
                     }
 
@@ -1880,7 +1880,7 @@ bool wmap_ui_message_filter(TigMessage* msg)
                             return true;
                         }
 
-                        if (sub_5627B0(&stru_64E7E8) && sub_5643E0(&stru_64E7E8)) {
+                        if (wmap_ui_can_travel_to_coords(&stru_64E7E8) && sub_5643E0(&stru_64E7E8)) {
                             dword_5C9AD8 = wmap_ui_routes[WMAP_ROUTE_TYPE_TOWN].length - 1;
                             wmap_ui_routes[WMAP_ROUTE_TYPE_TOWN].field_3C8 = 0;
                             return true;
@@ -2049,8 +2049,8 @@ bool wmap_ui_message_filter(TigMessage* msg)
                     return true;
                 case WMAP_UI_STATE_1:
                     if (wmap_info) {
-                        sub_562AF0(msg->data.mouse.x, msg->data.mouse.y);
-                        if (sub_5627B0(&stru_64E7E8)) {
+                        wmap_ui_edge_scroll(msg->data.mouse.x, msg->data.mouse.y);
+                        if (wmap_ui_can_travel_to_coords(&stru_64E7E8)) {
                             sub_564830(dword_5C9AD8, &stru_64E7E8);
                         }
                     }
@@ -2105,8 +2105,8 @@ bool wmap_ui_message_filter(TigMessage* msg)
                     return true;
                 case WMAP_UI_STATE_1:
                     if (inside) {
-                        sub_562AF0(msg->data.mouse.x, msg->data.mouse.y);
-                        if (!sub_5627B0(&stru_64E7E8)) {
+                        wmap_ui_edge_scroll(msg->data.mouse.x, msg->data.mouse.y);
+                        if (!wmap_ui_can_travel_to_coords(&stru_64E7E8)) {
                             return true;
                         }
                     }
@@ -2344,7 +2344,7 @@ bool wmap_ui_message_filter(TigMessage* msg)
 
                 for (int area = area_count() - 1; area > 0; area--) {
                     area_set_known(player_get_local_pc_obj(), area);
-                    sub_562800(area);
+                    wmap_ui_add_area_note(area);
                 }
 
                 wmap_info->refresh();
@@ -2359,7 +2359,7 @@ bool wmap_ui_message_filter(TigMessage* msg)
 }
 
 // 0x5627B0
-bool sub_5627B0(WmapCoords* coords)
+bool wmap_ui_can_travel_to_coords(WmapCoords* coords)
 {
     int64_t loc;
 
@@ -2371,6 +2371,12 @@ bool sub_5627B0(WmapCoords* coords)
     return sub_5627F0(loc);
 }
 
+// NOTE: Always true, and 0x5627F0 in the exe is a bare `return 1` too, so the
+// location is genuinely ignored rather than dropped in the port. Its only
+// caller is `wmap_ui_can_travel_to_coords`, which therefore also always says
+// yes - whatever check Troika meant to put here never shipped. Left as `sub_`;
+// there is no body to name it from.
+//
 // 0x5627F0
 bool sub_5627F0(int64_t loc)
 {
@@ -2380,7 +2386,7 @@ bool sub_5627F0(int64_t loc)
 }
 
 // 0x562800
-void sub_562800(int id)
+void wmap_ui_add_area_note(int id)
 {
     WmapNote note;
     const char* name;
@@ -2394,7 +2400,7 @@ void sub_562800(int id)
     if (name != NULL) {
         strncpy(note.str, name, sizeof(note.str));
         wmap_ui_loc_to_coords(area_get_location(id), &(note.coords));
-        sub_563C60(&note);
+        wmap_ui_add_note(&note);
     }
 }
 
@@ -2482,7 +2488,7 @@ void wmap_ui_navigate(int x, int y)
 }
 
 // 0x562AF0
-void sub_562AF0(int x, int y)
+void wmap_ui_edge_scroll(int x, int y)
 {
     if (y < wmap_ui_mode_info[wmap_ui_mode].field_14.y + 23) {
         wmap_ui_scroll_internal(0, 10);
@@ -3225,7 +3231,7 @@ void wmap_town_xy_to_coords(int x, int y, WmapCoords* coords)
 }
 
 // 0x563C60
-bool sub_563C60(WmapNote* note)
+bool wmap_ui_add_note(WmapNote* note)
 {
     WmapInfo* wmap_info;
     int index;
@@ -3849,7 +3855,7 @@ void sub_564A70(int64_t pc_obj, int64_t loc)
                 area_reset_last_known_area(pc_obj);
             }
             area_set_known(pc_obj, area);
-            sub_562800(area);
+            wmap_ui_add_area_note(area);
         }
 
         if (area_get_last_known_area(pc_obj) == area) {
@@ -4203,7 +4209,7 @@ void wmap_continent_refresh(void)
         if (wmap_note_type_info[note->type].enabled) {
             tmp_rect.x = vb_dst_rect.x + note->coords.x;
             tmp_rect.y = vb_dst_rect.y + note->coords.y + wmap_ui_window_frame.y;
-            sub_5656B0(tmp_rect.x, tmp_rect.y, &coords);
+            wmap_continent_scale_coords(tmp_rect.x, tmp_rect.y, &coords);
             tmp_rect.x = vb_dst_rect.x + coords.x;
             tmp_rect.y = vb_dst_rect.y + coords.y;
             tmp_rect.width = 2;
@@ -4217,7 +4223,7 @@ void wmap_continent_refresh(void)
         wmap_ui_loc_to_coords(area_get_location(area), &coords);
         tmp_rect.x = vb_dst_rect.x + note->coords.x;
         tmp_rect.y = vb_dst_rect.y + note->coords.y + wmap_ui_window_frame.y;
-        sub_5656B0(tmp_rect.x, tmp_rect.y, &coords);
+        wmap_continent_scale_coords(tmp_rect.x, tmp_rect.y, &coords);
         tmp_rect.x = vb_dst_rect.x + coords.x - 1;
         tmp_rect.y = vb_dst_rect.y + coords.y - 1;
         tmp_rect.width = 5;
@@ -4227,7 +4233,7 @@ void wmap_continent_refresh(void)
 
     tmp_rect.x = vb_dst_rect.x + wmap_ui_mode_info[WMAP_UI_MODE_WORLD].field_3C.x;
     tmp_rect.y = vb_dst_rect.y + wmap_ui_mode_info[WMAP_UI_MODE_WORLD].field_3C.y + wmap_ui_window_frame.y;
-    sub_5656B0(tmp_rect.x, tmp_rect.y, &coords);
+    wmap_continent_scale_coords(tmp_rect.x, tmp_rect.y, &coords);
     tmp_rect.x = vb_dst_rect.x + coords.x;
     tmp_rect.y = vb_dst_rect.y + coords.y;
     tmp_rect.width = 3;
@@ -4254,7 +4260,7 @@ void wmap_continent_refresh(void)
 }
 
 // 0x5656B0
-void sub_5656B0(int x, int y, WmapCoords* coords)
+void wmap_continent_scale_coords(int x, int y, WmapCoords* coords)
 {
     TigRect rect;
     int64_t width;
