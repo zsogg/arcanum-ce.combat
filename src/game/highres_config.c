@@ -55,6 +55,7 @@ void highres_config_reset(void)
     highres_config.menu_position = HIGHRES_MENU_POSITION_CENTER;
     highres_config.options_compact = false;
     highres_config.sprite_mirroring = true;
+    highres_config.logbook_font = 0;
     highres_config.logos = true;
     highres_config.intro = true;
 }
@@ -143,6 +144,10 @@ void highres_config_parse_line(char* line)
         highres_config.options_compact = value != 0;
     } else if (SDL_strcasecmp(key_start, "SpriteMirroring") == 0) {
         highres_config.sprite_mirroring = value != 0;
+    } else if (SDL_strcasecmp(key_start, "LogbookFont") == 0) {
+        if (value >= 0 && value <= 1) {
+            highres_config.logbook_font = value;
+        }
     } else if (SDL_strcasecmp(key_start, "Logos") == 0) {
         highres_config.logos = value != 0;
     } else if (SDL_strcasecmp(key_start, "Intro") == 0) {

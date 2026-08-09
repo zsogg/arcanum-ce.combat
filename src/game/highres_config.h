@@ -64,6 +64,13 @@ typedef struct HighResConfig {
      */
     bool sprite_mirroring;
 
+    /**
+     * Logbook text size: 0 keeps the stock size-12 font (interface art 229), 1
+     * uses the patch's size-14 (art 230) and the roomier page rects that go
+     * with it. `LogbookFont` in config.ini.
+     */
+    int logbook_font;
+
     bool logos;
     bool intro;
 } HighResConfig;
