@@ -65,7 +65,7 @@ bool tb_ui_init(GameInitInfo* init_info)
 
     callbacks.display_warning = display_warning;
     callbacks.display_msg = intgame_message_window_display_msg;
-    callbacks.field_58 = tb_ui_examine_object;
+    callbacks.examine_object = tb_ui_examine_object;
     callbacks.spell_add = spell_ui_add;
     callbacks.spell_maintain_add = spell_ui_maintain_add;
     callbacks.spell_maintain_end = spell_ui_maintain_end;
@@ -95,7 +95,7 @@ bool tb_ui_init(GameInitInfo* init_info)
     callbacks.reset_interface = tb_ui_reset_interface;
     callbacks.refresh_counters = tb_ui_refresh_counters;
     callbacks.item_spell_activate = tb_ui_item_spell_activate;
-    callbacks.field_88 = gameuilib_wants_mainmenu_set;
+    callbacks.wants_mainmenu_set = gameuilib_wants_mainmenu_set;
     callbacks.field_84 = sub_557730;
     callbacks.written_start_obj = written_ui_start_obj;
     callbacks.written_start_type = written_ui_start_type;
@@ -126,7 +126,7 @@ bool tb_ui_init(GameInitInfo* init_info)
     callbacks.field_FC = sub_549310;
     callbacks.refresh_cursor = intgame_refresh_cursor;
     callbacks.field_104 = sub_57A6C0;
-    callbacks.field_108 = inven_ui_drop_dragged_item;
+    callbacks.drop_dragged_item = inven_ui_drop_dragged_item;
     callbacks.wmap_rnd_timeevent_process = wmap_rnd_timeevent_process;
     callbacks.queue_slide = slide_ui_enqueue;
     callbacks.gameuilib_mod_load = gameuilib_mod_load;

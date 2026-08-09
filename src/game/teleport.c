@@ -493,7 +493,7 @@ void sub_4D3D60(int64_t obj)
     case OBJ_TYPE_PC:
         obj_field_handle_set(obj, OBJ_F_CRITTER_FLEEING_FROM, OBJ_HANDLE_NULL);
         if (player_is_local_pc_obj(obj)) {
-            sub_460B20();
+            ui_drop_dragged_item();
         }
     }
 

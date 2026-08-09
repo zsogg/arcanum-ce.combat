@@ -5330,7 +5330,7 @@ void object_location_changed(int64_t obj, int a2)
     v1 = object_hover_obj_get();
     if (v1 != OBJ_HANDLE_NULL) {
         if (v1 == obj || player_is_local_pc_obj(obj)) {
-            sub_4604F0(player_get_local_pc_obj(), v1);
+            ui_examine_object(player_get_local_pc_obj(), v1);
         }
     }
 

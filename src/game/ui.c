@@ -214,10 +214,10 @@ void ui_spell_maintain_refresh(void)
 }
 
 // 0x4604F0
-void sub_4604F0(int64_t a1, int64_t a2)
+void ui_examine_object(int64_t a1, int64_t a2)
 {
-    if (ui_callbacks.field_58 != NULL) {
-        ui_callbacks.field_58(a1, a2);
+    if (ui_callbacks.examine_object != NULL) {
+        ui_callbacks.examine_object(a1, a2);
     }
 }
 
@@ -345,10 +345,10 @@ void sub_4606C0(int a1)
 }
 
 // 0x4606E0
-void sub_4606E0(void)
+void ui_wants_mainmenu_set(void)
 {
-    if (ui_callbacks.field_88 != NULL) {
-        ui_callbacks.field_88();
+    if (ui_callbacks.wants_mainmenu_set != NULL) {
+        ui_callbacks.wants_mainmenu_set();
     }
 }
 
@@ -571,10 +571,10 @@ int sub_460B00(int a1, TargetDescriptor* td)
 }
 
 // 0x460B20
-void sub_460B20(void)
+void ui_drop_dragged_item(void)
 {
-    if (ui_callbacks.field_108 != NULL) {
-        ui_callbacks.field_108();
+    if (ui_callbacks.drop_dragged_item != NULL) {
+        ui_callbacks.drop_dragged_item();
     }
 }
 

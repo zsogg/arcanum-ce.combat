@@ -240,7 +240,7 @@ void sub_4EE3A0(int64_t obj, int64_t a2)
     Packet100 pkt;
 
     if (player_is_local_pc_obj(obj)) {
-        sub_4604F0(obj, a2);
+        ui_examine_object(obj, a2);
         return;
     }
 
@@ -337,7 +337,7 @@ void sub_4EE5E0(Packet100* pkt)
         mp_oid_to_obj(pkt->d.s.field_8, &v1);
         mp_oid_to_obj(pkt->d.s.field_20, &v2);
         if (player_is_local_pc_obj(v1)) {
-            sub_4604F0(v1, v2);
+            ui_examine_object(v1, v2);
         }
         break;
     case 8:

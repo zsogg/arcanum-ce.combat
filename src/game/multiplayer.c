@@ -1043,7 +1043,7 @@ void sub_4A2A30(void)
     if (off_5F0E04 != NULL) {
         off_5F0E04();
     } else {
-        sub_4606E0();
+        ui_wants_mainmenu_set();
     }
 }
 
