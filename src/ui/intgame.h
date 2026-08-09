@@ -104,7 +104,7 @@ bool intgame_pc_lens_check_pt(int x, int y);
 bool intgame_pc_lens_check_pt_unscale(int x, int y);
 void intgame_pc_lens_redraw(void);
 void iso_interface_refresh(void);
-bool sub_5517A0(TigMessage* msg);
+bool intgame_msg_is_over_iso_window(TigMessage* msg);
 bool intgame_get_location_under_cursor(int64_t* loc_ptr);
 IntgameMode intgame_mode_get(void);
 bool intgame_mode_set(IntgameMode mode);

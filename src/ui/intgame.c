@@ -158,13 +158,13 @@ static void intgame_mt_spells_disable(void);
 static void iso_interface_window_enable(RotatingWindowType window_type);
 static void intgame_mt_spells_enable(void);
 static int find_interface_window_index(int x, int y);
-static void sub_5517F0(void);
-static bool sub_5518C0(int x, int y);
-static void sub_551910(TigMessage* msg);
-static void sub_551A10(int64_t obj);
+static void intgame_hover_examine_refresh(void);
+static bool intgame_xy_is_over_iso_window(int x, int y);
+static void intgame_hover_examine(TigMessage* msg);
+static void intgame_center_on_obj(int64_t obj);
 static void intgame_force_fullscreen(void);
 static void intgame_unforce_fullscreen(void);
-static void sub_551F80(void);
+static void intgame_update_target_flags(void);
 static bool sub_552050(int x, int y, TargetDescriptor* td);
 static void sub_5520D0(RotatingWindowType window_type, int step);
 static void iso_interface_window_swap(RotatingWindowType window_type);
@@ -2750,7 +2750,7 @@ void intgame_process_event(TigMessage* msg)
         case TIG_MESSAGE_MOUSE:
             switch (msg->data.mouse.event) {
             case TIG_MESSAGE_MOUSE_LEFT_BUTTON_DOWN:
-                if (sub_5517A0(msg)
+                if (intgame_msg_is_over_iso_window(msg)
                     && sub_552050(msg->data.mouse.x, msg->data.mouse.y, &td)) {
                     if (td.is_loc) {
                         if (inven_ui_drag_item_obj_get() != OBJ_HANDLE_NULL) {
@@ -2825,7 +2825,7 @@ void intgame_process_event(TigMessage* msg)
 
                             tig_mouse_get_state(&mouse_state);
                             if (location_at(mouse_state.x, mouse_state.y, &loc)
-                                && sub_5517A0(msg)) {
+                                && intgame_msg_is_over_iso_window(msg)) {
                                 int64_t pc_loc;
                                 tig_art_id_t aid;
                                 int rot;
@@ -2849,7 +2849,7 @@ void intgame_process_event(TigMessage* msg)
                 }
                 break;
             case TIG_MESSAGE_MOUSE_IDLE:
-                sub_551910(msg);
+                intgame_hover_examine(msg);
             default:
                 break;
             }
@@ -2906,7 +2906,7 @@ void intgame_process_event(TigMessage* msg)
                 spell_ui_cancel();
                 break;
             case TIG_MESSAGE_MOUSE_IDLE:
-                sub_551910(msg);
+                intgame_hover_examine(msg);
                 break;
             default:
                 break;
@@ -2976,7 +2976,7 @@ void intgame_process_event(TigMessage* msg)
                 skill_ui_cancel();
                 break;
             case TIG_MESSAGE_MOUSE_IDLE:
-                sub_551910(msg);
+                intgame_hover_examine(msg);
                 break;
             default:
                 break;
@@ -3023,7 +3023,7 @@ void intgame_process_event(TigMessage* msg)
         case TIG_MESSAGE_MOUSE:
             switch (msg->data.mouse.event) {
             case TIG_MESSAGE_MOUSE_LEFT_BUTTON_DOWN:
-                if (sub_5517A0(msg)
+                if (intgame_msg_is_over_iso_window(msg)
                     && target_pick_at_screen_xy(msg->data.mouse.x, msg->data.mouse.y, &td, intgame_fullscreen)
                     && td.is_loc
                     && !inven_ui_drag_item_obj_get()
@@ -3047,7 +3047,7 @@ void intgame_process_event(TigMessage* msg)
                 dword_64C6D8 = false;
                 break;
             case TIG_MESSAGE_MOUSE_IDLE:
-                sub_551910(msg);
+                intgame_hover_examine(msg);
                 break;
             default:
                 break;
@@ -3083,7 +3083,7 @@ void intgame_process_event(TigMessage* msg)
                 item_ui_deactivate();
                 break;
             case TIG_MESSAGE_MOUSE_IDLE:
-                sub_551910(msg);
+                intgame_hover_examine(msg);
                 break;
             default:
                 break;
@@ -3116,7 +3116,7 @@ void intgame_process_event(TigMessage* msg)
                 follower_ui_end_order_mode();
                 break;
             case TIG_MESSAGE_MOUSE_IDLE:
-                sub_551910(msg);
+                intgame_hover_examine(msg);
                 break;
             default:
                 break;
@@ -3264,7 +3264,7 @@ void intgame_combat_mode_toggle(void)
         combat_critter_activate_combat_mode(pc_obj);
     }
 
-    sub_5517F0();
+    intgame_hover_examine_refresh();
 
     obj = qword_64C690;
     if (obj == OBJ_HANDLE_NULL) {
@@ -4469,7 +4469,7 @@ void intgame_pc_lens_do(PcLensMode mode, PcLens* pc_lens)
         }
         break;
     case PC_LENS_MODE_PASSTHROUGH:
-        sub_551A10(player_get_local_pc_obj());
+        intgame_center_on_obj(player_get_local_pc_obj());
 
         intgame_pc_lens.window_handle = pc_lens->window_handle;
         intgame_pc_lens.art_id = pc_lens->art_id;
@@ -4803,7 +4803,7 @@ int find_interface_window_index(int x, int y)
 }
 
 // 0x5517A0
-bool sub_5517A0(TigMessage* msg)
+bool intgame_msg_is_over_iso_window(TigMessage* msg)
 {
     tig_window_handle_t window_handle;
     TigWindowData window_data;
@@ -4813,7 +4813,9 @@ bool sub_5517A0(TigMessage* msg)
     }
 
     if (window_handle != dword_64C52C) {
-        // FIXME: Meaningless.
+        // NOTE: Meaningless, and Troika's - 0x5517A0 in the exe makes the same
+        // call and drops the result. The twin below does it too. Faithful, so
+        // left alone.
         tig_window_data(window_handle, &window_data);
         return false;
     }
@@ -4822,7 +4824,7 @@ bool sub_5517A0(TigMessage* msg)
 }
 
 // 0x5517F0
-void sub_5517F0(void)
+void intgame_hover_examine_refresh(void)
 {
     TigMouseState mouse_state;
     TigMessage msg;
@@ -4832,7 +4834,7 @@ void sub_5517F0(void)
         // is only interested in mouse coordinates.
         msg.data.mouse.x = mouse_state.x;
         msg.data.mouse.y = mouse_state.y;
-        sub_551910(&msg);
+        intgame_hover_examine(&msg);
     }
 }
 
@@ -4843,7 +4845,7 @@ bool intgame_get_location_under_cursor(int64_t* loc_ptr)
     TargetDescriptor td;
 
     if (tig_mouse_get_state(&mouse_state) == TIG_OK
-        && sub_5518C0(mouse_state.x, mouse_state.y)
+        && intgame_xy_is_over_iso_window(mouse_state.x, mouse_state.y)
         && target_pick_at_screen_xy_ex(mouse_state.x, mouse_state.y, &td, TGT_TILE, intgame_fullscreen)
         && td.is_loc) {
         *loc_ptr = td.loc;
@@ -4855,7 +4857,7 @@ bool intgame_get_location_under_cursor(int64_t* loc_ptr)
 }
 
 // 0x5518C0
-bool sub_5518C0(int x, int y)
+bool intgame_xy_is_over_iso_window(int x, int y)
 {
     tig_window_handle_t window_handle;
     TigWindowData window_data;
@@ -4865,7 +4867,9 @@ bool sub_5518C0(int x, int y)
     }
 
     if (window_handle != dword_64C52C) {
-        // FIXME: Meaningless.
+        // NOTE: Meaningless, and Troika's - 0x5517A0 in the exe makes the same
+        // call and drops the result. The twin below does it too. Faithful, so
+        // left alone.
         tig_window_data(window_handle, &window_data);
         return false;
     }
@@ -4874,12 +4878,12 @@ bool sub_5518C0(int x, int y)
 }
 
 // 0x551910
-void sub_551910(TigMessage* msg)
+void intgame_hover_examine(TigMessage* msg)
 {
     TargetDescriptor td;
 
-    if (sub_5517A0(msg)) {
-        sub_551F80();
+    if (intgame_msg_is_over_iso_window(msg)) {
+        intgame_update_target_flags();
 
         if (!map_is_clearing_objects()) {
             if (target_pick_at_screen_xy_ex(msg->data.mouse.x, msg->data.mouse.y, &td, qword_5C7280, intgame_fullscreen)) {
@@ -4904,7 +4908,7 @@ IntgameMode intgame_mode_get(void)
 }
 
 // 0x551A10
-void sub_551A10(int64_t obj)
+void intgame_center_on_obj(int64_t obj)
 {
     int64_t location;
     int64_t x;
@@ -4972,7 +4976,7 @@ bool intgame_mode_set(IntgameMode mode)
             combat_check_use_skill(player_get_local_pc_obj());
             break;
         case INTGAME_MODE_DIALOG:
-            sub_551A10(pc_obj);
+            intgame_center_on_obj(pc_obj);
             v1 = 1;
             if (v2) {
                 dialog_ui_end_dialog(player_get_local_pc_obj(), 0);
@@ -5085,7 +5089,7 @@ bool intgame_mode_set(IntgameMode mode)
         case INTGAME_MODE_MAIN:
         case INTGAME_MODE_SPELL:
         case INTGAME_MODE_SKILL:
-            sub_5517F0();
+            intgame_hover_examine_refresh();
             break;
         case INTGAME_MODE_DIALOG:
             compact_ui_message_window_hide();
@@ -5168,7 +5172,7 @@ bool intgame_mode_supports_scrolling(IntgameMode mode)
 }
 
 // 0x551F80
-void sub_551F80(void)
+void intgame_update_target_flags(void)
 {
     int64_t pc_obj;
 
@@ -5198,7 +5202,7 @@ void sub_551F80(void)
 // 0x552050
 bool sub_552050(int x, int y, TargetDescriptor* td)
 {
-    sub_551F80();
+    intgame_update_target_flags();
     return target_pick_at_screen_xy(x, y, td, intgame_fullscreen);
 }
 
@@ -6299,7 +6303,7 @@ void sub_553A70(TigMessage* msg)
     int64_t obj;
     TargetDescriptor td;
 
-    if (!sub_5517A0(msg)) {
+    if (!intgame_msg_is_over_iso_window(msg)) {
         return;
     }
 

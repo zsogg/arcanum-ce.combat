@@ -375,12 +375,12 @@ bool dialog_ui_message_filter(TigMessage* msg)
 
     option = intgame_dialog_get_option(msg);
     if (option == -1) {
-        sub_5517A0(msg);
+        intgame_msg_is_over_iso_window(msg);
         return true;
     }
 
     if (!dialog_ui_process_option(entry, option)) {
-        sub_5517A0(msg);
+        intgame_msg_is_over_iso_window(msg);
     }
 
     return true;
