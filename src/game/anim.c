@@ -56,23 +56,23 @@ static bool anim_is_not_turn_based(AnimRunInfo* run_info);
 static bool anim_add_parented_goal(AnimRunInfo* run_info);
 static bool anim_create_spell_projectile(AnimRunInfo* run_info);
 static bool anim_projectile_create(tig_art_id_t art_id, int64_t self_obj, int64_t target_obj, int64_t loc, int64_t target_loc, int spell, int64_t* obj_ptr, AnimID anim_id, ObjectID oid);
-static bool sub_424BC0(AnimRunInfo* run_info);
+static bool anim_set_projectile_rotation(AnimRunInfo* run_info);
 static bool anim_destroy_obj(AnimRunInfo* run_info);
 static bool anim_is_at_location(AnimRunInfo* run_info);
-static bool sub_424E00(AnimRunInfo* run_info);
+static bool anim_pick_step_aside_tile(AnimRunInfo* run_info);
 static bool anim_target_in_range(AnimRunInfo* run_info);
 static bool anim_tile_in_range(AnimRunInfo* run_info);
 static bool anim_target_in_walk_range(AnimRunInfo* run_info);
 static bool anim_finish_move(AnimRunInfo* run_info);
 static bool anim_finish_move_near(AnimRunInfo* run_info);
-static bool sub_425590(AnimRunInfo* run_info);
+static bool anim_finish_move_near_combat(AnimRunInfo* run_info);
 static bool anim_has_path(AnimRunInfo* run_info);
 static bool sub_425760(int64_t obj, int64_t loc, int64_t adjacent_loc, int rot);
 static void sub_4257E0(int64_t obj, unsigned int* flags_ptr);
 static bool sub_425840(int64_t a1, int64_t a2, int64_t a3, int a4, int64_t a5);
-static bool sub_425930(AnimRunInfo* run_info);
+static bool anim_create_wander_path(AnimRunInfo* run_info);
 static bool sub_425BF0(PathCreateInfo* path_create_info, bool a2);
-static bool sub_425D60(AnimRunInfo* run_info);
+static bool anim_create_wander_dark_path(AnimRunInfo* run_info);
 static bool anim_create_path_to_tile(AnimRunInfo* run_info);
 static void anim_create_path_max_length(int64_t a1, const char* msg, int value);
 static int sub_426320(AnimPath* anim_path, int64_t from, int64_t to, int64_t obj);
@@ -80,7 +80,7 @@ static int sub_426500(int64_t obj, int64_t to, AnimPath* path, unsigned int flag
 static bool anim_create_straight_path(AnimRunInfo* run_info);
 static bool anim_create_knockback_path(AnimRunInfo* run_info);
 static bool anim_create_projectile_path(AnimRunInfo* run_info);
-static bool sub_426A80(AnimRunInfo* run_info);
+static bool anim_create_path_away_from_obj(AnimRunInfo* run_info);
 static bool anim_is_concealed_npc(AnimRunInfo* run_info);
 static bool anim_is_prone(AnimRunInfo* run_info);
 static bool AGendAnimStunAnim(AnimRunInfo* run_info);
@@ -93,7 +93,7 @@ static bool sub_427710(AnimRunInfo* run_info);
 static bool sub_427720(AnimRunInfo* run_info);
 static bool anim_create_path_near_tile(AnimRunInfo* run_info);
 static bool anim_create_path_near_obj(AnimRunInfo* run_info);
-static bool sub_4280D0(AnimRunInfo* run_info);
+static bool anim_create_path_near_obj_combat(AnimRunInfo* run_info);
 static bool anim_is_portal(AnimRunInfo* run_info);
 static bool anim_portal_is_closed_and_idle(AnimRunInfo* run_info);
 static bool anim_try_open_portal(AnimRunInfo* run_info);
@@ -123,7 +123,7 @@ static bool anim_target_is_alive(AnimRunInfo* run_info);
 static bool anim_can_attack_target(AnimRunInfo* run_info);
 static bool anim_can_reach_target(int64_t source_obj, int64_t target_obj);
 static bool anim_play_queued_sfx(AnimRunInfo* run_info);
-static bool sub_429760(AnimRunInfo* run_info);
+static bool anim_should_auto_attack(AnimRunInfo* run_info);
 static bool anim_should_fidget(AnimRunInfo* run_info);
 static bool anim_target_in_weapon_range(AnimRunInfo* run_info);
 static bool anim_wields_ranged_weapon(AnimRunInfo* run_info);
@@ -146,7 +146,7 @@ static bool anim_run_skill_invocation(AnimRunInfo* run_info);
 static bool anim_skill_succeeded(AnimRunInfo* run_info);
 static bool anim_skill_is_pickpocket(AnimRunInfo* run_info);
 static bool anim_skill_is_picklock(AnimRunInfo* run_info);
-static bool sub_42A4E0(AnimRunInfo* run_info);
+static bool anim_run_skill_no_cost(AnimRunInfo* run_info);
 static bool anim_apply_attack(AnimRunInfo* run_info);
 static bool AGapplyFireDmg(AnimRunInfo* run_info);
 static bool anim_has_ranged_weapon(AnimRunInfo* run_info);
@@ -158,14 +158,14 @@ static bool anim_target_in_dialog_range(AnimRunInfo* run_info);
 static bool anim_begin_dialog(AnimRunInfo* run_info);
 static bool anim_cleanup_unconceal(AnimRunInfo* run_info);
 static bool anim_cleanup_stand_anim(AnimRunInfo* run_info);
-static bool sub_42B250(AnimRunInfo* run_info);
-static bool sub_42B440(AnimRunInfo* run_info);
+static bool anim_cleanup_stunned(AnimRunInfo* run_info);
+static bool anim_cleanup_throw_item(AnimRunInfo* run_info);
 static bool anim_cleanup_door_open(AnimRunInfo* run_info);
 static bool anim_cleanup_door_closed(AnimRunInfo* run_info);
 static bool anim_portal_is_not_sticky(AnimRunInfo* run_info);
 static bool anim_doorway_is_clear(AnimRunInfo* run_info);
 static bool anim_try_run(AnimRunInfo* run_info);
-static bool sub_42B9C0(AnimRunInfo* run_info);
+static bool anim_begin_attack(AnimRunInfo* run_info);
 static bool AGsetObjArtDeathAnim(AnimRunInfo* run_info);
 static bool AGsetObjArtAnim(AnimRunInfo* run_info);
 static bool anim_set_scratch_obj(AnimRunInfo* run_info);
@@ -217,8 +217,8 @@ static bool AGbeginAnimMove(AnimRunInfo* run_info);
 static void sub_42EDC0(AnimRunInfo* run_info, int64_t obj, tig_art_id_t* art_id_ptr, bool a4, int* a5);
 static void sub_42EE90(int64_t obj, DateTime* pause_time);
 static bool sub_42EF60(int a1, int a2, int a3);
-static bool sub_42F000(AnimRunInfo* run_info);
-static bool sub_42F140(AnimRunInfo* run_info);
+static bool anim_vault_to_next_tile(AnimRunInfo* run_info);
+static bool anim_advance_vault_step(AnimRunInfo* run_info);
 static bool AGbeginAnimMoveStraight(AnimRunInfo* run_info);
 static bool AGupdateAnimMoveStraight(AnimRunInfo* run_info);
 static bool anim_begin_projectile_move(AnimRunInfo* run_info);
@@ -638,8 +638,8 @@ static AnimGoalNode anim_goal_node_jump_window = {
         /*  5 */ { AGbeginAnimJump, { AGDATA_SELF_OBJ, AGDATA_ANIM_ID }, -1, 10, ANIM_DELAY_NONE, ANIM_FLOW_YIELD, ANIM_DELAY_NONE },
         /*  6 */ { AGsetObjArtAnim, { AGDATA_SELF_OBJ, -1 }, 1, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE, 9, ANIM_DELAY_NONE },
         /*  7 */ { anim_reached_action_frame, { AGDATA_SELF_OBJ, AGDATA_ANIM_ID }, -1, ANIM_FLOW_YIELD, ANIM_DELAY_PAUSE_TIME, 8, ANIM_DELAY_NONE },
-        /*  8 */ { sub_42F000, { AGDATA_SELF_OBJ, AGDATA_ANIM_ID }, -1, ANIM_FLOW_YIELD, ANIM_DELAY_PAUSE_TIME, ANIM_FLOW_YIELD, ANIM_DELAY_PAUSE_TIME },
-        /*  9 */ { sub_42F140, { AGDATA_SELF_OBJ, AGDATA_ANIM_ID }, -1, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE, ANIM_FLOW_POP_GOAL | ANIM_FLOW_KEEP_PATH, ANIM_DELAY_NONE },
+        /*  8 */ { anim_vault_to_next_tile, { AGDATA_SELF_OBJ, AGDATA_ANIM_ID }, -1, ANIM_FLOW_YIELD, ANIM_DELAY_PAUSE_TIME, ANIM_FLOW_YIELD, ANIM_DELAY_PAUSE_TIME },
+        /*  9 */ { anim_advance_vault_step, { AGDATA_SELF_OBJ, AGDATA_ANIM_ID }, -1, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE, ANIM_FLOW_POP_GOAL | ANIM_FLOW_KEEP_PATH, ANIM_DELAY_NONE },
         /* 10 */ { anim_spend_action_points, { AGDATA_SELF_OBJ, -1 }, 1, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE },
         /* 11 */ { anim_portal_is_closed_and_idle, { AGDATA_SCRATCH_OBJ, -1 }, -1, 5, ANIM_DELAY_NONE, ANIM_FLOW_PUSH | ANIM_FLOW_YIELD | ANIM_FLOW_RESET_PATH | AG_OPEN_DOOR, 50 },
         /* 12 */ { 0 },
@@ -770,14 +770,14 @@ static AnimGoalNode anim_goal_node_attempt_attack = {
         /*  2 */ { AGupdateAnimAttack, { AGDATA_SELF_OBJ, -1 }, -1, 9, ANIM_DELAY_NONE, 7, ANIM_DELAY_NONE },
         /*  3 */ { anim_face_target, { AGDATA_SELF_OBJ, AGDATA_TARGET_OBJ }, -1, 10, ANIM_DELAY_NONE, 4, ANIM_DELAY_NONE },
         /*  4 */ { anim_target_in_weapon_range, { AGDATA_SELF_OBJ, AGDATA_TARGET_OBJ }, -1, 12, ANIM_DELAY_NONE, 5, ANIM_DELAY_NONE },
-        /*  5 */ { sub_42B9C0, { AGDATA_SELF_OBJ, AGDATA_TARGET_OBJ }, -1, 10, ANIM_DELAY_NONE, 6, ANIM_DELAY_NONE },
+        /*  5 */ { anim_begin_attack, { AGDATA_SELF_OBJ, AGDATA_TARGET_OBJ }, -1, 10, ANIM_DELAY_NONE, 6, ANIM_DELAY_NONE },
         /*  6 */ { AGbeginAnimAttack, { AGDATA_SELF_OBJ, AGDATA_ANIM_ID }, -1, 10, ANIM_DELAY_NONE, ANIM_FLOW_YIELD, ANIM_DELAY_NONE },
         /*  7 */ { anim_reached_action_frame, { AGDATA_SELF_OBJ, AGDATA_ANIM_ID }, -1, ANIM_FLOW_YIELD, ANIM_DELAY_PAUSE_TIME, 13, ANIM_DELAY_NONE },
         /*  8 */ { anim_apply_attack, { AGDATA_SELF_OBJ, AGDATA_TARGET_OBJ }, -1, 10, ANIM_DELAY_NONE, ANIM_FLOW_YIELD, ANIM_DELAY_PAUSE_TIME },
         /*  9 */ { anim_has_ranged_weapon, { AGDATA_SELF_OBJ, -1 }, -1, 10, ANIM_DELAY_NONE, 10, ANIM_DELAY_NONE },
         /* 10 */ { AGsetObjArtAnim, { AGDATA_SELF_OBJ, -1 }, 0, 11, ANIM_DELAY_NONE, 11, ANIM_DELAY_NONE },
         /* 11 */ { anim_obj_is_valid, { AGDATA_SELF_OBJ, -1 }, -1, 12, ANIM_DELAY_NONE, 12, ANIM_DELAY_NONE },
-        /* 12 */ { sub_429760, { AGDATA_SELF_OBJ, AGDATA_TARGET_OBJ }, -1, ANIM_FLOW_POP_GOAL, ANIM_DELAY_NONE, ANIM_FLOW_REPLACE_GOAL | ANIM_FLOW_NO_CLEANUP | AG_ATTACK, 5 },
+        /* 12 */ { anim_should_auto_attack, { AGDATA_SELF_OBJ, AGDATA_TARGET_OBJ }, -1, ANIM_FLOW_POP_GOAL, ANIM_DELAY_NONE, ANIM_FLOW_REPLACE_GOAL | ANIM_FLOW_NO_CLEANUP | AG_ATTACK, 5 },
         /* 13 */ { anim_target_in_weapon_range, { AGDATA_SELF_OBJ, AGDATA_TARGET_OBJ }, -1, 12, ANIM_DELAY_NONE, 8, ANIM_DELAY_NONE },
         /* 14 */ { 0 },
         /* 15 */ { anim_cleanup_stand_anim, { AGDATA_SELF_OBJ, -1 }, 1, 0, ANIM_DELAY_NONE, 0, ANIM_DELAY_NONE },
@@ -1201,7 +1201,7 @@ static AnimGoalNode anim_goal_node_projectile = {
         /*  1 */ { anim_is_not_animating, { AGDATA_SELF_OBJ, -1 }, -1, 2, ANIM_DELAY_NONE, 3, ANIM_DELAY_NONE },
         /*  2 */ { AGupdateAnimProjectileMoveStraight, { AGDATA_SELF_OBJ, AGDATA_TARGET_OBJ }, -1, ANIM_FLOW_POP_GOAL, ANIM_DELAY_NONE, ANIM_FLOW_YIELD, ANIM_DELAY_CALLBACK },
         /*  3 */ { anim_is_at_location, { AGDATA_SELF_OBJ, AGDATA_TARGET_TILE }, -1, 4, ANIM_DELAY_NONE, ANIM_FLOW_POP_GOAL, ANIM_DELAY_NONE },
-        /*  4 */ { sub_424BC0, { AGDATA_SELF_OBJ, AGDATA_TARGET_OBJ }, -1, ANIM_FLOW_POP_GOAL, ANIM_DELAY_NONE, 5, ANIM_DELAY_NONE },
+        /*  4 */ { anim_set_projectile_rotation, { AGDATA_SELF_OBJ, AGDATA_TARGET_OBJ }, -1, ANIM_FLOW_POP_GOAL, ANIM_DELAY_NONE, 5, ANIM_DELAY_NONE },
         /*  5 */ { anim_has_path, { AGDATA_SELF_OBJ, -1 }, -1, 6, ANIM_DELAY_NONE, 7, ANIM_DELAY_NONE },
         /*  6 */ { anim_create_projectile_path, { AGDATA_SELF_OBJ, AGDATA_TARGET_TILE }, -1, ANIM_FLOW_POP_GOAL, ANIM_DELAY_NONE, 7, ANIM_DELAY_NONE },
         /*  7 */ { anim_begin_projectile_move, { AGDATA_SELF_OBJ, -1 }, -1, ANIM_FLOW_POP_GOAL, ANIM_DELAY_NONE, ANIM_FLOW_YIELD, ANIM_DELAY_NONE },
@@ -1239,7 +1239,7 @@ static AnimGoalNode anim_goal_node_throw_item = {
         /* 12 */ { 0 },
         /* 13 */ { 0 },
         /* 14 */ { 0 },
-        /* 15 */ { sub_42B440, { AGDATA_SELF_OBJ, -1 }, 1, 0, ANIM_DELAY_NONE, 0, ANIM_DELAY_NONE },
+        /* 15 */ { anim_cleanup_throw_item, { AGDATA_SELF_OBJ, -1 }, 1, 0, ANIM_DELAY_NONE, 0, ANIM_DELAY_NONE },
     },
 };
 
@@ -1634,7 +1634,7 @@ static AnimGoalNode anim_goal_node_move_away_from_obj = {
         /*  2 */ { anim_is_concealed_npc, { AGDATA_SELF_OBJ, -1 }, -1, 3, ANIM_DELAY_NONE, ANIM_FLOW_PUSH | AG_UNCONCEAL, ANIM_DELAY_NONE },
         /*  3 */ { anim_target_in_range, { AGDATA_SELF_OBJ, AGDATA_TARGET_OBJ }, -1, ANIM_FLOW_POP_GOAL, ANIM_DELAY_NONE, 5, ANIM_DELAY_NONE },
         /*  4 */ { anim_has_path, { AGDATA_SELF_OBJ, -1 }, -1, 5, ANIM_DELAY_NONE, ANIM_FLOW_PUSH | AG_ATTEMPT_MOVE, ANIM_DELAY_NONE },
-        /*  5 */ { sub_426A80, { AGDATA_SELF_OBJ, AGDATA_TARGET_OBJ }, -1, 6, ANIM_DELAY_NONE, ANIM_FLOW_PUSH | AG_ATTEMPT_MOVE, ANIM_DELAY_NONE },
+        /*  5 */ { anim_create_path_away_from_obj, { AGDATA_SELF_OBJ, AGDATA_TARGET_OBJ }, -1, 6, ANIM_DELAY_NONE, ANIM_FLOW_PUSH | AG_ATTEMPT_MOVE, ANIM_DELAY_NONE },
         /*  6 */ { anim_face_away_from_target, { AGDATA_SELF_OBJ, AGDATA_TARGET_OBJ }, -1, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE, 7, ANIM_DELAY_NONE },
         /*  7 */ { anim_set_no_flee, { AGDATA_SELF_OBJ, -1 }, -1, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE },
         /*  8 */ { 0 },
@@ -1779,7 +1779,7 @@ static AnimGoalNode anim_goal_node_animate_stunned = {
         /* 12 */ { 0 },
         /* 13 */ { 0 },
         /* 14 */ { 0 },
-        /* 15 */ { sub_42B250, { AGDATA_SELF_OBJ, -1 }, 1, 0, ANIM_DELAY_NONE, 0, ANIM_DELAY_NONE },
+        /* 15 */ { anim_cleanup_stunned, { AGDATA_SELF_OBJ, -1 }, 1, 0, ANIM_DELAY_NONE, 0, ANIM_DELAY_NONE },
     },
 };
 
@@ -1981,7 +1981,7 @@ static AnimGoalNode anim_goal_node_wander = {
     0,
     { AG_MOVE_NEAR_TILE, -1, -1 },
     {
-        /*  1 */ { sub_425930, { AGDATA_SELF_OBJ, -1 }, -1, ANIM_FLOW_YIELD, 300, ANIM_FLOW_REPLACE_GOAL | AG_MOVE_NEAR_TILE, 300 },
+        /*  1 */ { anim_create_wander_path, { AGDATA_SELF_OBJ, -1 }, -1, ANIM_FLOW_YIELD, 300, ANIM_FLOW_REPLACE_GOAL | AG_MOVE_NEAR_TILE, 300 },
         /*  2 */ { 0 },
         /*  3 */ { 0 },
         /*  4 */ { 0 },
@@ -2008,7 +2008,7 @@ static AnimGoalNode anim_goal_node_wander_seek_darkness = {
     0,
     { AG_MOVE_NEAR_TILE, -1, -1 },
     {
-        /*  1 */ { sub_425D60, { AGDATA_SELF_OBJ, -1 }, -1, ANIM_FLOW_YIELD, 300, ANIM_FLOW_REPLACE_GOAL | AG_MOVE_NEAR_TILE, 300 },
+        /*  1 */ { anim_create_wander_dark_path, { AGDATA_SELF_OBJ, -1 }, -1, ANIM_FLOW_YIELD, 300, ANIM_FLOW_REPLACE_GOAL | AG_MOVE_NEAR_TILE, 300 },
         /*  2 */ { 0 },
         /*  3 */ { 0 },
         /*  4 */ { 0 },
@@ -2040,7 +2040,7 @@ static AnimGoalNode anim_goal_node_use_picklock_skill_on = {
         /*  3 */ { anim_face_target, { AGDATA_SELF_OBJ, AGDATA_TARGET_OBJ }, -1, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE, 4, ANIM_DELAY_NONE },
         /*  4 */ { AGsetObjArtAnim, { AGDATA_SELF_OBJ, -1 }, 0xC, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE, 5, ANIM_DELAY_NONE },
         /*  5 */ { AGbeginAnimPickLock, { AGDATA_SELF_OBJ, AGDATA_ANIM_ID }, -1, 7, ANIM_DELAY_NONE, ANIM_FLOW_YIELD, ANIM_DELAY_PAUSE_TIME },
-        /*  6 */ { sub_42A4E0, { AGDATA_SELF_OBJ, AGDATA_TARGET_OBJ }, -1, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE, ANIM_FLOW_YIELD, ANIM_DELAY_PAUSE_TIME },
+        /*  6 */ { anim_run_skill_no_cost, { AGDATA_SELF_OBJ, AGDATA_TARGET_OBJ }, -1, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE, ANIM_FLOW_YIELD, ANIM_DELAY_PAUSE_TIME },
         /*  7 */ { AGsetObjArtAnim, { AGDATA_SELF_OBJ, -1 }, 0, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE, ANIM_FLOW_POP_GOAL, ANIM_DELAY_NONE },
         /*  8 */ { 0 },
         /*  9 */ { 0 },
@@ -2062,7 +2062,7 @@ static AnimGoalNode anim_goal_node_please_move = {
     0,
     { AG_MOVE_NEAR_TILE, AG_RUN_TO_TILE, AG_MOVE_TO_TILE },
     {
-        /*  1 */ { sub_424E00, { AGDATA_SELF_OBJ, AGDATA_TARGET_TILE }, -1, ANIM_FLOW_POP_GOAL, ANIM_DELAY_NONE, 2, ANIM_DELAY_CALLBACK },
+        /*  1 */ { anim_pick_step_aside_tile, { AGDATA_SELF_OBJ, AGDATA_TARGET_TILE }, -1, ANIM_FLOW_POP_GOAL, ANIM_DELAY_NONE, 2, ANIM_DELAY_CALLBACK },
         /*  2 */ { anim_is_at_location, { AGDATA_SELF_OBJ, AGDATA_TARGET_TILE }, -1, 3, ANIM_DELAY_NONE, ANIM_FLOW_POP_GOAL, ANIM_DELAY_NONE },
         /*  3 */ { anim_is_prone, { AGDATA_SELF_OBJ, -1 }, -1, 4, ANIM_DELAY_NONE, ANIM_FLOW_PUSH | AG_ANIM_GET_UP, ANIM_DELAY_NONE },
         /*  4 */ { anim_is_concealed_npc, { AGDATA_SELF_OBJ, -1 }, -1, 5, ANIM_DELAY_NONE, ANIM_FLOW_PUSH | AG_UNCONCEAL, ANIM_DELAY_NONE },
@@ -2363,7 +2363,7 @@ static AnimGoalNode anim_goal_node_move_near_obj_combat = {
         /*  2 */ { anim_is_prone, { AGDATA_SELF_OBJ, -1 }, -1, 3, ANIM_DELAY_NONE, ANIM_FLOW_PUSH | AG_ANIM_GET_UP, ANIM_DELAY_NONE },
         /*  3 */ { anim_is_concealed_npc, { AGDATA_SELF_OBJ, -1 }, -1, 4, ANIM_DELAY_NONE, ANIM_FLOW_PUSH | AG_UNCONCEAL, ANIM_DELAY_NONE },
         /*  4 */ { anim_has_path, { AGDATA_SELF_OBJ, -1 }, -1, 5, ANIM_DELAY_NONE, 7, ANIM_DELAY_NONE },
-        /*  5 */ { sub_4280D0, { AGDATA_SELF_OBJ, AGDATA_TARGET_OBJ }, -1, 6, ANIM_DELAY_NONE, 7, ANIM_DELAY_NONE },
+        /*  5 */ { anim_create_path_near_obj_combat, { AGDATA_SELF_OBJ, AGDATA_TARGET_OBJ }, -1, 6, ANIM_DELAY_NONE, 7, ANIM_DELAY_NONE },
         /*  6 */ { anim_is_not_turn_based, { -1, -1 }, -1, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE, ANIM_FLOW_PUSH | ANIM_FLOW_YIELD | AG_MOVE_TO_PAUSE, 1000 },
         /*  7 */ { anim_play_queued_sfx, { AGDATA_SELF_OBJ, -1 }, -1, 8, ANIM_DELAY_NONE, 8, ANIM_DELAY_NONE },
         /*  8 */ { anim_wields_ranged_weapon, { AGDATA_SELF_OBJ, -1 }, -1, ANIM_FLOW_PUSH | AG_ATTEMPT_MOVE_NEAR, ANIM_DELAY_NONE, ANIM_FLOW_PUSH | AG_ATTEMPT_MOVE_NEAR_COMBAT, ANIM_DELAY_NONE },
@@ -2390,7 +2390,7 @@ static AnimGoalNode anim_goal_node_attempt_move_near_combat = {
         /*  2 */ { anim_next_step_blocked, { AGDATA_SELF_OBJ, -1 }, -1, 3, ANIM_DELAY_NONE, 10, ANIM_DELAY_RANDOM },
         /*  3 */ { AGupdateAnimMove, { AGDATA_SELF_OBJ, -1 }, -1, ANIM_FLOW_POP_GOAL, ANIM_DELAY_PAUSE_TIME, ANIM_FLOW_YIELD, ANIM_DELAY_PAUSE_TIME },
         /*  4 */ { anim_has_path, { AGDATA_SELF_OBJ, -1 }, -1, 12, ANIM_DELAY_NONE, 5, ANIM_DELAY_NONE },
-        /*  5 */ { sub_425590, { AGDATA_SELF_OBJ, AGDATA_TARGET_OBJ }, -1, 6, ANIM_DELAY_NONE, ANIM_FLOW_POP_3_GOALS, ANIM_DELAY_NONE },
+        /*  5 */ { anim_finish_move_near_combat, { AGDATA_SELF_OBJ, AGDATA_TARGET_OBJ }, -1, 6, ANIM_DELAY_NONE, ANIM_FLOW_POP_3_GOALS, ANIM_DELAY_NONE },
         /*  6 */ { anim_find_blocking_wall, { AGDATA_SELF_OBJ, -1 }, -1, 7, ANIM_DELAY_NONE, 11, ANIM_DELAY_NONE },
         /*  7 */ { anim_find_blocking_door, { AGDATA_SELF_OBJ, -1 }, -1, 9, ANIM_DELAY_NONE, 8, ANIM_DELAY_NONE },
         /*  8 */ { anim_portal_is_closed_and_idle, { AGDATA_SCRATCH_OBJ, -1 }, -1, 9, ANIM_DELAY_NONE, ANIM_FLOW_PUSH | ANIM_FLOW_YIELD | ANIM_FLOW_RESET_PATH | AG_OPEN_DOOR, 50 },
@@ -4381,7 +4381,7 @@ bool anim_projectile_create(tig_art_id_t art_id, int64_t self_obj, int64_t targe
 }
 
 // 0x424BC0
-bool sub_424BC0(AnimRunInfo* run_info)
+bool anim_set_projectile_rotation(AnimRunInfo* run_info)
 {
     int64_t source_obj;
     int64_t parent_obj;
@@ -4415,7 +4415,10 @@ bool sub_424BC0(AnimRunInfo* run_info)
         target_loc = run_info->cur_stack_data->params[AGDATA_TARGET_TILE].loc;
     }
 
-    // FIXME: Looks meaningless.
+    // NOTE: Looks meaningless - `combat_projectile_art_id_rotation_set` returns
+    // the rotated aid and nothing here stores it - but it is Troika's: 0x424BC0
+    // in the exe drops the return value in exactly the same way. Faithful, so
+    // left alone.
     art_id = obj_field_int32_get(source_obj, OBJ_F_CURRENT_AID);
     parent_loc = obj_field_int64_get(parent_obj, OBJ_F_LOCATION);
     rotation = combat_projectile_rot(parent_loc, target_loc);
@@ -4472,7 +4475,7 @@ bool anim_is_at_location(AnimRunInfo* run_info)
 }
 
 // 0x424E00
-bool sub_424E00(AnimRunInfo* run_info)
+bool anim_pick_step_aside_tile(AnimRunInfo* run_info)
 {
     int64_t source_obj;
     int64_t source_loc;
@@ -4710,7 +4713,7 @@ bool anim_finish_move_near(AnimRunInfo* run_info)
 }
 
 // 0x425590
-bool sub_425590(AnimRunInfo* run_info)
+bool anim_finish_move_near_combat(AnimRunInfo* run_info)
 {
     int64_t source_obj;
     int64_t target_obj;
@@ -4845,7 +4848,7 @@ bool sub_425840(int64_t a1, int64_t a2, int64_t a3, int a4, int64_t a5)
 }
 
 // 0x425930
-bool sub_425930(AnimRunInfo* run_info)
+bool anim_create_wander_path(AnimRunInfo* run_info)
 {
     int64_t obj;
     int64_t loc;
@@ -4966,7 +4969,7 @@ bool sub_425BF0(PathCreateInfo* path_create_info, bool a2)
 }
 
 // 0x425D60
-bool sub_425D60(AnimRunInfo* run_info)
+bool anim_create_wander_dark_path(AnimRunInfo* run_info)
 {
     int64_t obj;
     int64_t loc;
@@ -5038,7 +5041,16 @@ bool sub_425D60(AnimRunInfo* run_info)
         }
     }
 
-    run_info->path.flags &= 0x03;
+    // FIX: Was `&= 0x03`, which keeps only the two bits it means to clear and
+    // wipes every other path flag. 0x425D60 in the exe is `and 0xfffffffc`, and
+    // the near-identical twin `anim_create_wander_path` already spells it
+    // `&= ~0x03`.
+    //
+    // Leaving bit 0x01 set matters: the move steps read it as "use the object's
+    // current rotation instead of the planned one", so a critter wandering into
+    // darkness walked its fresh path facing whichever way it happened to be
+    // pointing.
+    run_info->path.flags &= ~0x03;
     run_info->path.field_E8 = path_create_info.from;
     run_info->path.field_F0 = path_create_info.to;
     run_info->path.curr = 0;
@@ -5418,7 +5430,7 @@ bool anim_create_projectile_path(AnimRunInfo* run_info)
 }
 
 // 0x426A80
-bool sub_426A80(AnimRunInfo* run_info)
+bool anim_create_path_away_from_obj(AnimRunInfo* run_info)
 {
     int64_t source_obj;
     int64_t target_obj;
@@ -6198,7 +6210,7 @@ bool anim_create_path_near_obj(AnimRunInfo* run_info)
 }
 
 // 0x4280D0
-bool sub_4280D0(AnimRunInfo* run_info)
+bool anim_create_path_near_obj_combat(AnimRunInfo* run_info)
 {
     int64_t source_obj;
     int64_t target_obj;
@@ -7067,7 +7079,7 @@ bool anim_play_queued_sfx(AnimRunInfo* run_info)
 }
 
 // 0x429760
-bool sub_429760(AnimRunInfo* run_info)
+bool anim_should_auto_attack(AnimRunInfo* run_info)
 {
     int64_t source_obj;
     int64_t target_obj;
@@ -7693,7 +7705,7 @@ bool anim_skill_is_picklock(AnimRunInfo* run_info)
 }
 
 // 0x42A4E0
-bool sub_42A4E0(AnimRunInfo* run_info)
+bool anim_run_skill_no_cost(AnimRunInfo* run_info)
 {
     int64_t source_obj;
     int64_t target_obj;
@@ -8216,7 +8228,7 @@ bool anim_cleanup_stand_anim(AnimRunInfo* run_info)
 }
 
 // 0x42B250
-bool sub_42B250(AnimRunInfo* run_info)
+bool anim_cleanup_stunned(AnimRunInfo* run_info)
 {
     int64_t obj;
     int obj_type;
@@ -8286,7 +8298,7 @@ bool sub_42B250(AnimRunInfo* run_info)
 }
 
 // 0x42B440
-bool sub_42B440(AnimRunInfo* run_info)
+bool anim_cleanup_throw_item(AnimRunInfo* run_info)
 {
     int64_t obj;
     int obj_type;
@@ -8533,7 +8545,7 @@ bool anim_try_run(AnimRunInfo* run_info)
 }
 
 // 0x42B9C0
-bool sub_42B9C0(AnimRunInfo* run_info)
+bool anim_begin_attack(AnimRunInfo* run_info)
 {
     int64_t source_obj;
     int64_t target_obj;
@@ -10678,7 +10690,7 @@ bool sub_42EF60(int a1, int a2, int a3)
 }
 
 // 0x42F000
-bool sub_42F000(AnimRunInfo* run_info)
+bool anim_vault_to_next_tile(AnimRunInfo* run_info)
 {
     int x_shifts[] = {
         0,
@@ -10730,7 +10742,7 @@ bool sub_42F000(AnimRunInfo* run_info)
 }
 
 // 0x42F140
-bool sub_42F140(AnimRunInfo* run_info)
+bool anim_advance_vault_step(AnimRunInfo* run_info)
 {
     int64_t obj;
     int offset_x;
