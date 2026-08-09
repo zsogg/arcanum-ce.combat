@@ -957,7 +957,7 @@ bool multiplayer_map_open_by_name(const char* name)
     }
 
     sub_52A950();
-    sub_4605C0();
+    ui_reset_interface();
 
     if (!obj_validate_system(1)) {
         tig_debug_println("Object system validate failed post-load in multiplayer_map_open_by_name.");

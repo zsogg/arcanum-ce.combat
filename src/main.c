@@ -601,7 +601,7 @@ void main_loop(void)
                                         &gold_obj);
                                     obj_field_int32_set(gold_obj, OBJ_F_GOLD_QUANTITY, 1000);
                                     item_transfer(gold_obj, pc_obj);
-                                    sub_4605D0();
+                                    ui_refresh_counters();
                                 }
                                 break;
                             default:

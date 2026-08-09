@@ -263,36 +263,42 @@ int sub_460590(int64_t a1, int a2)
     }
 }
 
-// NOTE: These three, and the `ui_callbacks` fields they dispatch to, are left
-// unnamed together. Each is a one-line null-checked call, so the name has to
-// come from the callback's meaning, and the slots themselves are still
-// field_70/74/78. The call sites hint but do not settle it - sub_4605D0 fires
-// after gold transfers, item moves and magictech changes, which reads like a
-// refresh, except `ui_refresh_interface` already exists separately and it is
-// not clear which of the two this is. Name the fields first, from whatever
-// installs them, and these follow.
-//
-// 0x4605C0
-void sub_4605C0(void)
+/**
+ * Reset the interface after the world under it changed.
+ *
+ * Recovers the hotkeys, forces INTGAME_MODE_MAIN and drops the hover object.
+ * Called on a map change and from multiplayer.
+ *
+ * 0x4605C0
+ */
+void ui_reset_interface(void)
 {
-    if (ui_callbacks.field_70 != NULL) {
-        ui_callbacks.field_70();
+    if (ui_callbacks.reset_interface != NULL) {
+        ui_callbacks.reset_interface();
     }
 }
 
-// 0x4605D0
-void sub_4605D0(void)
+/**
+ * Redraw the interface counters - money, mana, ammo.
+ *
+ * Distinct from `ui_refresh_interface`, which redraws the bars and the
+ * character sheet after a stat change; this one fires after gold transfers,
+ * item moves and magictech changes.
+ *
+ * 0x4605D0
+ */
+void ui_refresh_counters(void)
 {
-    if (ui_callbacks.field_74 != NULL) {
-        ui_callbacks.field_74();
+    if (ui_callbacks.refresh_counters != NULL) {
+        ui_callbacks.refresh_counters();
     }
 }
 
 // 0x4605E0
-void sub_4605E0(int64_t a1, void* a2, int a3)
+void ui_item_spell_activate(int64_t a1, void* a2, int a3)
 {
-    if (ui_callbacks.field_78 != NULL) {
-        ui_callbacks.field_78(a1, a2, a3);
+    if (ui_callbacks.item_spell_activate != NULL) {
+        ui_callbacks.item_spell_activate(a1, a2, a3);
     }
 }
 

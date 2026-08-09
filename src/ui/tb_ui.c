@@ -45,9 +45,9 @@ static void sub_57CC70(int64_t a1, int64_t a2);
 static void end_death(void);
 static void end_game(void);
 static void sub_57CDF0(int a1);
-static void sub_57CE00(void);
-static void sub_57CE10(void);
-static void sub_57CE30(int64_t obj, void* a2, int a3);
+static void tb_ui_refresh_counters(void);
+static void tb_ui_reset_interface(void);
+static void tb_ui_item_spell_activate(int64_t obj, void* a2, int a3);
 static void handle_sector_changed(int64_t sec, int64_t obj);
 static void charedit_error_msg(int type, int param);
 static void sub_57CF70(int64_t a1, int64_t a2);
@@ -92,9 +92,9 @@ bool tb_ui_init(GameInitInfo* init_info)
     callbacks.field_64 = sub_57CDF0;
     callbacks.field_68 = sub_57EDF0;
     callbacks.field_6C = sub_57EED0;
-    callbacks.field_70 = sub_57CE10;
-    callbacks.field_74 = sub_57CE00;
-    callbacks.field_78 = sub_57CE30;
+    callbacks.reset_interface = tb_ui_reset_interface;
+    callbacks.refresh_counters = tb_ui_refresh_counters;
+    callbacks.item_spell_activate = tb_ui_item_spell_activate;
     callbacks.field_88 = gameuilib_wants_mainmenu_set;
     callbacks.field_84 = sub_557730;
     callbacks.written_start_obj = written_ui_start_obj;
@@ -304,13 +304,13 @@ void sub_57CDF0(int a1)
 }
 
 // 0x57CE00
-void sub_57CE00(void)
+void tb_ui_refresh_counters(void)
 {
     intgame_counters_refresh();
 }
 
 // 0x57CE10
-void sub_57CE10(void)
+void tb_ui_reset_interface(void)
 {
     intgame_hotkeys_recover();
     intgame_mode_set(INTGAME_MODE_MAIN);
@@ -328,7 +328,7 @@ void sub_57CE10(void)
 }
 
 // 0x57CE30
-void sub_57CE30(int64_t obj, void* a2, int a3)
+void tb_ui_item_spell_activate(int64_t obj, void* a2, int a3)
 {
     if (!magictech_has_item_triggers(a3)) {
         if (spell_ui_activate(obj, a3) == SPELL_UI_ACTIVATE_OK) {

@@ -837,7 +837,7 @@ bool map_open_in_game(int map, bool a2, bool a3)
     }
 
     sub_45C580();
-    sub_4605C0();
+    ui_reset_interface();
 
     if (!obj_validate_system(1)) {
         tig_debug_println("Object system validate failed post-load in map_open_in_game.");

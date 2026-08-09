@@ -1454,7 +1454,7 @@ void item_use_on_obj(int64_t source_obj, int64_t item_obj, int64_t target_obj)
     if (obj_field_int32_get(item_obj, OBJ_F_ITEM_SPELL_MANA_STORE) != 0
         || (obj_field_int32_get(item_obj, OBJ_F_ITEM_FLAGS) & OIF_IS_MAGICAL) != 0) {
         target_descriptor_set_obj(&td, target_obj);
-        sub_4605E0(item_obj, &td, mt_item_spell(item_obj, 0));
+        ui_item_spell_activate(item_obj, &td, mt_item_spell(item_obj, 0));
         mt_item_notify_used(item_obj, target_obj);
 
         if (item_type == OBJ_TYPE_FOOD
@@ -1551,7 +1551,7 @@ void item_use_on_loc(int64_t obj, int64_t item_obj, int64_t target_loc)
     item_flags = obj_field_int32_get(item_obj, OBJ_F_ITEM_FLAGS);
     if (mana_store != 0 || (item_flags & OIF_IS_MAGICAL) != 0) {
         target_descriptor_set_loc(&td, target_loc);
-        sub_4605E0(item_obj, &td, mt_item_spell(item_obj, 0));
+        ui_item_spell_activate(item_obj, &td, mt_item_spell(item_obj, 0));
         mt_item_notify_used(item_obj, OBJ_HANDLE_NULL);
     } else {
         combat_consume_action_points(obj, 4);
@@ -2506,7 +2506,7 @@ bool item_gold_transfer(int64_t from_obj, int64_t to_obj, int qty, int64_t gold_
             }
         }
 
-        sub_4605D0();
+        ui_refresh_counters();
     }
 
     return true;
@@ -3865,7 +3865,7 @@ void sub_466D60(int64_t obj)
     anim_speed_recalc(obj);
 
     if (player_is_local_pc_obj(obj)) {
-        sub_4605D0();
+        ui_refresh_counters();
     }
 
     ui_update_inven(obj);
@@ -4258,7 +4258,7 @@ void item_equipped(int64_t item_obj, int64_t parent_obj, int inventory_location)
         object_set_current_aid(parent_obj, aid);
 
         if (player_is_local_pc_obj(parent_obj)) {
-            sub_4605D0();
+            ui_refresh_counters();
         }
         break;
     case ITEM_INV_LOC_ARMOR:
@@ -4395,7 +4395,7 @@ void item_unequipped(int64_t item_obj, int64_t parent_obj, int inventory_locatio
         object_set_current_aid(parent_obj, aid);
 
         if (player_is_local_pc_obj(parent_obj)) {
-            sub_4605D0();
+            ui_refresh_counters();
         }
         break;
     case ITEM_INV_LOC_ARMOR:

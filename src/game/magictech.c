@@ -1638,7 +1638,7 @@ bool magictech_charge_fatigue(int64_t obj, int cost, bool a3, int magictech)
                     if (a3) {
                         obj_field_int32_set(item_obj, OBJ_F_ITEM_MANA_STORE, new_mana_store);
                         magictech_recharge_timeevent_schedule(item_obj, item_mana_cost, true);
-                        sub_4605D0();
+                        ui_refresh_counters();
 
                         if (new_mana_store == 0) {
                             mt_ai_notify_item_exhausted(obj, item_obj);
@@ -1685,7 +1685,7 @@ bool magictech_charge_fatigue(int64_t obj, int cost, bool a3, int magictech)
 
             if (a3) {
                 obj_field_int32_set(obj, OBJ_F_ITEM_SPELL_MANA_STORE, mana_store - 1);
-                sub_4605D0();
+                ui_refresh_counters();
             }
         }
 
@@ -4026,7 +4026,7 @@ bool magictech_component_recharge(int64_t obj, int num, int max)
             spell_mana_store = max;
         }
         obj_field_int32_set(obj, OBJ_F_ITEM_SPELL_MANA_STORE, spell_mana_store);
-        sub_4605D0();
+        ui_refresh_counters();
     }
 
     return true;
@@ -6670,7 +6670,7 @@ bool magictech_recharge_timeevent_process(TimeEvent* timeevent)
 
     parent_obj = obj_field_handle_get(obj, OBJ_F_ITEM_PARENT);
     if (parent_obj != OBJ_HANDLE_NULL && player_is_local_pc_obj(parent_obj)) {
-        sub_4605D0();
+        ui_refresh_counters();
     }
 
     if (diff > 0) {
