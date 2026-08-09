@@ -71,9 +71,30 @@ typedef struct HighResConfig {
      */
     int logbook_font;
 
+    /**
+     * Dialogue text size: 0 stock size-12 (interface art 229), 1 the patch's
+     * size-14 (art 230), 2 its size-18 (art 133). Larger text also needs a
+     * roomier dialogue window and text bubble, so `highres_dialog_metrics`
+     * carries those together. `DialogFont` in config.ini.
+     */
+    int dialog_font;
+
     bool logos;
     bool intro;
 } HighResConfig;
+
+/**
+ * Everything `DialogFont` changes, kept in one place so tc.c and tb.c cannot
+ * drift apart. The patch spreads the same numbers over Dialog.tph.
+ */
+typedef struct HighResDialogMetrics {
+    int font_art; /* the interface art the dialogue fonts are built from */
+    int window_width; /* tc_content_rect */
+    int window_height; /* tc_content_rect, and the scratch buffer it is drawn in */
+    int bubble_size; /* text bubble, square in both axes */
+} HighResDialogMetrics;
+
+const HighResDialogMetrics* highres_dialog_metrics(void);
 
 #define HIGHRES_MENU_POSITION_TOP 0
 #define HIGHRES_MENU_POSITION_CENTER 1

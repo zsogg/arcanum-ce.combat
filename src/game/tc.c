@@ -1,5 +1,7 @@
 #include "game/tc.h"
 
+#include "game/highres_config.h"
+
 /**
  * The number of lines in the text conversation.
  */
@@ -170,7 +172,7 @@ bool tc_init(GameInitInfo* init_info)
     tc_intermediate_video_buffer_rect.x = 0;
     tc_intermediate_video_buffer_rect.y = 0;
     tc_intermediate_video_buffer_rect.width = window_data.rect.width;
-    tc_intermediate_video_buffer_rect.height = 100;
+    tc_intermediate_video_buffer_rect.height = highres_dialog_metrics()->window_height;
 
     // Create the scratch video buffer for rendering text (color keyed for
     // transparency).
@@ -194,7 +196,8 @@ bool tc_init(GameInitInfo* init_info)
     }
 
     // Set up font creation parameters.
-    tig_art_interface_id_create(229, 0, 0, 0, &art_id);
+    // DialogFont picks the face; art 229 is the stock size-12.
+    tig_art_interface_id_create(highres_dialog_metrics()->font_art, 0, 0, 0, &art_id);
     font.flags = TIG_FONT_SHADOW;
     font.art_id = art_id;
 
@@ -410,8 +413,8 @@ void tc_clear(bool compact)
     dword_5FF544 = false;
 
     // Set default content size and center it horizontally.
-    tc_content_rect.width = 400;
-    tc_content_rect.height = 100;
+    tc_content_rect.width = highres_dialog_metrics()->window_width;
+    tc_content_rect.height = highres_dialog_metrics()->window_height;
     tc_content_rect.x = (tc_iso_window_rect.width - tc_content_rect.width) / 2;
 
     // Adjust vertical position depending on normal vs. compact mode.

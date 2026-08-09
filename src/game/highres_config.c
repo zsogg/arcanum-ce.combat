@@ -36,6 +36,21 @@ void highres_config_load(void)
     fclose(stream);
 }
 
+/**
+ * Sizes for each DialogFont setting, straight out of Dialog.tph: stock, then
+ * the patch's size-14 and size-18 rows.
+ */
+static const HighResDialogMetrics highres_dialog_metrics_table[] = {
+    { 229, 400, 100, 200 },
+    { 230, 465, 115, 235 },
+    { 133, 600, 150, 300 },
+};
+
+const HighResDialogMetrics* highres_dialog_metrics(void)
+{
+    return &highres_dialog_metrics_table[highres_config.dialog_font];
+}
+
 const HighResConfig* highres_config_get(void)
 {
     return &highres_config;
@@ -56,6 +71,7 @@ void highres_config_reset(void)
     highres_config.options_compact = false;
     highres_config.sprite_mirroring = true;
     highres_config.logbook_font = 0;
+    highres_config.dialog_font = 0;
     highres_config.logos = true;
     highres_config.intro = true;
 }
@@ -147,6 +163,10 @@ void highres_config_parse_line(char* line)
     } else if (SDL_strcasecmp(key_start, "LogbookFont") == 0) {
         if (value >= 0 && value <= 1) {
             highres_config.logbook_font = value;
+        }
+    } else if (SDL_strcasecmp(key_start, "DialogFont") == 0) {
+        if (value >= 0 && value <= 2) {
+            highres_config.dialog_font = value;
         }
     } else if (SDL_strcasecmp(key_start, "Logos") == 0) {
         highres_config.logos = value != 0;

@@ -1,6 +1,7 @@
 #include "game/tb.h"
 
 #include "game/gamelib.h"
+#include "game/highres_config.h"
 #include "game/object.h"
 
 /**
@@ -206,8 +207,14 @@ bool tb_init(GameInitInfo* init_info)
 
     // Set up video buffer creation parameters.
     vb_create_info.flags = TIG_VIDEO_BUFFER_CREATE_SYSTEM_MEMORY | TIG_VIDEO_BUFFER_CREATE_COLOR_KEY;
-    vb_create_info.width = TEXT_BUBBLE_WIDTH;
-    vb_create_info.height = TEXT_BUBBLE_HEIGHT;
+    // DialogFont widens the bubble to fit the larger face. The content rect
+    // has to move with the buffer, or text gets laid out for a size the buffer
+    // does not have.
+    tb_content_rect.width = highres_dialog_metrics()->bubble_size;
+    tb_content_rect.height = highres_dialog_metrics()->bubble_size;
+
+    vb_create_info.width = tb_content_rect.width;
+    vb_create_info.height = tb_content_rect.height;
     vb_create_info.background_color = tb_background_color;
     vb_create_info.color_key = tb_background_color;
 
@@ -228,7 +235,8 @@ bool tb_init(GameInitInfo* init_info)
 
     // Set up font creation parameters.
     font.flags = TIG_FONT_NO_ALPHA_BLEND | TIG_FONT_CENTERED | TIG_FONT_SHADOW;
-    tig_art_interface_id_create(229, 0, 0, 0, &(font.art_id));
+    // DialogFont picks the face; art 229 is the stock size-12.
+    tig_art_interface_id_create(highres_dialog_metrics()->font_art, 0, 0, 0, &(font.art_id));
 
     // Create fonts for each text bubble type with appropriate colors.
     for (idx = 0; idx < TB_TYPE_COUNT; idx++) {
