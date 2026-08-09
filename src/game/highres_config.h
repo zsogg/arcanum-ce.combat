@@ -53,6 +53,17 @@ typedef struct HighResConfig {
      */
     bool options_compact;
 
+    /**
+     * Mirror left-facing critter frames instead of storing them, which is what
+     * the engine does by default. `SpriteMirroring` in config.ini, which writes
+     * the flag at 0x5BEA14 - CE's `tig_art_mirroring_enabled`.
+     *
+     * Defaults to true, the stock behaviour, rather than to the patch's own
+     * config default of 0. Ignored while `uap fixes` is on, because those
+     * archives ship the mirrored frames already; see `uap_fixes_changed`.
+     */
+    bool sprite_mirroring;
+
     bool logos;
     bool intro;
 } HighResConfig;

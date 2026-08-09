@@ -465,6 +465,21 @@ void tig_art_uap_fixes_set(bool enabled)
     tig_art_mirroring_enabled = !enabled;
 }
 
+/**
+ * Turn sprite mirroring on or off directly.
+ *
+ * The engine mirrors left-facing critter frames rather than storing them, which
+ * the high resolution patch lets you switch off through `SpriteMirroring` - it
+ * writes this very flag, at 0x5BEA14. Callers must apply this *after*
+ * `tig_art_uap_fixes_set`, which also writes the flag and has to win: the patch
+ * ships the frames the engine used to mirror, so leaving mirroring on there
+ * would double-flip them.
+ */
+void tig_art_mirroring_set(bool enabled)
+{
+    tig_art_mirroring_enabled = enabled;
+}
+
 // 0x5021E0
 void tig_art_flush(void)
 {

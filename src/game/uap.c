@@ -3,6 +3,7 @@
 #include <tig/tig.h>
 
 #include "game/gamelib.h"
+#include "game/highres_config.h"
 #include "game/obj.h"
 #include "game/settings.h"
 
@@ -44,4 +45,12 @@ void uap_fixes_changed(void)
 
     // TIG sits below the game and cannot ask, so push the switch down to it.
     tig_art_uap_fixes_set(uap_fixes);
+
+    // That call also decides sprite mirroring, so the high resolution patch's
+    // `SpriteMirroring` only gets a say once the patch's art is out of the
+    // picture. With uap fixes on, mirroring must stay off whatever config.ini
+    // says, because those archives already contain the mirrored frames.
+    if (!uap_fixes) {
+        tig_art_mirroring_set(highres_config_get()->sprite_mirroring);
+    }
 }
