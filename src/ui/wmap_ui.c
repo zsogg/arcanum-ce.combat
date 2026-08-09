@@ -1195,7 +1195,7 @@ void wmap_ui_open_internal(void)
 
     if (!wmap_load_worldmap_info()) {
         if (wmap_ui_selecting) {
-            sub_452650(pc_obj);
+            magictech_teleport_to_area(pc_obj);
             return;
         }
 
@@ -1235,7 +1235,7 @@ void wmap_ui_open_internal(void)
         intgame_mode_set(INTGAME_MODE_MAIN);
 
         if (wmap_ui_selecting) {
-            sub_452650(pc_obj);
+            magictech_teleport_to_area(pc_obj);
             return;
         }
 

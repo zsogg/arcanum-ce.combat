@@ -1459,7 +1459,7 @@ void item_use_on_obj(int64_t source_obj, int64_t item_obj, int64_t target_obj)
 
         if (item_type == OBJ_TYPE_FOOD
             || item_type == OBJ_TYPE_SCROLL) {
-            sub_4574D0(item_obj);
+            magictech_clear_source_refs(item_obj);
             object_destroy(item_obj);
         }
 
@@ -1506,7 +1506,7 @@ void item_use_on_obj(int64_t source_obj, int64_t item_obj, int64_t target_obj)
             ui_message.str = mes_file_entry.str;
             ui_display_msg(&ui_message);
 
-            sub_4574D0(item_obj);
+            magictech_clear_source_refs(item_obj);
             object_destroy(item_obj);
         }
 
@@ -1514,7 +1514,7 @@ void item_use_on_obj(int64_t source_obj, int64_t item_obj, int64_t target_obj)
     }
 
     if (item_type == OBJ_TYPE_SCROLL) {
-        sub_4574D0(item_obj);
+        magictech_clear_source_refs(item_obj);
         object_destroy(item_obj);
         return;
     }
@@ -1562,7 +1562,7 @@ void item_use_on_loc(int64_t obj, int64_t item_obj, int64_t target_loc)
     }
 
     if (obj_type == OBJ_TYPE_FOOD || obj_type == OBJ_TYPE_SCROLL) {
-        sub_4574D0(item_obj);
+        magictech_clear_source_refs(item_obj);
         object_destroy(item_obj);
     }
 }

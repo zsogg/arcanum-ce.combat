@@ -2369,7 +2369,7 @@ void ai_action_perform_cast(Ai* ai)
         magictech_invocation_run(&mt_invocation);
 
         if (ai->item_obj != OBJ_HANDLE_NULL) {
-            sub_4574D0(ai->item_obj);
+            magictech_clear_source_refs(ai->item_obj);
 
             switch (obj_field_int32_get(ai->item_obj, OBJ_F_TYPE)) {
             case OBJ_TYPE_FOOD:
