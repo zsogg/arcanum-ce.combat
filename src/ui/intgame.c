@@ -3864,7 +3864,7 @@ void sub_550000(int64_t critter_obj, Hotkey* hotkey, int inventory_location)
     }
 
     if (item_obj != OBJ_HANDLE_NULL) {
-        v1 = sub_464D20(hotkey->item_obj.obj, inventory_location, critter_obj);
+        v1 = item_check_wield(hotkey->item_obj.obj, inventory_location, critter_obj);
         if (v1 != 0 && v1 != 4) {
             item_error_msg(critter_obj, v1);
             return;
@@ -3875,7 +3875,7 @@ void sub_550000(int64_t critter_obj, Hotkey* hotkey, int inventory_location)
         }
     }
 
-    v1 = sub_464D20(hotkey->item_obj.obj, inventory_location, critter_obj);
+    v1 = item_check_wield(hotkey->item_obj.obj, inventory_location, critter_obj);
     if (v1 != 0) {
         item_error_msg(critter_obj, v1);
         if (item_obj != OBJ_HANDLE_NULL) {

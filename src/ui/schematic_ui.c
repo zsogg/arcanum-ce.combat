@@ -1244,7 +1244,7 @@ void schematic_ui_draw_component(int ingr, SchematicInfo* schematic_info, bool* 
     if (ingr == 0) {
         for (index = 0; index < 3; index++) {
             item_obj = proto_get_by_description(schematic_info->item1[index]);
-            if (sub_462540(schematic_ui_primary_obj, item_obj, 0x7) != OBJ_HANDLE_NULL) {
+            if (item_find_by_proto(schematic_ui_primary_obj, item_obj, 0x7) != OBJ_HANDLE_NULL) {
                 break;
             }
         }
@@ -1260,7 +1260,7 @@ void schematic_ui_draw_component(int ingr, SchematicInfo* schematic_info, bool* 
     } else {
         for (index = 0; index < 3; index++) {
             item_obj = proto_get_by_description(schematic_info->item2[index]);
-            if (sub_462540(schematic_ui_primary_obj, item_obj, 0x7) != OBJ_HANDLE_NULL) {
+            if (item_find_by_proto(schematic_ui_primary_obj, item_obj, 0x7) != OBJ_HANDLE_NULL) {
                 break;
             }
         }
@@ -1439,7 +1439,7 @@ bool schematic_ui_process(int schematic, int64_t primary_obj, int64_t secondary_
     // Find available item for component 1.
     for (ingridient1 = 0; ingridient1 < 3; ingridient1++) {
         obj = proto_get_by_description(info.item1[ingridient1]);
-        ingridient1_obj = sub_462540(primary_obj, obj, 0x7);
+        ingridient1_obj = item_find_by_proto(primary_obj, obj, 0x7);
         if (ingridient1_obj != OBJ_HANDLE_NULL) {
             break;
         }
@@ -1451,7 +1451,7 @@ bool schematic_ui_process(int schematic, int64_t primary_obj, int64_t secondary_
     // Find available item for component 2.
     for (ingridient2 = 0; ingridient2 < 3; ingridient2++) {
         obj = proto_get_by_description(info.item2[ingridient2]);
-        ingridient2_obj = sub_462540(primary_obj, obj, 0x7);
+        ingridient2_obj = item_find_by_proto(primary_obj, obj, 0x7);
         if (ingridient2_obj != OBJ_HANDLE_NULL) {
             break;
         }

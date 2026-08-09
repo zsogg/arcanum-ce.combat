@@ -437,7 +437,7 @@ void sector_light_list_fold(SectorLightList* list, int64_t sector_id, SectorTile
                 }
 
                 if (add) {
-                    sub_4D9590(obj, false);
+                    light_create_for_obj(obj, false);
                     light = (Light*)obj_field_ptr_get(obj, OBJ_F_LIGHT_HANDLE);
                     if (light != NULL) {
                         sector_light_list_add(list, light);

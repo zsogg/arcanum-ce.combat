@@ -178,7 +178,7 @@ static bool dialog_perform_actions(DialogState* a1, char* a2, int a3);
 static int dialog_parse_second_number(const char* str);
 static bool dialog_build_npc_reply(DialogState* a1, bool a2);
 static bool dialog_search(int dlg, DialogFileEntry* entry);
-static void sub_416B00(char* dst, char* src, DialogState* a3);
+static void dialog_substitute_names(char* dst, char* src, DialogState* a3);
 static bool dialog_build_pc_option(int a1, int a2, DialogState* a3);
 static void dialog_response_val_decode(int response_val, int* type_ptr, int* num_ptr);
 static bool find_dialog(const char* path, int* index_ptr);
@@ -2370,9 +2370,9 @@ bool dialog_build_npc_reply(DialogState* a1, bool a2)
 
     if (obj_type_is_critter(obj_field_int32_get(a1->pc_obj, OBJ_F_TYPE))
         && stat_level_get(a1->pc_obj, STAT_GENDER) != GENDER_MALE) {
-        sub_416B00(a1->reply, entry.data.female_str, a1);
+        dialog_substitute_names(a1->reply, entry.data.female_str, a1);
     } else {
-        sub_416B00(a1->reply, entry.str, a1);
+        dialog_substitute_names(a1->reply, entry.str, a1);
     }
 
     return true;
@@ -2398,7 +2398,7 @@ bool dialog_search(int dlg, DialogFileEntry* entry)
 }
 
 // 0x416B00
-void sub_416B00(char* dst, char* src, DialogState* a3)
+void dialog_substitute_names(char* dst, char* src, DialogState* a3)
 {
     char* remainder;
     char* start;
@@ -2557,7 +2557,7 @@ bool dialog_build_pc_option(int a1, int a2, DialogState* a3)
     } else if (SDL_strncasecmp(entry.str, "z:", 2) == 0) {
         dialog_build_use_spell_option(a2, atoi(entry.str + 2), entry.response_val, a3);
     } else {
-        sub_416B00(a3->options[a2], entry.str, a3);
+        dialog_substitute_names(a3->options[a2], entry.str, a3);
         dialog_response_val_decode(entry.response_val, &(a3->option_response_types[a2]), &(a3->option_response_nums[a2]));
     }
 
@@ -3122,7 +3122,7 @@ void dialog_copy_pc_generic_msg(char* buffer, DialogState* state, int start, int
     mes_file_entry.num = start + random_between(0, cnt - 1);
     mes_get_msg(dialog_mes_files[gd], &mes_file_entry);
 
-    sub_416B00(buffer, mes_file_entry.str, state);
+    dialog_substitute_names(buffer, mes_file_entry.str, state);
 }
 
 // 0x418390
@@ -3150,7 +3150,7 @@ void dialog_copy_pc_class_specific_msg(char* buffer, DialogState* state, int num
     mes_file_entry.num = num + random_between(0, cnt - 1);
     mes_get_msg(dialog_mes_files[gd], &mes_file_entry);
 
-    sub_416B00(buffer, mes_file_entry.str, state);
+    dialog_substitute_names(buffer, mes_file_entry.str, state);
 }
 
 // 0x418460
@@ -3201,7 +3201,7 @@ void dialog_copy_npc_class_specific_msg(char* buffer, DialogState* state, int nu
     mes_file_entry.num = num + random_between(0, cnt - 1);
     mes_get_msg(dialog_mes_files[gd], &mes_file_entry);
 
-    sub_416B00(buffer, mes_file_entry.str, state);
+    dialog_substitute_names(buffer, mes_file_entry.str, state);
     state->speech_id = -1;
 }
 
@@ -3250,7 +3250,7 @@ void dialog_copy_npc_race_specific_msg(char* buffer, DialogState* state, int num
     mes_file_entry.num = num + random_between(0, cnt - 1);
     mes_get_msg(dialog_mes_files[gd], &mes_file_entry);
 
-    sub_416B00(buffer, mes_file_entry.str, state);
+    dialog_substitute_names(buffer, mes_file_entry.str, state);
     state->speech_id = -1;
 }
 
@@ -3281,7 +3281,7 @@ void dialog_copy_npc_generic_msg(char* buffer, DialogState* state, int start, in
     mes_file_entry.num = start + random_between(0, cnt - 1);
     mes_get_msg(dialog_mes_files[gd], &mes_file_entry);
 
-    sub_416B00(buffer, mes_file_entry.str, state);
+    dialog_substitute_names(buffer, mes_file_entry.str, state);
     state->speech_id = -1;
 }
 
@@ -3581,7 +3581,7 @@ void dialog_tell_rumor(int rumor, int a2, int a3, DialogState* state)
 
     // NPC: Rumor-specific.
     rumor_copy_interaction_str(state->pc_obj, state->npc_obj, rumor, buffer);
-    sub_416B00(state->reply, buffer, state);
+    dialog_substitute_names(state->reply, buffer, state);
     state->speech_id = -1;
 
     rumor_known_set(state->pc_obj, rumor);
@@ -4273,7 +4273,7 @@ void dialog_copy_npc_story_msg(char* buffer, DialogState* state)
 
     mes_file_entry.num = stat_level_get(state->npc_obj, STAT_RACE) + 100 * story_state;
     mes_get_msg(dialog_mes_files[gd], &mes_file_entry);
-    sub_416B00(buffer, mes_file_entry.str, state);
+    dialog_substitute_names(buffer, mes_file_entry.str, state);
     state->speech_id = -1;
 }
 

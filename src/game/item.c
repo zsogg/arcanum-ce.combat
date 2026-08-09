@@ -270,7 +270,7 @@ void item_generate_inventory(int64_t critter_obj)
         if (object_create(proto_obj, loc, &item_obj)) {
             item_transfer(item_obj, critter_obj);
 
-            if (sub_464D20(item_obj, ITEM_INV_LOC_ARMOR, critter_obj)) {
+            if (item_check_wield(item_obj, ITEM_INV_LOC_ARMOR, critter_obj)) {
                 object_destroy(item_obj);
 
                 switch (item_armor_size(race)) {
@@ -1101,7 +1101,7 @@ int64_t item_find_by_name(int64_t obj, int name)
 }
 
 // 0x462540
-int64_t sub_462540(int64_t parent_obj, int64_t item_prototype_obj, unsigned int flags)
+int64_t item_find_by_proto(int64_t parent_obj, int64_t item_prototype_obj, unsigned int flags)
 {
     int inventory_num_fld;
     int inventory_list_fld;
@@ -2453,7 +2453,7 @@ int64_t item_gold_obj(int64_t obj)
         return obj_field_handle_get(obj, OBJ_F_CRITTER_GOLD);
     }
     if (type == OBJ_TYPE_CONTAINER) {
-        return sub_462540(obj, 9056, 0);
+        return item_find_by_proto(obj, 9056, 0);
     }
 
     return OBJ_HANDLE_NULL;
@@ -2578,7 +2578,7 @@ bool item_wield_set(int64_t item_obj, int inventory_location)
 
     cur_item_obj = item_wield_get(owner_obj, inventory_location);
     if (cur_item_obj != item_obj) {
-        if (sub_464D20(item_obj, inventory_location, owner_obj) != ITEM_CANNOT_OK) {
+        if (item_check_wield(item_obj, inventory_location, owner_obj) != ITEM_CANNOT_OK) {
             return false;
         }
 
@@ -2655,7 +2655,7 @@ bool sub_464C80(int64_t item_obj)
 }
 
 // 0x464D20
-int sub_464D20(int64_t item_obj, int inventory_location, int64_t critter_obj)
+int item_check_wield(int64_t item_obj, int inventory_location, int64_t critter_obj)
 {
     int item_obj_type;
     unsigned int weapon_flags;
@@ -2865,7 +2865,7 @@ void item_wield_best(int64_t critter_obj, int inventory_location, int64_t target
     best_item_obj = equipped_item_obj;
 
     if (equipped_item_obj != OBJ_HANDLE_NULL) {
-        if (sub_464D20(equipped_item_obj, inventory_location, critter_obj) == ITEM_CANNOT_OK
+        if (item_check_wield(equipped_item_obj, inventory_location, critter_obj) == ITEM_CANNOT_OK
             && inventory_location != ITEM_INV_LOC_WEAPON) {
             best_item_worth = item_worth(equipped_item_obj);
         } else {
@@ -2883,7 +2883,7 @@ void item_wield_best(int64_t critter_obj, int inventory_location, int64_t target
 
     for (idx = 0; idx < cnt; idx++) {
         item_obj = obj_arrayfield_handle_get(critter_obj, OBJ_F_CRITTER_INVENTORY_LIST_IDX, idx);
-        if (sub_464D20(item_obj, inventory_location, critter_obj) == ITEM_CANNOT_OK) {
+        if (item_check_wield(item_obj, inventory_location, critter_obj) == ITEM_CANNOT_OK) {
             if (inventory_location == ITEM_INV_LOC_WEAPON) {
                 int ammo_type = item_weapon_ammo_type(item_obj);
                 if (ammo_type == 10000
@@ -3103,7 +3103,7 @@ int64_t item_ammo_obj(int64_t obj, int ammo_type)
     case OBJ_TYPE_NPC:
         return obj_field_handle_get(obj, dword_5B32A0[ammo_type]);
     case OBJ_TYPE_CONTAINER:
-        return sub_462540(obj, dword_5B32B0[ammo_type], 0);
+        return item_find_by_proto(obj, dword_5B32B0[ammo_type], 0);
     default:
         return OBJ_HANDLE_NULL;
     }

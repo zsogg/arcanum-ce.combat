@@ -697,11 +697,11 @@ void sub_572640(int64_t pc_obj, int64_t target_obj, int mode)
         substitute_inventory_obj = critter_substitute_inventory_get(target_obj);
         if (substitute_inventory_obj != OBJ_HANDLE_NULL) {
             prototype_obj = proto_get_first_by_type(8);
-            gold_obj = sub_462540(substitute_inventory_obj, prototype_obj, 0);
+            gold_obj = item_find_by_proto(substitute_inventory_obj, prototype_obj, 0);
             while (gold_obj != OBJ_HANDLE_NULL) {
                 amt = item_gold_get(gold_obj);
                 item_gold_transfer(substitute_inventory_obj, target_obj, amt, gold_obj);
-                gold_obj = sub_462540(substitute_inventory_obj, prototype_obj, 0);
+                gold_obj = item_find_by_proto(substitute_inventory_obj, prototype_obj, 0);
             }
         }
 
@@ -1725,7 +1725,7 @@ static inline bool inven_ui_message_filter_handle_mouse_lbutton_up_accept_drop(T
             }
         }
 
-        err = sub_464D20(inven_ui_drag_item_obj, inventory_location, v2);
+        err = item_check_wield(inven_ui_drag_item_obj, inventory_location, v2);
         if (err != 0) {
             item_error_msg(v2, err);
             inven_ui_drop_dragged_item();
@@ -1952,7 +1952,7 @@ static inline bool inven_ui_message_filter_handle_mouse_lbutton_up(int x, int y,
                     && (inven_ui_mode != INVEN_UI_MODE_STEAL
                         || qword_681450 == inven_ui_pc_obj
                         || parent_obj == inven_ui_pc_obj)) {
-                    int wield_reason = sub_464D20(inven_ui_drag_item_obj, inventory_location, parent_obj);
+                    int wield_reason = item_check_wield(inven_ui_drag_item_obj, inventory_location, parent_obj);
                     if (wield_reason == ITEM_CANNOT_OK) {
                         int64_t old_item_obj = item_wield_get(parent_obj, inventory_location);
                         if (old_item_obj != OBJ_HANDLE_NULL

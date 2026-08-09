@@ -2376,7 +2376,7 @@ void object_set_light(int64_t obj, unsigned int flags, tig_art_id_t aid, tig_col
     obj_field_int32_set(obj,
         OBJ_F_RENDER_FLAGS,
         obj_field_int32_get(obj, OBJ_F_RENDER_FLAGS) & ~ORF_80000000);
-    sub_4D9590(obj, true);
+    light_create_for_obj(obj, true);
 }
 
 // 0x43ECF0
@@ -2449,7 +2449,7 @@ void object_set_overlay_light(int64_t obj, int index, unsigned int flags, tig_ar
     obj_field_int32_set(obj,
         OBJ_F_RENDER_FLAGS,
         obj_field_int32_get(obj, OBJ_F_RENDER_FLAGS) & ~ORF_80000000);
-    sub_4D9590(obj, true);
+    light_create_for_obj(obj, true);
 }
 
 // 0x43EEB0
@@ -2913,7 +2913,7 @@ void object_overlay_light_frame_set_first(int64_t obj, int index)
     obj_field_int32_set(obj,
         OBJ_F_RENDER_FLAGS,
         obj_field_int32_get(obj, OBJ_F_RENDER_FLAGS) & ~ORF_80000000);
-    sub_4D9590(obj, true);
+    light_create_for_obj(obj, true);
 }
 
 // 0x43FBF0
@@ -2936,7 +2936,7 @@ void object_overlay_light_frame_set_last(int64_t obj, int index)
     obj_field_int32_set(obj,
         OBJ_F_RENDER_FLAGS,
         obj_field_int32_get(obj, OBJ_F_RENDER_FLAGS) & ~ORF_80000000);
-    sub_4D9590(obj, true);
+    light_create_for_obj(obj, true);
 }
 
 // 0x43FC80
@@ -3850,7 +3850,7 @@ void object_drop(int64_t obj, int64_t loc)
     }
 
     obj_field_int32_set(obj, OBJ_F_RENDER_FLAGS, 0);
-    sub_4D9590(obj, true);
+    light_create_for_obj(obj, true);
     sub_444270(obj, 2);
     object_get_rect(obj, 0x07, &rect);
     object_iso_invalidate_rect(&rect);
@@ -4305,7 +4305,7 @@ bool sub_442260(int64_t obj, int64_t loc)
         sector_unlock(sector_id);
     }
 
-    sub_4D9590(obj, true);
+    light_create_for_obj(obj, true);
 
     if (!object_editor) {
         if (type == OBJ_TYPE_NPC) {
@@ -5338,7 +5338,7 @@ void sub_444270(int64_t obj, int a2)
         if (player_is_pc_obj(obj) && player_is_local_pc_obj(obj)) {
             objlist_notify_sector_changed(sector_id_from_loc(loc), obj);
         }
-        sub_4D9590(obj, true);
+        light_create_for_obj(obj, true);
     }
 
     obj_field_int32_set(obj, OBJ_F_RENDER_FLAGS, render_flags);

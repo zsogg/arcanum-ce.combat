@@ -107,7 +107,7 @@ static void sub_4ABC20(Ai* ai);
 static bool sub_4ABC70(Ai* ai);
 static int sub_4ABE20(Ai* ai);
 static bool ai_is_stronger(int64_t attacker_obj, int64_t target_obj);
-static bool sub_4ABF10(Ai* ai, S4ABF10* a2);
+static bool ai_choose_action_from_list(Ai* ai, S4ABF10* a2);
 static void ai_action_perform(Ai* ai);
 static void ai_action_perform_cast(Ai* ai);
 static void ai_action_perform_item(Ai* ai);
@@ -514,7 +514,7 @@ bool ai_heal_func(Ai* ai, int64_t obj, bool a3)
         v1.entries = magictech_ai.actions[MAGICTECH_AI_ACTION_RESURRECT].entries;
         v1.cnt = magictech_ai.actions[MAGICTECH_AI_ACTION_RESURRECT].cnt;
         v1.obj = obj;
-        if (sub_4ABF10(ai, &v1)) {
+        if (ai_choose_action_from_list(ai, &v1)) {
             mt_ai_destroy(&magictech_ai);
             return true;
         } else {
@@ -535,7 +535,7 @@ bool ai_heal_func(Ai* ai, int64_t obj, bool a3)
             v1.entries = magictech_ai.actions[MAGICTECH_AI_ACTION_FATIGUE_RECOVER].entries;
             v1.cnt = magictech_ai.actions[MAGICTECH_AI_ACTION_FATIGUE_RECOVER].cnt;
             v1.obj = obj;
-            if (sub_4ABF10(ai, &v1)) {
+            if (ai_choose_action_from_list(ai, &v1)) {
                 mt_ai_destroy(&magictech_ai);
                 return true;
             }
@@ -561,7 +561,7 @@ bool ai_heal_func(Ai* ai, int64_t obj, bool a3)
         v1.entries = magictech_ai.actions[MAGICTECH_AI_ACTION_HEAL_HEAVY].entries;
         v1.cnt = magictech_ai.actions[MAGICTECH_AI_ACTION_HEAL_HEAVY].cnt;
         v1.obj = obj;
-        if (sub_4ABF10(ai, &v1)) {
+        if (ai_choose_action_from_list(ai, &v1)) {
             mt_ai_destroy(&magictech_ai);
             return true;
         }
@@ -575,7 +575,7 @@ bool ai_heal_func(Ai* ai, int64_t obj, bool a3)
         v1.entries = magictech_ai.actions[MAGICTECH_AI_ACTION_HEAL_MEDIUM].entries;
         v1.cnt = magictech_ai.actions[MAGICTECH_AI_ACTION_HEAL_MEDIUM].cnt;
         v1.obj = obj;
-        if (sub_4ABF10(ai, &v1)) {
+        if (ai_choose_action_from_list(ai, &v1)) {
             mt_ai_destroy(&magictech_ai);
             return true;
         }
@@ -589,7 +589,7 @@ bool ai_heal_func(Ai* ai, int64_t obj, bool a3)
         v1.entries = magictech_ai.actions[MAGICTECH_AI_ACTION_CURE_POISON].entries;
         v1.cnt = magictech_ai.actions[MAGICTECH_AI_ACTION_CURE_POISON].cnt;
         v1.obj = obj;
-        if (sub_4ABF10(ai, &v1)) {
+        if (ai_choose_action_from_list(ai, &v1)) {
             mt_ai_destroy(&magictech_ai);
             return true;
         }
@@ -605,7 +605,7 @@ bool ai_heal_func(Ai* ai, int64_t obj, bool a3)
         v1.entries = magictech_ai.actions[MAGICTECH_AI_ACTION_HEAL_LIGHT].entries;
         v1.cnt = magictech_ai.actions[MAGICTECH_AI_ACTION_HEAL_LIGHT].cnt;
         v1.obj = obj;
-        if (sub_4ABF10(ai, &v1)) {
+        if (ai_choose_action_from_list(ai, &v1)) {
             mt_ai_destroy(&magictech_ai);
             return true;
         }
@@ -1746,7 +1746,7 @@ bool sub_4AAF50(Ai* ai)
     v1.flags = 0x1;
     v1.entries = magictech_ai.actions[MAGICTECH_AI_ACTION_FLEE].entries;
     v1.cnt = magictech_ai.actions[MAGICTECH_AI_ACTION_FLEE].cnt;
-    if (!sub_4ABF10(ai, &v1)) {
+    if (!ai_choose_action_from_list(ai, &v1)) {
         mt_ai_destroy(&magictech_ai);
         return false;
     }
@@ -2183,7 +2183,7 @@ bool sub_4ABC70(Ai* ai)
         v3.flags = 0x1;
         v3.entries = magictech_ai.actions[MAGICTECH_AI_ACTION_SUMMON].entries;
         v3.cnt = magictech_ai.actions[MAGICTECH_AI_ACTION_SUMMON].cnt;
-        if (sub_4ABF10(ai, &v3)) {
+        if (ai_choose_action_from_list(ai, &v3)) {
             mt_ai_destroy(&magictech_ai);
             return true;
         }
@@ -2198,7 +2198,7 @@ bool sub_4ABC70(Ai* ai)
         v3.flags = 0x4;
         v3.entries = magictech_ai.actions[MAGICTECH_AI_ACTION_DEFENSIVE].entries;
         v3.cnt = magictech_ai.actions[MAGICTECH_AI_ACTION_DEFENSIVE].cnt;
-        if (sub_4ABF10(ai, &v3)) {
+        if (ai_choose_action_from_list(ai, &v3)) {
             mt_ai_destroy(&magictech_ai);
             return true;
         }
@@ -2210,7 +2210,7 @@ bool sub_4ABC70(Ai* ai)
     v3.flags = 0x2;
     v3.entries = magictech_ai.actions[MAGICTECH_AI_ACTION_OFFENSIVE].entries;
     v3.cnt = magictech_ai.actions[MAGICTECH_AI_ACTION_OFFENSIVE].cnt;
-    if (sub_4ABF10(ai, &v3)) {
+    if (ai_choose_action_from_list(ai, &v3)) {
         mt_ai_destroy(&magictech_ai);
         return true;
     }
@@ -2257,7 +2257,7 @@ bool ai_is_stronger(int64_t attacker_obj, int64_t target_obj)
 }
 
 // 0x4ABF10
-bool sub_4ABF10(Ai* ai, S4ABF10* a2)
+bool ai_choose_action_from_list(Ai* ai, S4ABF10* a2)
 {
     int64_t obj;
     int base;

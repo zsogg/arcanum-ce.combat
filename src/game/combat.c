@@ -1649,7 +1649,7 @@ void combat_dmg(CombatContext* combat)
 
             int64_t weapon_obj = item_wield_get(combat->target_obj, ITEM_INV_LOC_WEAPON);
             if (weapon_obj != OBJ_HANDLE_NULL
-                && sub_464D20(weapon_obj, ITEM_INV_LOC_WEAPON, combat->target_obj)) {
+                && item_check_wield(weapon_obj, ITEM_INV_LOC_WEAPON, combat->target_obj)) {
                 item_drop_nearby(weapon_obj);
 
                 mes_file_entry.num = 19; // "Weapon dropped"
@@ -1661,7 +1661,7 @@ void combat_dmg(CombatContext* combat)
 
             int64_t shield_obj = item_wield_get(combat->target_obj, ITEM_INV_LOC_SHIELD);
             if (shield_obj != OBJ_HANDLE_NULL
-                && sub_464D20(shield_obj, ITEM_INV_LOC_SHIELD, combat->target_obj)) {
+                && item_check_wield(shield_obj, ITEM_INV_LOC_SHIELD, combat->target_obj)) {
                 item_drop_nearby(weapon_obj);
 
                 mes_file_entry.num = 20; // "Item dropped"

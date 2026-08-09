@@ -65,7 +65,7 @@ void light_clear_modified(Light* light);
 bool light_read_dif(TigFile* stream, Light** light_ptr);
 bool light_write_dif(TigFile* stream, Light* light);
 void sub_4D9570(Light* light);
-void sub_4D9590(int64_t obj, bool a2);
+void light_create_for_obj(int64_t obj, bool a2);
 void sub_4D9990(int64_t obj);
 void sub_4D9A90(int64_t obj);
 bool shadow_apply(int64_t obj);

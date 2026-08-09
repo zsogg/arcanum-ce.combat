@@ -646,7 +646,7 @@ void sub_4D9570(Light* light)
 }
 
 // 0x4D9590
-void sub_4D9590(int64_t obj, bool a2)
+void light_create_for_obj(int64_t obj, bool a2)
 {
     unsigned int light_flags[4];
     unsigned int render_flags;
@@ -1936,7 +1936,7 @@ bool sub_4DDD90(Sector* sector)
                     }
 
                     if (update) {
-                        sub_4D9590(node->obj, false);
+                        light_create_for_obj(node->obj, false);
                         light = (Light*)obj_field_ptr_get(node->obj, OBJ_F_LIGHT_HANDLE);
                         if (light != NULL) {
                             sector_light_list_add(&(sector->lights), light);

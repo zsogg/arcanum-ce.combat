@@ -75,7 +75,7 @@ static bool anim_set_path_flags(PathCreateInfo* path_create_info, bool a2);
 static bool anim_create_wander_dark_path(AnimRunInfo* run_info);
 static bool anim_create_path_to_tile(AnimRunInfo* run_info);
 static void anim_create_path_max_length(int64_t a1, const char* msg, int value);
-static int sub_426320(AnimPath* anim_path, int64_t from, int64_t to, int64_t obj);
+static int anim_path_calc_max_length(AnimPath* anim_path, int64_t from, int64_t to, int64_t obj);
 static int sub_426500(int64_t obj, int64_t to, AnimPath* path, unsigned int flags);
 static bool anim_create_straight_path(AnimRunInfo* run_info);
 static bool anim_create_knockback_path(AnimRunInfo* run_info);
@@ -4907,7 +4907,7 @@ bool anim_create_wander_path(AnimRunInfo* run_info)
     run_info->path_attached_to_stack_index = run_info->current_goal + 1;
 
     path_create_info.obj = obj;
-    path_create_info.max_rotations = sub_426320(&(run_info->path), loc, target_loc, obj);
+    path_create_info.max_rotations = anim_path_calc_max_length(&(run_info->path), loc, target_loc, obj);
     path_create_info.from = loc;
     path_create_info.to = target_loc;
     path_create_info.rotations = run_info->path.rotations;
@@ -5032,7 +5032,7 @@ bool anim_create_wander_dark_path(AnimRunInfo* run_info)
     run_info->path_attached_to_stack_index = run_info->current_goal + 1;
 
     path_create_info.obj = obj;
-    path_create_info.max_rotations = sub_426320(&(run_info->path), loc, target_loc, obj);
+    path_create_info.max_rotations = anim_path_calc_max_length(&(run_info->path), loc, target_loc, obj);
     path_create_info.from = loc;
     path_create_info.to = target_loc;
     path_create_info.rotations = run_info->path.rotations;
@@ -5141,7 +5141,7 @@ int sub_4261E0(int64_t a1, int64_t a2)
     path.absMaxPathLength = 0;
     path.maxPathLength = 0;
     path.baseRot = 0;
-    path.field_CC = sizeof(path.rotations); // FIX: Initialize to prevent errors in `sub_426320`.
+    path.field_CC = sizeof(path.rotations); // FIX: Initialize to prevent errors in `anim_path_calc_max_length`.
 
     if (!sub_426500(a1, a2, &path, 0)) {
         return 0;
@@ -5161,7 +5161,7 @@ int sub_426250(int64_t a1, int64_t a2)
     path.absMaxPathLength = 0;
     path.maxPathLength = 0;
     path.baseRot = 0;
-    path.field_CC = sizeof(path.rotations); // FIX: Initialize to prevent errors in `sub_426320`.
+    path.field_CC = sizeof(path.rotations); // FIX: Initialize to prevent errors in `anim_path_calc_max_length`.
 
     if (!sub_426500(a1, a2, &path, PATH_FLAG_0x0001)) {
         return 0;
@@ -5180,7 +5180,7 @@ void anim_create_path_max_length(int64_t a1, const char* msg, int value)
 }
 
 // 0x426320
-int sub_426320(AnimPath* anim_path, int64_t from, int64_t to, int64_t obj)
+int anim_path_calc_max_length(AnimPath* anim_path, int64_t from, int64_t to, int64_t obj)
 {
     int estimate;
 
@@ -5265,7 +5265,7 @@ bool sub_426560(int64_t obj, int64_t from, int64_t to, AnimPath* path, unsigned 
 
     ASSERT(obj != OBJ_HANDLE_NULL); // 4511, "obj != OBJ_HANDLE_NULL"
 
-    v1 = sub_426320(path, from, to, obj);
+    v1 = anim_path_calc_max_length(path, from, to, obj);
 
     if ((flags & PATH_FLAG_0x1000) != 0) {
         v1 = 200;
@@ -5508,7 +5508,7 @@ bool anim_create_path_away_from_obj(AnimRunInfo* run_info)
     run_info->cur_stack_data->params[AGDATA_TARGET_TILE].loc = target_loc;
     run_info->path_attached_to_stack_index = run_info->current_goal;
 
-    v1 = sub_426320(&(run_info->path), source_loc, target_loc, source_obj);
+    v1 = anim_path_calc_max_length(&(run_info->path), source_loc, target_loc, source_obj);
 
     path_create_flags = 0;
     if ((obj_field_int32_get(source_obj, OBJ_F_SPELL_FLAGS) & OSF_POLYMORPHED) != 0) {
@@ -5981,7 +5981,7 @@ bool anim_create_path_near_tile(AnimRunInfo* run_info)
         return false;
     }
 
-    path_create_info.max_rotations = sub_426320(&(run_info->path), source_loc, target_loc, obj);
+    path_create_info.max_rotations = anim_path_calc_max_length(&(run_info->path), source_loc, target_loc, obj);
     path_create_info.from = source_loc;
     path_create_info.to = target_loc;
     path_create_info.obj = obj;
@@ -6077,7 +6077,7 @@ bool anim_create_path_near_obj(AnimRunInfo* run_info)
 
     source_loc = obj_field_int64_get(source_obj, OBJ_F_LOCATION);
     target_loc = obj_field_int64_get(target_obj, OBJ_F_LOCATION);
-    max_rotations = sub_426320(&(run_info->path), source_loc, target_loc, source_obj);
+    max_rotations = anim_path_calc_max_length(&(run_info->path), source_loc, target_loc, source_obj);
 
     run_info->cur_stack_data->params[AGDATA_TARGET_TILE].loc = target_loc;
 
@@ -6268,7 +6268,7 @@ bool anim_create_path_near_obj_combat(AnimRunInfo* run_info)
     range = run_info->cur_stack_data->params[AGDATA_RANGE_DATA].data;
     source_loc = obj_field_int64_get(source_obj, OBJ_F_LOCATION);
     target_loc = obj_field_int64_get(target_obj, OBJ_F_LOCATION);
-    max_rotations = sub_426320(&(run_info->path), source_loc, target_loc, source_obj);
+    max_rotations = anim_path_calc_max_length(&(run_info->path), source_loc, target_loc, source_obj);
 
     run_info->cur_stack_data->params[AGDATA_TARGET_TILE].loc = target_loc;
 
@@ -7088,7 +7088,7 @@ bool anim_can_reach_target(int64_t source_obj, int64_t target_obj)
         path.curr = 0;
         path.max = 0;
         path.baseRot = 0;
-        path.field_CC = sizeof(path.rotations); // FIX: Initialize to prevent errors in `sub_426320`.
+        path.field_CC = sizeof(path.rotations); // FIX: Initialize to prevent errors in `anim_path_calc_max_length`.
 
         if (!sub_426500(source_obj, target_loc, &path, PATH_FLAG_0x0001)) {
             return false;

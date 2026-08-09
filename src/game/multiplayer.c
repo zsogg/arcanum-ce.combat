@@ -2758,7 +2758,7 @@ int sub_4A5D80(int64_t obj, char* str)
         }
 
         tig_str_parse_value(&str, &basic_proto);
-        if (sub_462540(obj, proto_get_by_description(basic_proto), 0)) {
+        if (item_find_by_proto(obj, proto_get_by_description(basic_proto), 0)) {
             cnt++;
         }
     }
