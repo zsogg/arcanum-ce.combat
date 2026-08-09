@@ -2559,7 +2559,7 @@ void inven_ui_drop_dragged_item(void)
     if (item_parent(inven_ui_drag_item_obj, &parent_obj)
         && obj_field_int32_get(inven_ui_drag_item_obj, OBJ_F_ITEM_INV_LOCATION) != -1) {
         if (!tig_net_is_active() || !multiplayer_is_locked()) {
-            sub_4A51C0(player_get_local_pc_obj(), inven_ui_drag_item_obj);
+            multiplayer_item_reveal(player_get_local_pc_obj(), inven_ui_drag_item_obj);
         }
 
         sound_id = sfx_item_sound(inven_ui_drag_item_obj, qword_681450, OBJ_HANDLE_NULL, ITEM_SOUND_DROP);
@@ -2609,7 +2609,7 @@ void sub_575930(void)
         }
     }
 
-    sub_4A51C0(player_get_local_pc_obj(), inven_ui_drag_item_obj);
+    multiplayer_item_reveal(player_get_local_pc_obj(), inven_ui_drag_item_obj);
 
     sound_id = sfx_item_sound(inven_ui_drag_item_obj, qword_681450, OBJ_HANDLE_NULL, ITEM_SOUND_DROP);
     gsound_play_sfx(sound_id, 1);
@@ -2634,7 +2634,7 @@ void sub_575BE0(void)
 void sub_575C50(int64_t obj)
 {
     if (inven_ui_drag_item_obj != OBJ_HANDLE_NULL && obj == inven_ui_drag_item_obj) {
-        sub_4A51C0(player_get_local_pc_obj(), inven_ui_drag_item_obj);
+        multiplayer_item_reveal(player_get_local_pc_obj(), inven_ui_drag_item_obj);
         inven_ui_drag_item_obj = OBJ_HANDLE_NULL;
         intgame_refresh_cursor();
         redraw_inven(false);
@@ -3951,7 +3951,7 @@ void inven_ui_transfer_item(int64_t item_obj, int64_t target_obj, int new_invent
     int qty_fld;
     int qty;
 
-    sub_4A51C0(player_get_local_pc_obj(), item_obj);
+    multiplayer_item_reveal(player_get_local_pc_obj(), item_obj);
 
     if (target_obj == qword_681450) {
         reason = item_check_remove(item_obj);

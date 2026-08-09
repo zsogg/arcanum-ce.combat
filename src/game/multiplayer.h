@@ -41,7 +41,7 @@ bool sub_4A38B0(bool (*func)(tig_button_handle_t), tig_button_handle_t button_ha
 void sub_4A39D0(Func5F0DF8 func, tig_button_handle_t button_handle);
 bool sub_4A3D00(bool a1);
 bool sub_4A3D70(int64_t** objs_ptr, int* cnt_ptr);
-void sub_4A40F0(int player, ObjectID oid, int level, void* data, int size);
+void multiplayer_player_data_set(int player, ObjectID oid, int level, void* data, int size);
 void* sub_4A4180(int player);
 int sub_4A41B0(int player);
 ObjectID sub_4A41E0(int player);
@@ -55,7 +55,7 @@ bool multiplayer_level_scheme_rule(int64_t obj, char* str);
 bool multiplayer_level_scheme_name(int64_t obj, char* str);
 bool multiplayer_portrait_path(int64_t obj, int size, char* path);
 bool sub_4A50D0(int64_t pc_obj, int64_t item_obj);
-bool sub_4A51C0(int64_t pc_obj, int64_t item_obj);
+bool multiplayer_item_reveal(int64_t pc_obj, int64_t item_obj);
 int sub_4A5460(int64_t a1);
 void multiplayer_ping(tig_timestamp_t timestamp);
 void sub_4A53B0(int64_t a1, int64_t a2);

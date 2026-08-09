@@ -202,7 +202,7 @@ static void multiplayer_start_play(PlayerCreateInfo* player_create_info);
 static bool sub_49D570(TimeEvent* timeevent);
 static void multiplayer_handle_message(void* msg);
 static void sub_4A1F30(int64_t obj, int64_t location, int dx, int dy);
-static bool sub_4A1F60(int player, int64_t* obj_ptr);
+static bool multiplayer_player_obj_get(int player, int64_t* obj_ptr);
 static void multiplayer_send_player_list(void);
 static bool multiplayer_validate_message(void* msg);
 static void sub_4A2040(int a1);
@@ -222,7 +222,7 @@ static void sub_4A3660(int player);
 static void sub_4A3780(void);
 static bool save_char(const char* path, int64_t obj);
 static bool load_char(const char* path, int64_t* obj_ptr);
-static bool sub_4A40D0(int player);
+static bool multiplayer_player_data_exists(int player);
 static void multiplayer_level_scheme_set(int64_t obj, const char* rule, const char* name);
 static int multiplayer_level_scheme_get(int64_t obj, char* rule, char* name);
 static void sub_4A5290(void);
@@ -235,11 +235,11 @@ static void sub_4A5670(int64_t obj);
 static int sub_4A5710(int64_t obj, mes_file_handle_t mes_file);
 static int sub_4A57F0(int64_t obj);
 static int sub_4A5840(int64_t obj, mes_file_handle_t mes_file);
-static int sub_4A5920(int64_t obj, mes_file_handle_t mes_file, int num);
+static int multiplayer_grant_items(int64_t obj, mes_file_handle_t mes_file, int num);
 static int sub_4A59F0(int64_t obj, mes_file_handle_t mes_file);
 static void sub_4A5CA0(int64_t obj, mes_file_handle_t mes_file);
-static int sub_4A5D80(int64_t obj, char* str);
-static int sub_4A5E10(int64_t obj, char* str);
+static int multiplayer_count_items_owned(int64_t obj, char* str);
+static int multiplayer_give_items_from_list(int64_t obj, char* str);
 static bool sub_4A5EE0(int64_t obj);
 static void sub_4A6010(int64_t obj);
 static bool sub_4A6560(const char* a1, char* a2);
@@ -804,7 +804,7 @@ void multiplayer_start_play(PlayerCreateInfo* player_create_info)
     modal_dialog_info.process = NULL;
     modal_dialog_info.redraw = gamelib_redraw;
 
-    if (sub_4A40D0(0)) {
+    if (multiplayer_player_data_exists(0)) {
         if (!sub_4420D0(sub_4A4180(0), &(player_create_info->obj), player_create_info->loc)) {
             exit(EXIT_FAILURE);
         }
@@ -982,7 +982,7 @@ void sub_4A1F30(int64_t obj, int64_t location, int dx, int dy)
 }
 
 // 0x4A1F60
-bool sub_4A1F60(int player, int64_t* obj_ptr)
+bool multiplayer_player_obj_get(int player, int64_t* obj_ptr)
 {
     if (player >= 0 && player < NUM_PLAYERS) {
         *obj_ptr = obj_pool_perm_lookup(stru_5E8AD0[player].field_8);
@@ -1103,7 +1103,7 @@ int multiplayer_find_slot_from_obj(int64_t obj)
 
     for (player = 0; player < NUM_PLAYERS; player++) {
         if (tig_net_client_is_active(player)
-            && sub_4A1F60(player, &player_obj)
+            && multiplayer_player_obj_get(player, &player_obj)
             && player_obj == obj) {
             return player;
         }
@@ -1118,7 +1118,7 @@ int64_t sub_4A2B60(int player)
     int64_t obj;
 
     if (tig_net_client_is_active(player)
-        && sub_4A1F60(player, &obj)) {
+        && multiplayer_player_obj_get(player, &obj)) {
         return obj;
     }
 
@@ -1158,7 +1158,7 @@ int64_t multiplayer_player_find_first(void)
 
     for (dword_5B40D8 = 0; dword_5B40D8 < NUM_PLAYERS; dword_5B40D8++) {
         if (tig_net_client_is_active(dword_5B40D8)
-            && sub_4A1F60(dword_5B40D8, &obj)) {
+            && multiplayer_player_obj_get(dword_5B40D8, &obj)) {
             dword_5B40D8++;
             return obj;
         }
@@ -1178,7 +1178,7 @@ int64_t multiplayer_player_find_next(void)
 
     for (; dword_5B40D8 < NUM_PLAYERS; dword_5B40D8++) {
         if (tig_net_client_is_active(dword_5B40D8)
-            && sub_4A1F60(dword_5B40D8, &obj)) {
+            && multiplayer_player_obj_get(dword_5B40D8, &obj)) {
             dword_5B40D8++;
             return obj;
         }
@@ -1824,15 +1824,15 @@ bool load_char(const char* path, int64_t* obj_ptr)
 }
 
 // 0x4A40D0
-bool sub_4A40D0(int player)
+bool multiplayer_player_data_exists(int player)
 {
     return off_5F0BC8[player] != NULL;
 }
 
 // 0x4A40F0
-void sub_4A40F0(int player, ObjectID oid, int level, void* data, int size)
+void multiplayer_player_data_set(int player, ObjectID oid, int level, void* data, int size)
 {
-    if (sub_4A40D0(player)) {
+    if (multiplayer_player_data_exists(player)) {
         FREE(off_5F0BC8[player]);
     }
 
@@ -1847,7 +1847,7 @@ void sub_4A40F0(int player, ObjectID oid, int level, void* data, int size)
 // 0x4A4180
 void* sub_4A4180(int player)
 {
-    if (sub_4A40D0(player)) {
+    if (multiplayer_player_data_exists(player)) {
         return (void*)(off_5F0BC8[player] + 1);
     } else {
         return NULL;
@@ -1857,7 +1857,7 @@ void* sub_4A4180(int player)
 // 0x4A41B0
 int sub_4A41B0(int player)
 {
-    if (sub_4A40D0(player)) {
+    if (multiplayer_player_data_exists(player)) {
         return off_5F0BC8[player]->size;
     } else {
         return 0;
@@ -1869,7 +1869,7 @@ ObjectID sub_4A41E0(int player)
 {
     ObjectID oid;
 
-    if (sub_4A40D0(player)) {
+    if (multiplayer_player_data_exists(player)) {
         oid = off_5F0BC8[player]->oid;
     } else {
         oid.type = OID_TYPE_NULL;
@@ -1887,7 +1887,7 @@ void* sub_4A4230(int player)
 // 0x4A4240
 int sub_4A4240(int player)
 {
-    if (sub_4A40D0(player)) {
+    if (multiplayer_player_data_exists(player)) {
         // See 0x4A40F0.
         return off_5F0BC8[player]->size + sizeof(S5F0BC8) + 8;
     } else {
@@ -2291,7 +2291,7 @@ bool sub_4A50D0(int64_t pc_obj, int64_t item_obj)
 }
 
 // 0x4A51C0
-bool sub_4A51C0(int64_t pc_obj, int64_t item_obj)
+bool multiplayer_item_reveal(int64_t pc_obj, int64_t item_obj)
 {
     unsigned int flags;
 
@@ -2561,7 +2561,7 @@ int sub_4A57F0(int64_t obj)
 
     background_get_items(buffer, sizeof(buffer), background_get(obj));
 
-    return sub_4A5E10(obj, buffer);
+    return multiplayer_give_items_from_list(obj, buffer);
 }
 
 // 0x4A5840
@@ -2575,24 +2575,32 @@ int sub_4A5840(int64_t obj, mes_file_handle_t mes_file)
 
     value = tech_skill_level(obj, TECH_SKILL_PICK_LOCKS);
     if (value > 0) {
-        v1 += sub_4A5920(obj, mes_file, (value + level + 29) / 30 + 1100);
+        v1 += multiplayer_grant_items(obj, mes_file, (value + level + 29) / 30 + 1100);
     }
 
     value = basic_skill_level(obj, BASIC_SKILL_HEAL);
     if (value > 0) {
-        v1 += sub_4A5920(obj, mes_file, (value + level + 29) / 30 + 1200);
+        v1 += multiplayer_grant_items(obj, mes_file, (value + level + 29) / 30 + 1200);
     }
 
     value = basic_skill_level(obj, BASIC_SKILL_BACKSTAB);
     if (value > 0) {
-        v1 += sub_4A5920(obj, mes_file, (value + level + 29) / 30 + 1300);
+        v1 += multiplayer_grant_items(obj, mes_file, (value + level + 29) / 30 + 1300);
     }
 
     return v1;
 }
 
-// 0x4A5920
-int sub_4A5920(int64_t obj, mes_file_handle_t mes_file, int num)
+/**
+ * Give a player the starting items listed at `num` in a message file.
+ *
+ * The entry at `num + 10` is a skip list: if the object already carries any
+ * prototype named there, nothing is granted. That is what keeps a rejoining
+ * player from collecting a second set.
+ *
+ * 0x4A5920
+ */
+int multiplayer_grant_items(int64_t obj, mes_file_handle_t mes_file, int num)
 {
     MesFileEntry mes_file_entry1;
     MesFileEntry mes_file_entry2;
@@ -2602,14 +2610,14 @@ int sub_4A5920(int64_t obj, mes_file_handle_t mes_file, int num)
 
     if (mes_search(mes_file, &mes_file_entry2)) {
         mes_get_msg(mes_file, &mes_file_entry2);
-        if (sub_4A5D80(obj, mes_file_entry2.str)) {
+        if (multiplayer_count_items_owned(obj, mes_file_entry2.str)) {
             return 0;
         }
     }
 
     if (mes_search(mes_file, &mes_file_entry1)) {
         mes_get_msg(mes_file, &mes_file_entry1);
-        return sub_4A5E10(obj, mes_file_entry1.str);
+        return multiplayer_give_items_from_list(obj, mes_file_entry1.str);
     }
 
     return 0;
@@ -2631,9 +2639,9 @@ int sub_4A59F0(int64_t obj, mes_file_handle_t mes_file)
         mes_file_entry.num = 600;
         if (mes_search(mes_file, &mes_file_entry)) {
             mes_get_msg(mes_file, &mes_file_entry);
-            v1 += sub_4A5E10(obj, mes_file_entry.str);
+            v1 += multiplayer_give_items_from_list(obj, mes_file_entry.str);
         }
-        v1 += sub_4A5920(obj, mes_file, (value + level + 9) / 10 + 600);
+        v1 += multiplayer_grant_items(obj, mes_file, (value + level + 9) / 10 + 600);
     }
 
     // Bows
@@ -2642,9 +2650,9 @@ int sub_4A59F0(int64_t obj, mes_file_handle_t mes_file)
         mes_file_entry.num = 700;
         if (mes_search(mes_file, &mes_file_entry)) {
             mes_get_msg(mes_file, &mes_file_entry);
-            v1 += sub_4A5E10(obj, mes_file_entry.str);
+            v1 += multiplayer_give_items_from_list(obj, mes_file_entry.str);
         }
-        v1 += sub_4A5920(obj, mes_file, (value + level + 9) / 10 + 700);
+        v1 += multiplayer_grant_items(obj, mes_file, (value + level + 9) / 10 + 700);
     }
 
     // Throwing
@@ -2653,9 +2661,9 @@ int sub_4A59F0(int64_t obj, mes_file_handle_t mes_file)
         mes_file_entry.num = 800;
         if (mes_search(mes_file, &mes_file_entry)) {
             mes_get_msg(mes_file, &mes_file_entry);
-            v1 += sub_4A5E10(obj, mes_file_entry.str);
+            v1 += multiplayer_give_items_from_list(obj, mes_file_entry.str);
         }
-        v1 += sub_4A5920(obj, mes_file, (value + level + 9) / 10 + 800);
+        v1 += multiplayer_grant_items(obj, mes_file, (value + level + 9) / 10 + 800);
     }
 
     // Firearms
@@ -2664,9 +2672,9 @@ int sub_4A59F0(int64_t obj, mes_file_handle_t mes_file)
         mes_file_entry.num = 900;
         if (mes_search(mes_file, &mes_file_entry)) {
             mes_get_msg(mes_file, &mes_file_entry);
-            v1 += sub_4A5E10(obj, mes_file_entry.str);
+            v1 += multiplayer_give_items_from_list(obj, mes_file_entry.str);
         }
-        v1 += sub_4A5920(obj, mes_file, (value + level + 9) / 10 + 900);
+        v1 += multiplayer_grant_items(obj, mes_file, (value + level + 9) / 10 + 900);
     }
 
     if (v1 != 0) {
@@ -2695,7 +2703,7 @@ int sub_4A59F0(int64_t obj, mes_file_handle_t mes_file)
 
     mes_get_msg(mes_file, &mes_file_entry);
 
-    return sub_4A5E10(obj, mes_file_entry.str);
+    return multiplayer_give_items_from_list(obj, mes_file_entry.str);
 }
 
 // 0x4A5CA0
@@ -2739,11 +2747,11 @@ void sub_4A5CA0(int64_t obj, mes_file_handle_t mes_file)
         num += (strength + level - 12) / 10;
     }
 
-    sub_4A5920(obj, mes_file, num);
+    multiplayer_grant_items(obj, mes_file, num);
 }
 
 // 0x4A5D80
-int sub_4A5D80(int64_t obj, char* str)
+int multiplayer_count_items_owned(int64_t obj, char* str)
 {
     int cnt = 0;
     int basic_proto;
@@ -2767,7 +2775,7 @@ int sub_4A5D80(int64_t obj, char* str)
 }
 
 // 0x4A5E10
-int sub_4A5E10(int64_t obj, char* str)
+int multiplayer_give_items_from_list(int64_t obj, char* str)
 {
     int64_t loc;
     int cnt = 0;
