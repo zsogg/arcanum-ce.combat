@@ -60,19 +60,19 @@ int hotkey_ui_dragging_index = -1;
 static tig_window_handle_t hotkey_secondary_window_handle;
 
 // 0x683518
-static Hotkey stru_683518[2];
+static Hotkey hotkey_ui_recent_actions[2];
 
 // 0x6835C8
-static TigRect stru_6835C8;
+static TigRect hotkey_ui_bar_rect;
 
 // 0x6835D8
 static tig_window_handle_t hotkey_primary_window_handle;
 
 // 0x6835E0
-static Hotkey stru_6835E0[10];
+static Hotkey hotkey_ui_slots[10];
 
 // 0x683950
-static Hotkey stru_683950;
+static Hotkey hotkey_ui_dragged;
 
 // 0x6839A8
 static int hotkey_slot_width;
@@ -106,20 +106,20 @@ bool hotkey_ui_init(GameInitInfo* init_info)
     hotkey_slot_height = art_frame_data.height;
 
     for (index = 0; index < 2; index++) {
-        hotkey = &(stru_683518[index]);
+        hotkey = &(hotkey_ui_recent_actions[index]);
         hotkey->type = HOTKEY_SKILL;
         hotkey->data = intgame_recent_action_default_skill(index);
         intgame_recent_action_button_get(index)->art_num = skill_ui_icon_art_num(hotkey->data);
     }
 
     for (index = 0; index < 10; index++) {
-        hotkey = &(stru_6835E0[index]);
+        hotkey = &(hotkey_ui_slots[index]);
         hotkey_ui_clear_slot(hotkey);
         hotkey->slot = index;
         hotkey->data = -1;
         hotkey->info.art_num = hotkey_ui_art_nums[index];
         hotkey->info.button_handle = TIG_BUTTON_HANDLE_INVALID;
-        hotkey->info.x = hotkey_ui_slot_x[index] - stru_6835C8.x;
+        hotkey->info.x = hotkey_ui_slot_x[index] - hotkey_ui_bar_rect.x;
         hotkey->info.y = 445;
     }
 
@@ -151,7 +151,7 @@ bool hotkey_ui_start(tig_window_handle_t primary_window_handle, TigRect* rect, t
     int index;
     Hotkey* hotkey;
 
-    stru_6835C8 = *rect;
+    hotkey_ui_bar_rect = *rect;
     hotkey_primary_window_handle = primary_window_handle;
     hotkey_secondary_window_handle = secondary_window_handle;
 
@@ -167,11 +167,11 @@ bool hotkey_ui_start(tig_window_handle_t primary_window_handle, TigRect* rect, t
 
     if (hotkey_secondary_window_handle != TIG_WINDOW_HANDLE_INVALID) {
         for (index = 0; index < 2; index++) {
-            hotkey = &(stru_683518[index]);
+            hotkey = &(hotkey_ui_recent_actions[index]);
             intgame_recent_action_button_get(index)->art_num = hotkey->type == 2 || hotkey->type != 3
                 ? skill_ui_icon_art_num(hotkey->data)
                 : spell_icon(hotkey->data);
-            intgame_button_create_ex(hotkey_secondary_window_handle, &stru_6835C8, intgame_recent_action_button_get(index), 0x1);
+            intgame_button_create_ex(hotkey_secondary_window_handle, &hotkey_ui_bar_rect, intgame_recent_action_button_get(index), 0x1);
         }
     }
 
@@ -201,8 +201,8 @@ bool hotkey_ui_start(tig_window_handle_t primary_window_handle, TigRect* rect, t
     }
 
     for (index = 0; index < 10; index++) {
-        hotkey = &(stru_6835E0[index]);
-        hotkey->info.x = hotkey_ui_slot_x[index] - stru_6835C8.x;
+        hotkey = &(hotkey_ui_slots[index]);
+        hotkey->info.x = hotkey_ui_slot_x[index] - hotkey_ui_bar_rect.x;
         hotkey->info.y = 445;
         intgame_hotkey_refresh(index);
 
@@ -230,9 +230,9 @@ void hotkey_ui_end(void)
     }
 
     for (index = 0; index < 10; index++) {
-        if (stru_6835E0[index].info.button_handle != TIG_BUTTON_HANDLE_INVALID) {
-            tig_button_destroy(stru_6835E0[index].info.button_handle);
-            stru_6835E0[index].info.button_handle = TIG_BUTTON_HANDLE_INVALID;
+        if (hotkey_ui_slots[index].info.button_handle != TIG_BUTTON_HANDLE_INVALID) {
+            tig_button_destroy(hotkey_ui_slots[index].info.button_handle);
+            hotkey_ui_slots[index].info.button_handle = TIG_BUTTON_HANDLE_INVALID;
         }
     }
 }
@@ -247,10 +247,10 @@ void hotkey_ui_reset_recent_actions(void)
     hotkey_ui_dragging = false;
 
     for (index = 0; index < 2; index++) {
-        hotkey_ui_clear_slot(&(stru_683518[index]));
-        stru_683518[index].type = HOTKEY_SKILL;
-        stru_683518[index].data = intgame_recent_action_default_skill(index);
-        intgame_recent_action_button_get(index)->art_num = skill_ui_icon_art_num(stru_683518[index].data);
+        hotkey_ui_clear_slot(&(hotkey_ui_recent_actions[index]));
+        hotkey_ui_recent_actions[index].type = HOTKEY_SKILL;
+        hotkey_ui_recent_actions[index].data = intgame_recent_action_default_skill(index);
+        intgame_recent_action_button_get(index)->art_num = skill_ui_icon_art_num(hotkey_ui_recent_actions[index].data);
 
         button_handle = intgame_recent_action_button_get(index)->button_handle;
         if (button_handle != TIG_BUTTON_HANDLE_INVALID) {
@@ -266,14 +266,14 @@ bool hotkey_ui_save(TigFile* stream)
     int index;
 
     for (index = 0; index < 2; index++) {
-        stru_683518[index].slot = -1;
-        if (!intgame_save_hotkey(&(stru_683518[index]), stream)) {
+        hotkey_ui_recent_actions[index].slot = -1;
+        if (!intgame_save_hotkey(&(hotkey_ui_recent_actions[index]), stream)) {
             return false;
         }
     }
 
     for (index = 0; index < 10; index++) {
-        if (!intgame_save_hotkey(&(stru_6835E0[index]), stream)) {
+        if (!intgame_save_hotkey(&(hotkey_ui_slots[index]), stream)) {
             return false;
         }
     }
@@ -296,7 +296,7 @@ bool hotkey_ui_load(GameLoadInfo* load_info)
     }
 
     for (index = 0; index < 10; index++) {
-        if (!intgame_load_hotkey(&(stru_6835E0[index]), load_info->stream)) {
+        if (!intgame_load_hotkey(&(hotkey_ui_slots[index]), load_info->stream)) {
             return false;
         }
     }
@@ -307,9 +307,9 @@ bool hotkey_ui_load(GameLoadInfo* load_info)
 // 0x57DC20
 void sub_57DC20(void)
 {
-    stru_683950.slot = -1;
-    stru_683950.type = HOTKEY_ITEM;
-    object_ref_init(inven_ui_drag_item_obj_get(), &(stru_683950.item_obj));
+    hotkey_ui_dragged.slot = -1;
+    hotkey_ui_dragged.type = HOTKEY_ITEM;
+    object_ref_init(inven_ui_drag_item_obj_get(), &(hotkey_ui_dragged.item_obj));
     hotkey_ui_dragging = true;
 }
 
@@ -340,19 +340,19 @@ bool hotkey_ui_process_event(TigMessage* msg)
         case TIG_BUTTON_STATE_RELEASED:
             for (index = 0; index < 2; index++) {
                 if (msg->data.button.button_handle == intgame_recent_action_button_get(index)->button_handle) {
-                    intgame_hotkey_activate(&(stru_683518[index]));
+                    intgame_hotkey_activate(&(hotkey_ui_recent_actions[index]));
                     return true;
                 }
             }
             for (index = 0; index < 10; index++) {
-                if (msg->data.button.button_handle == stru_6835E0[index].info.button_handle) {
+                if (msg->data.button.button_handle == hotkey_ui_slots[index].info.button_handle) {
                     if (hotkey_ui_dragging || inven_ui_drag_item_obj_get() != OBJ_HANDLE_NULL) {
                         if (inven_ui_drag_item_obj_get() != OBJ_HANDLE_NULL) {
                             sub_57DC20();
                         }
                         sub_57E8D0(TIG_MESSAGE_MOUSE_LEFT_BUTTON_UP);
                     } else {
-                        intgame_hotkey_activate(&(stru_6835E0[index]));
+                        intgame_hotkey_activate(&(hotkey_ui_slots[index]));
                     }
                     return true;
                 }
@@ -360,16 +360,16 @@ bool hotkey_ui_process_event(TigMessage* msg)
             return false;
         case TIG_BUTTON_STATE_MOUSE_INSIDE:
             if (msg->data.button.button_handle == intgame_recent_action_button_get(0)->button_handle) {
-                intgame_hotkey_highlight(&(stru_683518[0]));
+                intgame_hotkey_highlight(&(hotkey_ui_recent_actions[0]));
                 return true;
             }
             if (msg->data.button.button_handle == intgame_recent_action_button_get(1)->button_handle) {
-                intgame_hotkey_highlight(&(stru_683518[1]));
+                intgame_hotkey_highlight(&(hotkey_ui_recent_actions[1]));
                 return true;
             }
             index = sub_57E460();
-            if (index < 10 && stru_6835E0[index].type) {
-                intgame_hotkey_highlight(&(stru_6835E0[index]));
+            if (index < 10 && hotkey_ui_slots[index].type) {
+                intgame_hotkey_highlight(&(hotkey_ui_slots[index]));
                 return true;
             }
             return false;
@@ -381,7 +381,7 @@ bool hotkey_ui_process_event(TigMessage* msg)
             && !mainmenu_ui_is_active()
             && msg->data.keyboard.key == SDLK_A
             && msg->data.keyboard.pressed) {
-            intgame_hotkey_activate(stru_683518);
+            intgame_hotkey_activate(hotkey_ui_recent_actions);
             gsound_play_sfx(0, 1);
             return true;
         }
@@ -536,7 +536,7 @@ void intgame_hotkey_refresh(int index)
         return;
     }
 
-    hotkey = &(stru_6835E0[index]);
+    hotkey = &(hotkey_ui_slots[index]);
 
     if (tig_art_interface_id_create(hotkey_ui_art_nums[0], 0, 0, 0, &art_id) == TIG_OK) {
         tig_art_frame_data(art_id, &art_frame_data);
@@ -730,12 +730,12 @@ bool hotkey_ui_begin_drag(void)
         return false;
     }
 
-    stru_683950.item_obj.obj = OBJ_HANDLE_NULL;
-    stru_683950.item_obj.locator.objid.type = OID_TYPE_NULL;
+    hotkey_ui_dragged.item_obj.obj = OBJ_HANDLE_NULL;
+    hotkey_ui_dragged.item_obj.locator.objid.type = OID_TYPE_NULL;
 
     index = sub_57E460();
     if (index < 10) {
-        hotkey = &(stru_6835E0[index]);
+        hotkey = &(hotkey_ui_slots[index]);
         if ((hotkey->flags & HOTKEY_DRAGGED) != 0) {
             return false;
         }
@@ -744,34 +744,34 @@ bool hotkey_ui_begin_drag(void)
             hotkey_ui_dragging_index = index;
             switch (hotkey->type) {
             case HOTKEY_ITEM:
-                stru_683950.type = hotkey->type;
-                stru_683950.item_obj = hotkey->item_obj;
-                inven_ui_begin_drag(stru_683950.item_obj.obj);
+                hotkey_ui_dragged.type = hotkey->type;
+                hotkey_ui_dragged.item_obj = hotkey->item_obj;
+                inven_ui_begin_drag(hotkey_ui_dragged.item_obj.obj);
                 art_id = TIG_ART_ID_INVALID;
                 v1 = false;
                 break;
             case HOTKEY_SKILL:
-                stru_683950.type = hotkey->type;
-                stru_683950.data = hotkey->data;
-                tig_art_interface_id_create(skill_ui_icon_art_num(stru_683950.data), 0, 0, 0, &art_id);
+                hotkey_ui_dragged.type = hotkey->type;
+                hotkey_ui_dragged.data = hotkey->data;
+                tig_art_interface_id_create(skill_ui_icon_art_num(hotkey_ui_dragged.data), 0, 0, 0, &art_id);
                 break;
             case HOTKEY_SPELL:
-                stru_683950.type = hotkey->type;
-                stru_683950.data = hotkey->data;
-                tig_art_interface_id_create(spell_icon(stru_683950.data), 0, 0, 0, &art_id);
+                hotkey_ui_dragged.type = hotkey->type;
+                hotkey_ui_dragged.data = hotkey->data;
+                tig_art_interface_id_create(spell_icon(hotkey_ui_dragged.data), 0, 0, 0, &art_id);
                 break;
             case HOTKEY_ITEM_SPELL:
-                stru_683950.type = hotkey->type;
-                stru_683950.item_obj = hotkey->item_obj;
-                stru_683950.data = hotkey->data;
-                tig_art_interface_id_create(spell_icon(stru_683950.data), 0, 0, 0, &art_id);
+                hotkey_ui_dragged.type = hotkey->type;
+                hotkey_ui_dragged.item_obj = hotkey->item_obj;
+                hotkey_ui_dragged.data = hotkey->data;
+                tig_art_interface_id_create(spell_icon(hotkey_ui_dragged.data), 0, 0, 0, &art_id);
                 break;
             default:
                 // Should be unreachable.
                 assert(0);
             }
 
-            stru_683950.slot = index;
+            hotkey_ui_dragged.slot = index;
             hotkey->flags |= HOTKEY_DRAGGED;
             intgame_hotkey_refresh(index);
             intgame_hotkey_mouse_load(art_id, v1);
@@ -783,8 +783,8 @@ bool hotkey_ui_begin_drag(void)
     if (!intgame_is_compact_interface()) {
         index = sub_557CF0();
         if (index < 5) {
-            stru_683950.type = HOTKEY_SPELL;
-            stru_683950.data = index + 5 * intgame_selected_college_get();
+            hotkey_ui_dragged.type = HOTKEY_SPELL;
+            hotkey_ui_dragged.data = index + 5 * intgame_selected_college_get();
             intgame_spell_button_get(intgame_selected_college_get(), index, &button_info);
             tig_art_interface_id_create(button_info.art_num, 0, 0, 0, &art_id);
             intgame_hotkey_mouse_load(art_id, true);
@@ -794,8 +794,8 @@ bool hotkey_ui_begin_drag(void)
 
         index = intgame_skill_button_at_mouse();
         if (index < 4) {
-            stru_683950.type = HOTKEY_SKILL;
-            stru_683950.data = index;
+            hotkey_ui_dragged.type = HOTKEY_SKILL;
+            hotkey_ui_dragged.data = index;
             tig_art_interface_id_create(skill_ui_icon_art_num(index), 0, 0, 0, &art_id);
             intgame_hotkey_mouse_load(art_id, true);
             hotkey_ui_dragging = true;
@@ -805,11 +805,11 @@ bool hotkey_ui_begin_drag(void)
         index = sub_557C00();
         if (index < 5) {
             spl = mt_item_spell(intgame_magictech_item_get(), index);
-            stru_683950.type = HOTKEY_ITEM_SPELL;
-            object_ref_init(intgame_magictech_item_get(), &(stru_683950.item_obj));
-            stru_683950.data = spl;
-            stru_683950.info.art_num = spell_icon(spl);
-            tig_art_interface_id_create(stru_683950.info.art_num, 0, 0, 0, &art_id);
+            hotkey_ui_dragged.type = HOTKEY_ITEM_SPELL;
+            object_ref_init(intgame_magictech_item_get(), &(hotkey_ui_dragged.item_obj));
+            hotkey_ui_dragged.data = spl;
+            hotkey_ui_dragged.info.art_num = spell_icon(spl);
+            tig_art_interface_id_create(hotkey_ui_dragged.info.art_num, 0, 0, 0, &art_id);
             intgame_hotkey_mouse_load(art_id, true);
             hotkey_ui_dragging = true;
             return true;
@@ -854,8 +854,8 @@ bool sub_57E8D0(TigMessageMouseEvent mouse_event)
 
     sub_573730();
 
-    if (stru_683950.item_obj.obj != OBJ_HANDLE_NULL) {
-        if (item_parent(stru_683950.item_obj.obj, &parent_obj)
+    if (hotkey_ui_dragged.item_obj.obj != OBJ_HANDLE_NULL) {
+        if (item_parent(hotkey_ui_dragged.item_obj.obj, &parent_obj)
             && !player_is_local_pc_obj(parent_obj)) {
             hotkey_ui_dragging = false;
             inven_ui_drop_dragged_item();
@@ -864,7 +864,7 @@ bool sub_57E8D0(TigMessageMouseEvent mouse_event)
             return false;
         }
 
-        obj_type = obj_field_int32_get(stru_683950.item_obj.obj, OBJ_F_TYPE);
+        obj_type = obj_field_int32_get(hotkey_ui_dragged.item_obj.obj, OBJ_F_TYPE);
         if (obj_type == OBJ_TYPE_AMMO
             || obj_type == OBJ_TYPE_GOLD) {
             hotkey_ui_dragging = false;
@@ -874,7 +874,7 @@ bool sub_57E8D0(TigMessageMouseEvent mouse_event)
             return false;
         }
 
-        if (sub_462A30(parent_obj, stru_683950.item_obj.obj)) {
+        if (sub_462A30(parent_obj, hotkey_ui_dragged.item_obj.obj)) {
             mes_file_entry.num = 4000; // "You already have a duplicate item on the hotkey bank."
             mes_get_msg(intgame_hotkey_mes_file(), &mes_file_entry);
 
@@ -892,7 +892,7 @@ bool sub_57E8D0(TigMessageMouseEvent mouse_event)
 
     index = sub_57E460();
     if (index < 10) {
-        hotkey = &(stru_6835E0[index]);
+        hotkey = &(hotkey_ui_slots[index]);
         if (hotkey_ui_dragging_index == index) {
             sound_id = sfx_item_sound(hotkey->item_obj.obj, player_get_local_pc_obj(), OBJ_HANDLE_NULL, ITEM_SOUND_DROP);
             if (sound_id != -1) {
@@ -910,7 +910,7 @@ bool sub_57E8D0(TigMessageMouseEvent mouse_event)
         }
 
         if (hotkey_ui_dragging_index != -1) {
-            hotkey_ui_clear_slot(&(stru_6835E0[hotkey_ui_dragging_index]));
+            hotkey_ui_clear_slot(&(hotkey_ui_slots[hotkey_ui_dragging_index]));
         }
 
         v2 = hotkey->item_obj.obj;
@@ -937,37 +937,37 @@ bool sub_57E8D0(TigMessageMouseEvent mouse_event)
             hotkey_ui_clear_index(index);
         }
 
-        hotkey->type = stru_683950.type;
+        hotkey->type = hotkey_ui_dragged.type;
 
-        switch (stru_683950.type) {
+        switch (hotkey_ui_dragged.type) {
         case HOTKEY_NONE:
             break;
         case HOTKEY_ITEM:
             sub_573840();
-            item_inventory_location_get(stru_683950.item_obj.obj); // FIXME: Useless.
-            flags = obj_field_int32_get(stru_683950.item_obj.obj, OBJ_F_ITEM_FLAGS);
+            item_inventory_location_get(hotkey_ui_dragged.item_obj.obj); // FIXME: Useless.
+            flags = obj_field_int32_get(hotkey_ui_dragged.item_obj.obj, OBJ_F_ITEM_FLAGS);
             flags &= ~OIF_NO_DISPLAY;
-            obj_field_int32_set(stru_683950.item_obj.obj, OBJ_F_ITEM_FLAGS, flags);
-            item_location_set(stru_683950.item_obj.obj, hotkey->slot + 2000);
+            obj_field_int32_set(hotkey_ui_dragged.item_obj.obj, OBJ_F_ITEM_FLAGS, flags);
+            item_location_set(hotkey_ui_dragged.item_obj.obj, hotkey->slot + 2000);
             inven_ui_update(player_get_local_pc_obj());
-            hotkey->item_obj = stru_683950.item_obj;
-            hotkey->art_id = intgame_item_icon_art_id_get(stru_683950.item_obj.obj);
+            hotkey->item_obj = hotkey_ui_dragged.item_obj;
+            hotkey->art_id = intgame_item_icon_art_id_get(hotkey_ui_dragged.item_obj.obj);
             hotkey->count = item_count_items_matching_prototype(player_get_local_pc_obj(), hotkey->item_obj.obj);
             break;
         case HOTKEY_SKILL:
-            hotkey->data = stru_683950.data;
-            hotkey->info.art_num = skill_ui_icon_art_num(stru_683950.data);
+            hotkey->data = hotkey_ui_dragged.data;
+            hotkey->info.art_num = skill_ui_icon_art_num(hotkey_ui_dragged.data);
             tig_art_interface_id_create(hotkey->info.art_num, 0, 0, 0, &(hotkey->art_id));
             break;
         case HOTKEY_SPELL:
-            hotkey->data = stru_683950.data;
-            hotkey->info.art_num = spell_icon(stru_683950.data);
+            hotkey->data = hotkey_ui_dragged.data;
+            hotkey->info.art_num = spell_icon(hotkey_ui_dragged.data);
             tig_art_interface_id_create(hotkey->info.art_num, 0, 0, 0, &(hotkey->art_id));
             break;
         case HOTKEY_ITEM_SPELL:
-            hotkey->item_obj = stru_683950.item_obj;
-            hotkey->data = stru_683950.data;
-            hotkey->info.art_num = spell_icon(stru_683950.data);
+            hotkey->item_obj = hotkey_ui_dragged.item_obj;
+            hotkey->data = hotkey_ui_dragged.data;
+            hotkey->info.art_num = spell_icon(hotkey_ui_dragged.data);
             tig_art_interface_id_create(hotkey->info.art_num, 0, 0, 0, &(hotkey->art_id));
             break;
         }
@@ -976,11 +976,11 @@ bool sub_57E8D0(TigMessageMouseEvent mouse_event)
             item_transfer(v2, v3);
         }
 
-        hotkey->type = stru_683950.type;
+        hotkey->type = hotkey_ui_dragged.type;
         hotkey->flags = 0;
         intgame_hotkey_refresh(index);
     } else {
-        if (stru_683950.type == HOTKEY_ITEM) {
+        if (hotkey_ui_dragged.type == HOTKEY_ITEM) {
             if (inven_ui_is_created()) {
                 hotkey_ui_dragging = false;
                 hotkey_ui_dragging_index = -1;
@@ -1007,8 +1007,8 @@ bool sub_57E8D0(TigMessageMouseEvent mouse_event)
         }
     }
 
-    if (stru_683950.item_obj.obj != OBJ_HANDLE_NULL) {
-        sound_id = sfx_item_sound(stru_683950.item_obj.obj, player_get_local_pc_obj(), OBJ_HANDLE_NULL, ITEM_SOUND_DROP);
+    if (hotkey_ui_dragged.item_obj.obj != OBJ_HANDLE_NULL) {
+        sound_id = sfx_item_sound(hotkey_ui_dragged.item_obj.obj, player_get_local_pc_obj(), OBJ_HANDLE_NULL, ITEM_SOUND_DROP);
         if (sound_id != -1) {
             gsound_play_sfx(sound_id, 1);
         }
@@ -1024,9 +1024,9 @@ bool sub_57E8D0(TigMessageMouseEvent mouse_event)
 // 0x57ED60
 void sub_57ED60(Hotkey* hotkey, int a2)
 {
-    stru_6835E0[hotkey_ui_dragging_index].flags = 0;
-    stru_6835E0[hotkey_ui_dragging_index].type = hotkey->type;
-    stru_6835E0[hotkey_ui_dragging_index].data = hotkey->data;
+    hotkey_ui_slots[hotkey_ui_dragging_index].flags = 0;
+    hotkey_ui_slots[hotkey_ui_dragging_index].type = hotkey->type;
+    hotkey_ui_slots[hotkey_ui_dragging_index].data = hotkey->data;
     intgame_hotkey_refresh(a2);
 }
 
@@ -1034,9 +1034,9 @@ void sub_57ED60(Hotkey* hotkey, int a2)
 bool sub_57EDA0(TigMessageMouseEvent mouse_event)
 {
     if (inven_ui_drag_item_obj_get() != OBJ_HANDLE_NULL) {
-        stru_683950.slot = -1;
-        stru_683950.type = HOTKEY_ITEM;
-        object_ref_init(inven_ui_drag_item_obj_get(), &(stru_683950.item_obj));
+        hotkey_ui_dragged.slot = -1;
+        hotkey_ui_dragged.type = HOTKEY_ITEM;
+        object_ref_init(inven_ui_drag_item_obj_get(), &(hotkey_ui_dragged.item_obj));
         hotkey_ui_dragging = true;
     }
 
@@ -1059,7 +1059,7 @@ void sub_57EE30(int64_t obj, int inventory_location)
     int64_t v1 = OBJ_HANDLE_NULL;
     Hotkey* hotkey;
 
-    hotkey = &(stru_6835E0[inventory_location - 2000]);
+    hotkey = &(hotkey_ui_slots[inventory_location - 2000]);
 
     if (hotkey->type != HOTKEY_NONE) {
         if (hotkey->item_obj.obj != OBJ_HANDLE_NULL) {
@@ -1081,7 +1081,7 @@ bool hotkey_ui_assign_item(int64_t obj, int inventory_location)
     int64_t v1 = OBJ_HANDLE_NULL;
     Hotkey* hotkey;
 
-    hotkey = &(stru_6835E0[inventory_location - 2000]);
+    hotkey = &(hotkey_ui_slots[inventory_location - 2000]);
 
     if (hotkey->type != HOTKEY_NONE) {
         if (hotkey->item_obj.obj != OBJ_HANDLE_NULL) {
@@ -1117,31 +1117,31 @@ void sub_57EFA0(int type, int data, int64_t item_obj)
 
     switch (type) {
     case HOTKEY_ITEM:
-        if (stru_683518[0].type == HOTKEY_ITEM
-            && stru_683518[0].item_obj.obj == item_obj) {
+        if (hotkey_ui_recent_actions[0].type == HOTKEY_ITEM
+            && hotkey_ui_recent_actions[0].item_obj.obj == item_obj) {
             return;
         }
         // FIXME: `new_art_id` is never set in this code path.
         new_art_id = TIG_ART_ID_INVALID;
         break;
     case HOTKEY_SKILL:
-        if (stru_683518[0].type == HOTKEY_SKILL
-            && stru_683518[0].data == data) {
+        if (hotkey_ui_recent_actions[0].type == HOTKEY_SKILL
+            && hotkey_ui_recent_actions[0].data == data) {
             return;
         }
         tig_art_interface_id_create(skill_ui_icon_art_num(data), 0, 0, 0, &new_art_id);
         break;
     case HOTKEY_SPELL:
-        if (stru_683518[0].type == HOTKEY_SPELL
-            && stru_683518[0].data == data) {
+        if (hotkey_ui_recent_actions[0].type == HOTKEY_SPELL
+            && hotkey_ui_recent_actions[0].data == data) {
             return;
         }
         tig_art_interface_id_create(spell_icon(data), 0, 0, 0, &new_art_id);
         break;
     case HOTKEY_ITEM_SPELL:
-        if (stru_683518[0].type == HOTKEY_ITEM_SPELL
-            && stru_683518[0].data == data
-            && stru_683518[0].item_obj.obj == item_obj) {
+        if (hotkey_ui_recent_actions[0].type == HOTKEY_ITEM_SPELL
+            && hotkey_ui_recent_actions[0].data == data
+            && hotkey_ui_recent_actions[0].item_obj.obj == item_obj) {
             return;
         }
         tig_art_interface_id_create(spell_icon(data), 0, 0, 0, &new_art_id);
@@ -1150,9 +1150,9 @@ void sub_57EFA0(int type, int data, int64_t item_obj)
         return;
     }
 
-    stru_683518[1].type = stru_683518[0].type;
-    stru_683518[1].data = stru_683518[0].data;
-    object_ref_init(stru_683518[0].item_obj.obj, &stru_683518[1].item_obj);
+    hotkey_ui_recent_actions[1].type = hotkey_ui_recent_actions[0].type;
+    hotkey_ui_recent_actions[1].data = hotkey_ui_recent_actions[0].data;
+    object_ref_init(hotkey_ui_recent_actions[0].item_obj.obj, &hotkey_ui_recent_actions[1].item_obj);
     intgame_recent_action_button_get(1)->art_num = intgame_recent_action_button_get(0)->art_num;
     button_handle = intgame_recent_action_button_get(1)->button_handle;
     if (button_handle != TIG_BUTTON_HANDLE_INVALID) {
@@ -1160,9 +1160,9 @@ void sub_57EFA0(int type, int data, int64_t item_obj)
         tig_button_set_art(button_handle, old_art_id);
     }
 
-    stru_683518[0].type = type;
-    stru_683518[0].data = data;
-    object_ref_init(item_obj, &stru_683518[1].item_obj); // FIXME: Probably wrong, should be [0].
+    hotkey_ui_recent_actions[0].type = type;
+    hotkey_ui_recent_actions[0].data = data;
+    object_ref_init(item_obj, &hotkey_ui_recent_actions[1].item_obj); // FIXME: Probably wrong, should be [0].
     intgame_recent_action_button_get(0)->art_num = tig_art_num_get(new_art_id);
     button_handle = intgame_recent_action_button_get(0)->button_handle;
     if (button_handle != TIG_BUTTON_HANDLE_INVALID) {
@@ -1194,7 +1194,7 @@ void sub_57F1D0(int index)
 {
     Hotkey* hotkey;
 
-    hotkey = &(stru_6835E0[index]);
+    hotkey = &(hotkey_ui_slots[index]);
 
     if ((hotkey->flags & HOTKEY_DRAGGED) != 0) {
         return;
@@ -1211,14 +1211,14 @@ void sub_57F1D0(int index)
 // 0x57F210
 void hotkey_ui_clear_index(int index)
 {
-    hotkey_ui_clear_slot(&(stru_6835E0[index]));
+    hotkey_ui_clear_slot(&(hotkey_ui_slots[index]));
     intgame_hotkey_refresh(index);
 }
 
 // 0x57F240
 Hotkey* sub_57F240(int index)
 {
-    return &(stru_6835E0[index]);
+    return &(hotkey_ui_slots[index]);
 }
 
 // 0x57F260
@@ -1253,7 +1253,7 @@ void hotkey_ui_notify_item_inserted_or_removed(int64_t item_obj, bool removed)
 
     if (removed) {
         for (index = 0; index < 2; index++) {
-            hotkey = &(stru_683518[index]);
+            hotkey = &(hotkey_ui_recent_actions[index]);
             if (hotkey->item_obj.obj == item_obj) {
                 hotkey_ui_clear_slot(hotkey);
                 sub_57EFA0(2, intgame_recent_action_default_skill(index), hotkey->item_obj.obj);
@@ -1269,7 +1269,7 @@ void hotkey_ui_notify_spell_removed(int spell)
     Hotkey* hotkey;
 
     for (index = 0; index < 2; index++) {
-        hotkey = &(stru_683518[index]);
+        hotkey = &(hotkey_ui_recent_actions[index]);
         if (hotkey->type == HOTKEY_SPELL && hotkey->data == spell) {
             hotkey_ui_clear_slot(hotkey);
             hotkey->data = intgame_recent_action_default_skill(index);
@@ -1295,7 +1295,7 @@ void intgame_hotkeys_recover(void)
     Hotkey* hotkey;
 
     for (index = 0; index < 2; index++) {
-        hotkey = &(stru_683518[index]);
+        hotkey = &(hotkey_ui_recent_actions[index]);
         if ((hotkey->type == HOTKEY_ITEM || hotkey->type == HOTKEY_ITEM_SPELL)
             && !object_ref_validate(&(hotkey->item_obj))) {
             if (!gamelib_in_reset()) {
