@@ -25,11 +25,11 @@ typedef struct MainMenuButtonInfo {
     /* 002C */ int field_2C;
 } MainMenuButtonInfo;
 
-typedef struct MainMenuWindowInfoF3C {
-    int field_0;
+typedef struct MainMenuAnimInfo {
+    int art_num;
     int x;
     int y;
-} MainMenuWindowInfoF3C;
+} MainMenuAnimInfo;
 
 typedef struct MainMenuWindowInfo {
     /* 0000 */ int background_art_num;
@@ -47,7 +47,7 @@ typedef struct MainMenuWindowInfo {
     /* 0030 */ int field_30;
     /* 0034 */ int field_34;
     /* 0038 */ int refresh_text_flags;
-    /* 003C */ MainMenuWindowInfoF3C field_3C[2];
+    /* 003C */ MainMenuAnimInfo anims[2];
     /* 0054 */ void (*refresh_func)(TigRect* rect);
     /* 0058 */ bool (*execute_func)(int btn);
     /* 005C */ TigRect content_rect;
