@@ -88,6 +88,8 @@ int sub_426250(int64_t a1, int64_t a2);
 bool sub_426560(int64_t obj, int64_t from, int64_t to, AnimPath* path, unsigned int flags);
 bool sub_427000(int64_t obj);
 void anim_goal_reset_position_mp(AnimID* anim_id, int64_t obj, int64_t loc, tig_art_id_t art_id, unsigned int flags, int offset_x, int offset_y);
+void anim_pause(void);
+void anim_unpause(void);
 bool anim_fidget_timeevent_process(TimeEvent* timeevent);
 void sub_430460(void);
 void anim_set_obj_offset(int64_t obj, int offset_x, int offset_y);

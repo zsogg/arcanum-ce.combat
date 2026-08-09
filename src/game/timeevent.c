@@ -82,14 +82,14 @@ static bool debug_timeevent_process(TimeEvent* timeevent);
 static void timeevent_debug_node(TimeEventNode* timeevent, int node);
 
 // 0x5B2178
-static const char* off_5B2178[TIME_TYPE_COUNT] = {
+static const char* timeevent_time_type_names[TIME_TYPE_COUNT] = {
     /*  TIME_TYPE_REAL_TIME */ "Real-Time",
     /*  TIME_TYPE_GAME_TIME */ "Game-Time",
     /* TIME_TYPE_ANIMATIONS */ "Game-Time2 (Animations)",
 };
 
 // 0x5B2188
-static TimeEventTypeInfo stru_5B2188[TIMEEVENT_TYPE_COUNT] = {
+static TimeEventTypeInfo timeevent_type_info[TIMEEVENT_TYPE_COUNT] = {
     /*               TIMEEVENT_TYPE_DEBUG */ { "Debug", false, P1_INT | P0_INT, TIME_TYPE_REAL_TIME, debug_timeevent_process, NULL, NULL },
     /*                TIMEEVENT_TYPE_ANIM */ { "Anim", true, P0_INT, TIME_TYPE_ANIMATIONS, anim_timeevent_process, NULL, NULL },
     /*            TIMEEVENT_TYPE_BKG_ANIM */ { "Bkg Anim", false, P2_INT | P1_INT | P0_INT, TIME_TYPE_REAL_TIME, timeevent_do_nothing, NULL, NULL },
@@ -134,7 +134,7 @@ static int datetime_start_year = 1885;
 static int datetime_start_time_in_milliseconds = 36000000;
 
 // 0x5B2794
-static TimeEventParamTypeFlags dword_5B2794[TIMEEVENT_PARAM_COUNT][TIMEEVENT_PARAM_TYPE_COUNT] = {
+static TimeEventParamTypeFlags timeevent_param_type_flags[TIMEEVENT_PARAM_COUNT][TIMEEVENT_PARAM_TYPE_COUNT] = {
     {
         P0_INT,
         P0_OBJ,
@@ -178,28 +178,25 @@ static DateTime timeevent_time[TIME_TYPE_COUNT];
 #define timeevent_anim_time (timeevent_time[TIME_TYPE_ANIMATIONS])
 
 // 0x5E8610
-static tig_timestamp_t dword_5E8610;
+static tig_timestamp_t timeevent_last_ping_timestamp;
 
 // 0x5E8614
 static bool timeevent_initialized;
 
 // 0x5E8618
-static int dword_5E8618;
+static int timeevent_pause_depth;
 
 // 0x5E861C
 static bool timeevent_in_ping;
 
 // 0x5E8620
-static bool dword_5E8620;
+static bool timeevent_adding_immediate;
 
 // 0x5E8624
-static tig_timestamp_t dword_5E8624;
+static tig_timestamp_t timeevent_last_time_broadcast_timestamp;
 
 // 0x5E8628
-static int dword_5E8628;
-
-// 0x5DE6E0
-static bool dword_5DE6E0;
+static int timeevent_unsynced_game_time_ms;
 
 /**
  * Returns the current in-game date and time.
@@ -541,9 +538,9 @@ bool timeevent_init(GameInitInfo* init_info)
         datetime_from_milliseconds(&timeevent_game_time, datetime_start_time_in_milliseconds);
         datetime_from_milliseconds(&timeevent_anim_time, datetime_start_time_in_milliseconds);
 
-        tig_timer_now(&dword_5E8610);
+        tig_timer_now(&timeevent_last_ping_timestamp);
 
-        sub_45B340();
+        timeevent_unpause();
 
         timeevent_initialized = true;
     }
@@ -556,13 +553,13 @@ bool timeevent_set_funcs(TimeEventFuncs* funcs)
 {
     if (timeevent_initialized) {
         if (funcs != NULL) {
-            stru_5B2188[TIMEEVENT_TYPE_BKG_ANIM].process_func = funcs->bkg_anim_func;
-            stru_5B2188[TIMEEVENT_TYPE_WORLDMAP].process_func = funcs->worldmap_func;
-            stru_5B2188[TIMEEVENT_TYPE_AMBIENT_LIGHTING].process_func = funcs->ambient_lighting_func;
-            stru_5B2188[TIMEEVENT_TYPE_SLEEPING].process_func = funcs->sleeping_func;
-            stru_5B2188[TIMEEVENT_TYPE_CLOCK].process_func = funcs->clock_func;
-            stru_5B2188[TIMEEVENT_TYPE_MAINMENU].process_func = funcs->mainmenu_func;
-            stru_5B2188[TIMEEVENT_TYPE_MP_CTRL_UI].process_func = funcs->mp_ctrl_ui_func;
+            timeevent_type_info[TIMEEVENT_TYPE_BKG_ANIM].process_func = funcs->bkg_anim_func;
+            timeevent_type_info[TIMEEVENT_TYPE_WORLDMAP].process_func = funcs->worldmap_func;
+            timeevent_type_info[TIMEEVENT_TYPE_AMBIENT_LIGHTING].process_func = funcs->ambient_lighting_func;
+            timeevent_type_info[TIMEEVENT_TYPE_SLEEPING].process_func = funcs->sleeping_func;
+            timeevent_type_info[TIMEEVENT_TYPE_CLOCK].process_func = funcs->clock_func;
+            timeevent_type_info[TIMEEVENT_TYPE_MAINMENU].process_func = funcs->mainmenu_func;
+            timeevent_type_info[TIMEEVENT_TYPE_MP_CTRL_UI].process_func = funcs->mp_ctrl_ui_func;
         }
     }
 
@@ -576,7 +573,7 @@ void timeevent_reset(void)
     datetime_from_milliseconds(&timeevent_real_time, 0);
     datetime_from_milliseconds(&timeevent_game_time, datetime_start_time_in_milliseconds);
     datetime_from_milliseconds(&timeevent_anim_time, datetime_start_time_in_milliseconds);
-    tig_timer_now(&dword_5E8610);
+    tig_timer_now(&timeevent_last_ping_timestamp);
 }
 
 // 0x45AEC0
@@ -620,7 +617,7 @@ bool timeevent_save(TigFile* stream)
 
         timeevent = timeevent_lists[index];
         while (timeevent != NULL) {
-            info = &(stru_5B2188[timeevent->te.type]);
+            info = &(timeevent_type_info[timeevent->te.type]);
             // NOTE: Original code is slightly different. It uses bitwise AND
             // with 0x1 implying `saveable` is a bitfield.
             if (info->saveable) {
@@ -673,19 +670,19 @@ bool timeevent_save_node(TimeEventTypeInfo* timeevent_type_info, TimeEventNode* 
     }
 
     for (index = 0; index < TIMEEVENT_PARAM_COUNT; index++) {
-        if ((dword_5B2794[index][TIMEEVENT_PARAM_TYPE_INTEGER] & timeevent_type_info->flags) != 0) {
+        if ((timeevent_param_type_flags[index][TIMEEVENT_PARAM_TYPE_INTEGER] & timeevent_type_info->flags) != 0) {
             if (tig_file_fwrite(&(node->te.params[index].integer_value), sizeof(node->te.params[index].integer_value), 1, stream) != 1) {
                 return false;
             }
-        } else if ((dword_5B2794[index][TIMEEVENT_PARAM_TYPE_OBJECT] & timeevent_type_info->flags) != 0) {
+        } else if ((timeevent_param_type_flags[index][TIMEEVENT_PARAM_TYPE_OBJECT] & timeevent_type_info->flags) != 0) {
             if (!object_save_obj_handle_safe(&(node->te.params[index].object_value), &(node->field_30[index]), stream)) {
                 return false;
             }
-        } else if ((dword_5B2794[index][TIMEEVENT_PARAM_TYPE_LOCATION] & timeevent_type_info->flags) != 0) {
+        } else if ((timeevent_param_type_flags[index][TIMEEVENT_PARAM_TYPE_LOCATION] & timeevent_type_info->flags) != 0) {
             if (tig_file_fwrite(&(node->te.params[index].location_value), sizeof(node->te.params[index].location_value), 1, stream) != 1) {
                 return false;
             }
-        } else if ((dword_5B2794[index][TIMEEVENT_PARAM_TYPE_FLOAT] & timeevent_type_info->flags) != 0) {
+        } else if ((timeevent_param_type_flags[index][TIMEEVENT_PARAM_TYPE_FLOAT] & timeevent_type_info->flags) != 0) {
             if (tig_file_fwrite(&(node->te.params[index].float_value), sizeof(node->te.params[index].float_value), 1, stream) != 1) {
                 return false;
             }
@@ -757,20 +754,20 @@ bool timeevent_load_node(TimeEvent* timeevent, TigFile* stream)
     }
 
     for (index = 0; index < TIMEEVENT_PARAM_COUNT; index++) {
-        if ((dword_5B2794[index][TIMEEVENT_PARAM_TYPE_INTEGER] & stru_5B2188[timeevent->type].flags) != 0) {
+        if ((timeevent_param_type_flags[index][TIMEEVENT_PARAM_TYPE_INTEGER] & timeevent_type_info[timeevent->type].flags) != 0) {
             if (tig_file_fread(&(timeevent->params[index].integer_value), sizeof(timeevent->params[index].integer_value), 1, stream) != 1) {
                 return false;
             }
-        } else if ((dword_5B2794[index][TIMEEVENT_PARAM_TYPE_OBJECT] & stru_5B2188[timeevent->type].flags) != 0) {
+        } else if ((timeevent_param_type_flags[index][TIMEEVENT_PARAM_TYPE_OBJECT] & timeevent_type_info[timeevent->type].flags) != 0) {
             if (!object_load_obj_handle_safe(&obj, 0, stream)) {
                 return false;
             }
             timeevent->params[index].object_value = obj;
-        } else if ((dword_5B2794[index][TIMEEVENT_PARAM_TYPE_LOCATION] & stru_5B2188[timeevent->type].flags) != 0) {
+        } else if ((timeevent_param_type_flags[index][TIMEEVENT_PARAM_TYPE_LOCATION] & timeevent_type_info[timeevent->type].flags) != 0) {
             if (tig_file_fread(&(timeevent->params[index].location_value), sizeof(timeevent->params[index].location_value), 1, stream) != 1) {
                 return false;
             }
-        } else if ((dword_5B2794[index][TIMEEVENT_PARAM_TYPE_FLOAT] & stru_5B2188[timeevent->type].flags) != 0) {
+        } else if ((timeevent_param_type_flags[index][TIMEEVENT_PARAM_TYPE_FLOAT] & timeevent_type_info[timeevent->type].flags) != 0) {
             if (tig_file_fread(&(timeevent->params[index].float_value), sizeof(timeevent->params[index].float_value), 1, stream) != 1) {
                 return false;
             }
@@ -781,40 +778,50 @@ bool timeevent_load_node(TimeEvent* timeevent, TigFile* stream)
 }
 
 // 0x45B300
-bool sub_45B300(void)
+bool timeevent_is_paused(void)
 {
-    if (dword_5E8618 == 0) {
+    if (timeevent_pause_depth == 0) {
         return sub_52A900();
     } else {
         return true;
     }
 }
 
+// CE: The pause flag at 0x5DE6E0 is one global in the original, written here
+// (via the setters at 0x4300B0/0x4300C0) and read by
+// `anim_fidget_timeevent_process`. It was ported as a separate file-static
+// `bool` in both timeevent.c and anim.c, so anim.c's copy was never written and
+// fidget animations kept playing while the clock was paused. Now it lives in
+// anim.c alone, where the original's setters put it.
+//
 // 0x45B320
-void sub_45B320(void)
+void timeevent_pause(void)
 {
-    if (dword_5E8618 < 30) {
-        dword_5E8618++;
-        dword_5DE6E0 = true;
+    if (timeevent_pause_depth < 30) {
+        timeevent_pause_depth++;
+        anim_pause();
     }
 }
 
 // 0x45B340
-void sub_45B340(void)
+void timeevent_unpause(void)
 {
-    if (dword_5E8618 > 0) {
-        dword_5E8618--;
-        if (dword_5E8618 == 0) {
-            dword_5DE6E0 = false;
+    if (timeevent_pause_depth > 0) {
+        timeevent_pause_depth--;
+        if (timeevent_pause_depth == 0) {
+            anim_unpause();
         }
     }
 }
 
 // 0x45B360
-void sub_45B360(void)
+void timeevent_pause_reset(void)
 {
-    dword_5E8618 = 0;
-    dword_5DE6E0 = false;
+    timeevent_pause_depth = 0;
+
+    // NOTE: The original writes the pause flag at 0x5DE6E0 directly here
+    // instead of calling the setter at 0x4300C0, as the two functions above do.
+    anim_unpause();
 }
 
 // 0x45B370
@@ -828,12 +835,12 @@ void timeevent_ping(tig_timestamp_t timestamp)
     int iter = 0;
     TimeEventNode offending_node_candidate;
 
-    delta = tig_timer_between(dword_5E8610, timestamp);
+    delta = tig_timer_between(timeevent_last_ping_timestamp, timestamp);
     if (delta < 5) {
         return;
     }
 
-    dword_5E8610 = timestamp;
+    timeevent_last_ping_timestamp = timestamp;
 
     if (delta > 250) {
         delta = 250;
@@ -844,15 +851,15 @@ void timeevent_ping(tig_timestamp_t timestamp)
 
     if (tig_net_is_active()
         && !tig_net_is_host()) {
-        if (!sub_45B300()) {
-            if (dword_5E8628 < 1000 * (sub_4A38A0() + 16)) {
+        if (!timeevent_is_paused()) {
+            if (timeevent_unsynced_game_time_ms < 1000 * (sub_4A38A0() + 16)) {
                 datetime_add_milliseconds(&timeevent_game_time, 8 * delta);
                 datetime_add_milliseconds(&timeevent_anim_time, 8 * delta);
-                dword_5E8628 += 8 * delta;
+                timeevent_unsynced_game_time_ms += 8 * delta;
             }
         }
     } else {
-        if (!sub_45B300()) {
+        if (!timeevent_is_paused()) {
             if (!combat_turn_based_is_active()) {
                 datetime_add_milliseconds(&timeevent_game_time, 8 * delta);
             }
@@ -882,7 +889,7 @@ void timeevent_ping(tig_timestamp_t timestamp)
             && datetime_compare(datetime, &(node->te.datetime)) >= 0) {
             timeevent_lists[time_type] = node->next;
 
-            info = &(stru_5B2188[node->te.type]);
+            info = &(timeevent_type_info[node->te.type]);
 
             if (timeevent_recover_handles(node)) {
                 // Save current node for debug purposes. In case infinite loop
@@ -922,10 +929,10 @@ void timeevent_ping(tig_timestamp_t timestamp)
 
     if (tig_net_is_active()
         && tig_net_is_host()
-        && tig_timer_between(dword_5E8624, timestamp) > 950) {
+        && tig_timer_between(timeevent_last_time_broadcast_timestamp, timestamp) > 950) {
         PacketGameTime pkt;
 
-        dword_5E8624 = timestamp;
+        timeevent_last_time_broadcast_timestamp = timestamp;
 
         pkt.type = 3;
         pkt.game_time = timeevent_game_time.value;
@@ -953,7 +960,7 @@ bool timeevent_recover_handles_internal(TimeEventNode* node, bool force)
     TimeEventTypeInfo* info;
     int64_t obj;
 
-    info = &(stru_5B2188[node->te.type]);
+    info = &(timeevent_type_info[node->te.type]);
 
     for (index = 0; index < TIMEEVENT_PARAM_COUNT; index++) {
         if (node->field_30[index].objid.type != OID_TYPE_NULL) {
@@ -979,7 +986,7 @@ bool timeevent_recover_handles_internal(TimeEventNode* node, bool force)
                 }
             }
         } else {
-            if ((info->flags & dword_5B2794[index][TIMEEVENT_PARAM_TYPE_OBJECT]) != 0) {
+            if ((info->flags & timeevent_param_type_flags[index][TIMEEVENT_PARAM_TYPE_OBJECT]) != 0) {
                 node->te.params[index].object_value = OBJ_HANDLE_NULL;
             }
         }
@@ -1012,12 +1019,12 @@ void sub_45B750(void)
 // 0x45B7A0
 bool sub_45B7A0(TimeEventNode* node)
 {
-    TimeEventTypeInfo* timeevent_type_info;
+    TimeEventTypeInfo* info;
     int index;
 
-    timeevent_type_info = &(stru_5B2188[node->te.type]);
+    info = &(timeevent_type_info[node->te.type]);
     for (index = 0; index < TIMEEVENT_PARAM_COUNT; index++) {
-        if ((dword_5B2794[index][TIMEEVENT_PARAM_TYPE_OBJECT] & timeevent_type_info->flags) != 0) {
+        if ((timeevent_param_type_flags[index][TIMEEVENT_PARAM_TYPE_OBJECT] & info->flags) != 0) {
             if (!obj_handle_is_valid(node->te.params[index].object_value)) {
                 return false;
             }
@@ -1039,12 +1046,12 @@ bool timeevent_add_immediate(TimeEvent* timeevent)
     DateTime datetime;
     bool rc;
 
-    dword_5E8620 = true;
+    timeevent_adding_immediate = true;
 
     datetime_from_milliseconds(&datetime, 0);
     rc = timeevent_add_delay(timeevent, &datetime);
 
-    dword_5E8620 = false;
+    timeevent_adding_immediate = false;
 
     return rc;
 }
@@ -1095,8 +1102,8 @@ bool timeevent_add_base_at_func(TimeEvent* timeevent, DateTime* base, DateTime* 
 
     timeevent->datetime = *base;
 
-    time_type = stru_5B2188[timeevent->type].time_type;
-    if (!timeevent_in_ping || dword_5E8620) {
+    time_type = timeevent_type_info[timeevent->type].time_type;
+    if (!timeevent_in_ping || timeevent_adding_immediate) {
         node_ptr = &(timeevent_lists[time_type]);
     } else {
         node_ptr = &(timeevent_new_lists[time_type]);
@@ -1114,7 +1121,7 @@ bool timeevent_add_base_at_func(TimeEvent* timeevent, DateTime* base, DateTime* 
     node->te = *timeevent;
 
     for (index = 0; index < TIMEEVENT_PARAM_COUNT; index++) {
-        if ((dword_5B2794[index][TIMEEVENT_PARAM_TYPE_OBJECT] & stru_5B2188[timeevent->type].flags) != 0) {
+        if ((timeevent_param_type_flags[index][TIMEEVENT_PARAM_TYPE_OBJECT] & timeevent_type_info[timeevent->type].flags) != 0) {
             object_locator_init(timeevent->params[index].object_value, &(node->field_30[index]));
         } else {
             node->field_30[index].objid.type = OID_TYPE_NULL;
@@ -1152,7 +1159,7 @@ bool timeevent_add_delay_base_at(TimeEvent* timeevent, DateTime* delay, DateTime
     if (base != NULL && (base->days != 0 || base->milliseconds != 0)) {
         time = *base;
     } else {
-        switch (stru_5B2188[timeevent->type].time_type) {
+        switch (timeevent_type_info[timeevent->type].time_type) {
         case TIME_TYPE_REAL_TIME:
             time = timeevent_real_time;
             break;
@@ -1205,7 +1212,7 @@ bool sub_45BB40(TimeEventNode* node)
         return false;
     }
 
-    time_type = stru_5B2188[node->te.type].time_type;
+    time_type = timeevent_type_info[node->te.type].time_type;
     if (timeevent_in_ping) {
         node_ptr = &(timeevent_new_lists[time_type]);
     } else {
@@ -1222,7 +1229,7 @@ bool sub_45BB40(TimeEventNode* node)
     node->next = *node_ptr;
 
     for (index = 0; index < TIMEEVENT_PARAM_COUNT; index++) {
-        if ((dword_5B2794[index][TIMEEVENT_PARAM_TYPE_OBJECT] & stru_5B2188[node->te.type].flags) != 0) {
+        if ((timeevent_param_type_flags[index][TIMEEVENT_PARAM_TYPE_OBJECT] & timeevent_type_info[node->te.type].flags) != 0) {
             object_locator_init(node->te.params[index].object_value, &(node->field_30[index]));
         } else {
             node->field_30[index].objid.type = OID_TYPE_NULL;
@@ -1245,8 +1252,8 @@ void timeevent_clear(void)
             node = timeevent_lists[index];
             timeevent_lists[index] = node->next;
 
-            if (stru_5B2188[node->te.type].exit_func != NULL) {
-                stru_5B2188[node->te.type].exit_func(&(node->te));
+            if (timeevent_type_info[node->te.type].exit_func != NULL) {
+                timeevent_type_info[node->te.type].exit_func(&(node->te));
             }
 
             timeevent_node_destroy(node);
@@ -1256,8 +1263,8 @@ void timeevent_clear(void)
             node = timeevent_new_lists[index];
             timeevent_new_lists[index] = node->next;
 
-            if (stru_5B2188[node->te.type].exit_func != NULL) {
-                stru_5B2188[node->te.type].exit_func(&(node->te));
+            if (timeevent_type_info[node->te.type].exit_func != NULL) {
+                timeevent_type_info[node->te.type].exit_func(&(node->te));
             }
 
             timeevent_node_destroy(node);
@@ -1301,14 +1308,14 @@ bool timeevent_clear_all_typed(int list)
         return false;
     }
 
-    node_ptr = &(timeevent_lists[stru_5B2188[list].time_type]);
+    node_ptr = &(timeevent_lists[timeevent_type_info[list].time_type]);
     while (*node_ptr != NULL) {
         node = *node_ptr;
         if (node->te.type == list) {
             *node_ptr = node->next;
 
-            if (stru_5B2188[list].exit_func != NULL) {
-                stru_5B2188[list].exit_func(&(node->te));
+            if (timeevent_type_info[list].exit_func != NULL) {
+                timeevent_type_info[list].exit_func(&(node->te));
             }
 
             timeevent_node_destroy(node);
@@ -1317,14 +1324,14 @@ bool timeevent_clear_all_typed(int list)
         }
     }
 
-    node_ptr = &(timeevent_new_lists[stru_5B2188[list].time_type]);
+    node_ptr = &(timeevent_new_lists[timeevent_type_info[list].time_type]);
     while (*node_ptr != NULL) {
         node = *node_ptr;
         if (node->te.type == list) {
             *node_ptr = node->next;
 
-            if (stru_5B2188[list].exit_func != NULL) {
-                stru_5B2188[list].exit_func(&(node->te));
+            if (timeevent_type_info[list].exit_func != NULL) {
+                timeevent_type_info[list].exit_func(&(node->te));
             }
 
             timeevent_node_destroy(node);
@@ -1346,14 +1353,14 @@ bool timeevent_clear_one_typed(int list)
         return false;
     }
 
-    node_ptr = &(timeevent_lists[stru_5B2188[list].time_type]);
+    node_ptr = &(timeevent_lists[timeevent_type_info[list].time_type]);
     while (*node_ptr != NULL) {
         node = *node_ptr;
         if (node->te.type == list) {
             *node_ptr = node->next;
 
-            if (stru_5B2188[list].exit_func != NULL) {
-                stru_5B2188[list].exit_func(&(node->te));
+            if (timeevent_type_info[list].exit_func != NULL) {
+                timeevent_type_info[list].exit_func(&(node->te));
             }
 
             timeevent_node_destroy(node);
@@ -1364,14 +1371,14 @@ bool timeevent_clear_one_typed(int list)
         node_ptr = &(node->next);
     }
 
-    node_ptr = &(timeevent_new_lists[stru_5B2188[list].time_type]);
+    node_ptr = &(timeevent_new_lists[timeevent_type_info[list].time_type]);
     while (*node_ptr != NULL) {
         node = *node_ptr;
         if (node->te.type == list) {
             *node_ptr = node->next;
 
-            if (stru_5B2188[list].exit_func != NULL) {
-                stru_5B2188[list].exit_func(&(node->te));
+            if (timeevent_type_info[list].exit_func != NULL) {
+                timeevent_type_info[list].exit_func(&(node->te));
             }
 
             timeevent_node_destroy(node);
@@ -1395,14 +1402,14 @@ bool timeevent_clear_all_ex(int list, TimeEventEnumerateFunc callback)
         return false;
     }
 
-    node_ptr = &(timeevent_lists[stru_5B2188[list].time_type]);
+    node_ptr = &(timeevent_lists[timeevent_type_info[list].time_type]);
     while (*node_ptr != NULL) {
         node = *node_ptr;
         if (node->te.type == list && callback(&(node->te))) {
             *node_ptr = node->next;
 
-            if (stru_5B2188[list].exit_func != NULL) {
-                stru_5B2188[list].exit_func(&(node->te));
+            if (timeevent_type_info[list].exit_func != NULL) {
+                timeevent_type_info[list].exit_func(&(node->te));
             }
 
             timeevent_node_destroy(node);
@@ -1411,14 +1418,14 @@ bool timeevent_clear_all_ex(int list, TimeEventEnumerateFunc callback)
         }
     }
 
-    node_ptr = &(timeevent_new_lists[stru_5B2188[list].time_type]);
+    node_ptr = &(timeevent_new_lists[timeevent_type_info[list].time_type]);
     while (*node_ptr != NULL) {
         node = *node_ptr;
         if (node->te.type == list && callback(&(node->te))) {
             *node_ptr = node->next;
 
-            if (stru_5B2188[list].exit_func != NULL) {
-                stru_5B2188[list].exit_func(&(node->te));
+            if (timeevent_type_info[list].exit_func != NULL) {
+                timeevent_type_info[list].exit_func(&(node->te));
             }
 
             timeevent_node_destroy(node);
@@ -1440,14 +1447,14 @@ bool timeevent_clear_one_ex(int list, TimeEventEnumerateFunc callback)
         return false;
     }
 
-    node_ptr = &(timeevent_lists[stru_5B2188[list].time_type]);
+    node_ptr = &(timeevent_lists[timeevent_type_info[list].time_type]);
     while (*node_ptr != NULL) {
         node = *node_ptr;
         if (node->te.type == list && callback(&(node->te))) {
             *node_ptr = node->next;
 
-            if (stru_5B2188[list].exit_func != NULL) {
-                stru_5B2188[list].exit_func(&(node->te));
+            if (timeevent_type_info[list].exit_func != NULL) {
+                timeevent_type_info[list].exit_func(&(node->te));
             }
 
             timeevent_node_destroy(node);
@@ -1458,14 +1465,14 @@ bool timeevent_clear_one_ex(int list, TimeEventEnumerateFunc callback)
         node_ptr = &(node->next);
     }
 
-    node_ptr = &(timeevent_new_lists[stru_5B2188[list].time_type]);
+    node_ptr = &(timeevent_new_lists[timeevent_type_info[list].time_type]);
     while (*node_ptr != NULL) {
         node = *node_ptr;
         if (node->te.type == list && callback(&(node->te))) {
             *node_ptr = node->next;
 
-            if (stru_5B2188[list].exit_func != NULL) {
-                stru_5B2188[list].exit_func(&(node->te));
+            if (timeevent_type_info[list].exit_func != NULL) {
+                timeevent_type_info[list].exit_func(&(node->te));
             }
 
             timeevent_node_destroy(node);
@@ -1488,7 +1495,7 @@ bool sub_45C0E0(int list)
         return false;
     }
 
-    node = timeevent_new_lists[stru_5B2188[list].time_type];
+    node = timeevent_new_lists[timeevent_type_info[list].time_type];
     while (node != NULL) {
         if (node->te.type == list) {
             return true;
@@ -1497,7 +1504,7 @@ bool sub_45C0E0(int list)
         node = node->next;
     }
 
-    node = timeevent_lists[stru_5B2188[list].time_type];
+    node = timeevent_lists[timeevent_type_info[list].time_type];
     while (node != NULL) {
         if (node->te.type == list) {
             return true;
@@ -1518,7 +1525,7 @@ bool timeevent_any(int list, TimeEventEnumerateFunc callback)
         return false;
     }
 
-    node = timeevent_new_lists[stru_5B2188[list].time_type];
+    node = timeevent_new_lists[timeevent_type_info[list].time_type];
     while (node != NULL) {
         if (node->te.type == list && callback(&(node->te))) {
             return true;
@@ -1527,7 +1534,7 @@ bool timeevent_any(int list, TimeEventEnumerateFunc callback)
         node = node->next;
     }
 
-    node = timeevent_lists[stru_5B2188[list].time_type];
+    node = timeevent_lists[timeevent_type_info[list].time_type];
     while (node != NULL) {
         if (node->te.type == list && callback(&(node->te))) {
             return true;
@@ -1561,7 +1568,7 @@ bool timeevent_inc_datetime(DateTime* datetime)
 // 0x45C230
 void timeevent_sync(DateTime* game_time, DateTime* anim_time)
 {
-    dword_5E8628 = 0;
+    timeevent_unsynced_game_time_ms = 0;
 
     if (datetime_compare(game_time, &timeevent_game_time) > 0) {
         timeevent_game_time = *game_time;
@@ -1631,7 +1638,7 @@ void timeevent_save_nodes_to_map(const char* name)
             if (sub_45C500(node) < 0) {
                 *node_ptr = node->next;
 
-                if (!timeevent_save_node(&(stru_5B2188[node->te.type]), node, stream)) {
+                if (!timeevent_save_node(&(timeevent_type_info[node->te.type]), node, stream)) {
                     tig_debug_printf("TimeEvent: timeevent_save_nodes_to_map: ERROR: Failed to save out nodes!\n");
                     tig_file_fclose(stream);
 
@@ -1644,8 +1651,8 @@ void timeevent_save_nodes_to_map(const char* name)
 
                 count++;
 
-                if (stru_5B2188[node->te.type].exit_func != NULL) {
-                    stru_5B2188[node->te.type].exit_func(&(node->te));
+                if (timeevent_type_info[node->te.type].exit_func != NULL) {
+                    timeevent_type_info[node->te.type].exit_func(&(node->te));
                 }
 
                 timeevent_node_destroy(node);
@@ -1678,7 +1685,7 @@ int sub_45C500(TimeEventNode* node)
     int index;
 
     for (index = 0; index < TIMEEVENT_PARAM_COUNT; index++) {
-        if ((dword_5B2794[index][TIMEEVENT_PARAM_TYPE_OBJECT] & stru_5B2188[node->te.type].flags) != 0) {
+        if ((timeevent_param_type_flags[index][TIMEEVENT_PARAM_TYPE_OBJECT] & timeevent_type_info[node->te.type].flags) != 0) {
             if (teleport_is_teleporting_obj(node->te.params[index].object_value)) {
                 count1++;
             } else {
@@ -1853,7 +1860,7 @@ void timeevent_break_nodes_to_map(const char* name)
             if (sub_45C500(node) > 0) {
                 *node_ptr = node->next;
 
-                if (!timeevent_save_node(&(stru_5B2188[node->te.type]), node, stream)) {
+                if (!timeevent_save_node(&(timeevent_type_info[node->te.type]), node, stream)) {
                     tig_debug_printf("TimeEvent: timeevent_break_nodes_to_map: ERROR: Failed to save out nodes!\n");
                     tig_file_fclose(stream);
 
@@ -1866,8 +1873,8 @@ void timeevent_break_nodes_to_map(const char* name)
 
                 count++;
 
-                if (stru_5B2188[node->te.type].exit_func != NULL) {
-                    stru_5B2188[node->te.type].exit_func(&(node->te));
+                if (timeevent_type_info[node->te.type].exit_func != NULL) {
+                    timeevent_type_info[node->te.type].exit_func(&(node->te));
                 }
 
                 timeevent_node_destroy(node);
@@ -1944,7 +1951,7 @@ void timeevent_debug_lists(void)
         }
 
         datetime_format_datetime(&time, time_str, sizeof(time_str));
-        tig_debug_printf("\t[%s] Game Time: [%s]\n", off_5B2178[index], time_str);
+        tig_debug_printf("\t[%s] Game Time: [%s]\n", timeevent_time_type_names[index], time_str);
 
         node = timeevent_new_lists[index];
         while (node != NULL) {
@@ -1967,7 +1974,7 @@ void timeevent_debug_lists(void)
 
     for (index = 0; index < TIME_TYPE_COUNT; index++) {
         tig_debug_printf("   List [%s]: %d\n",
-            off_5B2178[index],
+            timeevent_time_type_names[index],
             time_type_counts[index]);
     }
 
@@ -1975,7 +1982,7 @@ void timeevent_debug_lists(void)
 
     for (index = 0; index < TIMEEVENT_TYPE_COUNT; index++) {
         tig_debug_printf("   Type [%s]: %d\n",
-            stru_5B2188[index].name,
+            timeevent_type_info[index].name,
             timeevent_type_counts[index]);
     }
 }
@@ -1990,14 +1997,14 @@ void timeevent_debug_node(TimeEventNode* node, int node_index)
     int index;
 
     datetime_format_datetime(&(node->te.datetime), time_str, sizeof(time_str));
-    tig_debug_printf("TimeEvent: DBG: Node(%d): Type: [%s], Time: [%s]", node_index, stru_5B2188[node->te.type].name, time_str);
+    tig_debug_printf("TimeEvent: DBG: Node(%d): Type: [%s], Time: [%s]", node_index, timeevent_type_info[node->te.type].name, time_str);
 
     for (index = 0; index < TIMEEVENT_PARAM_COUNT; index++) {
-        if ((dword_5B2794[index][TIMEEVENT_PARAM_TYPE_INTEGER] & stru_5B2188[node->te.type].flags) != 0) {
+        if ((timeevent_param_type_flags[index][TIMEEVENT_PARAM_TYPE_INTEGER] & timeevent_type_info[node->te.type].flags) != 0) {
             tig_debug_printf(", D%d[%d]val",
                 index,
                 node->te.params[index].integer_value);
-        } else if ((dword_5B2794[index][TIMEEVENT_PARAM_TYPE_OBJECT] & stru_5B2188[node->te.type].flags) != 0) {
+        } else if ((timeevent_param_type_flags[index][TIMEEVENT_PARAM_TYPE_OBJECT] & timeevent_type_info[node->te.type].flags) != 0) {
             if (obj_handle_is_valid(node->te.params[index].object_value)) {
                 if (node->te.params[index].object_value != OBJ_HANDLE_NULL) {
                     object_examine(node->te.params[index].object_value,
@@ -2013,12 +2020,12 @@ void timeevent_debug_node(TimeEventNode* node, int node_index)
                 index,
                 object_name,
                 (long long)node->te.params[index].object_value);
-        } else if ((dword_5B2794[index][TIMEEVENT_PARAM_TYPE_LOCATION] & stru_5B2188[node->te.type].flags) != 0) {
+        } else if ((timeevent_param_type_flags[index][TIMEEVENT_PARAM_TYPE_LOCATION] & timeevent_type_info[node->te.type].flags) != 0) {
             tig_debug_printf(", D%d[%d x %d]loc",
                 index,
                 (int)LOCATION_GET_X(node->te.params[index].location_value),
                 (int)LOCATION_GET_Y(node->te.params[index].location_value));
-        } else if ((dword_5B2794[index][TIMEEVENT_PARAM_TYPE_FLOAT] & stru_5B2188[node->te.type].flags) != 0) {
+        } else if ((timeevent_param_type_flags[index][TIMEEVENT_PARAM_TYPE_FLOAT] & timeevent_type_info[node->te.type].flags) != 0) {
             tig_debug_printf(", D%d[%f]loc",
                 index,
                 node->te.params[index].float_value);

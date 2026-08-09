@@ -1632,7 +1632,7 @@ void mainmenu_ui_start(MainMenuType type)
         intgame_hide();
 
         if (type != MM_TYPE_OPTIONS) {
-            sub_45B320();
+            timeevent_pause();
         }
 
         tig_art_interface_id_create(0, 0, 0, 0, &art_id);
@@ -1801,7 +1801,7 @@ void mainmenu_ui_dismiss_ex(bool exiting)
             mainmenu_ui_was_compact_interface = false;
         }
     }
-    sub_45B340();
+    timeevent_unpause();
 
     // CE: Restore main interface to its normal state.
     intgame_show();

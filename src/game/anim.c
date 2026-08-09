@@ -2748,8 +2748,11 @@ static bool anim_editor;
 // 0x5DE6D8
 static int64_t qword_5DE6D8;
 
+// Set while the game clock is paused (see `timeevent_pause`). Suppresses new
+// fidget animations for the duration.
+//
 // 0x5DE6E0
-static bool dword_5DE6E0;
+static bool anim_paused;
 
 // 0x5DE6E4
 static int dword_5DE6E4;
@@ -11306,6 +11309,18 @@ bool anim_cleanup_dying(AnimRunInfo* run_info)
     return true;
 }
 
+// 0x4300B0
+void anim_pause(void)
+{
+    anim_paused = true;
+}
+
+// 0x4300C0
+void anim_unpause(void)
+{
+    anim_paused = false;
+}
+
 // 0x4300D0
 bool anim_fidget_timeevent_process(TimeEvent* timeevent)
 {
@@ -11329,7 +11344,7 @@ bool anim_fidget_timeevent_process(TimeEvent* timeevent)
         return true;
     }
 
-    if (dword_5DE6E0) {
+    if (anim_paused) {
         return true;
     }
 
