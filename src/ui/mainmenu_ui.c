@@ -10,6 +10,7 @@
 #include "game/gfade.h"
 #include "game/gmovie.h"
 #include "game/gsound.h"
+#include "game/highres_config.h"
 #include "game/hrp.h"
 #include "game/item.h"
 #include "game/map.h"
@@ -140,6 +141,7 @@ static bool mainmenu_ui_shop_button_released(tig_button_handle_t button_handle);
 static void mainmenu_ui_shop_refresh(TigRect* rect);
 static bool main_menu_button_create(MainMenuButtonInfo* info, int width, int height);
 static bool main_menu_button_create_ex(MainMenuButtonInfo* info, int width, int height, unsigned int flags);
+static void mainmenu_ui_apply_compact_options(void);
 static void mainmenu_ui_refresh_text(tig_window_handle_t window_handle, const char* str, TigRect* rect, unsigned int flags);
 static void sub_546DD0(void);
 static void mainmenu_ui_create_shared_radio_buttons(void);
@@ -616,6 +618,14 @@ static MainMenuWindowInfo stru_5C4338 = {
     -1,
     0,
 };
+
+/**
+ * The patch's compact options layout: a shorter background art, and the lens,
+ * buttons and controls all lifted by the same offset. Art 669 ships in the
+ * patch's own ArcanumZHighRes.dat, not in stock data.
+ */
+#define MAINMENU_UI_OPTIONS_COMPACT_ART 669
+#define MAINMENU_UI_OPTIONS_COMPACT_SHIFT 41
 
 // 0x5C43D0
 static MainMenuButtonInfo mainmenu_ui_options_buttons[] = {
@@ -1419,6 +1429,35 @@ static int64_t qword_64C460;
 static int dword_64C468;
 
 // 0x540930
+/**
+ * Switch the options screen to the patch's compact layout.
+ *
+ * `Options = 1` in config.ini. The patch does this by rewriting the same three
+ * places in the exe that this rewrites here: the window's background art number
+ * at 0x5C44A0, the lens rect's y at 0x5C4494, and the four button y values from
+ * 0x5C43D4 on a 48-byte stride. The shift is uniform, so it is applied rather
+ * than duplicated into a second set of tables.
+ *
+ * Guarded, because it mutates statics and must not compound if init runs twice.
+ */
+static void mainmenu_ui_apply_compact_options(void)
+{
+    static bool applied;
+    int index;
+
+    if (applied || !highres_config_get()->options_compact) {
+        return;
+    }
+    applied = true;
+
+    mainmenu_ui_options_window_info.background_art_num = MAINMENU_UI_OPTIONS_COMPACT_ART;
+    stru_5C4490.y -= MAINMENU_UI_OPTIONS_COMPACT_SHIFT;
+
+    for (index = 0; index < (int)SDL_arraysize(mainmenu_ui_options_buttons); index++) {
+        mainmenu_ui_options_buttons[index].y -= MAINMENU_UI_OPTIONS_COMPACT_SHIFT;
+    }
+}
+
 bool mainmenu_ui_init(GameInitInfo* init_info)
 {
     int index;
@@ -1438,6 +1477,8 @@ bool mainmenu_ui_init(GameInitInfo* init_info)
     }
 
     settings_register(&settings, "show version", "0", NULL);
+
+    mainmenu_ui_apply_compact_options();
 
     mainmenu_fonts_init();
 

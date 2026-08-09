@@ -42,6 +42,17 @@ typedef struct HighResConfig {
      */
     int menu_position;
 
+    /**
+     * Draw the main menu's options screen in the patch's compact layout:
+     * background art 669 in place of 556, and the lens, the four option
+     * buttons and the eight controls all 41 pixels higher. `Options` in
+     * config.ini, where 0 is normal and 1 is compact.
+     *
+     * Art 669 lives in the patch's own `ArcanumZHighRes.dat`, so this only
+     * looks right on an install that has those archives mounted. Default off.
+     */
+    bool options_compact;
+
     bool logos;
     bool intro;
 } HighResConfig;

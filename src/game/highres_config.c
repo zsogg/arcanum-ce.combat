@@ -53,6 +53,7 @@ void highres_config_reset(void)
     highres_config.preload_limit = 30;
     highres_config.broadcast_limit = 10;
     highres_config.menu_position = HIGHRES_MENU_POSITION_CENTER;
+    highres_config.options_compact = false;
     highres_config.logos = true;
     highres_config.intro = true;
 }
@@ -137,6 +138,8 @@ void highres_config_parse_line(char* line)
         if (value >= HIGHRES_MENU_POSITION_TOP && value <= HIGHRES_MENU_POSITION_BOTTOM) {
             highres_config.menu_position = value;
         }
+    } else if (SDL_strcasecmp(key_start, "Options") == 0) {
+        highres_config.options_compact = value != 0;
     } else if (SDL_strcasecmp(key_start, "Logos") == 0) {
         highres_config.logos = value != 0;
     } else if (SDL_strcasecmp(key_start, "Intro") == 0) {

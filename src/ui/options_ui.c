@@ -3,6 +3,7 @@
 #include "game/anim.h"
 #include "game/combat.h"
 #include "game/gamelib.h"
+#include "game/highres_config.h"
 #include "game/location.h"
 #include "game/mes.h"
 #include "game/obj.h"
@@ -80,6 +81,12 @@ static int options_ui_controls_x[MAX_CONTROLS] = {
     531,
     531,
 };
+
+/**
+ * How far the patch's compact options layout lifts everything on the screen.
+ * Base.tph calls it `OptionsOffset`.
+ */
+#define OPTIONS_UI_COMPACT_SHIFT 41
 
 /**
  * 0x5CCD58
@@ -290,7 +297,12 @@ void options_ui_start(OptionsUiTab tab, tig_window_handle_t window_handle, bool 
         control_info.mes_file_path = meta->mes;
         control_info.value_changed_callback = meta->setter;
         control_info.x = options_ui_controls_x[index];
-        control_info.y = options_ui_controls_y[index];
+
+        // The patch's `Options = 1` lifts every control 41 pixels to suit the
+        // shorter background art; it does that by rewriting this table at
+        // 0x5CCD58, which is the same eight values.
+        control_info.y = options_ui_controls_y[index]
+            - (highres_config_get()->options_compact ? OPTIONS_UI_COMPACT_SHIFT : 0);
 
         // Query initial value.
         if (meta->getter != NULL) {
