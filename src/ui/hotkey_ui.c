@@ -108,7 +108,7 @@ bool hotkey_ui_init(GameInitInfo* init_info)
     for (index = 0; index < 2; index++) {
         hotkey = &(stru_683518[index]);
         hotkey->type = HOTKEY_SKILL;
-        hotkey->data = sub_557B50(index);
+        hotkey->data = intgame_recent_action_default_skill(index);
         intgame_recent_action_button_get(index)->art_num = sub_579F70(hotkey->data);
     }
 
@@ -249,7 +249,7 @@ void hotkey_ui_reset_recent_actions(void)
     for (index = 0; index < 2; index++) {
         hotkey_ui_clear_slot(&(stru_683518[index]));
         stru_683518[index].type = HOTKEY_SKILL;
-        stru_683518[index].data = sub_557B50(index);
+        stru_683518[index].data = intgame_recent_action_default_skill(index);
         intgame_recent_action_button_get(index)->art_num = sub_579F70(stru_683518[index].data);
 
         button_handle = intgame_recent_action_button_get(index)->button_handle;
@@ -321,7 +321,7 @@ bool hotkey_ui_process_event(TigMessage* msg)
     // UAP (0x57DC57): hotkeys do nothing while a dialog is up. The patch has
     // no room inside this function, so it writes the test into the nine bytes
     // of padding immediately *before* it and retargets the two callers -
-    // `sub_54B5D0` (0x54B603) and `iso_interface_message_filter` (0x54C913) -
+    // `intgame_process_message` (0x54B603) and `iso_interface_message_filter` (0x54C913) -
     // nine bytes earlier, which changes only the low byte of each `call`. That
     // is what those two 1-byte rows in the worklist are.
     //
@@ -453,7 +453,7 @@ bool intgame_load_hotkey(Hotkey* hotkey, TigFile* stream)
         }
 
         object_ref_init(hotkey->item_obj.obj, &(hotkey->item_obj));
-        hotkey->art_id = sub_554BE0(hotkey->item_obj.obj);
+        hotkey->art_id = intgame_item_icon_art_id_get(hotkey->item_obj.obj);
 
         if (tig_file_fread(&(hotkey->count), sizeof(hotkey->count), 1, stream) != 1) {
             return false;
@@ -495,7 +495,7 @@ bool intgame_load_hotkey(Hotkey* hotkey, TigFile* stream)
         }
 
         object_ref_init(hotkey->item_obj.obj, &(hotkey->item_obj));
-        hotkey->art_id = sub_554BE0(hotkey->item_obj.obj);
+        hotkey->art_id = intgame_item_icon_art_id_get(hotkey->item_obj.obj);
 
         if (tig_file_fread(&(hotkey->data), sizeof(hotkey->data), 1, stream) != 1) {
             return false;
@@ -951,7 +951,7 @@ bool sub_57E8D0(TigMessageMouseEvent mouse_event)
             item_location_set(stru_683950.item_obj.obj, hotkey->slot + 2000);
             inven_ui_update(player_get_local_pc_obj());
             hotkey->item_obj = stru_683950.item_obj;
-            hotkey->art_id = sub_554BE0(stru_683950.item_obj.obj);
+            hotkey->art_id = intgame_item_icon_art_id_get(stru_683950.item_obj.obj);
             hotkey->count = item_count_items_matching_prototype(player_get_local_pc_obj(), hotkey->item_obj.obj);
             break;
         case HOTKEY_SKILL:
@@ -1095,7 +1095,7 @@ bool sub_57EED0(int64_t obj, int inventory_location)
 
     hotkey->type = HOTKEY_ITEM;
     object_ref_init(obj, &(hotkey->item_obj));
-    hotkey->art_id = sub_554BE0(obj);
+    hotkey->art_id = intgame_item_icon_art_id_get(obj);
     hotkey->count = item_count_items_matching_prototype(player_get_local_pc_obj(), obj);
     intgame_hotkey_refresh(hotkey->slot);
 
@@ -1256,7 +1256,7 @@ void hotkey_ui_notify_item_inserted_or_removed(int64_t item_obj, bool removed)
             hotkey = &(stru_683518[index]);
             if (hotkey->item_obj.obj == item_obj) {
                 hotkey_ui_clear_slot(hotkey);
-                sub_57EFA0(2, sub_557B50(index), hotkey->item_obj.obj);
+                sub_57EFA0(2, intgame_recent_action_default_skill(index), hotkey->item_obj.obj);
             }
         }
     }
@@ -1272,7 +1272,7 @@ void hotkey_ui_notify_spell_removed(int spell)
         hotkey = &(stru_683518[index]);
         if (hotkey->type == HOTKEY_SPELL && hotkey->data == spell) {
             hotkey_ui_clear_slot(hotkey);
-            hotkey->data = sub_557B50(index);
+            hotkey->data = intgame_recent_action_default_skill(index);
             sub_57EFA0(HOTKEY_SKILL, hotkey->data, OBJ_HANDLE_NULL);
         }
     }
@@ -1303,7 +1303,7 @@ void intgame_hotkeys_recover(void)
             }
 
             hotkey->type = HOTKEY_SKILL;
-            hotkey->data = sub_557B50(index);
+            hotkey->data = intgame_recent_action_default_skill(index);
             intgame_recent_action_button_get(index)->art_num = sub_579F70(hotkey->data);
 
             button_handle = intgame_recent_action_button_get(index)->button_handle;

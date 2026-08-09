@@ -312,7 +312,7 @@ void sub_569050(void)
 // 0x569060
 bool compact_ui_health_bar_message_filter(TigMessage* msg)
 {
-    return sub_54B5D0(msg);
+    return intgame_process_message(msg);
 }
 
 // 0x569070
