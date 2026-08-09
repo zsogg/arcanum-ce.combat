@@ -572,7 +572,7 @@ void handle_item_unwear_drop(int64_t item_obj, int64_t parent_obj, unsigned int 
         // Remove current effects.
         magictech_invocation_init(&mt_invocation, item_obj, mt_item_spell_to_magictech_spell(spell));
         object_ref_init(parent_obj, &(mt_invocation.target_obj));
-        sub_4573D0(&mt_invocation);
+        magictech_interrupt_matching(&mt_invocation);
 
         // Add new effects.
         magictech_invocation_init(&mt_invocation, item_obj, mt_item_spell_to_magictech_spell(spell));

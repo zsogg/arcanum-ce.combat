@@ -7640,7 +7640,7 @@ bool anim_end_spell(AnimRunInfo* run_info)
 // 0x42A260
 bool AGexecuteMagicTechCallback(AnimRunInfo* run_info)
 {
-    sub_457000(run_info->params[0].data, MAGICTECH_ACTION_CALLBACK);
+    magictech_run_action(run_info->params[0].data, MAGICTECH_ACTION_CALLBACK);
 
     return true;
 }
@@ -7648,7 +7648,7 @@ bool AGexecuteMagicTechCallback(AnimRunInfo* run_info)
 // 0x42A280
 bool AGexecuteMagicTechEndCallback(AnimRunInfo* run_info)
 {
-    sub_457000(run_info->params[0].data, MAGICTECH_ACTION_END_CALLBACK);
+    magictech_run_action(run_info->params[0].data, MAGICTECH_ACTION_END_CALLBACK);
 
     return true;
 }

@@ -1323,7 +1323,7 @@ void object_destroy(int64_t obj)
     }
 
     anim_force_interrupt_all_goals_of_obj(obj);
-    sub_459740(obj);
+    magictech_interrupt_runs_for_obj(obj);
     sub_4601D0(obj);
     sub_443770(obj);
 
@@ -1416,7 +1416,7 @@ void object_delete(int64_t obj)
         tf_remove(obj);
     }
     anim_force_interrupt_all_goals_of_obj(obj);
-    sub_459740(obj);
+    magictech_interrupt_runs_for_obj(obj);
     ai_timeevent_clear(obj);
     sub_4601D0(obj);
     sub_443770(obj);

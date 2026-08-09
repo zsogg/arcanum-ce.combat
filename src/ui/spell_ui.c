@@ -90,7 +90,7 @@ bool spell_ui_load(GameLoadInfo* load_info)
         if (tig_file_fread(&(stru_5CB3A8[index].field_4), sizeof(stru_5CB3A8[index].field_4), 1, load_info->stream) != 1) return false;
 
         if (stru_5CB3A8[index].field_4) {
-            intgame_spell_maintain_art_set(index, sub_458AE0(stru_5CB3A8[index].mt_id));
+            intgame_spell_maintain_art_set(index, magictech_spell_icon_art_id_get(stru_5CB3A8[index].mt_id));
         }
     }
 
@@ -359,7 +359,7 @@ bool spell_ui_maintain_add(int mt_id)
 
     stru_5CB3A8[candidate].mt_id = mt_id;
     stru_5CB3A8[candidate].field_4 = 1;
-    intgame_spell_maintain_art_set(candidate, sub_458AE0(mt_id));
+    intgame_spell_maintain_art_set(candidate, magictech_spell_icon_art_id_get(mt_id));
 
     return true;
 }

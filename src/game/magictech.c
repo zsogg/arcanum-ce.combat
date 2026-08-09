@@ -126,7 +126,7 @@ static void sub_4559E0(MagicTechRunInfo* run_info);
 static void sub_455C30(MagicTechInvocation* mt_invocation);
 static bool sub_456430(int64_t a1, int64_t a2, MagicTechInfo* magictech);
 static void magictech_preload_art(MagicTechRunInfo* run_info);
-static void sub_457030(int mt_id, int action);
+static void magictech_run_action_in_callback(int mt_id, int action);
 static bool magictech_timeevent_matches_current(TimeEvent* timeevent);
 static void magictech_end(int mt_id);
 static void magictech_clear_run_source(int mt_id);
@@ -1266,7 +1266,7 @@ void magictech_load_nodes_from_map(const char* map)
 
         *run_info = tmp_run_info;
         run_info->id = mt_id;
-        sub_459500(run_info->id);
+        magictech_reschedule_run(run_info->id);
     }
 
     tig_file_fclose(stream);
@@ -2618,7 +2618,7 @@ void MTComponentInterrupt_ProcFunc(void)
     object_ref_init(stru_5E6D28.target_obj, &(mt_invocation.target_obj));
     mt_invocation.target_loc = stru_5E6D28.target_loc;
     if (mt_invocation.target_obj.obj != OBJ_HANDLE_NULL || mt_invocation.target_loc != OBJ_HANDLE_NULL) {
-        sub_4573D0(&mt_invocation);
+        magictech_interrupt_matching(&mt_invocation);
     }
 }
 
@@ -3664,9 +3664,9 @@ void sub_453FA0(void)
         if (!dword_5E7630) {
             dword_5E7630 = true;
             if (dword_5E75D8) {
-                sub_457030(magictech_cur_run_info->id, MAGICTECH_ACTION_END_CALLBACK);
+                magictech_run_action_in_callback(magictech_cur_run_info->id, MAGICTECH_ACTION_END_CALLBACK);
             } else {
-                sub_457030(magictech_cur_run_info->id, MAGICTECH_ACTION_CALLBACK);
+                magictech_run_action_in_callback(magictech_cur_run_info->id, MAGICTECH_ACTION_CALLBACK);
             }
             dword_5E7630 = false;
             return;
@@ -5314,7 +5314,7 @@ void magictech_release(int mt_id, unsigned int flags)
 }
 
 // 0x457000
-void sub_457000(int mt_id, int action)
+void magictech_run_action(int mt_id, int action)
 {
     MagicTechRunInfo* run_info;
 
@@ -5325,18 +5325,28 @@ void sub_457000(int mt_id, int action)
 }
 
 // 0x457030
-void sub_457030(int mt_id, int action)
+void magictech_run_action_in_callback(int mt_id, int action)
 {
     MagicTechRunInfo* run_info;
 
     if (magictech_id_to_run_info(mt_id, &run_info)) {
         run_info->action = action;
-        sub_457060(run_info);
+        magictech_process_in_callback(run_info);
     }
 }
 
-// 0x457060
-void sub_457060(MagicTechRunInfo* run_info)
+/**
+ * As `magictech_process_run_info`, but marks the run as being processed from
+ * inside an animation-fx callback.
+ *
+ * That is the only difference: `dword_5E75D4`. The process function reads it to
+ * decide whether to re-enter itself with MAGICTECH_ACTION_CALLBACK or
+ * MAGICTECH_ACTION_END_CALLBACK, and it is set when the fx node carries
+ * ANIMFX_PLAY_CALLBACK or ANIMFX_PLAY_END_CALLBACK.
+ *
+ * 0x457060
+ */
+void magictech_process_in_callback(MagicTechRunInfo* run_info)
 {
     if (magictech_cur_id != -1 && magictech_cur_id != run_info->id) {
         tig_debug_printf("\n\nMagicTech: ERROR: Process function is NOT Re-Entrant, Spell: %d (%s)!\n",
@@ -5455,7 +5465,7 @@ void magictech_end(int mt_id)
 }
 
 // 0x4573D0
-void sub_4573D0(MagicTechInvocation* mt_invocation)
+void magictech_interrupt_matching(MagicTechInvocation* mt_invocation)
 {
     int idx;
     MagicTechRunInfo* run_info;
@@ -6165,7 +6175,7 @@ bool magictech_check_env_sf(unsigned int flags)
 }
 
 // 0x458AE0
-tig_art_id_t sub_458AE0(int mt_id)
+tig_art_id_t magictech_spell_icon_art_id_get(int mt_id)
 {
     MagicTechRunInfo* run_info;
     tig_art_id_t art_id;
@@ -6566,7 +6576,7 @@ bool sub_4594D0(TimeEvent* timeevent)
 }
 
 // 0x459500
-bool sub_459500(int index)
+bool magictech_reschedule_run(int index)
 {
     MagicTechRunInfo* run_info;
     TimeEvent timeevent;
@@ -6671,7 +6681,7 @@ bool magictech_recharge_timeevent_process(TimeEvent* timeevent)
 }
 
 // 0x459740
-void sub_459740(int64_t obj)
+void magictech_interrupt_runs_for_obj(int64_t obj)
 {
     int idx;
     MagicTechObjectNode* node;

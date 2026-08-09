@@ -2449,7 +2449,7 @@ void sub_4A54E0(void)
 
     for (index = 0; index < 512; index++) {
         if ((magictech_run_info[index].flags & MAGICTECH_RUN_ACTIVE) != 0) {
-            sub_459500(index);
+            magictech_reschedule_run(index);
         }
     }
 }

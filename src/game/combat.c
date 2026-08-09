@@ -2190,7 +2190,7 @@ void combat_heal(CombatContext* combat)
             critter_fatigue_damage_set(combat->target_obj, 10);
         }
 
-        sub_459740(combat->target_obj);
+        magictech_interrupt_runs_for_obj(combat->target_obj);
 
         if (combat->attacker_obj != OBJ_HANDLE_NULL
             && obj_field_int32_get(combat->attacker_obj, OBJ_F_TYPE) == OBJ_TYPE_PC) {
