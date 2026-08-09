@@ -165,7 +165,7 @@ SpellUiActivate spell_ui_activate(int64_t obj, int spl)
     dword_5CB3A0 = spl;
     qword_6834F8 = obj;
 
-    sub_459F20(spl, &tgt_ptr);
+    magictech_target_flags_get(spl, &tgt_ptr);
     tgt = *tgt_ptr;
 
     if (magictech_is_aggressive(dword_5CB3A0)
@@ -250,7 +250,7 @@ void sub_57C040(int64_t obj, int index)
     int spl;
 
     spl = mt_item_spell(obj, index);
-    if (!sub_45A030(spl) && spl != -1) {
+    if (!magictech_has_item_triggers(spl) && spl != -1) {
         spell_ui_activate(obj, spl);
     }
 }
@@ -258,7 +258,7 @@ void sub_57C040(int64_t obj, int index)
 // 0x57C080
 void sub_57C080(int64_t obj, int spl)
 {
-    if (!sub_45A030(spl) && spl != -1) {
+    if (!magictech_has_item_triggers(spl) && spl != -1) {
         spell_ui_activate(obj, spl);
     }
 }

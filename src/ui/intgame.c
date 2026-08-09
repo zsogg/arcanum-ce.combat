@@ -8796,7 +8796,7 @@ int sub_557C00(void)
             && y >= button_data.y
             && x < button_data.x + button_data.width
             && y < button_data.y + button_data.height) {
-            if (!sub_45A030(mt_item_spell(qword_64C688, index))) {
+            if (!magictech_has_item_triggers(mt_item_spell(qword_64C688, index))) {
                 return index;
             } else {
                 return 5;

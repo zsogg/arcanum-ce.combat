@@ -58,13 +58,13 @@ void sub_5719F0(int64_t item_obj, uint64_t** tgt_ptr)
         flags = obj_field_int32_get(item_obj, OBJ_F_ITEM_FLAGS);
         spl = mt_item_spell(item_obj, 0);
         if (mana_store != 0 || (flags & OIF_IS_MAGICAL) != 0) {
-            sub_459F20(spl, tgt_ptr);
+            magictech_target_flags_get(spl, tgt_ptr);
         } else if (trap_is_trap_device(item_obj)) {
             *tgt_ptr = &qword_5CAC50;
         } else if (spl == -1) {
             *tgt_ptr = &qword_5CAC40;
         } else {
-            sub_459F20(spl, tgt_ptr);
+            magictech_target_flags_get(spl, tgt_ptr);
         }
     }
 }
