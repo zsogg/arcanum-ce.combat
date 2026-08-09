@@ -263,6 +263,15 @@ int sub_460590(int64_t a1, int a2)
     }
 }
 
+// NOTE: These three, and the `ui_callbacks` fields they dispatch to, are left
+// unnamed together. Each is a one-line null-checked call, so the name has to
+// come from the callback's meaning, and the slots themselves are still
+// field_70/74/78. The call sites hint but do not settle it - sub_4605D0 fires
+// after gold transfers, item moves and magictech changes, which reads like a
+// refresh, except `ui_refresh_interface` already exists separately and it is
+// not clear which of the two this is. Name the fields first, from whatever
+// installs them, and these follow.
+//
 // 0x4605C0
 void sub_4605C0(void)
 {

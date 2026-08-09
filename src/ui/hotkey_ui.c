@@ -114,7 +114,7 @@ bool hotkey_ui_init(GameInitInfo* init_info)
 
     for (index = 0; index < 10; index++) {
         hotkey = &(stru_6835E0[index]);
-        sub_57E5A0(hotkey);
+        hotkey_ui_clear_slot(hotkey);
         hotkey->slot = index;
         hotkey->data = -1;
         hotkey->info.art_num = dword_5CB494[index];
@@ -247,7 +247,7 @@ void hotkey_ui_reset_recent_actions(void)
     hotkey_ui_dragging = false;
 
     for (index = 0; index < 2; index++) {
-        sub_57E5A0(&(stru_683518[index]));
+        hotkey_ui_clear_slot(&(stru_683518[index]));
         stru_683518[index].type = HOTKEY_SKILL;
         stru_683518[index].data = sub_557B50(index);
         intgame_recent_action_button_get(index)->art_num = sub_579F70(stru_683518[index].data);
@@ -706,7 +706,7 @@ void intgame_hotkey_mouse_load(tig_art_id_t art_id, bool a2)
 }
 
 // 0x57E5A0
-void sub_57E5A0(Hotkey* hotkey)
+void hotkey_ui_clear_slot(Hotkey* hotkey)
 {
     hotkey->item_obj.obj = OBJ_HANDLE_NULL;
     hotkey->type = HOTKEY_NONE;
@@ -910,7 +910,7 @@ bool sub_57E8D0(TigMessageMouseEvent mouse_event)
         }
 
         if (hotkey_ui_dragging_index != -1) {
-            sub_57E5A0(&(stru_6835E0[hotkey_ui_dragging_index]));
+            hotkey_ui_clear_slot(&(stru_6835E0[hotkey_ui_dragging_index]));
         }
 
         v2 = hotkey->item_obj.obj;
@@ -1211,7 +1211,7 @@ void sub_57F1D0(int index)
 // 0x57F210
 void sub_57F210(int index)
 {
-    sub_57E5A0(&(stru_6835E0[index]));
+    hotkey_ui_clear_slot(&(stru_6835E0[index]));
     intgame_hotkey_refresh(index);
 }
 
@@ -1255,7 +1255,7 @@ void hotkey_ui_notify_item_inserted_or_removed(int64_t item_obj, bool removed)
         for (index = 0; index < 2; index++) {
             hotkey = &(stru_683518[index]);
             if (hotkey->item_obj.obj == item_obj) {
-                sub_57E5A0(hotkey);
+                hotkey_ui_clear_slot(hotkey);
                 sub_57EFA0(2, sub_557B50(index), hotkey->item_obj.obj);
             }
         }
@@ -1271,7 +1271,7 @@ void hotkey_ui_notify_spell_removed(int spell)
     for (index = 0; index < 2; index++) {
         hotkey = &(stru_683518[index]);
         if (hotkey->type == HOTKEY_SPELL && hotkey->data == spell) {
-            sub_57E5A0(hotkey);
+            hotkey_ui_clear_slot(hotkey);
             hotkey->data = sub_557B50(index);
             sub_57EFA0(HOTKEY_SKILL, hotkey->data, OBJ_HANDLE_NULL);
         }
@@ -1280,7 +1280,7 @@ void hotkey_ui_notify_spell_removed(int spell)
     for (index = 0; index < 10; index++) {
         hotkey = sub_57F240(index);
         if (hotkey->type == HOTKEY_SPELL && hotkey->data == spell) {
-            sub_57E5A0(hotkey);
+            hotkey_ui_clear_slot(hotkey);
             intgame_hotkey_refresh(hotkey->slot);
         }
     }

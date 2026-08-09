@@ -1969,7 +1969,7 @@ void magictech_effect_summon(MagicTechSummonInfo* summon_info)
 }
 
 // 0x451070
-void sub_451070(MagicTechRunInfo* run_info)
+void magictech_process_run_info(MagicTechRunInfo* run_info)
 {
     if (magictech_cur_id != -1 && magictech_cur_id != run_info->id) {
         tig_debug_printf("\n\nMagicTech: ERROR: Process function is NOT Re-Entrant, Spell: %d (%s)!\n",
@@ -3167,7 +3167,7 @@ bool sub_452F20(void)
                 magictech_cur_run_info->action = MAGICTECH_ACTION_END;
 
                 stru_5E3518.cnt = 0;
-                sub_451070(magictech_cur_run_info);
+                magictech_process_run_info(magictech_cur_run_info);
 
                 return false;
             }
@@ -3698,7 +3698,7 @@ void sub_453FA0(void)
                     || !dword_5E75CC)
                 && v0) {
                 magictech_cur_run_info->action = MAGICTECH_ACTION_END;
-                sub_451070(magictech_cur_run_info);
+                magictech_process_run_info(magictech_cur_run_info);
                 return;
             }
 
@@ -3725,7 +3725,7 @@ void sub_453FA0(void)
                             ui_display_warning(mes_file_entry.str);
                         }
                         magictech_cur_run_info->action = MAGICTECH_ACTION_END;
-                        sub_451070(magictech_cur_run_info);
+                        magictech_process_run_info(magictech_cur_run_info);
                         return;
                     }
 
@@ -5295,7 +5295,7 @@ void sub_456F70(int mt_id)
 
     if (magictech_id_to_run_info(mt_id, &run_info)) {
         run_info->action = MAGICTECH_ACTION_BEGIN;
-        sub_451070(run_info);
+        magictech_process_run_info(run_info);
     }
 }
 
@@ -5320,7 +5320,7 @@ void sub_457000(int mt_id, int action)
 
     if (magictech_id_to_run_info(mt_id, &run_info)) {
         run_info->action = action;
-        sub_451070(run_info);
+        magictech_process_run_info(run_info);
     }
 }
 
@@ -5406,7 +5406,7 @@ void magictech_interrupt(int mt_id)
         dword_5E7604 = false;
     }
 
-    sub_451070(run_info);
+    magictech_process_run_info(run_info);
 }
 
 // 0x4571E0
@@ -5450,7 +5450,7 @@ void sub_457270(int mt_id)
             dword_5E7604 = false;
         }
         run_info->flags |= MAGICTECH_RUN_0x40;
-        sub_451070(run_info);
+        magictech_process_run_info(run_info);
     }
 }
 
@@ -6537,7 +6537,7 @@ bool magictech_timeevent_process(TimeEvent* timeevent)
         break;
     case 3:
         if (magictech_id_to_run_info(timeevent->params[0].integer_value, &run_info)) {
-            sub_451070(run_info);
+            magictech_process_run_info(run_info);
         }
         break;
     }
@@ -6554,7 +6554,7 @@ void sub_459490(int mt_id)
         if (run_info->action == MAGICTECH_ACTION_BEGIN) {
             run_info->action = MAGICTECH_ACTION_MAINTAIN;
         }
-        sub_451070(run_info);
+        magictech_process_run_info(run_info);
     }
 }
 

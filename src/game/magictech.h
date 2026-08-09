@@ -358,7 +358,7 @@ bool magictech_can_charge_spell_fatigue(int64_t obj, int magictech);
 bool sub_450940(int mt_id);
 int sub_450B40(int64_t obj);
 void magictech_effect_summon(MagicTechSummonInfo* summon_info);
-void sub_451070(MagicTechRunInfo* a1);
+void magictech_process_run_info(MagicTechRunInfo* a1);
 void magictech_component_dispel(int64_t obj, int mt_id);
 void sub_452650(int64_t obj);
 void magictech_component_trait(int64_t obj, MagicTechComponentTrait* trait, int obj_type);

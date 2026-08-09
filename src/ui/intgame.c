@@ -3903,7 +3903,7 @@ void sub_550000(int64_t critter_obj, Hotkey* hotkey, int inventory_location)
         gsound_play_sfx(sound_id, 1);
     }
 
-    sub_57E5A0(hotkey);
+    hotkey_ui_clear_slot(hotkey);
 }
 
 // 0x550150

@@ -20,7 +20,7 @@ void sub_57DC20(void);
 bool hotkey_ui_process_event(TigMessage* msg);
 bool hotkey_ui_is_dragging(void);
 void intgame_hotkey_refresh(int index);
-void sub_57E5A0(Hotkey* hotkey);
+void hotkey_ui_clear_slot(Hotkey* hotkey);
 bool hotkey_ui_begin_drag(void);
 void sub_57EF90(int index);
 void sub_57EFA0(int type, int data, int64_t item_obj);
