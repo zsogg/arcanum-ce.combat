@@ -29,7 +29,7 @@ bool sector_light_list_reset(SectorLightList* list)
     while (node != NULL) {
         next = node->next;
 
-        if (sub_4DD110(node->data)) {
+        if (light_is_unattached(node->data)) {
             sub_4D9570(node->data);
         } else {
             light_stop_animating(node->data);
@@ -60,7 +60,7 @@ bool sector_light_list_add(SectorLightList* list, Light* light)
     node->data = light;
     sector_light_list_node_attach(list, node);
 
-    if (sub_4DD110(light)) {
+    if (light_is_unattached(light)) {
         list->modified = true;
     }
 
@@ -80,7 +80,7 @@ bool sector_light_list_remove(SectorLightList* list, Light* light)
 
     sector_block_list_node_destroy(node);
 
-    if (sub_4DD110(light)) {
+    if (light_is_unattached(light)) {
         list->modified = true;
     }
 
@@ -100,7 +100,7 @@ bool sector_light_list_update(SectorLightList* list, Light* light, int64_t loc, 
     light_set_offset(light, offset_x, offset_y);
     sector_light_list_node_attach(list, node);
 
-    if (sub_4DD110(light)) {
+    if (light_is_unattached(light)) {
         list->modified = true;
     }
 
@@ -241,7 +241,7 @@ bool sector_light_list_save(SectorLightList* list, TigFile* stream)
 
     node = list->head;
     while (node != NULL) {
-        if (sub_4DD110(node->data)) {
+        if (light_is_unattached(node->data)) {
             light_clear_modified(node->data);
             if (!light_write(stream, node->data)) {
                 return false;
@@ -284,7 +284,7 @@ bool sector_light_list_is_modified(SectorLightList* list)
 
     node = list->head;
     while (node != NULL) {
-        if (sub_4DD110(node->data)
+        if (light_is_unattached(node->data)
             && light_is_modified(node->data)) {
             return true;
         }
@@ -307,7 +307,7 @@ bool sector_light_list_save_with_dif(SectorLightList* list, TigFile* stream)
     node = list->head;
     while (node != NULL) {
         light = (Light*)node->data;
-        if (sub_4DD110(light)) {
+        if (light_is_unattached(light)) {
             if (light_is_modified(light)) {
                 if (!dif) {
                     if (extent != 0) {

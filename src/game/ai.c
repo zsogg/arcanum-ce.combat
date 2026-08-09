@@ -95,7 +95,7 @@ static void sub_4AA620(int64_t a1, int64_t a2);
 static bool ai_npc_wait_here_timeevent_check(TimeEvent* timeevent);
 static void ai_copy_params(int64_t obj, AiParams* params);
 static void ai_danger_source(int64_t obj, int* type_ptr, int64_t* danger_source_ptr);
-static int sub_4AABE0(int64_t source_obj, int danger_type, int64_t target_obj, int* sound_id_ptr);
+static int ai_apply_danger_type(int64_t source_obj, int danger_type, int64_t target_obj, int* sound_id_ptr);
 static bool sub_4AAF50(Ai* ai);
 static bool sub_4AB030(int64_t a1, int64_t a2);
 static int64_t ai_choose_target(int64_t attacker_obj, int64_t candidate1_obj, int64_t candidate2_obj);
@@ -787,7 +787,7 @@ void sub_4A92D0(Ai* ai)
         if (danger_source_obj != OBJ_HANDLE_NULL) {
             ai->danger_source = danger_source_obj;
             sub_4ABC20(ai);
-            ai->danger_type = sub_4AABE0(ai->obj,
+            ai->danger_type = ai_apply_danger_type(ai->obj,
                 AI_DANGER_SOURCE_TYPE_COMBAT_FOCUS,
                 danger_source_obj,
                 &(ai->sound_id));
@@ -798,7 +798,7 @@ void sub_4A92D0(Ai* ai)
         if (danger_source_obj != OBJ_HANDLE_NULL) {
             ai->danger_source = danger_source_obj;
             sub_4ABC20(ai);
-            ai->danger_type = sub_4AABE0(ai->obj,
+            ai->danger_type = ai_apply_danger_type(ai->obj,
                 AI_DANGER_SOURCE_TYPE_COMBAT_FOCUS,
                 danger_source_obj,
                 &(ai->sound_id));
@@ -809,7 +809,7 @@ void sub_4A92D0(Ai* ai)
         ai->danger_source = danger_source_obj;
         if (sub_4AB990(ai->obj, ai->danger_source)) {
             sub_4ABC20(ai);
-            ai->danger_type = sub_4AABE0(ai->obj,
+            ai->danger_type = ai_apply_danger_type(ai->obj,
                 AI_DANGER_SOURCE_TYPE_COMBAT_FOCUS,
                 danger_source_obj,
                 &(ai->sound_id));
@@ -820,14 +820,14 @@ void sub_4A92D0(Ai* ai)
         ai->danger_source = danger_source_obj;
         if (ai->danger_source != OBJ_HANDLE_NULL) {
             sub_4ABC20(ai);
-            ai->danger_type = sub_4AABE0(ai->obj,
+            ai->danger_type = ai_apply_danger_type(ai->obj,
                 AI_DANGER_SOURCE_TYPE_COMBAT_FOCUS,
                 danger_source_obj,
                 &(ai->sound_id));
             break;
         }
 
-        ai->danger_type = sub_4AABE0(ai->obj,
+        ai->danger_type = ai_apply_danger_type(ai->obj,
             AI_DANGER_SOURCE_TYPE_NONE,
             OBJ_HANDLE_NULL,
             &(ai->sound_id));
@@ -837,7 +837,7 @@ void sub_4A92D0(Ai* ai)
         break;
     case 3:
         if (ai_object_hp_ratio(ai->obj) >= 80 && random_between(1, 500) == 1) {
-            ai->danger_type = sub_4AABE0(ai->obj,
+            ai->danger_type = ai_apply_danger_type(ai->obj,
                 AI_DANGER_SOURCE_TYPE_NONE,
                 OBJ_HANDLE_NULL,
                 &(ai->sound_id));
@@ -1044,7 +1044,7 @@ void ai_attack(int64_t source_obj, int64_t target_obj, int loudness, unsigned in
             }
         }
     } else if (target_obj_type == OBJ_TYPE_NPC) {
-        sub_4AABE0(target_obj,
+        ai_apply_danger_type(target_obj,
             AI_DANGER_SOURCE_TYPE_COMBAT_FOCUS,
             source_obj,
             NULL);
@@ -1146,7 +1146,7 @@ void sub_4A9C00(int64_t source_obj, int64_t a2, int64_t target_obj, int a4, int 
         if (a6) {
             ai_target_lock(source_obj, target_obj);
         } else {
-            sub_4AABE0(source_obj,
+            ai_apply_danger_type(source_obj,
                 AI_DANGER_SOURCE_TYPE_COMBAT_FOCUS,
                 target_obj,
                 NULL);
@@ -1214,7 +1214,7 @@ void sub_4A9F10(int64_t a1, int64_t a2, int64_t a3, int loudness)
             ai_danger_source(a1, &danger_type, NULL);
             if (danger_type == AI_DANGER_SOURCE_TYPE_NONE
                 && (ai_can_see(a1, a3) == 0 || ai_can_hear(a1, a3, loudness) == 0)) {
-                sub_4AABE0(a1,
+                ai_apply_danger_type(a1,
                     AI_DANGER_SOURCE_TYPE_FLEE,
                     a2,
                     NULL);
@@ -1306,7 +1306,7 @@ void sub_4AA300(int64_t a1, int64_t a2)
         }
     }
 
-    sub_4AABE0(a1, AI_DANGER_SOURCE_TYPE_NONE, OBJ_HANDLE_NULL, NULL);
+    ai_apply_danger_type(a1, AI_DANGER_SOURCE_TYPE_NONE, OBJ_HANDLE_NULL, NULL);
     sub_44E050(a1, v1);
 
     if (obj_type_is_critter(obj_type)) {
@@ -1610,7 +1610,7 @@ void ai_danger_source(int64_t obj, int* type_ptr, int64_t* danger_source_ptr)
 }
 
 // 0x4AABE0
-int sub_4AABE0(int64_t source_obj, int danger_type, int64_t target_obj, int* sound_id_ptr)
+int ai_apply_danger_type(int64_t source_obj, int danger_type, int64_t target_obj, int* sound_id_ptr)
 {
     unsigned int critter_flags;
     int64_t leader_obj;
@@ -1841,9 +1841,9 @@ int64_t ai_choose_target(int64_t attacker_obj, int64_t candidate1_obj, int64_t c
 void sub_4AB2A0(int64_t a1, int64_t a2)
 {
     if (ai_should_flee(a1, a2)) {
-        sub_4AABE0(a1, AI_DANGER_SOURCE_TYPE_FLEE, a2, 0);
+        ai_apply_danger_type(a1, AI_DANGER_SOURCE_TYPE_FLEE, a2, 0);
     } else {
-        sub_4AABE0(a1, AI_DANGER_SOURCE_TYPE_COMBAT_FOCUS, a2, 0);
+        ai_apply_danger_type(a1, AI_DANGER_SOURCE_TYPE_COMBAT_FOCUS, a2, 0);
     }
 }
 
@@ -2458,7 +2458,7 @@ void ai_action_perform_non_combat(Ai* ai)
 // 0x4AC620
 void ai_action_perform_fleeing(Ai* ai)
 {
-    sub_4AABE0(ai->obj, AI_DANGER_SOURCE_TYPE_SURRENDER, ai->danger_source, 0);
+    ai_apply_danger_type(ai->obj, AI_DANGER_SOURCE_TYPE_SURRENDER, ai->danger_source, 0);
     anim_goal_flee(ai->obj, ai->danger_source);
 }
 
@@ -2472,7 +2472,7 @@ void ai_action_perform_surrender(Ai* ai)
     if (fleeing_from_obj == OBJ_HANDLE_NULL
         || critter_is_dead(fleeing_from_obj)
         || critter_is_unconscious(fleeing_from_obj)) {
-        ai->danger_type = sub_4AABE0(ai->obj, 0, OBJ_HANDLE_NULL, 0);
+        ai->danger_type = ai_apply_danger_type(ai->obj, 0, OBJ_HANDLE_NULL, 0);
     }
 }
 
@@ -3954,7 +3954,7 @@ void ai_notify_portal_container_guards(int64_t critter_obj, int64_t target_obj, 
 void ai_flee(int64_t obj, int64_t danger_obj)
 {
     if (obj_field_int32_get(obj, OBJ_F_TYPE) == OBJ_TYPE_NPC) {
-        sub_4AABE0(obj, AI_DANGER_SOURCE_TYPE_FLEE, danger_obj, 0);
+        ai_apply_danger_type(obj, AI_DANGER_SOURCE_TYPE_FLEE, danger_obj, 0);
     }
 }
 
@@ -3966,7 +3966,7 @@ void ai_stop_fleeing(int64_t obj)
     if (obj_field_int32_get(obj, OBJ_F_TYPE) == OBJ_TYPE_NPC) {
         ai_danger_source(obj, &danger_type, NULL);
         if (danger_type == AI_DANGER_SOURCE_TYPE_FLEE) {
-            sub_4AABE0(obj, AI_DANGER_SOURCE_TYPE_NONE, OBJ_HANDLE_NULL, 0);
+            ai_apply_danger_type(obj, AI_DANGER_SOURCE_TYPE_NONE, OBJ_HANDLE_NULL, 0);
         }
         anim_interrupt_all_goals_of_type(obj, AG_FLEE, -1);
     }
@@ -4349,7 +4349,7 @@ void ai_target_lock(int64_t obj, int64_t tgt)
         && tgt != OBJ_HANDLE_NULL
         && obj_field_int32_get(obj, OBJ_F_TYPE) == OBJ_TYPE_NPC) {
         ai_target_unlock(obj);
-        sub_4AABE0(obj, AI_DANGER_SOURCE_TYPE_COMBAT_FOCUS, tgt, 0);
+        ai_apply_danger_type(obj, AI_DANGER_SOURCE_TYPE_COMBAT_FOCUS, tgt, 0);
         ai_danger_source(obj, &danger_type, &danger_source);
         if (danger_type == AI_DANGER_SOURCE_TYPE_COMBAT_FOCUS
             && danger_source == tgt) {

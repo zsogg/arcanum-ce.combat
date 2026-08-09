@@ -119,10 +119,10 @@ static bool object_inst_enumerate_available_fields(Object* object, ObjectInstEnu
 static bool object_inst_enumerate_available_fields_func(Object* object, int begin, int end, ObjectInstEnumerateFieldsCallback callback);
 static int sub_40D230(Object* object, int fld);
 static void sub_40D2A0(Object* object, int fld);
-static bool sub_40D320(Object* object, int fld);
+static bool obj_field_is_changed(Object* object, int fld);
 static bool sub_40D350(Object* object, int fld);
-static void sub_40D370(Object* object, int fld, bool enabled);
-static void sub_40D3A0(Object* object, ObjectFieldInfo* info, int enabled);
+static void obj_field_set_changed(Object* object, int fld, bool enabled);
+static void obj_field_info_set_changed(Object* object, ObjectFieldInfo* info, int enabled);
 static bool sub_40D3D0(Object* object, int fld);
 static void sub_40D400(Object* object, int fld, bool enabled);
 static void sub_40D450(Object* object, int fld);
@@ -2090,12 +2090,12 @@ void obj_field_reset(int64_t obj, int fld)
             object_transient_field_dealloc(object, fld);
             obj_unlock(obj);
         } else {
-            if (sub_40D320(object, fld)) {
+            if (obj_field_is_changed(object, fld)) {
                 object_inst_field_dealloc(object, sub_40D230(object, fld), &(object_fields[fld]));
                 sub_40D400(object, fld, true);
             } else {
                 sub_40D450(object, fld);
-                sub_40D370(object, fld, true);
+                obj_field_set_changed(object, fld, true);
                 sub_40D400(object, fld, true);
             }
             object->modified = true;
@@ -2409,13 +2409,13 @@ void obj_field_store(Object* object, int fld, void* value_ptr)
         storage_idx = fld - OBJ_F_TRANSIENT_BEGIN - 1;
         store_op.ptr = &(object->transient_properties[storage_idx]);
     } else {
-        if (sub_40D320(object, fld)) {
+        if (obj_field_is_changed(object, fld)) {
             storage_idx = sub_40D230(object, fld);
             store_op.ptr = &(object->data[storage_idx]);
             sub_40D400(object, fld, true);
         } else {
             sub_40D450(object, fld);
-            sub_40D370(object, fld, true);
+            obj_field_set_changed(object, fld, true);
             storage_idx = sub_40D230(object, fld);
             store_op.ptr = &(object->data[storage_idx]);
             sub_40D400(object, fld, true);
@@ -2461,7 +2461,7 @@ void obj_arrayfield_store(Object* object, int fld, int index, void* value_ptr)
         store_op.ptr = &(object->transient_properties[storage_idx]);
     } else {
         if (!sub_40D350(object, fld)) {
-            if (!sub_40D320(object, fld)) {
+            if (!obj_field_is_changed(object, fld)) {
                 sub_40D2A0(object, fld);
             }
         }
@@ -2519,7 +2519,7 @@ void obj_field_fetch(Object* object, int fld, void* value_ptr)
     } else if (fld > OBJ_F_TRANSIENT_BEGIN && fld < OBJ_F_TRANSIENT_END) {
         fetch_op.ptr = &(object->transient_properties[fld - OBJ_F_TRANSIENT_BEGIN - 1]);
         obj_data_fetch(&fetch_op);
-    } else if (sub_40D320(object, fld)) {
+    } else if (obj_field_is_changed(object, fld)) {
         storage_idx = sub_40D230(object, fld);
         fetch_op.ptr = &(object->data[storage_idx]);
         obj_data_fetch(&fetch_op);
@@ -2629,7 +2629,7 @@ void sub_408D60(Object* object, int fld, int* value_ptr)
             *value_ptr = obj_data_count_idx(&v1);
         }
 
-        if (sub_40D320(object, fld)) {
+        if (obj_field_is_changed(object, fld)) {
             v1.ptr = &(object->data[sub_40D230(object, fld)]);
             *value_ptr = obj_data_count_idx(&v1);
         } else {
@@ -2654,7 +2654,7 @@ void sub_408E70(Object* object, int fld, int value)
         v1.ptr = &(object->transient_properties[fld - OBJ_F_TRANSIENT_BEGIN - 1]);
     } else {
         if (!sub_40D350(object, fld)) {
-            if (!sub_40D320(object, fld)) {
+            if (!obj_field_is_changed(object, fld)) {
                 sub_40D2A0(object, fld);
             }
         }
@@ -2684,7 +2684,7 @@ bool sub_408F40(Object* object, int fld, SizeableArray*** ptr, int64_t* proto_ha
         return false;
     }
 
-    if (sub_40D320(object, fld)) {
+    if (obj_field_is_changed(object, fld)) {
         *ptr = (SizeableArray**)(&(object->data[sub_40D230(object, fld)]));
         return false;
     }
@@ -3366,7 +3366,7 @@ bool object_field_read_if_dif(Object* object, int idx, ObjectFieldInfo* info)
 
     if ((object->field_48[info->change_array_idx] & info->mask) == 0) {
         sub_40D470(object, idx);
-        sub_40D3A0(object, info, true);
+        obj_field_info_set_changed(object, info, true);
     }
 
     if (!object_field_read(object, idx, info)) {
@@ -4009,7 +4009,7 @@ void object_convert_scalar_handles_to_ids(Object* object)
     for (idx = 0; idx < obj_scalar_handle_field_cnt; idx++) {
         fld = obj_scalar_handle_fields[idx];
         if (object_field_valid(object->type, fld)
-            && sub_40D320(object, fld)) {
+            && obj_field_is_changed(object, fld)) {
             obj_field_fetch(object, fld, &oid);
             if (oid.type != OID_TYPE_NULL) {
                 if (oid.type == OID_TYPE_HANDLE) {
@@ -4048,7 +4048,7 @@ void object_convert_array_handles_to_ids(Object* object)
     for (idx = 0; idx < obj_array_handle_field_cnt; idx++) {
         fld = obj_array_handle_fields[idx];
         if (object_field_valid(object->type, fld)
-            && sub_40D320(object, fld)) {
+            && obj_field_is_changed(object, fld)) {
             sub_408F40(object, fld, &sa_ptr, &prototype_obj);
             if (*sa_ptr != NULL) {
                 if (!sa_enumerate(sa_ptr, convert_handle_to_id)) {
@@ -4070,7 +4070,7 @@ void object_convert_scalar_ids_to_handles(Object* object)
     for (idx = 0; idx < obj_scalar_handle_field_cnt; idx++) {
         fld = obj_scalar_handle_fields[idx];
         if (object_field_valid(object->type, fld)
-            && sub_40D320(object, fld)) {
+            && obj_field_is_changed(object, fld)) {
             obj_field_fetch(object, fld, &oid);
             if (oid.type != OID_TYPE_NULL) {
                 obj = obj_pool_perm_lookup(oid);
@@ -4097,7 +4097,7 @@ void object_convert_array_ids_to_handles(Object* object)
     for (idx = 0; idx < obj_array_handle_field_cnt; idx++) {
         fld = obj_array_handle_fields[idx];
         if (object_field_valid(object->type, fld)
-            && sub_40D320(object, fld)) {
+            && obj_field_is_changed(object, fld)) {
             sub_408F40(object, fld, &sa_ptr, &prototype_obj);
             if (*sa_ptr != NULL) {
                 if (!sa_enumerate(sa_ptr, convert_id_to_handle)) {
@@ -5039,7 +5039,7 @@ void sub_40D2A0(Object* object, int fld)
     int v3;
 
     sub_40D450(object, fld);
-    sub_40D370(object, fld, true);
+    obj_field_set_changed(object, fld, true);
 
     prototype = obj_lock(obj_get_prototype_handle(object));
     v2 = sub_40CB40(prototype, fld);
@@ -5050,25 +5050,31 @@ void sub_40D2A0(Object* object, int fld)
 }
 
 // 0x40D320
-bool sub_40D320(Object* object, int fld)
+bool obj_field_is_changed(Object* object, int fld)
 {
     return (object->field_48[object_fields[fld].change_array_idx] & object_fields[fld].mask) != 0;
 }
 
+// NOTE: Left unnamed. It is behaviourally identical to `obj_field_is_changed`,
+// which already returns a bool, and the two are used interchangeably in this
+// file - obj.c:2463 tests both in a row on the same field. There is nothing in
+// the body or the call sites to tell them apart, so a second name here would be
+// invented rather than recovered.
+//
 // 0x40D350
 bool sub_40D350(Object* object, int fld)
 {
-    return sub_40D320(object, fld) != 0;
+    return obj_field_is_changed(object, fld) != 0;
 }
 
 // 0x40D370
-void sub_40D370(Object* object, int fld, bool enabled)
+void obj_field_set_changed(Object* object, int fld, bool enabled)
 {
-    sub_40D3A0(object, &(object_fields[fld]), enabled);
+    obj_field_info_set_changed(object, &(object_fields[fld]), enabled);
 }
 
 // 0x40D3A0
-void sub_40D3A0(Object* object, ObjectFieldInfo* info, int enabled)
+void obj_field_info_set_changed(Object* object, ObjectFieldInfo* info, int enabled)
 {
     if (enabled) {
         object->field_48[info->change_array_idx] |= info->mask;

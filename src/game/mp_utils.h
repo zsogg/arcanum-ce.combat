@@ -674,7 +674,7 @@ static_assert(sizeof(Packet128) == 0x38, "wrong size");
 
 bool sub_4ED6C0(int64_t obj);
 bool mp_object_create(int name, int64_t loc, int64_t* obj_ptr);
-void sub_4EDA60(UiMessage* ui_message, int player, int a3);
+void mp_send_ui_message(UiMessage* ui_message, int player, int a3);
 void sub_4EDCE0(int64_t obj, tig_art_id_t art_id);
 void mp_ui_update_inven(int64_t obj);
 void sub_4EDF20(int64_t obj, int64_t location, int dx, int dy, bool a7);

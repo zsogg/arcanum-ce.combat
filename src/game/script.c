@@ -2978,7 +2978,7 @@ void script_print_line(ScriptAction* action, ScriptState* state)
         }
 
         if (player != 0) {
-            sub_4EDA60(&ui_message, player, 0);
+            mp_send_ui_message(&ui_message, player, 0);
             dialog_unload(v1.dlg);
             return;
         }

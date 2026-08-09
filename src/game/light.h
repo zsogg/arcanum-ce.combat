@@ -77,7 +77,7 @@ void light_set_flags(int64_t obj, unsigned int flags);
 void light_unset_flags(int64_t obj, unsigned int flags);
 void sub_4DD020(int64_t obj, int64_t loc, int offset_x, int offset_y);
 void sub_4DD0A0(int64_t obj, int offset_x, int offset_y);
-bool sub_4DD110(Light* light);
+bool light_is_unattached(Light* light);
 void light_get_rect(Light* light, TigRect* rect);
 void light_set_flags_internal(Light* light, unsigned int flags);
 void light_unset_flags_internal(Light* light, unsigned int flags);

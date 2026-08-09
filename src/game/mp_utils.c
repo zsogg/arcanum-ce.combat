@@ -67,7 +67,7 @@ bool mp_object_create(int name, int64_t loc, int64_t* obj_ptr)
 }
 
 // 0x4EDA60
-void sub_4EDA60(UiMessage* ui_message, int player, int a3)
+void mp_send_ui_message(UiMessage* ui_message, int player, int a3)
 {
     Packet84* pkt;
     int extra_length;

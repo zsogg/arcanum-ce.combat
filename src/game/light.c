@@ -552,7 +552,7 @@ void sub_4D9310(LightCreateInfo* create_info, Light** light_ptr)
     sub_4DE870(create_info, light_ptr);
     if (*light_ptr != NULL) {
         sector_id = sector_id_from_loc(create_info->loc);
-        if (sub_4DD110(*light_ptr) || sector_loaded(sector_id)) {
+        if (light_is_unattached(*light_ptr) || sector_loaded(sector_id)) {
             sector_lock(sector_id, &sector);
             sector_light_list_add(&(sector->lights), *light_ptr);
             sector_unlock(sector_id);
@@ -630,7 +630,7 @@ void sub_4D9510(Light* light)
     Sector* sector;
 
     sector_id = sector_id_from_loc(light->loc);
-    if (sub_4DD110(light) || sector_loaded(sector_id)) {
+    if (light_is_unattached(light) || sector_loaded(sector_id)) {
         sector_lock(sector_id, &sector);
         sector_light_list_remove(&(sector->lights), light);
         sector_unlock(sector_id);
@@ -1403,7 +1403,7 @@ void sub_4DD0A0(int64_t obj, int offset_x, int offset_y)
 }
 
 // 0x4DD110
-bool sub_4DD110(Light* light)
+bool light_is_unattached(Light* light)
 {
     return light->obj == OBJ_HANDLE_NULL;
 }
@@ -1543,7 +1543,7 @@ void sub_4DD320(Light* light, int64_t loc, int offset_x, int offset_y)
 
     old_sector_id = sector_id_from_loc(light->loc);
     new_sector_id = sector_id_from_loc(loc);
-    v1 = sub_4DD110(light);
+    v1 = light_is_unattached(light);
 
     if (old_sector_id == new_sector_id) {
         if (v1 || sector_loaded(new_sector_id)) {
@@ -2195,7 +2195,7 @@ void sub_4DE4F0(Light* light, int offset_x, int offset_y)
     if (light->offset_x != offset_x || light->offset_y != offset_y) {
         light_get_rect_internal(light, &dirty_rect);
         sector_id = sector_id_from_loc(light->loc);
-        if (sub_4DD110(light) || sector_loaded(sector_id)) {
+        if (light_is_unattached(light) || sector_loaded(sector_id)) {
             sector_lock(sector_id, &sector);
             sector_light_list_update(&(sector->lights), light, light->loc, offset_x, offset_y);
             sector_unlock(sector_id);
