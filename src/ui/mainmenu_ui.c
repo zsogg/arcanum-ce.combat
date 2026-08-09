@@ -449,18 +449,26 @@ static int mainmenu_ui_font_art_nums[2] = {
 };
 
 // 0x5C4038
-static int dword_5C4038 = 171;
+static int mainmenu_ui_body_font_art = 171;
 
 /**
- * UAP (0x5C4038) swaps the font art the main menu builds `dword_64C0CC` and
- * `dword_64BC04` from - the menu-entry fonts and the one
- * `mainmenu_ui_draw_version` pushes for the version banner. Art 226 rather
- * than 171; UAP's archives ship it.
+ * UAP (0x5C4038) swaps this art, 226 rather than 171; UAP's archives ship it.
+ *
+ * That reaches `mainmenu_ui_body_fonts`, `mainmenu_ui_version_fonts` and
+ * `mainmenu_ui_version_fonts_red` - so in practice the version banner, and the
+ * new-char, pregen-char, charedit and shop screens.
+ *
+ * NOTE: An earlier version of this comment called those "the menu-entry fonts",
+ * which is wrong and worth correcting explicitly, because it invites the
+ * opposite conclusion. The main menu's own entries are drawn with
+ * `mainmenu_ui_menu_fonts`, built from art 327 below, which UAP does not touch.
+ * The split is by `refresh_text_flags & 0x8` - see the comment on
+ * `mainmenu_ui_body_fonts`.
  */
 #define MAINMENU_UI_UAP_FONT_ART 226
 
 // 0x5C403C
-static int dword_5C403C = 327;
+static int mainmenu_ui_menu_font_art = 327;
 
 // 0x5C4040
 static int mainmenu_ui_font_colors[3][3] = {
@@ -1325,10 +1333,17 @@ static GameSaveInfo mainmenu_ui_gsi;
 static GameSaveList mainmenu_ui_gsl;
 
 // 0x64BC04
-static tig_font_handle_t dword_64BC04[3];
+static tig_font_handle_t mainmenu_ui_version_fonts[3];
 
+// NOTE: Built and destroyed alongside mainmenu_ui_version_fonts and never
+// pushed - nothing draws with it, in CE or in the original, where 0x64BC10
+// appears only in mainmenu_ui_init and mainmenu_ui_exit. Named from its
+// construction (identical to the version fonts, but the third entry is red)
+// rather than left blank, since the build states what it is; what is missing is
+// a user.
+//
 // 0x64BC10
-static tig_font_handle_t dword_64BC10[3];
+static tig_font_handle_t mainmenu_ui_version_fonts_red[3];
 
 // 0x64BC1C
 static char byte_64BC1C[1000];
@@ -1336,8 +1351,24 @@ static char byte_64BC1C[1000];
 // 0x64C004
 static MainMenuWindowType mainmenu_ui_window_stack[50];
 
+// The two font sets `mainmenu_ui_refresh_text` chooses between, each [variant]
+// [state]. Which one a window gets is decided by its `refresh_text_flags`:
+//
+//   flags & 0x8 set   -> mainmenu_ui_menu_fonts, built from art 327 and given
+//                        the real colours in mainmenu_ui_font_colors (black,
+//                        brown, dark red). Every menu screen sets it: the main
+//                        menu, options, load, save, credits and intro.
+//   flags & 0x8 clear -> mainmenu_ui_body_fonts, built from art 171 and all
+//                        black, because mainmenu_ui_body_font_greys is never
+//                        written. Only four windows: new-char, pregen-char,
+//                        charedit and shop.
+//
+// mainmenu_ui_body_fonts is additionally the emphasis font for *plain* text
+// (flags & 0x1 clear, flags & 0x10 set), so it is not exclusively the
+// character-creation face.
+//
 // 0x64C0CC
-static tig_font_handle_t dword_64C0CC[2][3];
+static tig_font_handle_t mainmenu_ui_body_fonts[2][3];
 
 // 0x64C0F0
 static char byte_64C0F0[128];
@@ -1346,19 +1377,19 @@ static char byte_64C0F0[128];
 static tig_font_handle_t mainmenu_ui_fonts_tbl[MM_FONT_COUNT][MM_COLOR_COUNT];
 
 // 0x64C210
-static tig_font_handle_t dword_64C210[2];
+static tig_font_handle_t mainmenu_ui_text_fonts[2];
 
 // 0x64C218
-static tig_font_handle_t dword_64C218[2];
+static tig_font_handle_t mainmenu_ui_text_fonts_red[2];
 
 // 0x64C220
 static ScrollbarId stru_64C220;
 
 // 0x64C228
-static tig_font_handle_t dword_64C228[2][3];
+static tig_font_handle_t mainmenu_ui_menu_fonts[2][3];
 
 // 0x64C240
-static tig_font_handle_t dword_64C240;
+static tig_font_handle_t mainmenu_ui_selected_font;
 
 // 0x64C244
 static MainMenuType mainmenu_ui_type;
@@ -1411,8 +1442,12 @@ static bool mainmenu_ui_auto_equip_items_on_start;
 // 0x64C428
 static bool dword_64C428;
 
+// NOTE: Never written, in CE or in the original - 0x64C42C has two reads in
+// mainmenu_ui_init and no writes anywhere. So all three entries are 0 and every
+// mainmenu_ui_body_fonts colour resolves to black. Kept as the original has it.
+//
 // 0x64C42C
-static int dword_64C42C[3];
+static int mainmenu_ui_body_font_greys[3];
 
 // 0x64C438
 static bool mainmenu_ui_was_compact_interface;
@@ -1502,53 +1537,53 @@ bool mainmenu_ui_init(GameInitInfo* init_info)
     mainmenu_fonts_init();
 
     // UAP (0x5C4038): see `MAINMENU_UI_UAP_FONT_ART`.
-    int menu_font_art = uap_fixes_enabled()
+    int body_font_art = uap_fixes_enabled()
         ? MAINMENU_UI_UAP_FONT_ART
-        : dword_5C4038;
+        : mainmenu_ui_body_font_art;
 
     for (index = 0; index < 3; index++) {
         font_desc.flags = 0;
         if (index == 1) {
             font_desc.flags = TIG_FONT_BLEND_ADD;
         }
-        tig_art_interface_id_create(dword_5C403C, 0, 0, 0, &(font_desc.art_id));
+        tig_art_interface_id_create(mainmenu_ui_menu_font_art, 0, 0, 0, &(font_desc.art_id));
         font_desc.str = NULL;
         font_desc.color = tig_color_make(mainmenu_ui_font_colors[index][0], mainmenu_ui_font_colors[index][1], mainmenu_ui_font_colors[index][2]);
-        tig_font_create(&font_desc, &(dword_64C228[0][index]));
+        tig_font_create(&font_desc, &(mainmenu_ui_menu_fonts[0][index]));
 
-        tig_art_interface_id_create(dword_5C403C, 0, 0, 0, &(font_desc.art_id));
+        tig_art_interface_id_create(mainmenu_ui_menu_font_art, 0, 0, 0, &(font_desc.art_id));
         font_desc.color = index < 2
             ? tig_color_make(mainmenu_ui_font_colors[index][0], mainmenu_ui_font_colors[index][1], mainmenu_ui_font_colors[index][2])
             : tig_color_make(240, 15, 15);
-        tig_font_create(&font_desc, &(dword_64C228[1][index]));
+        tig_font_create(&font_desc, &(mainmenu_ui_menu_fonts[1][index]));
     }
 
     for (index = 0; index < 3; index++) {
         font_desc.flags = 0;
-        tig_art_interface_id_create(menu_font_art, 0, 0, 0, &(font_desc.art_id));
+        tig_art_interface_id_create(body_font_art, 0, 0, 0, &(font_desc.art_id));
         font_desc.str = NULL;
-        font_desc.color = tig_color_make(dword_64C42C[index], dword_64C42C[index], dword_64C42C[index]);
-        tig_font_create(&font_desc, &(dword_64C0CC[0][index]));
+        font_desc.color = tig_color_make(mainmenu_ui_body_font_greys[index], mainmenu_ui_body_font_greys[index], mainmenu_ui_body_font_greys[index]);
+        tig_font_create(&font_desc, &(mainmenu_ui_body_fonts[0][index]));
 
-        tig_art_interface_id_create(menu_font_art, 0, 0, 0, &(font_desc.art_id));
+        tig_art_interface_id_create(body_font_art, 0, 0, 0, &(font_desc.art_id));
         font_desc.color = index < 2
-            ? tig_color_make(dword_64C42C[index], dword_64C42C[index], dword_64C42C[index])
+            ? tig_color_make(mainmenu_ui_body_font_greys[index], mainmenu_ui_body_font_greys[index], mainmenu_ui_body_font_greys[index])
             : tig_color_make(240, 15, 15);
-        tig_font_create(&font_desc, &(dword_64C0CC[1][index]));
+        tig_font_create(&font_desc, &(mainmenu_ui_body_fonts[1][index]));
     }
 
     for (index = 0; index < 3; index++) {
         font_desc.flags = 0;
-        tig_art_interface_id_create(menu_font_art, 0, 0, 0, &(font_desc.art_id));
+        tig_art_interface_id_create(body_font_art, 0, 0, 0, &(font_desc.art_id));
         font_desc.str = NULL;
         font_desc.color = tig_color_make(mainmenu_ui_menu_font_greys[index], mainmenu_ui_menu_font_greys[index], mainmenu_ui_menu_font_greys[index]);
-        tig_font_create(&font_desc, &(dword_64BC04[index]));
+        tig_font_create(&font_desc, &(mainmenu_ui_version_fonts[index]));
 
-        tig_art_interface_id_create(menu_font_art, 0, 0, 0, &(font_desc.art_id));
+        tig_art_interface_id_create(body_font_art, 0, 0, 0, &(font_desc.art_id));
         font_desc.color = index < 2
             ? tig_color_make(mainmenu_ui_menu_font_greys[index], mainmenu_ui_menu_font_greys[index], mainmenu_ui_menu_font_greys[index])
             : tig_color_make(240, 15, 15);
-        tig_font_create(&font_desc, &(dword_64BC10[index]));
+        tig_font_create(&font_desc, &(mainmenu_ui_version_fonts_red[index]));
     }
 
     for (index = 0; index < 2; index++) {
@@ -1556,20 +1591,20 @@ bool mainmenu_ui_init(GameInitInfo* init_info)
         tig_art_interface_id_create(mainmenu_ui_font_art_nums[index], 0, 0, 0, &(font_desc.art_id));
         font_desc.str = NULL;
         font_desc.color = tig_color_make(250, 250, 250);
-        tig_font_create(&font_desc, &(dword_64C210[index]));
+        tig_font_create(&font_desc, &(mainmenu_ui_text_fonts[index]));
 
         font_desc.flags = 0;
         tig_art_interface_id_create(mainmenu_ui_font_art_nums[index], 0, 0, 0, &(font_desc.art_id));
         font_desc.str = NULL;
         font_desc.color = tig_color_make(255, 50, 50);
-        tig_font_create(&font_desc, &(dword_64C218[index]));
+        tig_font_create(&font_desc, &(mainmenu_ui_text_fonts_red[index]));
     }
 
     font_desc.flags = 0;
     tig_art_interface_id_create(mainmenu_ui_font_art_nums[0], 0, 0, 0, &(font_desc.art_id));
     font_desc.str = NULL;
     font_desc.color = tig_color_make(255, 210, 0);
-    tig_font_create(&font_desc, &dword_64C240);
+    tig_font_create(&font_desc, &mainmenu_ui_selected_font);
 
     mes_file_entry.num = 500;
     mes_get_msg(mainmenu_ui_mainmenu_mes_file, &mes_file_entry);
@@ -1599,20 +1634,20 @@ void mainmenu_ui_exit(void)
     mainmenu_fonts_exit();
 
     for (index = 0; index < 3; index++) {
-        tig_font_destroy(dword_64C228[0][index]);
-        tig_font_destroy(dword_64C228[1][index]);
-        tig_font_destroy(dword_64C0CC[0][index]);
-        tig_font_destroy(dword_64C0CC[1][index]);
-        tig_font_destroy(dword_64BC04[index]);
-        tig_font_destroy(dword_64BC10[index]);
+        tig_font_destroy(mainmenu_ui_menu_fonts[0][index]);
+        tig_font_destroy(mainmenu_ui_menu_fonts[1][index]);
+        tig_font_destroy(mainmenu_ui_body_fonts[0][index]);
+        tig_font_destroy(mainmenu_ui_body_fonts[1][index]);
+        tig_font_destroy(mainmenu_ui_version_fonts[index]);
+        tig_font_destroy(mainmenu_ui_version_fonts_red[index]);
     }
 
     for (index = 0; index < 2; index++) {
-        tig_font_destroy(dword_64C210[index]);
-        tig_font_destroy(dword_64C218[index]);
+        tig_font_destroy(mainmenu_ui_text_fonts[index]);
+        tig_font_destroy(mainmenu_ui_text_fonts_red[index]);
     }
 
-    tig_font_destroy(dword_64C240);
+    tig_font_destroy(mainmenu_ui_selected_font);
     mes_unload(mainmenu_ui_rules_mainmenu_mes_file);
     mes_unload(mainmenu_ui_mainmenu_mes_file);
 
@@ -2132,7 +2167,7 @@ void mainmenu_ui_draw_version(void)
         rect.height = 20;
     }
 
-    tig_font_push(dword_64BC04[0]);
+    tig_font_push(mainmenu_ui_version_fonts[0]);
     if (tig_window_text_write(mainmenu_ui_window_handle, version, &rect) != TIG_OK) {
         tig_debug_printf("MainMenuUI: ERROR: GameLib_Version_String Failed to draw!\n");
     }
@@ -2629,7 +2664,7 @@ void mainmenu_ui_load_game_refresh(TigRect* rect)
                     break;
                 }
 
-                font = window->selected_index == index ? dword_64C240 : dword_64C210[0];
+                font = window->selected_index == index ? mainmenu_ui_selected_font : mainmenu_ui_text_fonts[0];
                 tig_font_push(font);
                 name = sub_543040(index);
                 if (*name != '\0') {
@@ -2675,7 +2710,7 @@ void mainmenu_ui_load_game_refresh(TigRect* rect)
                     }
                 }
 
-                font = dword_64C210[0];
+                font = mainmenu_ui_text_fonts[0];
                 tig_font_push(font);
 
                 if (mainmenu_ui_gsi.version == 25) {
@@ -2732,7 +2767,7 @@ void mainmenu_ui_load_game_refresh(TigRect* rect)
             } else {
                 tig_window_fill(mainmenu_ui_window_handle, &stru_5C46C0, tig_color_make(0, 0, 0));
 
-                font = dword_64C218[0];
+                font = mainmenu_ui_text_fonts_red[0];
                 tig_font_push(font);
                 mes_file_entry.num = 5005; // "Empty"
                 mes_get_msg(mainmenu_ui_mainmenu_mes_file, &mes_file_entry);
@@ -3365,7 +3400,7 @@ void mainmenu_ui_save_game_refresh(TigRect* rect)
                 break;
             }
 
-            font = window->selected_index == idx ? dword_64C240 : dword_64C210[0];
+            font = window->selected_index == idx ? mainmenu_ui_selected_font : mainmenu_ui_text_fonts[0];
             tig_font_push(font);
 
             char* name;
@@ -3425,7 +3460,7 @@ void mainmenu_ui_save_game_refresh(TigRect* rect)
                     }
                 }
 
-                font = dword_64C210[0];
+                font = mainmenu_ui_text_fonts[0];
                 tig_font_push(font);
 
                 if (dword_5C4790) {
@@ -3477,7 +3512,7 @@ void mainmenu_ui_save_game_refresh(TigRect* rect)
             } else {
                 tig_window_fill(mainmenu_ui_window_handle, &stru_5C46C0, tig_color_make(0, 0, 0));
 
-                font = dword_64C218[0];
+                font = mainmenu_ui_text_fonts_red[0];
                 tig_font_push(font);
                 mes_file_entry.num = 5005; // "Empty"
                 mes_get_msg(mainmenu_ui_mainmenu_mes_file, &mes_file_entry);
@@ -3831,9 +3866,9 @@ void mainmenu_ui_new_char_refresh(TigRect* rect)
         mes_get_msg(mainmenu_ui_mainmenu_mes_file, &mes_file_entry);
 
         if (textedit_ui_is_focused()) {
-            sub_544100(str, &mainmenu_ui_shared_char_name_rect, dword_64C218[1]);
+            sub_544100(str, &mainmenu_ui_shared_char_name_rect, mainmenu_ui_text_fonts_red[1]);
         } else {
-            mainmenu_ui_draw_centered_text(str, &mainmenu_ui_shared_char_name_rect, dword_64C218[1]);
+            mainmenu_ui_draw_centered_text(str, &mainmenu_ui_shared_char_name_rect, mainmenu_ui_text_fonts_red[1]);
         }
     }
 }
@@ -3869,7 +3904,7 @@ void mmUISharedCharRefreshFunc(int64_t obj, TigRect* rect)
             mainmenu_ui_shared_char_portrait_rect.y);
     }
 
-    font = dword_64C218[0];
+    font = mainmenu_ui_text_fonts_red[0];
     tig_font_push(font);
     if (rect == NULL
         || (mainmenu_ui_shared_char_gender_rect.x < rect->x + rect->width
@@ -3916,7 +3951,7 @@ void mmUISharedCharRefreshFunc(int64_t obj, TigRect* rect)
             && rect->y < mainmenu_ui_shared_char_desc_view_rect.y + mainmenu_ui_shared_char_desc_view_rect.height)) {
         if (tig_window_fill(mainmenu_ui_window_handle, &mainmenu_ui_shared_char_desc_view_rect, tig_color_make(0, 0, 0)) == TIG_OK) {
             if (mainmenu_ui_new_char_hover_mode == MMUI_NEW_CHAR_HOVER_MODE_GENDER) {
-                font = dword_64C210[0];
+                font = mainmenu_ui_text_fonts[0];
                 tig_font_push(font);
                 mes_file_entry.num = 742 + gender;
                 mes_get_msg(mainmenu_ui_mainmenu_mes_file, &mes_file_entry);
@@ -3929,14 +3964,14 @@ void mmUISharedCharRefreshFunc(int64_t obj, TigRect* rect)
             } else {
                 background = background_text_get(obj);
                 if (background > 1000 && mainmenu_ui_new_char_hover_mode == MMUI_NEW_CHAR_HOVER_MODE_BACKGROUND) {
-                    font = dword_64C210[0];
+                    font = mainmenu_ui_text_fonts[0];
                     tig_font_push(font);
                     mainmenu_ui_draw_centered_text(background_description_get_body(background),
                         &mainmenu_ui_shared_char_desc_view_rect,
                         font);
                     tig_font_pop();
                 } else {
-                    font = dword_64C210[1];
+                    font = mainmenu_ui_text_fonts[1];
                     tig_font_push(font);
                     mes_file_entry.num = 745; // "Race"
                     mes_get_msg(mainmenu_ui_mainmenu_mes_file, &mes_file_entry);
@@ -3947,7 +3982,7 @@ void mmUISharedCharRefreshFunc(int64_t obj, TigRect* rect)
                     }
                     tig_font_pop();
 
-                    font = dword_64C210[0];
+                    font = mainmenu_ui_text_fonts[0];
                     tig_font_push(font);
                     mes_file_entry.num = 770 + 2 * race + gender;
                     mes_get_msg(mainmenu_ui_mainmenu_mes_file, &mes_file_entry);
@@ -3967,7 +4002,7 @@ void mmUISharedCharRefreshFunc(int64_t obj, TigRect* rect)
             && mainmenu_ui_shared_char_stats_view_rect.y < rect->y + rect->height
             && rect->x < mainmenu_ui_shared_char_stats_view_rect.x + mainmenu_ui_shared_char_stats_view_rect.width
             && rect->y < mainmenu_ui_shared_char_stats_view_rect.y + mainmenu_ui_shared_char_stats_view_rect.height)) {
-        font = dword_64C210[1];
+        font = mainmenu_ui_text_fonts[1];
         tig_font_push(font);
         if (tig_window_fill(mainmenu_ui_window_handle, &mainmenu_ui_shared_char_stats_title_rect, tig_color_make(0, 0, 0)) == TIG_OK) {
             mes_file_entry.num = 739; // "Initial Stats"
@@ -3978,7 +4013,7 @@ void mmUISharedCharRefreshFunc(int64_t obj, TigRect* rect)
         }
         tig_font_pop();
 
-        font = dword_64C210[0];
+        font = mainmenu_ui_text_fonts[0];
         tig_font_push(font);
         for (index = 0; index < 15; index++) {
             if (tig_window_fill(mainmenu_ui_window_handle, &(mainmenu_ui_stat_rects[index]), tig_color_make(0, 0, 0)) == TIG_OK) {
@@ -4381,11 +4416,11 @@ void mainmenu_ui_pregen_char_refresh(TigRect* rect)
             && mainmenu_ui_shared_char_name_rect.y < rect->y + rect->height
             && rect->x < mainmenu_ui_shared_char_name_rect.x + mainmenu_ui_shared_char_name_rect.width
             && rect->y < mainmenu_ui_shared_char_name_rect.y + mainmenu_ui_shared_char_name_rect.height)) {
-        tig_font_push(dword_64C218[1]);
+        tig_font_push(mainmenu_ui_text_fonts_red[1]);
         if (tig_window_fill(mainmenu_ui_window_handle, &mainmenu_ui_shared_char_name_rect, tig_color_make(0, 0, 0)) == TIG_OK) {
             obj_field_string_get(qword_64C460, OBJ_F_PC_PLAYER_NAME, &name);
             if (name != NULL) {
-                mainmenu_ui_draw_centered_text(name, &mainmenu_ui_shared_char_name_rect, dword_64C218[1]);
+                mainmenu_ui_draw_centered_text(name, &mainmenu_ui_shared_char_name_rect, mainmenu_ui_text_fonts_red[1]);
                 FREE(name);
             }
         }
@@ -4873,15 +4908,15 @@ void mainmenu_ui_create_window_func(bool should_display)
 
     if ((window->refresh_text_flags & 0x1) != 0) {
         if ((window->refresh_text_flags & 0x8) != 0) {
-            font = dword_64C228[0][0];
+            font = mainmenu_ui_menu_fonts[0][0];
         } else {
-            font = dword_64C0CC[0][0];
+            font = mainmenu_ui_body_fonts[0][0];
         }
     } else {
         if ((window->refresh_text_flags & 0x10) != 0) {
-            font = dword_64C218[0];
+            font = mainmenu_ui_text_fonts_red[0];
         } else {
-            font = dword_64C210[0];
+            font = mainmenu_ui_text_fonts[0];
         }
     }
 
@@ -4986,7 +5021,7 @@ void mainmenu_ui_refresh_text(tig_window_handle_t window_handle, const char* str
     text_rect = *rect;
 
     if ((flags & 0x1) == 0) {
-        fonts = (flags & 0x10) != 0 ? dword_64C0CC[0] : dword_64C210;
+        fonts = (flags & 0x10) != 0 ? mainmenu_ui_body_fonts[0] : mainmenu_ui_text_fonts;
 
         if ((flags & 0x20) == 0) {
             tig_font_push(fonts[0]);
@@ -5011,9 +5046,9 @@ void mainmenu_ui_refresh_text(tig_window_handle_t window_handle, const char* str
         tig_font_pop();
     } else {
         if ((flags & 0x08) != 0) {
-            fonts = dword_64C228[(flags & 0x2) != 0 ? 1 : 0];
+            fonts = mainmenu_ui_menu_fonts[(flags & 0x2) != 0 ? 1 : 0];
         } else {
-            fonts = dword_64C0CC[(flags & 0x2) != 0 ? 1 : 0];
+            fonts = mainmenu_ui_body_fonts[(flags & 0x2) != 0 ? 1 : 0];
         }
 
         if ((flags & 0x20) == 0) {
