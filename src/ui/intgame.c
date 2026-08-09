@@ -2249,7 +2249,7 @@ bool intgame_process_message(TigMessage* msg)
             case ROTWIN_TYPE_MAP_NOTE:
                 for (index = 3; index < 6; index++) {
                     if (msg->data.button.button_handle == stru_5C6CA8[index].button_handle) {
-                        sub_564000(index - 3);
+                        wmap_ui_set_note_type(index - 3);
                         return true;
                     }
                 }

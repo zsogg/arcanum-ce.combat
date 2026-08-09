@@ -236,25 +236,25 @@ static void wmap_world_xy_to_coords(int x, int y, WmapCoords* coords);
 static void wmap_continent_xy_to_coords(int x, int y, WmapCoords* coords);
 static void wmap_town_xy_to_coords(int x, int y, WmapCoords* coords);
 static bool wmap_ui_add_note(WmapNote* note);
-static void sub_563D50(WmapNote* note);
+static void wmap_ui_note_calc_rect(WmapNote* note);
 static void sub_563D80(int a1, int a2);
 static WmapNote* wmap_ui_find_note(int id);
 static bool find_note_by_coords(WmapCoords* coords, int* id_ptr);
 static bool find_note_by_coords_mode(WmapCoords* coords, int* id_ptr, WmapUiMode mode);
-static bool sub_563F00(WmapCoords* coords, int64_t* a2);
-static void sub_563F90(WmapCoords* coords);
-static void sub_564030(WmapNote* note);
-static void sub_564070(bool a1);
+static bool wmap_ui_snap_note_to_pc(WmapCoords* coords, int64_t* a2);
+static void wmap_ui_begin_new_note(WmapCoords* coords);
+static void wmap_ui_open_note_editor(WmapNote* note);
+static void wmap_ui_close_note_editor(bool a1);
 static void wmap_ui_textedit_on_enter(TextEdit* textedit);
 static bool wmap_note_add(WmapNote* note);
 static bool wmap_note_add_mode(WmapNote* note, WmapUiMode mode);
 static bool wmap_note_remove(WmapNote* note);
 static void sub_5642E0(int id, WmapUiMode mode);
-static void sub_5642F0(WmapNote* note);
+static void wmap_ui_note_free_buffer(WmapNote* note);
 static void wmap_ui_textedit_on_change(TextEdit* textedit);
-static void sub_564360(int id);
-static bool sub_5643C0(const char* str);
-static bool sub_5643E0(WmapCoords* coords);
+static void wmap_ui_edit_note(int id);
+static bool wmap_ui_str_has_content(const char* str);
+static bool wmap_ui_add_waypoint(WmapCoords* coords);
 static bool sub_564780(WmapCoords* coords, int* idx_ptr);
 static void sub_564830(int a1, WmapCoords* coords);
 static void sub_564840(int a1);
@@ -1420,7 +1420,7 @@ void wmap_ui_close(void)
     }
 
     if (intgame_mode_set(INTGAME_MODE_MAIN) && wmap_ui_created) {
-        sub_564070(false);
+        wmap_ui_close_note_editor(false);
         wmap_ui_state_set(WMAP_UI_STATE_NORMAL);
         intgame_pc_lens_do(PC_LENS_MODE_NONE, NULL);
         ambient_lighting_enable();
@@ -1727,7 +1727,7 @@ bool wmap_ui_state_set(WmapUiState state)
             wmap_ui_travel_to_loc(loc);
             break;
         case WMAP_UI_STATE_EDITING:
-            sub_564070(1);
+            wmap_ui_close_note_editor(1);
             tig_art_interface_id_create(0, 0, 0, 0, &art_id);
             tig_mouse_cursor_set_art_id(art_id);
             break;
@@ -1829,7 +1829,7 @@ bool wmap_ui_message_filter(TigMessage* msg)
                             return true;
                         }
 
-                        if (wmap_ui_can_travel_to_coords(&stru_64E7E8) && sub_5643E0(&stru_64E7E8)) {
+                        if (wmap_ui_can_travel_to_coords(&stru_64E7E8) && wmap_ui_add_waypoint(&stru_64E7E8)) {
                             dword_5C9AD8 = wmap_ui_routes[WMAP_ROUTE_TYPE_WORLD].length - 1;
                             wmap_ui_state_set(WMAP_UI_STATE_1);
                             wmap_ui_routes[WMAP_ROUTE_TYPE_WORLD].field_3C8 = 0;
@@ -1858,9 +1858,9 @@ bool wmap_ui_message_filter(TigMessage* msg)
                 case WMAP_UI_STATE_EDITING: {
                     int id;
                     if (find_note_by_coords(&stru_64E7E8, &id)) {
-                        sub_564360(id);
+                        wmap_ui_edit_note(id);
                     } else {
-                        sub_563F90(&stru_64E7E8);
+                        wmap_ui_begin_new_note(&stru_64E7E8);
                     }
                     return true;
                 }
@@ -1880,7 +1880,7 @@ bool wmap_ui_message_filter(TigMessage* msg)
                             return true;
                         }
 
-                        if (wmap_ui_can_travel_to_coords(&stru_64E7E8) && sub_5643E0(&stru_64E7E8)) {
+                        if (wmap_ui_can_travel_to_coords(&stru_64E7E8) && wmap_ui_add_waypoint(&stru_64E7E8)) {
                             dword_5C9AD8 = wmap_ui_routes[WMAP_ROUTE_TYPE_TOWN].length - 1;
                             wmap_ui_routes[WMAP_ROUTE_TYPE_TOWN].field_3C8 = 0;
                             return true;
@@ -3247,7 +3247,7 @@ bool wmap_ui_add_note(WmapNote* note)
         if (wmap_info->notes[index].id == note->id) {
             // Note already exists, copy over everything.
             wmap_info->notes[index] = *note;
-            sub_563D50(&(wmap_info->notes[index]));
+            wmap_ui_note_calc_rect(&(wmap_info->notes[index]));
             return true;
         }
     }
@@ -3255,7 +3255,7 @@ bool wmap_ui_add_note(WmapNote* note)
     if (index < 199) {
         // Note does not exists, but there is a room for a new note.
         wmap_info->notes[index] = *note;
-        sub_563D50(&(wmap_info->notes[index]));
+        wmap_ui_note_calc_rect(&(wmap_info->notes[index]));
         note->flags &= ~0x4;
         (*wmap_info->num_notes)++;
         sub_563D80(wmap_info->notes[index].id, wmap_ui_mode);
@@ -3267,7 +3267,7 @@ bool wmap_ui_add_note(WmapNote* note)
 }
 
 // 0x563D50
-void sub_563D50(WmapNote* note)
+void wmap_ui_note_calc_rect(WmapNote* note)
 {
     note->field_18.x = note->coords.x;
     note->field_18.y = note->coords.y;
@@ -3275,12 +3275,15 @@ void sub_563D50(WmapNote* note)
     note->field_18.height = 50;
 }
 
-// NOTE: These three are empty in the shipped game, not emptied here -
-// 0x563D80, 0x5649C0 and 0x5649D0 are each a bare `return` in the exe. They are
-// called for real (from note handling and route handling respectively), so they
-// are hooks Troika stubbed rather than dead code, and there is nothing in a
-// body to name them from. Left as `sub_`, same as the anim goal table's
-// constant stubs.
+// NOTE: Four empty hooks, and all four are empty in the shipped game rather
+// than emptied here - 0x563D80, 0x5642E0, 0x5649C0 and 0x5649D0 are each a bare
+// `return` in the exe. They are called for real, so they are hooks Troika
+// stubbed rather than dead code, and an empty body gives nothing to name from.
+// Left as `sub_`, same as the anim goal table's constant stubs.
+//
+// sub_563D80 and sub_5642E0 are a pair: same `(note id, WmapUiMode)` signature,
+// called from opposite ends of note handling. Whatever notification Troika
+// meant to send when a note appeared or went away, neither half shipped.
 //
 // 0x563D80
 void sub_563D80(int a1, int a2)
@@ -3360,7 +3363,7 @@ bool find_note_by_coords_mode(WmapCoords* coords, int* id_ptr, WmapUiMode mode)
 }
 
 // 0x563F00
-bool sub_563F00(WmapCoords* coords, int64_t* a2)
+bool wmap_ui_snap_note_to_pc(WmapCoords* coords, int64_t* a2)
 {
     int64_t v1;
     int64_t pc_location;
@@ -3382,19 +3385,19 @@ bool sub_563F00(WmapCoords* coords, int64_t* a2)
 }
 
 // 0x563F90
-void sub_563F90(WmapCoords* coords)
+void wmap_ui_begin_new_note(WmapCoords* coords)
 {
     stru_66D718.str[0] = '\0';
     stru_66D718.type = dword_66D89C;
     stru_66D718.coords = *coords;
-    sub_563D50(&stru_66D718);
+    wmap_ui_note_calc_rect(&stru_66D718);
     stru_66D718.field_10 = 0;
-    sub_563F00(&(stru_66D718.coords), &(stru_66D718.field_10));
-    sub_564030(&stru_66D718);
+    wmap_ui_snap_note_to_pc(&(stru_66D718.coords), &(stru_66D718.field_10));
+    wmap_ui_open_note_editor(&stru_66D718);
 }
 
 // 0x564000
-void sub_564000(int a1)
+void wmap_ui_set_note_type(int a1)
 {
     int v1[3];
 
@@ -3405,7 +3408,7 @@ void sub_564000(int a1)
 }
 
 // 0x564030
-void sub_564030(WmapNote* note)
+void wmap_ui_open_note_editor(WmapNote* note)
 {
     iso_interface_window_set(ROTWIN_TYPE_MAP_NOTE);
     dword_66D9D4 = note;
@@ -3416,7 +3419,7 @@ void sub_564030(WmapNote* note)
 }
 
 // 0x564070
-void sub_564070(bool a1)
+void wmap_ui_close_note_editor(bool a1)
 {
     dword_66D9D4 = 0;
     stru_66D718.str[0] = '\0';
@@ -3434,7 +3437,7 @@ void wmap_ui_textedit_on_enter(TextEdit* textedit)
 {
     bool should_refresh;
 
-    if (*textedit->buffer != '\0' && sub_5643C0(textedit->buffer)) {
+    if (*textedit->buffer != '\0' && wmap_ui_str_has_content(textedit->buffer)) {
         if (textedit->buffer == stru_66D718.str) {
             dword_66D9D4->flags = 0;
             should_refresh = wmap_note_add(dword_66D9D4);
@@ -3445,7 +3448,7 @@ void wmap_ui_textedit_on_enter(TextEdit* textedit)
         should_refresh = wmap_note_remove(dword_66D9D4);
     }
 
-    sub_564070(1);
+    wmap_ui_close_note_editor(1);
 
     if (should_refresh) {
         wmap_ui_mode_info[wmap_ui_mode].refresh();
@@ -3473,7 +3476,7 @@ bool wmap_note_add_mode(WmapNote* note, WmapUiMode mode)
     note->id = wmap_ui_mode_info[mode].field_194++;
     note->flags &= ~0x4;
     wmap_ui_mode_info[mode].notes[note_index] = *note;
-    sub_563D50(&(wmap_ui_mode_info[mode].notes[note_index]));
+    wmap_ui_note_calc_rect(&(wmap_ui_mode_info[mode].notes[note_index]));
     (*wmap_ui_mode_info[mode].num_notes)++;
     sub_563D80(wmap_ui_mode_info[mode].notes[note_index].id, mode);
 
@@ -3508,7 +3511,7 @@ bool wmap_note_remove(WmapNote* note)
         return false;
     }
 
-    sub_5642F0(&(wmap_info->notes[index]));
+    wmap_ui_note_free_buffer(&(wmap_info->notes[index]));
     sub_5642E0(wmap_info->notes[index].id, wmap_ui_mode);
 
     (*wmap_info->num_notes)--;
@@ -3530,7 +3533,7 @@ void sub_5642E0(int id, WmapUiMode mode)
 }
 
 // 0x5642F0
-void sub_5642F0(WmapNote* note)
+void wmap_ui_note_free_buffer(WmapNote* note)
 {
     if ((note->flags & 0x4) != 0) {
         tig_video_buffer_destroy(note->video_buffer);
@@ -3549,7 +3552,7 @@ void wmap_ui_textedit_on_change(TextEdit* textedit)
 }
 
 // 0x564360
-void sub_564360(int id)
+void wmap_ui_edit_note(int id)
 {
     WmapInfo* wmap_info;
     int index;
@@ -3565,13 +3568,13 @@ void sub_564360(int id)
         }
 
         if (index < cnt && (wmap_info->notes[index].flags & 0x2) == 0) {
-            sub_564030(&(wmap_info->notes[index]));
+            wmap_ui_open_note_editor(&(wmap_info->notes[index]));
         }
     }
 }
 
 // 0x5643C0
-bool sub_5643C0(const char* str)
+bool wmap_ui_str_has_content(const char* str)
 {
     while (*str != '\0') {
         if (*str != ' ') {
@@ -3584,7 +3587,7 @@ bool sub_5643C0(const char* str)
 }
 
 // 0x5643E0
-bool sub_5643E0(WmapCoords* coords)
+bool wmap_ui_add_waypoint(WmapCoords* coords)
 {
     int start = 0;
     WmapRouteType route_type = WMAP_ROUTE_TYPE_WORLD;
@@ -3793,24 +3796,14 @@ void sub_564970(WmapRouteWaypoint* wp)
     }
 }
 
-// NOTE: These three are empty in the shipped game, not emptied here -
-// 0x563D80, 0x5649C0 and 0x5649D0 are each a bare `return` in the exe. They are
-// called for real (from note handling and route handling respectively), so they
-// are hooks Troika stubbed rather than dead code, and there is nothing in a
-// body to name them from. Left as `sub_`, same as the anim goal table's
-// constant stubs.
+// NOTE: An empty hook - see the note above sub_563D80.
 //
 // 0x5649C0
 void sub_5649C0(void)
 {
 }
 
-// NOTE: These three are empty in the shipped game, not emptied here -
-// 0x563D80, 0x5649C0 and 0x5649D0 are each a bare `return` in the exe. They are
-// called for real (from note handling and route handling respectively), so they
-// are hooks Troika stubbed rather than dead code, and there is nothing in a
-// body to name them from. Left as `sub_`, same as the anim goal table's
-// constant stubs.
+// NOTE: An empty hook - see the note above sub_563D80.
 //
 // 0x5649D0
 void sub_5649D0(int a1)
@@ -3899,7 +3892,7 @@ void wmap_ui_mark_townmap(int64_t obj)
     }
 
     object_examine(obj, OBJ_HANDLE_NULL, note.str);
-    sub_563D50(&note);
+    wmap_ui_note_calc_rect(&note);
     note.field_10 = 0;
     note.flags = 0x2;
     note.type = WMAP_NOTE_TYPE_QUEST;
