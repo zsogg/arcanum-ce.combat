@@ -4703,7 +4703,7 @@ void iso_interface_window_enable(RotatingWindowType window_type)
         intgame_quantity = 0;
 
         obj = sub_579760();
-        fld = sub_462410(obj, &qty_fld);
+        fld = item_stack_fields_get(obj, &qty_fld);
         if (fld != -1) {
             intgame_max_quantity = obj_field_int32_get(obj, qty_fld);
             switch (fld) {
@@ -7160,7 +7160,7 @@ void intgame_examine_item(int64_t pc_obj, int64_t item_obj, char* str)
         break;
     case OBJ_TYPE_AMMO:
     case OBJ_TYPE_GOLD:
-        sub_462410(item_obj, &quantity_fld);
+        item_stack_fields_get(item_obj, &quantity_fld);
         value = obj_field_int32_get(item_obj, quantity_fld);
 
         mes_file_entry.num = 6; // "Quantity"

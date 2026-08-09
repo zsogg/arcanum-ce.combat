@@ -379,7 +379,7 @@ int item_weight(int64_t item_obj, int64_t owner_obj)
         weight += item_adjust_magic(item_obj, owner_obj, weight_adj);
     }
 
-    if (sub_462410(item_obj, &quantity_fld) != -1) {
+    if (item_stack_fields_get(item_obj, &quantity_fld) != -1) {
         weight *= obj_field_int32_get(item_obj, quantity_fld) / 4;
     }
 
@@ -1034,9 +1034,8 @@ void item_damage_min_max(int64_t item_obj, int damage_type, int* min_damage, int
 }
 
 // 0x462410
-int sub_462410(int64_t item_id, int* quantity_field_ptr)
+int item_stack_fields_get(int64_t item_id, int* quantity_field_ptr)
 {
-    // TODO: Rename.
     int rc = -1;
     int quantity_field;
     int ammo_type;
@@ -3595,7 +3594,7 @@ bool item_inventory_slots_has_room_for(int64_t item_obj, int64_t parent_obj, int
 
     num_rows = obj_field_int32_get(parent_obj, OBJ_F_TYPE) == OBJ_TYPE_CONTAINER ? 96 : 12;
 
-    if (sub_462410(item_obj, NULL) != -1) {
+    if (item_stack_fields_get(item_obj, NULL) != -1) {
         existing_item_obj = item_find_first_matching_prototype(parent_obj, item_obj);
         if (existing_item_obj != OBJ_HANDLE_NULL
             && existing_item_obj != item_obj) {
@@ -3657,7 +3656,7 @@ int item_check_insert(int64_t item_obj, int64_t parent_obj, int* inventory_locat
         }
     }
 
-    if (sub_462410(item_obj, NULL) != -1
+    if (item_stack_fields_get(item_obj, NULL) != -1
         && item_find_first_matching_prototype(parent_obj, item_obj) != OBJ_HANDLE_NULL) {
         inventory_location = 0;
     } else {
@@ -3712,7 +3711,7 @@ void item_insert(int64_t item_obj, int64_t parent_obj, int inventory_location)
         inventory_list_fld = OBJ_F_CRITTER_INVENTORY_LIST_IDX;
     }
 
-    stack_fld = sub_462410(item_obj, &qty_fld);
+    stack_fld = item_stack_fields_get(item_obj, &qty_fld);
     if (stack_fld != -1) {
         existing_item_obj = item_find_first_matching_prototype(parent_obj, item_obj);
         if (existing_item_obj != OBJ_HANDLE_NULL) {
@@ -4309,7 +4308,7 @@ void item_force_remove(int64_t item_obj, int64_t parent_obj)
         inventory_num_fld = OBJ_F_CONTAINER_INVENTORY_NUM;
         inventory_list_fld = OBJ_F_CONTAINER_INVENTORY_LIST_IDX;
     } else {
-        stack_fld = sub_462410(item_obj, NULL);
+        stack_fld = item_stack_fields_get(item_obj, NULL);
         if (stack_fld != -1) {
             obj_field_handle_set(parent_obj, stack_fld, OBJ_HANDLE_NULL);
         }
@@ -4536,7 +4535,7 @@ bool item_decay(int64_t obj, int ms)
 
     timeevent.type = TIMEEVENT_TYPE_ITEM_DECAY;
     timeevent.params[0].object_value = obj;
-    timeevent.params[1].integer_value = sub_45A7F0();
+    timeevent.params[1].integer_value = timeevent_game_seconds_get();
     datetime_from_milliseconds(&datetime, ms);
     return timeevent_add_delay(&timeevent, &datetime);
 }

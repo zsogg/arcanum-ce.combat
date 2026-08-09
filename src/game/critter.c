@@ -1399,7 +1399,7 @@ bool critter_fatigue_timeevent_schedule(int64_t obj, int type, int delay)
     timeevent.type = TIMEEVENT_TYPE_FATIGUE;
     timeevent.params[0].integer_value = type;
     timeevent.params[1].object_value = obj;
-    timeevent.params[2].integer_value = sub_45A7F0();
+    timeevent.params[2].integer_value = timeevent_game_seconds_get();
     datetime_from_milliseconds(&datetime, delay);
     return timeevent_add_delay(&timeevent, &datetime);
 }
@@ -1520,7 +1520,7 @@ bool critter_resting_timeevent_schedule(int64_t obj)
     // Schedule the event.
     timeevent.type = TIMEEVENT_TYPE_RESTING;
     timeevent.params[0].object_value = obj;
-    timeevent.params[1].integer_value = sub_45A7F0();
+    timeevent.params[1].integer_value = timeevent_game_seconds_get();
     datetime_from_milliseconds(&datetime, 3600000);
     return timeevent_add_delay(&timeevent, &datetime);
 }
@@ -1575,7 +1575,7 @@ bool critter_decay_timeevent_schedule(int64_t obj)
     // Schedule decay event.
     timeevent.type = TIMEEVENT_TYPE_DECAY_DEAD_BODIE;
     timeevent.params[0].object_value = obj;
-    timeevent.params[1].integer_value = sub_45A7F0();
+    timeevent.params[1].integer_value = timeevent_game_seconds_get();
     if (obj_type_is_critter(type)) {
         // 1 day for critters.
         datetime_from_milliseconds(&datetime, 86400000);
@@ -1656,7 +1656,7 @@ bool critter_npc_combat_focus_wipe_schedule(int64_t npc_obj)
     // Schedule the event.
     timeevent.type = TIMEEVENT_TYPE_COMBAT_FOCUS_WIPE;
     timeevent.params[0].object_value = npc_obj;
-    timeevent.params[1].integer_value = sub_45A7F0();
+    timeevent.params[1].integer_value = timeevent_game_seconds_get();
     datetime_from_milliseconds(&datetime, 600000); // 10 minutes.
 
     return timeevent_add_delay(&timeevent, &datetime);

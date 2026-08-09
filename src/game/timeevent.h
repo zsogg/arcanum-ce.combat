@@ -109,7 +109,7 @@ typedef struct TimeEventFuncs {
 
 DateTime timeevent_current_datetime(void);
 DateTime sub_45A7D0(DateTime* other);
-int sub_45A7F0(void);
+int timeevent_game_seconds_get(void);
 int sub_45A820(unsigned int milliseconds);
 int datetime_seconds_since_reference_date(DateTime* datetime);
 int datetime_get_hour(DateTime* datetime);

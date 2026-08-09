@@ -4010,7 +4010,7 @@ void inven_ui_transfer_item(int64_t item_obj, int64_t target_obj, int new_invent
         if ((obj_type == OBJ_TYPE_GOLD || obj_type == OBJ_TYPE_AMMO)) {
             inven_ui_drop_dragged_item();
 
-            sub_462410(item_obj, &qty_fld);
+            item_stack_fields_get(item_obj, &qty_fld);
             qty = obj_field_int32_get(item_obj, qty_fld);
             if (qty != 1) {
                 if ((inven_ui_mode == INVEN_UI_MODE_LOOT

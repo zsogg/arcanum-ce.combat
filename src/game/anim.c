@@ -7462,7 +7462,7 @@ bool anim_cleanup_spell(AnimRunInfo* run_info)
         art_id = tig_art_id_frame_set(art_id, 0);
         object_set_current_aid(obj, art_id);
 
-        sub_430490(obj, 0, 0);
+        anim_set_obj_offset(obj, 0, 0);
     }
 
     return true;
@@ -8195,7 +8195,7 @@ bool anim_cleanup_unconceal(AnimRunInfo* run_info)
     object_set_current_aid(obj, art_id);
 
     if (obj_type_is_critter(type)) {
-        sub_430490(obj, 0, 0);
+        anim_set_obj_offset(obj, 0, 0);
 
         leader_obj = critter_leader_get(obj);
         if (leader_obj == OBJ_HANDLE_NULL
@@ -8250,7 +8250,7 @@ bool anim_cleanup_stand_anim(AnimRunInfo* run_info)
 
         art_id = tig_art_id_frame_set(art_id, 0);
         object_set_current_aid(obj, art_id);
-        sub_430490(obj, 0, 0);
+        anim_set_obj_offset(obj, 0, 0);
     }
 
     if (tig_net_is_active()
@@ -8311,7 +8311,7 @@ bool anim_cleanup_stunned(AnimRunInfo* run_info)
         art_id = tig_art_id_frame_set(art_id, 0);
         object_set_current_aid(obj, art_id);
 
-        sub_430490(obj, 0, 0);
+        anim_set_obj_offset(obj, 0, 0);
 
         if (!tig_net_is_active()
             || tig_net_is_host()) {
@@ -8382,7 +8382,7 @@ bool anim_cleanup_throw_item(AnimRunInfo* run_info)
         art_id = tig_art_id_frame_set(art_id, 0);
         object_set_current_aid(obj, art_id);
 
-        sub_430490(obj, 0, 0);
+        anim_set_obj_offset(obj, 0, 0);
 
         if (obj_type == OBJ_TYPE_PC) {
             item_obj = run_info->cur_stack_data->params[AGDATA_SCRATCH_OBJ].obj;
@@ -10814,7 +10814,7 @@ bool anim_advance_vault_step(AnimRunInfo* run_info)
         object_set_current_aid(obj, art_id);
 
         run_info->flags &= ~0x30;
-        sub_430490(obj, 0, 0);
+        anim_set_obj_offset(obj, 0, 0);
 
         return false;
     }
@@ -10830,7 +10830,7 @@ bool anim_advance_vault_step(AnimRunInfo* run_info)
     art_id = obj_field_int32_get(obj, OBJ_F_CURRENT_AID);
     art_id = tig_art_id_anim_set(art_id, TIG_ART_ANIM_VAULT);
     art_id = tig_art_id_rotation_set(art_id, rot);
-    sub_430490(obj, -offset_x, -offset_y);
+    anim_set_obj_offset(obj, -offset_x, -offset_y);
 
     if ((run_info->flags & 0x40) != 0) {
         art_id = tig_art_id_anim_set(art_id, TIG_ART_ANIM_RUN);
@@ -11451,7 +11451,7 @@ void sub_430460(void)
 }
 
 // 0x430490
-void sub_430490(int64_t obj, int offset_x, int offset_y)
+void anim_set_obj_offset(int64_t obj, int offset_x, int offset_y)
 {
     object_set_offset(obj, offset_x, offset_y + dword_5DE6E4);
 }
@@ -11677,7 +11677,7 @@ bool AGupdateAnimMove(AnimRunInfo* run_info)
                     art_id = tig_art_id_anim_set(art_id, anim);
                     art_id = tig_art_id_frame_set(art_id, 0);
                     object_set_current_aid(obj, art_id);
-                    sub_430490(obj, 0, 0);
+                    anim_set_obj_offset(obj, 0, 0);
 
                     run_info->flags &= ~0x30;
 
@@ -11692,7 +11692,7 @@ bool AGupdateAnimMove(AnimRunInfo* run_info)
 
                 rot = run_info->path.rotations[run_info->path.curr];
                 if (rot != run_info->path.rotations[run_info->path.curr - 1]) {
-                    sub_430490(obj, 0, 0);
+                    anim_set_obj_offset(obj, 0, 0);
                     art_id = tig_art_id_rotation_set(art_id, rot);
                     object_set_current_aid(obj, art_id);
                 }

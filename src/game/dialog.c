@@ -213,7 +213,7 @@ static void dialog_tell_rumor(int rumor, int a2, int a3, DialogState* state);
 static void dialog_build_pc_insult_option(int a1, int a2, int a3, DialogState* a4);
 static void dialog_insult_reply(int a1, int a2, DialogState* state);
 static void dialog_build_greeting(DialogState* a1, const char* a2);
-static bool sub_4197D0(unsigned int flags, int a2, DialogState* a3);
+static bool dialog_apply_status_flags(unsigned int flags, int a2, DialogState* a3);
 static void dialog_offer_healing(DialogHealingOfferType type, int response_val, DialogState* state);
 static void dialog_build_use_skill_option(int index, int skill, int response_val, DialogState* state);
 static void dialog_build_use_spell_option(int index, int spell, int response_val, DialogState* state);
@@ -3681,7 +3681,7 @@ void dialog_build_greeting(DialogState* a1, const char* str)
     }
 
     if ((flags[0] & 0x2) == 0 && critter_is_dead(a1->npc_obj)) {
-        if (!sub_4197D0(flags[0], values[0], a1)) {
+        if (!dialog_apply_status_flags(flags[0], values[0], a1)) {
             dialog_copy_npc_generic_msg(a1->reply, a1, 1500, 1599);
         }
         return;
@@ -3693,7 +3693,7 @@ void dialog_build_greeting(DialogState* a1, const char* str)
     }
 
     if ((flags[1] & 0x2) == 0 && critter_has_bad_associates(a1->pc_obj)) {
-        if (!sub_4197D0(flags[1], values[1], a1)) {
+        if (!dialog_apply_status_flags(flags[1], values[1], a1)) {
             dialog_copy_npc_class_specific_msg(a1->reply, a1, 18000);
 
             if (critter_social_class_get(a1->npc_obj) != SOCIAL_CLASS_WIZARD) {
@@ -3706,7 +3706,7 @@ void dialog_build_greeting(DialogState* a1, const char* str)
     spell_flags = obj_field_int32_get(a1->pc_obj, OBJ_F_SPELL_FLAGS);
 
     if ((flags[2] & 0x2) == 0 && (spell_flags & OSF_INVISIBLE) != 0) {
-        if (!sub_4197D0(flags[2], values[2], a1)) {
+        if (!dialog_apply_status_flags(flags[2], values[2], a1)) {
             dialog_copy_npc_class_specific_msg(a1->reply, a1, 22000);
 
             if (critter_social_class_get(a1->npc_obj) != SOCIAL_CLASS_WIZARD) {
@@ -3717,7 +3717,7 @@ void dialog_build_greeting(DialogState* a1, const char* str)
     }
 
     if ((flags[3] & 0x2) == 0 && (spell_flags & (OSF_BODY_OF_AIR | OSF_BODY_OF_EARTH | OSF_BODY_OF_FIRE | OSF_BODY_OF_WATER)) != 0) {
-        if (!sub_4197D0(flags[3], values[3], a1)) {
+        if (!dialog_apply_status_flags(flags[3], values[3], a1)) {
             dialog_copy_npc_class_specific_msg(a1->reply, a1, 19000);
 
             if (critter_social_class_get(a1->npc_obj) != SOCIAL_CLASS_WIZARD) {
@@ -3728,7 +3728,7 @@ void dialog_build_greeting(DialogState* a1, const char* str)
     }
 
     if ((flags[4] & 0x2) == 0 && (spell_flags & OSF_POLYMORPHED) != 0) {
-        if (!sub_4197D0(flags[4], values[4], a1)) {
+        if (!dialog_apply_status_flags(flags[4], values[4], a1)) {
             dialog_copy_npc_class_specific_msg(a1->reply, a1, 20000);
 
             if (critter_social_class_get(a1->npc_obj) != SOCIAL_CLASS_WIZARD) {
@@ -3739,7 +3739,7 @@ void dialog_build_greeting(DialogState* a1, const char* str)
     }
 
     if ((flags[6] & 0x2) == 0 && (spell_flags & OSF_SHRUNK) != 0) {
-        if (!sub_4197D0(flags[6], values[6], a1)) {
+        if (!dialog_apply_status_flags(flags[6], values[6], a1)) {
             dialog_copy_npc_race_specific_msg(a1->reply, a1, 6000);
         }
         return;
@@ -3750,7 +3750,7 @@ void dialog_build_greeting(DialogState* a1, const char* str)
 
     if ((flags[7] & 0x2) == 0
         && armor_type == TIG_ART_ARMOR_TYPE_UNDERWEAR) {
-        if (!sub_4197D0(flags[7], values[7], a1)) {
+        if (!dialog_apply_status_flags(flags[7], values[7], a1)) {
             dialog_copy_npc_class_specific_msg(a1->reply, a1, 16000);
         }
         return;
@@ -3758,14 +3758,14 @@ void dialog_build_greeting(DialogState* a1, const char* str)
 
     if ((flags[8] & 0x2) == 0
         && armor_type == TIG_ART_ARMOR_TYPE_BARBARIAN) {
-        if (!sub_4197D0(flags[8], values[8], a1)) {
+        if (!dialog_apply_status_flags(flags[8], values[8], a1)) {
             dialog_copy_npc_class_specific_msg(a1->reply, a1, 17000);
         }
         return;
     }
 
     if ((flags[9] & 0x2) == 0) {
-        if (!sub_4197D0(flags[9], values[9], a1)) {
+        if (!dialog_apply_status_flags(flags[9], values[9], a1)) {
             int reaction_level;
             int reputation;
 
@@ -3828,7 +3828,7 @@ void dialog_build_greeting(DialogState* a1, const char* str)
 }
 
 // 0x4197D0
-bool sub_4197D0(unsigned int flags, int a2, DialogState* a3)
+bool dialog_apply_status_flags(unsigned int flags, int a2, DialogState* a3)
 {
     if ((flags & 0x1) != 0) {
         a3->num = a2;

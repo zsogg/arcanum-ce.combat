@@ -223,7 +223,7 @@ DateTime sub_45A7D0(DateTime* other)
 }
 
 // 0x45A7F0
-int sub_45A7F0(void)
+int timeevent_game_seconds_get(void)
 {
     // NOTE: Uninline.
     return datetime_seconds_since_reference_date(&timeevent_game_time);

@@ -95,7 +95,7 @@ static void sub_443620(unsigned int flags, int scale, int x, int y, tig_art_id_t
 static void sub_4437C0(int64_t obj);
 static bool sub_443880(TigRect* rect, tig_art_id_t art_id);
 static bool load_reaction_colors(void);
-static void sub_444270(int64_t obj, int a2);
+static void object_location_changed(int64_t obj, int a2);
 static void object_lighting_changed(void);
 
 // 0x5A548C
@@ -2240,7 +2240,7 @@ void object_get_rect(int64_t obj, unsigned int flags, TigRect* rect)
  * object-list bookkeeping (move within, or remove/insert across sector
  * boundaries), text/floater follow, and screen rect invalidation, then
  * moves the object's lights (`sub_4DD020`) and runs the arrival bookkeeping
- * in `sub_444270` (wading, tile scripts, and - for the local PC - town map,
+ * in `object_location_changed` (wading, tile scripts, and - for the local PC - town map,
  * roof, wall check, scroll centering and jump points). Same-location calls
  * reduce to `object_set_offset_internal`.
  *
@@ -2313,9 +2313,9 @@ void object_move_to(int64_t obj, int64_t loc, int offset_x, int offset_y)
     sub_4DD020(obj, loc, offset_x, offset_y);
 
     if (cur_sector_id == sector_id) {
-        sub_444270(obj, 1);
+        object_location_changed(obj, 1);
     } else {
-        sub_444270(obj, 2);
+        object_location_changed(obj, 2);
     }
 }
 
@@ -2326,7 +2326,7 @@ bool object_teleported_timeevent_process(TimeEvent* timeevent)
         return false;
     }
 
-    sub_444270(timeevent->params[0].object_value, 2);
+    object_location_changed(timeevent->params[0].object_value, 2);
 
     return true;
 }
@@ -3851,7 +3851,7 @@ void object_drop(int64_t obj, int64_t loc)
 
     obj_field_int32_set(obj, OBJ_F_RENDER_FLAGS, 0);
     light_create_for_obj(obj, true);
-    sub_444270(obj, 2);
+    object_location_changed(obj, 2);
     object_get_rect(obj, 0x07, &rect);
     object_iso_invalidate_rect(&rect);
 }
@@ -4314,7 +4314,7 @@ bool sub_442260(int64_t obj, int64_t loc)
     }
 
     sub_463C60(obj);
-    sub_444270(obj, 2);
+    object_location_changed(obj, 2);
 
     object_get_rect(obj, 0x7, &rect);
     object_iso_invalidate_rect(&rect);
@@ -4326,7 +4326,7 @@ bool sub_442260(int64_t obj, int64_t loc)
  * Updates only `obj`'s pixel offsets within its current tile, doing the same
  * text/floater follow as `object_move_to`. Unlike `object_move_to` it does no
  * sector list bookkeeping beyond `objlist_move`, and the screen rect is
- * invalidated by `sub_444270(obj, 0)` rather than here.
+ * invalidated by `object_location_changed(obj, 0)` rather than here.
  *
  * Unlike the public `object_set_offset`, this does *not* check `OF_DESTROYED`
  * - callers are responsible for that.
@@ -4341,7 +4341,7 @@ void object_set_offset_internal(int64_t obj, int offset_x, int offset_y)
     int64_t sector_id;
     Sector* sector;
 
-    // NOTE: The result is unused - `sub_444270(obj, 0)` below recomputes the
+    // NOTE: The result is unused - `object_location_changed(obj, 0)` below recomputes the
     // rect it invalidates. Faithful to the original, which also discards it
     // (`push 0x7; call 0x43dfd0` at 0x4423F4).
     object_get_rect(obj, 0x7, &rect);
@@ -4366,7 +4366,7 @@ void object_set_offset_internal(int64_t obj, int offset_x, int offset_y)
         obj_field_int32_set(obj, OBJ_F_OFFSET_Y, offset_y);
     }
 
-    sub_444270(obj, 0);
+    object_location_changed(obj, 0);
     sub_4DD0A0(obj, offset_x, offset_y);
 }
 
@@ -5268,7 +5268,7 @@ bool load_reaction_colors(void)
 }
 
 // 0x444270
-void sub_444270(int64_t obj, int a2)
+void object_location_changed(int64_t obj, int a2)
 {
     unsigned int flags;
     unsigned int render_flags;

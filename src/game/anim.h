@@ -90,7 +90,7 @@ bool sub_427000(int64_t obj);
 void anim_goal_reset_position_mp(AnimID* anim_id, int64_t obj, int64_t loc, tig_art_id_t art_id, unsigned int flags, int offset_x, int offset_y);
 bool anim_fidget_timeevent_process(TimeEvent* timeevent);
 void sub_430460(void);
-void sub_430490(int64_t obj, int offset_x, int offset_y);
+void anim_set_obj_offset(int64_t obj, int offset_x, int offset_y);
 bool get_always_run(int64_t obj);
 void set_always_run(bool value);
 bool anim_goal_animate(int64_t obj, int anim);
