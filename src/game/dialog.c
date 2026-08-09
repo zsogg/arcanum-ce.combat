@@ -175,7 +175,7 @@ static void dialog_build_exchange(DialogState* a1, bool randomize);
 static int dialog_collect_pc_options(DialogState* a1, int* a2);
 static bool dialog_check_conditions(DialogState* a1, char* a2);
 static bool dialog_perform_actions(DialogState* a1, char* a2, int a3);
-static int sub_4167C0(const char* str);
+static int dialog_parse_second_number(const char* str);
 static bool dialog_build_npc_reply(DialogState* a1, bool a2);
 static bool dialog_search(int dlg, DialogFileEntry* entry);
 static void sub_416B00(char* dst, char* src, DialogState* a3);
@@ -1504,17 +1504,17 @@ bool dialog_check_conditions(DialogState* a1, char* a2)
             }
             break;
         case DIALOG_COND_GV:
-            if (script_global_var_get(value) != sub_4167C0(pch)) {
+            if (script_global_var_get(value) != dialog_parse_second_number(pch)) {
                 return false;
             }
             break;
         case DIALOG_COND_GF:
-            if (script_global_flag_get(value) != sub_4167C0(pch)) {
+            if (script_global_flag_get(value) != dialog_parse_second_number(pch)) {
                 return false;
             }
             break;
         case DIALOG_COND_QU:
-            if (quest_state_get(a1->pc_obj, value) != sub_4167C0(pch)) {
+            if (quest_state_get(a1->pc_obj, value) != dialog_parse_second_number(pch)) {
                 return false;
             }
             break;
@@ -1589,17 +1589,17 @@ bool dialog_check_conditions(DialogState* a1, char* a2)
             }
             break;
         case DIALOG_COND_LF:
-            if (script_local_flag_get(a1->npc_obj, SAP_DIALOG, value) != sub_4167C0(pch)) {
+            if (script_local_flag_get(a1->npc_obj, SAP_DIALOG, value) != dialog_parse_second_number(pch)) {
                 return false;
             }
             break;
         case DIALOG_COND_LC:
-            if (script_local_counter_get(a1->npc_obj, SAP_DIALOG, value) != sub_4167C0(pch)) {
+            if (script_local_counter_get(a1->npc_obj, SAP_DIALOG, value) != dialog_parse_second_number(pch)) {
                 return false;
             }
             break;
         case DIALOG_COND_TR:
-            training = sub_4167C0(pch);
+            training = dialog_parse_second_number(pch);
             if (IS_TECH_SKILL(value)) {
                 if (training < 0) {
                     if (tech_skill_training_get(a1->pc_obj, GET_TECH_SKILL(value)) > -training) {
@@ -1623,7 +1623,7 @@ bool dialog_check_conditions(DialogState* a1, char* a2)
             }
             break;
         case DIALOG_COND_SK:
-            level = sub_4167C0(pch);
+            level = dialog_parse_second_number(pch);
             if (IS_TECH_SKILL(value)) {
                 if (level < 0) {
                     if (tech_skill_level(a1->pc_obj, GET_TECH_SKILL(value)) > -level) {
@@ -1691,7 +1691,7 @@ bool dialog_check_conditions(DialogState* a1, char* a2)
             }
             break;
         case DIALOG_COND_QB:
-            if (quest_state_get(a1->pc_obj, value) > sub_4167C0(pch)) {
+            if (quest_state_get(a1->pc_obj, value) > dialog_parse_second_number(pch)) {
                 return false;
             }
             break;
@@ -1739,7 +1739,7 @@ bool dialog_check_conditions(DialogState* a1, char* a2)
             }
             break;
         case DIALOG_COND_QA:
-            if (quest_state_get(a1->pc_obj, value) < sub_4167C0(pch)) {
+            if (quest_state_get(a1->pc_obj, value) < dialog_parse_second_number(pch)) {
                 return false;
             }
             break;
@@ -1815,12 +1815,12 @@ bool dialog_check_conditions(DialogState* a1, char* a2)
             }
             break;
         case DIALOG_COND_PV:
-            if (script_pc_var_get(a1->pc_obj, value) != sub_4167C0(pch)) {
+            if (script_pc_var_get(a1->pc_obj, value) != dialog_parse_second_number(pch)) {
                 return false;
             }
             break;
         case DIALOG_COND_PF:
-            if (script_pc_flag_get(a1->pc_obj, value) != sub_4167C0(pch)) {
+            if (script_pc_flag_get(a1->pc_obj, value) != dialog_parse_second_number(pch)) {
                 return false;
             }
             break;
@@ -1869,7 +1869,7 @@ bool dialog_check_conditions(DialogState* a1, char* a2)
             }
             break;
         case DIALOG_COND_SC:
-            v39 = sub_4167C0(pch);
+            v39 = dialog_parse_second_number(pch);
             v40 = spell_college_level_get(a1->pc_obj, value);
             if (v39 > 0) {
                 if (v40 < v39) {
@@ -1988,7 +1988,7 @@ bool dialog_perform_actions(DialogState* a1, char* a2, int a3)
             break;
         }
         case DIALOG_ACTION_QU:
-            quest_state_set(a1->pc_obj, value, sub_4167C0(pch), a1->npc_obj);
+            quest_state_set(a1->pc_obj, value, dialog_parse_second_number(pch), a1->npc_obj);
             break;
         case DIALOG_ACTION_FL:
             a1->num = value;
@@ -2000,10 +2000,10 @@ bool dialog_perform_actions(DialogState* a1, char* a2, int a3)
             attack = true;
             break;
         case DIALOG_ACTION_GV:
-            script_global_var_set(value, sub_4167C0(pch));
+            script_global_var_set(value, dialog_parse_second_number(pch));
             break;
         case DIALOG_ACTION_GF:
-            script_global_flag_set(value, sub_4167C0(pch));
+            script_global_flag_set(value, dialog_parse_second_number(pch));
             break;
         case DIALOG_ACTION_MM:
             area_set_known(a1->pc_obj, value);
@@ -2088,15 +2088,15 @@ bool dialog_perform_actions(DialogState* a1, char* a2, int a3)
             break;
         }
         case DIALOG_ACTION_LF:
-            script_local_flag_set(a1->npc_obj, SAP_DIALOG, value, sub_4167C0(pch));
+            script_local_flag_set(a1->npc_obj, SAP_DIALOG, value, dialog_parse_second_number(pch));
             break;
         case DIALOG_ACTION_LC:
-            script_local_counter_set(a1->npc_obj, SAP_DIALOG, value, sub_4167C0(pch));
+            script_local_counter_set(a1->npc_obj, SAP_DIALOG, value, dialog_parse_second_number(pch));
             break;
         case DIALOG_ACTION_TR: {
             int training;
 
-            training = sub_4167C0(pch);
+            training = dialog_parse_second_number(pch);
             if (IS_TECH_SKILL(value)) {
                 tech_skill_training_set(a1->pc_obj, GET_TECH_SKILL(value), training);
             } else {
@@ -2114,7 +2114,7 @@ bool dialog_perform_actions(DialogState* a1, char* a2, int a3)
             int v41;
             int rc;
 
-            v41 = sub_4167C0(pch);
+            v41 = dialog_parse_second_number(pch);
             rc = ai_check_follow(a1->npc_obj, a1->pc_obj, value);
             if (rc == AI_FOLLOW_OK) {
                 critter_follow(a1->npc_obj, a1->pc_obj, value);
@@ -2152,7 +2152,7 @@ bool dialog_perform_actions(DialogState* a1, char* a2, int a3)
             int v43;
             int rc;
 
-            v43 = sub_4167C0(pch);
+            v43 = dialog_parse_second_number(pch);
             rc = ai_check_follow(a1->npc_obj, a1->pc_obj, value);
             if (rc == AI_FOLLOW_OK) {
                 ai_npc_unwait(a1->npc_obj, value);
@@ -2172,10 +2172,10 @@ bool dialog_perform_actions(DialogState* a1, char* a2, int a3)
             break;
         }
         case DIALOG_ACTION_PV:
-            script_pc_var_set(a1->pc_obj, value, sub_4167C0(pch));
+            script_pc_var_set(a1->pc_obj, value, dialog_parse_second_number(pch));
             break;
         case DIALOG_ACTION_PF:
-            script_pc_flag_set(a1->pc_obj, value, sub_4167C0(pch));
+            script_pc_flag_set(a1->pc_obj, value, dialog_parse_second_number(pch));
             break;
         case DIALOG_ACTION_XP:
             critter_give_xp(a1->pc_obj, quest_get_xp(value));
@@ -2191,7 +2191,7 @@ bool dialog_perform_actions(DialogState* a1, char* a2, int a3)
             }
             break;
         case DIALOG_ACTION_NP:
-            newspaper_enqueue(value, sub_4167C0(pch));
+            newspaper_enqueue(value, dialog_parse_second_number(pch));
             break;
         case DIALOG_ACTION_CE:
             dialog_copy_npc_order_ok_msg(a1->npc_obj, a1->pc_obj, a1->reply, &(a1->speech_id));
@@ -2226,7 +2226,7 @@ bool dialog_perform_actions(DialogState* a1, char* a2, int a3)
             int training;
             int level;
 
-            v50 = sub_4167C0(pch);
+            v50 = dialog_parse_second_number(pch);
             if (IS_TECH_SKILL(value)) {
                 level = tech_skill_level(a1->pc_obj, GET_TECH_SKILL(value));
                 training = tech_skill_training_get(a1->pc_obj, GET_TECH_SKILL(value));
@@ -2275,7 +2275,7 @@ bool dialog_perform_actions(DialogState* a1, char* a2, int a3)
 }
 
 // 0x4167C0
-int sub_4167C0(const char* str)
+int dialog_parse_second_number(const char* str)
 {
     while (SDL_isspace(*str)) {
         str++;
