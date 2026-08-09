@@ -141,14 +141,14 @@ static bool magictech_find_first(int64_t obj, int* mt_id_ptr);
 static bool magictech_find_next(int64_t obj, int* mt_id_ptr);
 static bool sub_459290(int64_t obj, int spell, int* index_ptr);
 static void sub_459490(int mt_id);
-static bool sub_4594D0(TimeEvent* timeevent);
+static bool magictech_reschedule_timeevent_match(TimeEvent* timeevent);
 static bool magictech_recharge_timeevent_schedule(int64_t item_obj, int mana_cost, bool add);
 static bool magictech_recharge_timeevent_add(TimeEvent* timeevent);
 static void sub_45A480(MagicTechRunInfo* run_info);
 static void magictech_debug_print_obj(int64_t obj, const char* msg);
 
 // 0x596140
-static uint64_t qword_596140[] = {
+static uint64_t magictech_target_flags[] = {
     TGT_NONE,
     TGT_SELF,
     TGT_SOURCE,
@@ -258,7 +258,7 @@ static MagicTechProc magictech_procs[] = {
 };
 
 // 0x5B0C0C
-static const char* off_5B0C0C[] = {
+static const char* magictech_action_names[] = {
     "[Begin]",
     "[Maintain]",
     "[End]",
@@ -267,7 +267,7 @@ static const char* off_5B0C0C[] = {
 };
 
 // 0x5B0C20
-static const char* off_5B0C20[] = {
+static const char* magictech_disposition_names[] = {
     "neutral",
     "friendly",
     "aggressive",
@@ -275,7 +275,7 @@ static const char* off_5B0C20[] = {
 };
 
 // 0x5B0C30
-static MagicTechFlags dword_5B0C30[] = {
+static MagicTechFlags magictech_disposition_flags[] = {
     0,
     MAGICTECH_FRIENDLY,
     MAGICTECH_AGGRESSIVE,
@@ -283,7 +283,7 @@ static MagicTechFlags dword_5B0C30[] = {
 };
 
 // 0x5B0C40
-static const char* off_5B0C40[] = {
+static const char* magictech_anim_goal_names[] = {
     "anim_goal_animate",
     "anim_goal_knockback",
     "anim_goal_follow",
@@ -293,7 +293,7 @@ static const char* off_5B0C40[] = {
 };
 
 // 0x5B0C58
-static int dword_5B0C58[6] = {
+static int magictech_anim_goal_values[6] = {
     0,
     43,
     24,
@@ -303,7 +303,7 @@ static int dword_5B0C58[6] = {
 };
 
 // 0x5B0C70
-static const char* off_5B0C70[] = {
+static const char* magictech_damage_type_names[] = {
     "Dmg_Normal",
     "Dmg_Poison",
     "Dmg_Electrical",
@@ -313,19 +313,19 @@ static const char* off_5B0C70[] = {
 };
 
 // 0x5B0C88
-static const char* off_5B0C88[] = {
+static const char* magictech_add_remove_names[] = {
     "Remove",
     "Add",
 };
 
 // 0x5B0C90
-static const char* off_5B0C90[] = {
+static const char* magictech_flag_state_names[] = {
     "FLAG_OFF",
     "FLAG_ON",
 };
 
 // 0x5B0C98
-static const char* off_5B0C98[] = {
+static const char* magictech_comparison_names[] = {
     "Equal",
     "GreaterThan",
     "GreaterThanOrEqual",
@@ -334,7 +334,7 @@ static const char* off_5B0C98[] = {
 };
 
 // 0x5B0CAC
-static const char* off_5B0CAC[] = {
+static const char* magictech_obj_field_names[] = {
     "art_num",
     "Teleport_Tile",
     "obj_f_critter_fleeing_from",
@@ -342,7 +342,7 @@ static const char* off_5B0CAC[] = {
 };
 
 // 0x5B0CBC
-static int dword_5B0CBC[] = {
+static int magictech_obj_field_values[] = {
     OBJ_F_CURRENT_AID,
     OBJ_F_CRITTER_TELEPORT_DEST,
     OBJ_F_CRITTER_FLEEING_FROM,
@@ -350,38 +350,38 @@ static int dword_5B0CBC[] = {
 };
 
 // 0x5B0CCC
-static const char* off_5B0CCC[] = {
+static const char* magictech_indexed_field_names[] = {
     "obj_f_critter_stat_base_idx",
     "obj_f_resistance_idx",
 };
 
 // 0x5B0CD4
-static int dword_5B0CD4[] = {
+static int magictech_indexed_field_values[] = {
     OBJ_F_CRITTER_STAT_BASE_IDX,
     OBJ_F_RESISTANCE_IDX,
 };
 
 // 0x5B0CDC
-static const char** off_5B0CDC[] = {
+static const char** magictech_indexed_field_key_tbls[] = {
     stat_lookup_keys_tbl,
     resistance_lookup_keys_tbl,
 };
 
 // 0x5B0CE4
-static int dword_5B0CE4[] = {
+static int magictech_indexed_field_key_counts[] = {
     STAT_COUNT,
     RESISTANCE_TYPE_COUNT,
 };
 
 // 0x5B0CF8
-static const char* off_5B0CF8[] = {
+static const char* magictech_obj_source_names[] = {
     "Target_Tile",
     "Caster_Obj",
     "Caster_Owner_Obj",
 };
 
 // 0x5B0D04
-static const char* off_5B0D04[] = {
+static const char* magictech_move_location_names[] = {
     "Target_Tile",
     "Random_Tile_In_Radius_Self",
     "Teleport_Tile",
@@ -389,7 +389,7 @@ static const char* off_5B0D04[] = {
 };
 
 // 0x5B0D14
-static const char* off_5B0D14[] = {
+static const char* magictech_damage_flag_names[] = {
     "None",
     "Full",
     "Resurrect",
@@ -403,7 +403,7 @@ static const char* off_5B0D14[] = {
 };
 
 // 0x5B0D3C
-static unsigned int dword_5B0D3C[] = {
+static unsigned int magictech_damage_flag_values[] = {
     0,
     CDF_FULL,
     CDF_RESURRECT,
@@ -462,7 +462,7 @@ static struct {
 };
 
 // 0x5B0DC8
-static int dword_5B0DC8[] = {
+static int magictech_spell_sound_effect_offsets[] = {
     0,
     4,
     5,
@@ -472,7 +472,7 @@ static int dword_5B0DC8[] = {
 };
 
 // 0x5B0DE0
-static int dword_5B0DE0[] = {
+static int magictech_default_iq_tbl[] = {
     6,
     9,
     12,
@@ -481,7 +481,7 @@ static int dword_5B0DE0[] = {
 };
 
 // 0x5B0DF8
-static MagicTechSummonTableEntry stru_5B0DF8[] = {
+static MagicTechSummonTableEntry magictech_summon_wild_animal_tbl[] = {
     { 20, BP_WOLF },
     { 1, BP_VORPAL_BUNNY },
     { 19, BP_FOREST_APE },
@@ -491,7 +491,7 @@ static MagicTechSummonTableEntry stru_5B0DF8[] = {
 };
 
 // 0x5B0E28
-static MagicTechSummonTableEntry stru_5B0E28[] = {
+static MagicTechSummonTableEntry magictech_summon_farm_animal_tbl[] = {
     { 20, BP_BUNNY },
     { 20, BP_SHEEP },
     { 20, BP_CHICKEN },
@@ -501,13 +501,13 @@ static MagicTechSummonTableEntry stru_5B0E28[] = {
 };
 
 // 0x5B0E58
-static MagicTechSummonTableEntry stru_5B0E58[] = {
+static MagicTechSummonTableEntry magictech_summon_wolf_tbl[] = {
     { 99, BP_PATRIARCH_WOLF },
     { 1, BP_VORPAL_BUNNY },
 };
 
 // 0x5B0E68
-static MagicTechSummonTableEntry stru_5B0E68[] = {
+static MagicTechSummonTableEntry magictech_summon_familiar_tbl[] = {
     { 25, BP_FAMILIAR_UNDERLING },
     { 50, BP_FAMILIAR },
     { 75, BP_FAMILIAR_SLASHER },
@@ -515,7 +515,7 @@ static MagicTechSummonTableEntry stru_5B0E68[] = {
 };
 
 // 0x5B0E88
-static MagicTechSummonTableEntry stru_5B0E88[] = {
+static MagicTechSummonTableEntry magictech_summon_beast_tbl[] = {
     { 20, BP_WOLF },
     { 40, BP_COUGAR },
     { 55, BP_TIGER },
@@ -525,7 +525,7 @@ static MagicTechSummonTableEntry stru_5B0E88[] = {
 };
 
 // 0x5B0EB8
-static MagicTechSummonTableEntry stru_5B0EB8[] = {
+static MagicTechSummonTableEntry magictech_summon_undead_tbl[] = {
     { 20, BP_DECAYED_SOLDIER },
     { 60, BP_RAGGED_FIGHTER },
     { 85, BP_SKELETON_WARRIOR },
@@ -533,20 +533,20 @@ static MagicTechSummonTableEntry stru_5B0EB8[] = {
 };
 
 // 0x5B0ED8
-static MagicTechSummonTable stru_5B0ED8[6] = {
-    { SDL_arraysize(stru_5B0DF8), stru_5B0DF8, 0 },
-    { SDL_arraysize(stru_5B0E28), stru_5B0E28, 0 },
-    { SDL_arraysize(stru_5B0E58), stru_5B0E58, 0 },
-    { SDL_arraysize(stru_5B0E68), stru_5B0E68, 1 },
-    { SDL_arraysize(stru_5B0E88), stru_5B0E88, 1 },
-    { SDL_arraysize(stru_5B0EB8), stru_5B0EB8, 1 },
+static MagicTechSummonTable magictech_summon_tables[6] = {
+    { SDL_arraysize(magictech_summon_wild_animal_tbl), magictech_summon_wild_animal_tbl, 0 },
+    { SDL_arraysize(magictech_summon_farm_animal_tbl), magictech_summon_farm_animal_tbl, 0 },
+    { SDL_arraysize(magictech_summon_wolf_tbl), magictech_summon_wolf_tbl, 0 },
+    { SDL_arraysize(magictech_summon_familiar_tbl), magictech_summon_familiar_tbl, 1 },
+    { SDL_arraysize(magictech_summon_beast_tbl), magictech_summon_beast_tbl, 1 },
+    { SDL_arraysize(magictech_summon_undead_tbl), magictech_summon_undead_tbl, 1 },
 };
 
 // 0x5B0F20
-static int dword_5B0F20 = -1;
+static int magictech_reschedule_timeevent_id = -1;
 
 // 0x5BBD70
-const char* off_5BBD70[] = {
+const char* magictech_target_names[] = {
     "Tgt_None",
     "Tgt_Self",
     "Tgt_Source",
@@ -735,7 +735,7 @@ static int dword_5E762C;
 static bool dword_5E7630;
 
 // 0x5E7634
-static int dword_5E7634;
+static int magictech_reschedule_timeevent_flag;
 
 // 0x6876D8
 MagicTechInfo* magictech_spells;
@@ -794,7 +794,7 @@ bool magictech_init(GameInitInfo* init_info)
         spell_eye_candies.num_fields = 6;
         spell_eye_candies.step = 10;
         spell_eye_candies.num_sound_effects = 6;
-        spell_eye_candies.sound_effects = dword_5B0DC8;
+        spell_eye_candies.sound_effects = magictech_spell_sound_effect_offsets;
         if (!animfx_list_load(&spell_eye_candies)) {
             FREE(magictech_component_names);
             FREE(magictech_run_info);
@@ -1491,10 +1491,10 @@ int magictech_min_willpower(int magictech)
     }
 
     if (magictech >= 0 && magictech < MT_80) {
-        return dword_5B0DE0[magictech % 5];
+        return magictech_default_iq_tbl[magictech % 5];
     }
 
-    return dword_5B0DE0[1];
+    return magictech_default_iq_tbl[1];
 }
 
 // 0x450340
@@ -2793,31 +2793,31 @@ void magictech_pick_proto_from_list(ObjectID* oid, int list)
     int rnd;
     int idx;
 
-    switch (stru_5B0ED8[list].type) {
+    switch (magictech_summon_tables[list].type) {
     case 0:
         rnd = random_between(0, 100);
-        for (idx = 0; idx < stru_5B0ED8[list].cnt; idx++) {
-            if (rnd < stru_5B0ED8[list].entries[idx].value) {
+        for (idx = 0; idx < magictech_summon_tables[list].cnt; idx++) {
+            if (rnd < magictech_summon_tables[list].entries[idx].value) {
                 break;
             }
 
-            rnd -= stru_5B0ED8[list].entries[idx].value;
+            rnd -= magictech_summon_tables[list].entries[idx].value;
         }
-        if (idx >= stru_5B0ED8[list].cnt) {
+        if (idx >= magictech_summon_tables[list].cnt) {
             tig_debug_printf("MagicTech: Error: magictech_pick_proto_from_list: went off end of list!\n");
             idx = 0;
         }
         break;
     case 1:
-        for (idx = 0; idx < stru_5B0ED8[list].cnt; idx++) {
-            if (magictech_cur_run_info->parent_obj.aptitude <= stru_5B0ED8[list].entries[idx].value) {
+        for (idx = 0; idx < magictech_summon_tables[list].cnt; idx++) {
+            if (magictech_cur_run_info->parent_obj.aptitude <= magictech_summon_tables[list].entries[idx].value) {
                 break;
             }
         }
         break;
     }
 
-    *oid = obj_get_id(proto_get_by_description(stru_5B0ED8[list].entries[idx].basic_prototype));
+    *oid = obj_get_id(proto_get_by_description(magictech_summon_tables[list].entries[idx].basic_prototype));
 }
 
 // 0x4529D0
@@ -5541,7 +5541,7 @@ void sub_457580(MagicTechInfo* info, int magictech)
     if (dword_5E7600 != 0) {
         info->iq = 0;
     } else {
-        info->iq = dword_5B0DE0[magictech % 5];
+        info->iq = magictech_default_iq_tbl[magictech % 5];
     }
 
     info->cost = 0;
@@ -5592,7 +5592,7 @@ void magictech_build_aoe_info(MagicTechInfo* info, char* str)
 
     tig_str_parse_set_separator(',');
 
-    if (!tig_str_parse_named_flag_list_64(&str, "AoE:", off_5BBD70, qword_596140, 65, &tgt)) {
+    if (!tig_str_parse_named_flag_list_64(&str, "AoE:", magictech_target_names, magictech_target_flags, 65, &tgt)) {
         tig_debug_printf("magictech_build_aoe_info: Error: failed match target AoE strings!\n");
     }
 
@@ -5640,7 +5640,7 @@ void magictech_build_aoe_info(MagicTechInfo* info, char* str)
     }
 
     for (action = 0; action < MAGICTECH_ACTION_COUNT; action++) {
-        if (tig_str_parse_named_flag_list_64(&str, off_5B0D64[action].aoe, off_5BBD70, qword_596140, 65, &tgt)) {
+        if (tig_str_parse_named_flag_list_64(&str, off_5B0D64[action].aoe, magictech_target_names, magictech_target_flags, 65, &tgt)) {
             info->target_params[action].tgt |= tgt;
         }
 
@@ -5721,8 +5721,8 @@ void sub_4578F0(MagicTechInfo* info, char* str)
         }
     }
 
-    if (tig_str_match_named_str_to_list(&curr, "Info:", off_5B0C20, 4, &value1)) {
-        info->flags |= dword_5B0C30[value1];
+    if (tig_str_match_named_str_to_list(&curr, "Info:", magictech_disposition_names, 4, &value1)) {
+        info->flags |= magictech_disposition_flags[value1];
     }
 
     if (!tig_str_parse_named_value(&curr, "Disabled:", &value1) || value1 == 0) {
@@ -5902,7 +5902,7 @@ void magictech_build_effect_info(MagicTechInfo* info, char* str)
 
     tig_str_parse_set_separator(',');
 
-    tig_str_match_str_to_list(&str, off_5B0C0C, MAGICTECH_ACTION_COUNT, &action);
+    tig_str_match_str_to_list(&str, magictech_action_names, MAGICTECH_ACTION_COUNT, &action);
 
     component_list = &(info->components[action]);
     if (component_list->entries != NULL) {
@@ -5922,7 +5922,7 @@ void magictech_build_effect_info(MagicTechInfo* info, char* str)
     component_info->aoe.radius = 0;
     component_info->aoe.count = -1;
 
-    if (tig_str_parse_named_flag_list_64(&str, "AoE:", off_5BBD70, qword_596140, 65, &tgt)) {
+    if (tig_str_parse_named_flag_list_64(&str, "AoE:", magictech_target_names, magictech_target_flags, 65, &tgt)) {
         component_info->aoe.tgt = tgt;
     }
 
@@ -5950,7 +5950,7 @@ void magictech_build_effect_info(MagicTechInfo* info, char* str)
     component_info->apply_aoe.radius = 0;
     component_info->apply_aoe.count = -1;
 
-    tig_str_parse_named_flag_list_64(&str, "Apply_AoE:", off_5BBD70, qword_596140, 65, &(component_info->apply_aoe.tgt));
+    tig_str_parse_named_flag_list_64(&str, "Apply_AoE:", magictech_target_names, magictech_target_flags, 65, &(component_info->apply_aoe.tgt));
 
     if (tig_str_parse_named_flag_list(&str, "ItemTriggers:", mt_item_trig_keys, mt_item_trig_values, 26, &flags)) {
         component_info->item_triggers = flags;
@@ -5961,8 +5961,8 @@ void magictech_build_effect_info(MagicTechInfo* info, char* str)
     if (tig_str_match_named_str_to_list(&str, "Type:", magictech_component_names, 25, &(component_info->type))) {
         switch (component_info->type) {
         case MTC_AGOAL:
-            tig_str_match_str_to_list(&str, off_5B0C40, 6, &value);
-            component_info->data.agoal.goal = dword_5B0C58[value];
+            tig_str_match_str_to_list(&str, magictech_anim_goal_names, 6, &value);
+            component_info->data.agoal.goal = magictech_anim_goal_values[value];
             if (tig_str_parse_named_value(&str, "SubGoal:", &value)) {
                 component_info->data.agoal.subgoal = value;
             } else {
@@ -5970,8 +5970,8 @@ void magictech_build_effect_info(MagicTechInfo* info, char* str)
             }
             break;
         case MTC_AGOALTERMINATE:
-            tig_str_match_str_to_list(&str, off_5B0C40, 6, &value);
-            component_info->data.agoal_terminate.goal = dword_5B0C58[value];
+            tig_str_match_str_to_list(&str, magictech_anim_goal_names, 6, &value);
+            component_info->data.agoal_terminate.goal = magictech_anim_goal_values[value];
             break;
         case MTC_AIREDIRECT:
             tig_str_match_str_to_list(&str, obj_flags_ocf, 32, &value);
@@ -5999,15 +5999,15 @@ void magictech_build_effect_info(MagicTechInfo* info, char* str)
             }
             break;
         case MTC_DAMAGE:
-            tig_str_match_named_str_to_list(&str, "DmgType:", off_5B0C70, 6, &(component_info->data.damage.damage_type));
+            tig_str_match_named_str_to_list(&str, "DmgType:", magictech_damage_type_names, 6, &(component_info->data.damage.damage_type));
             tig_str_parse_named_range(&str, "Dmg:", &(component_info->data.damage.damage_min), &(component_info->data.damage.damage_max));
             component_info->data.damage.damage_flags = 0;
-            tig_str_parse_named_flag_list(&str, "Dmg_Flags:", off_5B0D14, dword_5B0D3C, 10, &(component_info->data.damage.damage_flags));
+            tig_str_parse_named_flag_list(&str, "Dmg_Flags:", magictech_damage_flag_names, magictech_damage_flag_values, 10, &(component_info->data.damage.damage_flags));
             info->flags |= MAGICTECH_HAVE_DAMAGE;
             break;
         case MTC_EFFECT:
             tig_str_parse_value(&str, &(component_info->data.effect.num));
-            tig_str_match_str_to_list(&str, off_5B0C88, 2, &(component_info->data.effect.add_remove));
+            tig_str_match_str_to_list(&str, magictech_add_remove_names, 2, &(component_info->data.effect.add_remove));
             if (tig_str_parse_named_value(&str, "Count:", &value)) {
                 component_info->data.effect.count = value;
             } else {
@@ -6029,11 +6029,11 @@ void magictech_build_effect_info(MagicTechInfo* info, char* str)
         case MTC_ENVFLAG:
             tig_str_match_str_to_list(&str, obj_flags_tbl[OFS_SPELL_FLAGS], obj_flags_size_tbl[OFS_SPELL_FLAGS], &value);
             component_info->data.env_flags.flags = 1 << value;
-            tig_str_match_str_to_list(&str, off_5B0C90, 2, &(component_info->data.env_flags.state));
+            tig_str_match_str_to_list(&str, magictech_flag_state_names, 2, &(component_info->data.env_flags.state));
             break;
         case MTC_EYECANDY:
             tig_str_parse_value(&str, &(component_info->data.eye_candy.num));
-            tig_str_match_str_to_list(&str, off_5B0C88, 2, &(component_info->data.eye_candy.add_remove));
+            tig_str_match_str_to_list(&str, magictech_add_remove_names, 2, &(component_info->data.eye_candy.add_remove));
             tig_str_parse_named_flag_list(&str,
                 "Play:",
                 animfx_play_flags_lookup_tbl_keys,
@@ -6042,10 +6042,10 @@ void magictech_build_effect_info(MagicTechInfo* info, char* str)
                 &(component_info->data.eye_candy.flags));
             break;
         case MTC_HEAL:
-            tig_str_match_named_str_to_list(&str, "DmgType:", off_5B0C70, 6, &(component_info->data.heal.damage_type));
+            tig_str_match_named_str_to_list(&str, "DmgType:", magictech_damage_type_names, 6, &(component_info->data.heal.damage_type));
             tig_str_parse_named_range(&str, "Dmg:", &(component_info->data.heal.damage_min), &(component_info->data.heal.damage_max));
             component_info->data.heal.damage_flags = 0;
-            tig_str_parse_named_flag_list(&str, "Dmg_Flags:", off_5B0D14, dword_5B0D3C, 10, &(component_info->data.heal.damage_flags));
+            tig_str_parse_named_flag_list(&str, "Dmg_Flags:", magictech_damage_flag_names, magictech_damage_flag_values, 10, &(component_info->data.heal.damage_flags));
             break;
         case MTC_INTERRUPT:
             if (tig_str_parse_named_value(&str, "MagicTech:", &value)) {
@@ -6056,7 +6056,7 @@ void magictech_build_effect_info(MagicTechInfo* info, char* str)
             }
             break;
         case MTC_MOVEMENT:
-            if (tig_str_match_named_str_to_list(&str, "Move_Location:", off_5B0D04, 4, &(component_info->data.movement.move_location))
+            if (tig_str_match_named_str_to_list(&str, "Move_Location:", magictech_move_location_names, 4, &(component_info->data.movement.move_location))
                 && component_info->data.movement.move_location == 1) {
                 tig_str_parse_named_value(&str, "Tile_Radius:", &(component_info->data.movement.tile_radius));
             }
@@ -6066,7 +6066,7 @@ void magictech_build_effect_info(MagicTechInfo* info, char* str)
             component_info->data.obj_flag.flags_fld = obj_flags_fields_lookup_tbl_values[value];
             tig_str_match_str_to_list(&str, obj_flags_tbl[value], obj_flags_size_tbl[value], &value);
             component_info->data.obj_flag.value = 1u << value;
-            tig_str_match_str_to_list(&str, off_5B0C90, 2, &(component_info->data.obj_flag.state));
+            tig_str_match_str_to_list(&str, magictech_flag_state_names, 2, &(component_info->data.obj_flag.state));
             if (component_info->data.obj_flag.flags_fld == OBJ_F_SPELL_FLAGS
                 && component_info->data.obj_flag.state) {
                 info->field_114 |= component_info->data.obj_flag.value;
@@ -6110,9 +6110,9 @@ void magictech_build_effect_info(MagicTechInfo* info, char* str)
         case MTC_TESTNBRANCH:
             component_info->data.test_in_branch.field_48 = 0;
             component_info->data.test_in_branch.field_4C = -1;
-            tig_str_match_str_to_list(&str, off_5B0CAC, 4, &value);
-            component_info->data.test_in_branch.field_40 = dword_5B0CBC[value];
-            tig_str_match_str_to_list(&str, off_5B0C98, 5, &value);
+            tig_str_match_str_to_list(&str, magictech_obj_field_names, 4, &value);
+            component_info->data.test_in_branch.field_40 = magictech_obj_field_values[value];
+            tig_str_match_str_to_list(&str, magictech_comparison_names, 5, &value);
             component_info->data.test_in_branch.field_44 = value;
             if (tig_str_parse_named_value(&str, "TestVal:", &value)) {
                 component_info->data.test_in_branch.field_48 = value;
@@ -6122,8 +6122,8 @@ void magictech_build_effect_info(MagicTechInfo* info, char* str)
             }
             break;
         case MTC_TRAIT:
-            tig_str_match_str_to_list(&str, off_5B0CAC, 4, &value);
-            component_info->data.trait.fld = dword_5B0CBC[value];
+            tig_str_match_str_to_list(&str, magictech_obj_field_names, 4, &value);
+            component_info->data.trait.fld = magictech_obj_field_values[value];
             component_info->data.trait.field_4 = 0;
             tig_str_parse_value(&str, &value);
             component_info->data.trait.value = value;
@@ -6132,9 +6132,9 @@ void magictech_build_effect_info(MagicTechInfo* info, char* str)
             tig_str_parse_named_value(&str, "Palette:", &(component_info->data.trait.palette));
             break;
         case MTC_TRAITIDX:
-            tig_str_match_str_to_list(&str, off_5B0CCC, 2, &value);
-            component_info->data.trait_idx.field_44 = dword_5B0CD4[value];
-            tig_str_match_str_to_list(&str, off_5B0CDC[value], dword_5B0CE4[value], &value);
+            tig_str_match_str_to_list(&str, magictech_indexed_field_names, 2, &value);
+            component_info->data.trait_idx.field_44 = magictech_indexed_field_values[value];
+            tig_str_match_str_to_list(&str, magictech_indexed_field_key_tbls[value], magictech_indexed_field_key_counts[value], &value);
             component_info->data.trait_idx.field_40 = value;
             component_info->data.trait_idx.field_48 = 0;
             tig_str_parse_value(&str, &value);
@@ -6143,9 +6143,9 @@ void magictech_build_effect_info(MagicTechInfo* info, char* str)
             component_info->data.trait_idx.field_4C = 1;
             break;
         case MTC_TRAIT64:
-            tig_str_match_str_to_list(&str, off_5B0CAC, 4, &value);
-            component_info->data.trait64.field_40 = dword_5B0CBC[value];
-            tig_str_match_str_to_list(&str, off_5B0CF8, 3, &value);
+            tig_str_match_str_to_list(&str, magictech_obj_field_names, 4, &value);
+            component_info->data.trait64.field_40 = magictech_obj_field_values[value];
+            tig_str_match_str_to_list(&str, magictech_obj_source_names, 3, &value);
             component_info->data.trait64.field_44 = value;
             break;
         }
@@ -6569,10 +6569,10 @@ void sub_459490(int mt_id)
 }
 
 // 0x4594D0
-bool sub_4594D0(TimeEvent* timeevent)
+bool magictech_reschedule_timeevent_match(TimeEvent* timeevent)
 {
-    return timeevent->params[0].integer_value == dword_5B0F20
-        && timeevent->params[2].integer_value == dword_5E7634;
+    return timeevent->params[0].integer_value == magictech_reschedule_timeevent_id
+        && timeevent->params[2].integer_value == magictech_reschedule_timeevent_flag;
 }
 
 // 0x459500
@@ -6587,9 +6587,9 @@ bool magictech_reschedule_run(int index)
         return false;
     }
 
-    dword_5B0F20 = index;
-    dword_5E7634 = 1;
-    timeevent_clear_one_ex(TIMEEVENT_TYPE_MAGICTECH, sub_4594D0);
+    magictech_reschedule_timeevent_id = index;
+    magictech_reschedule_timeevent_flag = 1;
+    timeevent_clear_one_ex(TIMEEVENT_TYPE_MAGICTECH, magictech_reschedule_timeevent_match);
 
     timeevent.type = TIMEEVENT_TYPE_MAGICTECH;
     timeevent.params[0].integer_value = run_info->id;
@@ -7109,7 +7109,7 @@ void magictech_debug_lists(void)
                 index,
                 magictech_spell_name(run_info->spell),
                 run_info->spell);
-            tig_debug_printf("\tAction: %s\n", off_5B0C0C[run_info->action]);
+            tig_debug_printf("\tAction: %s\n", magictech_action_names[run_info->action]);
             magictech_debug_print_obj(run_info->parent_obj.obj, "Parent");
             magictech_debug_print_obj(run_info->source_obj.obj, "Source");
             magictech_debug_print_obj(run_info->target_obj.obj, "Target");
