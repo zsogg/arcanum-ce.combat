@@ -6,6 +6,7 @@
 #include "game/critter.h"
 #include "game/descriptions.h"
 #include "game/dialog.h"
+#include "game/highres_config.h"
 #include "game/item.h"
 #include "game/magictech.h"
 #include "game/map.h"
@@ -124,7 +125,7 @@ static bool ai_get_standpoint(int64_t obj, int64_t* standpoint_ptr);
 static void ai_wake_up(int64_t npc_obj);
 static int64_t ai_find_nearest_bed(int64_t obj);
 static void ai_move_to(int64_t obj, int64_t loc, int range);
-static bool sub_4AD420(int64_t obj);
+static bool ai_should_run_heartbeat(int64_t obj);
 static bool sub_4AD4D0(int64_t obj);
 static int ai_timeevent_delay(int64_t obj);
 static int ai_distance_to_nearest_player(int64_t obj);
@@ -2890,7 +2891,7 @@ bool ai_timeevent_process(TimeEvent* timeevent)
         }
     }
 
-    if (!skip && sub_4AD420(obj)) {
+    if (!skip && ai_should_run_heartbeat(obj)) {
         if (object_script_execute(obj, obj, OBJ_HANDLE_NULL, SAP_HEARTBEAT, 0)) {
             if ((obj_field_int32_get(obj, OBJ_F_NPC_FLAGS) & ONF_GENERATOR) != 0) {
                 if (monstergen_process(obj, &datetime)) {
@@ -2937,7 +2938,7 @@ bool ai_timeevent_process(TimeEvent* timeevent)
 }
 
 // 0x4AD420
-bool sub_4AD420(int64_t obj)
+bool ai_should_run_heartbeat(int64_t obj)
 {
     if (critter_is_dead(obj)) {
         return false;
@@ -2947,7 +2948,10 @@ bool sub_4AD420(int64_t obj)
         return false;
     }
 
-    if (object_dist(player_get_local_pc_obj(), obj) <= 30) {
+    // The stock radius is 30 tiles, the literal the high resolution patch
+    // overwrites at 0x4AD4B8. Reading it from config.ini keeps that knob
+    // available without an exe patch; the default is the stock value.
+    if (object_dist(player_get_local_pc_obj(), obj) <= highres_config_get()->preload_limit) {
         return true;
     }
 

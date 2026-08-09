@@ -50,6 +50,8 @@ void highres_config_reset(void)
     highres_config.show_fps = false;
     highres_config.scroll_fps = 35;
     highres_config.scroll_dist = 10;
+    highres_config.preload_limit = 30;
+    highres_config.broadcast_limit = 10;
     highres_config.logos = true;
     highres_config.intro = true;
 }
@@ -117,6 +119,18 @@ void highres_config_parse_line(char* line)
     } else if (SDL_strcasecmp(key_start, "ScrollDist") == 0) {
         if (value >= 0) {
             highres_config.scroll_dist = value;
+        }
+    } else if (SDL_strcasecmp(key_start, "PreloadLimit") == 0) {
+        // The high resolution patch pokes both of these into the exe with
+        // WRITE_BYTE, so its own documented ceiling is 255. Out-of-range values
+        // are ignored here rather than wrapped, which is the one place this
+        // deliberately differs from the patch.
+        if (value >= 1 && value <= 255) {
+            highres_config.preload_limit = value;
+        }
+    } else if (SDL_strcasecmp(key_start, "BroadcastLimit") == 0) {
+        if (value >= 0 && value <= 255) {
+            highres_config.broadcast_limit = value;
         }
     } else if (SDL_strcasecmp(key_start, "Logos") == 0) {
         highres_config.logos = value != 0;
