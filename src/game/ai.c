@@ -629,7 +629,7 @@ bool ai_look_for_item(Ai* ai)
         return false;
     }
 
-    if (sub_460C20() != OBJ_HANDLE_NULL) {
+    if (ui_inven_target_obj_get() != OBJ_HANDLE_NULL) {
         return false;
     }
 
@@ -2449,7 +2449,7 @@ void ai_action_perform_non_combat(Ai* ai)
     }
 
     if (!critter_is_sleeping(ai->obj)) {
-        if (sub_460C20() == OBJ_HANDLE_NULL && random_between(1, 100) == 1) {
+        if (ui_inven_target_obj_get() == OBJ_HANDLE_NULL && random_between(1, 100) == 1) {
             ai_look_for_item_func(ai->obj, OBJ_TM_ITEM);
         }
     }

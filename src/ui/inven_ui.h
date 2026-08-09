@@ -25,20 +25,20 @@ bool inven_ui_create(int64_t pc_obj, int64_t target_obj, int mode);
 void inven_ui_destroy(void);
 void inven_ui_notify_object_destroyed(int64_t obj);
 int inven_ui_is_created(void);
-int64_t sub_573600(void);
+int64_t inven_ui_target_obj_get(void);
 int64_t inven_ui_drag_item_obj_get(void);
-void sub_573630(int64_t obj);
+void inven_ui_begin_drag(int64_t obj);
 void sub_5736E0(void);
 void sub_573730(void);
 void sub_573740(int64_t a1, bool a2);
 void sub_573840(void);
 bool inven_ui_can_open_inven(int64_t pc_obj, int64_t npc_obj);
 void inven_ui_drop_dragged_item(void);
-void sub_575930(void);
-void sub_575C50(int64_t obj);
+void inven_ui_return_dragged_item(void);
+void inven_ui_notify_drag_item_removed(int64_t obj);
 void inven_ui_update(int64_t obj);
 void sub_578B80(int a1);
-bool sub_578EA0(Packet81* pkt);
+bool inven_ui_process_transfer_packet(Packet81* pkt);
 int64_t sub_579760(void);
 
 #endif /* ARCANUM_UI_INVEN_UI_H_ */

@@ -248,7 +248,7 @@ void skill_ui_activate(TargetDescriptor* td, int64_t obj, int a3)
     }
 
     is_pc = player_is_local_pc_obj(obj);
-    skill = sub_57A6C0(a3, td);
+    skill = skill_ui_skill_for_action(a3, td);
 
     switch (skill) {
     case SKILL_PICK_POCKET:
@@ -345,7 +345,7 @@ void sub_57A6B0(SkillInvocation* skill_invocation)
 }
 
 // 0x57A6C0
-int sub_57A6C0(int a1, TargetDescriptor* td)
+int skill_ui_skill_for_action(int a1, TargetDescriptor* td)
 {
     int v1;
     int complexity;

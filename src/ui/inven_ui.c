@@ -1192,7 +1192,7 @@ int inven_ui_is_created(void)
 }
 
 // 0x573600
-int64_t sub_573600(void)
+int64_t inven_ui_target_obj_get(void)
 {
     return inven_ui_created ? qword_682C78 : OBJ_HANDLE_NULL;
 }
@@ -1204,7 +1204,7 @@ int64_t inven_ui_drag_item_obj_get(void)
 }
 
 // 0x573630
-void sub_573630(int64_t obj)
+void inven_ui_begin_drag(int64_t obj)
 {
     tig_art_id_t inv_art_id;
     tig_art_id_t mouse_art_id;
@@ -1785,7 +1785,7 @@ static inline bool inven_ui_message_filter_handle_mouse_lbutton_up_accept_drop(T
         } else {
             item_error_msg(v2, err);
             item_insert(old_item_obj, v2, new_inventory_location);
-            sub_575930();
+            inven_ui_return_dragged_item();
         }
         critter_encumbrance_recalc_feedback_enable();
 
@@ -1981,7 +1981,7 @@ static inline bool inven_ui_message_filter_handle_mouse_lbutton_up(int x, int y,
                                         } else {
                                             item_error_msg(parent_obj, transfer_reason);
                                             item_insert(old_item_obj, parent_obj, old_inventory_location);
-                                            sub_575930();
+                                            inven_ui_return_dragged_item();
                                         }
                                         critter_encumbrance_recalc_feedback_enable();
                                     } else {
@@ -2551,7 +2551,7 @@ void inven_ui_drop_dragged_item(void)
         }
 
         if (!inven_ui_created) {
-            sub_575930();
+            inven_ui_return_dragged_item();
             return;
         }
     }
@@ -2569,12 +2569,12 @@ void inven_ui_drop_dragged_item(void)
         inven_ui_drag_item_obj = OBJ_HANDLE_NULL;
         redraw_inven(false);
     } else {
-        sub_575930();
+        inven_ui_return_dragged_item();
     }
 }
 
 // 0x575930
-void sub_575930(void)
+void inven_ui_return_dragged_item(void)
 {
     int sound_id;
     int inventory_location;
@@ -2631,7 +2631,7 @@ void sub_575BE0(void)
 }
 
 // 0x575C50
-void sub_575C50(int64_t obj)
+void inven_ui_notify_drag_item_removed(int64_t obj)
 {
     if (inven_ui_drag_item_obj != OBJ_HANDLE_NULL && obj == inven_ui_drag_item_obj) {
         multiplayer_item_reveal(player_get_local_pc_obj(), inven_ui_drag_item_obj);
@@ -4121,11 +4121,11 @@ void sub_578B80(int a1)
         }
     }
 
-    sub_578EA0(pkt);
+    inven_ui_process_transfer_packet(pkt);
 }
 
 // 0x578EA0
-bool sub_578EA0(Packet81* pkt)
+bool inven_ui_process_transfer_packet(Packet81* pkt)
 {
     int64_t v1;
     int64_t v2;
@@ -4197,7 +4197,7 @@ bool sub_578EA0(Packet81* pkt)
                     if ((flags & 0x04) != 0) {
                         object_pickup(gold_obj, v1);
                         if (v6 != OBJ_HANDLE_NULL && player_is_local_pc_obj(v6)) {
-                            sub_573630(gold_obj);
+                            inven_ui_begin_drag(gold_obj);
                             qword_681450 = v1;
                         }
                     } else if ((flags & 0x02) != 0) {
@@ -4227,7 +4227,7 @@ bool sub_578EA0(Packet81* pkt)
                     if ((flags & 0x04) != 0) {
                         object_pickup(ammo_obj, v1);
                         if (v6 != OBJ_HANDLE_NULL && player_is_local_pc_obj(v6)) {
-                            sub_573630(ammo_obj);
+                            inven_ui_begin_drag(ammo_obj);
                             qword_681450 = v1;
                         }
                     } else if ((flags & 0x02) != 0) {

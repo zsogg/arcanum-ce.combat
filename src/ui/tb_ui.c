@@ -51,7 +51,7 @@ static void tb_ui_item_spell_activate(int64_t obj, void* a2, int a3);
 static void handle_sector_changed(int64_t sec, int64_t obj);
 static void charedit_error_msg(int type, int param);
 static void tb_ui_open_charedit_passive(int64_t a1, int64_t a2);
-static void sub_57CFA0(void);
+static void tb_ui_cancel_item_drag(void);
 static bool sub_57CFB0(void);
 static bool sub_57D080(void);
 static bool sub_57D150(const char* name, const char* a2);
@@ -115,17 +115,17 @@ bool tb_ui_init(GameInitInfo* init_info)
     callbacks.schematic_process = schematic_ui_process;
     callbacks.schematic_feedback = schematic_ui_feedback;
     callbacks.open_charedit_passive = tb_ui_open_charedit_passive;
-    callbacks.field_D4 = sub_578EA0;
-    callbacks.field_D8 = sub_573630;
-    callbacks.field_DC = sub_57CFA0;
-    callbacks.field_E0 = sub_575C50;
+    callbacks.process_item_transfer = inven_ui_process_transfer_packet;
+    callbacks.begin_item_drag = inven_ui_begin_drag;
+    callbacks.cancel_item_drag = tb_ui_cancel_item_drag;
+    callbacks.notify_drag_item_removed = inven_ui_notify_drag_item_removed;
     callbacks.gameuilib_reset = gameuilib_reset;
     callbacks.start_dialog = dialog_ui_start_dialog;
     callbacks.end_dialog = dialog_ui_end_dialog;
     callbacks.field_F8 = NULL;
-    callbacks.field_FC = sub_549310;
+    callbacks.return_to_mainmenu = mainmenu_ui_return_to_mainmenu;
     callbacks.refresh_cursor = intgame_refresh_cursor;
-    callbacks.field_104 = sub_57A6C0;
+    callbacks.skill_for_action = skill_ui_skill_for_action;
     callbacks.drop_dragged_item = inven_ui_drop_dragged_item;
     callbacks.wmap_rnd_timeevent_process = wmap_rnd_timeevent_process;
     callbacks.queue_slide = slide_ui_enqueue;
@@ -134,7 +134,7 @@ bool tb_ui_init(GameInitInfo* init_info)
     callbacks.field_120 = sub_57D080;
     callbacks.field_124 = sub_57D150;
     callbacks.schematic_info_get = schematic_ui_info_get;
-    callbacks.field_12C = sub_573600;
+    callbacks.inven_target_obj_get = inven_ui_target_obj_get;
     callbacks.field_130 = sub_557790;
     callbacks.field_134 = sub_572370;
     callbacks.field_138 = sub_572510;
@@ -402,9 +402,9 @@ void tb_ui_open_charedit_passive(int64_t a1, int64_t a2)
 }
 
 // 0x57CFA0
-void sub_57CFA0(void)
+void tb_ui_cancel_item_drag(void)
 {
-    sub_575930();
+    inven_ui_return_dragged_item();
     intgame_refresh_cursor();
 }
 

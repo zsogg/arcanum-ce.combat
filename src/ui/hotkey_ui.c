@@ -746,7 +746,7 @@ bool hotkey_ui_begin_drag(void)
             case HOTKEY_ITEM:
                 stru_683950.type = hotkey->type;
                 stru_683950.item_obj = hotkey->item_obj;
-                sub_573630(stru_683950.item_obj.obj);
+                inven_ui_begin_drag(stru_683950.item_obj.obj);
                 art_id = TIG_ART_ID_INVALID;
                 v1 = false;
                 break;

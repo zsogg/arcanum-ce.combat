@@ -497,18 +497,18 @@ void ui_open_charedit_passive(int64_t a1, int64_t a2)
 }
 
 // 0x460960
-void sub_460960(Packet81* pkt)
+void ui_process_item_transfer(Packet81* pkt)
 {
-    if (ui_callbacks.field_D4 != NULL) {
-        ui_callbacks.field_D4(pkt);
+    if (ui_callbacks.process_item_transfer != NULL) {
+        ui_callbacks.process_item_transfer(pkt);
     }
 }
 
 // 0x460980
-void sub_460980(int64_t a1)
+void ui_begin_item_drag(int64_t a1)
 {
-    if (ui_callbacks.field_D8 != NULL) {
-        ui_callbacks.field_D8(a1);
+    if (ui_callbacks.begin_item_drag != NULL) {
+        ui_callbacks.begin_item_drag(a1);
     }
 }
 
@@ -545,10 +545,10 @@ void sub_460AB0(int a1, int a2, void* a3)
 }
 
 // 0x460AD0
-void sub_460AD0(int a1)
+void ui_return_to_mainmenu(int a1)
 {
-    if (ui_callbacks.field_FC != NULL) {
-        ui_callbacks.field_FC(a1);
+    if (ui_callbacks.return_to_mainmenu != NULL) {
+        ui_callbacks.return_to_mainmenu(a1);
     }
 }
 
@@ -561,10 +561,10 @@ void ui_refresh_cursor(void)
 }
 
 // 0x460B00
-int sub_460B00(int a1, TargetDescriptor* td)
+int ui_skill_for_action(int a1, TargetDescriptor* td)
 {
-    if (ui_callbacks.field_104 != NULL) {
-        return ui_callbacks.field_104(a1, td);
+    if (ui_callbacks.skill_for_action != NULL) {
+        return ui_callbacks.skill_for_action(a1, td);
     } else {
         return 0;
     }
@@ -654,10 +654,10 @@ void ui_schematic_info_get(int schematic, SchematicInfo* schematic_info)
 }
 
 // 0x460C20
-int64_t sub_460C20(void)
+int64_t ui_inven_target_obj_get(void)
 {
-    if (ui_callbacks.field_12C != NULL) {
-        return ui_callbacks.field_12C();
+    if (ui_callbacks.inven_target_obj_get != NULL) {
+        return ui_callbacks.inven_target_obj_get();
     } else {
         return OBJ_HANDLE_NULL;
     }

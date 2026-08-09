@@ -2133,7 +2133,7 @@ bool mainmenu_ui_press_mainmenu_in_play(tig_button_handle_t button_handle)
 
         tig_button_hide(button_handle);
 
-        return sub_549310(button_handle);
+        return mainmenu_ui_return_to_mainmenu(button_handle);
     }
 
     if (button_handle == window->buttons[4].button_handle) {
@@ -2168,7 +2168,7 @@ bool mainmenu_ui_press_mainmenu_in_play_locked(tig_button_handle_t button_handle
 
         tig_button_hide(button_handle);
 
-        return sub_549310(button_handle);
+        return mainmenu_ui_return_to_mainmenu(button_handle);
     }
 
     if (button_handle == window->buttons[2].button_handle) {
@@ -5542,7 +5542,7 @@ bool mainmenu_ui_message_filter(TigMessage* msg)
                             // FIXME: Looks wrong.
                             tig_button_hide(3);
 
-                            return sub_549310(3);
+                            return mainmenu_ui_return_to_mainmenu(3);
                         }
                         return true;
                     case 4:
@@ -5564,7 +5564,7 @@ bool mainmenu_ui_message_filter(TigMessage* msg)
                             // FIXME: Looks wrong.
                             tig_button_hide(1);
 
-                            return sub_549310(1);
+                            return mainmenu_ui_return_to_mainmenu(1);
                         }
                         return true;
                     case 2:
@@ -5834,7 +5834,7 @@ void sub_548FF0(int a1)
 }
 
 // 0x549310
-bool sub_549310(tig_button_handle_t button_handle)
+bool mainmenu_ui_return_to_mainmenu(tig_button_handle_t button_handle)
 {
     if (button_handle != TIG_BUTTON_HANDLE_INVALID) {
         tig_button_show(button_handle);

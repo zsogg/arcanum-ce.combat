@@ -92,7 +92,7 @@ bool sub_543220(void);
 void mainmenu_ui_create_window(void);
 void mainmenu_ui_create_window_func(bool should_display);
 bool mainmenu_ui_process_callback(TimeEvent* timeevent);
-bool sub_549310(tig_button_handle_t button_handle);
+bool mainmenu_ui_return_to_mainmenu(tig_button_handle_t button_handle);
 void sub_5493C0(char* buffer, int size);
 char* sub_549520(void);
 void mainmenu_ui_exit_game(void);
