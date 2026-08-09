@@ -390,7 +390,7 @@ typedef struct AnimRunInfo {
 
 extern const char* off_5A164C[];
 extern int dword_5A5978;
-extern int dword_5A597C[AGDATA_COUNT];
+extern int anim_goal_data_param_types[AGDATA_COUNT];
 extern bool dword_5E34F4;
 extern void (*dword_5E34F8)(void);
 extern bool in_anim_load;

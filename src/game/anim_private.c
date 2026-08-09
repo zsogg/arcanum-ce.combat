@@ -140,7 +140,7 @@ static const char* off_5B0530[] = {
 int dword_5A5978 = -1;
 
 // 0x5A597C
-int dword_5A597C[AGDATA_COUNT] = {
+int anim_goal_data_param_types[AGDATA_COUNT] = {
     AGDATATYPE_OBJ,
     AGDATATYPE_OBJ,
     AGDATATYPE_OBJ,
@@ -866,7 +866,7 @@ bool anim_recover_handles(AnimRunInfo* run_info, AnimGoalSubNode* goal_subnode)
             if (param < 0) {
                 run_info->params[idx].data = 0;
             } else if (param < AGDATA_COUNT) {
-                switch (dword_5A597C[param]) {
+                switch (anim_goal_data_param_types[param]) {
                 case AGDATATYPE_OBJ:
                     run_info->params[idx].obj = run_info->cur_stack_data->params[param].obj;
                     break;

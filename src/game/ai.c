@@ -160,7 +160,7 @@ static DateTime stru_5B5088[6] = {
 };
 
 // 0x5B50C0
-static int dword_5B50C0[LOUDNESS_COUNT] = {
+static int ai_loudness_radius_tbl[LOUDNESS_COUNT] = {
     2,
     8,
     15,
@@ -1162,9 +1162,9 @@ void sub_4A9E10(int64_t a1, int64_t a2, int loudness)
     ObjectList objects;
     ObjectNode* node;
 
-    radius = dword_5B50C0[loudness];
+    radius = ai_loudness_radius_tbl[loudness];
     dist = (int)object_dist(a2, a1);
-    if (dist < 2 * dword_5B50C0[LOUDNESS_LOUD]) {
+    if (dist < 2 * ai_loudness_radius_tbl[LOUDNESS_LOUD]) {
         ai_objects_in_radius(a2, radius, &objects, OBJ_TM_NPC);
         node = objects.head;
         while (node != NULL) {
@@ -4127,7 +4127,7 @@ int ai_can_hear(int64_t source_obj, int64_t target_obj, int loudness)
         perception += perception * diff / -100;
     }
 
-    hear_dist = (dword_5B50C0[loudness] - dword_5B50C0[LOUDNESS_SILENT] + ai_perception_distance(perception - 4)) / 2 - sub_4AF640(source_obj, target_obj);
+    hear_dist = (ai_loudness_radius_tbl[loudness] - ai_loudness_radius_tbl[LOUDNESS_SILENT] + ai_perception_distance(perception - 4)) / 2 - sub_4AF640(source_obj, target_obj);
     if ((int)dist > hear_dist) {
         return (int)dist - hear_dist;
     }

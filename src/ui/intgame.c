@@ -730,7 +730,7 @@ static uint64_t qword_5C7280 = TGT_OBJECT;
 static tig_window_handle_t intgame_fs_hotkey_window = TIG_WINDOW_HANDLE_INVALID;
 
 // 0x5C728C
-static int dword_5C728C[TIG_ART_AMMO_TYPE_COUNT] = {
+static int intgame_ammo_art_nums[TIG_ART_AMMO_TYPE_COUNT] = {
     /*  TIG_ART_AMMO_TYPE_ARROW */ 250,
     /* TIG_ART_AMMO_TYPE_BULLET */ 251,
     /* TIG_ART_AMMO_TYPE_CHARGE */ 252,
@@ -1802,7 +1802,7 @@ void intgame_counters_refresh(void)
             ammo_type = item_weapon_ammo_type(item_obj);
             if (ammo_type != 10000) {
                 qty = item_ammo_quantity_get(pc_obj, ammo_type);
-                art_num = dword_5C728C[ammo_type];
+                art_num = intgame_ammo_art_nums[ammo_type];
             } else {
                 qty = obj_field_int32_get(item_obj, OBJ_F_ITEM_MANA_STORE);
                 if (qty > 0) {

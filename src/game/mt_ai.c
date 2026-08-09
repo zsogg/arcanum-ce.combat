@@ -38,7 +38,7 @@ static void flush_actions(MagicTechAi* magictech_ai, int action);
 static int dword_5B7558 = -1;
 
 // 0x5B755C
-static const char* off_5B755C[MAGICTECH_AI_ACTION_COUNT] = {
+static const char* magictech_ai_action_names[MAGICTECH_AI_ACTION_COUNT] = {
     /*            MAGICTECH_AI_ACTION_FLEE */ "AIFlee",
     /*          MAGICTECH_AI_ACTION_SUMMON */ "AISummon",
     /*       MAGICTECH_AI_ACTION_DEFENSIVE */ "AIDefensive",
@@ -173,7 +173,7 @@ bool sub_4CC350(int action, MagicTechAiActionList* list)
 {
     dword_5B7558 = action;
     if (action >= 0 && action < MAGICTECH_AI_ACTION_COUNT) {
-        return sub_4CC380(list, off_5B755C[action]);
+        return sub_4CC380(list, magictech_ai_action_names[action]);
     } else {
         return false;
     }

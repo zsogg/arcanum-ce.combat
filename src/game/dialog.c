@@ -272,7 +272,7 @@ static const char* dialog_gd_mes_file_names[GD_COUNT] = {
 };
 
 // 0x5A06BC
-static const char* off_5A06BC[DIALOG_COND_COUNT] = {
+static const char* dialog_cond_codes[DIALOG_COND_COUNT] = {
     "ps",
     "ch",
     "pe",
@@ -313,7 +313,7 @@ static const char* off_5A06BC[DIALOG_COND_COUNT] = {
 };
 
 // 0x5A0750
-static const char* off_5A0750[DIALOG_ACTION_COUNT] = {
+static const char* dialog_action_codes[DIALOG_ACTION_COUNT] = {
     "$$",
     "re",
     "qu",
@@ -1431,7 +1431,7 @@ bool dialog_check_conditions(DialogState* a1, char* a2)
 
         value = atoi(pch);
         for (cond = 0; cond < DIALOG_COND_COUNT; cond++) {
-            if (SDL_strcasecmp(off_5A06BC[cond], code) == 0) {
+            if (SDL_strcasecmp(dialog_cond_codes[cond], code) == 0) {
                 break;
             }
         }
@@ -1927,7 +1927,7 @@ bool dialog_perform_actions(DialogState* a1, char* a2, int a3)
 
         value = atoi(pch);
         for (act = 0; act < DIALOG_ACTION_COUNT; act++) {
-            if (SDL_strcasecmp(off_5A0750[act], code) == 0) {
+            if (SDL_strcasecmp(dialog_action_codes[act], code) == 0) {
                 break;
             }
         }

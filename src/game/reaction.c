@@ -27,7 +27,7 @@ static mes_file_handle_t reaction_mes_file;
 static char* reaction_names[REACTION_COUNT];
 
 // 0x5B684C
-static int dword_5B684C[RACE_COUNT][8] = {
+static int reaction_race_modifier_tbl[RACE_COUNT][8] = {
     {
         0,
         0,
@@ -555,7 +555,7 @@ int sub_4C1500(int64_t npc_obj, int64_t pc_obj, unsigned int flags)
         npc_race = stat_level_get(npc_obj, STAT_RACE);
         pc_race = stat_level_get(pc_obj, STAT_RACE);
 
-        v1 = dword_5B684C[npc_race][pc_race] + modifier;
+        v1 = reaction_race_modifier_tbl[npc_race][pc_race] + modifier;
         if ((flags & 0x1) != 0) {
             if (v1 < -49) {
                 v1 = -49;

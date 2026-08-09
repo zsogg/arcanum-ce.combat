@@ -92,7 +92,7 @@ static const char* off_5B76E8[] = {
 static_assert(SDL_arraysize(off_5B76E8) == BLEND_COUNT, "wrong size");
 
 // 0x5B7704
-static const char* off_5B7704[EFFECT_TYPE_COUNT] = {
+static const char* effect_type_names[EFFECT_TYPE_COUNT] = {
     /* EFFECT_TYPE_TRANSLUCENCY */ "Translucency",
     /*      EFFECT_TYPE_TINTING */ "Tinting",
 };
@@ -1193,7 +1193,7 @@ void animfx_build_eye_candy_effect(int index, char* str)
         }
     } else if (tig_str_parse_named_value(&curr, "Sound:", &sound)) {
         entry->sound = sound;
-    } else if (tig_str_match_named_str_to_list(&curr, "ArtEffect:", off_5B7704, EFFECT_TYPE_COUNT, &art_effect)) {
+    } else if (tig_str_match_named_str_to_list(&curr, "ArtEffect:", effect_type_names, EFFECT_TYPE_COUNT, &art_effect)) {
         switch (art_effect) {
         case EFFECT_TYPE_TRANSLUCENCY:
             entry->flags |= ANIMFX_LIST_ENTRY_TRANSLUCENCY;

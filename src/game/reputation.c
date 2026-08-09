@@ -53,7 +53,7 @@ static bool reputation_parse(const char* path, int start, int end);
  *
  * 0x5B69C0
  */
-static const char* off_5B69C0[GAME_RP_COUNT] = {
+static const char* reputation_mes_file_names[GAME_RP_COUNT] = {
     /* GAME_RP_NPC_M2M */ "game_rp_npc_m2m",
     /* GAME_RP_NPC_M2F */ "game_rp_npc_m2f",
     /* GAME_RP_NPC_F2F */ "game_rp_npc_f2f",
@@ -138,7 +138,7 @@ bool reputation_mod_load(void)
 
     // Load reputation-specific greetings.
     for (index = 0; index < GAME_RP_COUNT; index++) {
-        snprintf(path, sizeof(path), "mes\\%s.mes", off_5B69C0[index]);
+        snprintf(path, sizeof(path), "mes\\%s.mes", reputation_mes_file_names[index]);
         mes_load(path, &(reputation_mes_files[index]));
     }
 

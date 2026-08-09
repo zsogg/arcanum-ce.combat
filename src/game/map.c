@@ -104,7 +104,7 @@ static bool map_read_token(char** str, char* token);
 static void map_apply_obj_patch(int64_t obj, char* str);
 
 // 0x59F058
-static const char* off_59F058[MAP_TYPE_COUNT] = {
+static const char* map_type_names[MAP_TYPE_COUNT] = {
     /*         MAP_TYPE_NONE */ "NONE",
     /*    MAP_TYPE_START_MAP */ "START_MAP",
     /* MAP_TYPE_SHOPPING_MAP */ "SHOPPING_MAP",
@@ -177,7 +177,7 @@ static int map_list_info_count;
 static int dword_5D1210;
 
 // 0x5D1214
-static int dword_5D1214[MAP_TYPE_COUNT];
+static int map_type_to_map_index[MAP_TYPE_COUNT];
 
 // 0x5D1220
 static int dword_5D1220;
@@ -773,7 +773,7 @@ bool map_open(const char* base_path, const char* save_path, bool a3)
     tig_timer_now(&timestamp);
     map_gender_check();
     dword_5D11EC = false;
-    if (dword_5D1210 != 0 && dword_5D1214[MAP_TYPE_START_MAP] == dword_5D1210) {
+    if (dword_5D1210 != 0 && map_type_to_map_index[MAP_TYPE_START_MAP] == dword_5D1210) {
         dword_5D11EC = true;
     }
     duration = tig_timer_elapsed(timestamp);
@@ -898,7 +898,7 @@ int map_current_map(void)
 int map_by_type(int map_type)
 {
     if (map_type >= 0 && map_type < MAP_TYPE_COUNT) {
-        return dword_5D1214[map_type];
+        return map_type_to_map_index[map_type];
     } else {
         return 0;
     }
@@ -2063,8 +2063,8 @@ bool map_list_info_load(void)
 
         if (str != NULL) {
             int type;
-            if (tig_str_match_named_str_to_list(&str, "Type:", off_59F058, MAP_TYPE_COUNT, &type)) {
-                dword_5D1214[type] = map_list_info_count + 1;
+            if (tig_str_match_named_str_to_list(&str, "Type:", map_type_names, MAP_TYPE_COUNT, &type)) {
+                map_type_to_map_index[type] = map_list_info_count + 1;
             }
         }
 
@@ -2117,10 +2117,10 @@ bool map_list_info_set(int index, const char* name, int64_t x, int64_t y, bool i
     map_list_info[index].area = area;
 
     if (is_start_map) {
-        dword_5D1214[MAP_TYPE_START_MAP] = index + 1;
+        map_type_to_map_index[MAP_TYPE_START_MAP] = index + 1;
     } else {
-        if (dword_5D1214[MAP_TYPE_START_MAP] == index + 1) {
-            dword_5D1214[MAP_TYPE_START_MAP] = 0;
+        if (map_type_to_map_index[MAP_TYPE_START_MAP] == index + 1) {
+            map_type_to_map_index[MAP_TYPE_START_MAP] = 0;
         }
     }
 

@@ -3019,13 +3019,13 @@ bool anim_goal_data_save(AnimGoalData* goal_data, TigFile* stream)
     }
 
     for (idx = 0; idx < 5; idx++) {
-        if (!anim_run_info_param_save(&(goal_data->params[idx]), &(goal_data->field_B0[idx]), dword_5A597C[idx], stream)) {
+        if (!anim_run_info_param_save(&(goal_data->params[idx]), &(goal_data->field_B0[idx]), anim_goal_data_param_types[idx], stream)) {
             return false;
         }
     }
 
     for (; idx < 20; idx++) {
-        if (!anim_run_info_param_save(&(goal_data->params[idx]), NULL, dword_5A597C[idx], stream)) {
+        if (!anim_run_info_param_save(&(goal_data->params[idx]), NULL, anim_goal_data_param_types[idx], stream)) {
             return false;
         }
     }
@@ -3033,7 +3033,7 @@ bool anim_goal_data_save(AnimGoalData* goal_data, TigFile* stream)
     // Special case - sound handle is volatile, it's not intended to be
     // serialized.
     param.data = -1;
-    if (!anim_run_info_param_save(&param, NULL, dword_5A597C[AGDATA_SOUND_HANDLE], stream)) {
+    if (!anim_run_info_param_save(&param, NULL, anim_goal_data_param_types[AGDATA_SOUND_HANDLE], stream)) {
         return false;
     }
 
@@ -3189,13 +3189,13 @@ bool anim_goal_data_load(AnimGoalData* goal_data, TigFile* stream)
     }
 
     for (idx = 0; idx < 5; idx++) {
-        if (!anim_run_info_param_load(&(goal_data->params[idx]), &(goal_data->field_B0[idx]), dword_5A597C[idx], stream)) {
+        if (!anim_run_info_param_load(&(goal_data->params[idx]), &(goal_data->field_B0[idx]), anim_goal_data_param_types[idx], stream)) {
             return false;
         }
     }
 
     for (; idx < AGDATA_COUNT; idx++) {
-        if (!anim_run_info_param_load(&(goal_data->params[idx]), NULL, dword_5A597C[idx], stream)) {
+        if (!anim_run_info_param_load(&(goal_data->params[idx]), NULL, anim_goal_data_param_types[idx], stream)) {
             return false;
         }
     }

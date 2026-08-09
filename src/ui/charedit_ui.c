@@ -638,7 +638,7 @@ static tig_window_handle_t charedit_spells_win;
 static tig_button_handle_t dword_64C7B4;
 
 // 0x64C7B8
-static int dword_64C7B8[BASIC_SKILL_COUNT];
+static int charedit_initial_basic_skill_points[BASIC_SKILL_COUNT];
 
 // 0x64C7E8
 static tig_button_handle_t dword_64C7E8[15];
@@ -650,7 +650,7 @@ static tig_button_handle_t dword_64C824;
 static tig_font_handle_t charedit_morph15_gray_font;
 
 // 0x64C82C
-static int dword_64C82C[TECH_SKILL_COUNT];
+static int charedit_initial_tech_skill_points[TECH_SKILL_COUNT];
 
 // 0x64C83C
 static tig_button_handle_t dword_64C83C;
@@ -701,7 +701,7 @@ static tig_window_handle_t charedit_skills_win;
 static mes_file_handle_t charedit_mes_file;
 
 // 0x64CA74
-static const char* dword_64CA74[TRAINING_COUNT];
+static const char* charedit_training_names[TRAINING_COUNT];
 
 // 0x64CA84
 static const char* charedit_seconds_str;
@@ -761,13 +761,13 @@ static tig_font_handle_t charedit_nick16_white_font;
 static int charedit_scheme_ids[200];
 
 // 0x64D304
-static int dword_64D304[23];
+static int charedit_initial_stat_values[23];
 
 // 0x64D360
 static int charedit_spells_hint;
 
 // 0x64D364
-static int dword_64D364[COLLEGE_COUNT];
+static int charedit_initial_college_levels[COLLEGE_COUNT];
 
 // 0x64D3A4
 static tig_font_handle_t charedit_icons17_white_font;
@@ -824,7 +824,7 @@ static bool charedit_scheme_scrollbar_initialized;
 static const char* charedit_minimum_level_str;
 
 // 0x64DEEC
-static int dword_64DEEC[TECH_COUNT];
+static int charedit_initial_tech_degrees[TECH_COUNT];
 
 // 0x64DF0C
 static tig_font_handle_t charedit_pork12_white_font;
@@ -1141,23 +1141,23 @@ bool charedit_open(int64_t obj, ChareditMode mode)
 
     if (charedit_mode != CHAREDIT_MODE_3) {
         for (index = 0; index < 23; index++) {
-            dword_64D304[index] = charedit_stat_value_get(charedit_obj, index);
+            charedit_initial_stat_values[index] = charedit_stat_value_get(charedit_obj, index);
         }
 
         for (index = 0; index < TECH_COUNT; index++) {
-            dword_64DEEC[index] = tech_degree_get(charedit_obj, index);
+            charedit_initial_tech_degrees[index] = tech_degree_get(charedit_obj, index);
         }
 
         for (index = 0; index < COLLEGE_COUNT; index++) {
-            dword_64D364[index] = spell_college_level_get(charedit_obj, index);
+            charedit_initial_college_levels[index] = spell_college_level_get(charedit_obj, index);
         }
 
         for (index = 0; index < BASIC_SKILL_COUNT; index++) {
-            dword_64C7B8[index] = basic_skill_points_get(charedit_obj, index);
+            charedit_initial_basic_skill_points[index] = basic_skill_points_get(charedit_obj, index);
         }
 
         for (index = 0; index < TECH_SKILL_COUNT; index++) {
-            dword_64C82C[index] = tech_skill_points_get(charedit_obj, index);
+            charedit_initial_tech_skill_points[index] = tech_skill_points_get(charedit_obj, index);
         }
     }
 
@@ -1498,7 +1498,7 @@ bool charedit_window_message_filter(TigMessage* msg)
                 if (msg->data.button.button_handle == stru_5C8028[index].button_handle) {
                     param = stru_5C8028[index].art_num;
                     value = charedit_stat_value_get(charedit_obj, param);
-                    if (value == dword_64D304[param]) {
+                    if (value == charedit_initial_stat_values[param]) {
                         charedit_error_msg.str = charedit_errors[CHAREDIT_ERR_STAT_AT_ACCEPTED_LEVEL];
                         intgame_message_window_display_msg(&charedit_error_msg);
                         return true;
@@ -2220,7 +2220,7 @@ void sub_55BD10(int group)
                 stru_5C82F0[4 * dword_64E020 + index].value);
         }
 
-        v2[index] = dword_64CA74[training];
+        v2[index] = charedit_training_names[training];
         trainings[index] = training;
     }
 
@@ -2538,7 +2538,7 @@ void charedit_refresh_tech_win(void)
         && charedit_mode != CHAREDIT_MODE_PASSIVE
         && (charedit_mode == CHAREDIT_MODE_CREATE
             || charedit_mode == CHAREDIT_MODE_3
-            || dword_64DEEC[charedit_selected_tech] < degree)) {
+            || charedit_initial_tech_degrees[charedit_selected_tech] < degree)) {
         tig_art_interface_id_create(648, 0, 0, 0, &(button_data.art_id));
         button_data.x = charedit_tech_degree_icons_x[degree - 1];
         button_data.y = charedit_tech_degree_icons_y[degree - 1];
@@ -2819,7 +2819,7 @@ void charedit_refresh_spells_win(void)
         && charedit_mode != CHAREDIT_MODE_PASSIVE
         && (charedit_mode == CHAREDIT_MODE_CREATE
             || charedit_mode == CHAREDIT_MODE_3
-            || dword_64D364[dword_64E024] < cnt)) {
+            || charedit_initial_college_levels[dword_64E024] < cnt)) {
         tig_art_interface_id_create(648, 0, 0, 0, &(button_data.art_id));
         button_data.x = dword_5C8FF8[cnt - 1] - 503;
         button_data.y = dword_5C900C[cnt - 1] - 104;
@@ -3043,7 +3043,7 @@ bool charedit_skills_win_message_filter(TigMessage* msg)
                     // FIX: Original code has mess with plus/minus buttons, but
                     // it does not affect outcome as both plus/minus buttons
                     // refer to the same skills.
-                    if (basic_skill_points_get(charedit_obj, charedit_skills_minus_buttons[index].art_num) == dword_64C7B8[charedit_skills_minus_buttons[index].art_num]) {
+                    if (basic_skill_points_get(charedit_obj, charedit_skills_minus_buttons[index].art_num) == charedit_initial_basic_skill_points[charedit_skills_minus_buttons[index].art_num]) {
                         charedit_error_msg.str = charedit_errors[CHAREDIT_ERR_SKILL_AT_ACCEPTED_LEVEL];
                         intgame_message_window_display_msg(&charedit_error_msg);
                     } else {
@@ -3119,7 +3119,7 @@ bool sub_55D6F0(TigMessage* msg)
                 }
 
                 if (msg->data.button.button_handle == charedit_skills_minus_buttons[BASIC_SKILL_COUNT + index].button_handle) {
-                    if (tech_skill_points_get(charedit_obj, charedit_skills_minus_buttons[BASIC_SKILL_COUNT + index].art_num) == dword_64C82C[charedit_skills_minus_buttons[BASIC_SKILL_COUNT + index].art_num]) {
+                    if (tech_skill_points_get(charedit_obj, charedit_skills_minus_buttons[BASIC_SKILL_COUNT + index].art_num) == charedit_initial_tech_skill_points[charedit_skills_minus_buttons[BASIC_SKILL_COUNT + index].art_num]) {
                         charedit_error_msg.str = charedit_errors[CHAREDIT_ERR_SKILL_AT_ACCEPTED_LEVEL];
                         intgame_message_window_display_msg(&charedit_error_msg);
                     } else {
@@ -3343,7 +3343,7 @@ bool charedit_spells_win_message_filter(TigMessage* msg)
 
             if (msg->data.button.button_handle == spell_minus_bid) {
                 v1 = spell_college_level_get(charedit_obj, dword_64E024);
-                if (v1 == dword_64D364[dword_64E024]) {
+                if (v1 == charedit_initial_college_levels[dword_64E024]) {
                     charedit_error_msg.str = charedit_errors[CHAREDIT_ERR_SPELL_AT_ACCEPTED_LEVEL];
                     intgame_message_window_display_msg(&charedit_error_msg);
                 } else {
@@ -3508,7 +3508,7 @@ bool charedit_labels_init(void)
     }
 
     for (index = 0; index < TRAINING_COUNT; index++) {
-        dword_64CA74[index] = training_name(index);
+        charedit_training_names[index] = training_name(index);
     }
 
     for (index = 0; index < 4; index++) {

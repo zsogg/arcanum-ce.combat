@@ -83,7 +83,7 @@ static int hit_loc_penalties[HIT_LOC_COUNT] = {
 };
 
 // 0x5B57A8
-static int dword_5B57A8[TRAINING_COUNT] = {
+static int combat_critical_dodge_chance_tbl[TRAINING_COUNT] = {
     0,
     10,
     50,
@@ -963,7 +963,7 @@ int sub_4B3170(CombatContext* combat)
 
                     if ((skill_invocation.flags & SKILL_INVOCATION_CRITICAL) != 0) {
                         int training = basic_skill_training_get(combat->target_obj, BASIC_SKILL_DODGE);
-                        if (random_between(1, 100) <= dword_5B57A8[training]) {
+                        if (random_between(1, 100) <= combat_critical_dodge_chance_tbl[training]) {
                             combat->flags |= CF_CRITICAL;
                         }
                     }

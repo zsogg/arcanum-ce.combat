@@ -61,7 +61,7 @@ static bool item_cancel_decay(int64_t obj);
 static bool item_decay_timeevent_check(TimeEvent* timeevent);
 
 // 0x5B32A0
-static int dword_5B32A0[TIG_ART_AMMO_TYPE_COUNT] = {
+static int item_ammo_type_to_field_tbl[TIG_ART_AMMO_TYPE_COUNT] = {
     /*  TIG_ART_AMMO_TYPE_ARROW */ OBJ_F_CRITTER_ARROWS,
     /* TIG_ART_AMMO_TYPE_BULLET */ OBJ_F_CRITTER_BULLETS,
     /* TIG_ART_AMMO_TYPE_CHARGE */ OBJ_F_CRITTER_POWER_CELLS,
@@ -69,7 +69,7 @@ static int dword_5B32A0[TIG_ART_AMMO_TYPE_COUNT] = {
 };
 
 // 0x5B32B0
-static int dword_5B32B0[TIG_ART_AMMO_TYPE_COUNT] = {
+static int item_ammo_type_to_proto_tbl[TIG_ART_AMMO_TYPE_COUNT] = {
     /*  TIG_ART_AMMO_TYPE_ARROW */ BP_ARROW,
     /* TIG_ART_AMMO_TYPE_BULLET */ BP_BULLET,
     /* TIG_ART_AMMO_TYPE_CHARGE */ BP_BATTERY,
@@ -104,10 +104,10 @@ static int dword_5B32F0[] = {
 };
 
 // 0x5B3304
-static int dword_5B3304 = 24;
+static int item_defence_ac_weight = 24;
 
 // 0x5B3308
-static int dword_5B3308[RESISTANCE_TYPE_COUNT] = {
+static int item_defence_resistance_weight_tbl[RESISTANCE_TYPE_COUNT] = {
     /*     RESISTANCE_TYPE_NORMAL */ 25,
     /*       RESISTANCE_TYPE_FIRE */ 15,
     /* RESISTANCE_TYPE_ELECTRICAL */ 10,
@@ -1047,7 +1047,7 @@ int item_stack_fields_get(int64_t item_id, int* quantity_field_ptr)
         break;
     case OBJ_TYPE_AMMO:
         ammo_type = obj_field_int32_get(item_id, OBJ_F_AMMO_TYPE);
-        rc = dword_5B32A0[ammo_type];
+        rc = item_ammo_type_to_field_tbl[ammo_type];
         quantity_field = OBJ_F_AMMO_QUANTITY;
         break;
     default:
@@ -2417,12 +2417,12 @@ int item_total_defence(int64_t obj)
     int v2;
     int resistance_type;
 
-    v1 = dword_5B3304 * object_get_ac(obj, true);
-    v2 = dword_5B3304;
+    v1 = item_defence_ac_weight * object_get_ac(obj, true);
+    v2 = item_defence_ac_weight;
 
     for (resistance_type = 0; resistance_type < RESISTANCE_TYPE_COUNT; resistance_type++) {
-        v1 += dword_5B3308[resistance_type] * object_get_resistance(obj, resistance_type, true);
-        v2 += dword_5B3308[resistance_type];
+        v1 += item_defence_resistance_weight_tbl[resistance_type] * object_get_resistance(obj, resistance_type, true);
+        v2 += item_defence_resistance_weight_tbl[resistance_type];
     }
 
     return 2 * (v1 / (v2 + 6));
@@ -3100,9 +3100,9 @@ int64_t item_ammo_obj(int64_t obj, int ammo_type)
     switch (obj_field_int32_get(obj, OBJ_F_TYPE)) {
     case OBJ_TYPE_PC:
     case OBJ_TYPE_NPC:
-        return obj_field_handle_get(obj, dword_5B32A0[ammo_type]);
+        return obj_field_handle_get(obj, item_ammo_type_to_field_tbl[ammo_type]);
     case OBJ_TYPE_CONTAINER:
-        return item_find_by_proto(obj, dword_5B32B0[ammo_type], 0);
+        return item_find_by_proto(obj, item_ammo_type_to_proto_tbl[ammo_type], 0);
     default:
         return OBJ_HANDLE_NULL;
     }
@@ -3170,7 +3170,7 @@ int64_t item_ammo_create(int quantity, int ammo_type, int64_t loc)
 {
     int64_t ammo_obj;
 
-    if (mp_object_create(dword_5B32B0[ammo_type], loc, &ammo_obj)) {
+    if (mp_object_create(item_ammo_type_to_proto_tbl[ammo_type], loc, &ammo_obj)) {
         obj_field_int32_set(ammo_obj, OBJ_F_AMMO_QUANTITY, quantity);
     }
 
