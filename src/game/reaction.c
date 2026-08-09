@@ -225,7 +225,7 @@ int sub_4C0D00(int64_t npc_obj, int64_t pc_obj, unsigned int flags)
     value = effect_adjust_reaction(npc_obj, value);
 
     if (value < 50
-        && sub_459040(npc_obj, OSF_MIND_CONTROLLED, &mind_controlled_by_obj)
+        && magictech_find_effect_caster(npc_obj, OSF_MIND_CONTROLLED, &mind_controlled_by_obj)
         && mind_controlled_by_obj == pc_obj) {
         value = 50;
     }
@@ -268,7 +268,7 @@ void reaction_adj_ex(int64_t npc_obj, int64_t pc_obj, int value, bool apply_effe
         return;
     }
 
-    if (sub_459040(npc_obj, OSF_MIND_CONTROLLED, &mind_controlled_by_obj)
+    if (magictech_find_effect_caster(npc_obj, OSF_MIND_CONTROLLED, &mind_controlled_by_obj)
         && mind_controlled_by_obj == pc_obj) {
         return;
     }

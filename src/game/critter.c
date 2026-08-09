@@ -770,7 +770,7 @@ void sub_45DC90(int64_t killer_obj, int64_t victim_obj, bool a3)
     int v1;
     int alignment;
 
-    if (!sub_459040(victim_obj, OSF_SUMMONED, &summoner_obj) || summoner_obj != killer_obj) {
+    if (!magictech_find_effect_caster(victim_obj, OSF_SUMMONED, &summoner_obj) || summoner_obj != killer_obj) {
         alignment2 = stat_level_get(victim_obj, STAT_ALIGNMENT);
         if (alignment2 < 0) {
             alignment1 = stat_level_get(killer_obj, STAT_ALIGNMENT);
@@ -949,7 +949,7 @@ bool critter_disband(int64_t obj, bool force)
             }
 
             // Mind-controlled critters cannot voluntarily leave their master.
-            if (sub_459040(obj, OSF_MIND_CONTROLLED, &v1)) {
+            if (magictech_find_effect_caster(obj, OSF_MIND_CONTROLLED, &v1)) {
                 return false;
             }
         }

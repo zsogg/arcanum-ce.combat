@@ -7316,7 +7316,7 @@ bool anim_pay_spell_cost(AnimRunInfo* run_info)
         return false;
     }
 
-    if (!sub_450940(run_info->cur_stack_data->params[AGDATA_SPELL_DATA].data)) {
+    if (!magictech_charge_run_fatigue(run_info->cur_stack_data->params[AGDATA_SPELL_DATA].data)) {
         return false;
     }
 
@@ -7363,14 +7363,14 @@ bool anim_set_spell_projectile_art(AnimRunInfo* run_info)
 {
     tig_art_id_t art_id;
 
-    art_id = sub_458B70(run_info->params[0].data);
+    art_id = magictech_projectile_art_id_get(run_info->params[0].data);
     if (art_id == TIG_ART_ID_INVALID) {
         return false;
     }
 
     run_info->cur_stack_data->params[AGDATA_SCRATCH_VAL4].data = art_id;
 
-    sub_456E00(run_info->params[0].data);
+    magictech_add_casting_eye_candy(run_info->params[0].data);
 
     return true;
 }
@@ -7378,17 +7378,17 @@ bool anim_set_spell_projectile_art(AnimRunInfo* run_info)
 // 0x429C80
 bool anim_begin_spell(AnimRunInfo* run_info)
 {
-    if (!sub_456A90(run_info->params[0].data)) {
+    if (!magictech_target_is_valid(run_info->params[0].data)) {
         return false;
     }
 
-    if (sub_458B70(run_info->params[0].data) == TIG_ART_ID_INVALID) {
-        sub_456E00(run_info->params[0].data);
+    if (magictech_projectile_art_id_get(run_info->params[0].data) == TIG_ART_ID_INVALID) {
+        magictech_add_casting_eye_candy(run_info->params[0].data);
     }
 
     run_info->flags |= 0xC;
 
-    sub_456F70(run_info->params[0].data);
+    magictech_begin(run_info->params[0].data);
 
     return true;
 }
@@ -7444,7 +7444,7 @@ bool anim_cleanup_spell(AnimRunInfo* run_info)
     if ((run_info->flags & 0x08) == 0 && spell != -1) {
         if (!tig_net_is_active()
             || tig_net_is_host()) {
-            sub_456FA0(spell, 1);
+            magictech_release(spell, 1);
         }
 
         run_info->cur_stack_data->params[AGDATA_SPELL_DATA].data = -1;
@@ -7495,7 +7495,7 @@ bool anim_set_projectile_speed(AnimRunInfo* run_info)
         return false;
     }
 
-    run_info->cur_stack_data->params[AGDATA_SCRATCH_VAL5].data = sub_458CA0(run_info->params[0].data);
+    run_info->cur_stack_data->params[AGDATA_SCRATCH_VAL5].data = magictech_projectile_speed_get(run_info->params[0].data);
 
     return true;
 }
@@ -7511,7 +7511,7 @@ bool anim_load_spell_visuals(AnimRunInfo* run_info)
     int overlay_light_idx;
     int fx_idx;
 
-    if (!sub_456A90(run_info->params[0].data)) {
+    if (!magictech_target_is_valid(run_info->params[0].data)) {
         return false;
     }
 
@@ -7632,7 +7632,7 @@ bool anim_end_spell(AnimRunInfo* run_info)
 
     ASSERT(obj != OBJ_HANDLE_NULL); // 7416, "obj != OBJ_HANDLE_NULL"
 
-    sub_456FA0(run_info->params[1].data, 0x1);
+    magictech_release(run_info->params[1].data, 0x1);
 
     return true;
 }

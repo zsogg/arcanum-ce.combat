@@ -3142,7 +3142,7 @@ int ai_check_follow(int64_t npc_obj, int64_t pc_obj, bool ignore_charisma_limits
     int pc_max_followers;
 
     if ((obj_field_int32_get(npc_obj, OBJ_F_SPELL_FLAGS) & OSF_MIND_CONTROLLED) != 0) {
-        if (sub_459040(npc_obj, OSF_MIND_CONTROLLED, &mind_controlled_by_obj)) {
+        if (magictech_find_effect_caster(npc_obj, OSF_MIND_CONTROLLED, &mind_controlled_by_obj)) {
             if (mind_controlled_by_obj == pc_obj) {
                 return AI_FOLLOW_OK;
             }
@@ -3216,7 +3216,7 @@ int ai_check_leader(int64_t npc_obj, int64_t pc_obj)
     obj_field_int32_set(npc_obj, OBJ_F_CRITTER_FLAGS2, critter_flags2 & ~(OCF2_CHECK_ALIGN_BAD | OCF2_CHECK_ALIGN_GOOD | OCF2_CHECK_REACTION_BAD));
 
     if ((obj_field_int32_get(npc_obj, OBJ_F_SPELL_FLAGS) & OSF_MIND_CONTROLLED) != 0) {
-        if (sub_459040(npc_obj, OSF_MIND_CONTROLLED, &mind_controlled_by_obj)) {
+        if (magictech_find_effect_caster(npc_obj, OSF_MIND_CONTROLLED, &mind_controlled_by_obj)) {
             if (mind_controlled_by_obj == pc_obj) {
                 return AI_FOLLOW_OK;
             }
@@ -3266,7 +3266,7 @@ int ai_check_upset_attacking(int64_t source_obj, int64_t target_obj, int64_t lea
     AiParams params;
 
     if ((obj_field_int32_get(source_obj, OBJ_F_SPELL_FLAGS) & OSF_MIND_CONTROLLED) != 0) {
-        if (sub_459040(source_obj, OSF_MIND_CONTROLLED, &mind_controlled_by_obj)) {
+        if (magictech_find_effect_caster(source_obj, OSF_MIND_CONTROLLED, &mind_controlled_by_obj)) {
             if (mind_controlled_by_obj == leader_obj) {
                 return AI_UPSET_ATTACKING_NONE;
             }

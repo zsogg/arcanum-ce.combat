@@ -62,7 +62,7 @@ static bool sub_44FFA0(int a1, const char* a2, int a3);
 static void sub_450090(mes_file_handle_t msg_file, MagicTechInfo* info, int num, int magictech);
 static void sub_4501D0(mes_file_handle_t msg_file, MagicTechInfo* info, int num, int magictech);
 static void sub_450240(void);
-static bool sub_4507D0(int64_t obj, int magictech);
+static bool magictech_charge_spell_fatigue(int64_t obj, int magictech);
 static int sub_450B90(int64_t obj);
 static void sub_450C10(int64_t obj, unsigned int flags);
 static void magictech_process(void);
@@ -128,7 +128,7 @@ static bool sub_456430(int64_t a1, int64_t a2, MagicTechInfo* magictech);
 static void magictech_preload_art(MagicTechRunInfo* run_info);
 static void sub_457030(int mt_id, int action);
 static bool sub_4570E0(TimeEvent* timeevent);
-static void sub_457270(int mt_id);
+static void magictech_end(int mt_id);
 static void sub_457530(int mt_id);
 static void sub_457580(MagicTechInfo* info, int magictech);
 static void magictech_build_aoe_info(MagicTechInfo* info, char* str);
@@ -1072,20 +1072,20 @@ void magictech_break_nodes_to_map(const char* map)
         if ((magictech_run_info[idx].flags & MAGICTECH_RUN_ACTIVE) != 0) {
             if (magictech_run_info[idx].source_obj.obj != OBJ_HANDLE_NULL
                 && !teleport_is_teleporting_obj(magictech_run_info[idx].source_obj.obj)) {
-                sub_457270(idx);
+                magictech_end(idx);
                 continue;
             }
 
             if (magictech_run_info[idx].parent_obj.obj != magictech_run_info[idx].source_obj.obj
                 && magictech_run_info[idx].parent_obj.obj != OBJ_HANDLE_NULL
                 && !teleport_is_teleporting_obj(magictech_run_info[idx].parent_obj.obj)) {
-                sub_457270(idx);
+                magictech_end(idx);
                 continue;
             }
 
             if (magictech_run_info[idx].target_obj.obj != OBJ_HANDLE_NULL
                 && !teleport_is_teleporting_obj(magictech_run_info[idx].target_obj.obj)) {
-                sub_457270(idx);
+                magictech_end(idx);
                 continue;
             }
 
@@ -1093,7 +1093,7 @@ void magictech_break_nodes_to_map(const char* map)
             while (node != NULL) {
                 if (node->obj != OBJ_HANDLE_NULL
                     && !teleport_is_teleporting_obj(node->obj)) {
-                    sub_457270(idx);
+                    magictech_end(idx);
                     break;
                 }
                 node = node->next;
@@ -1106,7 +1106,7 @@ void magictech_break_nodes_to_map(const char* map)
             while (node != NULL) {
                 if (node->obj != OBJ_HANDLE_NULL
                     && !teleport_is_teleporting_obj(node->obj)) {
-                    sub_457270(idx);
+                    magictech_end(idx);
                     break;
                 }
                 node = node->next;
@@ -1540,7 +1540,7 @@ MagicTechDurationInfo* magictech_get_duration(int magictech)
 }
 
 // 0x450420
-bool sub_450420(int64_t obj, int cost, bool a3, int magictech)
+bool magictech_charge_fatigue(int64_t obj, int cost, bool a3, int magictech)
 {
     MagicTechInfo* info;
     bool charges_from_cells = false;
@@ -1698,11 +1698,11 @@ bool sub_450420(int64_t obj, int cost, bool a3, int magictech)
 // 0x4507B0
 void sub_4507B0(int64_t obj, int magictech)
 {
-    sub_4507D0(obj, magictech);
+    magictech_charge_spell_fatigue(obj, magictech);
 }
 
 // 0x4507D0
-bool sub_4507D0(int64_t obj, int magictech)
+bool magictech_charge_spell_fatigue(int64_t obj, int magictech)
 {
     int cost;
 
@@ -1729,7 +1729,7 @@ bool sub_4507D0(int64_t obj, int magictech)
         cost *= 2;
     }
 
-    return sub_450420(obj, cost, true, magictech);
+    return magictech_charge_fatigue(obj, cost, true, magictech);
 }
 
 // 0x4508A0
@@ -1754,11 +1754,11 @@ bool magictech_can_charge_spell_fatigue(int64_t obj, int magictech)
         cost *= 2;
     }
 
-    return sub_450420(obj, cost, false, magictech);
+    return magictech_charge_fatigue(obj, cost, false, magictech);
 }
 
 // 0x450940
-bool sub_450940(int mt_id)
+bool magictech_charge_run_fatigue(int mt_id)
 {
     MagicTechRunInfo* run_info;
     int cost;
@@ -1789,7 +1789,7 @@ bool sub_450940(int mt_id)
         cost *= 2;
     }
 
-    return sub_450420(run_info->source_obj.obj, cost, 0, run_info->spell);
+    return magictech_charge_fatigue(run_info->source_obj.obj, cost, 0, run_info->spell);
 }
 
 // 0x450A50
@@ -2212,7 +2212,7 @@ void MTComponentCast_ProcFunc(void)
 void MTComponentChargeNBranch_ProcFunc(void)
 {
     if (magictech_cur_run_info->source_obj.obj != OBJ_HANDLE_NULL
-        && !sub_450420(magictech_cur_run_info->source_obj.obj, magictech_cur_component->data.charge_branch.cost, true, magictech_cur_run_info->spell)) {
+        && !magictech_charge_fatigue(magictech_cur_run_info->source_obj.obj, magictech_cur_component->data.charge_branch.cost, true, magictech_cur_run_info->spell)) {
         if (magictech_cur_component->data.charge_branch.branch != -1) {
             dword_5E7624 = true;
             dword_5E6D90 = SDL_min(magictech_cur_component->data.charge_branch.branch, magictech_cur_component_list->cnt);
@@ -3089,7 +3089,7 @@ bool sub_452F20(void)
 
             if (v2) {
                 if ((magictech_cur_spell_info->flags & 0x100) == 0
-                    && !sub_4507D0(magictech_cur_run_info->source_obj.obj, magictech_cur_run_info->spell)) {
+                    && !magictech_charge_spell_fatigue(magictech_cur_run_info->source_obj.obj, magictech_cur_run_info->spell)) {
                     v1 = true;
                     mes_file_entry.num = 600; // "Not enough Energy."
                 }
@@ -3194,7 +3194,7 @@ bool sub_4532F0(int64_t obj, int magictech)
         cost *= 2;
     }
 
-    return sub_450420(obj, cost, true, magictech);
+    return magictech_charge_fatigue(obj, cost, true, magictech);
 }
 
 // 0x453370
@@ -3219,7 +3219,7 @@ bool sub_453370(int64_t obj, int magictech, int a3)
         cost *= 2;
     }
 
-    return sub_450420(obj, cost, true, magictech);
+    return magictech_charge_fatigue(obj, cost, true, magictech);
 }
 
 // 0x453410
@@ -4471,8 +4471,8 @@ bool sub_455550(TargetContext* target_ctx, MagicTechRunInfo* run_info)
     run_info->flags |= MAGICTECH_RUN_REFLECTED;
 
     if ((run_info->field_138 & 0x2000) == 0
-        && sub_459040(target_ctx->target_obj, OSF_FULL_REFLECTION, &parent_obj)) {
-        sub_450420(parent_obj, dword_5E762C, true, 10000);
+        && magictech_find_effect_caster(target_ctx->target_obj, OSF_FULL_REFLECTION, &parent_obj)) {
+        magictech_charge_fatigue(parent_obj, dword_5E762C, true, 10000);
     }
 
     if (target_ctx->target_obj == run_info->source_obj.obj) {
@@ -4892,8 +4892,8 @@ void sub_455C30(MagicTechInvocation* mt_invocation)
             }
         }
     } else {
-        if (sub_458B70(run_info->id) == -1) {
-            sub_456E00(run_info->id);
+        if (magictech_projectile_art_id_get(run_info->id) == -1) {
+            magictech_add_casting_eye_candy(run_info->id);
         }
 
         timeevent.type = TIMEEVENT_TYPE_MAGICTECH;
@@ -5107,7 +5107,7 @@ bool sub_456A10(int64_t a1, int64_t a2, int64_t a3)
 }
 
 // 0x456A90
-bool sub_456A90(int mt_id)
+bool magictech_target_is_valid(int mt_id)
 {
     MagicTechRunInfo* run_info;
     uint64_t* tgt_ptr;
@@ -5241,7 +5241,7 @@ bool sub_456D20(int mt_id, tig_art_id_t* art_id_ptr, tig_art_id_t* light_art_id_
 }
 
 // 0x456E00
-void sub_456E00(int mt_id)
+void magictech_add_casting_eye_candy(int mt_id)
 {
     MagicTechRunInfo* run_info;
     AnimFxNode node;
@@ -5289,7 +5289,7 @@ void magictech_fx_remove(int64_t obj, int fx)
 }
 
 // 0x456F70
-void sub_456F70(int mt_id)
+void magictech_begin(int mt_id)
 {
     MagicTechRunInfo* run_info;
 
@@ -5300,13 +5300,13 @@ void sub_456F70(int mt_id)
 }
 
 // 0x456FA0
-void sub_456FA0(int mt_id, unsigned int flags)
+void magictech_release(int mt_id, unsigned int flags)
 {
     if (mt_id != -1
         && (!tig_net_is_active()
             || tig_net_is_host())) {
         if ((flags & 0x1) != 0) {
-            sub_4507D0(magictech_run_info[mt_id].source_obj.obj,
+            magictech_charge_spell_fatigue(magictech_run_info[mt_id].source_obj.obj,
                 magictech_run_info[mt_id].spell);
         }
         magictech_id_free_lock(mt_id);
@@ -5421,7 +5421,7 @@ void magictech_interrupt_delayed(int mt_id)
     if (magictech_id_to_run_info(mt_id, &run_info)
         && run_info->action == MAGICTECH_ACTION_BEGIN
         && (run_info->flags & MAGICTECH_RUN_0x04) == 0) {
-        sub_456FA0(mt_id, 1);
+        magictech_release(mt_id, 1);
         return;
     }
 
@@ -5436,7 +5436,7 @@ void magictech_interrupt_delayed(int mt_id)
 }
 
 // 0x457270
-void sub_457270(int mt_id)
+void magictech_end(int mt_id)
 {
     MagicTechRunInfo* run_info;
 
@@ -6188,7 +6188,7 @@ const char* magictech_get_name(int magictech)
 }
 
 // 0x458B70
-tig_art_id_t sub_458B70(int mt_id)
+tig_art_id_t magictech_projectile_art_id_get(int mt_id)
 {
     MagicTechRunInfo* run_info;
     AnimFxListEntry* v2;
@@ -6230,7 +6230,7 @@ void sub_458C00(int spell, int64_t obj)
 }
 
 // 0x458CA0
-int sub_458CA0(int mt_id)
+int magictech_projectile_speed_get(int mt_id)
 {
     MagicTechRunInfo* run_info;
     AnimFxListEntry* fx_info;
@@ -6336,7 +6336,7 @@ bool magictech_find_next(int64_t obj, int* mt_id_ptr)
 }
 
 // 0x459040
-bool sub_459040(int64_t obj, unsigned int flags, int64_t* parent_obj_ptr)
+bool magictech_find_effect_caster(int64_t obj, unsigned int flags, int64_t* parent_obj_ptr)
 {
     int idx;
     MagicTechObjectNode* node;
@@ -6752,7 +6752,7 @@ void sub_4598D0(int64_t obj)
                 node = magictech_run_info[idx].summoned_obj;
                 while (node != NULL) {
                     if (node->obj == obj) {
-                        sub_457270(magictech_run_info[idx].id);
+                        magictech_end(magictech_run_info[idx].id);
                         break;
                     }
                     node = node->next;
@@ -6764,7 +6764,7 @@ void sub_4598D0(int64_t obj)
     for (idx = 0; idx < 512; idx++) {
         if (idx != magictech_cur_id) {
             if (magictech_run_info[idx].parent_obj.obj == obj) {
-                sub_457270(magictech_run_info[idx].id);
+                magictech_end(magictech_run_info[idx].id);
             }
         }
     }
@@ -6773,7 +6773,7 @@ void sub_4598D0(int64_t obj)
         if ((magictech_run_info[idx].flags & MAGICTECH_RUN_ACTIVE) != 0
             && idx != magictech_cur_id
             && magictech_run_info[idx].target_obj.obj == obj) {
-            sub_457270(magictech_run_info[idx].id);
+            magictech_end(magictech_run_info[idx].id);
         }
     }
 }
