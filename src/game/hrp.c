@@ -1,7 +1,21 @@
 #include "game/hrp.h"
 
+#include "game/highres_config.h"
+
 static int hrp_iso_window_width;
 static int hrp_iso_window_height;
+
+Gravity hrp_menu_gravity(void)
+{
+    switch (highres_config_get()->menu_position) {
+    case HIGHRES_MENU_POSITION_TOP:
+        return GRAVITY_TOP;
+    case HIGHRES_MENU_POSITION_BOTTOM:
+        return GRAVITY_BOTTOM;
+    default:
+        return GRAVITY_CENTER_VERTICAL;
+    }
+}
 
 bool hrp_init(GameInitInfo* init_info)
 {

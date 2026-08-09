@@ -2151,7 +2151,8 @@ bool inven_ui_message_filter(TigMessage* msg)
     // area.
     if (msg->type == TIG_MESSAGE_MOUSE) {
         TigRect rect = { 0, 0, 800, 600 };
-        hrp_apply(&rect, GRAVITY_CENTER_HORIZONTAL | GRAVITY_CENTER_VERTICAL);
+        // MenuPosition: inventory locks that panel, so its mouse math must match.
+        hrp_apply(&rect, GRAVITY_CENTER_HORIZONTAL | hrp_menu_gravity());
         msg->data.mouse.x -= rect.x;
         msg->data.mouse.y -= rect.y;
     }

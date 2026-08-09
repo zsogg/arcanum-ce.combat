@@ -564,7 +564,8 @@ void written_ui_create(void)
     window_data.flags = TIG_WINDOW_MESSAGE_FILTER;
     window_data.rect = written_ui_frame;
     window_data.message_filter = written_ui_message_filter;
-    hrp_apply(&(window_data.rect), GRAVITY_CENTER_HORIZONTAL | GRAVITY_CENTER_VERTICAL);
+    // MenuPosition: written_ui_frame is one of the patch's HeightBonus rects.
+    hrp_apply(&(window_data.rect), GRAVITY_CENTER_HORIZONTAL | hrp_menu_gravity());
 
     if (tig_window_create(&window_data, &written_ui_window) != TIG_OK) {
         tig_debug_printf("written_ui_create: ERROR: window create failed!\n");

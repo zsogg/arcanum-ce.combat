@@ -8323,7 +8323,8 @@ bool intgame_big_window_create(void)
     window_data.rect.height = 400;
     window_data.background_color = 0;
     window_data.message_filter = intgame_big_window_message_filter;
-    hrp_apply(&(window_data.rect), GRAVITY_CENTER_HORIZONTAL | GRAVITY_CENTER_VERTICAL);
+    // MenuPosition: intgame_big_window_create places the shared panel.
+    hrp_apply(&(window_data.rect), GRAVITY_CENTER_HORIZONTAL | hrp_menu_gravity());
 
     if (tig_window_create(&window_data, &intgame_big_window_handle) != TIG_OK) {
         return false;

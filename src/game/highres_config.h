@@ -31,9 +31,24 @@ typedef struct HighResConfig {
      */
     int broadcast_limit;
 
+    /**
+     * Where the shared "big window" panel and the character-editor windows sit
+     * vertically: 0 top, 1 centre, 2 bottom. `MenuPosition` in config.ini.
+     *
+     * The patch spells this as Base.tph's `HeightBonus`, which is 0,
+     * (Height - 600) / 2 or (Height - 600); `hrp_menu_gravity` maps those onto
+     * GRAVITY_TOP, GRAVITY_CENTER_VERTICAL and GRAVITY_BOTTOM. Default 1, which
+     * is what CE did unconditionally before and is also the patch's default.
+     */
+    int menu_position;
+
     bool logos;
     bool intro;
 } HighResConfig;
+
+#define HIGHRES_MENU_POSITION_TOP 0
+#define HIGHRES_MENU_POSITION_CENTER 1
+#define HIGHRES_MENU_POSITION_BOTTOM 2
 
 void highres_config_load(void);
 const HighResConfig* highres_config_get(void);

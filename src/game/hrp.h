@@ -12,6 +12,20 @@ typedef unsigned int Gravity;
 #define GRAVITY_CENTER_HORIZONTAL 0x10
 #define GRAVITY_CENTER_VERTICAL 0x20
 
+/**
+ * The vertical gravity the `MenuPosition` setting asks for.
+ *
+ * Callers that place, or un-project mouse input for, one of the panels the
+ * high resolution patch moves with `HeightBonus` use this in place of a
+ * hardcoded `GRAVITY_CENTER_VERTICAL`. Placement and un-projection for the same
+ * panel must pass the same value or clicks land off the controls, which is why
+ * this is a function rather than a constant per call site.
+ *
+ * Panels the patch always centres - the main menu, the slide show, the pc lens,
+ * the turn-based and confirmation modals - keep `GRAVITY_CENTER_VERTICAL`.
+ */
+Gravity hrp_menu_gravity(void);
+
 bool hrp_init(GameInitInfo* init_info);
 void hrp_resize(GameResizeInfo* resize_info);
 void hrp_apply(TigRect* rect, Gravity gravity);

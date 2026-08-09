@@ -2057,6 +2057,13 @@ void sub_55B880(tig_window_handle_t window_handle, tig_font_handle_t font, S5C81
             rect.height = font_desc.height;
         }
 
+        // NOTE: Left on GRAVITY_CENTER_VERTICAL while the charedit windows
+        // around it follow MenuPosition, because which space this rect is in is
+        // not clear: the branch above makes it window-relative by subtracting
+        // window_data.rect.x, but only the x, and then this re-adds both axes.
+        // The patch does not touch 0x55B880 either, so there is no evidence
+        // from that side. If charedit labels sit wrong at MenuPosition 0 or 2,
+        // this is the line.
         hrp_apply(&rect, GRAVITY_CENTER_HORIZONTAL | GRAVITY_CENTER_VERTICAL);
 
         art_blit_info.src_rect = &rect;
@@ -2089,7 +2096,8 @@ bool charedit_create_skills_win(void)
     window_data.rect.height = art_frame_data.height;
     window_data.background_color = 0;
     window_data.message_filter = charedit_skills_win_message_filter;
-    hrp_apply(&(window_data.rect), GRAVITY_CENTER_HORIZONTAL | GRAVITY_CENTER_VERTICAL);
+    // MenuPosition: charedit_create_skills_win.
+    hrp_apply(&(window_data.rect), GRAVITY_CENTER_HORIZONTAL | hrp_menu_gravity());
 
     if (tig_window_create(&window_data, &charedit_skills_win) != TIG_OK) {
         return false;
@@ -2327,7 +2335,8 @@ bool charedit_create_tech_win(void)
     window_data.rect.height = art_frame_data.height;
     window_data.background_color = 0;
     window_data.message_filter = charedit_tech_win_message_filter;
-    hrp_apply(&(window_data.rect), GRAVITY_CENTER_HORIZONTAL | GRAVITY_CENTER_VERTICAL);
+    // MenuPosition: charedit_create_tech_win.
+    hrp_apply(&(window_data.rect), GRAVITY_CENTER_HORIZONTAL | hrp_menu_gravity());
 
     if (tig_window_create(&window_data, &charedit_tech_win) != TIG_OK) {
         return false;
@@ -2571,7 +2580,8 @@ bool charedit_create_spells_win(void)
     window_data.rect.height = art_frame_data.height;
     window_data.background_color = 0;
     window_data.message_filter = charedit_spells_win_message_filter;
-    hrp_apply(&(window_data.rect), GRAVITY_CENTER_HORIZONTAL | GRAVITY_CENTER_VERTICAL);
+    // MenuPosition: charedit_create_spells_win.
+    hrp_apply(&(window_data.rect), GRAVITY_CENTER_HORIZONTAL | hrp_menu_gravity());
 
     if (tig_window_create(&window_data, &charedit_spells_win) != TIG_OK) {
         return false;
@@ -2858,7 +2868,8 @@ bool charedit_scheme_win_create(void)
     window_data.rect.height = art_frame_data.height;
     window_data.background_color = 0;
     window_data.message_filter = charedit_scheme_win_message_filter;
-    hrp_apply(&(window_data.rect), GRAVITY_CENTER_HORIZONTAL | GRAVITY_CENTER_VERTICAL);
+    // MenuPosition: charedit_scheme_win_create.
+    hrp_apply(&(window_data.rect), GRAVITY_CENTER_HORIZONTAL | hrp_menu_gravity());
 
     if (tig_window_create(&window_data, &charedit_scheme_win) != TIG_OK) {
         return false;
