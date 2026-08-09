@@ -94,7 +94,7 @@ void sub_430490(int64_t obj, int offset_x, int offset_y);
 bool get_always_run(int64_t obj);
 void set_always_run(bool value);
 bool anim_goal_animate(int64_t obj, int anim);
-void sub_432D90(int64_t obj);
+void anim_create_blood_splat(int64_t obj);
 void anim_play_blood_splotch_fx(int64_t obj, int blood_splotch_type, int damage_type, CombatContext* combat);
 void anim_lag_icon_add(int64_t obj);
 void anim_lag_icon_remove(int64_t obj);

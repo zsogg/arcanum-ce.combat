@@ -79,7 +79,7 @@ static int sub_426320(AnimPath* anim_path, int64_t from, int64_t to, int64_t obj
 static int sub_426500(int64_t obj, int64_t to, AnimPath* path, unsigned int flags);
 static bool anim_create_straight_path(AnimRunInfo* run_info);
 static bool sub_4268F0(AnimRunInfo* run_info);
-static bool sub_4269D0(AnimRunInfo* run_info);
+static bool anim_create_projectile_path(AnimRunInfo* run_info);
 static bool sub_426A80(AnimRunInfo* run_info);
 static bool anim_is_concealed_npc(AnimRunInfo* run_info);
 static bool anim_is_prone(AnimRunInfo* run_info);
@@ -134,12 +134,12 @@ static bool anim_spell_target_is_valid(AnimRunInfo* run_info);
 static bool anim_set_spell_projectile_art(AnimRunInfo* run_info);
 static bool anim_begin_spell(AnimRunInfo* run_info);
 static bool anim_cleanup_spell(AnimRunInfo* run_info);
-static bool sub_429E70(AnimRunInfo* run_info);
-static bool sub_429ED0(AnimRunInfo* run_info);
+static bool anim_cleanup_destroy_obj(AnimRunInfo* run_info);
+static bool anim_set_projectile_speed(AnimRunInfo* run_info);
 static bool anim_load_spell_visuals(AnimRunInfo* run_info);
 static bool sub_42A010(AnimRunInfo* run_info);
-static bool sub_42A180(AnimRunInfo* run_info);
-static bool sub_42A200(AnimRunInfo* run_info);
+static bool anim_is_on_target_tile(AnimRunInfo* run_info);
+static bool anim_end_spell(AnimRunInfo* run_info);
 static bool AGexecuteMagicTechCallback(AnimRunInfo* run_info);
 static bool AGexecuteMagicTechEndCallback(AnimRunInfo* run_info);
 static bool anim_run_skill_invocation(AnimRunInfo* run_info);
@@ -171,7 +171,7 @@ static bool AGsetObjArtAnim(AnimRunInfo* run_info);
 static bool anim_set_scratch_obj(AnimRunInfo* run_info);
 static bool anim_set_skill(AnimRunInfo* run_info);
 static bool anim_set_range(AnimRunInfo* run_info);
-static bool sub_42BEC0(AnimRunInfo* run_info);
+static bool anim_update_target_tile(AnimRunInfo* run_info);
 static bool anim_set_follow_range(AnimRunInfo* run_info);
 static bool anim_is_crowding_target(AnimRunInfo* run_info);
 static bool anim_face_target(AnimRunInfo* run_info);
@@ -184,7 +184,7 @@ static bool anim_face_path_direction(AnimRunInfo* run_info);
 static bool anim_face_spell_target(AnimRunInfo* run_info);
 static bool anim_is_not_animating(AnimRunInfo* run_info);
 static bool anim_reached_action_frame(AnimRunInfo* run_info);
-static bool sub_42CAC0(AnimRunInfo* run_info);
+static bool anim_cleanup_projectile(AnimRunInfo* run_info);
 static bool AGbeginAnimAnim(AnimRunInfo* run_info);
 static bool anim_advance_frame(AnimRunInfo* run_info);
 static bool sub_42CDF0(AnimRunInfo* run_info);
@@ -228,18 +228,18 @@ static bool sub_42FD70(AnimRunInfo* run_info, int64_t obj, AnimPath* path, int64
 static bool sub_42FEA0(AnimRunInfo* run_info);
 static bool sub_42FEB0(AnimRunInfo* run_info);
 static bool sub_42FEC0(AnimRunInfo* run_info);
-static bool sub_42FED0(AnimRunInfo* run_info);
-static bool sub_42FF40(AnimRunInfo* run_info);
+static bool anim_add_death_blood(AnimRunInfo* run_info);
+static bool anim_finish_death(AnimRunInfo* run_info);
 static bool sub_42FFE0(AnimRunInfo* run_info);
 static int sub_4302D0(LocRect* loc_rect, ObjectList* objects);
 static bool sub_4303D0(int64_t obj);
 static bool AGupdateAnimMove(AnimRunInfo* run_info);
 static bool anim_cleanup_move_path(AnimRunInfo* run_info);
 static int sub_430FC0(AnimRunInfo* run_info);
-static bool sub_431130(AnimRunInfo* run_info);
-static bool sub_431150(AnimRunInfo* run_info);
-static bool sub_4311F0(AnimRunInfo* run_info);
-static bool sub_431290(AnimRunInfo* run_info);
+static bool anim_float_not_started(AnimRunInfo* run_info);
+static bool anim_float_bob(AnimRunInfo* run_info);
+static bool anim_float_begin(AnimRunInfo* run_info);
+static bool anim_float_end(AnimRunInfo* run_info);
 static bool anim_eye_candy_not_applied(AnimRunInfo* run_info);
 static bool AGupdateAnimEyeCandy(AnimRunInfo* run_info);
 static void sub_431550(AnimRunInfo* run_info, int64_t obj);
@@ -985,18 +985,18 @@ static AnimGoalNode anim_goal_node_shoot_spell = {
         /*  1 */ { anim_is_at_location, { AGDATA_SELF_OBJ, AGDATA_FORCE_TARGET_TILE }, -1, 2, ANIM_DELAY_NONE, 4, ANIM_DELAY_NONE },
         /*  2 */ { anim_has_path, { AGDATA_SELF_OBJ, -1 }, -1, 3, ANIM_DELAY_NONE, 8, ANIM_DELAY_NONE },
         /*  3 */ { anim_create_straight_path, { AGDATA_SELF_OBJ, AGDATA_FORCE_TARGET_TILE }, -1, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE, 8, ANIM_DELAY_NONE },
-        /*  4 */ { sub_42A180, { AGDATA_SELF_OBJ, 1 }, -1, 9, ANIM_DELAY_NONE, 5, ANIM_DELAY_NONE },
+        /*  4 */ { anim_is_on_target_tile, { AGDATA_SELF_OBJ, 1 }, -1, 9, ANIM_DELAY_NONE, 5, ANIM_DELAY_NONE },
         /*  5 */ { anim_begin_spell, { AGDATA_SPELL_DATA, -1 }, -1, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE, 6, ANIM_DELAY_NONE },
         /*  6 */ { anim_destroy_obj, { AGDATA_SELF_OBJ, -1 }, -1, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE, ANIM_FLOW_POP_GOAL, ANIM_DELAY_NONE },
-        /*  7 */ { sub_42A200, { AGDATA_SELF_OBJ, AGDATA_SPELL_DATA }, -1, 6, ANIM_DELAY_NONE, 6, ANIM_DELAY_NONE },
-        /*  8 */ { sub_429ED0, { AGDATA_SPELL_DATA, -1 }, -1, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE, ANIM_FLOW_PUSH | AG_ATTEMPT_MOVE_STRAIGHT_SPELL, ANIM_DELAY_NONE },
-        /*  9 */ { sub_42BEC0, { AGDATA_TARGET_OBJ, -1 }, -1, ANIM_FLOW_POP_GOAL, ANIM_DELAY_NONE, 1, ANIM_DELAY_NONE },
+        /*  7 */ { anim_end_spell, { AGDATA_SELF_OBJ, AGDATA_SPELL_DATA }, -1, 6, ANIM_DELAY_NONE, 6, ANIM_DELAY_NONE },
+        /*  8 */ { anim_set_projectile_speed, { AGDATA_SPELL_DATA, -1 }, -1, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE, ANIM_FLOW_PUSH | AG_ATTEMPT_MOVE_STRAIGHT_SPELL, ANIM_DELAY_NONE },
+        /*  9 */ { anim_update_target_tile, { AGDATA_TARGET_OBJ, -1 }, -1, ANIM_FLOW_POP_GOAL, ANIM_DELAY_NONE, 1, ANIM_DELAY_NONE },
         /* 10 */ { 0 },
         /* 11 */ { 0 },
         /* 12 */ { 0 },
         /* 13 */ { 0 },
         /* 14 */ { 0 },
-        /* 15 */ { sub_429E70, { AGDATA_SELF_OBJ, AGDATA_SPELL_DATA }, 1, 0, ANIM_DELAY_NONE, 0, ANIM_DELAY_NONE },
+        /* 15 */ { anim_cleanup_destroy_obj, { AGDATA_SELF_OBJ, AGDATA_SPELL_DATA }, 1, 0, ANIM_DELAY_NONE, 0, ANIM_DELAY_NONE },
     },
 };
 
@@ -1069,9 +1069,9 @@ static AnimGoalNode anim_goal_node_dying = {
         /*  4 */ { anim_is_concealed_npc, { AGDATA_SELF_OBJ, -1 }, -1, 5, ANIM_DELAY_NONE, 5, ANIM_DELAY_NONE },
         /*  5 */ { AGsetObjArtDeathAnim, { AGDATA_SELF_OBJ, -1 }, -1, 7, ANIM_DELAY_NONE, 6, ANIM_DELAY_NONE },
         /*  6 */ { AGbeginAnimDying, { AGDATA_SELF_OBJ, AGDATA_ANIM_ID }, -1, 7, ANIM_DELAY_NONE, ANIM_FLOW_YIELD, ANIM_DELAY_NONE },
-        /*  7 */ { sub_42FED0, { AGDATA_SELF_OBJ, -1 }, -1, 8, ANIM_DELAY_NONE, 9, ANIM_DELAY_NONE },
+        /*  7 */ { anim_add_death_blood, { AGDATA_SELF_OBJ, -1 }, -1, 8, ANIM_DELAY_NONE, 9, ANIM_DELAY_NONE },
         /*  8 */ { anim_spend_action_points, { AGDATA_SELF_OBJ, -1 }, 1, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE },
-        /*  9 */ { sub_42FF40, { AGDATA_SELF_OBJ, -1 }, -1, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE },
+        /*  9 */ { anim_finish_death, { AGDATA_SELF_OBJ, -1 }, -1, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE },
         /* 10 */ { 0 },
         /* 11 */ { 0 },
         /* 12 */ { 0 },
@@ -1203,7 +1203,7 @@ static AnimGoalNode anim_goal_node_projectile = {
         /*  3 */ { anim_is_at_location, { AGDATA_SELF_OBJ, AGDATA_TARGET_TILE }, -1, 4, ANIM_DELAY_NONE, ANIM_FLOW_POP_GOAL, ANIM_DELAY_NONE },
         /*  4 */ { sub_424BC0, { AGDATA_SELF_OBJ, AGDATA_TARGET_OBJ }, -1, ANIM_FLOW_POP_GOAL, ANIM_DELAY_NONE, 5, ANIM_DELAY_NONE },
         /*  5 */ { anim_has_path, { AGDATA_SELF_OBJ, -1 }, -1, 6, ANIM_DELAY_NONE, 7, ANIM_DELAY_NONE },
-        /*  6 */ { sub_4269D0, { AGDATA_SELF_OBJ, AGDATA_TARGET_TILE }, -1, ANIM_FLOW_POP_GOAL, ANIM_DELAY_NONE, 7, ANIM_DELAY_NONE },
+        /*  6 */ { anim_create_projectile_path, { AGDATA_SELF_OBJ, AGDATA_TARGET_TILE }, -1, ANIM_FLOW_POP_GOAL, ANIM_DELAY_NONE, 7, ANIM_DELAY_NONE },
         /*  7 */ { sub_42F5C0, { AGDATA_SELF_OBJ, -1 }, -1, ANIM_FLOW_POP_GOAL, ANIM_DELAY_NONE, ANIM_FLOW_YIELD, ANIM_DELAY_NONE },
         /*  8 */ { 0 },
         /*  9 */ { 0 },
@@ -1212,7 +1212,7 @@ static AnimGoalNode anim_goal_node_projectile = {
         /* 12 */ { 0 },
         /* 13 */ { 0 },
         /* 14 */ { 0 },
-        /* 15 */ { sub_42CAC0, { -1, -1 }, 1, 0, ANIM_DELAY_NONE, 0, ANIM_DELAY_NONE },
+        /* 15 */ { anim_cleanup_projectile, { -1, -1 }, 1, 0, ANIM_DELAY_NONE, 0, ANIM_DELAY_NONE },
     },
 };
 
@@ -1414,10 +1414,10 @@ static AnimGoalNode anim_goal_node_floating = {
     1,
     { -1, -1, -1 },
     {
-        /*  1 */ { sub_431130, { AGDATA_SELF_OBJ, -1 }, -1, 2, ANIM_DELAY_NONE, 3, ANIM_DELAY_NONE },
-        /*  2 */ { sub_431150, { AGDATA_SELF_OBJ, -1 }, -1, 4, 100, ANIM_FLOW_YIELD, 100 },
-        /*  3 */ { sub_4311F0, { AGDATA_SELF_OBJ, -1 }, -1, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE, ANIM_FLOW_YIELD, ANIM_DELAY_NONE },
-        /*  4 */ { sub_431290, { AGDATA_SELF_OBJ, -1 }, -1, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE },
+        /*  1 */ { anim_float_not_started, { AGDATA_SELF_OBJ, -1 }, -1, 2, ANIM_DELAY_NONE, 3, ANIM_DELAY_NONE },
+        /*  2 */ { anim_float_bob, { AGDATA_SELF_OBJ, -1 }, -1, 4, 100, ANIM_FLOW_YIELD, 100 },
+        /*  3 */ { anim_float_begin, { AGDATA_SELF_OBJ, -1 }, -1, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE, ANIM_FLOW_YIELD, ANIM_DELAY_NONE },
+        /*  4 */ { anim_float_end, { AGDATA_SELF_OBJ, -1 }, -1, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE, ANIM_FLOW_TERMINATE, ANIM_DELAY_NONE },
         /*  5 */ { 0 },
         /*  6 */ { 0 },
         /*  7 */ { 0 },
@@ -5386,7 +5386,7 @@ bool sub_4268F0(AnimRunInfo* run_info)
 }
 
 // 0x4269D0
-bool sub_4269D0(AnimRunInfo* run_info)
+bool anim_create_projectile_path(AnimRunInfo* run_info)
 {
     int64_t obj;
 
@@ -7413,7 +7413,7 @@ bool anim_cleanup_spell(AnimRunInfo* run_info)
 }
 
 // 0x429E70
-bool sub_429E70(AnimRunInfo* run_info)
+bool anim_cleanup_destroy_obj(AnimRunInfo* run_info)
 {
     int64_t obj;
 
@@ -7433,7 +7433,7 @@ bool sub_429E70(AnimRunInfo* run_info)
 }
 
 // 0x429ED0
-bool sub_429ED0(AnimRunInfo* run_info)
+bool anim_set_projectile_speed(AnimRunInfo* run_info)
 {
     if (run_info->params[0].data == -1) {
         return false;
@@ -7544,7 +7544,7 @@ bool sub_42A010(AnimRunInfo* run_info)
 }
 
 // 0x42A180
-bool sub_42A180(AnimRunInfo* run_info)
+bool anim_is_on_target_tile(AnimRunInfo* run_info)
 {
     int64_t source_obj;
     int64_t target_obj;
@@ -7568,7 +7568,7 @@ bool sub_42A180(AnimRunInfo* run_info)
 }
 
 // 0x42A200
-bool sub_42A200(AnimRunInfo* run_info)
+bool anim_end_spell(AnimRunInfo* run_info)
 {
     int64_t obj;
 
@@ -8738,7 +8738,7 @@ bool anim_set_range(AnimRunInfo* run_info)
 }
 
 // 0x42BEC0
-bool sub_42BEC0(AnimRunInfo* run_info)
+bool anim_update_target_tile(AnimRunInfo* run_info)
 {
     int64_t target_obj;
     int64_t target_loc;
@@ -9181,7 +9181,7 @@ bool anim_reached_action_frame(AnimRunInfo* run_info)
 }
 
 // 0x42CAC0
-bool sub_42CAC0(AnimRunInfo* run_info)
+bool anim_cleanup_projectile(AnimRunInfo* run_info)
 {
     AnimGoalData* goal_data;
     int64_t self_obj;
@@ -11166,7 +11166,7 @@ bool sub_42FEC0(AnimRunInfo* run_info)
 }
 
 // 0x42FED0
-bool sub_42FED0(AnimRunInfo* run_info)
+bool anim_add_death_blood(AnimRunInfo* run_info)
 {
     int64_t obj;
     int64_t loc;
@@ -11179,14 +11179,14 @@ bool sub_42FED0(AnimRunInfo* run_info)
 
     loc = obj_field_int64_get(obj, OBJ_F_LOCATION);
     if (!tile_is_blocking(loc, false)) {
-        sub_432D90(obj);
+        anim_create_blood_splat(obj);
     }
 
     return true;
 }
 
 // 0x42FF40
-bool sub_42FF40(AnimRunInfo* run_info)
+bool anim_finish_death(AnimRunInfo* run_info)
 {
     int64_t obj;
 
@@ -11821,13 +11821,13 @@ int sub_430FC0(AnimRunInfo* run_info)
 }
 
 // 0x431130
-bool sub_431130(AnimRunInfo* run_info)
+bool anim_float_not_started(AnimRunInfo* run_info)
 {
     return (run_info->cur_stack_data->params[AGDATA_FLAGS_DATA].data & 0x20) == 0;
 }
 
 // 0x431150
-bool sub_431150(AnimRunInfo* run_info)
+bool anim_float_bob(AnimRunInfo* run_info)
 {
     int64_t obj;
     int v1;
@@ -11867,7 +11867,7 @@ bool sub_431150(AnimRunInfo* run_info)
 }
 
 // 0x4311F0
-bool sub_4311F0(AnimRunInfo* run_info)
+bool anim_float_begin(AnimRunInfo* run_info)
 {
     int64_t obj;
     int offset_x;
@@ -11878,7 +11878,16 @@ bool sub_4311F0(AnimRunInfo* run_info)
     ASSERT(obj != OBJ_HANDLE_NULL); // 12872, obj != OBJ_HANDLE_NULL
     if (obj == OBJ_HANDLE_NULL) return false;
 
-    run_info->cur_stack_data->params[AGDATA_FLAGS_DATA].data |= ~0x20;
+    // FIX: Was `|= ~0x20`, which sets every bit *except* 0x20 - the one bit it
+    // means to set. 0x4311F0 in the exe is a plain `or 0x20`.
+    //
+    // Two things went wrong with the original spelling. Sub-node 1 routes on
+    // `(FLAGS_DATA & 0x20) == 0`, so with the bit never set the goal returned
+    // here every tick and lifted the object another 15 pixels instead of
+    // handing over to the bob in sub-node 2. And the stray bits included 0x80,
+    // which `anim_goal_is_endless` reads, so the run also stopped counting
+    // toward animNumActiveGoals.
+    run_info->cur_stack_data->params[AGDATA_FLAGS_DATA].data |= 0x20;
     run_info->cur_stack_data->params[AGDATA_SCRATCH_VAL1].data = 1;
     run_info->pause_time.milliseconds = 100;
     offset_x = obj_field_int32_get(obj, OBJ_F_OFFSET_X);
@@ -11889,7 +11898,7 @@ bool sub_4311F0(AnimRunInfo* run_info)
 }
 
 // 0x431290
-bool sub_431290(AnimRunInfo* run_info)
+bool anim_float_end(AnimRunInfo* run_info)
 {
     int64_t obj;
     int offset_x;
@@ -13058,7 +13067,7 @@ bool anim_obj_is_valid(AnimRunInfo* run_info)
 }
 
 // 0x432D90
-void sub_432D90(int64_t obj)
+void anim_create_blood_splat(int64_t obj)
 {
     int64_t pc_obj;
     int64_t loc;

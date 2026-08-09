@@ -645,7 +645,7 @@ void critter_kill(int64_t obj)
         }
         object_set_current_aid(obj, art_id);
         object_flags_set(obj, OF_FLAT | OF_NO_BLOCK);
-        sub_432D90(obj);
+        anim_create_blood_splat(obj);
     }
 }
 
