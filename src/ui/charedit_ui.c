@@ -249,7 +249,7 @@ static int dword_5C8124[] = {
 };
 
 // 0x5C8150
-static S5C8150 stru_5C8150[] = {
+static S5C8150 charedit_basic_info_labels[] = {
     { NULL, 212, 94, 0 },
     { NULL, 212, 75, 0 },
     { NULL, 212, 113, 0 },
@@ -262,7 +262,7 @@ static S5C8150 stru_5C8150[] = {
 };
 
 // 0x5C81E0
-static S5C8150 stru_5C81E0[] = {
+static S5C8150 charedit_secondary_stat_labels[] = {
     { NULL, 49, 349, STAT_CARRY_WEIGHT },
     { NULL, 49, 367, STAT_DAMAGE_BONUS },
     { NULL, 49, 385, STAT_AC_ADJUSTMENT },
@@ -287,7 +287,7 @@ static S5C87D0 charedit_skill_group_buttons[CHAREDIT_SKILL_GROUP_COUNT] = {
 };
 
 // 0x5C82F0
-static S5C8150 stru_5C82F0[SKILL_COUNT] = {
+static S5C8150 charedit_skill_labels[SKILL_COUNT] = {
     { NULL, 520, 167, BASIC_SKILL_BOW },
     { NULL, 520, 233, BASIC_SKILL_DODGE },
     { NULL, 520, 299, BASIC_SKILL_MELEE },
@@ -306,6 +306,14 @@ static S5C8150 stru_5C82F0[SKILL_COUNT] = {
     { NULL, 520, 365, TECH_SKILL_DISARM_TRAPS },
 };
 
+// NOTE: Write-only in the shipped game, so it keeps its placeholder name. The
+// four slots are given charedit_basic_info_labels[0]'s string and are never
+// drawn - nothing reads them back. Checked against the original rather than
+// assumed: 0x5C83F0 has three references, all from one function (0x55E12D), and
+// none of them is a read. Their x/y put them in a column at x=517, one per
+// 55px row, which is the follower portrait strip, but with no draw call there
+// is nothing to say what they were meant to hold and a name would be invented.
+//
 // 0x5C83F0
 static S5C8150 stru_5C83F0[4] = {
     { NULL, 517, 206, -1 },
@@ -405,7 +413,7 @@ static S5C87D0 charedit_tech_buttons[TECH_COUNT] = {
 };
 
 // 0x5C8850
-static S5C8150 stru_5C8850[7] = {
+static S5C8150 charedit_schematic_product_labels[7] = {
     { NULL, 549, 198, -1 },
     { NULL, 549, 231, -1 },
     { NULL, 549, 264, -1 },
@@ -416,7 +424,7 @@ static S5C8150 stru_5C8850[7] = {
 };
 
 // 0x5C88C0
-static S5C8150 stru_5C88C0[7] = {
+static S5C8150 charedit_schematic_component_labels[7] = {
     { NULL, 549, 213, -1 },
     { NULL, 549, 246, -1 },
     { NULL, 549, 279, -1 },
@@ -444,8 +452,8 @@ static void charedit_apply_schematic_label_offsets(void)
     int components_dy = uap_fixes_enabled() ? 5 : 0;
 
     for (index = 0; index < 7; index++) {
-        stru_5C8850[index].y = 198 + 33 * index + product_dy;
-        stru_5C88C0[index].y = 213 + 33 * index + components_dy;
+        charedit_schematic_product_labels[index].y = 198 + 33 * index + product_dy;
+        charedit_schematic_component_labels[index].y = 213 + 33 * index + components_dy;
     }
 }
 
@@ -453,7 +461,7 @@ static void charedit_apply_schematic_label_offsets(void)
 static TigRect stru_5C8930 = { 12, 10, 89, 89 };
 
 // 0x5C8940
-static S5C8150 stru_5C8940[3] = {
+static S5C8150 charedit_alignment_aptitude_labels[3] = {
     { NULL, -57, 239, 0 },
     { NULL, -767, 107, 0 },
     { NULL, -767, 406, 0 },
@@ -466,10 +474,10 @@ static TigRect stru_5C8970 = { 756, 68, 30, 16 };
 static TigRect stru_5C8980 = { 756, 367, 30, 16 };
 
 // 0x5C8E40
-static S5C8150 stru_5C8E40 = { 0, -620, 125, 0 };
+static S5C8150 charedit_scheme_name_label = { 0, -620, 125, 0 };
 
 // 0x5C8E50
-static S5C8150 stru_5C8E50[15] = {
+static S5C8150 charedit_scheme_list_labels[15] = {
     { NULL, 526, 170, 0 },
     { NULL, 526, 186, 0 },
     { NULL, 526, 202, 0 },
@@ -558,7 +566,7 @@ static S5C8CA8 stru_5C8DC8[5] = {
 static TigRect stru_5C8F40 = { 209, 60, 17, 255 };
 
 // 0x5C8F50
-static S5C8150 stru_5C8F50 = { NULL, 0, 0, -1 };
+static S5C8150 charedit_stat_value_label = { NULL, 0, 0, -1 };
 
 // 0x5C8F70
 static int charedit_tech_degree_icons_x[DEGREE_COUNT - 1] = {
@@ -595,7 +603,7 @@ static int charedit_tech_degree_icons[DEGREE_COUNT] = {
 };
 
 // 0x5C8FC8
-static S5C8150 stru_5C8FC8[3] = {
+static S5C8150 charedit_tech_header_labels[3] = {
     { 0, 520, 174, -1 },
     { 0, -621, 173, -1 },
     { 0, 707, 176, -1 },
@@ -1279,8 +1287,8 @@ void charedit_refresh_basic_info(void)
     const char* labels[7];
     int index;
 
-    charedit_draw_text_rows(charedit_window_handle, charedit_morph15_white_font, &(stru_5C8150[0]), NULL, -1, 3);
-    charedit_draw_text_rows(charedit_window_handle, charedit_morph15_yellow_font, &(stru_5C8150[3]), NULL, -1, 1);
+    charedit_draw_text_rows(charedit_window_handle, charedit_morph15_white_font, &(charedit_basic_info_labels[0]), NULL, -1, 3);
+    charedit_draw_text_rows(charedit_window_handle, charedit_morph15_yellow_font, &(charedit_basic_info_labels[3]), NULL, -1, 1);
 
     // UAP (0x55A29E, 0x55A2FC): a follower's sheet shows the same basic-info
     // fields as the player's, the display half of "distribute their character
@@ -1291,26 +1299,26 @@ void charedit_refresh_basic_info(void)
     // catches types *below* `OBJ_TYPE_PC` - none of which ever reach a
     // character sheet - which funnels every critter into the non-monstrous
     // branch; then it rewrites that branch's second call from
-    // `(&stru_5C8150[7], 2)` to `(&stru_5C8150[4], 5)`, the PC branch's own
-    // call. The branch's first call, `(&stru_5C8150[4], 2)`, has no spare
+    // `(&charedit_basic_info_labels[7], 2)` to `(&charedit_basic_info_labels[4], 5)`, the PC branch's own
+    // call. The branch's first call, `(&charedit_basic_info_labels[4], 2)`, has no spare
     // bytes to remove and is left redrawing two labels identically over
     // themselves. Written out here without that redundant draw.
     if (uap_fixes_enabled()) {
         if (critter_is_monstrous(charedit_obj)) {
-            charedit_draw_text_rows(charedit_window_handle, charedit_morph15_white_font, &(stru_5C8150[7]), NULL, -1, 2);
+            charedit_draw_text_rows(charedit_window_handle, charedit_morph15_white_font, &(charedit_basic_info_labels[7]), NULL, -1, 2);
         } else {
-            charedit_draw_text_rows(charedit_window_handle, charedit_morph15_white_font, &(stru_5C8150[4]), NULL, -1, 5);
+            charedit_draw_text_rows(charedit_window_handle, charedit_morph15_white_font, &(charedit_basic_info_labels[4]), NULL, -1, 5);
         }
     } else if (obj_field_int32_get(charedit_obj, OBJ_F_TYPE) == OBJ_TYPE_PC) {
-        charedit_draw_text_rows(charedit_window_handle, charedit_morph15_white_font, &(stru_5C8150[4]), NULL, -1, 5);
+        charedit_draw_text_rows(charedit_window_handle, charedit_morph15_white_font, &(charedit_basic_info_labels[4]), NULL, -1, 5);
     } else if (critter_is_monstrous(charedit_obj)) {
-        charedit_draw_text_rows(charedit_window_handle, charedit_morph15_white_font, &(stru_5C8150[7]), NULL, -1, 2);
+        charedit_draw_text_rows(charedit_window_handle, charedit_morph15_white_font, &(charedit_basic_info_labels[7]), NULL, -1, 2);
     } else {
-        charedit_draw_text_rows(charedit_window_handle, charedit_morph15_white_font, &(stru_5C8150[4]), NULL, -1, 2);
-        charedit_draw_text_rows(charedit_window_handle, charedit_morph15_white_font, &(stru_5C8150[7]), NULL, -1, 2);
+        charedit_draw_text_rows(charedit_window_handle, charedit_morph15_white_font, &(charedit_basic_info_labels[4]), NULL, -1, 2);
+        charedit_draw_text_rows(charedit_window_handle, charedit_morph15_white_font, &(charedit_basic_info_labels[7]), NULL, -1, 2);
     }
 
-    charedit_draw_text_rows(charedit_window_handle, charedit_flare12_white_font, stru_5C81E0, NULL, -1, 13);
+    charedit_draw_text_rows(charedit_window_handle, charedit_flare12_white_font, charedit_secondary_stat_labels, NULL, -1, 13);
 
     object_examine(charedit_obj, charedit_obj, buffers[3]);
     tig_font_push(charedit_morph15_yellow_font);
@@ -1346,20 +1354,20 @@ void charedit_refresh_basic_info(void)
         labels[index] = buffers[index];
     }
 
-    charedit_draw_text_rows(charedit_window_handle, charedit_morph15_white_font, &(stru_5C8150[0]), &(labels[0]), -1, 3);
-    charedit_draw_text_rows(charedit_window_handle, charedit_morph15_yellow_font, &(stru_5C8150[3]), &(labels[3]), -1, 1);
+    charedit_draw_text_rows(charedit_window_handle, charedit_morph15_white_font, &(charedit_basic_info_labels[0]), &(labels[0]), -1, 3);
+    charedit_draw_text_rows(charedit_window_handle, charedit_morph15_yellow_font, &(charedit_basic_info_labels[3]), &(labels[3]), -1, 1);
 
     // UAP (0x55A542, 0x55A593): the same widening applied to the value column
     // - `jne` becomes `jge` and the non-monstrous branch's count goes 2 -> 3,
     // matching the PC branch.
     if (uap_fixes_enabled()) {
         if (!critter_is_monstrous(charedit_obj)) {
-            charedit_draw_text_rows(charedit_window_handle, charedit_morph15_white_font, &(stru_5C8150[4]), &(labels[4]), -1, 3);
+            charedit_draw_text_rows(charedit_window_handle, charedit_morph15_white_font, &(charedit_basic_info_labels[4]), &(labels[4]), -1, 3);
         }
     } else if (obj_field_int32_get(charedit_obj, OBJ_F_TYPE) == OBJ_TYPE_PC) {
-        charedit_draw_text_rows(charedit_window_handle, charedit_morph15_white_font, &(stru_5C8150[4]), &(labels[4]), -1, 3);
+        charedit_draw_text_rows(charedit_window_handle, charedit_morph15_white_font, &(charedit_basic_info_labels[4]), &(labels[4]), -1, 3);
     } else if (!critter_is_monstrous(charedit_obj)) {
-        charedit_draw_text_rows(charedit_window_handle, charedit_morph15_white_font, &(stru_5C8150[4]), &(labels[4]), -1, 2);
+        charedit_draw_text_rows(charedit_window_handle, charedit_morph15_white_font, &(charedit_basic_info_labels[4]), &(labels[4]), -1, 2);
     }
 }
 
@@ -1769,16 +1777,16 @@ void charedit_refresh_secondary_stats(void)
     for (index = 0; index < 8; index++) {
         snprintf(buffers[index], sizeof(buffers[index]),
             ": %d  ",
-            stat_level_get(charedit_obj, stru_5C81E0[index].value));
+            stat_level_get(charedit_obj, charedit_secondary_stat_labels[index].value));
     }
 
     for (index = 8; index < 13; index++) {
         snprintf(buffers[index], sizeof(buffers[index]),
             ": %d  ",
-            object_get_resistance(charedit_obj, stru_5C81E0[index].value, true));
+            object_get_resistance(charedit_obj, charedit_secondary_stat_labels[index].value, true));
     }
 
-    charedit_draw_text_rows(charedit_window_handle, charedit_flare12_white_font, stru_5C81E0, labels, -1, 13);
+    charedit_draw_text_rows(charedit_window_handle, charedit_flare12_white_font, charedit_secondary_stat_labels, labels, -1, 13);
 }
 
 // 0x55B280
@@ -1835,10 +1843,10 @@ void charedit_refresh_stat(int stat)
     }
 
     snprintf(str, sizeof(str), " %d ", value);
-    stru_5C8F50.str = str;
-    stru_5C8F50.x = stru_5C7E70[stat].x;
-    stru_5C8F50.y = stru_5C7E70[stat].y;
-    charedit_draw_text_rows(charedit_window_handle, font, &stru_5C8F50, NULL, -1, 1);
+    charedit_stat_value_label.str = str;
+    charedit_stat_value_label.x = stru_5C7E70[stat].x;
+    charedit_stat_value_label.y = stru_5C7E70[stat].y;
+    charedit_draw_text_rows(charedit_window_handle, font, &charedit_stat_value_label, NULL, -1, 1);
 }
 
 // 0x55B410
@@ -2209,15 +2217,15 @@ void sub_55BD10(int group)
     art_blit_info.dst_rect = &rect;
     tig_window_blit_art(charedit_skills_win, &art_blit_info);
 
-    charedit_draw_text_rows(charedit_skills_win, charedit_morph15_white_font, &stru_5C82F0[4 * dword_64E020], 0, -1, 4);
+    charedit_draw_text_rows(charedit_skills_win, charedit_morph15_white_font, &charedit_skill_labels[4 * dword_64E020], 0, -1, 4);
 
     for (index = 0; index < 4; index++) {
         if (dword_64E020 < 3) {
             training = basic_skill_training_get(charedit_obj,
-                stru_5C82F0[4 * dword_64E020 + index].value);
+                charedit_skill_labels[4 * dword_64E020 + index].value);
         } else {
             training = tech_skill_training_get(charedit_obj,
-                stru_5C82F0[4 * dword_64E020 + index].value);
+                charedit_skill_labels[4 * dword_64E020 + index].value);
         }
 
         v2[index] = charedit_training_names[training];
@@ -2234,7 +2242,7 @@ void sub_55BD10(int group)
         v2[index] = v1[index];
     }
 
-    charedit_draw_text_rows(charedit_skills_win, charedit_morph15_white_font, &stru_5C82F0[4 * dword_64E020], v2, -1, 4);
+    charedit_draw_text_rows(charedit_skills_win, charedit_morph15_white_font, &charedit_skill_labels[4 * dword_64E020], v2, -1, 4);
     charedit_refresh_skills_win();
 }
 
@@ -2273,14 +2281,14 @@ void charedit_refresh_skills_win(void)
     for (y = 87; y < 351; y += 66) {
         if (dword_64E020 < 3) {
             skill_level = basic_skill_level(charedit_obj,
-                stru_5C82F0[dword_64E020 * 4 + index].value);
+                charedit_skill_labels[dword_64E020 * 4 + index].value);
             basic_skill_cost_inc(charedit_obj,
-                stru_5C82F0[dword_64E020 * 4 + index].value);
+                charedit_skill_labels[dword_64E020 * 4 + index].value);
         } else {
             skill_level = tech_skill_level(charedit_obj,
-                stru_5C82F0[dword_64E020 * 4 + index].value);
+                charedit_skill_labels[dword_64E020 * 4 + index].value);
             tech_skill_cost_inc(charedit_obj,
-                stru_5C82F0[dword_64E020 * 4 + index].value);
+                charedit_skill_labels[dword_64E020 * 4 + index].value);
         }
 
         src_rect.x = 59;
@@ -2464,23 +2472,23 @@ void charedit_refresh_tech_win(void)
     tig_window_blit_art(charedit_tech_win, &art_blit_info);
 
     for (index = 0; index < 3; index++) {
-        stru_5C8FC8[index].str = str[0];
+        charedit_tech_header_labels[index].str = str[0];
     }
 
     str[0][0] = (char)('1' + charedit_selected_tech);
     str[0][1] = '\0';
-    charedit_draw_text_rows(charedit_tech_win, charedit_icons17_white_font, &(stru_5C8FC8[0]), 0, -1, 1);
+    charedit_draw_text_rows(charedit_tech_win, charedit_icons17_white_font, &(charedit_tech_header_labels[0]), 0, -1, 1);
 
     snprintf(str[0], sizeof(str[0]),
         "%s %s",
         tech_discipline_name_get(charedit_selected_tech),
         tech_degree_name_get(tech_degree_get(charedit_obj, charedit_selected_tech)));
-    charedit_draw_text_rows(charedit_tech_win, charedit_nick16_white_font, &(stru_5C8FC8[1]), 0, -1, 1);
+    charedit_draw_text_rows(charedit_tech_win, charedit_nick16_white_font, &(charedit_tech_header_labels[1]), 0, -1, 1);
 
     snprintf(str[0], sizeof(str[0]),
         "%d",
         tech_degree_level_get(charedit_obj, charedit_selected_tech));
-    charedit_draw_text_rows(charedit_tech_win, charedit_flare12_blue_font, &(stru_5C8FC8[2]), 0, -1, 1);
+    charedit_draw_text_rows(charedit_tech_win, charedit_flare12_blue_font, &(charedit_tech_header_labels[2]), 0, -1, 1);
 
     degree = tech_degree_get(charedit_obj, charedit_selected_tech);
     next_degree = degree < 7 ? degree + 1 : degree;
@@ -2492,31 +2500,31 @@ void charedit_refresh_tech_win(void)
     charedit_apply_schematic_label_offsets();
 
     for (index = 1; index - 1 < 7; index++) {
-        stru_5C8850[index - 1].str = schematic_ui_learned_schematic_product_name(charedit_selected_tech, index);
+        charedit_schematic_product_labels[index - 1].str = schematic_ui_learned_schematic_product_name(charedit_selected_tech, index);
         schematic_ui_learned_schematic_component_names(charedit_selected_tech, index, components[0], components[1]);
         snprintf(str[index - 1], sizeof(str[index - 1]),
             "[%s]+[%s]",
             components[0],
             components[1]);
-        stru_5C88C0[index - 1].str = str[index - 1];
+        charedit_schematic_component_labels[index - 1].str = str[index - 1];
     }
 
     if (next_degree > degree) {
         if (degree > 0) {
-            charedit_draw_text_rows(charedit_tech_win, charedit_nick16_white_font, stru_5C8850, 0, -1, degree);
-            charedit_draw_text_rows(charedit_tech_win, charedit_garmond9_white_font, stru_5C88C0, 0, -1, degree);
+            charedit_draw_text_rows(charedit_tech_win, charedit_nick16_white_font, charedit_schematic_product_labels, 0, -1, degree);
+            charedit_draw_text_rows(charedit_tech_win, charedit_garmond9_white_font, charedit_schematic_component_labels, 0, -1, degree);
         }
 
-        charedit_draw_text_rows(charedit_tech_win, charedit_nick16_yellow_font, &(stru_5C8850[degree]), 0, -1, 1);
-        charedit_draw_text_rows(charedit_tech_win, charedit_garmond9_yellow_font, &(stru_5C88C0[degree]), 0, -1, 1);
+        charedit_draw_text_rows(charedit_tech_win, charedit_nick16_yellow_font, &(charedit_schematic_product_labels[degree]), 0, -1, 1);
+        charedit_draw_text_rows(charedit_tech_win, charedit_garmond9_yellow_font, &(charedit_schematic_component_labels[degree]), 0, -1, 1);
 
         if (degree + 1 < 7) {
-            charedit_draw_text_rows(charedit_tech_win, charedit_nick16_gray_font, &stru_5C8850[degree + 1], 0, -1, 6 - degree);
-            charedit_draw_text_rows(charedit_tech_win, charedit_garmond9_gray_font, &stru_5C88C0[degree + 1], 0, -1, 6 - degree);
+            charedit_draw_text_rows(charedit_tech_win, charedit_nick16_gray_font, &charedit_schematic_product_labels[degree + 1], 0, -1, 6 - degree);
+            charedit_draw_text_rows(charedit_tech_win, charedit_garmond9_gray_font, &charedit_schematic_component_labels[degree + 1], 0, -1, 6 - degree);
         }
     } else {
-        charedit_draw_text_rows(charedit_tech_win, charedit_nick16_white_font, stru_5C8850, 0, -1, 7);
-        charedit_draw_text_rows(charedit_tech_win, charedit_garmond9_white_font, stru_5C88C0, 0, -1, 7);
+        charedit_draw_text_rows(charedit_tech_win, charedit_nick16_white_font, charedit_schematic_product_labels, 0, -1, 7);
+        charedit_draw_text_rows(charedit_tech_win, charedit_garmond9_white_font, charedit_schematic_component_labels, 0, -1, 7);
     }
 
     button_data.flags = TIG_BUTTON_MOMENTARY;
@@ -2910,8 +2918,8 @@ bool charedit_scheme_win_create(void)
     button_data.art_id = TIG_ART_ID_INVALID;
 
     for (index = 0; index < 15; index++) {
-        button_data.x = stru_5C8E50[index].x - 503;
-        button_data.y = stru_5C8E50[index].y - 104;
+        button_data.x = charedit_scheme_list_labels[index].x - 503;
+        button_data.y = charedit_scheme_list_labels[index].y - 104;
         button_data.width = 160;
         button_data.height = 16;
         tig_button_create(&button_data, &(dword_64C7E8[index]));
@@ -2944,7 +2952,7 @@ void charedit_scheme_win_refresh(void)
     art_blit_info.dst_rect = &rect;
     tig_window_blit_art(charedit_scheme_win, &art_blit_info);
 
-    stru_5C8E40.str = auto_level_scheme_name(auto_level_scheme_get(charedit_obj));
+    charedit_scheme_name_label.str = auto_level_scheme_name(auto_level_scheme_get(charedit_obj));
 
     cnt = charedit_num_schemes;
     if (cnt >= 15) {
@@ -2952,11 +2960,11 @@ void charedit_scheme_win_refresh(void)
     }
 
     for (index = 0; index < cnt; index++) {
-        stru_5C8E50[index].str = charedit_scheme_names[charedit_top_scheme_index + index];
+        charedit_scheme_list_labels[index].str = charedit_scheme_names[charedit_top_scheme_index + index];
     }
 
-    charedit_draw_text_rows(charedit_scheme_win, charedit_flare12_blue_font, &stru_5C8E40, NULL, -1, 1);
-    charedit_draw_text_rows(charedit_scheme_win, charedit_flare12_white_font, &(stru_5C8E50[0]), NULL, -1, cnt);
+    charedit_draw_text_rows(charedit_scheme_win, charedit_flare12_blue_font, &charedit_scheme_name_label, NULL, -1, 1);
+    charedit_draw_text_rows(charedit_scheme_win, charedit_flare12_white_font, &(charedit_scheme_list_labels[0]), NULL, -1, cnt);
 
     scrollbar_ui_control_redraw(charedit_scheme_scrollbar);
 }
@@ -3371,7 +3379,7 @@ bool charedit_scheme_win_message_filter(TigMessage* msg)
             for (index = 0; index < 15; index++) {
                 if (msg->data.button.button_handle == dword_64C7E8[index]) {
                     if (index < charedit_num_schemes) {
-                        charedit_draw_text_rows(charedit_scheme_win, charedit_flare12_blue_font, &stru_5C8E50[index], NULL, -1, 1);
+                        charedit_draw_text_rows(charedit_scheme_win, charedit_flare12_blue_font, &charedit_scheme_list_labels[index], NULL, -1, 1);
                     }
 
                     return true;
@@ -3385,7 +3393,7 @@ bool charedit_scheme_win_message_filter(TigMessage* msg)
             for (index = 0; index < 15; index++) {
                 if (msg->data.button.button_handle == dword_64C7E8[index]) {
                     if (index < charedit_num_schemes) {
-                        charedit_draw_text_rows(charedit_scheme_win, charedit_flare12_white_font, &stru_5C8E50[index], NULL, -1, 1);
+                        charedit_draw_text_rows(charedit_scheme_win, charedit_flare12_white_font, &charedit_scheme_list_labels[index], NULL, -1, 1);
                     }
 
                     return true;
@@ -3451,7 +3459,7 @@ bool charedit_labels_init(void)
     for (index = 0; index < 9; index++) {
         mes_file_entry.num = num++;
         mes_get_msg(charedit_mes_file, &mes_file_entry);
-        stru_5C8150[index].str = mes_file_entry.str;
+        charedit_basic_info_labels[index].str = mes_file_entry.str;
     }
 
     // Skip "Base" and "Adj."
@@ -3465,11 +3473,11 @@ bool charedit_labels_init(void)
 
     for (index = 0; index < 13; index++) {
         if (index < 8) {
-            stru_5C81E0[index].str = stat_name(stru_5C81E0[index].value);
+            charedit_secondary_stat_labels[index].str = stat_name(charedit_secondary_stat_labels[index].value);
         } else {
             mes_file_entry.num = num++;
             mes_get_msg(charedit_mes_file, &mes_file_entry);
-            stru_5C81E0[index].str = mes_file_entry.str;
+            charedit_secondary_stat_labels[index].str = mes_file_entry.str;
         }
     }
 
@@ -3500,11 +3508,11 @@ bool charedit_labels_init(void)
     charedit_minimum_level_str = mes_file_entry.str;
 
     for (index = 0; index < BASIC_SKILL_COUNT; index++) {
-        stru_5C82F0[index].str = basic_skill_name(index);
+        charedit_skill_labels[index].str = basic_skill_name(index);
     }
 
     for (index = 0; index < TECH_SKILL_COUNT; index++) {
-        stru_5C82F0[BASIC_SKILL_COUNT + index].str = tech_skill_name(index);
+        charedit_skill_labels[BASIC_SKILL_COUNT + index].str = tech_skill_name(index);
     }
 
     for (index = 0; index < TRAINING_COUNT; index++) {
@@ -3512,7 +3520,7 @@ bool charedit_labels_init(void)
     }
 
     for (index = 0; index < 4; index++) {
-        stru_5C83F0[index].str = stru_5C8150[0].str;
+        stru_5C83F0[index].str = charedit_basic_info_labels[0].str;
     }
 
     font_desc.flags = 0;
@@ -3755,7 +3763,7 @@ void charedit_refresh_alignment_aptitude_bars(void)
     art_blit_info.dst_rect = &stru_5C8980;
     tig_window_blit_art(charedit_window_handle, &art_blit_info);
 
-    charedit_draw_text_rows(charedit_window_handle, charedit_cloister18_white_font, stru_5C8940, labels, -1, 3);
+    charedit_draw_text_rows(charedit_window_handle, charedit_cloister18_white_font, charedit_alignment_aptitude_labels, labels, -1, 3);
 }
 
 // 0x55EFB0
