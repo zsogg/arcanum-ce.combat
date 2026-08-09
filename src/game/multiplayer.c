@@ -197,7 +197,7 @@ typedef struct S5E8940 {
     /* 000C */ void* failure_info;
 } S5E8940;
 
-static void sub_49CB80(S5E8AD0* a1);
+static void multiplayer_slot_init(S5E8AD0* a1);
 static void multiplayer_start_play(PlayerCreateInfo* player_create_info);
 static bool sub_49D570(TimeEvent* timeevent);
 static void multiplayer_handle_message(void* msg);
@@ -210,12 +210,12 @@ static bool multiplayer_handle_network_event(int type, int client_id, void* data
 static void sub_4A2A30(void);
 static void multiplayer_notify_player_lagging(int64_t obj);
 static void multiplayer_notify_player_recovered(int64_t obj);
-static void sub_4A2AE0(int player);
+static void multiplayer_slot_reset(int player);
 static void sub_4A2CD0(S5F0DFC* a1);
 static void sub_4A2E90(void);
 static bool sub_4A2EC0(ObjectID a, ObjectID b, int player);
 static void sub_4A3030(ObjectID a1, ObjectID a2, int a3);
-static S5F0E1C* sub_4A3080(ObjectID oid);
+static S5F0E1C* multiplayer_find_oid_entry(ObjectID oid);
 static void sub_4A30D0(ObjectID oid);
 static void sub_4A3170(ObjectID oid);
 static void sub_4A3660(int player);
@@ -388,7 +388,7 @@ bool multiplayer_init(GameInitInfo* init_info)
     }
 
     for (index = 0; index < NUM_PLAYERS; index++) {
-        sub_49CB80(&(stru_5E8AD0[index]));
+        multiplayer_slot_init(&(stru_5E8AD0[index]));
     }
 
     mes_load("mes\\MultiPlayer.mes", &multiplayer_mes_file);
@@ -460,7 +460,7 @@ void multiplayer_reset(void)
         tig_net_local_server_set_description("Description");
 
         for (index = 0; index < NUM_PLAYERS; index++) {
-            sub_49CB80(&(stru_5E8AD0[index]));
+            multiplayer_slot_init(&(stru_5E8AD0[index]));
         }
 
         for (index = 0; index < NUM_PLAYERS; index++) {
@@ -471,7 +471,7 @@ void multiplayer_reset(void)
         }
 
         if (dword_5F0DE4 != NULL) {
-            sub_4A3D00(false);
+            multiplayer_free_loaded_chars(false);
             dword_5F0DE4 = NULL;
             dword_5F0DE8 = 0;
         }
@@ -591,12 +591,12 @@ bool multiplayer_mod_load(void)
 void multiplayer_mod_unload(void)
 {
     multiplayer_lock();
-    sub_4A3D00(true);
+    multiplayer_free_loaded_chars(true);
     multiplayer_unlock();
 }
 
 // 0x49CB80
-void sub_49CB80(S5E8AD0* a1)
+void multiplayer_slot_init(S5E8AD0* a1)
 {
     memset(a1, 0, sizeof(*a1));
     a1->flags = 0;
@@ -619,7 +619,7 @@ bool multiplayer_start(void)
         return false;
     }
 
-    sub_4A2AE0(0);
+    multiplayer_slot_reset(0);
     tig_net_on_message(multiplayer_handle_message);
     tig_net_on_message_validation(multiplayer_validate_message);
     tig_net_on_network_event(multiplayer_handle_network_event);
@@ -633,7 +633,7 @@ bool multiplayer_end(void)
 {
     bool v1;
 
-    sub_4A2AE0(0);
+    multiplayer_slot_reset(0);
     tig_net_on_message(NULL);
     v1 = sub_5280F0();
     dword_5F0E00 = false;
@@ -1084,9 +1084,9 @@ void multiplayer_notify_player_recovered(int64_t obj)
 }
 
 // 0x4A2AE0
-void sub_4A2AE0(int player)
+void multiplayer_slot_reset(int player)
 {
-    sub_49CB80(&stru_5E8AD0[player]);
+    multiplayer_slot_init(&stru_5E8AD0[player]);
 }
 
 // 0x4A2B00
@@ -1113,7 +1113,7 @@ int multiplayer_find_slot_from_obj(int64_t obj)
 }
 
 // 0x4A2B60
-int64_t sub_4A2B60(int player)
+int64_t multiplayer_active_player_obj_get(int player)
 {
     int64_t obj;
 
@@ -1234,14 +1234,14 @@ bool sub_4A2EC0(ObjectID item_oid, ObjectID parent_oid, int player)
         }
 
         if ((obj_field_int32_get(item_obj, OBJ_F_ITEM_FLAGS) & OIF_NO_DISPLAY) != 0) {
-            if (sub_4A2B60(player) != parent_obj) {
+            if (multiplayer_active_player_obj_get(player) != parent_obj) {
                 return false;
             }
         }
     }
 
     if ((obj_field_int32_get(item_obj, OBJ_F_FLAGS) & OF_MULTIPLAYER_LOCK) != 0) {
-        lock = sub_4A3080(item_oid);
+        lock = multiplayer_find_oid_entry(item_oid);
         if (lock == NULL) {
             return false;
         }
@@ -1274,7 +1274,7 @@ void sub_4A3030(ObjectID a1, ObjectID a2, int a3)
 }
 
 // 0x4A3080
-S5F0E1C* sub_4A3080(ObjectID oid)
+S5F0E1C* multiplayer_find_oid_entry(ObjectID oid)
 {
     S5F0E1C* node;
 
@@ -1297,7 +1297,7 @@ void sub_4A30D0(ObjectID oid)
 
     mp_oid_to_obj(oid, &obj);
     if ((obj_field_int32_get(obj, OBJ_F_FLAGS) & OF_MULTIPLAYER_LOCK) != 0) {
-        node = sub_4A3080(oid);
+        node = multiplayer_find_oid_entry(oid);
         if (node != NULL) {
             node->field_34--;
             if (node->field_34 == 0) {
@@ -1690,7 +1690,7 @@ bool save_char(const char* path, int64_t obj)
 }
 
 // 0x4A3D00
-bool sub_4A3D00(bool a1)
+bool multiplayer_free_loaded_chars(bool a1)
 {
     int idx;
 
@@ -1715,7 +1715,7 @@ bool sub_4A3D00(bool a1)
 }
 
 // 0x4A3D70
-bool sub_4A3D70(int64_t** objs_ptr, int* cnt_ptr)
+bool multiplayer_load_chars(int64_t** objs_ptr, int* cnt_ptr)
 {
     char path[TIG_MAX_PATH];
     TigFileList file_list;
@@ -1727,7 +1727,7 @@ bool sub_4A3D70(int64_t** objs_ptr, int* cnt_ptr)
     tig_file_list_create(&file_list, path);
 
     if (dword_5F0DE4 != NULL) {
-        sub_4A3D00(true);
+        multiplayer_free_loaded_chars(true);
     }
 
     if (file_list.count != 0) {

@@ -108,7 +108,7 @@ int64_t party_find_first(int64_t obj, int* index_ptr)
 
     for (*index_ptr = 0; *index_ptr < PARTY_TABLE_SIZE; (*index_ptr)++) {
         if (dword_5FC32C[*index_ptr] == dword_5FC32C[index]) {
-            return sub_4A2B60(*index_ptr);
+            return multiplayer_active_player_obj_get(*index_ptr);
         }
     }
 
@@ -136,7 +136,7 @@ int64_t party_find_next(int* index_ptr)
 
     while (*index_ptr < PARTY_TABLE_SIZE) {
         if (dword_5FC32C[*index_ptr] == dword_5FC32C[index]) {
-            return sub_4A2B60(*index_ptr);
+            return multiplayer_active_player_obj_get(*index_ptr);
         }
         (*index_ptr)++;
     }
