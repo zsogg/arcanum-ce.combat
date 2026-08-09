@@ -299,7 +299,7 @@ static UiButtonInfo intgame_rotwin_button_info[ROTWIN_TYPE_COUNT] = {
 };
 
 // 0x5C65F8
-static UiButtonInfo stru_5C65F8[] = {
+static UiButtonInfo intgame_message_scroll_buttons[] = {
     { 210, 545, 0, TIG_BUTTON_HANDLE_INVALID },
     { 210, 504, 0, TIG_BUTTON_HANDLE_INVALID },
 };
@@ -418,7 +418,7 @@ static UiButtonInfo intgame_mt_spell_buttons[] = {
 };
 
 // 0x5C6C68
-static UiButtonInfo stru_5C6C68[4] = {
+static UiButtonInfo intgame_skill_buttons[4] = {
     { 288, 514, -1, TIG_BUTTON_HANDLE_INVALID },
     { 351, 514, -1, TIG_BUTTON_HANDLE_INVALID },
     { 414, 514, -1, TIG_BUTTON_HANDLE_INVALID },
@@ -426,7 +426,7 @@ static UiButtonInfo stru_5C6C68[4] = {
 };
 
 // 0x5C6CA8
-static UiButtonInfo stru_5C6CA8[] = {
+static UiButtonInfo intgame_map_note_buttons[] = {
     { 396, 550, 201, TIG_BUTTON_HANDLE_INVALID },
     { 511, 550, 202, TIG_BUTTON_HANDLE_INVALID },
     { 281, 549, 203, TIG_BUTTON_HANDLE_INVALID },
@@ -499,7 +499,7 @@ static UiButtonInfo intgame_recent_action_buttons[] = {
 };
 
 // 0x5C6F60
-static int dword_5C6F60[] = {
+static int intgame_recent_action_default_skills[] = {
     1,
     0,
 };
@@ -707,7 +707,7 @@ static int intgame_mode_cursors[INTGAME_MODE_COUNT] = {
 };
 
 // 0x5C71D0
-static UiButtonInfo stru_5C71D0[10] = {
+static UiButtonInfo intgame_level_progress_pips[10] = {
     { 211, 37, 773, TIG_BUTTON_HANDLE_INVALID },
     { 249, 37, 774, TIG_BUTTON_HANDLE_INVALID },
     { 287, 37, 775, TIG_BUTTON_HANDLE_INVALID },
@@ -737,6 +737,13 @@ static int intgame_ammo_art_nums[TIG_ART_AMMO_TYPE_COUNT] = {
     /*   TIG_ART_AMMO_TYPE_FUEL */ 253,
 };
 
+// NOTE: Unreferenced, so it keeps its placeholder name. Not just unused by CE -
+// 0x5C729C has no references in the original either, so the values never
+// reached any code that could say what they meant. They read like a rect
+// (199, 495, 80, 48) behind a leading zero, which would put it in the
+// interface's lower band, but that is a guess and a name would fix it as fact.
+//
+// 0x5C729C
 static int dword_5C729C[] = {
     0,
     199,
@@ -777,7 +784,7 @@ static bool intgame_mode_scrolling[INTGAME_MODE_COUNT] = {
 static int dword_5C7308 = -1;
 
 // 0x5C730C
-static int dword_5C730C[8] = {
+static int intgame_moon_phase_days[8] = {
     0,
     4,
     9,
@@ -2091,7 +2098,7 @@ bool intgame_process_message(TigMessage* msg)
 
             switch (intgame_iso_window_type) {
             case ROTWIN_TYPE_MSG:
-                if (msg->data.button.button_handle == stru_5C65F8[1].button_handle) {
+                if (msg->data.button.button_handle == intgame_message_scroll_buttons[1].button_handle) {
                     if (inven_ui_drag_item_obj_get() == OBJ_HANDLE_NULL) {
                         intgame_message_history_scroll_up();
                         return true;
@@ -2100,7 +2107,7 @@ bool intgame_process_message(TigMessage* msg)
                     intgame_refresh_cursor();
                     return true;
                 }
-                if (msg->data.button.button_handle == stru_5C65F8[0].button_handle) {
+                if (msg->data.button.button_handle == intgame_message_scroll_buttons[0].button_handle) {
                     if (inven_ui_drag_item_obj_get() == OBJ_HANDLE_NULL) {
                         intgame_message_history_scroll_down();
                         return true;
@@ -2124,7 +2131,7 @@ bool intgame_process_message(TigMessage* msg)
                 break;
             case ROTWIN_TYPE_SKILLS:
                 for (index = 0; index < 4; index++) {
-                    if (msg->data.button.button_handle == stru_5C6C68[index].button_handle) {
+                    if (msg->data.button.button_handle == intgame_skill_buttons[index].button_handle) {
                         sub_57EFA0(2, index, OBJ_HANDLE_NULL);
                         sub_579FA0(player_get_local_pc_obj(), index);
                         return true;
@@ -2145,17 +2152,17 @@ bool intgame_process_message(TigMessage* msg)
                 }
                 break;
             case ROTWIN_TYPE_MAP_NOTE:
-                if (msg->data.button.button_handle == stru_5C6CA8[0].button_handle) {
+                if (msg->data.button.button_handle == intgame_map_note_buttons[0].button_handle) {
                     textedit_ui_clear();
                     return true;
                 }
 
-                if (msg->data.button.button_handle == stru_5C6CA8[1].button_handle) {
+                if (msg->data.button.button_handle == intgame_map_note_buttons[1].button_handle) {
                     textedit_ui_restore();
                     return true;
                 }
 
-                if (msg->data.button.button_handle == stru_5C6CA8[2].button_handle) {
+                if (msg->data.button.button_handle == intgame_map_note_buttons[2].button_handle) {
                     textedit_ui_submit();
                     return true;
                 }
@@ -2248,7 +2255,7 @@ bool intgame_process_message(TigMessage* msg)
                 break;
             case ROTWIN_TYPE_MAP_NOTE:
                 for (index = 3; index < 6; index++) {
-                    if (msg->data.button.button_handle == stru_5C6CA8[index].button_handle) {
+                    if (msg->data.button.button_handle == intgame_map_note_buttons[index].button_handle) {
                         wmap_ui_set_note_type(index - 3);
                         return true;
                     }
@@ -2361,14 +2368,14 @@ bool intgame_process_message(TigMessage* msg)
                 break;
             case ROTWIN_TYPE_SKILLS:
                 for (index = 0; index < 4; index++) {
-                    if (msg->data.button.button_handle == stru_5C6C68[index].button_handle) {
+                    if (msg->data.button.button_handle == intgame_skill_buttons[index].button_handle) {
                         intgame_message_window_display_skill(index);
                         return true;
                     }
                 }
                 break;
             case ROTWIN_TYPE_MSG:
-                if (msg->data.button.button_handle == stru_5C65F8[1].button_handle) {
+                if (msg->data.button.button_handle == intgame_message_scroll_buttons[1].button_handle) {
                     if (inven_ui_drag_item_obj_get() == OBJ_HANDLE_NULL) {
                         art_id = tig_mouse_cursor_get_art_id();
                         switch (tig_art_num_get(art_id)) {
@@ -2383,7 +2390,7 @@ bool intgame_process_message(TigMessage* msg)
                     }
                     return true;
                 }
-                if (msg->data.button.button_handle == stru_5C65F8[0].button_handle) {
+                if (msg->data.button.button_handle == intgame_message_scroll_buttons[0].button_handle) {
                     if (inven_ui_drag_item_obj_get() == OBJ_HANDLE_NULL) {
                         art_id = tig_mouse_cursor_get_art_id();
                         switch (tig_art_num_get(art_id)) {
@@ -2674,8 +2681,8 @@ bool handle_button_unhover(TigMessage* msg)
 
     switch (intgame_iso_window_type) {
     case ROTWIN_TYPE_MSG:
-        if (msg->data.button.button_handle == stru_5C65F8[1].button_handle
-            || msg->data.button.button_handle == stru_5C65F8[0].button_handle) {
+        if (msg->data.button.button_handle == intgame_message_scroll_buttons[1].button_handle
+            || msg->data.button.button_handle == intgame_message_scroll_buttons[0].button_handle) {
             if (inven_ui_drag_item_obj_get() == OBJ_HANDLE_NULL) {
                 intgame_refresh_cursor();
             }
@@ -3940,7 +3947,7 @@ bool sub_5501C0(void)
     tig_button_handle_t group[3];
 
     for (index = 0; index < 2; index++) {
-        button_create_no_art(&(stru_5C65F8[index]), 382, 41);
+        button_create_no_art(&(intgame_message_scroll_buttons[index]), 382, 41);
     }
 
     for (index = 0; index < COLLEGE_COUNT; index++) {
@@ -3958,9 +3965,9 @@ bool sub_5501C0(void)
     }
 
     for (index = 0; index < 4; index++) {
-        stru_5C6C68[index].art_num = sub_579F50(index);
-        if (stru_5C6C68[index].art_num != -1) {
-            intgame_button_create(&(stru_5C6C68[index]));
+        intgame_skill_buttons[index].art_num = sub_579F50(index);
+        if (intgame_skill_buttons[index].art_num != -1) {
+            intgame_button_create(&(intgame_skill_buttons[index]));
         }
     }
 
@@ -3976,11 +3983,11 @@ bool sub_5501C0(void)
     }
 
     for (index = 0; index < 6; index++) {
-        intgame_button_create(&(stru_5C6CA8[index]));
+        intgame_button_create(&(intgame_map_note_buttons[index]));
     }
 
     for (index = 3; index < 6; index++) {
-        group[index - 3] = stru_5C6CA8[index].button_handle;
+        group[index - 3] = intgame_map_note_buttons[index].button_handle;
     }
     tig_button_radio_group_create(3, group, 0);
 
@@ -4047,7 +4054,7 @@ void iso_interface_window_disable(RotatingWindowType window_type)
     switch (window_type) {
     case ROTWIN_TYPE_MSG:
         for (index = 0; index < 2; index++) {
-            tig_button_hide(stru_5C65F8[index].button_handle);
+            tig_button_hide(intgame_message_scroll_buttons[index].button_handle);
         }
         break;
     case ROTWIN_TYPE_SPELLS:
@@ -4061,7 +4068,7 @@ void iso_interface_window_disable(RotatingWindowType window_type)
     case ROTWIN_TYPE_SKILLS:
         for (index = 0; index < 4; index++) {
             if (sub_579F50(index) != -1) {
-                tig_button_hide(stru_5C6C68[index].button_handle);
+                tig_button_hide(intgame_skill_buttons[index].button_handle);
             }
         }
         break;
@@ -4076,7 +4083,7 @@ void iso_interface_window_disable(RotatingWindowType window_type)
         break;
     case ROTWIN_TYPE_MAP_NOTE:
         for (index = 0; index < 6; index++) {
-            tig_button_hide(stru_5C6CA8[index].button_handle);
+            tig_button_hide(intgame_map_note_buttons[index].button_handle);
         }
         break;
     case ROTWIN_TYPE_BROADCAST:
@@ -4656,7 +4663,7 @@ void iso_interface_window_enable(RotatingWindowType window_type)
     switch (window_type) {
     case ROTWIN_TYPE_MSG:
         for (index = 0; index < 2; index++) {
-            tig_button_show(stru_5C65F8[index].button_handle);
+            tig_button_show(intgame_message_scroll_buttons[index].button_handle);
         }
         break;
     case ROTWIN_TYPE_SPELLS:
@@ -4672,7 +4679,7 @@ void iso_interface_window_enable(RotatingWindowType window_type)
     case ROTWIN_TYPE_SKILLS:
         for (index = 0; index < 4; index++) {
             if (sub_579F50(index) != -1) {
-                tig_button_show(stru_5C6C68[index].button_handle);
+                tig_button_show(intgame_skill_buttons[index].button_handle);
             }
         }
         break;
@@ -4687,7 +4694,7 @@ void iso_interface_window_enable(RotatingWindowType window_type)
         break;
     case ROTWIN_TYPE_MAP_NOTE:
         for (index = 0; index < 6; index++) {
-            tig_button_show(stru_5C6CA8[index].button_handle);
+            tig_button_show(intgame_map_note_buttons[index].button_handle);
         }
         break;
     case ROTWIN_TYPE_BROADCAST:
@@ -5382,7 +5389,7 @@ void intgame_clock_refresh(void)
             v2 = ((datetime_seconds_since_reference_date(&datetime) + 43200) / 84600) % 28;
 
             for (idx = 0; idx < 8; idx++) {
-                if (v2 <= dword_5C730C[idx]) {
+                if (v2 <= intgame_moon_phase_days[idx]) {
                     break;
                 }
             }
@@ -8126,15 +8133,15 @@ void intgame_refresh_experience_gauges(int64_t obj)
 
     cnt = 11 * level_progress_towards_next_level(obj) / 10;
     for (index = 0; index < cnt / 100; index++) {
-        if (tig_art_interface_id_create(stru_5C71D0[index].art_num, 0, 0, 0, &art_id) == TIG_OK
+        if (tig_art_interface_id_create(intgame_level_progress_pips[index].art_num, 0, 0, 0, &art_id) == TIG_OK
             && tig_art_frame_data(art_id, &art_frame_data) == TIG_OK) {
             src_rect.x = 0;
             src_rect.y = 0;
             src_rect.width = art_frame_data.width;
             src_rect.height = art_frame_data.height;
 
-            dst_rect.x = stru_5C71D0[index].x;
-            dst_rect.y = stru_5C71D0[index].y;
+            dst_rect.x = intgame_level_progress_pips[index].x;
+            dst_rect.y = intgame_level_progress_pips[index].y;
             dst_rect.width = src_rect.width;
             dst_rect.height = src_rect.height;
 
@@ -8706,7 +8713,7 @@ void intgame_recent_action_button_position_set(int index, int x, int y)
 // 0x557B50
 int intgame_recent_action_default_skill(int index)
 {
-    return dword_5C6F60[index];
+    return intgame_recent_action_default_skills[index];
 }
 
 // 0x557B60
@@ -8752,7 +8759,7 @@ int intgame_skill_button_at_mouse(void)
     y = mouse_state.y - window_data.rect.y;
 
     for (index = 0; index < 4; index++) {
-        if (tig_button_data(stru_5C6C68[index].button_handle, &button_data) != TIG_OK) {
+        if (tig_button_data(intgame_skill_buttons[index].button_handle, &button_data) != TIG_OK) {
             break;
         }
 

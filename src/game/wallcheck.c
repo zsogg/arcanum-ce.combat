@@ -46,7 +46,7 @@ static void wallcheck_roof_faded_clear(int64_t a1);
 static bool wallcheck_enabled = true;
 
 // 0x5A3E94
-static uint8_t byte_5A3E94[4][4] = {
+static uint8_t wallcheck_offset_masks[4][4] = {
     { 3, 1, 1, 9 },
     { 2, 3, 9, 8 },
     { 2, 6, 12, 8 },
@@ -54,7 +54,7 @@ static uint8_t byte_5A3E94[4][4] = {
 };
 
 // 0x5A3EA4
-static char byte_5A3EA4[4] = {
+static char wallcheck_direction_bits[4] = {
     1,
     2,
     4,
@@ -62,7 +62,7 @@ static char byte_5A3EA4[4] = {
 };
 
 // 0x5A3EA8
-static S5A3EA8 stru_5A3EA8[27] = {
+static S5A3EA8 wallcheck_tile_offsets[27] = {
     { 0, 8, -8 },
     { 0, 4, -8 },
     { 0, 8, -4 },
@@ -93,7 +93,7 @@ static S5A3EA8 stru_5A3EA8[27] = {
 };
 
 // 0x5A3FF0
-static S5A3FF0 stru_5A3FF0[34] = {
+static S5A3FF0 wallcheck_scan_tbl[34] = {
     {
         1,
         7,
@@ -607,7 +607,7 @@ static S5A3FF0 stru_5A3FF0[34] = {
 };
 
 // 0x5A5310
-static int dword_5A5310[8] = {
+static int wallcheck_step_dx[8] = {
     0,
     -1,
     0,
@@ -619,7 +619,7 @@ static int dword_5A5310[8] = {
 };
 
 // 0x5A5330
-static int dword_5A5330[8] = {
+static int wallcheck_step_dy[8] = {
     0,
     0,
     0,
@@ -646,7 +646,7 @@ static int dword_5E0E10;
 static int64_t qword_5E0E18;
 
 // 0x5E0E20
-static S5E0E20 stru_5E0E20[256];
+static S5E0E20 wallcheck_tracked_walls[256];
 
 // 0x5E2E24
 static int dword_5E2E24;
@@ -658,7 +658,7 @@ static int dword_5E2E28;
 static bool wallcheck_dirty;
 
 // 0x5DE6F0
-static ObjectList stru_5DE6F0[34][3];
+static ObjectList wallcheck_scan_walls[34][3];
 
 // 0x437D90
 bool wallcheck_init(GameInitInfo* init_info)
@@ -677,8 +677,8 @@ void wallcheck_reset(void)
 
     if (dword_5E2E24 > 0) {
         for (index = 0; index < dword_5E2E24; index++) {
-            stru_5E0E20[index].flags &= ~0x2;
-            stru_5E0E20[index].flags |= 0x1;
+            wallcheck_tracked_walls[index].flags &= ~0x2;
+            wallcheck_tracked_walls[index].flags |= 0x1;
         }
 
         sub_438830();
@@ -765,7 +765,7 @@ void wallcheck_recalc(int64_t loc)
 
     x -= v1;
     y -= v2;
-    v3 = byte_5A3E94[v2][v1];
+    v3 = wallcheck_offset_masks[v2][v1];
 
     if (qword_5E0E18 == LOCATION_MAKE(x, y)
         && (dword_5E0E10 & v3) != 0) {
@@ -776,56 +776,56 @@ void wallcheck_recalc(int64_t loc)
     dword_5E0E10 = v3;
 
     for (int i = 0; i < dword_5E2E24; i++) {
-        stru_5E0E20[i].flags &= ~0x02;
-        stru_5E0E20[i].flags |= 0x01;
+        wallcheck_tracked_walls[i].flags &= ~0x02;
+        wallcheck_tracked_walls[i].flags |= 0x01;
     }
 
     for (int i = 0; i < 34; i++) {
-        stru_5A3FF0[i].field_0 &= 0xFFFF;
+        wallcheck_scan_tbl[i].field_0 &= 0xFFFF;
     }
 
     for (int i = 0; i < 27; i++) {
-        stru_5A3EA8[i].flags = 0;
+        wallcheck_tile_offsets[i].flags = 0;
     }
 
     for (int i = 0; i < 22; i++) {
-        if ((stru_5A3FF0[i].field_0 & 0x10000) == 0) {
+        if ((wallcheck_scan_tbl[i].field_0 & 0x10000) == 0) {
             tmp_x = x
-                + dword_5A5310[stru_5A3FF0[i].field_14]
-                + stru_5A3EA8[stru_5A3FF0[i].field_4].offset_x;
+                + wallcheck_step_dx[wallcheck_scan_tbl[i].field_14]
+                + wallcheck_tile_offsets[wallcheck_scan_tbl[i].field_4].offset_x;
             tmp_y = y
-                + dword_5A5330[stru_5A3FF0[i].field_14]
-                + stru_5A3EA8[stru_5A3FF0[i].field_4].offset_y;
+                + wallcheck_step_dy[wallcheck_scan_tbl[i].field_14]
+                + wallcheck_tile_offsets[wallcheck_scan_tbl[i].field_4].offset_y;
 
             for (int j = 0; j < 3; j++) {
-                object_list_location(LOCATION_MAKE(tmp_x, tmp_y), OBJ_TM_WALL, &(stru_5DE6F0[i][j]));
-                if (stru_5DE6F0[i][j].head == NULL) {
-                    stru_5A3FF0[i].field_0 |= 0x20000;
-                    if ((stru_5A3FF0[i].field_0 & 0x01) == 0) {
+                object_list_location(LOCATION_MAKE(tmp_x, tmp_y), OBJ_TM_WALL, &(wallcheck_scan_walls[i][j]));
+                if (wallcheck_scan_walls[i][j].head == NULL) {
+                    wallcheck_scan_tbl[i].field_0 |= 0x20000;
+                    if ((wallcheck_scan_tbl[i].field_0 & 0x01) == 0) {
                         break;
                     }
                 }
 
-                tmp_x += dword_5A5310[stru_5A3FF0[i].field_14];
-                tmp_y += dword_5A5330[stru_5A3FF0[i].field_14];
+                tmp_x += wallcheck_step_dx[wallcheck_scan_tbl[i].field_14];
+                tmp_y += wallcheck_step_dy[wallcheck_scan_tbl[i].field_14];
             }
 
-            if ((stru_5A3FF0[i].field_0 & 0x20000) == 0) {
+            if ((wallcheck_scan_tbl[i].field_0 & 0x20000) == 0) {
                 for (int j = 0; j < 10; j++) {
-                    if (stru_5A3FF0[i].field_18[j] == -1) {
+                    if (wallcheck_scan_tbl[i].field_18[j] == -1) {
                         break;
                     }
-                    stru_5A3FF0[stru_5A3FF0[i].field_18[j]].field_0 |= 0x10000;
+                    wallcheck_scan_tbl[wallcheck_scan_tbl[i].field_18[j]].field_0 |= 0x10000;
                 }
 
                 for (int j = 0; j < 4; j++) {
-                    if ((byte_5A3EA4[j] & dword_5E0E10) != 0) {
+                    if ((wallcheck_direction_bits[j] & dword_5E0E10) != 0) {
                         for (int k = 0; k < 5; k++) {
-                            if (stru_5A3FF0[i].field_40[j][k] == -1) {
+                            if (wallcheck_scan_tbl[i].field_40[j][k] == -1) {
                                 break;
                             }
 
-                            stru_5A3FF0[stru_5A3FF0[i].field_40[j][k]].field_0 |= 0x10000;
+                            wallcheck_scan_tbl[wallcheck_scan_tbl[i].field_40[j][k]].field_0 |= 0x10000;
                         }
                     }
                 }
@@ -834,55 +834,55 @@ void wallcheck_recalc(int64_t loc)
     }
 
     for (int i = 22; i < 34; i++) {
-        if ((stru_5A3FF0[i].field_0 & 0x10000) == 0) {
+        if ((wallcheck_scan_tbl[i].field_0 & 0x10000) == 0) {
             tmp_x = x
-                + dword_5A5310[stru_5A3FF0[i].field_14]
-                + stru_5A3EA8[stru_5A3FF0[i].field_4].offset_x;
+                + wallcheck_step_dx[wallcheck_scan_tbl[i].field_14]
+                + wallcheck_tile_offsets[wallcheck_scan_tbl[i].field_4].offset_x;
             tmp_y = y
-                + dword_5A5330[stru_5A3FF0[i].field_14]
-                + stru_5A3EA8[stru_5A3FF0[i].field_4].offset_y;
+                + wallcheck_step_dy[wallcheck_scan_tbl[i].field_14]
+                + wallcheck_tile_offsets[wallcheck_scan_tbl[i].field_4].offset_y;
 
             for (int j = 0; j < 3; j++) {
-                object_list_location(LOCATION_MAKE(tmp_x, tmp_y), OBJ_TM_WALL, &(stru_5DE6F0[i][j]));
-                tmp_x += dword_5A5310[stru_5A3FF0[i].field_14];
-                tmp_y += dword_5A5330[stru_5A3FF0[i].field_14];
+                object_list_location(LOCATION_MAKE(tmp_x, tmp_y), OBJ_TM_WALL, &(wallcheck_scan_walls[i][j]));
+                tmp_x += wallcheck_step_dx[wallcheck_scan_tbl[i].field_14];
+                tmp_y += wallcheck_step_dy[wallcheck_scan_tbl[i].field_14];
             }
         }
     }
 
     for (int i = 0; i < 34; i++) {
-        if ((stru_5A3FF0[i].field_0 & 0x10000) == 0
-            && (stru_5A3FF0[i].field_0 & 0x01) != 0) {
+        if ((wallcheck_scan_tbl[i].field_0 & 0x10000) == 0
+            && (wallcheck_scan_tbl[i].field_0 & 0x01) != 0) {
             bool v1 = false;
             for (int j = 0; j < 3; j++) {
-                if (stru_5DE6F0[i][j].head != NULL) {
+                if (wallcheck_scan_walls[i][j].head != NULL) {
                     v1 = true;
-                    sub_438570(stru_5DE6F0[i][j].head->obj,
-                        stru_5DE6F0[i][j].sectors[0],
+                    sub_438570(wallcheck_scan_walls[i][j].head->obj,
+                        wallcheck_scan_walls[i][j].sectors[0],
                         0);
                 }
             }
             if (v1) {
-                stru_5A3EA8[stru_5A3FF0[i].field_4].flags |= stru_5A3FF0[i].field_C;
-                stru_5A3EA8[stru_5A3FF0[i].field_8].flags |= stru_5A3FF0[i].field_10;
+                wallcheck_tile_offsets[wallcheck_scan_tbl[i].field_4].flags |= wallcheck_scan_tbl[i].field_C;
+                wallcheck_tile_offsets[wallcheck_scan_tbl[i].field_8].flags |= wallcheck_scan_tbl[i].field_10;
             }
         }
     }
 
     for (int i = 0; i < 34; i++) {
         for (int j = 0; j < 3; j++) {
-            if (stru_5DE6F0[i][j].num_sectors > 0) {
-                object_list_destroy(&(stru_5DE6F0[i][j]));
-                stru_5DE6F0[i][j].num_sectors = 0;
+            if (wallcheck_scan_walls[i][j].num_sectors > 0) {
+                object_list_destroy(&(wallcheck_scan_walls[i][j]));
+                wallcheck_scan_walls[i][j].num_sectors = 0;
             }
         }
 
-        stru_5A3FF0[i].field_0 &= 0xFFFF;
+        wallcheck_scan_tbl[i].field_0 &= 0xFFFF;
     }
 
     for (int i = 0; i < 27; i++) {
-        if (stru_5A3EA8[i].flags != 0) {
-            object_list_location(LOCATION_MAKE(x + stru_5A3EA8[i].offset_x, y + stru_5A3EA8[i].offset_y), OBJ_TM_WALL, &walls);
+        if (wallcheck_tile_offsets[i].flags != 0) {
+            object_list_location(LOCATION_MAKE(x + wallcheck_tile_offsets[i].offset_x, y + wallcheck_tile_offsets[i].offset_y), OBJ_TM_WALL, &walls);
             node = walls.head;
             while (node != NULL) {
                 art_id = obj_field_int32_get(node->obj, OBJ_F_CURRENT_AID);
@@ -891,18 +891,18 @@ void wallcheck_recalc(int64_t loc)
                     rot--;
                 }
                 if (rot == 0 || rot == 4) {
-                    if ((stru_5A3EA8[i].flags & 0x03) != 0) {
-                        sub_438570(node->obj, walls.sectors[0], stru_5A3EA8[i].flags & 0x03);
+                    if ((wallcheck_tile_offsets[i].flags & 0x03) != 0) {
+                        sub_438570(node->obj, walls.sectors[0], wallcheck_tile_offsets[i].flags & 0x03);
                     }
                 } else {
-                    if ((stru_5A3EA8[i].flags & 0x30) != 0) {
-                        sub_438570(node->obj, walls.sectors[0], stru_5A3EA8[i].flags & 0x30);
+                    if ((wallcheck_tile_offsets[i].flags & 0x30) != 0) {
+                        sub_438570(node->obj, walls.sectors[0], wallcheck_tile_offsets[i].flags & 0x30);
                     }
                 }
                 node = node->next;
             }
             object_list_destroy(&walls);
-            stru_5A3EA8[i].flags = 0;
+            wallcheck_tile_offsets[i].flags = 0;
         }
     }
 
@@ -945,25 +945,25 @@ void sub_438570(int64_t obj, int64_t sector_id, int type)
     Sector* sector;
 
     if (!sub_4386B0(obj, &index)) {
-        memmove(&(stru_5E0E20[index + 1]),
-            &(stru_5E0E20[index]),
-            sizeof(*stru_5E0E20) * (dword_5E2E24 - index));
-        stru_5E0E20[index].flags = 0;
-        stru_5E0E20[index].sector_id = sector_id;
-        stru_5E0E20[index].obj = obj;
-        stru_5E0E20[index].field_18 = roof_normalize_loc(obj_field_int64_get(obj, OBJ_F_LOCATION));
+        memmove(&(wallcheck_tracked_walls[index + 1]),
+            &(wallcheck_tracked_walls[index]),
+            sizeof(*wallcheck_tracked_walls) * (dword_5E2E24 - index));
+        wallcheck_tracked_walls[index].flags = 0;
+        wallcheck_tracked_walls[index].sector_id = sector_id;
+        wallcheck_tracked_walls[index].obj = obj;
+        wallcheck_tracked_walls[index].field_18 = roof_normalize_loc(obj_field_int64_get(obj, OBJ_F_LOCATION));
 
         sector_lock(sector_id, &sector);
-        sub_438720(stru_5E0E20[index].field_18);
+        sub_438720(wallcheck_tracked_walls[index].field_18);
         dword_5E2E24++;
     }
 
     if (type == 1 || type == 16) {
-        stru_5E0E20[index].flags = 0x04 | 0x02;
+        wallcheck_tracked_walls[index].flags = 0x04 | 0x02;
     } else if (type == 2 || type == 32) {
-        stru_5E0E20[index].flags = 0x08 | 0x02;
+        wallcheck_tracked_walls[index].flags = 0x08 | 0x02;
     } else {
-        stru_5E0E20[index].flags = 0x08 | 0x04 | 0x02;
+        wallcheck_tracked_walls[index].flags = 0x08 | 0x04 | 0x02;
     }
 }
 
@@ -979,7 +979,7 @@ bool sub_4386B0(int64_t obj, int* index_ptr)
     r = dword_5E2E24 - 1;
     while (l <= r) {
         m = (l + r) / 2;
-        curr = stru_5E0E20[m].obj;
+        curr = wallcheck_tracked_walls[m].obj;
 
         if (curr < obj) {
             l = m + 1;
@@ -1052,55 +1052,55 @@ void sub_438830(void)
     unsigned int new_wall_flags;
 
     for (idx = 0; idx < dword_5E2E24; idx++) {
-        if ((stru_5E0E20[idx].flags & 0x01) != 0) {
-            wall_flags = obj_field_int32_get(stru_5E0E20[idx].obj, OBJ_F_WALL_FLAGS);
+        if ((wallcheck_tracked_walls[idx].flags & 0x01) != 0) {
+            wall_flags = obj_field_int32_get(wallcheck_tracked_walls[idx].obj, OBJ_F_WALL_FLAGS);
             if ((wall_flags & 0x01) == 0) {
                 wall_flags &= ~(0x04 | 0x02);
-                obj_field_int32_set(stru_5E0E20[idx].obj, OBJ_F_WALL_FLAGS, wall_flags);
+                obj_field_int32_set(wallcheck_tracked_walls[idx].obj, OBJ_F_WALL_FLAGS, wall_flags);
 
-                render_flags = obj_field_int32_get(stru_5E0E20[idx].obj, OBJ_F_RENDER_FLAGS);
+                render_flags = obj_field_int32_get(wallcheck_tracked_walls[idx].obj, OBJ_F_RENDER_FLAGS);
                 render_flags &= ~ORF_01000000;
-                obj_field_int32_set(stru_5E0E20[idx].obj, OBJ_F_RENDER_FLAGS, render_flags);
+                obj_field_int32_set(wallcheck_tracked_walls[idx].obj, OBJ_F_RENDER_FLAGS, render_flags);
 
-                object_get_rect(stru_5E0E20[idx].obj, 0, &obj_rect);
+                object_get_rect(wallcheck_tracked_walls[idx].obj, 0, &obj_rect);
                 dword_5E0A00(&obj_rect);
             }
 
-            wallcheck_roof_faded_clear(stru_5E0E20[idx].field_18);
+            wallcheck_roof_faded_clear(wallcheck_tracked_walls[idx].field_18);
 
-            sector_unlock(stru_5E0E20[idx].sector_id);
+            sector_unlock(wallcheck_tracked_walls[idx].sector_id);
 
-            memmove(&(stru_5E0E20[idx]),
-                &(stru_5E0E20[idx + 1]),
-                sizeof(stru_5E0E20[0]) * (dword_5E2E24 - idx - 1));
+            memmove(&(wallcheck_tracked_walls[idx]),
+                &(wallcheck_tracked_walls[idx + 1]),
+                sizeof(wallcheck_tracked_walls[0]) * (dword_5E2E24 - idx - 1));
             dword_5E2E24--;
             idx--;
-        } else if ((stru_5E0E20[idx].flags & 0x02) != 0) {
-            wall_flags = obj_field_int32_get(stru_5E0E20[idx].obj, OBJ_F_WALL_FLAGS);
+        } else if ((wallcheck_tracked_walls[idx].flags & 0x02) != 0) {
+            wall_flags = obj_field_int32_get(wallcheck_tracked_walls[idx].obj, OBJ_F_WALL_FLAGS);
             if ((wall_flags & 0x01) == 0) {
                 wall_flags &= ~(0x04 | 0x02);
 
-                if (((stru_5E0E20[idx].flags) & (0x08 | 0x04)) == (0x08 | 0x04)) {
+                if (((wallcheck_tracked_walls[idx].flags) & (0x08 | 0x04)) == (0x08 | 0x04)) {
                     new_wall_flags = 0x04 | 0x02;
-                } else if ((stru_5E0E20[idx].flags & (0x08 | 0x04)) == 0x04) {
+                } else if ((wallcheck_tracked_walls[idx].flags & (0x08 | 0x04)) == 0x04) {
                     new_wall_flags = 0x02;
                 } else {
                     new_wall_flags = 0x04;
                 }
 
                 if (new_wall_flags != wall_flags) {
-                    obj_field_int32_set(stru_5E0E20[idx].obj, OBJ_F_WALL_FLAGS, wall_flags | new_wall_flags);
+                    obj_field_int32_set(wallcheck_tracked_walls[idx].obj, OBJ_F_WALL_FLAGS, wall_flags | new_wall_flags);
 
-                    render_flags = obj_field_int32_get(stru_5E0E20[idx].obj, OBJ_F_RENDER_FLAGS);
+                    render_flags = obj_field_int32_get(wallcheck_tracked_walls[idx].obj, OBJ_F_RENDER_FLAGS);
                     render_flags &= ~ORF_01000000;
-                    obj_field_int32_set(stru_5E0E20[idx].obj, OBJ_F_RENDER_FLAGS, render_flags);
+                    obj_field_int32_set(wallcheck_tracked_walls[idx].obj, OBJ_F_RENDER_FLAGS, render_flags);
 
-                    object_get_rect(stru_5E0E20[idx].obj, 0, &obj_rect);
+                    object_get_rect(wallcheck_tracked_walls[idx].obj, 0, &obj_rect);
                     dword_5E0A00(&obj_rect);
                 }
             }
 
-            stru_5E0E20[idx].flags &= ~0x02;
+            wallcheck_tracked_walls[idx].flags &= ~0x02;
         }
     }
 }
