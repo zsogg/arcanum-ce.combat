@@ -444,6 +444,11 @@ static UiButtonInfo intgame_quantity_buttons[INTGAME_QUANTITY_BUTTON_COUNT] = {
     /*   INTGAME_QUANTITY_BUTTON_CANCEL */ { 545, 557, 32, TIG_BUTTON_HANDLE_INVALID },
 };
 
+// NOTE: Write-only, in the original too. `sub_5501C0` sets it to -1 and the two
+// window-swap paths store the outgoing type into it (0x5503D4, 0x5520BC,
+// 0x552158), but nothing anywhere reads 0x5C6D58. It looks like a "previous
+// window" meant for a back gesture that was never built.
+//
 // 0x5C6D58
 static RotatingWindowType dword_5C6D58 = ROTWIN_TYPE_INVALID;
 
@@ -489,6 +494,12 @@ static TigRect intgame_maintain_window_rects[5] = {
     { 481, 3, 32, 32 },
 };
 
+// NOTE: Created by `iso_interface_create` and then ignored - its
+// `button_handle` at 0x5C6F3C is read by no instruction in the exe, so nothing
+// handles its presses in the original either. Art 182 at (616, 455) in the
+// bottom panel; unnamed because a button nobody listens to gives no evidence
+// of what it is.
+//
 // 0x5C6F30
 static UiButtonInfo stru_5C6F30 = { 616, 455, 182, TIG_BUTTON_HANDLE_INVALID };
 
@@ -737,11 +748,20 @@ static UiButtonInfo intgame_level_progress_pips[10] = {
     { 555, 37, 782, TIG_BUTTON_HANDLE_INVALID },
 };
 
+// The fractional pip at the end of the level progress gauge. Whole pips come
+// from `intgame_level_progress_pips`; this one is blitted clipped to
+// `(cnt % 100)` percent of its width, and is never made into a button despite
+// the type.
+//
 // 0x5C7270
-static UiButtonInfo stru_5C7270 = { 216, 47, 772, TIG_BUTTON_HANDLE_INVALID };
+static UiButtonInfo intgame_level_progress_partial_pip = { 216, 47, 772, TIG_BUTTON_HANDLE_INVALID };
 
+// The TGT_* filter `target_pick_at_screen_xy_ex` picks with, narrowed while a
+// spell or skill is armed so the cursor only takes legal targets, and reset to
+// plain TGT_OBJECT on the way back to INTGAME_MODE_MAIN.
+//
 // 0x5C7280
-static uint64_t qword_5C7280 = TGT_OBJECT;
+static uint64_t intgame_target_pick_flags = TGT_OBJECT;
 
 // 0x5C7288
 static tig_window_handle_t intgame_fs_hotkey_window = TIG_WINDOW_HANDLE_INVALID;
@@ -769,8 +789,12 @@ static int dword_5C729C[] = {
     48,
 };
 
+// Keeps the PC lens's render lock paired: 1 when the lock is not held, 0 while
+// PC_LENS_MODE_BLACKOUT holds it. Both guards test `< 1` rather than assuming,
+// so setting the same mode twice cannot acquire or release twice.
+//
 // 0x5C72B0
-static int dword_5C72B0 = 1;
+static int intgame_pc_lens_renderlock_balance = 1;
 
 // 0x5C72B4
 static bool intgame_mode_scrolling[INTGAME_MODE_COUNT] = {
@@ -1002,17 +1026,31 @@ static int64_t intgame_magictech_item;
 // 0x64C690
 static int64_t intgame_examine_obj;
 
+// NOTE: Never written, here or in the original - the only instruction naming
+// 0x64C698 is the PUSH in `intgame_pc_lens_do` that passes it. So the blackout
+// path hands `sub_558130` a zero rect, which is presumably the point: the
+// other two modes pass NULL and the real lens rect.
+//
 // 0x64C698
 static TigRect stru_64C698;
 
 // 0x64C6A8
 static RotatingWindowType intgame_iso_window_type;
 
+// NOTE: Write-only, in the original too - both stores are in
+// `iso_interface_window_set` (0x5506F1, 0x550701) and there are no loads of
+// 0x64C6AC anywhere. Same shape as `dword_5C6D58` just above.
+//
 // 0x64C6AC
 static RotatingWindowType dword_64C6AC;
 
+// Set once by `iso_interface_create` and never cleared, so the drawing helpers
+// can bail before the interface windows exist. Distinct from
+// `intgame_iso_interface_created`, which tracks whether it is *currently* set
+// up and does get cleared.
+//
 // 0x64C6B0
-static bool dword_64C6B0;
+static bool intgame_iso_interface_exists;
 
 // 0x64C6B4
 static bool intgame_iso_interface_created;
@@ -1334,7 +1372,7 @@ void iso_interface_create(tig_window_handle_t window_handle)
     hrp_apply(&intgame_pc_lens_dst_rect, GRAVITY_CENTER_HORIZONTAL | GRAVITY_CENTER_VERTICAL);
 
     intgame_iso_window_handle = window_handle;
-    dword_64C6B0 = 1;
+    intgame_iso_interface_exists = 1;
     intgame_iso_interface_created = false;
 
     tig_window_data(window_handle, &window_data);
@@ -1746,7 +1784,7 @@ void intgame_draw_bar_rect(TigRect* rect)
     int filled_height;
     int empty_height;
 
-    if (!dword_64C6B0) {
+    if (!intgame_iso_interface_exists) {
         return;
     }
 
@@ -4582,9 +4620,9 @@ void intgame_pc_lens_do(PcLensMode mode, PcLens* pc_lens)
         sub_558130(NULL);
         iso_redraw();
 
-        if (dword_5C72B0 < 1) {
+        if (intgame_pc_lens_renderlock_balance < 1) {
             gamelib_renderlock_release();
-            dword_5C72B0++;
+            intgame_pc_lens_renderlock_balance++;
         }
         break;
     case PC_LENS_MODE_PASSTHROUGH:
@@ -4606,9 +4644,9 @@ void intgame_pc_lens_do(PcLensMode mode, PcLens* pc_lens)
 
         sub_558130(&intgame_pc_lens_dst_rect);
 
-        if (dword_5C72B0 < 1) {
+        if (intgame_pc_lens_renderlock_balance < 1) {
             gamelib_renderlock_release();
-            dword_5C72B0++;
+            intgame_pc_lens_renderlock_balance++;
         }
         break;
     case PC_LENS_MODE_BLACKOUT:
@@ -4642,7 +4680,7 @@ void intgame_pc_lens_do(PcLensMode mode, PcLens* pc_lens)
         sub_558130(&stru_64C698);
 
         gamelib_renderlock_acquire();
-        dword_5C72B0--;
+        intgame_pc_lens_renderlock_balance--;
         break;
     }
 
@@ -5005,7 +5043,7 @@ void intgame_hover_examine(TigMessage* msg)
         intgame_update_target_flags();
 
         if (!map_is_clearing_objects()) {
-            if (target_pick_at_screen_xy_ex(msg->data.mouse.x, msg->data.mouse.y, &td, qword_5C7280, intgame_fullscreen)) {
+            if (target_pick_at_screen_xy_ex(msg->data.mouse.x, msg->data.mouse.y, &td, intgame_target_pick_flags, intgame_fullscreen)) {
                 if (!td.is_loc) {
                     tb_ui_examine_object(player_get_local_pc_obj(), td.obj);
                     object_hover_obj_set(td.obj);
@@ -5298,24 +5336,24 @@ void intgame_update_target_flags(void)
     pc_obj = player_get_local_pc_obj();
     if (pc_obj != OBJ_HANDLE_NULL) {
         if (intgame_mode_get() != INTGAME_MODE_MAIN) {
-            qword_5C7280 = TGT_OBJECT;
+            intgame_target_pick_flags = TGT_OBJECT;
             return;
         }
 
         if (combat_critter_is_combat_mode_active(pc_obj)) {
             if (tig_kb_get_modifier(SDL_KMOD_ALT)) {
                 target_flags_set(TGT_OBJECT | TGT_OBJ_NO_SELF | TGT_OBJ_NO_T_WALL | TGT_TILE);
-                qword_5C7280 = TGT_OBJECT | TGT_OBJ_NO_SELF | TGT_OBJ_NO_T_WALL;
+                intgame_target_pick_flags = TGT_OBJECT | TGT_OBJ_NO_SELF | TGT_OBJ_NO_T_WALL;
             } else {
                 target_flags_set(TGT_OBJECT | TGT_OBJ_NO_SELF | TGT_OBJ_NO_ST_CRITTER_DEAD | TGT_OBJ_NO_T_WALL | TGT_TILE | TGT_NON_PARTY_CRITTERS);
-                qword_5C7280 = TGT_OBJECT | TGT_OBJ_NO_SELF | TGT_OBJ_NO_ST_CRITTER_DEAD | TGT_OBJ_NO_T_WALL | TGT_NON_PARTY_CRITTERS;
+                intgame_target_pick_flags = TGT_OBJECT | TGT_OBJ_NO_SELF | TGT_OBJ_NO_ST_CRITTER_DEAD | TGT_OBJ_NO_T_WALL | TGT_NON_PARTY_CRITTERS;
             }
             return;
         }
     }
 
     target_flags_set(TGT_OBJECT | TGT_OBJ_NO_T_WALL | TGT_TILE);
-    qword_5C7280 = TGT_OBJECT;
+    intgame_target_pick_flags = TGT_OBJECT;
 }
 
 // 0x552050
@@ -6435,7 +6473,7 @@ void intgame_hover_on_mouse_move(TigMessage* msg)
         return;
     }
 
-    if (target_pick_at_screen_xy_ex(msg->data.mouse.x, msg->data.mouse.y, &td, qword_5C7280, intgame_fullscreen)) {
+    if (target_pick_at_screen_xy_ex(msg->data.mouse.x, msg->data.mouse.y, &td, intgame_target_pick_flags, intgame_fullscreen)) {
         if (obj != td.obj) {
             tb_ui_examine_object(player_get_local_pc_obj(), td.obj);
             object_hover_obj_set(td.obj);
@@ -8270,15 +8308,15 @@ void intgame_refresh_experience_gauges(int64_t obj)
     }
 
     if (cnt % 100 != 0) {
-        if (tig_art_interface_id_create(stru_5C7270.art_num, 0, 0, 0, &art_id) == TIG_OK
+        if (tig_art_interface_id_create(intgame_level_progress_partial_pip.art_num, 0, 0, 0, &art_id) == TIG_OK
             && tig_art_frame_data(art_id, &art_frame_data) == TIG_OK) {
             src_rect.x = 0;
             src_rect.y = 0;
             src_rect.width = art_frame_data.width * (cnt % 100) / 100;
             src_rect.height = art_frame_data.height;
 
-            dst_rect.x = stru_5C7270.x;
-            dst_rect.y = stru_5C7270.y;
+            dst_rect.x = intgame_level_progress_partial_pip.x;
+            dst_rect.y = intgame_level_progress_partial_pip.y;
             dst_rect.width = src_rect.width;
             dst_rect.height = src_rect.height;
 
