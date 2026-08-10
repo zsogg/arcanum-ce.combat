@@ -72,9 +72,9 @@ typedef enum MainMenuWindowType {
     MM_WINDOW_COUNT,
 } MainMenuWindowType;
 
-extern int dword_5C3618;
-extern int dword_64C420;
-extern int64_t* dword_64C41C;
+extern int mainmenu_ui_mp_char_idx;
+extern int mainmenu_ui_mp_chars_count;
+extern int64_t* mainmenu_ui_mp_chars;
 
 bool mainmenu_ui_init(GameInitInfo* init_info);
 void mainmenu_ui_exit(void);

@@ -181,8 +181,14 @@ static int mainmenu_font_colors[MM_COLOR_COUNT][3] = {
     { 128, 128, 128 },
 };
 
+// The multiplayer character list of the original's window types 17 and 22 -
+// `multiplayer_load_chars(&mainmenu_ui_mp_chars, &mainmenu_ui_mp_chars_count)`
+// fills the pair from `Players\\G_*.mpc`, and the index selects the row the
+// arrow keys move and Delete removes. CE keeps the storage (and frees it in
+// `mainmenu_ui_exit`) but has neither window, so nothing populates it.
+//
 // 0x5C3618
-int dword_5C3618 = -1;
+int mainmenu_ui_mp_char_idx = -1;
 
 // 0x5C361C
 static int mainmenu_ui_pregen_char_cnt = 9;
@@ -1459,11 +1465,15 @@ static ScrollbarUiControlInfo mainmenu_ui_scrollbar_info;
 // 0x64C2F4
 static mes_file_handle_t mainmenu_ui_rules_mainmenu_mes_file;
 
+// NOTE: Read but never written, in the original as well as here - the one
+// instruction that touches it is a load at 0x548C6B, inside the redraw helper
+// for the multiplayer character list. So it is always zero, and CE is faithful.
+//
 // 0x64C378
 static int dword_64C378;
 
 // 0x64C37C
-static char* dword_64C37C;
+static char* mainmenu_ui_savelist_module_name;
 
 // 0x64C380
 static bool mainmenu_ui_initialized;
@@ -1471,11 +1481,18 @@ static bool mainmenu_ui_initialized;
 // 0x64C384
 static bool mainmenu_ui_active;
 
+// Forces `mainmenu_ui_create_window_func` to skip the display, so the window
+// `mainmenu_ui_init` opens to seed state never reaches the screen.
+//
 // 0x64C388
-static bool dword_64C388;
+static bool mainmenu_ui_suppress_display;
 
+// Set by the transitions that have already fixed up the window stack
+// themselves - intro, credits, and loading a save - so the next
+// `mainmenu_ui_open` does not push the window it opens. Cleared by that open.
+//
 // 0x64C38C
-static bool dword_64C38C;
+static bool mainmenu_ui_skip_window_stack_push;
 
 // 0x64C390
 static int mainmenu_ui_num_windows;
@@ -1495,10 +1512,10 @@ static MainMenuWindowType mainmenu_ui_window_type;
 static bool mainmenu_ui_start_new_game;
 
 // 0x64C41C
-int64_t* dword_64C41C;
+int64_t* mainmenu_ui_mp_chars;
 
 // 0x64C420
-int dword_64C420;
+int mainmenu_ui_mp_chars_count;
 
 // 0x64C424
 static bool mainmenu_ui_auto_equip_items_on_start;
@@ -1516,11 +1533,15 @@ static int mainmenu_ui_body_font_greys[3];
 // 0x64C438
 static bool mainmenu_ui_was_compact_interface;
 
+// Counts `mainmenu_ui_create_mainmenu` calls. Escape quits the game only once
+// this is above one, which is what keeps it from quitting from the main menu
+// the game starts on.
+//
 // 0x64C43C
-static int dword_64C43C;
+static int mainmenu_ui_mainmenu_create_count;
 
 // 0x64C440
-static int dword_64C440;
+static int mainmenu_ui_options_tab;
 
 // 0x64C444
 static bool mainmenu_ui_gsi_loaded;
@@ -1531,17 +1552,21 @@ static int mainmenu_ui_progressbar_max_value;
 // 0x64C44C
 static int mainmenu_ui_progressbar_value;
 
+// Whether the load game screen's PC lens shows the live map rather than a
+// blackout - false only on the shopping map. Clicking the lens returns to the
+// game when it is set and backs out one window when it is not.
+//
 // 0x64C450
-static bool dword_64C450;
+static bool mainmenu_ui_load_game_lens_passthrough;
 
 // 0x64C454
-static ChareditMode dword_64C454;
+static ChareditMode mainmenu_ui_charedit_mode;
 
 // 0x64C458
 static MainMenuUiNewCharHoverMode mainmenu_ui_new_char_hover_mode;
 
 // 0x64C460
-static int64_t qword_64C460;
+static int64_t mainmenu_ui_pregen_char_obj;
 
 // 0x64C468
 static int mainmenu_ui_key_shortcuts_disable_count;
@@ -1677,14 +1702,14 @@ bool mainmenu_ui_init(GameInitInfo* init_info)
     mainmenu_ui_initialized = true;
     mainmenu_ui_window_type = MM_WINDOW_0;
 
-    dword_64C388 = true;
+    mainmenu_ui_suppress_display = true;
     mainmenu_ui_start(MM_TYPE_DEFAULT);
-    dword_64C388 = false;
+    mainmenu_ui_suppress_display = false;
 
     gamelib_thumbnail_size_set(468, 300);
     mainmenu_ui_start_new_game = false;
     sub_549A80();
-    dword_64C37C = NULL;
+    mainmenu_ui_savelist_module_name = NULL;
 
     return true;
 }
@@ -1715,8 +1740,8 @@ void mainmenu_ui_exit(void)
     mes_unload(mainmenu_ui_rules_mainmenu_mes_file);
     mes_unload(mainmenu_ui_mainmenu_mes_file);
 
-    if (dword_64C41C != NULL) {
-        FREE(dword_64C41C);
+    if (mainmenu_ui_mp_chars != NULL) {
+        FREE(mainmenu_ui_mp_chars);
     }
 
     mainmenu_ui_initialized = false;
@@ -2046,12 +2071,12 @@ void mainmenu_ui_open(void)
         }
 
         if (mainmenu_ui_active) {
-            if (!dword_64C38C) {
+            if (!mainmenu_ui_skip_window_stack_push) {
                 mainmenu_ui_push_window_stack(mainmenu_ui_window_type);
             }
         }
 
-        dword_64C38C = false;
+        mainmenu_ui_skip_window_stack_push = false;
     }
 }
 
@@ -2204,7 +2229,7 @@ void mainmenu_ui_create_mainmenu(void)
 {
     mainmenu_ui_window_type = MM_WINDOW_MAINMENU;
     mainmenu_ui_create_window();
-    ++dword_64C43C;
+    ++mainmenu_ui_mainmenu_create_count;
     mainmenu_ui_draw_version();
 }
 
@@ -2327,7 +2352,7 @@ void mainmenu_ui_create_options(void)
     sub_541D40();
     mainmenu_ui_window_type = MM_WINDOW_OPTIONS;
     mainmenu_ui_create_window_func(false);
-    dword_64C440 = 0;
+    mainmenu_ui_options_tab = 0;
     options_ui_start(OPTIONS_UI_TAB_GAME, mainmenu_ui_window_handle, mainmenu_ui_type_flags[mainmenu_ui_type][1] == 0);
     mainmenu_ui_draw_version();
 
@@ -2406,11 +2431,11 @@ bool mainmenu_ui_press_options(tig_button_handle_t button_handle)
 // 0x541E20
 void sub_541E20(int a1)
 {
-    if (dword_64C440 != a1 && options_ui_load_module()) {
+    if (mainmenu_ui_options_tab != a1 && options_ui_load_module()) {
         options_ui_close();
 
-        dword_64C440 = a1;
-        switch (dword_64C440) {
+        mainmenu_ui_options_tab = a1;
+        switch (mainmenu_ui_options_tab) {
         case 0:
             options_ui_start(OPTIONS_UI_TAB_GAME, mainmenu_ui_window_handle, mainmenu_ui_type_flags[mainmenu_ui_type][1] == 0);
             break;
@@ -2436,8 +2461,8 @@ void mainmenu_ui_load_game_create(void)
 
     sub_542200();
 
-    if (dword_64C37C) {
-        gamelib_savelist_create_module(dword_64C37C, &mainmenu_ui_gsl);
+    if (mainmenu_ui_savelist_module_name) {
+        gamelib_savelist_create_module(mainmenu_ui_savelist_module_name, &mainmenu_ui_gsl);
     } else {
         gamelib_savelist_create(&mainmenu_ui_gsl);
     }
@@ -2502,7 +2527,7 @@ void mainmenu_ui_load_game_create(void)
     mainmenu_ui_scrollbar_info.content_rect.height = 232;
     scrollbar_ui_control_create(&mainmenu_ui_scrollbar, &mainmenu_ui_scrollbar_info, mainmenu_ui_window_handle);
 
-    dword_64C450 = false;
+    mainmenu_ui_load_game_lens_passthrough = false;
 
     pc_obj = player_get_local_pc_obj();
 
@@ -2518,7 +2543,7 @@ void mainmenu_ui_load_game_create(void)
         intgame_pc_lens_do(PC_LENS_MODE_BLACKOUT, &pc_lens);
     } else {
         intgame_pc_lens_do(PC_LENS_MODE_PASSTHROUGH, &pc_lens);
-        dword_64C450 = true;
+        mainmenu_ui_load_game_lens_passthrough = true;
     }
 
     scrollbar_ui_control_redraw(mainmenu_ui_scrollbar);
@@ -2550,9 +2575,9 @@ void mainmenu_ui_load_game_destroy(void)
     gamelib_savelist_destroy(&mainmenu_ui_gsl);
 
     intgame_pc_lens_do(PC_LENS_MODE_NONE, NULL);
-    if (dword_64C37C != NULL)
-        FREE(dword_64C37C);
-    dword_64C37C = NULL;
+    if (mainmenu_ui_savelist_module_name != NULL)
+        FREE(mainmenu_ui_savelist_module_name);
+    mainmenu_ui_savelist_module_name = NULL;
 }
 
 // 0x542280
@@ -3822,7 +3847,7 @@ void mainmenu_ui_last_save_create(void)
     } else {
         mainmenu_ui_active = true;
         mainmenu_ui_close(true);
-        dword_64C38C = true;
+        mainmenu_ui_skip_window_stack_push = true;
     }
 
     tig_mouse_show();
@@ -3838,7 +3863,7 @@ void mainmenu_ui_intro_create(void)
     mainmenu_ui_pop_window_stack();
     mainmenu_ui_window_type = MM_WINDOW_SINGLE_PLAYER;
     mainmenu_ui_open();
-    dword_64C38C = true;
+    mainmenu_ui_skip_window_stack_push = true;
 }
 
 // 0x544640
@@ -3849,7 +3874,7 @@ void mainmenu_ui_credits_create(void)
     mainmenu_ui_pop_window_stack();
     mainmenu_ui_window_type = MM_WINDOW_MAINMENU;
     mainmenu_ui_open();
-    dword_64C38C = true;
+    mainmenu_ui_skip_window_stack_push = true;
     slide_ui_start(SLIDE_UI_TYPE_CREDITS);
 
     if (mainmenu_ui_active) {
@@ -3877,7 +3902,7 @@ void mainmenu_ui_create_single_player(void)
 // 0x5446D0
 void mainmenu_ui_pick_new_or_pregen_create(void)
 {
-    dword_64C454 = CHAREDIT_MODE_CREATE;
+    mainmenu_ui_charedit_mode = CHAREDIT_MODE_CREATE;
     mainmenu_ui_window_type = MM_WINDOW_PICK_NEW_OR_PREGEN;
     mainmenu_ui_create_window();
     mainmenu_ui_draw_version();
@@ -4474,7 +4499,7 @@ void mainmenu_ui_pregen_char_create(void)
 {
     mainmenu_ui_window_type = MM_WINDOW_PREGEN_CHAR;
     mainmenu_ui_pregen_char_idx = 1;
-    qword_64C460 = obj_pool_perm_lookup(obj_get_id(proto_get_by_description(BP_MERWIN_TUMBLEBROOK)));
+    mainmenu_ui_pregen_char_obj = obj_pool_perm_lookup(obj_get_id(proto_get_by_description(BP_MERWIN_TUMBLEBROOK)));
     mainmenu_ui_create_window();
 }
 
@@ -4483,7 +4508,7 @@ void mainmenu_ui_pregen_char_refresh(TigRect* rect)
 {
     char* name;
 
-    mmUISharedCharRefreshFunc(qword_64C460, rect);
+    mmUISharedCharRefreshFunc(mainmenu_ui_pregen_char_obj, rect);
     if (rect == NULL
         || (mainmenu_ui_shared_char_name_rect.x < rect->x + rect->width
             && mainmenu_ui_shared_char_name_rect.y < rect->y + rect->height
@@ -4491,7 +4516,7 @@ void mainmenu_ui_pregen_char_refresh(TigRect* rect)
             && rect->y < mainmenu_ui_shared_char_name_rect.y + mainmenu_ui_shared_char_name_rect.height)) {
         tig_font_push(mainmenu_ui_text_fonts_red[1]);
         if (tig_window_fill(mainmenu_ui_window_handle, &mainmenu_ui_shared_char_name_rect, tig_color_make(0, 0, 0)) == TIG_OK) {
-            obj_field_string_get(qword_64C460, OBJ_F_PC_PLAYER_NAME, &name);
+            obj_field_string_get(mainmenu_ui_pregen_char_obj, OBJ_F_PC_PLAYER_NAME, &name);
             if (name != NULL) {
                 mainmenu_ui_draw_centered_text(name, &mainmenu_ui_shared_char_name_rect, mainmenu_ui_text_fonts_red[1]);
                 FREE(name);
@@ -4537,7 +4562,7 @@ bool mainmenu_ui_pregen_char_button_released(tig_button_handle_t button_handle)
         } else {
             mainmenu_ui_pregen_char_idx = mainmenu_ui_pregen_char_cnt - 1;
         }
-        qword_64C460 = obj_pool_perm_lookup(obj_get_id(proto_get_by_description(mainmenu_ui_pregen_char_idx + BP_GENERIC_PC)));
+        mainmenu_ui_pregen_char_obj = obj_pool_perm_lookup(obj_get_id(proto_get_by_description(mainmenu_ui_pregen_char_idx + BP_GENERIC_PC)));
         window->refresh_func(NULL);
         return true;
     case 3:
@@ -4546,7 +4571,7 @@ bool mainmenu_ui_pregen_char_button_released(tig_button_handle_t button_handle)
         } else {
             mainmenu_ui_pregen_char_idx = 1;
         }
-        qword_64C460 = obj_pool_perm_lookup(obj_get_id(proto_get_by_description(mainmenu_ui_pregen_char_idx + BP_GENERIC_PC)));
+        mainmenu_ui_pregen_char_obj = obj_pool_perm_lookup(obj_get_id(proto_get_by_description(mainmenu_ui_pregen_char_idx + BP_GENERIC_PC)));
         window->refresh_func(NULL);
         return true;
     default:
@@ -4628,10 +4653,10 @@ void mainmenu_ui_charedit_refresh(TigRect* rect)
     (void)rect;
 
     pc_obj = player_get_local_pc_obj();
-    if (!charedit_open(pc_obj, dword_64C454)) {
+    if (!charedit_open(pc_obj, mainmenu_ui_charedit_mode)) {
         mainmenu_ui_close(true);
     }
-    dword_64C454 = CHAREDIT_MODE_3;
+    mainmenu_ui_charedit_mode = CHAREDIT_MODE_3;
 }
 
 // 0x545E20
@@ -4807,7 +4832,7 @@ void mainmenu_ui_create_window_func(bool should_display)
     int idx;
     int rc;
 
-    if (dword_64C388) {
+    if (mainmenu_ui_suppress_display) {
         should_display = false;
     }
 
@@ -5295,7 +5320,7 @@ bool mainmenu_ui_message_filter(TigMessage* msg)
                 break;
             case MM_WINDOW_LOAD_GAME:
                 if (intgame_pc_lens_check_pt(msg->data.mouse.x, msg->data.mouse.y)) {
-                    if (dword_64C450) {
+                    if (mainmenu_ui_load_game_lens_passthrough) {
                         mainmenu_ui_dismiss();
                     } else {
                         mainmenu_ui_close(true);
@@ -5511,7 +5536,7 @@ bool mainmenu_ui_message_filter(TigMessage* msg)
                 return true;
             case MM_WINDOW_MAINMENU:
                 if (msg->data.keyboard.scancode == SDL_SCANCODE_ESCAPE
-                    && dword_64C43C > 1) {
+                    && mainmenu_ui_mainmenu_create_count > 1) {
                     gsound_play_sfx(0, 1);
                     mainmenu_ui_dismiss();
                     mainmenu_ui_window_type = 0;
