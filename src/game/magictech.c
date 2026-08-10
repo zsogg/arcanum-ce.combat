@@ -2061,7 +2061,7 @@ void magictech_effect_summon(MagicTechSummonInfo* summon_info)
         sub_4372B0(obj, summon_info->field_0.obj);
     }
 
-    sub_463630(obj);
+    item_inventory_mark_summoned(obj);
 }
 
 // 0x451070
@@ -6796,7 +6796,7 @@ void magictech_interrupt_runs_for_obj(int64_t obj)
 
     if ((obj_field_int32_get(obj, OBJ_F_SPELL_FLAGS) & OSF_SUMMONED) != 0) {
         if (!map_is_clearing_objects()) {
-            sub_463860(obj, true);
+            item_inventory_drop_all_except_summoned(obj, true);
         }
 
         for (idx = 0; idx < 512; idx++) {
@@ -6850,7 +6850,7 @@ void sub_4598D0(int64_t obj)
     }
 
     if ((obj_field_int32_get(obj, OBJ_F_SPELL_FLAGS) & OSF_SUMMONED) != 0) {
-        sub_463730(obj, true);
+        item_inventory_drop_all(obj, true);
 
         for (idx = 0; idx < 512; idx++) {
             if ((magictech_run_info[idx].flags & MAGICTECH_RUN_ACTIVE) != 0

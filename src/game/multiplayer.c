@@ -1587,7 +1587,7 @@ bool save_char(const char* path, int64_t obj)
 
     multiplayer_lock();
     obj_get_id(obj);
-    sub_463730(obj, true);
+    item_inventory_drop_all(obj, true);
 
     if ((obj_field_int32_get(obj, OBJ_F_FLAGS) & OF_TEXT) != 0) {
         tb_remove(obj);

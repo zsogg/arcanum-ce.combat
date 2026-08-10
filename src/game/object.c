@@ -1328,7 +1328,7 @@ void object_destroy(int64_t obj)
             }
         }
 
-        sub_4639E0(obj, true);
+        item_inventory_drop_invulnerable(obj, true);
     } else if (obj_type_is_item(obj_type)) {
         if (item_parent(obj, &parent_obj)) {
             loc = obj_field_int64_get(parent_obj, OBJ_F_LOCATION);
@@ -1336,7 +1336,7 @@ void object_destroy(int64_t obj)
             object_drop(obj, loc);
         }
     } else if (obj_type == OBJ_TYPE_CONTAINER) {
-        sub_4639E0(obj, true);
+        item_inventory_drop_invulnerable(obj, true);
     }
 
     anim_force_interrupt_all_goals_of_obj(obj);
@@ -1369,7 +1369,7 @@ void sub_43CEA0(int64_t obj, unsigned int flags, const char* path)
     object_get_rect(obj, 0x7, &rect);
     object_iso_invalidate_rect(&rect);
 
-    sub_463B30(obj, false);
+    item_inventory_destroy_all(obj, false);
 
     type = obj_field_int32_get(obj, OBJ_F_TYPE);
     if (type == OBJ_TYPE_PROJECTILE
@@ -2603,7 +2603,7 @@ void object_bust(int64_t obj, int64_t triggerer_obj)
         if (proto_get_description(obj) == BP_JUNK_PILE) {
             object_hp_damage_set(obj, 0);
         } else {
-            sub_463730(obj, true);
+            item_inventory_drop_all(obj, true);
 
             loc = obj_field_int64_get(obj, OBJ_F_LOCATION);
             object_destroy(obj);

@@ -35,8 +35,8 @@
 static bool sub_461CA0(int64_t item_obj, int64_t critter_obj, int inventory_location);
 static bool item_check_sell(int64_t item_obj, int64_t seller_pc_obj, int64_t buyer_npc_obj);
 static bool item_check_buy(int64_t item_obj, int64_t seller_npc_obj, int64_t buyer_pc_obj);
-static bool sub_463240(int64_t critter_obj, int lock_id);
-static bool sub_463340(int lock_id, int key_id);
+static bool item_critter_has_key(int64_t critter_obj, int lock_id);
+static bool item_key_id_matches(int lock_id, int key_id);
 static bool sub_464150(TimeEvent* timeevent);
 static int64_t item_gold_obj(int64_t obj);
 static int64_t item_find_key_ring(int64_t critter_obj);
@@ -45,10 +45,10 @@ static int sub_465010(int64_t obj);
 static tig_art_id_t sub_4650D0(int64_t critter_obj);
 static int64_t item_ammo_obj(int64_t obj, int ammo_type);
 static bool sub_465AE0(int64_t a1, int64_t a2, tig_art_id_t* art_id_ptr);
-static bool sub_466A00(int64_t a1, int64_t key_obj);
-static void sub_466A50(int64_t key_obj, int64_t key_ring_obj);
-static void sub_466AA0(int64_t critter_obj, int64_t a2);
-static void sub_466BD0(int64_t key_ring_obj);
+static bool item_key_ring_add(int64_t parent_obj, int64_t key_obj);
+static void item_key_ring_absorb_key(int64_t key_obj, int64_t key_ring_obj);
+static void item_key_ring_merge(int64_t critter_obj, int64_t incoming_key_ring_obj);
+static void item_key_ring_refresh_art(int64_t key_ring_obj);
 static bool sub_466EF0(int64_t obj, int64_t loc);
 static char* item_error_str(int reason);
 static int find_free_inv_loc_horizontal(int64_t item_obj, int64_t parent_obj, int* slots);
@@ -215,7 +215,7 @@ void item_generate_inventory(int64_t critter_obj)
     int64_t proto_obj;
 
     loc = obj_field_int64_get(critter_obj, OBJ_F_LOCATION);
-    sub_463B30(critter_obj, false);
+    item_inventory_destroy_all(critter_obj, false);
     background_generate_inventory(critter_obj);
 
     cnt = obj_field_int32_get(critter_obj, OBJ_F_CRITTER_INVENTORY_NUM);
@@ -1619,7 +1619,7 @@ int64_t item_find_key_ring(int64_t critter_obj)
 }
 
 // 0x463240
-bool sub_463240(int64_t critter_obj, int lock_id)
+bool item_critter_has_key(int64_t critter_obj, int lock_id)
 {
     int inv_cnt;
     int inv_idx;
@@ -1639,7 +1639,7 @@ bool sub_463240(int64_t critter_obj, int lock_id)
         switch (obj_field_int32_get(item_obj, OBJ_F_TYPE)) {
         case OBJ_TYPE_KEY:
             key_id = obj_field_int32_get(item_obj, OBJ_F_KEY_KEY_ID);
-            if (sub_463340(lock_id, key_id)) {
+            if (item_key_id_matches(lock_id, key_id)) {
                 return true;
             }
             break;
@@ -1647,7 +1647,7 @@ bool sub_463240(int64_t critter_obj, int lock_id)
             keyring_cnt = obj_arrayfield_length_get(item_obj, OBJ_F_KEY_RING_LIST_IDX);
             for (keyring_idx = 0; keyring_idx < keyring_cnt; keyring_idx++) {
                 key_id = obj_arrayfield_uint32_get(item_obj, OBJ_F_KEY_RING_LIST_IDX, keyring_idx);
-                if (sub_463340(lock_id, key_id)) {
+                if (item_key_id_matches(lock_id, key_id)) {
                     return true;
                 }
             }
@@ -1659,7 +1659,7 @@ bool sub_463240(int64_t critter_obj, int lock_id)
 }
 
 // 0x463340
-bool sub_463340(int lock_id, int key_id)
+bool item_key_id_matches(int lock_id, int key_id)
 {
     if (lock_id == 0 || key_id == 0) {
         return false;
@@ -1673,7 +1673,7 @@ bool sub_463340(int lock_id, int key_id)
 }
 
 // 0x463370
-bool sub_463370(int64_t obj, int key_id)
+bool item_party_has_key(int64_t obj, int key_id)
 {
     int64_t leader_obj;
     ObjectList objects;
@@ -1690,14 +1690,14 @@ bool sub_463370(int64_t obj, int key_id)
         }
     }
 
-    if (sub_463240(leader_obj, key_id)) {
+    if (item_critter_has_key(leader_obj, key_id)) {
         return true;
     }
 
     object_list_all_followers(leader_obj, &objects);
     node = objects.head;
     while (node != NULL) {
-        if (sub_463240(node->obj, key_id)) {
+        if (item_critter_has_key(node->obj, key_id)) {
             break;
         }
         node = node->next;
@@ -1713,7 +1713,7 @@ bool sub_463370(int64_t obj, int key_id)
         if (player_is_pc_obj(obj)) {
             party_member_obj = party_find_first(obj, &iter);
             while (party_member_obj != OBJ_HANDLE_NULL) {
-                if (sub_463240(party_member_obj, key_id)) {
+                if (item_critter_has_key(party_member_obj, key_id)) {
                     return true;
                 }
                 party_member_obj = party_find_next(&iter);
@@ -1725,7 +1725,7 @@ bool sub_463370(int64_t obj, int key_id)
                 node = objects.head;
                 while (node != NULL) {
                     if (party_id_from_obj(node->obj) == player
-                        && sub_463240(node->obj, key_id)) {
+                        && item_critter_has_key(node->obj, key_id)) {
                         break;
                     }
                     node = node->next;
@@ -1784,7 +1784,7 @@ bool sub_463540(int64_t container_obj)
 }
 
 // 0x463630
-void sub_463630(int64_t obj)
+void item_inventory_mark_summoned(int64_t obj)
 {
     int inventory_num_fld;
     int inventory_list_fld;
@@ -1823,7 +1823,7 @@ void sub_463630(int64_t obj)
 }
 
 // 0x463730
-void sub_463730(int64_t obj, bool a2)
+void item_inventory_drop_all(int64_t obj, bool a2)
 {
     int inventory_num_fld;
     int inventory_list_fld;
@@ -1863,7 +1863,7 @@ void sub_463730(int64_t obj, bool a2)
 }
 
 // 0x463860
-void sub_463860(int64_t obj, bool a2)
+void item_inventory_drop_all_except_summoned(int64_t obj, bool a2)
 {
     int inventory_num_fld;
     int inventory_list_fld;
@@ -1914,7 +1914,7 @@ void sub_463860(int64_t obj, bool a2)
 }
 
 // 0x4639E0
-void sub_4639E0(int64_t obj, bool a2)
+void item_inventory_drop_invulnerable(int64_t obj, bool a2)
 {
     int inventory_num_fld;
     int inventory_list_fld;
@@ -1958,7 +1958,7 @@ void sub_4639E0(int64_t obj, bool a2)
 }
 
 // 0x463B30
-void sub_463B30(int64_t obj, bool a2)
+void item_inventory_destroy_all(int64_t obj, bool a2)
 {
     int inventory_num_fld;
     int inventory_list_fld;
@@ -3704,7 +3704,7 @@ void item_insert(int64_t item_obj, int64_t parent_obj, int inventory_location)
         encumbrance_level = critter_encumbrance_level_get(parent_obj);
 
         if (item_obj_type == OBJ_TYPE_KEY_RING) {
-            sub_466AA0(parent_obj, item_obj);
+            item_key_ring_merge(parent_obj, item_obj);
         }
 
         inventory_num_fld = OBJ_F_CRITTER_INVENTORY_NUM;
@@ -3771,28 +3771,28 @@ void item_insert(int64_t item_obj, int64_t parent_obj, int inventory_location)
 
     if (parent_obj_type != OBJ_TYPE_CONTAINER
         && item_obj_type == OBJ_TYPE_KEY) {
-        sub_466A00(parent_obj, item_obj);
+        item_key_ring_add(parent_obj, item_obj);
     }
 }
 
 // 0x466A00
-bool sub_466A00(int64_t a1, int64_t key_obj)
+bool item_key_ring_add(int64_t parent_obj, int64_t key_obj)
 {
     int64_t key_ring_obj;
 
-    key_ring_obj = item_find_key_ring(a1);
+    key_ring_obj = item_find_key_ring(parent_obj);
     if (key_ring_obj == OBJ_HANDLE_NULL) {
         return false;
     }
 
-    sub_466A50(key_obj, key_ring_obj);
-    sub_466BD0(key_ring_obj);
+    item_key_ring_absorb_key(key_obj, key_ring_obj);
+    item_key_ring_refresh_art(key_ring_obj);
 
     return true;
 }
 
 // 0x466A50
-void sub_466A50(int64_t key_obj, int64_t key_ring_obj)
+void item_key_ring_absorb_key(int64_t key_obj, int64_t key_ring_obj)
 {
     int index;
     int key_id;
@@ -3807,7 +3807,7 @@ void sub_466A50(int64_t key_obj, int64_t key_ring_obj)
 }
 
 // 0x466AA0
-void sub_466AA0(int64_t critter_obj, int64_t a2)
+void item_key_ring_merge(int64_t critter_obj, int64_t incoming_key_ring_obj)
 {
     int64_t key_ring_obj;
     int cnt;
@@ -3818,31 +3818,31 @@ void sub_466AA0(int64_t critter_obj, int64_t a2)
     key_ring_obj = item_find_key_ring(critter_obj);
     if (key_ring_obj != OBJ_HANDLE_NULL) {
         index = obj_arrayfield_length_get(key_ring_obj, OBJ_F_KEY_RING_LIST_IDX);
-        cnt = obj_arrayfield_length_get(a2, OBJ_F_KEY_RING_LIST_IDX);
+        cnt = obj_arrayfield_length_get(incoming_key_ring_obj, OBJ_F_KEY_RING_LIST_IDX);
         while (cnt > 0) {
-            key_id = obj_arrayfield_uint32_get(a2, OBJ_F_KEY_RING_LIST_IDX, cnt - 1);
-            obj_arrayfield_length_set(a2, OBJ_F_KEY_RING_LIST_IDX, cnt - 1);
+            key_id = obj_arrayfield_uint32_get(incoming_key_ring_obj, OBJ_F_KEY_RING_LIST_IDX, cnt - 1);
+            obj_arrayfield_length_set(incoming_key_ring_obj, OBJ_F_KEY_RING_LIST_IDX, cnt - 1);
             obj_arrayfield_uint32_set(key_ring_obj, OBJ_F_KEY_RING_LIST_IDX, index++, key_id);
             cnt--;
         }
 
-        sub_466BD0(key_ring_obj);
-        sub_466BD0(a2);
+        item_key_ring_refresh_art(key_ring_obj);
+        item_key_ring_refresh_art(incoming_key_ring_obj);
     } else {
         cnt = obj_field_int32_get(critter_obj, OBJ_F_CRITTER_INVENTORY_NUM);
         while (cnt > 0) {
             item_obj = obj_arrayfield_handle_get(critter_obj, OBJ_F_CRITTER_INVENTORY_LIST_IDX, cnt - 1);
             if (obj_field_int32_get(item_obj, OBJ_F_TYPE) == OBJ_TYPE_KEY) {
-                sub_466A50(item_obj, a2);
+                item_key_ring_absorb_key(item_obj, incoming_key_ring_obj);
             }
             cnt--;
         }
-        sub_466BD0(a2);
+        item_key_ring_refresh_art(incoming_key_ring_obj);
     }
 }
 
 // 0x466BD0
-void sub_466BD0(int64_t key_ring_obj)
+void item_key_ring_refresh_art(int64_t key_ring_obj)
 {
     tig_art_id_t aid;
 

@@ -84,13 +84,26 @@ int sub_462C30(int64_t a1, int64_t a2);
 void item_use_on_obj(int64_t source_obj, int64_t item_obj, int64_t target_obj);
 void item_use_on_loc(int64_t obj, int64_t item_obj, int64_t target_loc);
 int item_get_keys(int64_t obj, int* key_ids);
-bool sub_463370(int64_t obj, int key_id);
+bool item_party_has_key(int64_t obj, int key_id);
 bool sub_463540(int64_t container_obj);
-void sub_463630(int64_t obj);
-void sub_463730(int64_t obj, bool a2);
-void sub_463860(int64_t obj, bool a2);
-void sub_4639E0(int64_t obj, bool a2);
-void sub_463B30(int64_t obj, bool a2);
+// Five ways to empty an inventory, differing only in which items survive. In
+// the four that take one, `a2` picks how a surviving item reaches the ground:
+// true scatters it with `item_drop_at_loc`, false places it with
+// `object_drop`. Every caller in the tree passes true except the two that wipe
+// an inventory before refilling it.
+//
+// NOTE: Four of the five carry the same "...associatednum field on poop"
+// debug message, copied along with the code, so it names none of them.
+void item_inventory_mark_summoned(int64_t obj);
+void item_inventory_drop_all(int64_t obj, bool a2);
+// Drops everything, then destroys what was summoned or `OIF_NO_DISPLAY`, so
+// only lootable items are left behind. Used when a corpse decays.
+void item_inventory_drop_all_except_summoned(int64_t obj, bool a2);
+// Drops only `OF_INVULNERABLE` items - the ones that must outlive their owner -
+// and leaves the rest to be destroyed with it. Junk piles are skipped.
+void item_inventory_drop_invulnerable(int64_t obj, bool a2);
+// Destroys the whole inventory. `a2` spares `OIF_PERSISTENT` items.
+void item_inventory_destroy_all(int64_t obj, bool a2);
 void sub_463C60(int64_t obj);
 void sub_463E20(int64_t obj);
 void sub_4640C0(int64_t obj);

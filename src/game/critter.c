@@ -1546,7 +1546,7 @@ bool critter_decay_timeevent_process(TimeEvent* timeevent)
             return false;
         }
 
-        sub_463860(obj, true);
+        item_inventory_drop_all_except_summoned(obj, true);
     }
 
     object_destroy(obj);

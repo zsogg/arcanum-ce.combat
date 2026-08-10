@@ -552,7 +552,7 @@ void sub_4EFAE0(int64_t obj, int a2)
 
     if (!tig_net_is_active()
         || tig_net_is_host()) {
-        sub_463B30(obj, a2);
+        item_inventory_destroy_all(obj, a2);
     }
 
     if (tig_net_is_active()
@@ -573,7 +573,7 @@ void sub_4EFB50(Packet121* pkt)
 
     multiplayer_lock();
     mp_oid_to_obj(pkt->oid, &obj);
-    sub_463B30(obj, pkt->field_20);
+    item_inventory_destroy_all(obj, pkt->field_20);
     multiplayer_unlock();
 }
 

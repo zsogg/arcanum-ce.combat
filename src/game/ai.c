@@ -3784,7 +3784,7 @@ int ai_attempt_open_portal(int64_t obj, int64_t portal_obj, int dir)
 
         if (object_locked_get(portal_obj)) {
             key_id = obj_field_int32_get(portal_obj, OBJ_F_PORTAL_KEY_ID);
-            if (!sub_463370(obj, key_id)) {
+            if (!item_party_has_key(obj, key_id)) {
                 return AI_ATTEMPT_OPEN_PORTAL_LOCKED;
             }
         }
@@ -3859,7 +3859,7 @@ int ai_attempt_open_container(int64_t obj, int64_t container_obj)
 
         if (object_locked_get(container_obj)) {
             key_id = obj_field_int32_get(container_obj, OBJ_F_CONTAINER_KEY_ID);
-            if (!sub_463370(obj, key_id)) {
+            if (!item_party_has_key(obj, key_id)) {
                 return AI_ATTEMPT_OPEN_CONTAINER_LOCKED;
             }
         }
