@@ -648,38 +648,55 @@ static int intgame_message_icons[UI_MSG_TYPE_COUNT] = {
     /*   UI_MSG_TYPE_SCHEMATIC */ 0,
 };
 
+// The message window's text layout, in two variants.
+//
+// The normal one leaves the left of the window to the icon
+// `intgame_message_window_draw_image` puts there, so it starts at x=290: a
+// title row at y=63 drawn in morph15, then three body rows at 87, 105 and 123
+// in flare12, plus the spans a message needs when its text runs over several
+// rows.
+//
+// The `wide` variant starts at x=217 and reclaims the icon's column. It is a
+// *fallback*, not a choice: `intgame_message_window_write_text` returns false
+// when the string does not fit its rect, and the callers that can overflow
+// respond by clearing the window and rewriting into the wide rects with
+// `MSG_TEXT_TRUNCATE`, which chops characters off the end until it fits.
+//
 // 0x5C70C8
-static TigRect stru_5C70C8 = { 290, 63, 291, 19 };
+static TigRect intgame_message_title_rect = { 290, 63, 291, 19 };
 
 // 0x5C70D8
-static TigRect stru_5C70D8 = { 290, 87, 291, 18 };
+static TigRect intgame_message_row1_rect = { 290, 87, 291, 18 };
 
 // 0x5C70E8
-static TigRect stru_5C70E8 = { 290, 105, 291, 18 };
+static TigRect intgame_message_row2_rect = { 290, 105, 291, 18 };
 
 // 0x5C70F8
-static TigRect stru_5C70F8 = { 290, 123, 291, 18 };
+static TigRect intgame_message_row3_rect = { 290, 123, 291, 18 };
 
 // 0x5C7108
-static TigRect stru_5C7108 = { 290, 63, 291, 78 };
+static TigRect intgame_message_all_rows_rect = { 290, 63, 291, 78 };
 
+// A title allowed to wrap down over the first two body rows; the scenery
+// examine panel uses it and puts hit points on the last row.
+//
 // 0x5C7118
-static TigRect stru_5C7118 = { 290, 63, 291, 55 };
+static TigRect intgame_message_tall_title_rect = { 290, 63, 291, 55 };
 
 // 0x5C7128
-static TigRect stru_5C7128 = { 290, 105, 291, 36 };
+static TigRect intgame_message_rows2to3_rect = { 290, 105, 291, 36 };
 
 // 0x5C7138
-static TigRect stru_5C7138 = { 290, 87, 291, 54 };
+static TigRect intgame_message_rows1to3_rect = { 290, 87, 291, 54 };
 
 // 0x5C7148
-static TigRect stru_5C7148 = { 217, 63, 364, 19 };
+static TigRect intgame_message_wide_title_rect = { 217, 63, 364, 19 };
 
 // 0x5C7158
-static TigRect stru_5C7158 = { 217, 63, 364, 78 };
+static TigRect intgame_message_wide_all_rows_rect = { 217, 63, 364, 78 };
 
 // 0x5C7168
-static TigRect stru_5C7168 = { 217, 87, 364, 54 };
+static TigRect intgame_message_wide_rows1to3_rect = { 217, 87, 364, 54 };
 
 // 0x5C7178
 static int intgame_mode_cursors[INTGAME_MODE_COUNT] = {
@@ -5627,7 +5644,7 @@ void intgame_message_draw(tig_window_handle_t window_handle, UiMessage* ui_messa
         mes_get_msg(intgame_mes_file, &mes_file_entry1);
         intgame_message_window_write_text(window_handle,
             mes_file_entry1.str,
-            &stru_5C70C8,
+            &intgame_message_title_rect,
             intgame_morph15_white_font,
             MSG_TEXT_HALIGN_LEFT);
 
@@ -5636,7 +5653,7 @@ void intgame_message_draw(tig_window_handle_t window_handle, UiMessage* ui_messa
         snprintf(str, sizeof(str), mes_file_entry1.str, ui_message->field_8);
         intgame_message_window_write_text(window_handle,
             str,
-            &stru_5C70D8,
+            &intgame_message_row1_rect,
             intgame_flare12_white_font,
             MSG_TEXT_HALIGN_LEFT);
 
@@ -5646,13 +5663,13 @@ void intgame_message_draw(tig_window_handle_t window_handle, UiMessage* ui_messa
             snprintf(str, sizeof(str), mes_file_entry1.str, ui_message->field_C);
             intgame_message_window_write_text(window_handle,
                 str,
-                &stru_5C70E8,
+                &intgame_message_row2_rect,
                 intgame_flare12_white_font,
                 MSG_TEXT_HALIGN_LEFT);
         } else {
             intgame_message_window_write_text(window_handle,
                 ui_message->str,
-                &stru_5C7128,
+                &intgame_message_rows2to3_rect,
                 intgame_flare12_white_font,
                 MSG_TEXT_HALIGN_LEFT);
         }
@@ -5665,7 +5682,7 @@ void intgame_message_draw(tig_window_handle_t window_handle, UiMessage* ui_messa
         intgame_message_window_draw_image(window_handle, intgame_message_icons[ui_message->type]);
         intgame_message_window_write_text(window_handle,
             ui_message->str,
-            &stru_5C70C8,
+            &intgame_message_title_rect,
             intgame_morph15_white_font,
             MSG_TEXT_HALIGN_LEFT);
 
@@ -5674,7 +5691,7 @@ void intgame_message_draw(tig_window_handle_t window_handle, UiMessage* ui_messa
         snprintf(str, sizeof(str), mes_file_entry1.str, ui_message->field_8);
         intgame_message_window_write_text(window_handle,
             str,
-            &stru_5C70D8,
+            &intgame_message_row1_rect,
             intgame_flare12_red_font,
             MSG_TEXT_HALIGN_LEFT);
 
@@ -5686,14 +5703,14 @@ void intgame_message_draw(tig_window_handle_t window_handle, UiMessage* ui_messa
         intgame_message_window_draw_image(window_handle, intgame_message_icons[ui_message->type]);
         intgame_message_window_write_text(window_handle,
             ui_message->str,
-            &stru_5C70C8,
+            &intgame_message_title_rect,
             intgame_morph15_white_font,
             MSG_TEXT_HALIGN_LEFT);
 
         curse_copy_description(ui_message->field_8, str, sizeof(str));
         intgame_message_window_write_text(window_handle,
             str,
-            &stru_5C7138,
+            &intgame_message_rows1to3_rect,
             intgame_flare12_white_font,
             MSG_TEXT_HALIGN_LEFT);
 
@@ -5705,14 +5722,14 @@ void intgame_message_draw(tig_window_handle_t window_handle, UiMessage* ui_messa
         intgame_message_window_draw_image(window_handle, intgame_message_icons[ui_message->type]);
         intgame_message_window_write_text(window_handle,
             ui_message->str,
-            &stru_5C70C8,
+            &intgame_message_title_rect,
             intgame_morph15_white_font,
             MSG_TEXT_HALIGN_LEFT);
 
         bless_copy_description(ui_message->field_8, str, sizeof(str));
         intgame_message_window_write_text(window_handle,
             str,
-            &stru_5C7138,
+            &intgame_message_rows1to3_rect,
             intgame_flare12_white_font,
             MSG_TEXT_HALIGN_LEFT);
 
@@ -5740,17 +5757,17 @@ void intgame_message_draw(tig_window_handle_t window_handle, UiMessage* ui_messa
             ui_message->str[pos] = '\0';
             intgame_message_window_write_text(window_handle,
                 ui_message->str,
-                &stru_5C70C8,
+                &intgame_message_title_rect,
                 intgame_morph15_white_font,
                 MSG_TEXT_HALIGN_LEFT);
             rc = intgame_message_window_write_text(window_handle,
                 ui_message->str + pos + 1,
-                &stru_5C7138,
+                &intgame_message_rows1to3_rect,
                 intgame_flare12_white_font,
                 MSG_TEXT_HALIGN_LEFT);
             ui_message->str[pos] = '\n';
         } else {
-            rc = intgame_message_window_write_text(window_handle, ui_message->str, &stru_5C7108, intgame_flare12_white_font, 1);
+            rc = intgame_message_window_write_text(window_handle, ui_message->str, &intgame_message_all_rows_rect, intgame_flare12_white_font, 1);
         }
 
         if (!rc) {
@@ -5758,19 +5775,19 @@ void intgame_message_draw(tig_window_handle_t window_handle, UiMessage* ui_messa
             if (ui_message->str[pos] == '\n') {
                 ui_message->str[pos] = '\0';
                 intgame_message_window_write_text(window_handle, ui_message->str,
-                    &stru_5C7148,
+                    &intgame_message_wide_title_rect,
                     intgame_morph15_white_font,
                     MSG_TEXT_HALIGN_LEFT | MSG_TEXT_TRUNCATE);
                 intgame_message_window_write_text(window_handle,
                     ui_message->str + pos + 1,
-                    &stru_5C7168,
+                    &intgame_message_wide_rows1to3_rect,
                     intgame_flare12_white_font,
                     MSG_TEXT_HALIGN_LEFT | MSG_TEXT_TRUNCATE);
                 ui_message->str[pos] = '\n';
             } else {
                 intgame_message_window_write_text(window_handle,
                     ui_message->str,
-                    &stru_5C7158,
+                    &intgame_message_wide_all_rows_rect,
                     intgame_flare12_white_font,
                     MSG_TEXT_HALIGN_LEFT | MSG_TEXT_TRUNCATE);
             }
@@ -5790,14 +5807,14 @@ void intgame_message_draw(tig_window_handle_t window_handle, UiMessage* ui_messa
             IS_TECH_SKILL(ui_message->field_8)
                 ? tech_skill_name(GET_TECH_SKILL(ui_message->field_8))
                 : basic_skill_name(GET_BASIC_SKILL(ui_message->field_8)),
-            &stru_5C70C8,
+            &intgame_message_title_rect,
             intgame_morph15_white_font,
             MSG_TEXT_HALIGN_LEFT);
         intgame_message_window_write_text(window_handle,
             IS_TECH_SKILL(ui_message->field_8)
                 ? tech_skill_description(GET_TECH_SKILL(ui_message->field_8))
                 : basic_skill_description(GET_BASIC_SKILL(ui_message->field_8)),
-            &stru_5C7138,
+            &intgame_message_rows1to3_rect,
             intgame_flare12_white_font,
             MSG_TEXT_HALIGN_LEFT);
 
@@ -5810,7 +5827,7 @@ void intgame_message_draw(tig_window_handle_t window_handle, UiMessage* ui_messa
                 ui_message->field_C);
             intgame_message_window_write_text(window_handle,
                 str,
-                &stru_5C70C8,
+                &intgame_message_title_rect,
                 intgame_flare12_red_font,
                 MSG_TEXT_HALIGN_RIGHT);
         }
@@ -5819,7 +5836,7 @@ void intgame_message_draw(tig_window_handle_t window_handle, UiMessage* ui_messa
         intgame_message_window_draw_image(window_handle, spell_college_large_icon(ui_message->field_8 / 5));
         intgame_message_window_write_text(window_handle,
             spell_name(ui_message->field_8),
-            &stru_5C70C8,
+            &intgame_message_title_rect,
             intgame_morph15_white_font,
             MSG_TEXT_HALIGN_LEFT);
 
@@ -5831,7 +5848,7 @@ void intgame_message_draw(tig_window_handle_t window_handle, UiMessage* ui_messa
             spell_min_willpower(ui_message->field_8));
         intgame_message_window_write_text(window_handle,
             str,
-            &stru_5C70D8,
+            &intgame_message_row1_rect,
             intgame_flare12_white_font,
             MSG_TEXT_HALIGN_LEFT);
 
@@ -5871,13 +5888,13 @@ void intgame_message_draw(tig_window_handle_t window_handle, UiMessage* ui_messa
         }
         intgame_message_window_write_text(window_handle,
             str,
-            &stru_5C70D8,
+            &intgame_message_row1_rect,
             intgame_flare12_white_font,
             MSG_TEXT_HALIGN_RIGHT);
 
         intgame_message_window_write_text(window_handle,
             spell_description(ui_message->field_8),
-            &stru_5C7128,
+            &intgame_message_rows2to3_rect,
             intgame_flare12_white_font,
             MSG_TEXT_HALIGN_LEFT);
         break;
@@ -5886,12 +5903,12 @@ void intgame_message_draw(tig_window_handle_t window_handle, UiMessage* ui_messa
         intgame_message_window_draw_image(window_handle, spell_college_large_icon(ui_message->field_8));
         intgame_message_window_write_text(window_handle,
             spell_college_name(ui_message->field_8),
-            &stru_5C70C8,
+            &intgame_message_title_rect,
             intgame_morph15_white_font,
             MSG_TEXT_HALIGN_LEFT);
         intgame_message_window_write_text(window_handle,
             spell_college_description(ui_message->field_8),
-            &stru_5C7138,
+            &intgame_message_rows1to3_rect,
             intgame_flare12_white_font,
             MSG_TEXT_HALIGN_LEFT);
         break;
@@ -5899,12 +5916,12 @@ void intgame_message_draw(tig_window_handle_t window_handle, UiMessage* ui_messa
         intgame_message_window_draw_image(window_handle, intgame_message_icons[UI_MSG_TYPE_FEEDBACK]);
         intgame_message_window_write_text(window_handle,
             tech_discipline_name_get(ui_message->field_8),
-            &stru_5C70C8,
+            &intgame_message_title_rect,
             intgame_morph15_white_font,
             MSG_TEXT_HALIGN_LEFT);
         intgame_message_window_write_text(window_handle,
             tech_discipline_description_get(ui_message->field_8),
-            &stru_5C7138,
+            &intgame_message_rows1to3_rect,
             intgame_flare12_white_font,
             MSG_TEXT_HALIGN_LEFT);
         break;
@@ -5912,7 +5929,7 @@ void intgame_message_draw(tig_window_handle_t window_handle, UiMessage* ui_messa
         intgame_message_window_draw_image(window_handle, intgame_message_icons[UI_MSG_TYPE_FEEDBACK]);
         intgame_message_window_write_text(window_handle,
             tech_degree_name_get(ui_message->field_8 % 8),
-            &stru_5C70C8,
+            &intgame_message_title_rect,
             intgame_morph15_white_font,
             MSG_TEXT_HALIGN_LEFT);
 
@@ -5924,13 +5941,13 @@ void intgame_message_draw(tig_window_handle_t window_handle, UiMessage* ui_messa
             tech_degree_min_intelligence_get(ui_message->field_8 % 8));
         intgame_message_window_write_text(window_handle,
             str,
-            &stru_5C70C8,
+            &intgame_message_title_rect,
             intgame_flare12_white_font,
             MSG_TEXT_HALIGN_RIGHT);
 
         intgame_message_window_write_text(window_handle,
             tech_degree_description_get(ui_message->field_8 % 8, ui_message->field_8 / 8),
-            &stru_5C7138,
+            &intgame_message_rows1to3_rect,
             intgame_flare12_white_font,
             MSG_TEXT_HALIGN_LEFT);
         break;
@@ -5947,19 +5964,19 @@ void intgame_message_draw(tig_window_handle_t window_handle, UiMessage* ui_messa
             ui_message->str[pos] = '\0';
             intgame_message_window_write_text(window_handle,
                 ui_message->str,
-                &stru_5C70C8,
+                &intgame_message_title_rect,
                 intgame_morph15_white_font,
                 MSG_TEXT_HALIGN_LEFT);
             intgame_message_window_write_text(window_handle,
                 ui_message->str + pos + 1,
-                &stru_5C7138,
+                &intgame_message_rows1to3_rect,
                 intgame_flare12_white_font,
                 MSG_TEXT_HALIGN_LEFT);
             ui_message->str[pos] = '\n';
         } else {
             intgame_message_window_write_text(window_handle,
                 ui_message->str,
-                &stru_5C7108,
+                &intgame_message_all_rows_rect,
                 intgame_flare12_white_font,
                 MSG_TEXT_HALIGN_LEFT);
         }
@@ -5969,12 +5986,12 @@ void intgame_message_draw(tig_window_handle_t window_handle, UiMessage* ui_messa
         intgame_message_window_draw_image(window_handle, intgame_message_icons[UI_MSG_TYPE_FEEDBACK]);
         intgame_message_window_write_text(window_handle,
             schematic_ui_product_name(ui_message->field_8),
-            &stru_5C70C8,
+            &intgame_message_title_rect,
             intgame_morph15_white_font,
             MSG_TEXT_HALIGN_LEFT);
         intgame_message_window_write_text(window_handle,
             ui_message->str,
-            &stru_5C7138,
+            &intgame_message_rows1to3_rect,
             intgame_flare12_white_font,
             MSG_TEXT_HALIGN_LEFT);
         break;
@@ -6538,7 +6555,7 @@ void intgame_examine_critter(int64_t pc_obj, int64_t critter_obj, char* str)
 
     intgame_message_window_write_text(intgame_rotwin_text_frame[intgame_iso_window_type].window_handle,
         str,
-        &stru_5C70C8,
+        &intgame_message_title_rect,
         intgame_morph15_white_font,
         MSG_TEXT_HALIGN_LEFT);
 
@@ -6547,7 +6564,7 @@ void intgame_examine_critter(int64_t pc_obj, int64_t critter_obj, char* str)
         mes_get_msg(intgame_mes_file, &mes_file_entry);
         intgame_message_window_write_text(intgame_rotwin_text_frame[intgame_iso_window_type].window_handle,
             mes_file_entry.str,
-            &stru_5C70D8,
+            &intgame_message_row1_rect,
             intgame_flare12_red_font,
             MSG_TEXT_HALIGN_LEFT);
         return;
@@ -6623,7 +6640,7 @@ void intgame_examine_critter(int64_t pc_obj, int64_t critter_obj, char* str)
 
         intgame_message_window_write_text(intgame_rotwin_text_frame[intgame_iso_window_type].window_handle,
             buffer,
-            &stru_5C70D8,
+            &intgame_message_row1_rect,
             intgame_flare12_white_font,
             MSG_TEXT_HALIGN_LEFT);
     }
@@ -6637,7 +6654,7 @@ void intgame_examine_critter(int64_t pc_obj, int64_t critter_obj, char* str)
         stat_level_get(critter_obj, STAT_LEVEL));
     intgame_message_window_write_text(intgame_rotwin_text_frame[intgame_iso_window_type].window_handle,
         buffer,
-        &stru_5C70D8,
+        &intgame_message_row1_rect,
         intgame_flare12_white_font,
         MSG_TEXT_HALIGN_RIGHT);
 
@@ -6645,9 +6662,9 @@ void intgame_examine_critter(int64_t pc_obj, int64_t critter_obj, char* str)
     int max_hp = object_hp_max(critter_obj);
     int hp_ratio = 100 * cur_hp / max_hp;
     if (stat_level_get(critter_obj, STAT_POISON_LEVEL) > 0) {
-        intgame_draw_progress_bar(665, 666, &stru_5C70E8, hp_ratio);
+        intgame_draw_progress_bar(665, 666, &intgame_message_row2_rect, hp_ratio);
     } else {
-        intgame_draw_progress_bar(463, 464, &stru_5C70E8, hp_ratio);
+        intgame_draw_progress_bar(463, 464, &intgame_message_row2_rect, hp_ratio);
     }
 
     if (pc_obj == critter_obj || leader_obj == pc_obj) {
@@ -6657,14 +6674,14 @@ void intgame_examine_critter(int64_t pc_obj, int64_t critter_obj, char* str)
     }
     intgame_message_window_write_text(intgame_rotwin_text_frame[intgame_iso_window_type].window_handle,
         buffer,
-        &stru_5C70E8,
+        &intgame_message_row2_rect,
         intgame_flare12_red_font,
         MSG_TEXT_HALIGN_RIGHT);
 
     int cur_fatigue = critter_fatigue_current(critter_obj);
     int max_fatigue = critter_fatigue_max(critter_obj);
     int fatigue_ratio = 100 * cur_fatigue / max_fatigue;
-    intgame_draw_progress_bar(465, 466, &stru_5C70F8, fatigue_ratio);
+    intgame_draw_progress_bar(465, 466, &intgame_message_row3_rect, fatigue_ratio);
 
     if (pc_obj == critter_obj || leader_obj == pc_obj) {
         snprintf(buffer, sizeof(buffer), "%d/%d", cur_fatigue, max_fatigue);
@@ -6673,7 +6690,7 @@ void intgame_examine_critter(int64_t pc_obj, int64_t critter_obj, char* str)
     }
     intgame_message_window_write_text(intgame_rotwin_text_frame[intgame_iso_window_type].window_handle,
         buffer,
-        &stru_5C70F8,
+        &intgame_message_row3_rect,
         intgame_flare12_blue_font,
         MSG_TEXT_HALIGN_RIGHT);
 }
@@ -7129,13 +7146,13 @@ void intgame_examine_item(int64_t pc_obj, int64_t item_obj, char* str)
         && is_identified) {
         intgame_message_window_write_text(intgame_rotwin_text_frame[intgame_iso_window_type].window_handle,
             str,
-            &stru_5C70C8,
+            &intgame_message_title_rect,
             intgame_morph15_orange_font,
             MSG_TEXT_HALIGN_LEFT);
     } else {
         intgame_message_window_write_text(intgame_rotwin_text_frame[intgame_iso_window_type].window_handle,
             str,
-            &stru_5C70C8,
+            &intgame_message_title_rect,
             complexity > 0 ? intgame_morph15_blue_font : intgame_morph15_white_font,
             MSG_TEXT_HALIGN_LEFT);
     }
@@ -7152,7 +7169,7 @@ void intgame_examine_item(int64_t pc_obj, int64_t item_obj, char* str)
             value);
         intgame_message_window_write_text(intgame_rotwin_text_frame[intgame_iso_window_type].window_handle,
             buffer,
-            &stru_5C70C8,
+            &intgame_message_title_rect,
             intgame_flare12_red_font,
             MSG_TEXT_HALIGN_RIGHT);
     }
@@ -7243,7 +7260,7 @@ void intgame_examine_item(int64_t pc_obj, int64_t item_obj, char* str)
     if (buffer[0] != '\0' || !intgame_is_compact_interface()) {
         intgame_message_window_write_text(intgame_rotwin_text_frame[intgame_iso_window_type].window_handle,
             buffer,
-            &stru_5C70D8,
+            &intgame_message_row1_rect,
             intgame_flare12_white_font,
             MSG_TEXT_HALIGN_LEFT);
     }
@@ -7264,7 +7281,7 @@ void intgame_examine_item(int64_t pc_obj, int64_t item_obj, char* str)
                 100 * value / complexity);
             intgame_message_window_write_text(intgame_rotwin_text_frame[intgame_iso_window_type].window_handle,
                 buffer,
-                &stru_5C70E8,
+                &intgame_message_row2_rect,
                 intgame_flare12_white_font,
                 MSG_TEXT_HALIGN_LEFT);
         } else if (complexity < 0) {
@@ -7279,7 +7296,7 @@ void intgame_examine_item(int64_t pc_obj, int64_t item_obj, char* str)
                 value);
             intgame_message_window_write_text(intgame_rotwin_text_frame[intgame_iso_window_type].window_handle,
                 buffer,
-                &stru_5C70E8,
+                &intgame_message_row2_rect,
                 intgame_flare12_white_font,
                 MSG_TEXT_HALIGN_LEFT);
         }
@@ -7333,7 +7350,7 @@ void intgame_examine_item(int64_t pc_obj, int64_t item_obj, char* str)
     if (buffer[0] != '\0' || !intgame_is_compact_interface()) {
         intgame_message_window_write_text(intgame_rotwin_text_frame[intgame_iso_window_type].window_handle,
             buffer,
-            &stru_5C70E8,
+            &intgame_message_row2_rect,
             intgame_flare12_white_font,
             MSG_TEXT_HALIGN_RIGHT);
     }
@@ -7350,7 +7367,7 @@ void intgame_examine_item(int64_t pc_obj, int64_t item_obj, char* str)
         suffix.str);
     intgame_message_window_write_text(intgame_rotwin_text_frame[intgame_iso_window_type].window_handle,
         buffer,
-        &stru_5C70F8,
+        &intgame_message_row3_rect,
         intgame_flare12_red_font,
         MSG_TEXT_HALIGN_LEFT);
 
@@ -7365,7 +7382,7 @@ void intgame_examine_item(int64_t pc_obj, int64_t item_obj, char* str)
                 object_hp_max(item_obj));
             intgame_message_window_write_text(intgame_rotwin_text_frame[intgame_iso_window_type].window_handle,
                 buffer,
-                &stru_5C70F8,
+                &intgame_message_row3_rect,
                 intgame_flare12_red_font,
                 MSG_TEXT_HALIGN_RIGHT);
         }
@@ -7595,7 +7612,7 @@ void intgame_examine_scenery(int64_t pc_obj, int64_t scenery_obj, char* str)
 
     intgame_message_window_write_text(intgame_rotwin_text_frame[intgame_iso_window_type].window_handle,
         str,
-        &stru_5C7118,
+        &intgame_message_tall_title_rect,
         intgame_morph15_white_font,
         MSG_TEXT_HALIGN_LEFT);
 
@@ -7606,7 +7623,7 @@ void intgame_examine_scenery(int64_t pc_obj, int64_t scenery_obj, char* str)
             object_hp_max(scenery_obj));
         intgame_message_window_write_text(intgame_rotwin_text_frame[intgame_iso_window_type].window_handle,
             buffer,
-            &stru_5C70F8,
+            &intgame_message_row3_rect,
             intgame_flare12_red_font,
             MSG_TEXT_HALIGN_RIGHT);
     }
@@ -7634,7 +7651,7 @@ void intgame_examine_portal(int64_t pc_obj, int64_t portal_obj, char* str)
 
     intgame_message_window_write_text(intgame_rotwin_text_frame[intgame_iso_window_type].window_handle,
         str,
-        &stru_5C70C8,
+        &intgame_message_title_rect,
         intgame_morph15_white_font,
         MSG_TEXT_HALIGN_LEFT);
 
@@ -7651,7 +7668,7 @@ void intgame_examine_portal(int64_t pc_obj, int64_t portal_obj, char* str)
     mes_get_msg(intgame_mes_file, &mes_file_entry);
     intgame_message_window_write_text(intgame_rotwin_text_frame[intgame_iso_window_type].window_handle,
         mes_file_entry.str,
-        &stru_5C70F8,
+        &intgame_message_row3_rect,
         intgame_flare12_red_font,
         MSG_TEXT_HALIGN_LEFT);
 
@@ -7661,7 +7678,7 @@ void intgame_examine_portal(int64_t pc_obj, int64_t portal_obj, char* str)
         object_hp_max(portal_obj));
     intgame_message_window_write_text(intgame_rotwin_text_frame[intgame_iso_window_type].window_handle,
         buffer,
-        &stru_5C70F8,
+        &intgame_message_row3_rect,
         intgame_flare12_red_font,
         MSG_TEXT_HALIGN_RIGHT);
 }
@@ -7684,7 +7701,7 @@ void intgame_examine_container(int64_t pc_obj, int64_t container_obj, char* str)
 
     intgame_message_window_write_text(intgame_rotwin_text_frame[intgame_iso_window_type].window_handle,
         str,
-        &stru_5C70C8,
+        &intgame_message_title_rect,
         intgame_morph15_white_font,
         MSG_TEXT_HALIGN_LEFT);
 
@@ -7701,7 +7718,7 @@ void intgame_examine_container(int64_t pc_obj, int64_t container_obj, char* str)
     mes_get_msg(intgame_mes_file, &mes_file_entry);
     intgame_message_window_write_text(intgame_rotwin_text_frame[intgame_iso_window_type].window_handle,
         mes_file_entry.str,
-        &stru_5C70F8,
+        &intgame_message_row3_rect,
         intgame_flare12_red_font,
         MSG_TEXT_HALIGN_LEFT);
 
@@ -7712,7 +7729,7 @@ void intgame_examine_container(int64_t pc_obj, int64_t container_obj, char* str)
             object_hp_max(container_obj));
         intgame_message_window_write_text(intgame_rotwin_text_frame[intgame_iso_window_type].window_handle,
             buffer,
-            &stru_5C70F8,
+            &intgame_message_row3_rect,
             intgame_flare12_red_font,
             MSG_TEXT_HALIGN_RIGHT);
     }
@@ -7759,7 +7776,7 @@ void intgame_message_window_display_attack(int64_t obj)
     intgame_message_window_draw_image(intgame_rotwin_text_frame[intgame_iso_window_type].window_handle, 675);
     intgame_message_window_write_text(intgame_rotwin_text_frame[intgame_iso_window_type].window_handle,
         str,
-        &stru_5C70C8,
+        &intgame_message_title_rect,
         intgame_morph15_white_font,
         MSG_TEXT_HALIGN_LEFT);
 
@@ -7778,7 +7795,7 @@ void intgame_message_window_display_attack(int64_t obj)
     snprintf(str, sizeof(str), "%s: %d%%", mes_file_entry.str, effectiveness);
     intgame_message_window_write_text(intgame_rotwin_text_frame[intgame_iso_window_type].window_handle,
         str,
-        &stru_5C70D8,
+        &intgame_message_row1_rect,
         intgame_flare12_white_font,
         MSG_TEXT_HALIGN_LEFT);
 
@@ -7797,7 +7814,7 @@ void intgame_message_window_display_attack(int64_t obj)
     }
     intgame_message_window_write_text(intgame_rotwin_text_frame[intgame_iso_window_type].window_handle,
         str,
-        &stru_5C70E8,
+        &intgame_message_row2_rect,
         intgame_flare12_white_font,
         MSG_TEXT_HALIGN_LEFT);
 
@@ -7816,7 +7833,7 @@ void intgame_message_window_display_attack(int64_t obj)
     }
     intgame_message_window_write_text(intgame_rotwin_text_frame[intgame_iso_window_type].window_handle,
         str,
-        &stru_5C70F8,
+        &intgame_message_row3_rect,
         intgame_flare12_white_font,
         MSG_TEXT_HALIGN_LEFT);
 
@@ -7835,7 +7852,7 @@ void intgame_message_window_display_attack(int64_t obj)
     }
     intgame_message_window_write_text(intgame_rotwin_text_frame[intgame_iso_window_type].window_handle,
         str,
-        &stru_5C70D8,
+        &intgame_message_row1_rect,
         intgame_flare12_white_font,
         MSG_TEXT_HALIGN_LEFT | MSG_TEXT_SECONDARY);
 
@@ -7854,7 +7871,7 @@ void intgame_message_window_display_attack(int64_t obj)
     }
     intgame_message_window_write_text(intgame_rotwin_text_frame[intgame_iso_window_type].window_handle,
         str,
-        &stru_5C70E8,
+        &intgame_message_row2_rect,
         intgame_flare12_white_font,
         MSG_TEXT_HALIGN_LEFT | MSG_TEXT_SECONDARY);
 
@@ -7873,7 +7890,7 @@ void intgame_message_window_display_attack(int64_t obj)
     }
     intgame_message_window_write_text(intgame_rotwin_text_frame[intgame_iso_window_type].window_handle,
         str,
-        &stru_5C70F8,
+        &intgame_message_row3_rect,
         intgame_flare12_white_font,
         MSG_TEXT_HALIGN_LEFT | MSG_TEXT_SECONDARY);
 }
@@ -7903,7 +7920,7 @@ void intgame_message_window_display_defense(int64_t obj)
     intgame_message_window_draw_image(intgame_rotwin_text_frame[intgame_iso_window_type].window_handle, 674);
     intgame_message_window_write_text(intgame_rotwin_text_frame[intgame_iso_window_type].window_handle,
         buffer,
-        &stru_5C70C8,
+        &intgame_message_title_rect,
         intgame_morph15_white_font,
         MSG_TEXT_HALIGN_LEFT);
 
@@ -7922,7 +7939,7 @@ void intgame_message_window_display_defense(int64_t obj)
     }
     intgame_message_window_write_text(intgame_rotwin_text_frame[intgame_iso_window_type].window_handle,
         buffer,
-        &stru_5C70D8,
+        &intgame_message_row1_rect,
         intgame_flare12_white_font,
         MSG_TEXT_HALIGN_LEFT);
 
@@ -7941,7 +7958,7 @@ void intgame_message_window_display_defense(int64_t obj)
     }
     intgame_message_window_write_text(intgame_rotwin_text_frame[intgame_iso_window_type].window_handle,
         buffer,
-        &stru_5C70E8,
+        &intgame_message_row2_rect,
         intgame_flare12_white_font,
         MSG_TEXT_HALIGN_LEFT);
 
@@ -7960,7 +7977,7 @@ void intgame_message_window_display_defense(int64_t obj)
     }
     intgame_message_window_write_text(intgame_rotwin_text_frame[intgame_iso_window_type].window_handle,
         buffer,
-        &stru_5C70F8,
+        &intgame_message_row3_rect,
         intgame_flare12_white_font,
         MSG_TEXT_HALIGN_LEFT);
 
@@ -7979,7 +7996,7 @@ void intgame_message_window_display_defense(int64_t obj)
     }
     intgame_message_window_write_text(intgame_rotwin_text_frame[intgame_iso_window_type].window_handle,
         buffer,
-        &stru_5C70D8,
+        &intgame_message_row1_rect,
         intgame_flare12_white_font,
         MSG_TEXT_HALIGN_LEFT | MSG_TEXT_SECONDARY);
 
@@ -7998,7 +8015,7 @@ void intgame_message_window_display_defense(int64_t obj)
     }
     intgame_message_window_write_text(intgame_rotwin_text_frame[intgame_iso_window_type].window_handle,
         buffer,
-        &stru_5C70E8,
+        &intgame_message_row2_rect,
         intgame_flare12_white_font,
         MSG_TEXT_HALIGN_LEFT | MSG_TEXT_SECONDARY);
 
@@ -8017,7 +8034,7 @@ void intgame_message_window_display_defense(int64_t obj)
     }
     intgame_message_window_write_text(intgame_rotwin_text_frame[intgame_iso_window_type].window_handle,
         buffer,
-        &stru_5C70F8,
+        &intgame_message_row3_rect,
         intgame_flare12_white_font,
         MSG_TEXT_HALIGN_LEFT | MSG_TEXT_SECONDARY);
 }
