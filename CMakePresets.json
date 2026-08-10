@@ -78,6 +78,24 @@
             }
         },
         {
+            "name": "windows-x64-mingw",
+            "displayName": "Windows x64 (cross-compiled from Linux with mingw-w64)",
+            "description": "Produces a self-contained arcanum-ce.exe from a Linux host. CE's own windows-* presets need a Windows host and Visual Studio; this is the cross path. Requires: sudo apt install mingw-w64",
+            "inherits": [
+                "base"
+            ],
+            "condition": {
+                "type": "equals",
+                "lhs": "${hostSystemName}",
+                "rhs": "Linux"
+            },
+            "generator": "Ninja",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Release",
+                "CMAKE_TOOLCHAIN_FILE": "${sourceDir}/cmake/mingw-w64-x86_64.cmake"
+            }
+        },
+        {
             "name": "linux-x64-release",
             "inherits": [
                 "linux-base"
@@ -189,6 +207,10 @@
         {
             "name": "linux-x64-asan",
             "configurePreset": "linux-x64-asan"
+        },
+        {
+            "name": "windows-x64-mingw",
+            "configurePreset": "windows-x64-mingw"
         },
         {
             "name": "linux-x64-release",
