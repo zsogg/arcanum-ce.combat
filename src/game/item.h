@@ -85,7 +85,7 @@ void item_use_on_obj(int64_t source_obj, int64_t item_obj, int64_t target_obj);
 void item_use_on_loc(int64_t obj, int64_t item_obj, int64_t target_loc);
 int item_get_keys(int64_t obj, int* key_ids);
 bool item_party_has_key(int64_t obj, int key_id);
-bool sub_463540(int64_t container_obj);
+bool item_junk_pile_collapse(int64_t container_obj);
 // Five ways to empty an inventory, differing only in which items survive. In
 // the four that take one, `a2` picks how a surviving item reaches the ground:
 // true scatters it with `item_drop_at_loc`, false places it with
@@ -123,7 +123,7 @@ bool item_wield_set(int64_t item_obj, int inventory_location);
 bool sub_464C50(int64_t obj, int inventory_location);
 bool sub_464C80(int64_t item_obj);
 int item_check_wield(int64_t a1, int a2, int64_t a3);
-tig_art_id_t sub_465020(int64_t obj);
+tig_art_id_t item_wield_art_id(int64_t obj);
 void item_wield_best(int64_t critter_obj, int inventory_location, int64_t target_obj);
 void item_wield_best_all(int64_t critter_obj, int64_t target_obj);
 void item_rewield(int64_t obj);
@@ -151,7 +151,7 @@ bool item_inventory_slots_has_room_for(int64_t item_obj, int64_t parent_obj, int
 int item_find_free_inv_loc_for_insertion(int64_t item_obj, int64_t parent_obj);
 int item_check_insert(int64_t item_obj, int64_t parent_obj, int* inventory_location_ptr);
 void item_insert(int64_t item_obj, int64_t parent_obj, int inventory_location);
-void sub_466D60(int64_t obj);
+void item_notify_inventory_changed(int64_t obj);
 int item_check_remove(int64_t obj);
 void item_remove(int64_t item_obj);
 void item_drop_at_loc(int64_t obj, int64_t loc);

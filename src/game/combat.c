@@ -1371,7 +1371,7 @@ void combat_critter_toggle_combat_mode(int64_t obj)
     }
 
     object_set_current_aid(obj, art_id);
-    object_set_current_aid(obj, sub_465020(obj));
+    object_set_current_aid(obj, item_wield_art_id(obj));
 
     if (combat_mode_is_active) {
         if (is_pc) {

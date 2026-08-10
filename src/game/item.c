@@ -41,21 +41,21 @@ static bool sub_464150(TimeEvent* timeevent);
 static int64_t item_gold_obj(int64_t obj);
 static int64_t item_find_key_ring(int64_t critter_obj);
 static bool item_check_invensource_buy_list(int64_t item_obj, int64_t buyer_npc_obj);
-static int sub_465010(int64_t obj);
-static tig_art_id_t sub_4650D0(int64_t critter_obj);
+static int item_check_remove_worn(int64_t obj);
+static tig_art_id_t item_wield_attack_art_id(int64_t critter_obj);
 static int64_t item_ammo_obj(int64_t obj, int ammo_type);
 static bool sub_465AE0(int64_t a1, int64_t a2, tig_art_id_t* art_id_ptr);
 static bool item_key_ring_add(int64_t parent_obj, int64_t key_obj);
 static void item_key_ring_absorb_key(int64_t key_obj, int64_t key_ring_obj);
 static void item_key_ring_merge(int64_t critter_obj, int64_t incoming_key_ring_obj);
 static void item_key_ring_refresh_art(int64_t key_ring_obj);
-static bool sub_466EF0(int64_t obj, int64_t loc);
+static bool item_insert_into_junk_pile(int64_t obj, int64_t loc);
 static char* item_error_str(int reason);
 static int find_free_inv_loc_horizontal(int64_t item_obj, int64_t parent_obj, int* slots);
 static int find_free_inv_loc_vertical(int64_t item_obj, int64_t parent_obj, int* slots);
 static void item_equipped(int64_t item_obj, int64_t parent_obj, int inventory_location);
 static void item_unequipped(int64_t item_obj, int64_t parent_obj, int inventory_location);
-static bool sub_467E70(void);
+static bool item_force_remove_failed_get(void);
 static void item_recalc_light(int64_t item_obj, int64_t parent_obj);
 static bool item_cancel_decay(int64_t obj);
 static bool item_decay_timeevent_check(TimeEvent* timeevent);
@@ -143,7 +143,7 @@ static TigRect item_iso_content_rect;
 static int64_t qword_5E8818;
 
 // 0x5E8820
-static bool dword_5E8820;
+static bool item_force_remove_failed;
 
 // 0x460E70
 bool item_init(GameInitInfo* init_info)
@@ -183,7 +183,7 @@ bool item_init(GameInitInfo* init_info)
     }
 
     in_rewield = 0;
-    dword_5E8820 = 0;
+    item_force_remove_failed = 0;
     item_decay_process_cnt = 1;
 
     return true;
@@ -1743,17 +1743,21 @@ bool item_party_has_key(int64_t obj, int key_id)
 }
 
 // 0x463540
-bool sub_463540(int64_t container_obj)
+// A junk pile that has been emptied down to one item or none stops being worth
+// having: with none it is destroyed, with one the item is dropped loose in its
+// place. Anything else is left alone. `item_junk_pile_collapsing` is a
+// reentrancy guard - the drop path can land back here.
+bool item_junk_pile_collapse(int64_t container_obj)
 {
     // 0x5E8824
-    static bool dword_5E8824;
+    static bool item_junk_pile_collapsing;
 
     bool rc = false;
     int cnt;
     int64_t item_obj;
     int64_t loc;
 
-    if (dword_5E8824) {
+    if (item_junk_pile_collapsing) {
         return false;
     }
 
@@ -1762,7 +1766,7 @@ bool sub_463540(int64_t container_obj)
         return false;
     }
 
-    dword_5E8824 = true;
+    item_junk_pile_collapsing = true;
     if (proto_get_description(container_obj) == BP_JUNK_PILE) {
         cnt = obj_field_int32_get(container_obj, OBJ_F_CONTAINER_INVENTORY_NUM);
         if (cnt == 0) {
@@ -1778,7 +1782,7 @@ bool sub_463540(int64_t container_obj)
             rc = true;
         }
     }
-    dword_5E8824 = false;
+    item_junk_pile_collapsing = false;
 
     return rc;
 }
@@ -1852,7 +1856,7 @@ void item_inventory_drop_all(int64_t obj, bool a2)
 
         item_force_remove(item_obj, obj);
 
-        if (!sub_467E70()) {
+        if (!item_force_remove_failed_get()) {
             if (a2) {
                 item_drop_at_loc(item_obj, loc);
             } else {
@@ -1897,7 +1901,7 @@ void item_inventory_drop_all_except_summoned(int64_t obj, bool a2)
 
         item_force_remove(item_obj, obj);
 
-        if (!sub_467E70()) {
+        if (!item_force_remove_failed_get()) {
             if ((spell_flags & OSF_SUMMONED) == 0
                 && (item_flags & OIF_NO_DISPLAY) == 0) {
                 if (a2) {
@@ -2704,7 +2708,7 @@ int item_check_wield(int64_t item_obj, int inventory_location, int64_t critter_o
         }
 
         item_subtype = tig_art_item_id_subtype_get(obj_field_int32_get(item_obj, OBJ_F_ITEM_USE_AID_FRAGMENT));
-        art_id = sub_4650D0(critter_obj);
+        art_id = item_wield_attack_art_id(critter_obj);
         art_id = tig_art_critter_id_weapon_set(art_id, item_subtype);
         if (tig_art_critter_id_weapon_get(art_id) != item_subtype) {
             return ITEM_CANNOT_NOT_WIELDABLE;
@@ -2728,7 +2732,7 @@ int item_check_wield(int64_t item_obj, int inventory_location, int64_t critter_o
         }
 
         if (item_obj_type == OBJ_TYPE_ARMOR) {
-            art_id = sub_4650D0(critter_obj);
+            art_id = item_wield_attack_art_id(critter_obj);
             art_id = tig_art_critter_id_shield_set(art_id, 1);
             if (tig_art_exists(art_id) != TIG_OK) {
                 return ITEM_CANNOT_NOT_WIELDABLE;
@@ -2769,13 +2773,28 @@ int item_check_wield(int64_t item_obj, int inventory_location, int64_t critter_o
 }
 
 // 0x465010
-int sub_465010(int64_t obj)
+// The wear-slot branch of `item_check_remove`, and it always says yes.
+//
+// NOTE: Faithful - 0x465010 in the exe is `xor eax, eax; ret`. So the
+// `ITEM_CANNOT_HEXED` case the enum carries ("The item is hexed and cannot be
+// unwielded") is never reached through here; Troika stubbed the hook and left
+// the message behind. Checked because a function that only ever returns OK
+// reads like a dropped port, and it is not.
+int item_check_remove_worn(int64_t obj)
 {
     return ITEM_CANNOT_OK;
 }
 
 // 0x465020
-tig_art_id_t sub_465020(int64_t obj)
+// The critter art id implied by what it is wielding: its current aid with the
+// weapon and shield fragments set. Out of combat mode the weapon fragment is
+// forced to "no weapon", which is what sheathes it. Fed to
+// `object_set_current_aid`, so this is what the critter actually looks like.
+//
+// The twin below, `item_wield_attack_art_id`, is not a duplicate: it ignores
+// combat mode and forces the attack animation, because it exists to build a
+// candidate art id for `tig_art_exists` rather than to be displayed.
+tig_art_id_t item_wield_art_id(int64_t obj)
 {
     int64_t weapon_obj;
     int64_t armor_obj;
@@ -2815,7 +2834,7 @@ tig_art_id_t sub_465020(int64_t obj)
 }
 
 // 0x4650D0
-tig_art_id_t sub_4650D0(int64_t critter_obj)
+tig_art_id_t item_wield_attack_art_id(int64_t critter_obj)
 {
     int64_t item_obj;
     int weapon_type;
@@ -3159,8 +3178,8 @@ bool item_ammo_transfer(int64_t from_obj, int64_t to_obj, int qty, int ammo_type
         }
     }
 
-    sub_466D60(from_obj);
-    sub_466D60(to_obj);
+    item_notify_inventory_changed(from_obj);
+    item_notify_inventory_changed(to_obj);
 
     return true;
 }
@@ -3720,7 +3739,7 @@ void item_insert(int64_t item_obj, int64_t parent_obj, int inventory_location)
             obj_field_int32_set(existing_item_obj, qty_fld, existing_qty + qty);
 
             object_drop(item_obj, obj_field_int64_get(parent_obj, OBJ_F_LOCATION));
-            sub_466D60(parent_obj);
+            item_notify_inventory_changed(parent_obj);
             object_script_execute(parent_obj, item_obj, OBJ_HANDLE_NULL, SAP_INSERT_ITEM, 0);
             object_destroy(item_obj);
             return;
@@ -3755,7 +3774,7 @@ void item_insert(int64_t item_obj, int64_t parent_obj, int inventory_location)
         obj_field_int32_set(parent_obj, OBJ_F_NPC_FLAGS, npc_flags);
     }
 
-    sub_466D60(parent_obj);
+    item_notify_inventory_changed(parent_obj);
     object_script_execute(parent_obj, item_obj, OBJ_HANDLE_NULL, SAP_INSERT_ITEM, 0);
     mt_ai_notify_inventory_changed(parent_obj);
 
@@ -3856,7 +3875,7 @@ void item_key_ring_refresh_art(int64_t key_ring_obj)
 }
 
 // 0x466D60
-void sub_466D60(int64_t obj)
+void item_notify_inventory_changed(int64_t obj)
 {
     if (obj == OBJ_HANDLE_NULL) {
         return;
@@ -3882,7 +3901,7 @@ int item_check_remove(int64_t obj)
 
     inventory_location = item_inventory_location_get(obj);
     if (IS_WEAR_INV_LOC(inventory_location)) {
-        return sub_465010(obj);
+        return item_check_remove_worn(obj);
     }
 
     return ITEM_CANNOT_OK;
@@ -3915,7 +3934,7 @@ void item_drop_at_loc(int64_t obj, int64_t loc)
         return;
     }
 
-    if (!sub_466EF0(obj, loc)) {
+    if (!item_insert_into_junk_pile(obj, loc)) {
         object_drop(obj, loc);
     }
 
@@ -3923,7 +3942,7 @@ void item_drop_at_loc(int64_t obj, int64_t loc)
 }
 
 // 0x466EF0
-bool sub_466EF0(int64_t obj, int64_t loc)
+bool item_insert_into_junk_pile(int64_t obj, int64_t loc)
 {
     ObjectList objects;
     ObjectNode* node;
@@ -4254,7 +4273,7 @@ void item_equipped(int64_t item_obj, int64_t parent_obj, int inventory_location)
     switch (inventory_location) {
     case ITEM_INV_LOC_WEAPON:
     case ITEM_INV_LOC_SHIELD:
-        aid = sub_465020(parent_obj);
+        aid = item_wield_art_id(parent_obj);
         object_set_current_aid(parent_obj, aid);
 
         if (player_is_local_pc_obj(parent_obj)) {
@@ -4287,16 +4306,16 @@ void item_force_remove(int64_t item_obj, int64_t parent_obj)
     int idx;
     int inventory_location;
 
-    dword_5E8820 = false;
+    item_force_remove_failed = false;
 
     if (item_parent(item_obj, &actual_parent_obj)) {
         if (actual_parent_obj != parent_obj) {
-            dword_5E8820 = true;
+            item_force_remove_failed = true;
             tig_debug_printf("Warning: item_force_remove called on item with different parent.\n");
         }
         is_pc = player_is_local_pc_obj(parent_obj);
     } else {
-        dword_5E8820 = true;
+        item_force_remove_failed = true;
         tig_debug_printf("Warning: item_force_remove called on item that doesn't think it has a parent.\n");
     }
 
@@ -4326,7 +4345,7 @@ void item_force_remove(int64_t item_obj, int64_t parent_obj)
     }
 
     if (idx >= cnt) {
-        dword_5E8820 = true;
+        item_force_remove_failed = true;
         tig_debug_printf("Item: item_force_remove: ERROR: Couldn't match object in parent!\n");
         return;
     }
@@ -4343,7 +4362,7 @@ void item_force_remove(int64_t item_obj, int64_t parent_obj)
     obj_arrayfield_length_set(parent_obj, inventory_list_fld, cnt);
     obj_field_int32_set(parent_obj, inventory_num_fld, cnt);
 
-    if (!dword_5E8820) {
+    if (!item_force_remove_failed) {
         obj_field_int32_set(item_obj, OBJ_F_ITEM_INV_LOCATION, -1);
     }
 
@@ -4364,7 +4383,7 @@ void item_force_remove(int64_t item_obj, int64_t parent_obj)
 
     if (parent_type == OBJ_TYPE_CONTAINER) {
         if (!item_editor && item_decay_process_cnt > 0) {
-            sub_463540(parent_obj);
+            item_junk_pile_collapse(parent_obj);
         }
     } else {
         critter_encumbrance_level_recalc(parent_obj, encubmrance_level);
@@ -4375,7 +4394,7 @@ void item_force_remove(int64_t item_obj, int64_t parent_obj)
         }
     }
 
-    sub_466D60(parent_obj);
+    item_notify_inventory_changed(parent_obj);
     object_script_execute(parent_obj, item_obj, OBJ_HANDLE_NULL, SAP_REMOVE_ITEM, 0);
 
     if (is_pc) {
@@ -4391,7 +4410,7 @@ void item_unequipped(int64_t item_obj, int64_t parent_obj, int inventory_locatio
     switch (inventory_location) {
     case ITEM_INV_LOC_WEAPON:
     case ITEM_INV_LOC_SHIELD:
-        aid = sub_465020(parent_obj);
+        aid = item_wield_art_id(parent_obj);
         object_set_current_aid(parent_obj, aid);
 
         if (player_is_local_pc_obj(parent_obj)) {
@@ -4411,12 +4430,20 @@ void item_unequipped(int64_t item_obj, int64_t parent_obj, int inventory_locatio
 }
 
 // 0x467E70
-bool sub_467E70(void)
+// Reads *and clears* the flag `item_force_remove` sets when a removal went
+// wrong - wrong parent, no parent, or the item was not in the parent's list.
+// The disposal loops ask this after every removal and only drop an item whose
+// removal actually succeeded, which is what stops a half-removed item being
+// duplicated onto the ground.
+//
+// NOTE: The clear is belt-and-braces in the original too - `item_force_remove`
+// already resets the flag on entry, so no caller can observe a stale true.
+bool item_force_remove_failed_get(void)
 {
     bool ret;
 
-    ret = dword_5E8820;
-    dword_5E8820 = false;
+    ret = item_force_remove_failed;
+    item_force_remove_failed = false;
 
     return ret;
 }

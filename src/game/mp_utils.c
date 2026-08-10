@@ -31,7 +31,7 @@ bool sub_4ED6C0(int64_t obj)
 
     if (!tig_net_is_active()
         || tig_net_is_host()) {
-        return sub_463540(obj);
+        return item_junk_pile_collapse(obj);
     }
 
     pkt.type = 29;
