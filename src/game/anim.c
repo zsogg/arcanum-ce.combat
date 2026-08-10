@@ -2834,7 +2834,7 @@ void anim_exit(void)
 // 0x421C20
 void anim_reset(void)
 {
-    dword_5E3500 = 0;
+    anim_num_allocated_run_indices = 0;
 }
 
 // 0x421C30
@@ -3644,9 +3644,9 @@ bool anim_timeevent_process(TimeEvent* timeevent)
     bool err = false;
     int num_loops = 0;
 
-    if (dword_5E34F4) {
+    if (anim_out_of_slots) {
         anim_goal_interrupt_all_goals_of_priority(3);
-        dword_5E34F4 = false;
+        anim_out_of_slots = false;
     }
 
     run_index = timeevent->params[0].integer_value;
@@ -3710,7 +3710,7 @@ bool anim_timeevent_process(TimeEvent* timeevent)
         err = true;
     }
 
-    dword_5A5978 = run_index;
+    anim_current_run_index = run_index;
 
     while (!err) {
         if (++num_loops > 100) {
@@ -3721,7 +3721,7 @@ bool anim_timeevent_process(TimeEvent* timeevent)
             ASSERT(num_loops < 100); // 2088, "numLoops < ANIM_MAX_LOOPS_ALLOWED"
 
             combat_turn_based_end_critter_turn(run_info->anim_obj);
-            dword_5A5978 = -1;
+            anim_current_run_index = -1;
             anim_interrupt(&(run_info->id), PRIORITY_HIGHEST);
             return true;
         }
@@ -3742,7 +3742,7 @@ bool anim_timeevent_process(TimeEvent* timeevent)
         }
 
         if ((run_info->flags & 0x01) == 0) {
-            dword_5A5978 = -1;
+            anim_current_run_index = -1;
             return true;
         }
 
@@ -3865,7 +3865,7 @@ bool anim_timeevent_process(TimeEvent* timeevent)
         }
     }
 
-    dword_5A5978 = -1;
+    anim_current_run_index = -1;
 
     if ((run_info->flags & 0x02) != 0) {
         int64_t anim_obj = run_info->anim_obj;
@@ -4034,9 +4034,9 @@ void anim_catch_up_disable(void)
 }
 
 // 0x423FE0
-void sub_423FE0(void (*func)(void))
+void anim_all_goals_finished_callback_set(void (*func)(void))
 {
-    dword_5E34F8 = func;
+    anim_all_goals_finished_callback = func;
 }
 
 /**
@@ -4144,7 +4144,7 @@ bool anim_goal_interrupt_all_goals(void)
 {
     int index;
 
-    if (dword_5E3500 > 0) {
+    if (anim_num_allocated_run_indices > 0) {
         for (index = 0; index < 216; index++) {
             if ((anim_run_info[index].flags & 0x1) != 0
                 && !anim_interrupt(&(anim_run_info[index].id), PRIORITY_HIGHEST)) {

@@ -15,7 +15,7 @@ static bool anim_allocate_this_run_index(AnimID* anim_id);
 static bool sub_44D240(int index);
 static bool anim_goal_add_func(AnimGoalData* goal_data, AnimID* anim_id, bool a3, unsigned int flags);
 static bool anim_subgoal_add_func(AnimID anim_id, AnimGoalData* goal_data);
-static bool sub_44E2A0(TimeEvent* timeevent);
+static bool anim_interrupt_timeevent_match(TimeEvent* timeevent);
 static void anim_path_debug(AnimPath* path);
 static void anim_goal_data_debug(AnimGoalData* goal_data);
 static void anim_run_info_debug(AnimRunInfo* run_info);
@@ -137,7 +137,7 @@ static const char* anim_goal_data_names[] = {
 };
 
 // 0x5A5978
-int dword_5A5978 = -1;
+int anim_current_run_index = -1;
 
 // 0x5A597C
 int anim_goal_data_param_types[AGDATA_COUNT] = {
@@ -164,26 +164,40 @@ int anim_goal_data_param_types[AGDATA_COUNT] = {
     AGDATATYPE_SOUND,
 };
 
+// The slot `anim_interrupt_timeevent_match` compares against.
+//
+// This is a global only because `timeevent_clear_one_ex` takes no user data,
+// so the predicate it invokes has nowhere else to read its parameter from.
+// Same shape as `anim_goal_restart_match_id` below and as magictech's
+// `magictech_timeevent_match_id`. It reads like stale global state and is not.
+//
 // 0x5B052C
-static int dword_5B052C = -1;
+static int anim_interrupt_match_slot = -1;
 
 // 0x5E3000
-static AnimID stru_5E3000;
+static AnimID anim_goal_restart_match_id;
 
 // 0x5E33F8
-static AnimPath stru_5E33F8;
+static AnimPath anim_scratch_path;
 
+// Set when `anim_allocate_new_run_index` finds all 216 slots taken - Troika's
+// own "Ran out of animation slots!" warning sits on the line above the write.
+// It is a *deferred* recovery request, not a report: `anim_timeevent_process`
+// picks it up on the next tick, clears it, and calls
+// `anim_goal_interrupt_all_goals_of_priority(3)` to free slots up. That is why
+// the flag lives here but is consumed in anim.c.
+//
 // 0x5E34F4
-bool dword_5E34F4;
+bool anim_out_of_slots;
 
 // 0x5E34F8
-void (*dword_5E34F8)(void);
+void (*anim_all_goals_finished_callback)(void);
 
 // 0x5E34FC
 bool in_anim_load;
 
 // 0x5E3500
-int dword_5E3500;
+int anim_num_allocated_run_indices;
 
 // 0x5E3504
 int animNumActiveGoals;
@@ -273,7 +287,7 @@ bool anim_private_init(GameInitInfo* init_info)
 
     anim_next_unique_id = random_between(0, 10024);
     animNumActiveGoals = 0;
-    dword_5E3500 = 0;
+    anim_num_allocated_run_indices = 0;
 
     return true;
 }
@@ -303,21 +317,21 @@ void anim_private_reset(void)
     }
 
     animNumActiveGoals = 0;
-    dword_5E3500 = 0;
+    anim_num_allocated_run_indices = 0;
 }
 
 // 0x44CB60
-bool sub_44CB60(void)
+bool anim_is_processing_run(void)
 {
-    return dword_5A5978 != -1;
+    return anim_current_run_index != -1;
 }
 
 // 0x44CB70
-bool sub_44CB70(TimeEvent* timeevent)
+bool anim_goal_restart_timeevent_match(TimeEvent* timeevent)
 {
     ASSERT(timeevent != NULL); // 2766, "pTimeEvent"
 
-    return timeevent->params[0].integer_value == stru_5E3000.slot_num;
+    return timeevent->params[0].integer_value == anim_goal_restart_match_id.slot_num;
 }
 
 // 0x44CBB0
@@ -350,8 +364,8 @@ bool anim_goal_restart(AnimID* anim_id)
         run_info->path_attached_to_stack_index = -1;
     }
 
-    stru_5E3000 = run_info->id;
-    timeevent_clear_one_ex(TIMEEVENT_TYPE_ANIM, sub_44CB70);
+    anim_goal_restart_match_id = run_info->id;
+    timeevent_clear_one_ex(TIMEEVENT_TYPE_ANIM, anim_goal_restart_timeevent_match);
 
     timeevent.type = TIMEEVENT_TYPE_ANIM;
     timeevent.params[0].integer_value = run_info->id.slot_num;
@@ -377,7 +391,7 @@ bool anim_allocate_new_run_index(AnimID* anim_id)
 
     if (index == 216) {
         tig_debug_printf("Anim: WARNING: Ran out of animation slots!\n");
-        dword_5E34F4 = 1;
+        anim_out_of_slots = 1;
         return false;
     }
 
@@ -403,7 +417,7 @@ bool anim_allocate_new_run_index(AnimID* anim_id)
         run_info->goals[0].field_B0[subindex].objid.type = OID_TYPE_NULL;
     }
 
-    dword_5E3500++;
+    anim_num_allocated_run_indices++;
 
     return true;
 }
@@ -473,7 +487,7 @@ bool anim_allocate_this_run_index(AnimID* anim_id)
         run_info->goals[0].field_B0[idx].objid.type = OID_TYPE_NULL;
     }
 
-    dword_5E3500++;
+    anim_num_allocated_run_indices++;
 
     return true;
 }
@@ -514,12 +528,12 @@ bool mp_deallocate_run_index(AnimID* anim_id)
         run_info->current_goal = -1;
         run_info->path.flags = 1;
 
-        dword_5E3500--;
+        anim_num_allocated_run_indices--;
         anim_validate_active_goals("Free Run Index");
 
         if (animNumActiveGoals == 0) {
-            if (dword_5E34F8 != NULL) {
-                dword_5E34F8();
+            if (anim_all_goals_finished_callback != NULL) {
+                anim_all_goals_finished_callback();
             }
         }
     } else {
@@ -569,8 +583,8 @@ bool sub_44D240(int index)
     run_info->current_goal = -1;
     run_info->path.flags |= 0x1;
 
-    stru_5E3000 = run_info->id;
-    timeevent_clear_one_ex(TIMEEVENT_TYPE_ANIM, sub_44CB70);
+    anim_goal_restart_match_id = run_info->id;
+    timeevent_clear_one_ex(TIMEEVENT_TYPE_ANIM, anim_goal_restart_timeevent_match);
 
     return true;
 }
@@ -973,12 +987,12 @@ bool anim_force_interrupt(AnimID* anim_id)
 
     run_info->flags |= 0x8002;
 
-    if (anim_id->slot_num == dword_5A5978) {
+    if (anim_id->slot_num == anim_current_run_index) {
         return true;
     }
 
-    dword_5B052C = anim_id->slot_num;
-    timeevent_clear_all_ex(TIMEEVENT_TYPE_ANIM, sub_44E2A0);
+    anim_interrupt_match_slot = anim_id->slot_num;
+    timeevent_clear_all_ex(TIMEEVENT_TYPE_ANIM, anim_interrupt_timeevent_match);
 
     if (run_info->current_goal != -1) {
         if (run_info->cur_stack_data == NULL) {
@@ -999,9 +1013,9 @@ bool anim_force_interrupt(AnimID* anim_id)
 }
 
 // 0x44E2A0
-bool sub_44E2A0(TimeEvent* timeevent)
+bool anim_interrupt_timeevent_match(TimeEvent* timeevent)
 {
-    return timeevent->params[0].integer_value == dword_5B052C;
+    return timeevent->params[0].integer_value == anim_interrupt_match_slot;
 }
 
 // 0x44E2C0
@@ -1058,12 +1072,12 @@ bool anim_interrupt(AnimID* anim_id, int priority)
 
     run_info->flags |= 0x02;
 
-    if (anim_id->slot_num == dword_5A5978) {
+    if (anim_id->slot_num == anim_current_run_index) {
         return true;
     }
 
-    dword_5B052C = anim_id->slot_num;
-    timeevent_clear_all_ex(TIMEEVENT_TYPE_ANIM, sub_44E2A0);
+    anim_interrupt_match_slot = anim_id->slot_num;
+    timeevent_clear_all_ex(TIMEEVENT_TYPE_ANIM, anim_interrupt_timeevent_match);
 
     if (run_info->current_goal != -1) {
         if (run_info->cur_stack_data == NULL) {
@@ -1395,8 +1409,8 @@ bool sub_44EB40(int64_t obj, int64_t from, int64_t to)
 {
     ASSERT(obj != OBJ_HANDLE_NULL); // 4489, "obj != OBJ_HANDLE_NULL"
 
-    stru_5E33F8.flags = 1;
-    stru_5E33F8.field_CC = 200;
+    anim_scratch_path.flags = 1;
+    anim_scratch_path.field_CC = 200;
 
     if (obj == OBJ_HANDLE_NULL) {
         return false;
@@ -1406,7 +1420,7 @@ bool sub_44EB40(int64_t obj, int64_t from, int64_t to)
         return false;
     }
 
-    if (!sub_426560(obj, from, to, &stru_5E33F8, 0)) {
+    if (!sub_426560(obj, from, to, &anim_scratch_path, 0)) {
         return false;
     }
 

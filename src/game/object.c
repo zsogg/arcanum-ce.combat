@@ -2785,13 +2785,13 @@ void sub_43F710(int64_t obj)
     }
 
     if ((obj_field_int32_get(obj, OBJ_F_SCENERY_FLAGS) & OSCF_NO_AUTO_ANIMATE) != 0) {
-        if (!sub_44CB60()) {
+        if (!anim_is_processing_run()) {
             anim_force_interrupt_all_goals_of_obj(obj);
         }
     } else {
         if (tig_art_anim_data(obj_field_int32_get(obj, OBJ_F_CURRENT_AID), &art_anim_data) == TIG_OK) {
             if (art_anim_data.num_frames <= 1 && sfx_misc_sound(obj, MISC_SOUND_ANIMATING) == -1) {
-                if (!sub_44CB60()) {
+                if (!anim_is_processing_run()) {
                     anim_force_interrupt_all_goals_of_obj(obj);
                 }
             } else {

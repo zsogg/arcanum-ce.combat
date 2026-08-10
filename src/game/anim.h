@@ -75,7 +75,7 @@ bool anim_timeevent_process(TimeEvent* timeevent);
 void anim_validate_active_goals(const char* msg);
 void anim_catch_up_enable(void);
 void anim_catch_up_disable(void);
-void sub_423FE0(void (*func)(void));
+void anim_all_goals_finished_callback_set(void (*func)(void));
 bool anim_force_interrupt_all_goals_of_obj(int64_t obj);
 bool anim_interrupt_all_goals_of_obj(int64_t obj, int priority_level, bool concurrent, bool a4);
 bool anim_goal_interrupt_all_goals(void);

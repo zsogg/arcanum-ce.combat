@@ -389,12 +389,12 @@ typedef struct AnimRunInfo {
 } AnimRunInfo;
 
 extern const char* anim_goal_names[];
-extern int dword_5A5978;
+extern int anim_current_run_index;
 extern int anim_goal_data_param_types[AGDATA_COUNT];
-extern bool dword_5E34F4;
-extern void (*dword_5E34F8)(void);
+extern bool anim_out_of_slots;
+extern void (*anim_all_goals_finished_callback)(void);
 extern bool in_anim_load;
-extern int dword_5E3500;
+extern int anim_num_allocated_run_indices;
 extern int animNumActiveGoals;
 extern int anim_next_unique_id;
 extern int dword_739E40;
@@ -407,7 +407,7 @@ bool anim_goal_is_endless(AnimRunInfo* run_info);
 bool anim_private_init(GameInitInfo* init_info);
 void anim_private_exit(void);
 void anim_private_reset(void);
-bool sub_44CB60(void);
+bool anim_is_processing_run(void);
 bool anim_goal_restart(AnimID* anim_id);
 bool mp_deallocate_run_index(AnimID* anim_id);
 void sub_44C8F0(AnimRunInfo* run_info, AnimGoalNode* goal_node);

@@ -3150,7 +3150,7 @@ bool combat_turn_based_start(void)
 
     dword_5FC250 = 0;
 
-    sub_423FE0(sub_4B7080);
+    anim_all_goals_finished_callback_set(sub_4B7080);
 
     loc = obj_field_int64_get(player_get_local_pc_obj(), OBJ_F_LOCATION);
     combat_recalc_perception_range();
@@ -3192,7 +3192,7 @@ void combat_turn_based_end(void)
     if (combat_turn_based_active) {
         combat_turn_based_active = false;
 
-        sub_423FE0(NULL);
+        anim_all_goals_finished_callback_set(NULL);
 
         if (!in_combat_reset) {
             node = combat_critter_list.head;
