@@ -97,14 +97,30 @@ static ViewOptions light_view_options;
 // 0x602E40
 static TigPalette* light_indoor_palette;
 
+// Geometry of the off-screen light buffer, all six derived together in
+// `light_buffers_init` and only meaningful as a set:
+//
+//   light_buffer_width/height    pixels - the iso content rect plus a margin
+//                                of 320 x 160, i.e. eight tiles either way, so
+//                                lights just off screen still cast onto it
+//   light_buffer_tiles_x/y       the same in tiles, /40 and /20 (+1), which is
+//                                the isometric tile size and the reason for
+//                                the two different divisors
+//   light_buffer_origin_x/y      where the buffer's top-left sits, so
+//                                `(x - origin_x) / 40` is the tile column
+//
+// Changing one without the others silently mis-indexes the buffer: the bounds
+// checks use the tile counts while the addressing uses the origin and the
+// divisors.
+//
 // 0x602E44
-static int dword_602E44;
+static int light_buffer_width;
 
 // 0x602E48
 static TigRect light_iso_content_rect;
 
 // 0x602E58
-static TigPalette** dword_602E58;
+static TigPalette** light_shadow_palettes;
 
 // 0x602E5C
 static TigVideoBuffer* darker_vb;
@@ -131,7 +147,7 @@ static TigVideoBuffer* lighter_vb;
 static uint32_t* darker_colors;
 
 // 0x602EA4
-static int dword_602EA4;
+static int light_buffer_height;
 
 // 0x602EA8
 static tig_color_t light_outdoor_color;
@@ -140,7 +156,7 @@ static tig_color_t light_outdoor_color;
 static uint32_t* lighter_colors;
 
 // 0x602EB8
-static bool dword_602EB8;
+static bool light_module_initialized;
 
 // 0x602EBC
 static int darker_pitch;
@@ -158,19 +174,19 @@ static int lighter_pitch;
 static bool light_enabled;
 
 // 0x602ED0
-static int dword_602ED0;
+static int light_buffer_origin_x;
 
 // 0x602ED4
-static int dword_602ED4;
+static int light_buffer_origin_y;
 
 // 0x602ED8
-static TigRect stru_602ED8;
+static TigRect light_shadowmap_rect;
 
 // 0x602EE8
 static TigBmp light_shadowmap_bmp;
 
 // 0x603400
-static Light* dword_603400;
+static Light* light_timeevent_match_light;
 
 // 0x603404
 static int light_buffers_lock_cnt;
@@ -182,27 +198,27 @@ static tig_color_t light_indoor_color;
 static bool light_hardware_accelerated;
 
 // 0x603418
-static int dword_603418;
+static int light_buffer_tiles_x;
 
 // 0x60341C
-static int dword_60341C;
+static int light_buffer_tiles_y;
 
 // 0x4D7F30
 bool light_init(GameInitInfo* init_info)
 {
     TigWindowData window_data;
 
-    dword_602E58 = (TigPalette**)CALLOC(7, sizeof(*dword_602E58));
+    light_shadow_palettes = (TigPalette**)CALLOC(7, sizeof(*light_shadow_palettes));
     sub_4F8330();
     light_iso_window_handle = init_info->iso_window_handle;
     light_iso_window_invalidate_rect = init_info->invalidate_rect_func;
     light_editor = init_info->editor;
     light_view_options.type = VIEW_TYPE_ISOMETRIC;
     light_enabled = true;
-    dword_602EB8 = true;
+    light_module_initialized = true;
 
     if (tig_window_data(init_info->iso_window_handle, &window_data) != TIG_OK) {
-        FREE(dword_602E58);
+        FREE(light_shadow_palettes);
         return false;
     }
 
@@ -217,12 +233,12 @@ bool light_init(GameInitInfo* init_info)
     light_shadows_enabled = settings_get_value(&settings, SHADOWS_KEY);
 
     if (!light_buffers_init()) {
-        FREE(dword_602E58);
+        FREE(light_shadow_palettes);
         return false;
     }
 
     if (!shadow_init()) {
-        FREE(dword_602E58);
+        FREE(light_shadow_palettes);
         return false;
     }
 
@@ -245,7 +261,7 @@ void light_exit(void)
     light_iso_window_handle = TIG_WINDOW_HANDLE_INVALID;
     light_iso_window_invalidate_rect = NULL;
     sub_4F8340();
-    FREE(dword_602E58);
+    FREE(light_shadow_palettes);
 }
 
 // 0x4D8160
@@ -314,7 +330,7 @@ void light_draw(GameDrawInfo* draw_info)
     int64_t cx;
     int64_t cy;
 
-    if (!dword_602EB8) {
+    if (!light_module_initialized) {
         return;
     }
 
@@ -327,8 +343,8 @@ void light_draw(GameDrawInfo* draw_info)
     cx += 40;
     cy += 20;
 
-    dword_602ED0 = (int)cx - dword_602E44 / 2;
-    dword_602ED4 = (int)cy - dword_602EA4 / 2;
+    light_buffer_origin_x = (int)cx - light_buffer_width / 2;
+    light_buffer_origin_y = (int)cy - light_buffer_height / 2;
     light_render_internal(draw_info);
 }
 
@@ -403,7 +419,7 @@ void light_start_animating(Light* light)
 void light_stop_animating(Light* light)
 {
     if ((light_get_flags(light) & LF_ANIMATING) != 0) {
-        dword_603400 = light;
+        light_timeevent_match_light = light;
         timeevent_clear_all_ex(TIMEEVENT_TYPE_LIGHT, sub_4DE820);
         light_unset_flags_internal(light, LF_ANIMATING);
     }
@@ -845,8 +861,8 @@ bool shadow_apply(int64_t obj)
 
     if (light_shadows_enabled) {
         location_xy(loc, &loc_x, &loc_y);
-        loc_x += obj_field_int32_get(obj, OBJ_F_OFFSET_X) + 40 - stru_602ED8.width / 2;
-        loc_y += obj_field_int32_get(obj, OBJ_F_OFFSET_Y) + 20 - stru_602ED8.height / 2;
+        loc_x += obj_field_int32_get(obj, OBJ_F_OFFSET_X) + 40 - light_shadowmap_rect.width / 2;
+        loc_y += obj_field_int32_get(obj, OBJ_F_OFFSET_Y) + 20 - light_shadowmap_rect.height / 2;
 
         if (loc_x < INT_MIN
             || loc_x > INT_MAX
@@ -855,10 +871,10 @@ bool shadow_apply(int64_t obj)
             return false;
         }
 
-        stru_602ED8.x = (int)loc_x;
-        stru_602ED8.y = (int)loc_y;
+        light_shadowmap_rect.x = (int)loc_x;
+        light_shadowmap_rect.y = (int)loc_y;
 
-        if (!location_screen_rect_to_loc_rect(&stru_602ED8, &loc_rect)) {
+        if (!location_screen_rect_to_loc_rect(&light_shadowmap_rect, &loc_rect)) {
             return false;
         }
 
@@ -884,11 +900,11 @@ bool shadow_apply(int64_t obj)
                         lx = (int)loc_x + light->offset_x + 40;
                         ly = (int)loc_y + light->offset_y + 20;
 
-                        if (lx >= stru_602ED8.x
-                            && ly >= stru_602ED8.y
-                            && lx < stru_602ED8.x + stru_602ED8.width
-                            && ly < stru_602ED8.y + stru_602ED8.height) {
-                            color_index = ((uint8_t*)light_shadowmap_bmp.pixels)[light_shadowmap_bmp.pitch * (ly - stru_602ED8.y) + lx - stru_602ED8.x];
+                        if (lx >= light_shadowmap_rect.x
+                            && ly >= light_shadowmap_rect.y
+                            && lx < light_shadowmap_rect.x + light_shadowmap_rect.width
+                            && ly < light_shadowmap_rect.y + light_shadowmap_rect.height) {
+                            color_index = ((uint8_t*)light_shadowmap_bmp.pixels)[light_shadowmap_bmp.pitch * (ly - light_shadowmap_rect.y) + lx - light_shadowmap_rect.x];
                             if (color_index != 0) {
                                 uint8_t light_gray = tig_color_rgb_to_grayscale(light->tint_color);
                                 int delta = light_gray - gray;
@@ -901,7 +917,7 @@ bool shadow_apply(int64_t obj)
                                     frame %= 7;
                                     frames[cnt] = frame;
 
-                                    shadows[cnt].palette = dword_602E58[frame];
+                                    shadows[cnt].palette = light_shadow_palettes[frame];
                                     shadows[cnt].art_id = tig_art_id_frame_set(shadows[cnt].art_id, frame);
 
                                     int shadow_grey = v1 - frame * (v1 / 7);
@@ -951,7 +967,7 @@ bool shadow_apply(int64_t obj)
         }
 
         shadow->art_id = sub_504730(art_id, 2);
-        shadow->palette = dword_602E58[palette];
+        shadow->palette = light_shadow_palettes[palette];
         shadow->color = tig_color_make((int)((float)gray * 0.4f), (int)((float)gray * 0.4f), (int)((float)gray * 0.4f));
         obj_arrayfield_ptr_set(obj, OBJ_F_SHADOW_HANDLES, idx, shadow);
         idx++;
@@ -1009,13 +1025,13 @@ bool sub_4DA360(int x, int y, tig_color_t color, tig_color_t* colors)
 
     light_buffers_lock();
 
-    dx = (x - dword_602ED0) / 40;
-    dy = (y - dword_602ED4) / 20;
+    dx = (x - light_buffer_origin_x) / 40;
+    dy = (y - light_buffer_origin_y) / 20;
 
     if (dx < 0
-        || dx + 2 >= dword_603418
+        || dx + 2 >= light_buffer_tiles_x
         || dy < 0
-        || dy + 2 >= dword_60341C) {
+        || dy + 2 >= light_buffer_tiles_y) {
         light_buffers_unlock();
         return false;
     }
@@ -1974,16 +1990,16 @@ bool light_buffers_init(void)
 {
     light_buffers_exit();
 
-    dword_602E44 = light_iso_content_rect.width + 320;
-    dword_603418 = dword_602E44 / 40 + 1;
+    light_buffer_width = light_iso_content_rect.width + 320;
+    light_buffer_tiles_x = light_buffer_width / 40 + 1;
 
-    dword_602EA4 = light_iso_content_rect.height + 160;
-    dword_60341C = dword_602EA4 / 20 + 1;
+    light_buffer_height = light_iso_content_rect.height + 160;
+    light_buffer_tiles_y = light_buffer_height / 20 + 1;
 
     TigVideoBufferCreateInfo vb_create_info;
     vb_create_info.flags = TIG_VIDEO_BUFFER_CREATE_SYSTEM_MEMORY | TIG_VIDEO_BUFFER_CREATE_COLOR_KEY;
-    vb_create_info.width = dword_603418;
-    vb_create_info.height = dword_60341C;
+    vb_create_info.width = light_buffer_tiles_x;
+    vb_create_info.height = light_buffer_tiles_y;
     vb_create_info.color_key = tig_color_make(0, 255, 0);
     vb_create_info.background_color = vb_create_info.color_key;
 
@@ -2003,15 +2019,15 @@ void light_buffers_exit(void)
 {
     if (lighter_vb != NULL) {
         tig_video_buffer_destroy(lighter_vb);
-        dword_60341C = 0;
-        dword_603418 = 0;
+        light_buffer_tiles_y = 0;
+        light_buffer_tiles_x = 0;
         lighter_vb = NULL;
     }
 
     if (darker_vb != NULL) {
         tig_video_buffer_destroy(darker_vb);
-        dword_60341C = 0;
-        dword_603418 = 0;
+        light_buffer_tiles_y = 0;
+        light_buffer_tiles_x = 0;
         darker_vb = NULL;
     }
 }
@@ -2243,15 +2259,15 @@ bool shadow_init(void)
         return false;
     }
 
-    stru_602ED8.width = light_shadowmap_bmp.width;
-    stru_602ED8.height = light_shadowmap_bmp.height;
+    light_shadowmap_rect.width = light_shadowmap_bmp.width;
+    light_shadowmap_rect.height = light_shadowmap_bmp.height;
 
     palette_modify_info.flags = TIG_PALETTE_MODIFY_TINT;
     palette_modify_info.src_palette = art_anim_data.palette2;
 
     for (index = 0; index < 7; index++) {
-        dword_602E58[index] = tig_palette_create();
-        palette_modify_info.dst_palette = dword_602E58[index];
+        light_shadow_palettes[index] = tig_palette_create();
+        palette_modify_info.dst_palette = light_shadow_palettes[index];
         palette_modify_info.tint_color = tig_color_make(225 - 13 * index, 225 - 13 * index, 225 - 13 * index);
         tig_palette_modify(&palette_modify_info);
     }
@@ -2267,7 +2283,7 @@ void shadow_exit(void)
     shadow_node_clear();
 
     for (index = 0; index < 7; index++) {
-        tig_palette_destroy(dword_602E58[index]);
+        tig_palette_destroy(light_shadow_palettes[index]);
     }
 
     tig_bmp_destroy(&light_shadowmap_bmp);
@@ -2328,7 +2344,7 @@ void shadow_node_clear(void)
 // 0x4DE820
 bool sub_4DE820(TimeEvent* timeevent)
 {
-    return (Light*)timeevent->params[0].pointer_value == dword_603400;
+    return (Light*)timeevent->params[0].pointer_value == light_timeevent_match_light;
 }
 
 // 0x4DE870
@@ -2440,12 +2456,12 @@ void light_render_internal(GameDrawInfo* draw_info)
                                                 && ly < tmp_rect.y + tmp_rect.height
                                                 && sub_502E50(light->art_id, lx - tmp_rect.x, ly - tmp_rect.y, &color) == TIG_OK
                                                 && color != art_anim_data.color_key) {
-                                                int cx = (lx - dword_602ED0) / 40;
-                                                int cy = (ly - dword_602ED4) / 20;
+                                                int cx = (lx - light_buffer_origin_x) / 40;
+                                                int cy = (ly - light_buffer_origin_y) / 20;
                                                 if (cx >= 0
-                                                    && cx < dword_603418
+                                                    && cx < light_buffer_tiles_x
                                                     && cy >= 0
-                                                    && cy < dword_60341C) {
+                                                    && cy < light_buffer_tiles_y) {
                                                     if (((light->flags & LF_INDOOR) != 0
                                                             && light->tint_color != indoor_color)
                                                         || ((light->flags & LF_OUTDOOR) != 0
