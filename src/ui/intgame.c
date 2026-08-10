@@ -797,8 +797,11 @@ static bool intgame_mode_scrolling[INTGAME_MODE_COUNT] = {
     /*   INTGAME_MODE_NPC_REPAIR */ false,
 };
 
+// The scroll offset last drawn, so the clock only repaints when it moves. -1
+// cannot collide with a real offset, which is always modulo the strip widths.
+//
 // 0x5C7308
-static int dword_5C7308 = -1;
+static int intgame_clock_scroll_offset = -1;
 
 // 0x5C730C
 static int intgame_moon_phase_days[8] = {
@@ -868,14 +871,24 @@ static tig_window_handle_t intgame_iso_window = TIG_WINDOW_HANDLE_INVALID;
 // 0x64C470
 static tig_font_handle_t intgame_morph15_blue_font;
 
+// NOTE: Created in `iso_interface_create` and destroyed in
+// `iso_interface_destroy`, and never drawn into - in the original too. Those
+// are the only two instructions in the exe that name 0x64C474 (0x54A393 and
+// 0x54AA16). Troika's dead allocation, sized off the health bar; kept because
+// removing it would change what the port does.
+//
 // 0x64C474
 static TigVideoBuffer* dword_64C474;
 
 // 0x64C478
 static int intgame_max_quantity;
 
+// Widths of the clock's two scrolling strips, art 207 and 208. The clock is a
+// band that scrolls once per day: `intgame_clock_refresh` maps seconds since
+// midnight onto their combined width.
+//
 // 0x64C47C
-static int dword_64C47C[2];
+static int intgame_clock_strip_widths[2];
 
 // 0x64C484
 static int intgame_ui_primary_button_icons[UI_PRIMARY_BUTTON_COUNT];
@@ -902,8 +915,13 @@ static tig_font_handle_t intgame_flare14_white_font;
 // 0x64C4A8
 static UiButtonInfo intgame_dialog_row_buttons[DIALOG_ROW_COUNT];
 
+// The two windows of the main interface - the top bar and the bottom panel -
+// in the same order as `intgame_interface_window_frames`, which is what
+// `find_interface_window_index` searches to decide which of the two a given
+// screen position belongs to.
+//
 // 0x64C4F8
-static tig_window_handle_t dword_64C4F8[2];
+static tig_window_handle_t intgame_interface_window_handles[2];
 
 // 0x64C500
 static tig_font_handle_t intgame_flare12_blue_font;
@@ -921,10 +939,14 @@ static TigRect intgame_pc_lens_dst_rect;
 static PcLens intgame_pc_lens;
 
 // 0x64C52C
-static tig_window_handle_t dword_64C52C;
+static tig_window_handle_t intgame_iso_window_handle;
 
+// The spell college whose five spells the spell buttons currently show;
+// `intgame_spell_buttons` is indexed `5 * college + slot`. Part of the save,
+// and restored by pressing the matching `intgame_college_buttons` radio.
+//
 // 0x64C530
-static int dword_64C530;
+static int intgame_selected_college;
 
 // 0x64C534
 static UiPrimaryButton intgame_map_button;
@@ -1118,7 +1140,7 @@ void intgame_resize(GameResizeInfo* resize_info)
     TigRect rect;
 
     hotkey_ui_end();
-    dword_64C52C = resize_info->window_handle;
+    intgame_iso_window_handle = resize_info->window_handle;
 
     if (intgame_fs_hotkey_window != TIG_WINDOW_HANDLE_INVALID) {
         tig_window_destroy(intgame_fs_hotkey_window);
@@ -1126,7 +1148,7 @@ void intgame_resize(GameResizeInfo* resize_info)
     }
 
     if (!intgame_compact_interface) {
-        hotkey_ui_start(dword_64C4F8[1], &(intgame_interface_window_frames[1]), dword_64C4F8[1], false);
+        hotkey_ui_start(intgame_interface_window_handles[1], &(intgame_interface_window_frames[1]), intgame_interface_window_handles[1], false);
 
         for (index = 0; index < 5; index++) {
             tig_window_hide(intgame_maintain_fs_windows[index]);
@@ -1166,7 +1188,7 @@ void intgame_resize(GameResizeInfo* resize_info)
         }
     }
 
-    if (tig_window_is_hidden(dword_64C52C)) {
+    if (tig_window_is_hidden(intgame_iso_window_handle)) {
         intgame_hide();
     }
 }
@@ -1190,7 +1212,7 @@ bool intgame_save(TigFile* stream)
 {
     if (stream == NULL) return false;
     if (tig_file_fwrite(&intgame_iso_window_type, sizeof(intgame_iso_window_type), 1, stream) != 1) return false;
-    if (tig_file_fwrite(&dword_64C530, sizeof(dword_64C530), 1, stream) != 1) return false;
+    if (tig_file_fwrite(&intgame_selected_college, sizeof(intgame_selected_college), 1, stream) != 1) return false;
     if (!hotkey_ui_save(stream)) return false;
     if (tig_file_fwrite(intgame_ui_primary_button_icons, sizeof(*intgame_ui_primary_button_icons), UI_PRIMARY_BUTTON_COUNT, stream) != UI_PRIMARY_BUTTON_COUNT) return false;
     if (tig_file_fwrite(&intgame_map_button, sizeof(intgame_map_button), 1, stream) != 1) return false;
@@ -1207,10 +1229,10 @@ bool intgame_load(GameLoadInfo* load_info)
 
     if (load_info->stream == NULL) return false;
     if (tig_file_fread(&v1, sizeof(v1), 1, load_info->stream) != 1) return false;
-    if (tig_file_fread(&dword_64C530, sizeof(dword_64C530), 1, load_info->stream) != 1) return false;
+    if (tig_file_fread(&intgame_selected_college, sizeof(intgame_selected_college), 1, load_info->stream) != 1) return false;
 
     if (intgame_iso_window_type == ROTWIN_TYPE_SPELLS) {
-        tig_button_state_change(intgame_college_buttons[dword_64C530].button_handle, TIG_BUTTON_STATE_PRESSED);
+        tig_button_state_change(intgame_college_buttons[intgame_selected_college].button_handle, TIG_BUTTON_STATE_PRESSED);
     }
 
     if (!hotkey_ui_load(load_info)) return false;
@@ -1271,7 +1293,7 @@ void iso_interface_create(tig_window_handle_t window_handle)
     intgame_pc_lens_dst_rect.y = (600 - intgame_pc_lens_dst_rect.height) / 2;
     hrp_apply(&intgame_pc_lens_dst_rect, GRAVITY_CENTER_HORIZONTAL | GRAVITY_CENTER_VERTICAL);
 
-    dword_64C52C = window_handle;
+    intgame_iso_window_handle = window_handle;
     dword_64C6B0 = 1;
     intgame_iso_interface_created = false;
 
@@ -1318,14 +1340,14 @@ void iso_interface_create(tig_window_handle_t window_handle)
             break;
         }
 
-        if (tig_window_create(&window_data, &(dword_64C4F8[index])) != TIG_OK) {
+        if (tig_window_create(&window_data, &(intgame_interface_window_handles[index])) != TIG_OK) {
             tig_debug_printf("iso_interface_create: ERROR: couldn't create window!\n");
             exit(EXIT_SUCCESS); // FIXME: Should be EXIT_FAILURE
         }
 
         window_data.rect.x = 0;
         window_data.rect.y = 0;
-        tig_window_blit_art(dword_64C4F8[index], &art_blit_info);
+        tig_window_blit_art(intgame_interface_window_handles[index], &art_blit_info);
     }
 
     for (index = 0; index < 5; index++) {
@@ -1350,7 +1372,7 @@ void iso_interface_create(tig_window_handle_t window_handle)
     sub_5501C0();
 
     intgame_iso_interface_created = true;
-    dword_64C530 = 0;
+    intgame_selected_college = 0;
 
     for (index = 0; index < 11; index++) {
         iwid = find_interface_window_index(intgame_rotwin_text_frame[index].rect.x, intgame_rotwin_text_frame[index].rect.y);
@@ -1361,7 +1383,7 @@ void iso_interface_create(tig_window_handle_t window_handle)
 
         intgame_rotwin_text_frame[index].rect.x -= intgame_interface_window_frames[iwid].x;
         intgame_rotwin_text_frame[index].rect.y -= intgame_interface_window_frames[iwid].y;
-        intgame_rotwin_text_frame[index].window_handle = dword_64C4F8[iwid];
+        intgame_rotwin_text_frame[index].window_handle = intgame_interface_window_handles[iwid];
     }
 
     for (index = 0; index < INTGAME_COUNTER_COUNT; index++) {
@@ -1373,10 +1395,10 @@ void iso_interface_create(tig_window_handle_t window_handle)
 
         intgame_number_boxes[index].rect.x -= intgame_interface_window_frames[iwid].x;
         intgame_number_boxes[index].rect.y -= intgame_interface_window_frames[iwid].y;
-        intgame_number_boxes[index].window_handle = dword_64C4F8[iwid];
+        intgame_number_boxes[index].window_handle = intgame_interface_window_handles[iwid];
     }
 
-    hotkey_ui_start(dword_64C4F8[1], &(intgame_interface_window_frames[1]), dword_64C4F8[1], false);
+    hotkey_ui_start(intgame_interface_window_handles[1], &(intgame_interface_window_frames[1]), intgame_interface_window_handles[1], false);
     intgame_button_create(&stru_5C6F30);
     intgame_button_create(&intgame_mt_button_info);
     intgame_mt_button_disable();
@@ -1400,14 +1422,14 @@ void iso_interface_create(tig_window_handle_t window_handle)
         tig_debug_printf("iso_interface_create: ERROR: clock stuff failed!\n");
         exit(EXIT_FAILURE);
     }
-    dword_64C47C[0] = art_frame_data.width;
+    intgame_clock_strip_widths[0] = art_frame_data.width;
 
     if (tig_art_interface_id_create(208, 0, 0, 0, &art_id) != TIG_OK
         || tig_art_frame_data(art_id, &art_frame_data) != TIG_OK) {
         tig_debug_printf("iso_interface_create: ERROR: clock stuff failed!\n");
         exit(EXIT_FAILURE);
     }
-    dword_64C47C[1] = art_frame_data.width;
+    intgame_clock_strip_widths[1] = art_frame_data.width;
 
     intgame_clock_process_callback(NULL);
     intgame_draw_bar(INTGAME_BAR_HEALTH);
@@ -1433,7 +1455,7 @@ void iso_interface_create(tig_window_handle_t window_handle)
 
     if (intgame_is_compact_interface()) {
         for (index = 0; index < 2; index++) {
-            tig_window_hide(dword_64C4F8[index]);
+            tig_window_hide(intgame_interface_window_handles[index]);
         }
     }
 
@@ -1473,7 +1495,7 @@ void iso_interface_destroy(void)
 
     if (intgame_iso_interface_created) {
         for (index = 0; index < 2; index++) {
-            tig_window_destroy(dword_64C4F8[index]);
+            tig_window_destroy(intgame_interface_window_handles[index]);
         }
 
         tig_font_destroy(intgame_cloister18_font);
@@ -1530,7 +1552,7 @@ bool intgame_button_create(UiButtonInfo* button_info)
         return false;
     }
 
-    return intgame_button_create_ex(dword_64C4F8[index], &(intgame_interface_window_frames[index]), button_info, TIG_BUTTON_MOMENTARY);
+    return intgame_button_create_ex(intgame_interface_window_handles[index], &(intgame_interface_window_frames[index]), button_info, TIG_BUTTON_MOMENTARY);
 }
 
 // 0x54AB20
@@ -1543,7 +1565,7 @@ bool button_create_flags(UiButtonInfo* button_info, unsigned int flags)
         return false;
     }
 
-    return intgame_button_create_ex(dword_64C4F8[index], &(intgame_interface_window_frames[index]), button_info, flags);
+    return intgame_button_create_ex(intgame_interface_window_handles[index], &(intgame_interface_window_frames[index]), button_info, flags);
 }
 
 // 0x54ABD0
@@ -1557,7 +1579,7 @@ bool button_create_no_art(UiButtonInfo* button_info, int width, int height)
         return false;
     }
 
-    button_data.window_handle = dword_64C4F8[index];
+    button_data.window_handle = intgame_interface_window_handles[index];
     button_data.x = button_info->x - intgame_interface_window_frames[index].x;
     button_data.y = button_info->y - intgame_interface_window_frames[index].y;
     button_data.width = width;
@@ -1710,7 +1732,7 @@ void intgame_draw_bar_rect(TigRect* rect)
             art_blit_info.src_rect = &blit_rect;
             art_blit_info.dst_rect = &blit_rect;
             art_blit_info.flags = 0;
-            tig_window_blit_art(dword_64C4F8[1], &art_blit_info);
+            tig_window_blit_art(intgame_interface_window_handles[1], &art_blit_info);
         }
 
         if (bar == INTGAME_BAR_HEALTH) {
@@ -1752,7 +1774,7 @@ void intgame_draw_bar_rect(TigRect* rect)
                 art_blit_info.flags = 0;
                 art_blit_info.src_rect = &tmp_rect;
                 art_blit_info.dst_rect = &dst_rect;
-                tig_window_blit_art(dword_64C4F8[1], &art_blit_info);
+                tig_window_blit_art(intgame_interface_window_handles[1], &art_blit_info);
             }
         }
 
@@ -1791,7 +1813,7 @@ void intgame_draw_bar_rect(TigRect* rect)
                 art_blit_info.flags = 0;
                 art_blit_info.src_rect = &tmp_rect;
                 art_blit_info.dst_rect = &dst_rect;
-                tig_window_blit_art(dword_64C4F8[1], &art_blit_info);
+                tig_window_blit_art(intgame_interface_window_handles[1], &art_blit_info);
             }
         }
 
@@ -1900,7 +1922,7 @@ void intgame_ammo_icon_refresh(tig_art_id_t art_id)
     blt.flags = 0;
     blt.src_rect = &src_rect;
     blt.dst_rect = &dst_rect;
-    tig_window_blit_art(dword_64C4F8[index], &blt);
+    tig_window_blit_art(intgame_interface_window_handles[index], &blt);
 }
 
 // 0x54B5D0
@@ -2007,7 +2029,7 @@ bool intgame_process_message(TigMessage* msg)
             case INTGAME_MODE_CHAREDIT:
             case INTGAME_MODE_SCHEMATIC:
             case INTGAME_MODE_WRITTEN:
-                if (tig_window_data(dword_64C52C, &window_data) == TIG_OK) {
+                if (tig_window_data(intgame_iso_window_handle, &window_data) == TIG_OK) {
                     if (msg->data.mouse.x < window_data.rect.x
                         || msg->data.mouse.x - window_data.rect.x > window_data.rect.width) {
                         intgame_mode_set(INTGAME_MODE_MAIN);
@@ -2146,11 +2168,11 @@ bool intgame_process_message(TigMessage* msg)
                 break;
             case ROTWIN_TYPE_SPELLS:
                 for (index = 0; index < 5; index++) {
-                    if (intgame_spell_buttons[5 * dword_64C530 + index].art_num != -1
-                        && msg->data.button.button_handle == intgame_spell_buttons[5 * dword_64C530 + index].button_handle) {
-                        if (spell_is_known(player_get_local_pc_obj(), 5 * dword_64C530 + index)) {
-                            sub_57EFA0(3, 5 * dword_64C530 + index, OBJ_HANDLE_NULL);
-                            spell_ui_activate(player_get_local_pc_obj(), 5 * dword_64C530 + index);
+                    if (intgame_spell_buttons[5 * intgame_selected_college + index].art_num != -1
+                        && msg->data.button.button_handle == intgame_spell_buttons[5 * intgame_selected_college + index].button_handle) {
+                        if (spell_is_known(player_get_local_pc_obj(), 5 * intgame_selected_college + index)) {
+                            sub_57EFA0(3, 5 * intgame_selected_college + index, OBJ_HANDLE_NULL);
+                            spell_ui_activate(player_get_local_pc_obj(), 5 * intgame_selected_college + index);
                             return true;
                         }
                     }
@@ -2257,9 +2279,9 @@ bool intgame_process_message(TigMessage* msg)
                 for (index = 0; index < COLLEGE_COUNT; index++) {
                     if (spell_college_small_icon(index) != -1
                         && msg->data.button.button_handle == intgame_college_buttons[index].button_handle) {
-                        intgame_spells_hide_college_spells(dword_64C530);
-                        dword_64C530 = index;
-                        intgame_spells_show_college_spells(dword_64C530);
+                        intgame_spells_hide_college_spells(intgame_selected_college);
+                        intgame_selected_college = index;
+                        intgame_spells_show_college_spells(intgame_selected_college);
                         return true;
                     }
                 }
@@ -2379,8 +2401,8 @@ bool intgame_process_message(TigMessage* msg)
                     }
                 }
                 for (index = 0; index < 5; index++) {
-                    if (msg->data.button.button_handle == intgame_spell_buttons[5 * dword_64C530 + index].button_handle) {
-                        intgame_message_window_display_spell(5 * dword_64C530 + index);
+                    if (msg->data.button.button_handle == intgame_spell_buttons[5 * intgame_selected_college + index].button_handle) {
+                        intgame_message_window_display_spell(5 * intgame_selected_college + index);
                         return true;
                     }
                 }
@@ -3983,7 +4005,7 @@ bool sub_5501C0(void)
             intgame_button_create(&(intgame_college_buttons[index]));
             college_radio_group[college_radio_group_size] = intgame_college_buttons[index].button_handle;
 
-            if (index == dword_64C530) {
+            if (index == intgame_selected_college) {
                 selected_college_index = college_radio_group_size;
             }
 
@@ -4093,7 +4115,7 @@ bool intgame_rotwin_button_draw_progress(RotatingWindowType window_type, int pro
     art_blit_info.src_rect = &src_rect;
     art_blit_info.dst_rect = &dst_rect;
 
-    return tig_window_blit_art(dword_64C4F8[iwid], &art_blit_info);
+    return tig_window_blit_art(intgame_interface_window_handles[iwid], &art_blit_info);
 }
 
 // 0x5504F0
@@ -4113,7 +4135,7 @@ void iso_interface_window_disable(RotatingWindowType window_type)
                 tig_button_hide(intgame_college_buttons[index].button_handle);
             }
         }
-        intgame_spells_hide_college_spells(dword_64C530);
+        intgame_spells_hide_college_spells(intgame_selected_college);
         break;
     case ROTWIN_TYPE_SKILLS:
         for (index = 0; index < 4; index++) {
@@ -4629,7 +4651,7 @@ void intgame_pc_lens_redraw(void)
     if (intgame_pc_lens_video_buffer != NULL) {
         tig_window_copy(intgame_pc_lens.window_handle,
             intgame_pc_lens.rect,
-            dword_64C52C,
+            intgame_iso_window_handle,
             &intgame_pc_lens_dst_rect);
 
         src_rect.x = 0;
@@ -4637,7 +4659,7 @@ void intgame_pc_lens_redraw(void)
         src_rect.width = intgame_pc_lens.rect->width;
         src_rect.height = intgame_pc_lens.rect->height;
 
-        if (tig_window_copy_to_vbuffer(dword_64C52C, &intgame_pc_lens_dst_rect, intgame_pc_lens_video_buffer, &src_rect) == TIG_OK) {
+        if (tig_window_copy_to_vbuffer(intgame_iso_window_handle, &intgame_pc_lens_dst_rect, intgame_pc_lens_video_buffer, &src_rect) == TIG_OK) {
             dst_rect = src_rect;
             dst_rect.x = intgame_pc_lens.rect->x;
             dst_rect.y = intgame_pc_lens.rect->y;
@@ -4723,8 +4745,8 @@ void iso_interface_window_enable(RotatingWindowType window_type)
                 tig_button_show(intgame_college_buttons[index].button_handle);
             }
         }
-        tig_button_state_change(intgame_college_buttons[dword_64C530].button_handle, TIG_BUTTON_STATE_PRESSED);
-        intgame_spells_show_college_spells(dword_64C530);
+        tig_button_state_change(intgame_college_buttons[intgame_selected_college].button_handle, TIG_BUTTON_STATE_PRESSED);
+        intgame_spells_show_college_spells(intgame_selected_college);
         break;
     case ROTWIN_TYPE_SKILLS:
         for (index = 0; index < 4; index++) {
@@ -4796,7 +4818,7 @@ void iso_interface_window_enable(RotatingWindowType window_type)
             blit_info.flags = 0;
             blit_info.src_rect = &src_rect;
             blit_info.dst_rect = &dst_rect;
-            tig_window_blit_art(dword_64C4F8[1], &blit_info);
+            tig_window_blit_art(intgame_interface_window_handles[1], &blit_info);
         } else {
             intgame_max_quantity = 1;
         }
@@ -4869,7 +4891,7 @@ bool intgame_msg_is_over_iso_window(TigMessage* msg)
         return false;
     }
 
-    if (window_handle != dword_64C52C) {
+    if (window_handle != intgame_iso_window_handle) {
         // NOTE: Meaningless, and Troika's - 0x5517A0 in the exe makes the same
         // call and drops the result. The twin below does it too. Faithful, so
         // left alone.
@@ -4923,7 +4945,7 @@ bool intgame_xy_is_over_iso_window(int x, int y)
         return false;
     }
 
-    if (window_handle != dword_64C52C) {
+    if (window_handle != intgame_iso_window_handle) {
         // NOTE: Meaningless, and Troika's - 0x5517A0 in the exe makes the same
         // call and drops the result. The twin below does it too. Faithful, so
         // left alone.
@@ -5401,23 +5423,23 @@ void intgame_clock_refresh(void)
         font_desc.width = 0;
         tig_font_measure(&font_desc);
 
-        if (tig_window_fill(dword_64C4F8[0], &rect, tig_color_make(0, 0, 0)) == TIG_OK) {
-            tig_window_text_write(dword_64C4F8[0], str, &rect);
+        if (tig_window_fill(intgame_interface_window_handles[0], &rect, tig_color_make(0, 0, 0)) == TIG_OK) {
+            tig_window_text_write(intgame_interface_window_handles[0], str, &rect);
         }
         return;
     }
 
     datetime = timeevent_current_datetime();
-    v1 = (dword_64C47C[1] + dword_64C47C[0]
-             + (datetime_seconds_since_reference_date(&datetime) + 73800) % 86400 * (dword_64C47C[1] + dword_64C47C[0]) / 86400
+    v1 = (intgame_clock_strip_widths[1] + intgame_clock_strip_widths[0]
+             + (datetime_seconds_since_reference_date(&datetime) + 73800) % 86400 * (intgame_clock_strip_widths[1] + intgame_clock_strip_widths[0]) / 86400
              - intgame_clock_frame.width / 2)
-        % (dword_64C47C[1] + dword_64C47C[0]);
-    if (dword_5C7308 == v1) {
+        % (intgame_clock_strip_widths[1] + intgame_clock_strip_widths[0]);
+    if (intgame_clock_scroll_offset == v1) {
         return;
     }
 
-    dword_5C7308 = v1;
-    tig_window_fill(dword_64C4F8[0], &intgame_clock_frame, tig_color_make(0, 0, 0));
+    intgame_clock_scroll_offset = v1;
+    tig_window_fill(intgame_interface_window_handles[0], &intgame_clock_frame, tig_color_make(0, 0, 0));
 
     dst_x = intgame_clock_frame.x;
     dst_width = intgame_clock_frame.width;
@@ -5425,7 +5447,7 @@ void intgame_clock_refresh(void)
     cycle = 0;
     num_cycles = 0;
     while (dst_width > 0 && num_cycles < 3) {
-        width = dword_64C47C[cycle];
+        width = intgame_clock_strip_widths[cycle];
         if (cycle == 0) {
             // 207: "clk_timestrip.art"
             if (tig_art_interface_id_create(207, 0, 0, 0, &(art_blit_info.art_id)) != TIG_OK) {
@@ -5465,7 +5487,7 @@ void intgame_clock_refresh(void)
             art_blit_info.flags = 0;
             art_blit_info.src_rect = &src_rect;
             art_blit_info.dst_rect = &dst_rect;
-            tig_window_blit_art(dword_64C4F8[0], &art_blit_info);
+            tig_window_blit_art(intgame_interface_window_handles[0], &art_blit_info);
 
             dst_x += src_rect.width;
             dst_width -= src_rect.width;
@@ -5498,7 +5520,7 @@ void intgame_clock_refresh(void)
     art_blit_info.flags = 0;
     art_blit_info.src_rect = &src_rect;
     art_blit_info.dst_rect = &dst_rect;
-    tig_window_blit_art(dword_64C4F8[0], &art_blit_info);
+    tig_window_blit_art(intgame_interface_window_handles[0], &art_blit_info);
 }
 
 // 0x5526F0
@@ -6132,7 +6154,7 @@ void intgame_spell_maintain_art_set_func(UiButtonInfo* button, int slot, tig_art
                 art_blit_info.src_rect = &src_rect;
                 art_blit_info.dst_rect = &dst_rect;
 
-                if (window_handle == dword_64C4F8[0]) {
+                if (window_handle == intgame_interface_window_handles[0]) {
                     dst_rect.x = button->x;
                     dst_rect.y = button->y;
                 } else {
@@ -6164,11 +6186,11 @@ void intgame_spell_maintain_art_set_func(UiButtonInfo* button, int slot, tig_art
             }
         }
 
-        if (window_handle != dword_64C4F8[0]) {
+        if (window_handle != intgame_interface_window_handles[0]) {
             tig_window_hide(intgame_maintain_fs_windows[slot]);
         }
     } else {
-        if (window_handle != dword_64C4F8[0]) {
+        if (window_handle != intgame_interface_window_handles[0]) {
             tig_window_show(intgame_maintain_fs_windows[slot]);
         }
         tig_button_set_art(button->button_handle, art_id);
@@ -6186,7 +6208,7 @@ void intgame_spell_maintain_art_set(int slot, tig_art_id_t art_id)
     intgame_spell_maintain_art_set_func(&(intgame_maintain_buttons[slot]),
         slot,
         art_id,
-        dword_64C4F8[0]);
+        intgame_interface_window_handles[0]);
     intgame_spell_maintain_art_set_func(&(intgame_maintain_fs_buttons[slot]),
         slot,
         art_id,
@@ -6290,7 +6312,7 @@ void intgame_spell_maintain_refresh(int slot, bool active)
         &(intgame_maintain_buttons[slot]),
         slot,
         active,
-        dword_64C4F8[0]);
+        intgame_interface_window_handles[0]);
     intgame_spell_maintain_refresh_func(intgame_maintain_fs_buttons[slot].button_handle,
         &(intgame_maintain_fs_buttons[slot]),
         slot,
@@ -6301,7 +6323,7 @@ void intgame_spell_maintain_refresh(int slot, bool active)
 // 0x553960
 void intgame_refresh_quantity(void)
 {
-    roller_ui_draw(intgame_quantity, dword_64C4F8[1], 404, 104, 6, 0);
+    roller_ui_draw(intgame_quantity, intgame_interface_window_handles[1], 404, 104, 6, 0);
 }
 
 // 0x553990
@@ -8178,7 +8200,7 @@ void intgame_refresh_experience_gauges(int64_t obj)
         art_blit_info.art_id = art_id;
         art_blit_info.src_rect = &src_rect;
         art_blit_info.dst_rect = &src_rect;
-        tig_window_blit_art(dword_64C4F8[1], &art_blit_info);
+        tig_window_blit_art(intgame_interface_window_handles[1], &art_blit_info);
     }
 
     cnt = 11 * level_progress_towards_next_level(obj) / 10;
@@ -8199,7 +8221,7 @@ void intgame_refresh_experience_gauges(int64_t obj)
             art_blit_info.art_id = art_id;
             art_blit_info.src_rect = &src_rect;
             art_blit_info.dst_rect = &dst_rect;
-            tig_window_blit_art(dword_64C4F8[1], &art_blit_info);
+            tig_window_blit_art(intgame_interface_window_handles[1], &art_blit_info);
         }
     }
 
@@ -8220,7 +8242,7 @@ void intgame_refresh_experience_gauges(int64_t obj)
             art_blit_info.art_id = art_id;
             art_blit_info.src_rect = &src_rect;
             art_blit_info.dst_rect = &dst_rect;
-            tig_window_blit_art(dword_64C4F8[1], &art_blit_info);
+            tig_window_blit_art(intgame_interface_window_handles[1], &art_blit_info);
         }
     }
 }
@@ -8304,7 +8326,7 @@ void intgame_mt_button_disable(void)
         art_blit_info.art_id = art_id;
         art_blit_info.src_rect = &rect;
         art_blit_info.dst_rect = &rect;
-        tig_window_blit_art(dword_64C4F8[1], &art_blit_info);
+        tig_window_blit_art(intgame_interface_window_handles[1], &art_blit_info);
     }
 }
 
@@ -8564,7 +8586,7 @@ void sub_5576B0(void)
     rect.y = 0;
     rect.width = art_frame_data.width;
     rect.height = art_frame_data.height;
-    tig_window_blit_art(dword_64C4F8[0], &art_blit_info);
+    tig_window_blit_art(intgame_interface_window_handles[0], &art_blit_info);
 }
 
 // 0x557730
@@ -8663,11 +8685,11 @@ void intgame_toggle_interface(void)
 
     tig_debug_printf("Resizing Iso View...");
 
-    resize_info.window_handle = dword_64C52C;
+    resize_info.window_handle = intgame_iso_window_handle;
     intgame_compact_interface = !intgame_compact_interface;
 
     if (intgame_iso_window != TIG_WINDOW_HANDLE_INVALID) {
-        if (tig_window_data(dword_64C52C, &window_data) != TIG_OK) {
+        if (tig_window_data(intgame_iso_window_handle, &window_data) != TIG_OK) {
             tig_debug_printf("intgame_toggle_interface: ERROR: tig_window_data failed!\n");
             exit(EXIT_FAILURE);
         }
@@ -8682,7 +8704,7 @@ void intgame_toggle_interface(void)
             hrp_apply(&intgame_pc_lens_dst_rect, GRAVITY_CENTER_HORIZONTAL | GRAVITY_CENTER_VERTICAL);
 
             for (index = 0; index < 2; index++) {
-                tig_window_hide(dword_64C4F8[index]);
+                tig_window_hide(intgame_interface_window_handles[index]);
             }
 
             gamelib_resize(&resize_info);
@@ -8699,14 +8721,14 @@ void intgame_toggle_interface(void)
             gameuilib_resize(&resize_info);
 
             for (index = 0; index < 2; index++) {
-                tig_window_show(dword_64C4F8[index]);
+                tig_window_show(intgame_interface_window_handles[index]);
             }
 
             compact_ui_destroy();
         }
     }
 
-    if (tig_window_is_hidden(dword_64C52C)) {
+    if (tig_window_is_hidden(intgame_iso_window_handle)) {
         intgame_hide();
     }
 
@@ -8724,7 +8746,7 @@ RotatingWindowType iso_interface_window_get_3(void)
 // 0x557AB0
 int intgame_selected_college_get(void)
 {
-    return dword_64C530;
+    return intgame_selected_college;
 }
 
 // 0x557AC0
@@ -8795,7 +8817,7 @@ int intgame_skill_button_at_mouse(void)
     // from DAT_005C63A0/A4 and does no bounds check, because the original
     // window could not move. Substituting the live rect is right for a
     // resizable window; the typo came with it.
-    if (tig_window_data(dword_64C4F8[1], &window_data) != TIG_OK
+    if (tig_window_data(intgame_interface_window_handles[1], &window_data) != TIG_OK
         || mouse_state.x < window_data.rect.x
         || mouse_state.y < window_data.rect.y
         || mouse_state.x >= window_data.rect.x + window_data.rect.width
@@ -8842,7 +8864,7 @@ int sub_557C00(void)
     tig_mouse_get_state(&mouse_state);
 
     // Check if mouse position is within rotating window bounds.
-    if (tig_window_data(dword_64C4F8[1], &window_data) != TIG_OK
+    if (tig_window_data(intgame_interface_window_handles[1], &window_data) != TIG_OK
         || mouse_state.x < window_data.rect.x
         || mouse_state.y < window_data.rect.y
         || mouse_state.y >= window_data.rect.x + window_data.rect.width
@@ -8898,7 +8920,7 @@ int sub_557CF0(void)
     tig_mouse_get_state(&mouse_state);
 
     // Check if mouse position is within rotating window bounds.
-    if (tig_window_data(dword_64C4F8[1], &window_data) != TIG_OK
+    if (tig_window_data(intgame_interface_window_handles[1], &window_data) != TIG_OK
         || mouse_state.x < window_data.rect.x
         || mouse_state.y < window_data.rect.y
         || mouse_state.y >= window_data.rect.x + window_data.rect.width
@@ -8917,7 +8939,7 @@ int sub_557CF0(void)
     }
 
     for (index = 0; index < 5; index++) {
-        if (tig_button_data(intgame_spell_buttons[5 * dword_64C530 + index].button_handle, &button_data) != TIG_OK) {
+        if (tig_button_data(intgame_spell_buttons[5 * intgame_selected_college + index].button_handle, &button_data) != TIG_OK) {
             return 6;
         }
 
@@ -8925,7 +8947,7 @@ int sub_557CF0(void)
             && y >= button_data.y
             && x < button_data.x + button_data.width
             && y < button_data.y + button_data.height) {
-            if (spell_is_known(pc_obj, 5 * dword_64C530 + index)) {
+            if (spell_is_known(pc_obj, 5 * intgame_selected_college + index)) {
                 return index;
             } else {
                 return 5;
@@ -8945,10 +8967,10 @@ void intgame_hide(void)
         return;
     }
 
-    tig_window_hide(dword_64C52C);
+    tig_window_hide(intgame_iso_window_handle);
 
     for (index = 0; index < 2; index++) {
-        tig_window_hide(dword_64C4F8[index]);
+        tig_window_hide(intgame_interface_window_handles[index]);
     }
 
     if (intgame_fs_hotkey_window != TIG_WINDOW_HANDLE_INVALID) {
@@ -8964,10 +8986,10 @@ void intgame_hide(void)
     // Move bottom bar window up so its aligned with mainmenu covers.
     rect = intgame_interface_window_frames[1];
     hrp_apply(&rect, GRAVITY_CENTER_HORIZONTAL | GRAVITY_CENTER_VERTICAL);
-    tig_window_move(dword_64C4F8[1], rect.x, rect.y);
+    tig_window_move(intgame_interface_window_handles[1], rect.x, rect.y);
 
     if (!intgame_is_compact_interface()) {
-        tig_window_show(dword_64C4F8[1]);
+        tig_window_show(intgame_interface_window_handles[1]);
     }
 }
 
@@ -8980,11 +9002,11 @@ void intgame_show(void)
         return;
     }
 
-    tig_window_show(dword_64C52C);
+    tig_window_show(intgame_iso_window_handle);
 
     if (!intgame_is_compact_interface()) {
         for (index = 0; index < 2; index++) {
-            tig_window_show(dword_64C4F8[index]);
+            tig_window_show(intgame_interface_window_handles[index]);
         }
     }
 
@@ -9001,7 +9023,7 @@ void intgame_show(void)
     // Restore bottom bar position.
     rect = intgame_interface_window_frames[1];
     hrp_apply(&rect, GRAVITY_CENTER_HORIZONTAL | GRAVITY_BOTTOM);
-    tig_window_move(dword_64C4F8[1], rect.x, rect.y);
+    tig_window_move(intgame_interface_window_handles[1], rect.x, rect.y);
 
     follower_ui_show();
 }
