@@ -889,8 +889,18 @@ static tig_font_handle_t intgame_flare12_red_font;
 // 0x64C4A0
 static tig_font_handle_t intgame_flare14_white_font;
 
+// The dialogue panel's reply rows. Must match `TEXT_CONVERSATION_LINES` in
+// game/tc.c, which is what actually lays the text out.
+#define DIALOG_ROW_COUNT 5
+
+// Five invisible momentary buttons laid over the dialogue panel's reply rows,
+// one per row. Nothing reads their handles: picking a reply is
+// `tc_handle_message`'s job, and it works off the mouse's y position against
+// `tc_content_rect`. Their only job is to sit in front of the iso window so a
+// click on a reply is not also a click on the world behind it.
+//
 // 0x64C4A8
-static UiButtonInfo stru_64C4A8[5];
+static UiButtonInfo intgame_dialog_row_buttons[DIALOG_ROW_COUNT];
 
 // 0x64C4F8
 static tig_window_handle_t dword_64C4F8[2];
@@ -3991,12 +4001,35 @@ bool sub_5501C0(void)
     intgame_spells_init();
     intgame_mt_spells_init();
 
-    for (index = 0; index < 5; index++) {
-        stru_64C4A8[index].x = intgame_rotwin_text_frame[5].rect.x;
-        stru_64C4A8[index].y = intgame_rotwin_text_frame[5].rect.y + intgame_rotwin_text_frame[5].rect.y / 5;
-        stru_64C4A8[index].art_num = -1;
-        stru_64C4A8[index].button_handle = TIG_BUTTON_HANDLE_INVALID;
-        button_create_no_art(&(stru_64C4A8[index]), intgame_rotwin_text_frame[5].rect.width, intgame_rotwin_text_frame[5].rect.y / 5);
+    // FIX: Both expressions below read `rect.y` where the original reads
+    // `rect.height`, and the y was missing its per-row term - every button got
+    // the same one. The original walks the rows with an accumulator:
+    //
+    //     iVar8 = DAT_005c6dd0 / 5;        // rect.height / 5
+    //     iVar3 = 0;
+    //     do { puVar7[-1] = iVar3 + DAT_005c6dc8;   // rect.y + accumulator
+    //          button_create_no_art(puVar7 - 2, DAT_005c6dcc, iVar8);
+    //          iVar3 = iVar3 + iVar8; } while (...);
+    //
+    // at 0x5501C0, where 0x5C6DC4 is this rect and 0x5C6DD0 its height.
+    //
+    // The consequence was not five misplaced buttons but *no* buttons. This
+    // runs before `iso_interface_create` makes the rect window-relative, so
+    // rect.y is still 507; the old expression gave 507 + 507/5 = 608, which is
+    // past the bottom of the lower interface window (441 + 159 = 600), so
+    // `button_create_no_art` failed `find_interface_window_index` and returned
+    // false for all five. Every handle stayed TIG_BUTTON_HANDLE_INVALID, and
+    // the show/hide loops below have been passing that ever since. Correct is
+    // 507, 523, 539, 555, 571 - five 383x16 rows filling the panel.
+    for (index = 0; index < DIALOG_ROW_COUNT; index++) {
+        intgame_dialog_row_buttons[index].x = intgame_rotwin_text_frame[ROTWIN_TYPE_DIALOGUE].rect.x;
+        intgame_dialog_row_buttons[index].y = intgame_rotwin_text_frame[ROTWIN_TYPE_DIALOGUE].rect.y
+            + index * (intgame_rotwin_text_frame[ROTWIN_TYPE_DIALOGUE].rect.height / DIALOG_ROW_COUNT);
+        intgame_dialog_row_buttons[index].art_num = -1;
+        intgame_dialog_row_buttons[index].button_handle = TIG_BUTTON_HANDLE_INVALID;
+        button_create_no_art(&(intgame_dialog_row_buttons[index]),
+            intgame_rotwin_text_frame[ROTWIN_TYPE_DIALOGUE].rect.width,
+            intgame_rotwin_text_frame[ROTWIN_TYPE_DIALOGUE].rect.height / DIALOG_ROW_COUNT);
     }
 
     for (index = 0; index < 6; index++) {
@@ -4094,8 +4127,8 @@ void iso_interface_window_disable(RotatingWindowType window_type)
     case ROTWIN_TYPE_TRAPS:
         break;
     case ROTWIN_TYPE_DIALOGUE:
-        for (index = 0; index < 5; index++) {
-            tig_button_hide(stru_64C4A8[index].button_handle);
+        for (index = 0; index < DIALOG_ROW_COUNT; index++) {
+            tig_button_hide(intgame_dialog_row_buttons[index].button_handle);
         }
         break;
     case ROTWIN_TYPE_MAP_NOTE:
@@ -4705,8 +4738,8 @@ void iso_interface_window_enable(RotatingWindowType window_type)
     case ROTWIN_TYPE_TRAPS:
         break;
     case ROTWIN_TYPE_DIALOGUE:
-        for (index = 0; index < 5; index++) {
-            tig_button_show(stru_64C4A8[index].button_handle);
+        for (index = 0; index < DIALOG_ROW_COUNT; index++) {
+            tig_button_show(intgame_dialog_row_buttons[index].button_handle);
         }
         break;
     case ROTWIN_TYPE_MAP_NOTE:
