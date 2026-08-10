@@ -5823,7 +5823,7 @@ void intgame_message_draw(tig_window_handle_t window_handle, UiMessage* ui_messa
             intgame_morph15_white_font,
             MSG_TEXT_HALIGN_LEFT);
 
-        mes_file_entry1.num = 73; // "Bonus to Heal skill"
+        mes_file_entry1.num = 73; // "Minimum WP"
         mes_get_msg(intgame_mes_file, &mes_file_entry1);
         snprintf(str, sizeof(str),
             "%s: %d",
@@ -5835,7 +5835,7 @@ void intgame_message_draw(tig_window_handle_t window_handle, UiMessage* ui_messa
             intgame_flare12_white_font,
             MSG_TEXT_HALIGN_LEFT);
 
-        mes_file_entry1.num = 59; // "Damage"
+        mes_file_entry1.num = 59; // "Fatigue"
         mes_get_msg(intgame_mes_file, &mes_file_entry1);
 
         int cast_cost;
