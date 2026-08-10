@@ -655,7 +655,7 @@ static MainMenuButtonInfo mainmenu_ui_options_buttons[] = {
 };
 
 // 0x5C4490
-static TigRect stru_5C4490 = { 84, 67, 89, 89 };
+static TigRect mainmenu_ui_options_pc_lens_rect = { 84, 67, 89, 89 };
 
 // 0x5C44A0
 static MainMenuWindowInfo mainmenu_ui_options_window_info = {
@@ -691,8 +691,14 @@ static MainMenuWindowInfo mainmenu_ui_options_window_info = {
     2,
 };
 
+// NOTE: The region `mainmenu_ui_progressbar_init`/`_update` invalidate, but
+// nothing ever draws a bar into it - and that is faithful, not a porting slip.
+// `mainmenu_ui_progressbar_max_value` (0x64C448) and `..._value` (0x64C44C) are
+// written by exactly one instruction each in the original (0x5495F4, 0x549624)
+// and read nowhere, so Troika cut the drawing and left the invalidation behind.
+//
 // 0x5C4538
-static TigRect stru_5C4538 = { 150, 273, 240, 40 };
+static TigRect mainmenu_ui_progressbar_rect = { 150, 273, 240, 40 };
 
 // 0x5C4548
 static MainMenuButtonInfo mainmenu_ui_load_game_buttons[] = {
@@ -748,32 +754,50 @@ static MainMenuWindowInfo mainmenu_ui_load_game_window_info = {
     5,
 };
 
+// The save info panel, shared by the load game and save game screens: it
+// describes the selected entry of `mainmenu_ui_gsl` from the `mainmenu_ui_gsi`
+// loaded for it. Everything below `mainmenu_ui_saveinfo_text_shown` is drawn
+// only while that flag is set.
+//
+// The two thumbnail rects are a blit pair, and both are resized to the
+// thumbnail's real dimensions on every refresh, so the initializers only give
+// the origin (0, 0 in the video buffer, 281, 55 in the window).
+//
 // 0x5C46B0
-static TigRect stru_5C46B0 = { 0, 0, 468, 300 };
+static TigRect mainmenu_ui_saveinfo_thumbnail_src_rect = { 0, 0, 468, 300 };
 
+// The thumbnail's window rect, which doubles as the panel's dirty region: the
+// refresh functions test it for intersection and fill it black when there is
+// no save info to show.
+//
 // 0x5C46C0
-static TigRect stru_5C46C0 = { 281, 55, 468, 300 };
+static TigRect mainmenu_ui_saveinfo_thumbnail_dst_rect = { 281, 55, 468, 300 };
 
+// Also carries the "Version Mismatch!" (5004) and "Empty" (5005) notices, which
+// replace the panel's text when the save cannot be described.
+//
 // 0x5C46D0
-static TigRect stru_5C46D0 = { 289, 192, 451, 18 };
+static TigRect mainmenu_ui_saveinfo_pc_name_rect = { 289, 192, 451, 18 };
 
+// Only the origin is used - `portrait_draw_native` sizes the blit itself.
+//
 // 0x5C46E0
-static TigRect stru_5C46E0 = { 484, 98, 451, 18 };
+static TigRect mainmenu_ui_saveinfo_portrait_rect = { 484, 98, 451, 18 };
 
 // 0x5C46F0
-static TigRect stru_5C46F0 = { 281, 212, 465, 18 };
+static TigRect mainmenu_ui_saveinfo_area_rect = { 281, 212, 465, 18 };
 
 // 0x5C4700
-static TigRect stru_5C4700 = { 448, 138, 139, 18 };
+static TigRect mainmenu_ui_saveinfo_time_rect = { 448, 138, 139, 18 };
 
 // 0x5C4710
-static TigRect stru_5C4710 = { 448, 126, 139, 18 };
+static TigRect mainmenu_ui_saveinfo_date_rect = { 448, 126, 139, 18 };
 
 // 0x5C4720
-static TigRect stru_5C4720 = { 547, 126, 109, 18 };
+static TigRect mainmenu_ui_saveinfo_level_rect = { 547, 126, 109, 18 };
 
 // 0x5C4730
-static TigRect stru_5C4730 = { 294, 173, 441, 18 };
+static TigRect mainmenu_ui_saveinfo_description_rect = { 294, 173, 441, 18 };
 
 // 0x5C4740
 static TigRect mainmenu_ui_story_state_rects[4] = {
@@ -783,14 +807,25 @@ static TigRect mainmenu_ui_story_state_rects[4] = {
     { 348, 292, 338, 18 },
 };
 
+// The live PC's lens on the load game and save game screens (art 746), as
+// opposed to `mainmenu_ui_options_pc_lens_rect` on the options screen.
+//
 // 0x5C4780
-static TigRect stru_5C4780 = { 84, 10, 89, 89 };
+static TigRect mainmenu_ui_save_load_pc_lens_rect = { 84, 10, 89, 89 };
 
+// Hides the save info panel's text while the texttoggle button is held down,
+// uncovering the thumbnail underneath it. Cleared on button press and set again
+// on release, on both screens.
+//
 // 0x5C4790
-static bool dword_5C4790 = true;
+static bool mainmenu_ui_saveinfo_text_shown = true;
 
+// The save list's scrollbar. Assigned into `mainmenu_ui_scrollbar_info` by both
+// create functions, and re-blitted from the background art at the top of both
+// refresh functions to erase the previous thumb.
+//
 // 0x5C4798
-static TigRect stru_5C4798 = { 213, 111, 12, 232 };
+static TigRect mainmenu_ui_scrollbar_rect = { 213, 111, 12, 232 };
 
 // 0x5C47A8
 static MainMenuButtonInfo mainmenu_ui_save_game_buttons[] = {
@@ -1505,7 +1540,7 @@ static void mainmenu_ui_apply_compact_options(void)
     applied = true;
 
     mainmenu_ui_options_window_info.background_art_num = MAINMENU_UI_OPTIONS_COMPACT_ART;
-    stru_5C4490.y -= MAINMENU_UI_OPTIONS_COMPACT_SHIFT;
+    mainmenu_ui_options_pc_lens_rect.y -= MAINMENU_UI_OPTIONS_COMPACT_SHIFT;
 
     for (index = 0; index < (int)SDL_arraysize(mainmenu_ui_options_buttons); index++) {
         mainmenu_ui_options_buttons[index].y -= MAINMENU_UI_OPTIONS_COMPACT_SHIFT;
@@ -2259,7 +2294,7 @@ void mainmenu_ui_create_options(void)
     mainmenu_ui_draw_version();
 
     pc_lens.window_handle = mainmenu_ui_window_handle;
-    pc_lens.rect = &stru_5C4490;
+    pc_lens.rect = &mainmenu_ui_options_pc_lens_rect;
     tig_art_interface_id_create(670, 0, 0, 0, &pc_lens.art_id);
     if (mainmenu_ui_type_flags[mainmenu_ui_type][0]) {
         pc_obj = player_get_local_pc_obj();
@@ -2405,7 +2440,7 @@ void mainmenu_ui_load_game_create(void)
         exit(EXIT_FAILURE);
     }
 
-    mainmenu_ui_scrollbar_info.scrollbar_rect = stru_5C4798;
+    mainmenu_ui_scrollbar_info.scrollbar_rect = mainmenu_ui_scrollbar_rect;
     mainmenu_ui_scrollbar_info.flags = SB_INFO_VALID
         | SB_INFO_CONTENT_RECT
         | SB_INFO_MAX_VALUE
@@ -2434,7 +2469,7 @@ void mainmenu_ui_load_game_create(void)
     pc_obj = player_get_local_pc_obj();
 
     pc_lens.window_handle = mainmenu_ui_window_handle;
-    pc_lens.rect = &stru_5C4780;
+    pc_lens.rect = &mainmenu_ui_save_load_pc_lens_rect;
     tig_art_interface_id_create(746, 0, 0, 0, &(pc_lens.art_id));
 
     if (pc_obj != OBJ_HANDLE_NULL) {
@@ -2522,8 +2557,8 @@ bool mainmenu_ui_load_game_button_pressed(tig_button_handle_t button_handle)
         return false;
     }
 
-    dword_5C4790 = 0;
-    main_menu_window_info[mainmenu_ui_window_type]->refresh_func(&stru_5C46C0);
+    mainmenu_ui_saveinfo_text_shown = false;
+    main_menu_window_info[mainmenu_ui_window_type]->refresh_func(&mainmenu_ui_saveinfo_thumbnail_dst_rect);
 
     return true;
 }
@@ -2550,8 +2585,8 @@ bool mainmenu_ui_load_game_button_released(tig_button_handle_t button_handle)
     }
 
     if (button_handle == mainmenu_ui_load_game_texttoggle_button.button_handle) {
-        dword_5C4790 = 1;
-        window->refresh_func(&stru_5C46C0);
+        mainmenu_ui_saveinfo_text_shown = true;
+        window->refresh_func(&mainmenu_ui_saveinfo_thumbnail_dst_rect);
         return true;
     }
 
@@ -2615,15 +2650,15 @@ void mainmenu_ui_load_game_refresh(TigRect* rect)
     tig_art_interface_id_create(window->background_art_num, 0, 0, 0, &art_id);
     tig_art_frame_data(art_id, &art_frame_data);
     if (tig_art_anim_data(art_id, &art_anim_data) == TIG_OK) {
-        src_rect.x = stru_5C4798.x;
-        src_rect.y = stru_5C4798.y;
-        src_rect.width = stru_5C4798.width + 1;
-        src_rect.height = stru_5C4798.height + 1;
+        src_rect.x = mainmenu_ui_scrollbar_rect.x;
+        src_rect.y = mainmenu_ui_scrollbar_rect.y;
+        src_rect.width = mainmenu_ui_scrollbar_rect.width + 1;
+        src_rect.height = mainmenu_ui_scrollbar_rect.height + 1;
 
-        dst_rect.x = stru_5C4798.x;
-        dst_rect.y = stru_5C4798.y;
-        dst_rect.width = stru_5C4798.width + 1;
-        dst_rect.height = stru_5C4798.height + 1;
+        dst_rect.x = mainmenu_ui_scrollbar_rect.x;
+        dst_rect.y = mainmenu_ui_scrollbar_rect.y;
+        dst_rect.width = mainmenu_ui_scrollbar_rect.width + 1;
+        dst_rect.height = mainmenu_ui_scrollbar_rect.height + 1;
 
         art_blit_info.art_id = art_id;
         art_blit_info.flags = 0;
@@ -2677,10 +2712,10 @@ void mainmenu_ui_load_game_refresh(TigRect* rect)
     }
 
     if (rect == NULL
-        || (stru_5C46C0.x < rect->x + rect->width
-            && stru_5C46C0.y < rect->y + rect->height
-            && rect->x < stru_5C46C0.x + stru_5C46C0.width
-            && rect->y < stru_5C46C0.y + stru_5C46C0.height)) {
+        || (mainmenu_ui_saveinfo_thumbnail_dst_rect.x < rect->x + rect->width
+            && mainmenu_ui_saveinfo_thumbnail_dst_rect.y < rect->y + rect->height
+            && rect->x < mainmenu_ui_saveinfo_thumbnail_dst_rect.x + mainmenu_ui_saveinfo_thumbnail_dst_rect.width
+            && rect->y < mainmenu_ui_saveinfo_thumbnail_dst_rect.y + mainmenu_ui_saveinfo_thumbnail_dst_rect.height)) {
         if (window->selected_index > -1) {
             if (!mainmenu_ui_gsi_loaded
                 && mainmenu_ui_gsl.count > 0
@@ -2691,18 +2726,18 @@ void mainmenu_ui_load_game_refresh(TigRect* rect)
             if (mainmenu_ui_gsi_loaded) {
                 if (mainmenu_ui_gsi.thumbnail_video_buffer != NULL) {
                     if (tig_video_buffer_data(mainmenu_ui_gsi.thumbnail_video_buffer, &video_buffer_data) == TIG_OK) {
-                        stru_5C46B0.width = video_buffer_data.width;
-                        stru_5C46B0.height = video_buffer_data.height;
+                        mainmenu_ui_saveinfo_thumbnail_src_rect.width = video_buffer_data.width;
+                        mainmenu_ui_saveinfo_thumbnail_src_rect.height = video_buffer_data.height;
 
-                        stru_5C46C0.width = video_buffer_data.width;
-                        stru_5C46C0.height = video_buffer_data.height;
+                        mainmenu_ui_saveinfo_thumbnail_dst_rect.width = video_buffer_data.width;
+                        mainmenu_ui_saveinfo_thumbnail_dst_rect.height = video_buffer_data.height;
 
                         win_blit_info.type = TIG_WINDOW_BLIT_VIDEO_BUFFER_TO_WINDOW;
                         win_blit_info.vb_blit_flags = 0;
                         win_blit_info.src_video_buffer = mainmenu_ui_gsi.thumbnail_video_buffer;
-                        win_blit_info.src_rect = &stru_5C46B0;
+                        win_blit_info.src_rect = &mainmenu_ui_saveinfo_thumbnail_src_rect;
                         win_blit_info.dst_window_handle = mainmenu_ui_window_handle;
-                        win_blit_info.dst_rect = &stru_5C46C0;
+                        win_blit_info.dst_rect = &mainmenu_ui_saveinfo_thumbnail_dst_rect;
 
                         if (tig_window_blit(&win_blit_info) != TIG_OK) {
                             tig_debug_printf("MMUI: ERROR: mmUIMPLoadGameRefreshFunc FAILED to refresh!\n");
@@ -2714,22 +2749,22 @@ void mainmenu_ui_load_game_refresh(TigRect* rect)
                 tig_font_push(font);
 
                 if (mainmenu_ui_gsi.version == 25) {
-                    if (dword_5C4790) {
-                        mainmenu_ui_draw_centered_text(mainmenu_ui_gsi.pc_name, &stru_5C46D0, font);
+                    if (mainmenu_ui_saveinfo_text_shown) {
+                        mainmenu_ui_draw_centered_text(mainmenu_ui_gsi.pc_name, &mainmenu_ui_saveinfo_pc_name_rect, font);
                         if (mainmenu_ui_gsi.pc_portrait != 0) {
                             portrait_draw_native(OBJ_HANDLE_NULL,
                                 mainmenu_ui_gsi.pc_portrait,
                                 mainmenu_ui_window_handle,
-                                stru_5C46E0.x,
-                                stru_5C46E0.y);
+                                mainmenu_ui_saveinfo_portrait_rect.x,
+                                mainmenu_ui_saveinfo_portrait_rect.y);
                         }
 
                         mes_file_entry.num = 5051; // "Level %d"
                         mes_get_msg(mainmenu_ui_mainmenu_mes_file, &mes_file_entry);
                         snprintf(str, sizeof(str), mes_file_entry.str, mainmenu_ui_gsi.pc_level);
-                        mainmenu_ui_draw_centered_text(str, &stru_5C4720, font);
+                        mainmenu_ui_draw_centered_text(str, &mainmenu_ui_saveinfo_level_rect, font);
 
-                        mainmenu_ui_draw_centered_text(mainmenu_ui_gsi.description, &stru_5C4730, font);
+                        mainmenu_ui_draw_centered_text(mainmenu_ui_gsi.description, &mainmenu_ui_saveinfo_description_rect, font);
 
                         if (map_by_type(MAP_TYPE_START_MAP) == mainmenu_ui_gsi.map) {
                             area = area_get_nearest_area_in_range(mainmenu_ui_gsi.pc_location, true);
@@ -2745,13 +2780,13 @@ void mainmenu_ui_load_game_refresh(TigRect* rect)
                             area_name = mes_file_entry.str;
                         }
 
-                        mainmenu_ui_draw_centered_text(area_name, &stru_5C46F0, font);
+                        mainmenu_ui_draw_centered_text(area_name, &mainmenu_ui_saveinfo_area_rect, font);
 
                         datetime_format_date(&(mainmenu_ui_gsi.datetime), str, sizeof(str));
-                        sub_542EA0(str, &stru_5C4710, font);
+                        sub_542EA0(str, &mainmenu_ui_saveinfo_date_rect, font);
 
                         datetime_format_time(&(mainmenu_ui_gsi.datetime), str, sizeof(str));
-                        sub_542EA0(str, &stru_5C4700, font);
+                        sub_542EA0(str, &mainmenu_ui_saveinfo_time_rect, font);
 
                         story_state_desc = script_story_state_info(mainmenu_ui_gsi.story_state);
                         if (story_state_desc != NULL && *story_state_desc != '\0') {
@@ -2761,21 +2796,21 @@ void mainmenu_ui_load_game_refresh(TigRect* rect)
                 } else {
                     mes_file_entry.num = 5004; // "Version Mismatch!"
                     mes_get_msg(mainmenu_ui_mainmenu_mes_file, &mes_file_entry);
-                    mainmenu_ui_draw_centered_text(mes_file_entry.str, &stru_5C46D0, font);
+                    mainmenu_ui_draw_centered_text(mes_file_entry.str, &mainmenu_ui_saveinfo_pc_name_rect, font);
                 }
                 tig_font_pop();
             } else {
-                tig_window_fill(mainmenu_ui_window_handle, &stru_5C46C0, tig_color_make(0, 0, 0));
+                tig_window_fill(mainmenu_ui_window_handle, &mainmenu_ui_saveinfo_thumbnail_dst_rect, tig_color_make(0, 0, 0));
 
                 font = mainmenu_ui_text_fonts_red[0];
                 tig_font_push(font);
                 mes_file_entry.num = 5005; // "Empty"
                 mes_get_msg(mainmenu_ui_mainmenu_mes_file, &mes_file_entry);
-                mainmenu_ui_draw_centered_text(mes_file_entry.str, &stru_5C46D0, font);
+                mainmenu_ui_draw_centered_text(mes_file_entry.str, &mainmenu_ui_saveinfo_pc_name_rect, font);
                 tig_font_pop();
             }
         } else {
-            tig_window_fill(mainmenu_ui_window_handle, &stru_5C46C0, tig_color_make(0, 0, 0));
+            tig_window_fill(mainmenu_ui_window_handle, &mainmenu_ui_saveinfo_thumbnail_dst_rect, tig_color_make(0, 0, 0));
         }
 
         tig_art_interface_id_create(748, 0, 0, 0, &art_id);
@@ -3119,7 +3154,7 @@ void mainmenu_ui_save_game_create(void)
         exit(EXIT_FAILURE);
     }
 
-    mainmenu_ui_scrollbar_info.scrollbar_rect = stru_5C4798;
+    mainmenu_ui_scrollbar_info.scrollbar_rect = mainmenu_ui_scrollbar_rect;
     mainmenu_ui_scrollbar_info.flags = SB_INFO_VALID
         | SB_INFO_CONTENT_RECT
         | SB_INFO_MAX_VALUE
@@ -3146,7 +3181,7 @@ void mainmenu_ui_save_game_create(void)
     pc_obj = player_get_local_pc_obj();
 
     pc_lens.window_handle = mainmenu_ui_window_handle;
-    pc_lens.rect = &stru_5C4780;
+    pc_lens.rect = &mainmenu_ui_save_load_pc_lens_rect;
     tig_art_interface_id_create(746, 0, 0, 0, &(pc_lens.art_id));
 
     if (pc_obj != OBJ_HANDLE_NULL) {
@@ -3286,8 +3321,8 @@ bool mainmenu_ui_save_game_button_pressed(tig_button_handle_t button_handle)
         return false;
     }
 
-    dword_5C4790 = 0;
-    main_menu_window_info[mainmenu_ui_window_type]->refresh_func(&stru_5C46C0);
+    mainmenu_ui_saveinfo_text_shown = false;
+    main_menu_window_info[mainmenu_ui_window_type]->refresh_func(&mainmenu_ui_saveinfo_thumbnail_dst_rect);
 
     return true;
 }
@@ -3313,8 +3348,8 @@ bool mainmenu_ui_save_game_button_released(tig_button_handle_t button_handle)
     }
 
     if (button_handle == mainmenu_ui_save_game_texttoggle_button.button_handle) {
-        dword_5C4790 = 1;
-        window->refresh_func(&stru_5C46C0);
+        mainmenu_ui_saveinfo_text_shown = true;
+        window->refresh_func(&mainmenu_ui_saveinfo_thumbnail_dst_rect);
         return true;
     }
 
@@ -3361,15 +3396,15 @@ void mainmenu_ui_save_game_refresh(TigRect* rect)
     tig_art_interface_id_create(window->background_art_num, 0, 0, 0, &art_id);
     tig_art_frame_data(art_id, &art_frame_data);
     if (tig_art_anim_data(art_id, &art_anim_data) == TIG_OK) {
-        src_rect.x = stru_5C4798.x;
-        src_rect.y = stru_5C4798.y;
-        src_rect.width = stru_5C4798.width + 1;
-        src_rect.height = stru_5C4798.height + 1;
+        src_rect.x = mainmenu_ui_scrollbar_rect.x;
+        src_rect.y = mainmenu_ui_scrollbar_rect.y;
+        src_rect.width = mainmenu_ui_scrollbar_rect.width + 1;
+        src_rect.height = mainmenu_ui_scrollbar_rect.height + 1;
 
-        dst_rect.x = stru_5C4798.x;
-        dst_rect.y = stru_5C4798.y;
-        dst_rect.width = stru_5C4798.width + 1;
-        dst_rect.height = stru_5C4798.height + 1;
+        dst_rect.x = mainmenu_ui_scrollbar_rect.x;
+        dst_rect.y = mainmenu_ui_scrollbar_rect.y;
+        dst_rect.width = mainmenu_ui_scrollbar_rect.width + 1;
+        dst_rect.height = mainmenu_ui_scrollbar_rect.height + 1;
 
         art_blit_info.art_id = art_id;
         art_blit_info.flags = 0;
@@ -3427,10 +3462,10 @@ void mainmenu_ui_save_game_refresh(TigRect* rect)
     }
 
     if (rect == NULL
-        || (stru_5C46C0.x < rect->x + rect->width
-            && stru_5C46C0.y < rect->y + rect->height
-            && rect->x < stru_5C46C0.x + stru_5C46C0.width
-            && rect->y < stru_5C46C0.y + stru_5C46C0.height)) {
+        || (mainmenu_ui_saveinfo_thumbnail_dst_rect.x < rect->x + rect->width
+            && mainmenu_ui_saveinfo_thumbnail_dst_rect.y < rect->y + rect->height
+            && rect->x < mainmenu_ui_saveinfo_thumbnail_dst_rect.x + mainmenu_ui_saveinfo_thumbnail_dst_rect.width
+            && rect->y < mainmenu_ui_saveinfo_thumbnail_dst_rect.y + mainmenu_ui_saveinfo_thumbnail_dst_rect.height)) {
         if (window->selected_index > 0) {
             if (!mainmenu_ui_gsi_loaded
                 && mainmenu_ui_gsl.count > 0
@@ -3441,18 +3476,18 @@ void mainmenu_ui_save_game_refresh(TigRect* rect)
             if (mainmenu_ui_gsi_loaded) {
                 if (mainmenu_ui_gsi.thumbnail_video_buffer != NULL) {
                     if (tig_video_buffer_data(mainmenu_ui_gsi.thumbnail_video_buffer, &video_buffer_data) == TIG_OK) {
-                        stru_5C46B0.width = video_buffer_data.width;
-                        stru_5C46B0.height = video_buffer_data.height;
+                        mainmenu_ui_saveinfo_thumbnail_src_rect.width = video_buffer_data.width;
+                        mainmenu_ui_saveinfo_thumbnail_src_rect.height = video_buffer_data.height;
 
-                        stru_5C46C0.width = video_buffer_data.width;
-                        stru_5C46C0.height = video_buffer_data.height;
+                        mainmenu_ui_saveinfo_thumbnail_dst_rect.width = video_buffer_data.width;
+                        mainmenu_ui_saveinfo_thumbnail_dst_rect.height = video_buffer_data.height;
 
                         win_blit_info.type = TIG_WINDOW_BLIT_VIDEO_BUFFER_TO_WINDOW;
                         win_blit_info.vb_blit_flags = 0;
                         win_blit_info.src_video_buffer = mainmenu_ui_gsi.thumbnail_video_buffer;
-                        win_blit_info.src_rect = &stru_5C46B0;
+                        win_blit_info.src_rect = &mainmenu_ui_saveinfo_thumbnail_src_rect;
                         win_blit_info.dst_window_handle = mainmenu_ui_window_handle;
-                        win_blit_info.dst_rect = &stru_5C46C0;
+                        win_blit_info.dst_rect = &mainmenu_ui_saveinfo_thumbnail_dst_rect;
 
                         if (tig_window_blit(&win_blit_info) != TIG_OK) {
                             tig_debug_printf("MMUI: ERROR: mmUIMPSaveGameRefreshFunc FAILED to refresh!\n");
@@ -3463,22 +3498,22 @@ void mainmenu_ui_save_game_refresh(TigRect* rect)
                 font = mainmenu_ui_text_fonts[0];
                 tig_font_push(font);
 
-                if (dword_5C4790) {
-                    mainmenu_ui_draw_centered_text(mainmenu_ui_gsi.pc_name, &stru_5C46D0, font);
+                if (mainmenu_ui_saveinfo_text_shown) {
+                    mainmenu_ui_draw_centered_text(mainmenu_ui_gsi.pc_name, &mainmenu_ui_saveinfo_pc_name_rect, font);
                     if (mainmenu_ui_gsi.pc_portrait != 0) {
                         portrait_draw_native(OBJ_HANDLE_NULL,
                             mainmenu_ui_gsi.pc_portrait,
                             mainmenu_ui_window_handle,
-                            stru_5C46E0.x,
-                            stru_5C46E0.y);
+                            mainmenu_ui_saveinfo_portrait_rect.x,
+                            mainmenu_ui_saveinfo_portrait_rect.y);
                     }
 
                     mes_file_entry.num = 5051; // "Level %d"
                     mes_get_msg(mainmenu_ui_mainmenu_mes_file, &mes_file_entry);
                     snprintf(str, sizeof(str), mes_file_entry.str, mainmenu_ui_gsi.pc_level);
-                    mainmenu_ui_draw_centered_text(str, &stru_5C4720, font);
+                    mainmenu_ui_draw_centered_text(str, &mainmenu_ui_saveinfo_level_rect, font);
 
-                    mainmenu_ui_draw_centered_text(mainmenu_ui_gsi.description, &stru_5C4730, font);
+                    mainmenu_ui_draw_centered_text(mainmenu_ui_gsi.description, &mainmenu_ui_saveinfo_description_rect, font);
 
                     if (map_by_type(MAP_TYPE_START_MAP) == mainmenu_ui_gsi.map) {
                         area = area_get_nearest_area_in_range(mainmenu_ui_gsi.pc_location, true);
@@ -3494,13 +3529,13 @@ void mainmenu_ui_save_game_refresh(TigRect* rect)
                         area_name = mes_file_entry.str;
                     }
 
-                    mainmenu_ui_draw_centered_text(area_name, &stru_5C46F0, font);
+                    mainmenu_ui_draw_centered_text(area_name, &mainmenu_ui_saveinfo_area_rect, font);
 
                     datetime_format_date(&(mainmenu_ui_gsi.datetime), str, sizeof(str));
-                    sub_542EA0(str, &stru_5C4710, font);
+                    sub_542EA0(str, &mainmenu_ui_saveinfo_date_rect, font);
 
                     datetime_format_time(&(mainmenu_ui_gsi.datetime), str, sizeof(str));
-                    sub_542EA0(str, &stru_5C4700, font);
+                    sub_542EA0(str, &mainmenu_ui_saveinfo_time_rect, font);
 
                     story_state_desc = script_story_state_info(mainmenu_ui_gsi.story_state);
                     if (story_state_desc != NULL && *story_state_desc != '\0') {
@@ -3510,17 +3545,17 @@ void mainmenu_ui_save_game_refresh(TigRect* rect)
 
                 tig_font_pop();
             } else {
-                tig_window_fill(mainmenu_ui_window_handle, &stru_5C46C0, tig_color_make(0, 0, 0));
+                tig_window_fill(mainmenu_ui_window_handle, &mainmenu_ui_saveinfo_thumbnail_dst_rect, tig_color_make(0, 0, 0));
 
                 font = mainmenu_ui_text_fonts_red[0];
                 tig_font_push(font);
                 mes_file_entry.num = 5005; // "Empty"
                 mes_get_msg(mainmenu_ui_mainmenu_mes_file, &mes_file_entry);
-                mainmenu_ui_draw_centered_text(mes_file_entry.str, &stru_5C46D0, font);
+                mainmenu_ui_draw_centered_text(mes_file_entry.str, &mainmenu_ui_saveinfo_pc_name_rect, font);
                 tig_font_pop();
             }
         } else {
-            tig_window_fill(mainmenu_ui_window_handle, &stru_5C46C0, tig_color_make(0, 0, 0));
+            tig_window_fill(mainmenu_ui_window_handle, &mainmenu_ui_saveinfo_thumbnail_dst_rect, tig_color_make(0, 0, 0));
         }
 
         tig_art_interface_id_create(748, 0, 0, 0, &art_id);
@@ -6019,7 +6054,7 @@ void mainmenu_ui_progressbar_init(int max_value)
 
     if (mainmenu_ui_active) {
         if (main_menu_window_info[mainmenu_ui_window_type]->refresh_func != NULL) {
-            main_menu_window_info[mainmenu_ui_window_type]->refresh_func(&stru_5C4538);
+            main_menu_window_info[mainmenu_ui_window_type]->refresh_func(&mainmenu_ui_progressbar_rect);
         }
     }
 }
@@ -6031,7 +6066,7 @@ void mainmenu_ui_progressbar_update(int value)
 
     if (mainmenu_ui_active) {
         if (main_menu_window_info[mainmenu_ui_window_type]->refresh_func != NULL) {
-            main_menu_window_info[mainmenu_ui_window_type]->refresh_func(&stru_5C4538);
+            main_menu_window_info[mainmenu_ui_window_type]->refresh_func(&mainmenu_ui_progressbar_rect);
         }
     }
 }
