@@ -37,8 +37,8 @@ void inven_ui_drop_dragged_item(void);
 void inven_ui_return_dragged_item(void);
 void inven_ui_notify_drag_item_removed(int64_t obj);
 void inven_ui_update(int64_t obj);
-void sub_578B80(int a1);
+void inven_ui_send_transfer_packet(int a1);
 bool inven_ui_process_transfer_packet(Packet81* pkt);
-int64_t sub_579760(void);
+int64_t inven_ui_pending_item_obj_get(void);
 
 #endif /* ARCANUM_UI_INVEN_UI_H_ */

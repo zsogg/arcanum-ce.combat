@@ -2302,7 +2302,7 @@ bool intgame_process_message(TigMessage* msg)
                 }
 
                 if (msg->data.button.button_handle == intgame_quantity_buttons[INTGAME_QUANTITY_BUTTON_OK].button_handle) {
-                    sub_578B80(intgame_quantity);
+                    inven_ui_send_transfer_packet(intgame_quantity);
                     intgame_mode_set(INTGAME_MODE_MAIN);
                     return true;
                 }
@@ -2727,7 +2727,7 @@ bool intgame_process_message(TigMessage* msg)
                 return true;
             case SDLK_RETURN:
                 if (intgame_iso_window_type == ROTWIN_TYPE_QUANTITY) {
-                    sub_578B80(intgame_quantity);
+                    inven_ui_send_transfer_packet(intgame_quantity);
                     intgame_mode_set(INTGAME_MODE_MAIN);
                     gsound_play_sfx(0, 1);
                 } else if (!mainmenu_ui_is_active()) {
@@ -4859,7 +4859,7 @@ void iso_interface_window_enable(RotatingWindowType window_type)
 
         intgame_quantity = 0;
 
-        obj = sub_579760();
+        obj = inven_ui_pending_item_obj_get();
         fld = item_stack_fields_get(obj, &qty_fld);
         if (fld != -1) {
             intgame_max_quantity = obj_field_int32_get(obj, qty_fld);
@@ -5208,7 +5208,7 @@ bool intgame_mode_set(IntgameMode mode)
             break;
         case INTGAME_MODE_QUANTITY:
             iso_interface_window_set(ROTWIN_TYPE_MSG);
-            obj = sub_579760();
+            obj = inven_ui_pending_item_obj_get();
             item_flags_unset(obj, OIF_NO_DISPLAY);
 
             inven_ui_update(OBJ_HANDLE_NULL);
@@ -5271,7 +5271,7 @@ bool intgame_mode_set(IntgameMode mode)
             scroll_set_scroll_func(wmap_ui_scroll);
             break;
         case INTGAME_MODE_QUANTITY:
-            obj = sub_579760();
+            obj = inven_ui_pending_item_obj_get();
             item_flags_set(obj, OIF_NO_DISPLAY);
             inven_ui_update(OBJ_HANDLE_NULL);
             break;
