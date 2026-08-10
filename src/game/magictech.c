@@ -687,29 +687,59 @@ static int64_t magictech_scratch_obj;
 // 0x5E75C0
 static AnimID magictech_scratch_anim_id;
 
+// An eye-candy fx carrying ANIMFX_PLAY_CALLBACK or ANIMFX_PLAY_END_CALLBACK
+// was queued successfully, so a real callback is coming and the spell must not
+// finish yet.
+//
 // 0x5E75CC
-static int dword_5E75CC;
+static int magictech_callback_fx_added;
 
 // 0x5E75D0
 static unsigned int dword_5E75D0;
 
+// The callback action has to be run inline. Set by
+// `magictech_process_in_callback` for a run that really is inside an fx
+// callback, and also when a callback-bearing fx could *not* be queued - in
+// which case the finish path synthesises the callback rather than waiting for
+// one that will never arrive.
+//
 // 0x5E75D4
-static int dword_5E75D4;
+static int magictech_in_callback;
 
+// Picks MAGICTECH_ACTION_END_CALLBACK over MAGICTECH_ACTION_CALLBACK when the
+// inline callback above is run. Note `magictech_process_in_callback` does not
+// reset it where `magictech_process_run_info` does - checked against 0x457060,
+// which does not either.
+//
 // 0x5E75D8
-static int dword_5E75D8;
+static int magictech_callback_is_end;
 
+// NOTE: Unnamed on purpose - the evidence points two ways. It is set when
+// `magictech_cur_targets.cnt == 0` and in two other "nothing further here"
+// branches, and read to gate the maintenance check and the scheduling of the
+// duration timeevent. "No targets were processed" describes every write and
+// "keep this run ticking" describes every read, and one name cannot be both
+// without asserting which is the cause.
+//
 // 0x5E75DC
 static int dword_5E75DC;
 
+// The target of the last attack `magictech_register_attack` reported, so a
+// component pass that touches one victim repeatedly only wakes its AI once.
+//
+// This is eight bytes: 0x5E75E4 is its top half, not a global. CE used to
+// declare a `dword_5E75E4` there, which was Ghidra splitting the 64-bit
+// compare in `magictech_register_attack` into two 32-bit ones. Nothing
+// referenced it. A sweep of all 1,383 annotated globals found no second case.
+//
 // 0x5E75E0
-static int64_t qword_5E75E0;
+static int64_t magictech_last_attack_target;
 
-// 0x5E75E4
-static int dword_5E75E4;
-
+// The action the run carried when `magictech_process` was entered, snapshotted
+// because component handlers may change `magictech_cur_run_info->action`.
+//
 // 0x5E75E8
-static int dword_5E75E8;
+static int magictech_entry_action;
 
 // 0x5E75F0
 static MagicTechRunInfo* magictech_cur_run_info;
@@ -756,8 +786,12 @@ static int dword_5E7628;
 // 0x5E762C
 static int dword_5E762C;
 
+// Stops the synthesised inline callback from recursing: the finish path sets
+// it around its own `magictech_run_action_in_callback` call, which re-enters
+// the same finish path.
+//
 // 0x5E7630
-static bool dword_5E7630;
+static bool magictech_callback_reenter_guard;
 
 // 0x5E7634
 static int magictech_reschedule_timeevent_flag;
@@ -2008,12 +2042,12 @@ void magictech_process_run_info(MagicTechRunInfo* run_info)
 
     magictech_cur_run_info = run_info;
     magictech_cur_target_obj_type = -1;
-    dword_5E75CC = 0;
-    dword_5E75D4 = 0;
-    dword_5E75D8 = 0;
+    magictech_callback_fx_added = 0;
+    magictech_in_callback = 0;
+    magictech_callback_is_end = 0;
     dword_5E75DC = 0;
-    qword_5E75E0 = 0;
-    dword_5E75E8 = run_info->action;
+    magictech_last_attack_target = 0;
+    magictech_entry_action = run_info->action;
     magictech_process();
 }
 
@@ -2571,16 +2605,16 @@ void MTComponentEyeCandy_ProcFunc(void)
         if ((magictech_cur_run_info->flags & MAGICTECH_RUN_0x40) == 0) {
             if (animfx_add(&node)) {
                 if ((node.flags & (ANIMFX_PLAY_CALLBACK | ANIMFX_PLAY_END_CALLBACK)) != 0) {
-                    dword_5E75CC = 1;
+                    magictech_callback_fx_added = 1;
                 }
                 return;
             }
         }
 
         if ((node.flags & (ANIMFX_PLAY_CALLBACK | ANIMFX_PLAY_END_CALLBACK)) != 0) {
-            dword_5E75D4 = 1;
+            magictech_in_callback = 1;
             if ((node.flags & ANIMFX_PLAY_END_CALLBACK) != 0) {
-                dword_5E75D8 = 1;
+                magictech_callback_is_end = 1;
             }
         }
     }
@@ -3661,8 +3695,8 @@ void sub_453EE0(void)
 // 0x453F20
 void magictech_register_attack(int64_t a1, int64_t a2)
 {
-    if (qword_5E75E0 != a2) {
-        qword_5E75E0 = a2;
+    if (magictech_last_attack_target != a2) {
+        magictech_last_attack_target = a2;
         ai_attack(a1, a2, 1, 0);
 
         if (magictech_cur_run_info->attacker_obj.obj != OBJ_HANDLE_NULL
@@ -3688,15 +3722,15 @@ void sub_453FA0(void)
     v0 = false;
     v1 = true;
 
-    if (dword_5E75D4) {
-        if (!dword_5E7630) {
-            dword_5E7630 = true;
-            if (dword_5E75D8) {
+    if (magictech_in_callback) {
+        if (!magictech_callback_reenter_guard) {
+            magictech_callback_reenter_guard = true;
+            if (magictech_callback_is_end) {
                 magictech_run_action_in_callback(magictech_cur_run_info->id, MAGICTECH_ACTION_END_CALLBACK);
             } else {
                 magictech_run_action_in_callback(magictech_cur_run_info->id, MAGICTECH_ACTION_CALLBACK);
             }
-            dword_5E7630 = false;
+            magictech_callback_reenter_guard = false;
             return;
         }
     } else {
@@ -3723,7 +3757,7 @@ void sub_453FA0(void)
 
             if ((magictech_cur_run_info->action != MAGICTECH_ACTION_BEGIN
                     || magictech_cur_spell_info->components[MAGICTECH_ACTION_CALLBACK].cnt == 0
-                    || !dword_5E75CC)
+                    || !magictech_callback_fx_added)
                 && v0) {
                 magictech_cur_run_info->action = MAGICTECH_ACTION_END;
                 magictech_process_run_info(magictech_cur_run_info);
@@ -3765,13 +3799,13 @@ void sub_453FA0(void)
                             return;
                         }
 
-                        if (dword_5E75CC
+                        if (magictech_callback_fx_added
                             && magictech_cur_spell_info->components[MAGICTECH_ACTION_END_CALLBACK].cnt == 0) {
-                            dword_5E75CC = false;
+                            magictech_callback_fx_added = false;
                         }
 
                         if (magictech_cur_run_info->action != MAGICTECH_ACTION_END
-                            || dword_5E75CC
+                            || magictech_callback_fx_added
                             || magictech_cur_run_info->id == -1) {
                             return;
                         }
@@ -5367,7 +5401,7 @@ void magictech_run_action_in_callback(int mt_id, int action)
  * As `magictech_process_run_info`, but marks the run as being processed from
  * inside an animation-fx callback.
  *
- * That is the only difference: `dword_5E75D4`. The process function reads it to
+ * That is the only difference: `magictech_in_callback`. The process function reads it to
  * decide whether to re-enter itself with MAGICTECH_ACTION_CALLBACK or
  * MAGICTECH_ACTION_END_CALLBACK, and it is set when the fx node carries
  * ANIMFX_PLAY_CALLBACK or ANIMFX_PLAY_END_CALLBACK.
@@ -5385,11 +5419,11 @@ void magictech_process_in_callback(MagicTechRunInfo* run_info)
 
     magictech_cur_run_info = run_info;
     magictech_cur_target_obj_type = -1;
-    dword_5E75CC = 0;
-    dword_5E75D4 = 1;
+    magictech_callback_fx_added = 0;
+    magictech_in_callback = 1;
     dword_5E75DC = 0;
-    qword_5E75E0 = 0;
-    dword_5E75E8 = run_info->action;
+    magictech_last_attack_target = 0;
+    magictech_entry_action = run_info->action;
     magictech_process();
 }
 
