@@ -421,6 +421,9 @@ static unsigned int magictech_damage_flag_values[] = {
     CDF_BLIND | CDF_CRIPPLE_ARM | CDF_CRIPPLE_LEG,
 };
 
+// The AoE parser keys, one row per MagicTech action - the row picks the
+// `[Begin]`/`[Maintain]`/... prefix and the five field names share it.
+//
 // 0x5B0D64
 static struct {
     const char* aoe;
@@ -428,7 +431,7 @@ static struct {
     const char* aoe_no_sf;
     const char* radius;
     const char* count;
-} off_5B0D64[] = {
+} magictech_action_aoe_keys[] = {
     {
         "[Begin]AoE:",
         "[Begin]AoE_SF:",
@@ -631,14 +634,22 @@ static TargetList magictech_cur_targets;
 // 0x5E6D20
 static mes_file_handle_t magictech_spelllist_mes_file;
 
+// Handed in by `magictech_init` through GameInitInfo; called with NULL to
+// invalidate the whole view after a spell changes what is drawn.
+//
 // 0x5E6D24
-static IsoInvalidateRectFunc* dword_5E6D24;
+static IsoInvalidateRectFunc* magictech_invalidate_rect;
 
 // 0x5E6D28
 static TargetContext magictech_cur_target_ctx;
 
+// The component index the current list should jump to, with
+// `magictech_branch_pending` saying whether a jump is wanted at all. Set by
+// the charge and test components and clamped to the list length, so a bad
+// branch index in the data lands on the end rather than out of bounds.
+//
 // 0x5E6D90
-static int dword_5E6D90;
+static int magictech_branch_target;
 
 // 0x5E7568
 static AnimFxList spell_eye_candies;
@@ -694,8 +705,11 @@ static AnimID magictech_scratch_anim_id;
 // 0x5E75CC
 static int magictech_callback_fx_added;
 
+// A shared temporary: the target's OBJ_F_FLAGS, read and tested on the next
+// line. Another one that could have been a local.
+//
 // 0x5E75D0
-static unsigned int dword_5E75D0;
+static unsigned int magictech_scratch_target_flags;
 
 // The callback action has to be run inline. Set by
 // `magictech_process_in_callback` for a run that really is inside an fx
@@ -753,17 +767,28 @@ static const char** magictech_component_names;
 // 0x5E75FC
 static bool magictech_cheat_mode;
 
+// NOTE: Read but never written, in the original too - the load at 0x457580 is
+// the only instruction in the exe naming 0x5E7600, so it is always zero and
+// the branch it guards never runs.
+//
 // 0x5E7600
 static int dword_5E7600;
 
+// Guards the two `timeevent_clear_one_ex` calls that run under
+// `magictech_timeevent_match_id`, which the predicate reads - so a re-entrant
+// clear would work against an id the outer one is still using.
+//
 // 0x5E7604
-static bool dword_5E7604;
+static bool magictech_timeevent_clear_guard;
 
 // 0x5E7608
 static int magictech_recharge_timeevent_mana_cost;
 
+// Game-clock seconds when a maintained spell's timeevent was scheduled,
+// carried in the event's own params[1].
+//
 // 0x5E760C
-static int dword_5E760C;
+static int magictech_timeevent_start_seconds;
 
 // 0x5E7610
 static int64_t magictech_recharge_timeevent_item_obj;
@@ -777,14 +802,23 @@ static MagicTechComponentInfo* magictech_cur_component;
 // 0x5E7620
 static MagicTechResistance* magictech_cur_resistance;
 
+// See `magictech_branch_target`.
+//
 // 0x5E7624
-static bool dword_5E7624;
+static bool magictech_branch_pending;
 
+// The spell `magictech_load_spell` is parsing, carried into
+// `magictech_build_aoe_info` so it can special-case spells 1, 2 and 9 - the
+// three that do not get TGT_OBJ_NO_INVULNERABLE forced on.
+//
 // 0x5E7628
-static int dword_5E7628;
+static int magictech_loading_spell;
 
+// The fatigue a spell is about to cost, stashed by the affordability check and
+// spent later by the code that commits the cast.
+//
 // 0x5E762C
-static int dword_5E762C;
+static int magictech_pending_fatigue_cost;
 
 // Stops the synthesised inline callback from recursing: the finish path sets
 // it around its own `magictech_run_action_in_callback` call, which re-enters
@@ -814,7 +848,7 @@ bool magictech_init(GameInitInfo* init_info)
     MesFileEntry mes_file_entry;
     int index;
 
-    dword_5E6D24 = init_info->invalidate_rect_func;
+    magictech_invalidate_rect = init_info->invalidate_rect_func;
     magictech_editor = init_info->editor;
     magictech_component_names = (const char**)CALLOC(25, sizeof(const char*));
     magictech_run_info = (MagicTechRunInfo*)CALLOC(512, sizeof(MagicTechRunInfo));
@@ -1445,7 +1479,7 @@ void magictech_load_spell(mes_file_handle_t msg_file, MagicTechInfo* info, int n
 {
     MesFileEntry mes_file_entry;
 
-    dword_5E7628 = magictech;
+    magictech_loading_spell = magictech;
 
     sub_457580(info, magictech);
 
@@ -1640,7 +1674,7 @@ bool magictech_charge_fatigue(int64_t obj, int cost, bool a3, int magictech)
         return true;
     }
 
-    dword_5E762C = cost;
+    magictech_pending_fatigue_cost = cost;
 
     if (obj == OBJ_HANDLE_NULL) {
         return true;
@@ -2141,9 +2175,9 @@ void magictech_process(void)
                                 sub_453EE0();
                                 magictech_procs[magictech_cur_component->type]();
 
-                                if (dword_5E7624) {
-                                    comp = dword_5E6D90;
-                                    dword_5E7624 = false;
+                                if (magictech_branch_pending) {
+                                    comp = magictech_branch_target;
+                                    magictech_branch_pending = false;
                                 }
                             }
                         }
@@ -2276,11 +2310,11 @@ void MTComponentChargeNBranch_ProcFunc(void)
     if (magictech_cur_run_info->source_obj.obj != OBJ_HANDLE_NULL
         && !magictech_charge_fatigue(magictech_cur_run_info->source_obj.obj, magictech_cur_component->data.charge_branch.cost, true, magictech_cur_run_info->spell)) {
         if (magictech_cur_component->data.charge_branch.branch != -1) {
-            dword_5E7624 = true;
-            dword_5E6D90 = SDL_min(magictech_cur_component->data.charge_branch.branch, magictech_cur_component_list->cnt);
+            magictech_branch_pending = true;
+            magictech_branch_target = SDL_min(magictech_cur_component->data.charge_branch.branch, magictech_cur_component_list->cnt);
         } else {
-            dword_5E7624 = true;
-            dword_5E6D90 = magictech_cur_component_list->cnt;
+            magictech_branch_pending = true;
+            magictech_branch_target = magictech_cur_component_list->cnt;
         }
     }
 }
@@ -2355,9 +2389,9 @@ void MTComponentDamage_ProcFunc(void)
         combat_acid_dmg(&combat);
     }
 
-    dword_5E75D0 = obj_field_int32_get(combat.target_obj, OBJ_F_FLAGS);
+    magictech_scratch_target_flags = obj_field_int32_get(combat.target_obj, OBJ_F_FLAGS);
 
-    if ((dword_5E75D0 & (OF_DESTROYED | OF_OFF)) == 0
+    if ((magictech_scratch_target_flags & (OF_DESTROYED | OF_OFF)) == 0
         && (combat.dam_flags & CDF_HAVE_DAMAGE) != 0) {
         anim_play_blood_splotch_fx(combat.target_obj, BLOOD_SPLOTCH_TYPE_NORMAL, magictech_cur_component->data.damage.damage_type, &combat);
     }
@@ -2885,8 +2919,8 @@ void magictech_pick_proto_from_list(ObjectID* oid, int list)
 // 0x4529D0
 void MTComponentTerminate_ProcFunc(void)
 {
-    dword_5E7624 = 1;
-    dword_5E6D90 = magictech_cur_component_list->cnt;
+    magictech_branch_pending = 1;
+    magictech_branch_target = magictech_cur_component_list->cnt;
 }
 
 // 0x4529F0
@@ -2927,14 +2961,14 @@ void MTComponentTestNBranch_ProcFunc(void)
             break;
         }
 
-        dword_5E7624 = true;
+        magictech_branch_pending = true;
         if (magictech_cur_component->data.test_in_branch.field_4C != -1) {
-            dword_5E6D90 = magictech_cur_component->data.test_in_branch.field_4C;
-            if (dword_5E6D90 >= magictech_cur_component_list->cnt) {
-                dword_5E6D90 = magictech_cur_component_list->cnt;
+            magictech_branch_target = magictech_cur_component->data.test_in_branch.field_4C;
+            if (magictech_branch_target >= magictech_cur_component_list->cnt) {
+                magictech_branch_target = magictech_cur_component_list->cnt;
             }
         } else {
-            dword_5E6D90 = magictech_cur_component_list->cnt;
+            magictech_branch_target = magictech_cur_component_list->cnt;
         }
     }
 }
@@ -4121,7 +4155,7 @@ void magictech_component_obj_flag(int64_t obj, int64_t a2, int fld, int a4, int 
         case OBJ_F_SPELL_FLAGS:
             if ((a4 & (OSF_DETECTING_INVISIBLE | OSF_DETECTING_TRAPS | OSF_DETECTING_ALIGNMENT | OSF_DETECTING_MAGIC)) != 0) {
                 if (player_is_local_pc_obj(obj)) {
-                    dword_5E6D24(NULL);
+                    magictech_invalidate_rect(NULL);
                 }
             } else if ((a4 & OSF_INVISIBLE) != 0) {
                 if (!player_is_local_pc_obj(obj)) {
@@ -4211,7 +4245,7 @@ void magictech_component_obj_flag(int64_t obj, int64_t a2, int fld, int a4, int 
         case OBJ_F_SPELL_FLAGS:
             if ((a4 & (OSF_DETECTING_INVISIBLE | OSF_DETECTING_TRAPS | OSF_DETECTING_ALIGNMENT | OSF_DETECTING_MAGIC)) != 0) {
                 if (player_is_local_pc_obj(obj)) {
-                    dword_5E6D24(NULL);
+                    magictech_invalidate_rect(NULL);
                 }
             } else if ((a4 & OSF_INVISIBLE) != 0) {
                 if (!player_is_local_pc_obj(obj)) {
@@ -4534,7 +4568,7 @@ bool sub_455550(TargetContext* target_ctx, MagicTechRunInfo* run_info)
 
     if ((run_info->field_138 & 0x2000) == 0
         && magictech_find_effect_caster(target_ctx->target_obj, OSF_FULL_REFLECTION, &parent_obj)) {
-        magictech_charge_fatigue(parent_obj, dword_5E762C, true, 10000);
+        magictech_charge_fatigue(parent_obj, magictech_pending_fatigue_cost, true, 10000);
     }
 
     if (target_ctx->target_obj == run_info->source_obj.obj) {
@@ -5471,11 +5505,11 @@ void magictech_interrupt(int mt_id)
     }
 
     magictech_cur_targets.cnt = 0;
-    if (!dword_5E7604) {
-        dword_5E7604 = true;
+    if (!magictech_timeevent_clear_guard) {
+        magictech_timeevent_clear_guard = true;
         magictech_timeevent_match_id = mt_id;
         timeevent_clear_one_ex(TIMEEVENT_TYPE_MAGICTECH, magictech_timeevent_matches_current);
-        dword_5E7604 = false;
+        magictech_timeevent_clear_guard = false;
     }
 
     magictech_process_run_info(run_info);
@@ -5515,11 +5549,11 @@ void magictech_end(int mt_id)
     if (magictech_id_to_run_info(mt_id, &run_info)) {
         run_info->action = MAGICTECH_ACTION_END;
         magictech_cur_targets.cnt = 0;
-        if (!dword_5E7604) {
-            dword_5E7604 = true;
+        if (!magictech_timeevent_clear_guard) {
+            magictech_timeevent_clear_guard = true;
             magictech_timeevent_match_id = mt_id;
             timeevent_clear_one_ex(TIMEEVENT_TYPE_MAGICTECH, magictech_timeevent_matches_current);
-            dword_5E7604 = false;
+            magictech_timeevent_clear_guard = false;
         }
         run_info->flags |= MAGICTECH_RUN_0x40;
         magictech_process_run_info(run_info);
@@ -5659,9 +5693,9 @@ void magictech_build_aoe_info(MagicTechInfo* info, char* str)
     }
 
     for (action = 0; action < MAGICTECH_ACTION_COUNT; action++) {
-        if (dword_5E7628 == 2
-            || dword_5E7628 == 9
-            || dword_5E7628 == 1) {
+        if (magictech_loading_spell == 2
+            || magictech_loading_spell == 9
+            || magictech_loading_spell == 1) {
             info->target_params[action].tgt = tgt;
         } else {
             info->target_params[action].tgt = tgt;
@@ -5702,23 +5736,23 @@ void magictech_build_aoe_info(MagicTechInfo* info, char* str)
     }
 
     for (action = 0; action < MAGICTECH_ACTION_COUNT; action++) {
-        if (tig_str_parse_named_flag_list_64(&str, off_5B0D64[action].aoe, magictech_target_names, magictech_target_flags, 65, &tgt)) {
+        if (tig_str_parse_named_flag_list_64(&str, magictech_action_aoe_keys[action].aoe, magictech_target_names, magictech_target_flags, 65, &tgt)) {
             info->target_params[action].tgt |= tgt;
         }
 
-        if (tig_str_parse_named_flag_list_direct(&str, off_5B0D64[action].aoe_sf, obj_flags_tbl[OFS_SPELL_FLAGS], obj_flags_size_tbl[OFS_SPELL_FLAGS], &flags)) {
+        if (tig_str_parse_named_flag_list_direct(&str, magictech_action_aoe_keys[action].aoe_sf, obj_flags_tbl[OFS_SPELL_FLAGS], obj_flags_size_tbl[OFS_SPELL_FLAGS], &flags)) {
             info->target_params[action].spell_flags |= flags;
         }
 
-        if (tig_str_parse_named_flag_list_direct(&str, off_5B0D64[action].aoe_no_sf, obj_flags_tbl[OFS_SPELL_FLAGS], obj_flags_size_tbl[OFS_SPELL_FLAGS], &flags)) {
+        if (tig_str_parse_named_flag_list_direct(&str, magictech_action_aoe_keys[action].aoe_no_sf, obj_flags_tbl[OFS_SPELL_FLAGS], obj_flags_size_tbl[OFS_SPELL_FLAGS], &flags)) {
             info->target_params[action].no_spell_flags |= flags;
         }
 
-        if (tig_str_parse_named_value(&str, off_5B0D64[action].radius, &value)) {
+        if (tig_str_parse_named_value(&str, magictech_action_aoe_keys[action].radius, &value)) {
             info->target_params[action].radius = value;
         }
 
-        if (tig_str_parse_named_value(&str, off_5B0D64[action].count, &value)) {
+        if (tig_str_parse_named_value(&str, magictech_action_aoe_keys[action].count, &value)) {
             info->target_params[action].count = value;
         }
     }
@@ -6667,7 +6701,7 @@ bool magictech_recharge_timeevent_schedule(int64_t item_obj, int mana_cost, bool
 
     magictech_recharge_timeevent_mana_cost = mana_cost;
     magictech_recharge_timeevent_item_obj = item_obj;
-    dword_5E760C = timeevent_game_seconds_get();
+    magictech_timeevent_start_seconds = timeevent_game_seconds_get();
 
     if (add) {
         if (timeevent_any(TIMEEVENT_TYPE_RECHARGE_MAGIC_ITEM, magictech_recharge_timeevent_add)) {
@@ -6677,7 +6711,7 @@ bool magictech_recharge_timeevent_schedule(int64_t item_obj, int mana_cost, bool
 
     timeevent.type = TIMEEVENT_TYPE_RECHARGE_MAGIC_ITEM;
     timeevent.params[0].object_value = item_obj;
-    timeevent.params[1].integer_value = dword_5E760C;
+    timeevent.params[1].integer_value = magictech_timeevent_start_seconds;
     timeevent.params[2].integer_value = magictech_recharge_timeevent_mana_cost;
     datetime_from_milliseconds(&datetime, 60000);
     datetime.milliseconds *= 8;
