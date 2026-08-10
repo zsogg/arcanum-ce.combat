@@ -132,7 +132,7 @@ void intgame_message_window_display_attack(int64_t obj);
 void intgame_message_window_display_defense(int64_t obj);
 void intgame_toggle_primary_button(UiPrimaryButton btn, bool on);
 void intgame_set_map_button(UiPrimaryButton btn);
-void sub_556E60(void);
+void intgame_magictech_item_validate(void);
 void intgame_set_examine_obj(int64_t obj);
 void intgame_notify_item_inserted_or_removed(int64_t item_obj, bool removed, int inventory_location);
 void intgame_refresh_health_bar(int64_t obj);

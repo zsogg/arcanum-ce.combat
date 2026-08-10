@@ -169,7 +169,7 @@ void tb_inven_ui_update(int64_t obj)
 {
     inven_ui_update(obj);
     if (player_is_local_pc_obj(obj)) {
-        sub_556E60();
+        intgame_magictech_item_validate();
         intgame_counters_refresh();
     }
 }

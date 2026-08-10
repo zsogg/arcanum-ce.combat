@@ -195,7 +195,7 @@ static void intgame_examine_container(int64_t pc_obj, int64_t container_obj, cha
 static void intgame_draw_portrait(int64_t obj, int portrait, tig_window_handle_t window_handle, int x, int y);
 static void intgame_refresh_primary_button(UiPrimaryButton btn);
 static void intgame_refresh_experience_gauges(int64_t obj);
-static void sub_556EA0(int64_t item_obj);
+static void intgame_magictech_item_set(int64_t item_obj);
 static void intgame_mt_button_enable(void);
 static void intgame_mt_button_disable(void);
 static bool intgame_big_window_create(void);
@@ -969,8 +969,14 @@ static TigRect intgame_pc_lens_src_rect;
 // 0x64C670
 static tig_font_handle_t intgame_cloister18_font;
 
+// The intgame.mes number the message window shows once the mouse has gone idle
+// over one of the interface buttons - 1000 "Spells" through 1010 "Multiplayer
+// Control" - or -1 when the pointer is not on one. Set on button enter,
+// cleared on leave; the display happens on TIG_MESSAGE_MOUSE_IDLE, which is
+// what makes it a hover delay rather than an immediate label.
+//
 // 0x64C674
-static int dword_64C674;
+static int intgame_hover_msg_num;
 
 // 0x64C678
 static int intgame_quantity;
@@ -981,11 +987,20 @@ static bool intgame_compact_interface;
 // 0x64C680
 static bool intgame_fullscreen;
 
+// The item whose magick/tech spells the MT buttons currently offer: whatever
+// was handed to `intgame_magictech_item_set`, else the PC's wielded weapon.
+// Read back through `intgame_magictech_item_get`, and dropped when the item
+// leaves the PC's inventory or is destroyed.
+//
 // 0x64C688
-static int64_t qword_64C688;
+static int64_t intgame_magictech_item;
 
+// An object queued for examining by `intgame_set_examine_obj`, described again
+// when the mouse stops picking a target so the panel falls back to it instead
+// of going blank. Consumed and cleared at that point.
+//
 // 0x64C690
-static int64_t qword_64C690;
+static int64_t intgame_examine_obj;
 
 // 0x64C698
 static TigRect stru_64C698;
@@ -1107,7 +1122,7 @@ bool intgame_init(GameInitInfo* init_info)
 
     memcpy(intgame_ui_primary_button_icons, intgame_ui_primary_button_normal_icons, sizeof(intgame_ui_primary_button_icons));
     intgame_map_button = UI_PRIMARY_BUTTON_TOWNMAP;
-    dword_64C674 = -1;
+    intgame_hover_msg_num = -1;
 
     return true;
 }
@@ -1876,10 +1891,10 @@ void intgame_counters_refresh(void)
     tig_art_interface_id_create(art_num, 0, 0, 0, &art_id);
     intgame_ammo_icon_refresh(art_id);
 
-    if (qword_64C688 != OBJ_HANDLE_NULL
+    if (intgame_magictech_item != OBJ_HANDLE_NULL
         && intgame_iso_window_type == ROTWIN_TYPE_MAGICTECH) {
-        if ((obj_field_int32_get(qword_64C688, OBJ_F_ITEM_FLAGS) & OIF_IDENTIFIED) != 0) {
-            mana = obj_field_int32_get(qword_64C688, OBJ_F_ITEM_SPELL_MANA_STORE);
+        if ((obj_field_int32_get(intgame_magictech_item, OBJ_F_ITEM_FLAGS) & OIF_IDENTIFIED) != 0) {
+            mana = obj_field_int32_get(intgame_magictech_item, OBJ_F_ITEM_SPELL_MANA_STORE);
             if (mana >= 0) {
                 intgame_draw_counter(INTGAME_COUNTER_MANA, mana, 3);
             } else {
@@ -1979,8 +1994,8 @@ bool intgame_process_message(TigMessage* msg)
         }
 
         if (msg->data.mouse.event == TIG_MESSAGE_MOUSE_IDLE) {
-            if (dword_64C674 != -1) {
-                mes_file_entry.num = dword_64C674;
+            if (intgame_hover_msg_num != -1) {
+                mes_file_entry.num = intgame_hover_msg_num;
                 ui_message.type = UI_MSG_TYPE_FEEDBACK;
                 if (mes_search(intgame_mes_file, &mes_file_entry)) {
                     ui_message.str = mes_file_entry.str;
@@ -2141,7 +2156,7 @@ bool intgame_process_message(TigMessage* msg)
             }
 
             if (msg->data.button.button_handle == intgame_mt_button_info.button_handle) {
-                sub_556EA0(OBJ_HANDLE_NULL);
+                intgame_magictech_item_set(OBJ_HANDLE_NULL);
                 return true;
             }
 
@@ -2195,7 +2210,7 @@ bool intgame_process_message(TigMessage* msg)
                 for (index = 0; index < 5; index++) {
                     if (intgame_mt_spell_buttons[index].art_num != -1
                         && msg->data.button.button_handle == intgame_mt_spell_buttons[index].button_handle) {
-                        sub_57C040(qword_64C688, index);
+                        sub_57C040(intgame_magictech_item, index);
                         return true;
                     }
                 }
@@ -2344,52 +2359,52 @@ bool intgame_process_message(TigMessage* msg)
             }
 
             if (msg->data.button.button_handle == intgame_secondary_buttons[INTGAME_SECONDARY_BUTTON_SPELLS].button_handle) {
-                dword_64C674 = 1000; // "Spells"
+                intgame_hover_msg_num = 1000; // "Spells"
                 return true;
             }
 
             if (msg->data.button.button_handle == intgame_secondary_buttons[INTGAME_SECONDARY_BUTTON_SKILLS].button_handle) {
-                dword_64C674 = 1001; // "Skills"
+                intgame_hover_msg_num = 1001; // "Skills"
                 return true;
             }
 
             if (msg->data.button.button_handle == intgame_secondary_buttons[INTGAME_SECONDARY_BUTTON_COMBAT].button_handle) {
-                dword_64C674 = 1002; // "Combat Toggle"
+                intgame_hover_msg_num = 1002; // "Combat Toggle"
                 return true;
             }
 
             if (msg->data.button.button_handle == intgame_secondary_buttons[INTGAME_SECONDARY_BUTTON_SCHEMATICS].button_handle) {
-                dword_64C674 = 1003; // "Schematics"
+                intgame_hover_msg_num = 1003; // "Schematics"
                 return true;
             }
 
             if (msg->data.button.button_handle == intgame_primary_buttons[INTGAME_PRIMARY_BUTTON_LOGBOOK].button_handle) {
-                dword_64C674 = 1004; // "Log Book"
+                intgame_hover_msg_num = 1004; // "Log Book"
                 return true;
             }
 
             if (msg->data.button.button_handle == intgame_primary_buttons[INTGAME_PRIMARY_BUTTON_CHAR].button_handle) {
-                dword_64C674 = 1005; // "Character Editor"
+                intgame_hover_msg_num = 1005; // "Character Editor"
                 return true;
             }
 
             if (msg->data.button.button_handle == intgame_primary_buttons[INTGAME_PRIMARY_BUTTON_INVENTORY].button_handle) {
-                dword_64C674 = 1006; // "Inventory"
+                intgame_hover_msg_num = 1006; // "Inventory"
                 return true;
             }
 
             if (msg->data.button.button_handle == intgame_primary_buttons[INTGAME_PRIMARY_BUTTON_MAP].button_handle) {
-                dword_64C674 = 1007; // "Maps"
+                intgame_hover_msg_num = 1007; // "Maps"
                 return true;
             }
 
             if (msg->data.button.button_handle == intgame_primary_buttons[INTGAME_PRIMARY_BUTTON_FATE].button_handle) {
-                dword_64C674 = 1008; // "Fate Points"
+                intgame_hover_msg_num = 1008; // "Fate Points"
                 return true;
             }
 
             if (msg->data.button.button_handle == intgame_sleep_button_info.button_handle) {
-                dword_64C674 = (tig_net_is_active()) ? 1010 : 1009;
+                intgame_hover_msg_num = (tig_net_is_active()) ? 1010 : 1009;
             }
 
             switch (intgame_iso_window_type) {
@@ -2410,7 +2425,7 @@ bool intgame_process_message(TigMessage* msg)
             case ROTWIN_TYPE_MAGICTECH:
                 for (index = 0; index < 5; index++) {
                     if (msg->data.button.button_handle == intgame_mt_spell_buttons[index].button_handle) {
-                        intgame_message_window_display_spell(mt_item_spell(qword_64C688, index));
+                        intgame_message_window_display_spell(mt_item_spell(intgame_magictech_item, index));
                         return true;
                     }
                 }
@@ -2723,7 +2738,7 @@ bool handle_button_unhover(TigMessage* msg)
         || msg->data.button.button_handle == intgame_primary_buttons[INTGAME_PRIMARY_BUTTON_MAP].button_handle
         || msg->data.button.button_handle == intgame_primary_buttons[INTGAME_PRIMARY_BUTTON_FATE].button_handle
         || msg->data.button.button_handle == intgame_sleep_button_info.button_handle) {
-        dword_64C674 = -1;
+        intgame_hover_msg_num = -1;
         intgame_message_window_clear();
         return true;
     }
@@ -3322,7 +3337,7 @@ void intgame_combat_mode_toggle(void)
 
     intgame_hover_examine_refresh();
 
-    obj = qword_64C690;
+    obj = intgame_examine_obj;
     if (obj == OBJ_HANDLE_NULL) {
         obj = object_hover_obj_get();
     }
@@ -3339,7 +3354,7 @@ void intgame_combat_mode_toggle(void)
 // 0x54ECD0
 void sub_54ECD0(void)
 {
-    if (qword_64C690 == OBJ_HANDLE_NULL) {
+    if (intgame_examine_obj == OBJ_HANDLE_NULL) {
         return;
     }
 
@@ -3347,9 +3362,9 @@ void sub_54ECD0(void)
         return;
     }
 
-    object_hover_obj_set(qword_64C690);
+    object_hover_obj_set(intgame_examine_obj);
     object_hover_obj_set(OBJ_HANDLE_NULL);
-    tb_ui_examine_object(player_get_local_pc_obj(), qword_64C690);
+    tb_ui_examine_object(player_get_local_pc_obj(), intgame_examine_obj);
 }
 
 // TODO: Lots of jumps, check.
@@ -4690,8 +4705,8 @@ void iso_interface_refresh(void)
 
     if (intgame_iso_window_type == ROTWIN_TYPE_MSG) {
         if (pc_obj != OBJ_HANDLE_NULL) {
-            if (qword_64C690 != OBJ_HANDLE_NULL) {
-                tb_ui_examine_object(pc_obj, qword_64C690);
+            if (intgame_examine_obj != OBJ_HANDLE_NULL) {
+                tb_ui_examine_object(pc_obj, intgame_examine_obj);
             } else if ((obj = object_hover_obj_get()) != OBJ_HANDLE_NULL) {
                 tb_ui_examine_object(pc_obj, obj);
             } else {
@@ -4842,14 +4857,14 @@ void intgame_mt_spells_enable(void)
     tig_art_id_t art_id;
 
     if (player_get_local_pc_obj() == OBJ_HANDLE_NULL
-        || qword_64C688 == OBJ_HANDLE_NULL) {
+        || intgame_magictech_item == OBJ_HANDLE_NULL) {
         return;
     }
 
-    if ((obj_field_int32_get(qword_64C688, OBJ_F_ITEM_FLAGS) & OIF_IDENTIFIED) != 0
-        && obj_field_int32_get(qword_64C688, OBJ_F_ITEM_MAGIC_TECH_COMPLEXITY) > 0) {
+    if ((obj_field_int32_get(intgame_magictech_item, OBJ_F_ITEM_FLAGS) & OIF_IDENTIFIED) != 0
+        && obj_field_int32_get(intgame_magictech_item, OBJ_F_ITEM_MAGIC_TECH_COMPLEXITY) > 0) {
         for (index = 0; index < 5; index++) {
-            spl = mt_item_spell(qword_64C688, index);
+            spl = mt_item_spell(intgame_magictech_item, index);
             if (spl != -1
                 && !magictech_is_tech(spl)
                 && intgame_mt_spell_buttons[index].art_num != -1) {
@@ -6397,14 +6412,14 @@ void intgame_hover_on_mouse_move(TigMessage* msg)
             object_hover_obj_set(td.obj);
         }
     } else {
-        if (qword_64C690 != OBJ_HANDLE_NULL || object_hover_obj_get() == OBJ_HANDLE_NULL) {
+        if (intgame_examine_obj != OBJ_HANDLE_NULL || object_hover_obj_get() == OBJ_HANDLE_NULL) {
             if (intgame_iso_window_type != ROTWIN_TYPE_CHAT) {
-                if (obj_handle_is_valid(qword_64C690)) {
-                    object_hover_obj_set(qword_64C690);
+                if (obj_handle_is_valid(intgame_examine_obj)) {
+                    object_hover_obj_set(intgame_examine_obj);
                     object_hover_obj_set(OBJ_HANDLE_NULL);
-                    tb_ui_examine_object(player_get_local_pc_obj(), qword_64C690);
+                    tb_ui_examine_object(player_get_local_pc_obj(), intgame_examine_obj);
                 }
-                qword_64C690 = OBJ_HANDLE_NULL;
+                intgame_examine_obj = OBJ_HANDLE_NULL;
             }
         } else {
             if (intgame_iso_window_type != ROTWIN_TYPE_CHAT) {
@@ -8247,26 +8262,34 @@ void intgame_refresh_experience_gauges(int64_t obj)
     }
 }
 
+// Drops `intgame_magictech_item` if it is no longer held by the local PC.
+// Called whenever that inventory changes, since the MT buttons would otherwise
+// keep offering the spells of an item that has been dropped, sold or destroyed.
+//
 // 0x556E60
-void sub_556E60(void)
+void intgame_magictech_item_validate(void)
 {
     int64_t parent_obj;
 
-    if (qword_64C688 != OBJ_HANDLE_NULL) {
-        parent_obj = obj_field_handle_get(qword_64C688, OBJ_F_ITEM_PARENT);
+    if (intgame_magictech_item != OBJ_HANDLE_NULL) {
+        parent_obj = obj_field_handle_get(intgame_magictech_item, OBJ_F_ITEM_PARENT);
         if (parent_obj == OBJ_HANDLE_NULL || !player_is_local_pc_obj(parent_obj)) {
-            qword_64C688 = OBJ_HANDLE_NULL;
+            intgame_magictech_item = OBJ_HANDLE_NULL;
         }
     }
 }
 
+// OBJ_HANDLE_NULL means "the wielded weapon", which is what the MT button
+// passes. Also rotates the panel to ROTWIN_TYPE_MAGICTECH, so this is the whole
+// act of opening the magick/tech view on an item, not just a field write.
+//
 // 0x556EA0
-void sub_556EA0(int64_t item_obj)
+void intgame_magictech_item_set(int64_t item_obj)
 {
     if (item_obj != OBJ_HANDLE_NULL) {
-        qword_64C688 = item_obj;
+        intgame_magictech_item = item_obj;
     } else {
-        qword_64C688 = item_wield_get(player_get_local_pc_obj(), ITEM_INV_LOC_WEAPON);
+        intgame_magictech_item = item_wield_get(player_get_local_pc_obj(), ITEM_INV_LOC_WEAPON);
     }
     iso_interface_window_set(ROTWIN_TYPE_MAGICTECH);
 }
@@ -8333,9 +8356,9 @@ void intgame_mt_button_disable(void)
 // 0x5570A0
 void intgame_set_examine_obj(int64_t obj)
 {
-    qword_64C690 = obj;
-    if (qword_64C690 != OBJ_HANDLE_NULL) {
-        tb_ui_examine_object(player_get_local_pc_obj(), qword_64C690);
+    intgame_examine_obj = obj;
+    if (intgame_examine_obj != OBJ_HANDLE_NULL) {
+        tb_ui_examine_object(player_get_local_pc_obj(), intgame_examine_obj);
     }
 }
 
@@ -8360,10 +8383,10 @@ void intgame_notify_item_inserted_or_removed(int64_t item_obj, bool removed, int
 
     if (removed) {
         hotkey_ui_notify_item_inserted_or_removed(item_obj, removed);
-        if (qword_64C688 == item_obj
+        if (intgame_magictech_item == item_obj
             && intgame_iso_window_type == ROTWIN_TYPE_MAGICTECH) {
             iso_interface_window_set(ROTWIN_TYPE_MSG);
-            qword_64C688 = OBJ_HANDLE_NULL;
+            intgame_magictech_item = OBJ_HANDLE_NULL;
         }
 
         if (inventory_location == ITEM_INV_LOC_WEAPON) {
@@ -8387,7 +8410,7 @@ void intgame_refresh_health_bar(int64_t obj)
         anim_ui_event_add(ANIM_UI_EVENT_TYPE_UPDATE_HEALTH_BAR, -1);
     }
 
-    if (object_hover_obj_get() == obj || qword_64C690 == obj) {
+    if (object_hover_obj_get() == obj || intgame_examine_obj == obj) {
         tb_ui_examine_object(player_get_local_pc_obj(), obj);
     }
 
@@ -8760,7 +8783,7 @@ void intgame_spell_button_get(int clg, int lvl, UiButtonInfo* button_info)
 // 0x557B00
 int64_t intgame_magictech_item_get(void)
 {
-    return qword_64C688;
+    return intgame_magictech_item;
 }
 
 // 0x557B10
@@ -8891,7 +8914,7 @@ int sub_557C00(void)
             && y >= button_data.y
             && x < button_data.x + button_data.width
             && y < button_data.y + button_data.height) {
-            if (!magictech_has_item_triggers(mt_item_spell(qword_64C688, index))) {
+            if (!magictech_has_item_triggers(mt_item_spell(intgame_magictech_item, index))) {
                 return index;
             } else {
                 return 5;
