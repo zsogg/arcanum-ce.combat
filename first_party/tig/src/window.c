@@ -1795,6 +1795,9 @@ int tig_window_move(tig_window_handle_t window_handle, int x, int y)
 {
     int window_index;
     TigWindow* win;
+    int dx;
+    int dy;
+    int index;
 
     window_index = tig_window_handle_to_index(window_handle);
     win = &(windows[window_index]);
@@ -1803,8 +1806,24 @@ int tig_window_move(tig_window_handle_t window_handle, int x, int y)
         tig_window_invalidate_rect(&(win->frame));
     }
 
+    dx = x - win->frame.x;
+    dy = y - win->frame.y;
+
     win->frame.x = x;
     win->frame.y = y;
+
+    // CE: Carry the window's buttons with it. Their rects are cached in screen
+    // space by `tig_button_create`, so without this they keep the origin the
+    // window had when they were created - which draws them at the wrong offset
+    // inside the moved window and leaves that misdraw baked into its video
+    // buffer. `intgame_hide`/`intgame_show` move the bottom bar between the
+    // menu and in-game positions, so at any screen height other than 600 the
+    // two positions differ and every button in the bar was ghosted.
+    if (dx != 0 || dy != 0) {
+        for (index = 0; index < win->num_buttons; index++) {
+            tig_button_translate(win->buttons[index], dx, dy);
+        }
+    }
 
     if ((win->flags & TIG_WINDOW_HIDDEN) != 0) {
         tig_window_invalidate_rect(&(win->frame));

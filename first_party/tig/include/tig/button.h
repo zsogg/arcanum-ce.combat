@@ -45,6 +45,10 @@ int tig_button_create(TigButtonData* button_data, tig_button_handle_t* button_ha
 int tig_button_destroy(tig_button_handle_t button_handle);
 int tig_button_data(tig_button_handle_t button_handle, TigButtonData* button_data);
 int tig_button_refresh_rect(tig_window_handle_t window_handle, TigRect* rect);
+
+// CE: `TigButton::rect` is cached in screen space, so a button does not follow
+// its window unless something translates it. Called by `tig_window_move`.
+int tig_button_translate(tig_button_handle_t button_handle, int dx, int dy);
 void tig_button_state_change(tig_button_handle_t button_handle, TigButtonState state);
 int tig_button_state_get(tig_button_handle_t button_handle, TigButtonState* state);
 tig_button_handle_t tig_button_get_at_position(int x, int y);

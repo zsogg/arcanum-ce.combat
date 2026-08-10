@@ -286,6 +286,27 @@ int tig_button_refresh_rect(tig_window_handle_t window_handle, TigRect* rect)
     return TIG_OK;
 }
 
+// CE: Buttons store their rect in screen space (see `tig_button_create`, which
+// bakes the window origin into it), so moving a window leaves every button in
+// it pointing at the old screen position. `tig_button_refresh_rect` then draws
+// the art at `rect - window.frame`, which is the wrong offset inside the new
+// window, and the misdraw is baked into the window's video buffer. Translating
+// the rect with the window keeps both the drawing and the hit test correct.
+int tig_button_translate(tig_button_handle_t button_handle, int dx, int dy)
+{
+    int button_index;
+
+    if (button_handle == TIG_BUTTON_HANDLE_INVALID) {
+        return TIG_ERR_INVALID_PARAM;
+    }
+
+    button_index = tig_button_handle_to_index(button_handle);
+    buttons[button_index].rect.x += dx;
+    buttons[button_index].rect.y += dy;
+
+    return TIG_OK;
+}
+
 // 0x537FA0
 int tig_button_free_index(void)
 {
