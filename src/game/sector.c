@@ -75,7 +75,7 @@ static bool sector_block_save_internal(void);
 static bool sector_block_load_internal(const char* base_map_name, const char* current_map_name);
 
 // 0x5B7CD0
-static DateTime qword_5B7CD0 = { .days = -1, .milliseconds = -1 };
+static DateTime sector_datetime_invalid = { .days = -1, .milliseconds = -1 };
 
 // 0x5B7CD8
 static int sector_art_cache_state = 1;
@@ -111,7 +111,7 @@ static int64_t sector_limit_x;
 static bool sector_editor;
 
 // 0x6017AC
-static tig_color_t dword_6017AC;
+static tig_color_t sector_default_color;
 
 // 0x6017B0
 static SectorCacheEntry* sector_cache_entries;
@@ -123,7 +123,13 @@ static SectorLoadFunc sector_load_func;
 static IsoInvalidateRectFunc* sector_iso_window_invalidate_rect;
 
 // 0x6017BC
-static int dword_6017BC;
+// A logical clock, not a time: it ticks once per `sector_lock` and the value
+// is stamped into `cache_entry->timestamp`. When the cache is full,
+// `sector_lock` evicts the unreferenced entry with the smallest timestamp, so
+// the LRU order is in units of accesses and nothing here reads a real
+// datetime. (`sector_cache_find_unused` is a different thing - it returns the
+// first entry that is not in use at all, and never looks at the timestamp.)
+static int sector_cache_clock;
 
 // 0x6017C0
 static bool in_sector_enumerate;
@@ -144,10 +150,10 @@ static int sector_art_cache_size;
 static int64_t sector_demo_limits_max_x;
 
 // 0x6017E8
-static int64_t* dword_6017E8;
+static int64_t* sector_boundaries_x;
 
 // 0x6017EC
-static int64_t* dword_6017EC;
+static int64_t* sector_boundaries_y;
 
 // 0x6017F0
 static tig_art_id_t* sector_art_cache;
@@ -183,10 +189,10 @@ static SectorLockFunc sector_write_lock_func;
 static bool sector_demo_limits_set;
 
 // 0x601828
-static tig_color_t dword_601828;
+static tig_color_t sector_dirty_rect_color;
 
 // 0x60182C
-static int dword_60182C;
+static int sector_cache_current_index;
 
 // 0x601830
 static bool sector_grid_enabled;
@@ -205,8 +211,8 @@ bool sector_init(GameInitInfo* init_info)
     sector_iso_window_invalidate_rect = init_info->invalidate_rect_func;
     sector_view_options.type = VIEW_TYPE_ISOMETRIC;
     sector_grid_enabled = false;
-    dword_6017AC = tig_color_make(255, 255, 0);
-    dword_601828 = tig_color_make(255, 255, 0);
+    sector_default_color = tig_color_make(255, 255, 0);
+    sector_dirty_rect_color = tig_color_make(255, 255, 0);
     sector_editor = init_info->editor;
 
     if (sector_editor) {
@@ -220,8 +226,8 @@ bool sector_init(GameInitInfo* init_info)
     sector_base_path = (char*)CALLOC(TIG_MAX_PATH, sizeof(*sector_base_path));
     sector_save_path = (char*)CALLOC(TIG_MAX_PATH, sizeof(*sector_save_path));
 
-    dword_6017E8 = (int64_t*)CALLOC(151, sizeof(*dword_6017E8));
-    dword_6017EC = (int64_t*)CALLOC(151, sizeof(*dword_6017EC));
+    sector_boundaries_x = (int64_t*)CALLOC(151, sizeof(*sector_boundaries_x));
+    sector_boundaries_y = (int64_t*)CALLOC(151, sizeof(*sector_boundaries_y));
 
     sector_limits_set(0x4000000, 0x4000000);
 
@@ -294,8 +300,8 @@ void sector_exit(void)
     FREE(sector_cache_entries);
     FREE(sector_base_path);
     FREE(sector_save_path);
-    FREE(dword_6017E8);
-    FREE(dword_6017EC);
+    FREE(sector_boundaries_x);
+    FREE(sector_boundaries_y);
     sector_art_cache_clear();
 }
 
@@ -373,7 +379,7 @@ void sector_draw(GameDrawInfo* draw_info)
                 color = tig_color_make(red, 0, 255 - red);
             }
         } else {
-            color = dword_6017AC;
+            color = sector_default_color;
         }
 
         location = location_make(sector_x + 63, sector_y);
@@ -443,7 +449,7 @@ void sector_draw(GameDrawInfo* draw_info)
         rect_node = *draw_info->rects;
         while (rect_node != NULL) {
             if (tig_rect_intersection(&rect, &(rect_node->rect), &dirty_rect) == TIG_OK) {
-                tig_window_box(sector_iso_window_handle, &dirty_rect, dword_601828);
+                tig_window_box(sector_iso_window_handle, &dirty_rect, sector_dirty_rect_color);
             }
             rect_node = rect_node->next;
         }
@@ -456,7 +462,7 @@ void sector_draw(GameDrawInfo* draw_info)
         rect_node = *draw_info->rects;
         while (rect_node != NULL) {
             if (tig_rect_intersection(&rect, &(rect_node->rect), &dirty_rect) == TIG_OK) {
-                tig_window_box(sector_iso_window_handle, &dirty_rect, dword_601828);
+                tig_window_box(sector_iso_window_handle, &dirty_rect, sector_dirty_rect_color);
             }
             rect_node = rect_node->next;
         }
@@ -779,12 +785,12 @@ SectorListNode* sector_list_create(LocRect* loc_rect)
     SectorListNode* prev;
     SectorListNode* node;
 
-    width = sector_compute_boundaries(loc_rect->x1, loc_rect->x2 + 1, 64, dword_6017E8) - 1;
+    width = sector_compute_boundaries(loc_rect->x1, loc_rect->x2 + 1, 64, sector_boundaries_x) - 1;
     if (width == 0) {
         return NULL;
     }
 
-    height = sector_compute_boundaries(loc_rect->y1, loc_rect->y2 + 1, 64, dword_6017EC) - 1;
+    height = sector_compute_boundaries(loc_rect->y1, loc_rect->y2 + 1, 64, sector_boundaries_y) - 1;
     if (height == 0) {
         return NULL;
     }
@@ -796,10 +802,10 @@ SectorListNode* sector_list_create(LocRect* loc_rect)
         for (x = 0; x < width; x++) {
             node = sector_list_node_create();
             node->next = prev;
-            node->loc = LOCATION_MAKE(dword_6017E8[x], dword_6017EC[y]);
+            node->loc = LOCATION_MAKE(sector_boundaries_x[x], sector_boundaries_y[y]);
             node->sec = sector_id_from_loc(node->loc);
-            node->width = (dword_6017E8[x + 1] & 0xFFFFFFFF) - (dword_6017E8[x] & 0xFFFFFFFF);
-            node->height = (dword_6017EC[y + 1] & 0xFFFFFFFF) - (dword_6017EC[y] & 0xFFFFFFFF);
+            node->width = (sector_boundaries_x[x + 1] & 0xFFFFFFFF) - (sector_boundaries_x[x] & 0xFFFFFFFF);
+            node->height = (sector_boundaries_y[y + 1] & 0xFFFFFFFF) - (sector_boundaries_y[y] & 0xFFFFFFFF);
             prev = node;
         }
     }
@@ -885,16 +891,16 @@ bool sector_lock(int64_t id, Sector** sector_ptr)
     }
 
     in_sector_lock = true;
-    dword_6017BC++;
+    sector_cache_clock++;
 
-    cache_entry = &(sector_cache_entries[sector_cache_indexes[dword_60182C]]);
+    cache_entry = &(sector_cache_entries[sector_cache_indexes[sector_cache_current_index]]);
     if (cache_entry->used && cache_entry->sector.id == id) {
         cache_entry->refcount++;
-        cache_entry->timestamp = dword_6017BC;
-    } else if (sector_cache_find_by_id(id, &dword_60182C)) {
-        cache_entry = &(sector_cache_entries[sector_cache_indexes[dword_60182C]]);
+        cache_entry->timestamp = sector_cache_clock;
+    } else if (sector_cache_find_by_id(id, &sector_cache_current_index)) {
+        cache_entry = &(sector_cache_entries[sector_cache_indexes[sector_cache_current_index]]);
         cache_entry->refcount++;
-        cache_entry->timestamp = dword_6017BC;
+        cache_entry->timestamp = sector_cache_clock;
     } else {
         if (sector_cache_size >= sector_cache_capacity) {
             for (index = 0; index < sector_cache_capacity; index++) {
@@ -924,7 +930,7 @@ bool sector_lock(int64_t id, Sector** sector_ptr)
                 sizeof(*sector_cache_indexes) * (sector_cache_size - oldest - 1));
             sector_cache_size--;
 
-            sector_cache_find_by_id(id, &dword_60182C);
+            sector_cache_find_by_id(id, &sector_cache_current_index);
         }
 
         if (!sector_cache_find_unused(&index)) {
@@ -933,7 +939,7 @@ bool sector_lock(int64_t id, Sector** sector_ptr)
             return false;
         }
 
-        datetime = qword_5B7CD0;
+        datetime = sector_datetime_invalid;
         for (unsigned int j = 0; j < sector_history_size; j++) {
             if (sector_history_entries[j].id == id) {
                 datetime = sub_45A7D0(&(sector_history_entries[j].datetime));
@@ -954,15 +960,15 @@ bool sector_lock(int64_t id, Sector** sector_ptr)
             return false;
         }
 
-        memmove(&(sector_cache_indexes[dword_60182C + 1]),
-            &(sector_cache_indexes[dword_60182C]),
-            sizeof(*sector_cache_indexes) * (sector_cache_size - dword_60182C));
-        sector_cache_indexes[dword_60182C] = index;
+        memmove(&(sector_cache_indexes[sector_cache_current_index + 1]),
+            &(sector_cache_indexes[sector_cache_current_index]),
+            sizeof(*sector_cache_indexes) * (sector_cache_size - sector_cache_current_index));
+        sector_cache_indexes[sector_cache_current_index] = index;
         sector_cache_size++;
 
         cache_entry->used = true;
         cache_entry->refcount = 1;
-        cache_entry->timestamp = dword_6017BC;
+        cache_entry->timestamp = sector_cache_clock;
         cache_entry->sector.id = id;
     }
 
