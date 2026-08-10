@@ -2684,6 +2684,27 @@ AnimGoalNode* anim_goal_nodes[] = {
     /*  AG_ATTEMPT_USE_PICKPOCKET_SKILL_ON */ &anim_goal_node_attempt_use_pickpocket_skill_on,
 };
 
+// NOTE: The thirteen `dword_5DE6xx` placeholders below, plus `dword_739E40`
+// and `dword_739E44` from anim_private.c, are **savegame ballast**. Each is
+// written by `anim_save` and read by `anim_load_internal` and touched by
+// nothing else - and that is true of the original too, not just of this port.
+// Checked against the exe with `search_instructions` on nine of them
+// (0x5DE608, 5DE640, 5DE650, 5DE668, 5DE69C, 5DE6A0, 5DE6B0, 5DE6B8, 5DE6C0,
+// 5DE6C4): every one is named by exactly two instructions in the whole image,
+// the PUSH in `anim_save` and the PUSH in `anim_load_internal`. So Troika kept
+// serialising state that nothing consumes, and CE is faithful in doing the
+// same. They cannot be named individually because there is no use to infer a
+// meaning from; they are documented here as a class instead.
+//
+// **Do not reorder them.** The save file's field order is load-bearing, and it
+// is not address order. It was verified against the original: the `anim_save`
+// PUSH sites run 0x421F3A, 0x421F6E, 0x421F88, 0x421FD6, 0x421FF0, 0x42200A,
+// 0x422024, 0x42203E, 0x422058, 0x422072 - strictly increasing in the order CE
+// writes them, including the three descending-address pairs that look like
+// transcription slips and are not (6B8 before 6B0, 6A0 before 69C, 6C4 before
+// 6C0). The three not queried are pinned by the uniform 0x1A stride between
+// consecutive fwrite calls.
+//
 // 0x5DE608
 static int dword_5DE608;
 
@@ -2752,7 +2773,7 @@ static int anim_catch_up;
 static bool anim_editor;
 
 // 0x5DE6D8
-static int64_t qword_5DE6D8;
+static int64_t anim_fidget_obj;
 
 // Set while the game clock is paused (see `timeevent_pause`). Suppresses new
 // fidget animations for the duration.
@@ -2761,7 +2782,7 @@ static int64_t qword_5DE6D8;
 static bool anim_paused;
 
 // 0x5DE6E4
-static int dword_5DE6E4;
+static int anim_float_offset_y;
 
 // 0x421B00
 bool anim_init(GameInitInfo* init_info)
@@ -11365,7 +11386,7 @@ bool anim_fidget_timeevent_process(TimeEvent* timeevent)
         cnt = sub_4302D0(&loc_rect, &objects);
         if (cnt != 0) {
             if (cnt > 1) {
-                if (object_list_remove(&objects, qword_5DE6D8)) {
+                if (object_list_remove(&objects, anim_fidget_obj)) {
                     cnt--;
                 }
             }
@@ -11384,22 +11405,22 @@ bool anim_fidget_timeevent_process(TimeEvent* timeevent)
 
             ASSERT(node != NULL); // 12021, "pCurNode != NULL"
 
-            qword_5DE6D8 = node->obj;
-            if (qword_5DE6D8 != OBJ_HANDLE_NULL) {
-                art_id = obj_field_int32_get(qword_5DE6D8, OBJ_F_CURRENT_AID);
+            anim_fidget_obj = node->obj;
+            if (anim_fidget_obj != OBJ_HANDLE_NULL) {
+                art_id = obj_field_int32_get(anim_fidget_obj, OBJ_F_CURRENT_AID);
                 art_id = tig_art_id_frame_set(art_id, 0);
-                if (magictech_is_under_influence_of(qword_5DE6D8, 172)) {
+                if (magictech_is_under_influence_of(anim_fidget_obj, 172)) {
                     art_id = tig_art_id_anim_set(art_id, TIG_ART_ANIM_STUNNED);
                     v1 = true;
                 }
 
-                object_set_current_aid(qword_5DE6D8, art_id);
+                object_set_current_aid(anim_fidget_obj, art_id);
 
-                anim_goal_data_init(&goal_data, qword_5DE6D8, AG_ANIM_FIDGET);
+                anim_goal_data_init(&goal_data, anim_fidget_obj, AG_ANIM_FIDGET);
                 if (!anim_goal_add(&goal_data, NULL)) {
                     if (v1) {
                         art_id = tig_art_id_anim_set(art_id, TIG_ART_ANIM_STAND);
-                        object_set_current_aid(qword_5DE6D8, art_id);
+                        object_set_current_aid(anim_fidget_obj, art_id);
                     }
                 }
             }
@@ -11474,7 +11495,7 @@ void sub_430460(void)
 // 0x430490
 void anim_set_obj_offset(int64_t obj, int offset_x, int offset_y)
 {
-    object_set_offset(obj, offset_x, offset_y + dword_5DE6E4);
+    object_set_offset(obj, offset_x, offset_y + anim_float_offset_y);
 }
 
 // 0x4304C0
@@ -11625,7 +11646,7 @@ bool AGupdateAnimMove(AnimRunInfo* run_info)
         }
 
         v2 = anim_run_info[anim_id.slot_num].cur_stack_data->params[AGDATA_SCRATCH_VAL1].data;
-        dword_5DE6E4 = 15 - 2 * v2;
+        anim_float_offset_y = 15 - 2 * v2;
     }
 
     new_loc = loc;
@@ -11702,7 +11723,7 @@ bool AGupdateAnimMove(AnimRunInfo* run_info)
 
                     run_info->flags &= ~0x30;
 
-                    dword_5DE6E4 = 0;
+                    anim_float_offset_y = 0;
 
                     if (v3) {
                         anim_goal_knockdown(obj);
@@ -11774,7 +11795,7 @@ bool AGupdateAnimMove(AnimRunInfo* run_info)
         }
     }
 
-    dword_5DE6E4 = 0;
+    anim_float_offset_y = 0;
 
     if ((run_info->flags & 0x80) != 0) {
         if (tig_art_anim_data(art_id, &art_anim_data) == TIG_OK) {
@@ -11891,7 +11912,7 @@ int anim_spend_move_cost(AnimRunInfo* run_info)
     }
 
     if (!combat_consume_action_points(obj, action_points)) {
-        dword_5DE6E4 = 0;
+        anim_float_offset_y = 0;
         anim_interrupt(&(run_info->id), PRIORITY_HIGHEST);
         return false;
     }
