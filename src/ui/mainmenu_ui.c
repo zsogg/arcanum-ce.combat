@@ -1863,7 +1863,7 @@ void mainmenu_ui_dismiss(void)
  *
  * `exiting` is set only by `mainmenu_ui_exit`, i.e. when the game is shutting
  * down. It suppresses `intgame_draw_bars` and the compact-interface toggle,
- * but not `intgame_refresh_cursor`, `sub_5507D0` or `intgame_show`.
+ * but not `intgame_refresh_cursor`, `intgame_message_window_set_display_func` or `intgame_show`.
  *
  * NOTE: On the shutdown path those three still reach into Intgame, which
  * `gameuilib_exit` tears down first - it walks `gameuilib_modules` in reverse
@@ -1955,7 +1955,7 @@ void mainmenu_ui_dismiss_ex(bool exiting)
     }
 
     intgame_refresh_cursor();
-    sub_5507D0(0);
+    intgame_message_window_set_display_func(0);
     if (!exiting) {
         intgame_draw_bars();
 

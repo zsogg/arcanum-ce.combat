@@ -1035,26 +1035,51 @@ static int intgame_message_history_curr;
 // 0x64C6CC
 static bool (*intgame_dialog_process_event_func)(TigMessage* msg);
 
+// NOTE: Read once by `intgame_clock_refresh` and never written, here and in
+// the original - the load at 0x552309 is the only instruction in the exe that
+// names 0x64C6D0. So it is always zero and the branch it guards never runs.
+//
 // 0x64C6D0
 static int dword_64C6D0;
 
+// An override for how the message window shows a message: when set, the three
+// display entry points hand off to it instead of drawing themselves.
+//
+// NOTE: Always NULL, in the original as well. Its only writer is
+// `intgame_message_window_set_display_func`, which has exactly one caller in
+// the exe (0x541552, the one CE ports as `mainmenu_ui.c`'s
+// `..._set_display_func(0)`), and that caller passes 0. So every one of those
+// three branches always takes the else. Troika's extension point, never used.
+//
 // 0x64C6D4
-static void (*dword_64C6D4)(UiMessage* ui_message);
+static void (*intgame_message_window_display_func)(UiMessage* ui_message);
 
+// Whether the left button currently held down has already issued a move order.
+// Holding it and sweeping the mouse re-issues one per tile, and the previous
+// goal is cleared first; releasing clears the flag. It also suppresses
+// `intgame_perform_action_on_target`, so a drag that began as movement cannot
+// turn into an attack partway through.
+//
 // 0x64C6D8
-static int dword_64C6D8;
+static int intgame_drag_move_active;
 
 // 0x64C6DC
 static bool intgame_fullscreen_forced;
 
+// Whether a rotating window is currently enabled, so that enabling one first
+// disables whatever was there.
+//
 // 0x64C6E0
-static bool dword_64C6E0;
+static bool intgame_iso_window_enabled;
 
 // 0x64C6E4
 static TigVideoBuffer* intgame_pc_lens_video_buffer;
 
+// Re-entry guard on the intgame mode setter, which refreshes the cursor and
+// can loop back into itself through the UI it touches.
+//
 // 0x64C6E8
-static bool dword_64C6E8;
+static bool intgame_mode_set_in_progress;
 
 // 0x64C6F0
 static unsigned int intgame_iso_window_flags;
@@ -1132,7 +1157,7 @@ void intgame_reset(void)
 {
     int index;
 
-    dword_64C6D8 = 0;
+    intgame_drag_move_active = 0;
     intgame_refresh_cursor();
     hotkey_ui_reset_recent_actions();
     intgame_clock_process_callback(NULL);
@@ -2855,18 +2880,18 @@ void intgame_process_event(TigMessage* msg)
                                 anim_goal_move_to_tile(pc_obj, td.loc);
                             }
 
-                            if (dword_64C6D8) {
+                            if (intgame_drag_move_active) {
                                 sub_436CF0();
                             }
-                            dword_64C6D8 = true;
+                            intgame_drag_move_active = true;
                         }
-                    } else if (!dword_64C6D8) {
+                    } else if (!intgame_drag_move_active) {
                         intgame_perform_action_on_target(&td);
                     }
                 }
                 break;
             case TIG_MESSAGE_MOUSE_LEFT_BUTTON_UP:
-                dword_64C6D8 = false;
+                intgame_drag_move_active = false;
                 break;
             case TIG_MESSAGE_MOUSE_RIGHT_BUTTON_UP:
                 if (pc_obj != OBJ_HANDLE_NULL) {
@@ -3108,14 +3133,14 @@ void intgame_process_event(TigMessage* msg)
                         anim_goal_move_to_tile(pc_obj, td.loc);
                     }
 
-                    if (dword_64C6D8) {
+                    if (intgame_drag_move_active) {
                         sub_436CF0();
                     }
-                    dword_64C6D8 = true;
+                    intgame_drag_move_active = true;
                 }
                 break;
             case TIG_MESSAGE_MOUSE_LEFT_BUTTON_UP:
-                dword_64C6D8 = false;
+                intgame_drag_move_active = false;
                 break;
             case TIG_MESSAGE_MOUSE_IDLE:
                 intgame_hover_examine(msg);
@@ -4190,7 +4215,7 @@ void iso_interface_window_disable(RotatingWindowType window_type)
         break;
     }
 
-    dword_64C6E0 = false;
+    intgame_iso_window_enabled = false;
 }
 
 // 0x5506C0
@@ -4223,8 +4248,8 @@ void intgame_message_window_clear(void)
         return;
     }
 
-    if (dword_64C6D4 != NULL) {
-        dword_64C6D4(0);
+    if (intgame_message_window_display_func != NULL) {
+        intgame_message_window_display_func(0);
     } else {
         intgame_message_window_clear_internal();
     }
@@ -4234,8 +4259,8 @@ void intgame_message_window_clear(void)
 void intgame_message_window_display_msg(UiMessage* ui_message)
 {
     intgame_message_history_add(ui_message);
-    if (dword_64C6D4 != NULL) {
-        dword_64C6D4(ui_message);
+    if (intgame_message_window_display_func != NULL) {
+        intgame_message_window_display_func(ui_message);
     }
 }
 
@@ -4246,19 +4271,19 @@ void intgame_message_window_display_str(int a1, char* str)
 
     (void)a1;
 
-    if (dword_64C6D4 != NULL) {
+    if (intgame_message_window_display_func != NULL) {
         ui_message.type = UI_MSG_TYPE_FEEDBACK;
         ui_message.str = str;
-        dword_64C6D4(&ui_message);
+        intgame_message_window_display_func(&ui_message);
     } else if (intgame_iso_interface_created) {
         intgame_message_window_write_text_centered(str, &(intgame_rotwin_text_frame[intgame_iso_window_type].rect));
     }
 }
 
 // 0x5507D0
-void sub_5507D0(void (*func)(UiMessage* ui_message))
+void intgame_message_window_set_display_func(void (*func)(UiMessage* ui_message))
 {
-    dword_64C6D4 = func;
+    intgame_message_window_display_func = func;
 }
 
 // 0x5507E0
@@ -4738,7 +4763,7 @@ void iso_interface_window_enable(RotatingWindowType window_type)
     TigRect src_rect;
     TigRect dst_rect;
 
-    if (dword_64C6E0) {
+    if (intgame_iso_window_enabled) {
         iso_interface_window_disable(intgame_iso_window_type);
     }
 
@@ -4846,7 +4871,7 @@ void iso_interface_window_enable(RotatingWindowType window_type)
         break;
     }
 
-    dword_64C6E0 = true;
+    intgame_iso_window_enabled = true;
 }
 
 // 0x551660
@@ -5029,12 +5054,12 @@ bool intgame_mode_set(IntgameMode mode)
     bool v17 = false;
     bool v18 = false;
 
-    if (dword_64C6E8) {
+    if (intgame_mode_set_in_progress) {
         return true;
     }
 
     while (1) {
-        dword_64C6E8 = true;
+        intgame_mode_set_in_progress = true;
         pc_obj = player_get_local_pc_obj();
         prev_mode = intgame_mode_stack[intgame_mode_stack_size];
 
@@ -5226,7 +5251,7 @@ bool intgame_mode_set(IntgameMode mode)
         intgame_refresh_cursor();
 
         v1 = false;
-        dword_64C6E8 = false;
+        intgame_mode_set_in_progress = false;
 
         if (!v17) {
             return true;
@@ -5574,13 +5599,17 @@ void intgame_open_charedit(int64_t obj, ChareditMode mode)
 // 0x552770
 void intgame_message_history_add(UiMessage* ui_message)
 {
+    // When a message last went into the history. Transient types (6-12) are
+    // only redrawn once the window has been quiet for three seconds, so a
+    // burst of feedback cannot trample a message the player is still reading.
+    //
     // 0x64C6EC
-    static tig_timestamp_t dword_64C6EC;
+    static tig_timestamp_t last_history_message_timestamp;
 
     int prev_idx;
 
     if (ui_message->type >= 6 && ui_message->type <= 12) {
-        if (tig_timer_elapsed(dword_64C6EC) > 3000
+        if (tig_timer_elapsed(last_history_message_timestamp) > 3000
             && intgame_iso_window_type == ROTWIN_TYPE_MSG) {
             intgame_message_window_clear_internal();
             intgame_message_draw(intgame_rotwin_text_frame[intgame_iso_window_type].window_handle,
@@ -5588,7 +5617,7 @@ void intgame_message_history_add(UiMessage* ui_message)
                 true);
         }
     } else {
-        tig_timer_now(&dword_64C6EC);
+        tig_timer_now(&last_history_message_timestamp);
 
         prev_idx = intgame_message_history_end;
         if (intgame_message_history_size < MAX_MESSAGE_HISTORY_ITEMS) {
