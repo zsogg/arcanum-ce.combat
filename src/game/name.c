@@ -18,10 +18,10 @@ static bool sub_41F190(TigMessage* msg);
 static void sub_41F240(void);
 
 // 0x5A1064
-static const char* off_5A1064 = "art";
+static const char* name_art_dir = "art";
 
 // 0x5A1068
-static const char* off_5A1068 = "art\\missing.dat";
+static const char* name_missing_art_path = "art\\missing.dat";
 
 // 0x5A106C
 static int name_check_bits[] = {
@@ -218,17 +218,35 @@ static bool name_initialized;
 // 0x5D5624
 static bool name_missing_art_initialized;
 
+// State of the modal art browser `sub_41F090` runs: it creates a window, spins
+// its own message loop until `name_browser_result` leaves 0 (RETURN sets 1,
+// ESC sets -1), then destroys the window and returns
+// `name_browser_selection` through its third argument. A/Z step the selection.
+//
+// Globals rather than locals for the usual reason - the message filter is a
+// separate callback with no user data, so the loop's state has to be reachable
+// from outside the frame that owns it. Fifth instance of that shape in the
+// tree, after magictech, anim_private, light and obj.c.
+//
 // 0x739E48
-static tig_window_handle_t dword_739E48;
+static tig_window_handle_t name_browser_window;
 
 // 0x739E4C
-static int dword_739E4C;
+static int name_browser_result;
 
 // 0x739E50
+// NOTE: Left unnamed with `dword_739E58` above. These two carry
+// `sub_41F090`'s first two arguments into its key handler, which passes them
+// straight to `sub_41DFC0` to seed the selection. Both that function and
+// `sub_41F090` itself are still unnamed, and `sub_41E960` in the same chain is
+// a CE stub marked "TODO: Incomplete" - so what the pair actually mean is not
+// recoverable from this file yet. Naming them after their argument positions
+// would describe the plumbing and assert nothing true about the contents.
+// Revisit once the `sub_41DFC0` / `sub_41E200` / `sub_41E960` chain is named.
 static int* dword_739E50;
 
 // 0x739E54
-static int dword_739E54;
+static int name_browser_selection;
 
 // 0x739E58
 static int dword_739E58;
@@ -518,7 +536,7 @@ bool name_missing_art_load(void)
     int expected_cnt;
     int actual_cnt;
 
-    stream = tig_file_fopen(off_5A1068, "rb");
+    stream = tig_file_fopen(name_missing_art_path, "rb");
     if (stream == NULL) {
         return false;
     }
@@ -562,9 +580,9 @@ bool name_missing_art_save(void)
     TigFile* stream;
 
     cnt = sub_41D390();
-    tig_file_mkdir(off_5A1064);
+    tig_file_mkdir(name_art_dir);
 
-    stream = tig_file_fopen(off_5A1068, "wb");
+    stream = tig_file_fopen(name_missing_art_path, "wb");
     if (stream == NULL) {
         return false;
     }
@@ -1444,7 +1462,7 @@ bool sub_41F090(int a1, int* a2, int* a3)
 
     dword_739E58 = a1;
     dword_739E50 = a2;
-    dword_739E54 = -1;
+    name_browser_selection = -1;
 
     window_data.rect.x = 40;
     window_data.rect.y = 40;
@@ -1454,25 +1472,25 @@ bool sub_41F090(int a1, int* a2, int* a3)
     window_data.message_filter = sub_41F190;
     window_data.background_color = tig_color_make(30, 30, 30);
 
-    if (tig_window_create(&window_data, &dword_739E48) != TIG_OK) {
+    if (tig_window_create(&window_data, &name_browser_window) != TIG_OK) {
         return false;
     }
 
     sub_41F240();
 
-    dword_739E4C = 0;
-    while (dword_739E4C == 0) {
+    name_browser_result = 0;
+    while (name_browser_result == 0) {
         tig_ping();
         tig_window_display();
     }
 
-    tig_window_destroy(dword_739E48);
+    tig_window_destroy(name_browser_window);
 
-    if (dword_739E4C != 1) {
+    if (name_browser_result != 1) {
         return false;
     }
 
-    *a3 = dword_739E54;
+    *a3 = name_browser_selection;
 
     return true;
 }
@@ -1486,28 +1504,28 @@ bool sub_41F190(TigMessage* msg)
         && msg->data.keyboard.pressed) {
         switch (msg->data.keyboard.key) {
         case SDLK_A:
-            if (dword_739E54 != -1) {
-                dword_739E54 = sub_41E960(dword_739E54);
+            if (name_browser_selection != -1) {
+                name_browser_selection = sub_41E960(name_browser_selection);
                 sub_41F240();
             }
             break;
         case SDLK_Z:
-            if (dword_739E54 == -1) {
-                dword_739E54 = sub_41DFC0(dword_739E58, dword_739E50);
+            if (name_browser_selection == -1) {
+                name_browser_selection = sub_41DFC0(dword_739E58, dword_739E50);
                 sub_41F240();
             } else {
-                v1 = sub_41E200(dword_739E54);
+                v1 = sub_41E200(name_browser_selection);
                 if (v1 != -1) {
-                    dword_739E54 = v1;
+                    name_browser_selection = v1;
                 }
                 sub_41F240();
             }
             break;
         case SDLK_ESCAPE:
-            dword_739E4C = -1;
+            name_browser_result = -1;
             break;
         case SDLK_RETURN:
-            dword_739E4C = 1;
+            name_browser_result = 1;
             break;
         }
     }
@@ -1528,10 +1546,10 @@ void sub_41F240(void)
     dst_rect.width = 80;
     dst_rect.height = 80;
 
-    tig_window_fill(dword_739E48, &dst_rect, tig_color_make(0, 0, 60));
+    tig_window_fill(name_browser_window, &dst_rect, tig_color_make(0, 0, 60));
 
-    if (dword_739E54 != TIG_ART_ID_INVALID) {
-        if (tig_art_frame_data(dword_739E54, &art_frame_data) == TIG_OK) {
+    if (name_browser_selection != TIG_ART_ID_INVALID) {
+        if (tig_art_frame_data(name_browser_selection, &art_frame_data) == TIG_OK) {
             src_rect.x = 0;
             src_rect.y = 0;
             src_rect.width = art_frame_data.width;
@@ -1552,10 +1570,10 @@ void sub_41F240(void)
             dst_rect.y += (80 - dst_rect.height) / 2;
 
             art_blit_spec.flags = TIG_ART_BLT_PALETTE_ORIGINAL;
-            art_blit_spec.art_id = dword_739E54;
+            art_blit_spec.art_id = name_browser_selection;
             art_blit_spec.src_rect = &src_rect;
             art_blit_spec.dst_rect = &dst_rect;
-            tig_window_blit_art(dword_739E48, &art_blit_spec);
+            tig_window_blit_art(name_browser_window, &art_blit_spec);
         }
     }
 }
