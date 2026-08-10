@@ -650,16 +650,16 @@ static ScrollbarId charedit_scheme_scrollbar;
 static tig_window_handle_t charedit_spells_win;
 
 // 0x64C7B4
-static tig_button_handle_t dword_64C7B4;
+static tig_button_handle_t charedit_skills_tab_btn;
 
 // 0x64C7B8
 static int charedit_initial_basic_skill_points[BASIC_SKILL_COUNT];
 
 // 0x64C7E8
-static tig_button_handle_t dword_64C7E8[15];
+static tig_button_handle_t charedit_scheme_row_buttons[15];
 
 // 0x64C824
-static tig_button_handle_t dword_64C824;
+static tig_button_handle_t charedit_prev_follower_btn;
 
 // 0x64C828
 static tig_font_handle_t charedit_morph15_gray_font;
@@ -668,7 +668,7 @@ static tig_font_handle_t charedit_morph15_gray_font;
 static int charedit_initial_tech_skill_points[TECH_SKILL_COUNT];
 
 // 0x64C83C
-static tig_button_handle_t dword_64C83C;
+static tig_button_handle_t charedit_tech_tab_btn;
 
 // 0x64C840
 static tig_font_handle_t charedit_garmond9_white_font;
@@ -692,13 +692,13 @@ static tig_font_handle_t charedit_flare12_white_font;
 static int charedit_player_tech_skills_tbl[8][TECH_SKILL_COUNT];
 
 // 0x64CA54
-static tig_button_handle_t dword_64CA54;
+static tig_button_handle_t charedit_scheme_tab_btn;
 
 // 0x64CA58
 static int charedit_skills_hint;
 
 // 0x64CA5C
-static tig_button_handle_t dword_64CA5C;
+static tig_button_handle_t charedit_next_follower_btn;
 
 // 0x64CA60
 static tig_window_handle_t charedit_scheme_win;
@@ -761,13 +761,13 @@ static tig_font_handle_t charedit_morph15_yellow_font;
 static tig_button_handle_t spell_plus_bid;
 
 // 0x64CDD8
-static tig_button_handle_t dword_64CDD8;
+static tig_button_handle_t charedit_scheme_scroll_up_btn;
 
 // 0x64CDDC
 static int charedit_player_spell_college_levels_tbl[8][COLLEGE_COUNT];
 
 // 0x64CFDC
-static tig_button_handle_t dword_64CFDC;
+static tig_button_handle_t charedit_level_down_btn;
 
 // 0x64CFE0
 static tig_font_handle_t charedit_nick16_white_font;
@@ -791,7 +791,7 @@ static tig_font_handle_t charedit_icons17_white_font;
 static tig_font_handle_t charedit_morph15_white_font;
 
 // 0x64D3AC
-static tig_button_handle_t dword_64D3AC;
+static tig_button_handle_t charedit_scheme_scroll_down_btn;
 
 // 0x64D3B0
 static tig_font_handle_t charedit_nick16_gray_font;
@@ -800,7 +800,7 @@ static tig_font_handle_t charedit_nick16_gray_font;
 static tig_button_handle_t charedit_inc_tech_degree_btn;
 
 // 0x64D3B8
-static tig_button_handle_t dword_64D3B8;
+static tig_button_handle_t charedit_spells_tab_btn;
 
 // 0x64D3BC
 static tig_font_handle_t charedit_morph15_red_font;
@@ -818,7 +818,7 @@ static tig_font_handle_t charedit_pork12_yellow_font;
 static int charedit_top_scheme_index;
 
 // 0x64D428
-static tig_button_handle_t dword_64D428;
+static tig_button_handle_t charedit_level_up_btn;
 
 // 0x64D42C
 static tig_font_handle_t charedit_garmond9_gray_font;
@@ -830,6 +830,15 @@ static tig_button_handle_t spell_minus_bid;
 static int charedit_player_stats_tbl[8][CHAREDIT_STAT_COUNT];
 
 // 0x64D714
+// NOTE: Unused here, and unlike the other dead placeholders in this tree it is
+// *not* dead in the original - it is a difference CE has already made and got
+// right. At 0x55D2C8 `charedit_scheme_win_refresh` copies the scheme name into
+// this buffer, terminates it, and points `charedit_scheme_name_label.str`
+// (0x5C8E40) at the copy. CE assigns `auto_level_scheme_name(...)` to that
+// field directly instead, which is safe because the function returns a pointer
+// into a loaded .mes file, and those outlive the label. So the copy is
+// redundant rather than dropped. Left declared for layout fidelity; naming it
+// would suggest it does something.
 static char byte_64D714[2000];
 
 // 0x64DEE4
@@ -854,13 +863,17 @@ static int64_t charedit_obj;
 static bool charedit_created;
 
 // 0x64E01C
-static int dword_64E01C;
+// Which of the four lower panels is on top: 0 skills, 1 tech, 2 spells,
+// 3 scheme. The four `charedit_*_tab_btn` handlers each raise their window and
+// store their own number here; 3 is special-cased because leaving the scheme
+// tab has to commit it (`sub_55EFE0`/`sub_55F0D0`).
+static int charedit_tab;
 
 // 0x64E020
-static int dword_64E020;
+static int charedit_skill_group;
 
 // 0x64E024
-static int dword_64E024;
+static int charedit_college;
 
 // 0x64E028
 static int charedit_selected_tech;
@@ -1065,7 +1078,7 @@ bool charedit_open(int64_t obj, ChareditMode mode)
 
     button_data.x = 527;
     button_data.y = 11;
-    if (tig_button_create(&button_data, &dword_64C7B4) != TIG_OK) {
+    if (tig_button_create(&button_data, &charedit_skills_tab_btn) != TIG_OK) {
         intgame_big_window_unlock();
         charedit_obj = OBJ_HANDLE_NULL;
         return false;
@@ -1073,7 +1086,7 @@ bool charedit_open(int64_t obj, ChareditMode mode)
 
     button_data.x = 595;
     tig_art_interface_id_create(35, 0, 0, 0, &(button_data.art_id));
-    if (tig_button_create(&button_data, &dword_64C83C) != TIG_OK) {
+    if (tig_button_create(&button_data, &charedit_tech_tab_btn) != TIG_OK) {
         intgame_big_window_unlock();
         charedit_obj = OBJ_HANDLE_NULL;
         return false;
@@ -1081,7 +1094,7 @@ bool charedit_open(int64_t obj, ChareditMode mode)
 
     button_data.x = 663;
     tig_art_interface_id_create(36, 0, 0, 0, &(button_data.art_id));
-    if (tig_button_create(&button_data, &dword_64D3B8) != TIG_OK) {
+    if (tig_button_create(&button_data, &charedit_spells_tab_btn) != TIG_OK) {
         intgame_big_window_unlock();
         charedit_obj = OBJ_HANDLE_NULL;
         return false;
@@ -1090,7 +1103,7 @@ bool charedit_open(int64_t obj, ChareditMode mode)
     button_data.x = 754;
     button_data.y = 21;
     tig_art_interface_id_create(568, 0, 0, 0, &(button_data.art_id));
-    if (tig_button_create(&button_data, &dword_64CA54) != TIG_OK) {
+    if (tig_button_create(&button_data, &charedit_scheme_tab_btn) != TIG_OK) {
         intgame_big_window_unlock();
         charedit_obj = OBJ_HANDLE_NULL;
         return false;
@@ -1104,20 +1117,20 @@ bool charedit_open(int64_t obj, ChareditMode mode)
 
     if (charedit_mode == CHAREDIT_MODE_PASSIVE) {
         for (index = 0; index < 15; index++) {
-            tig_button_hide(dword_64C7E8[index]);
+            tig_button_hide(charedit_scheme_row_buttons[index]);
         }
     } else {
         for (index = 0; index < 15; index++) {
-            tig_button_show(dword_64C7E8[index]);
+            tig_button_show(charedit_scheme_row_buttons[index]);
         }
     }
 
-    dword_64E01C = 0;
-    sub_55BD10(dword_64E020);
+    charedit_tab = 0;
+    sub_55BD10(charedit_skill_group);
 
     if (charedit_obj != OBJ_HANDLE_NULL) {
-        dword_64D428 = TIG_BUTTON_HANDLE_INVALID;
-        dword_64CFDC = TIG_BUTTON_HANDLE_INVALID;
+        charedit_level_up_btn = TIG_BUTTON_HANDLE_INVALID;
+        charedit_level_down_btn = TIG_BUTTON_HANDLE_INVALID;
     } else {
         button_data.flags = 1;
         button_data.window_handle = charedit_window_handle;
@@ -1129,11 +1142,11 @@ bool charedit_open(int64_t obj, ChareditMode mode)
         tig_art_interface_id_create(24, 0, 0, 0, &(button_data.art_id));
         button_data.x = 82;
         button_data.y = 196;
-        tig_button_create(&button_data, &dword_64D428);
+        tig_button_create(&button_data, &charedit_level_up_btn);
 
         button_data.y += 12;
         tig_art_interface_id_create(23, 0, 0, 0, &(button_data.art_id));
-        tig_button_create(&button_data, &dword_64CFDC);
+        tig_button_create(&button_data, &charedit_level_down_btn);
     }
 
     charedit_refresh_internal();
@@ -1192,8 +1205,8 @@ bool charedit_open(int64_t obj, ChareditMode mode)
         tig_button_create(&button_data, &charedit_hint_areas[index].button_handle);
     }
 
-    dword_64C824 = TIG_BUTTON_HANDLE_INVALID;
-    dword_64CA5C = TIG_BUTTON_HANDLE_INVALID;
+    charedit_prev_follower_btn = TIG_BUTTON_HANDLE_INVALID;
+    charedit_next_follower_btn = TIG_BUTTON_HANDLE_INVALID;
 
     // UAP (0x559FEF): the prev/next-follower arrows move from the read-only
     // mode to the editable one, because UAP's follower context menu now opens
@@ -1209,12 +1222,12 @@ bool charedit_open(int64_t obj, ChareditMode mode)
         tig_art_interface_id_create(827, 0, 0, 0, &(button_data.art_id));
         button_data.x = 126;
         button_data.y = 44;
-        tig_button_create(&button_data, &dword_64C824);
+        tig_button_create(&button_data, &charedit_prev_follower_btn);
 
         tig_art_interface_id_create(828, 0, 0, 0, &(button_data.art_id));
         button_data.x = 461;
         button_data.y = 44;
-        tig_button_create(&button_data, &dword_64CA5C);
+        tig_button_create(&button_data, &charedit_next_follower_btn);
     }
 
     charedit_hint = -1;
@@ -1392,22 +1405,22 @@ bool charedit_window_message_filter(TigMessage* msg)
     case TIG_MESSAGE_BUTTON:
         switch (msg->data.button.state) {
         case TIG_BUTTON_STATE_MOUSE_INSIDE:
-            if (msg->data.button.button_handle == dword_64C7B4) {
+            if (msg->data.button.button_handle == charedit_skills_tab_btn) {
                 charedit_hint = 132;
                 return true;
             }
 
-            if (msg->data.button.button_handle == dword_64C83C) {
+            if (msg->data.button.button_handle == charedit_tech_tab_btn) {
                 charedit_hint = 133;
                 return true;
             }
 
-            if (msg->data.button.button_handle == dword_64D3B8) {
+            if (msg->data.button.button_handle == charedit_spells_tab_btn) {
                 charedit_hint = 134;
                 return true;
             }
 
-            if (msg->data.button.button_handle == dword_64CA54) {
+            if (msg->data.button.button_handle == charedit_scheme_tab_btn) {
                 charedit_hint = 140;
                 return true;
             }
@@ -1433,10 +1446,10 @@ bool charedit_window_message_filter(TigMessage* msg)
 
             return false;
         case TIG_BUTTON_STATE_MOUSE_OUTSIDE:
-            if (msg->data.button.button_handle == dword_64C7B4
-                || msg->data.button.button_handle == dword_64C83C
-                || msg->data.button.button_handle == dword_64D3B8
-                || msg->data.button.button_handle == dword_64CA54) {
+            if (msg->data.button.button_handle == charedit_skills_tab_btn
+                || msg->data.button.button_handle == charedit_tech_tab_btn
+                || msg->data.button.button_handle == charedit_spells_tab_btn
+                || msg->data.button.button_handle == charedit_scheme_tab_btn) {
                 charedit_hint = -1;
                 intgame_message_window_clear();
                 return true;
@@ -1461,12 +1474,12 @@ bool charedit_window_message_filter(TigMessage* msg)
 
             return false;
         case TIG_BUTTON_STATE_RELEASED:
-            if (msg->data.button.button_handle == dword_64C824) {
+            if (msg->data.button.button_handle == charedit_prev_follower_btn) {
                 charedit_cycle_obj(false);
                 return true;
             }
 
-            if (msg->data.button.button_handle == dword_64CA5C) {
+            if (msg->data.button.button_handle == charedit_next_follower_btn) {
                 charedit_cycle_obj(true);
                 return true;
             }
@@ -1576,47 +1589,47 @@ bool charedit_window_message_filter(TigMessage* msg)
                 }
             }
 
-            if (msg->data.button.button_handle == dword_64C7B4) {
-                if (dword_64E01C == 3) {
+            if (msg->data.button.button_handle == charedit_skills_tab_btn) {
+                if (charedit_tab == 3) {
                     sub_55F0D0();
                 }
                 sub_51E850(charedit_skills_win);
-                dword_64E01C = 0;
+                charedit_tab = 0;
                 charedit_refresh_internal();
                 return true;
             }
 
-            if (msg->data.button.button_handle == dword_64C83C) {
-                if (dword_64E01C == 3) {
+            if (msg->data.button.button_handle == charedit_tech_tab_btn) {
+                if (charedit_tab == 3) {
                     sub_55F0D0();
                 }
                 sub_51E850(charedit_tech_win);
-                dword_64E01C = 1;
+                charedit_tab = 1;
                 charedit_refresh_internal();
                 return true;
             }
 
-            if (msg->data.button.button_handle == dword_64D3B8) {
-                if (dword_64E01C == 3) {
+            if (msg->data.button.button_handle == charedit_spells_tab_btn) {
+                if (charedit_tab == 3) {
                     sub_55F0D0();
                 }
                 sub_51E850(charedit_spells_win);
-                dword_64E01C = 2;
+                charedit_tab = 2;
                 charedit_refresh_internal();
                 return true;
             }
 
-            if (msg->data.button.button_handle == dword_64CA54) {
+            if (msg->data.button.button_handle == charedit_scheme_tab_btn) {
                 sub_51E850(charedit_scheme_win);
-                if (dword_64E01C != 3) {
+                if (charedit_tab != 3) {
                     sub_55EFE0();
                 }
-                dword_64E01C = 3;
+                charedit_tab = 3;
                 charedit_refresh_internal();
                 return true;
             }
 
-            if (msg->data.button.button_handle == dword_64D428) {
+            if (msg->data.button.button_handle == charedit_level_up_btn) {
                 value = stat_base_get(charedit_obj, STAT_LEVEL) + 1;
                 if (stat_base_set(charedit_obj, STAT_LEVEL, value) == value) {
                     unspent_points = stat_base_get(charedit_obj, STAT_UNSPENT_POINTS);
@@ -1626,7 +1639,7 @@ bool charedit_window_message_filter(TigMessage* msg)
                 return true;
             }
 
-            if (msg->data.button.button_handle == dword_64CFDC) {
+            if (msg->data.button.button_handle == charedit_level_down_btn) {
                 unspent_points = stat_base_get(charedit_obj, STAT_UNSPENT_POINTS);
                 if (unspent_points >= 1) {
                     value = stat_base_get(charedit_obj, STAT_LEVEL) - 1;
@@ -1749,7 +1762,7 @@ void charedit_refresh_internal(void)
 {
     charedit_refresh_stats();
     charedit_refresh_secondary_stats();
-    switch (dword_64E01C) {
+    switch (charedit_tab) {
     case 0:
         charedit_refresh_skills_win();
         break;
@@ -2161,7 +2174,7 @@ bool charedit_create_skills_win(void)
         button_handles[index] = charedit_skill_group_buttons[index].button_handle;
     }
 
-    tig_button_radio_group_create(CHAREDIT_SKILL_GROUP_COUNT, button_handles, dword_64E020);
+    tig_button_radio_group_create(CHAREDIT_SKILL_GROUP_COUNT, button_handles, charedit_skill_group);
 
     button_data.flags = TIG_BUTTON_MOMENTARY;
     button_data.mouse_down_snd_id = -1;
@@ -2198,12 +2211,12 @@ void sub_55BD10(int group)
         tig_button_hide(charedit_skills_minus_buttons[index].button_handle);
     }
 
-    dword_64E020 = group;
+    charedit_skill_group = group;
 
     if (charedit_mode != CHAREDIT_MODE_PASSIVE) {
         for (index = 0; index < 4; index++) {
-            tig_button_show(charedit_skills_plus_buttons[4 * dword_64E020 + index].button_handle);
-            tig_button_show(charedit_skills_minus_buttons[4 * dword_64E020 + index].button_handle);
+            tig_button_show(charedit_skills_plus_buttons[4 * charedit_skill_group + index].button_handle);
+            tig_button_show(charedit_skills_minus_buttons[4 * charedit_skill_group + index].button_handle);
         }
     }
 
@@ -2224,15 +2237,15 @@ void sub_55BD10(int group)
     art_blit_info.dst_rect = &rect;
     tig_window_blit_art(charedit_skills_win, &art_blit_info);
 
-    charedit_draw_text_rows(charedit_skills_win, charedit_morph15_white_font, &charedit_skill_labels[4 * dword_64E020], 0, -1, 4);
+    charedit_draw_text_rows(charedit_skills_win, charedit_morph15_white_font, &charedit_skill_labels[4 * charedit_skill_group], 0, -1, 4);
 
     for (index = 0; index < 4; index++) {
-        if (dword_64E020 < 3) {
+        if (charedit_skill_group < 3) {
             training = basic_skill_training_get(charedit_obj,
-                charedit_skill_labels[4 * dword_64E020 + index].value);
+                charedit_skill_labels[4 * charedit_skill_group + index].value);
         } else {
             training = tech_skill_training_get(charedit_obj,
-                charedit_skill_labels[4 * dword_64E020 + index].value);
+                charedit_skill_labels[4 * charedit_skill_group + index].value);
         }
 
         v2[index] = charedit_training_names[training];
@@ -2249,7 +2262,7 @@ void sub_55BD10(int group)
         v2[index] = v1[index];
     }
 
-    charedit_draw_text_rows(charedit_skills_win, charedit_morph15_white_font, &charedit_skill_labels[4 * dword_64E020], v2, -1, 4);
+    charedit_draw_text_rows(charedit_skills_win, charedit_morph15_white_font, &charedit_skill_labels[4 * charedit_skill_group], v2, -1, 4);
     charedit_refresh_skills_win();
 }
 
@@ -2286,16 +2299,16 @@ void charedit_refresh_skills_win(void)
 
     index = 0;
     for (y = 87; y < 351; y += 66) {
-        if (dword_64E020 < 3) {
+        if (charedit_skill_group < 3) {
             skill_level = basic_skill_level(charedit_obj,
-                charedit_skill_labels[dword_64E020 * 4 + index].value);
+                charedit_skill_labels[charedit_skill_group * 4 + index].value);
             basic_skill_cost_inc(charedit_obj,
-                charedit_skill_labels[dword_64E020 * 4 + index].value);
+                charedit_skill_labels[charedit_skill_group * 4 + index].value);
         } else {
             skill_level = tech_skill_level(charedit_obj,
-                charedit_skill_labels[dword_64E020 * 4 + index].value);
+                charedit_skill_labels[charedit_skill_group * 4 + index].value);
             tech_skill_cost_inc(charedit_obj,
-                charedit_skill_labels[dword_64E020 * 4 + index].value);
+                charedit_skill_labels[charedit_skill_group * 4 + index].value);
         }
 
         src_rect.x = 59;
@@ -2639,7 +2652,7 @@ bool charedit_create_spells_win(void)
         }
     }
 
-    tig_button_radio_group_create(COLLEGE_COUNT, button_handles, dword_64E024);
+    tig_button_radio_group_create(COLLEGE_COUNT, button_handles, charedit_college);
 
     spell_plus_bid = TIG_BUTTON_HANDLE_INVALID;
     spell_minus_bid = TIG_BUTTON_HANDLE_INVALID;
@@ -2660,7 +2673,7 @@ void sub_55CA70(int a1, int a2)
     TigPaletteModifyInfo palette_modify_info;
     TigPalette* tmp_palette;
 
-    art_num = spell_icon(a1 + 5 * dword_64E024);
+    art_num = spell_icon(a1 + 5 * charedit_college);
     if (art_num != -1) {
         tig_art_interface_id_create(art_num, 0, 0, 0, &art_id);
         tig_art_frame_data(art_id, &art_frame_data);
@@ -2753,7 +2766,7 @@ void charedit_refresh_spells_win(void)
 
     tig_window_blit_art(charedit_spells_win, &art_blit_info);
 
-    cnt = spell_college_level_get(charedit_obj, dword_64E024);
+    cnt = spell_college_level_get(charedit_obj, charedit_college);
 
     // TODO: Refactor v1.
     v1 = cnt;
@@ -2766,7 +2779,7 @@ void charedit_refresh_spells_win(void)
     }
 
     for (index = 0; index < 5; index++) {
-        spells[index] = index + 5 * dword_64E024;
+        spells[index] = index + 5 * charedit_college;
         charedit_spell_title_labels[index].str = spell_name(spells[index]);
     }
 
@@ -2834,7 +2847,7 @@ void charedit_refresh_spells_win(void)
         && charedit_mode != CHAREDIT_MODE_PASSIVE
         && (charedit_mode == CHAREDIT_MODE_CREATE
             || charedit_mode == CHAREDIT_MODE_3
-            || charedit_initial_college_levels[dword_64E024] < cnt)) {
+            || charedit_initial_college_levels[charedit_college] < cnt)) {
         tig_art_interface_id_create(648, 0, 0, 0, &(button_data.art_id));
         button_data.x = charedit_spell_row_x[cnt - 1] - 503;
         button_data.y = charedit_spell_row_y[cnt - 1] - 104;
@@ -2929,7 +2942,7 @@ bool charedit_scheme_win_create(void)
         button_data.y = charedit_scheme_list_labels[index].y - 104;
         button_data.width = 160;
         button_data.height = 16;
-        tig_button_create(&button_data, &(dword_64C7E8[index]));
+        tig_button_create(&button_data, &(charedit_scheme_row_buttons[index]));
     }
 
     return true;
@@ -2999,7 +3012,7 @@ bool charedit_skills_win_message_filter(TigMessage* msg)
 
             for (index = 0; index < CHAREDIT_SKILLS_PER_GROUP; index++) {
                 if (msg->data.button.button_handle == charedit_skills_hover_areas[index].button_handle) {
-                    charedit_skills_hint = 4 * dword_64E020 + 1000 + index;
+                    charedit_skills_hint = 4 * charedit_skill_group + 1000 + index;
                     return true;
                 }
             }
@@ -3288,18 +3301,18 @@ bool charedit_spells_win_message_filter(TigMessage* msg)
 
             for (index = 0; index < 5; index++) {
                 if (msg->data.button.button_handle == charedit_spell_hover_areas[index].button_handle) {
-                    charedit_spells_hint = 2000 + 5 * dword_64E024 + index;
+                    charedit_spells_hint = 2000 + 5 * charedit_college + index;
                     return true;
                 }
             }
 
             if (msg->data.button.button_handle == spell_plus_bid) {
-                charedit_spells_hint = spell_college_level_get(charedit_obj, dword_64E024) + 5 * (dword_64E024 + 400);
+                charedit_spells_hint = spell_college_level_get(charedit_obj, charedit_college) + 5 * (charedit_college + 400);
                 return true;
             }
 
             if (msg->data.button.button_handle == spell_minus_bid) {
-                charedit_spells_hint = spell_college_level_get(charedit_obj, dword_64E024) - 1 + 5 * (dword_64E024 + 400);
+                charedit_spells_hint = spell_college_level_get(charedit_obj, charedit_college) - 1 + 5 * (charedit_college + 400);
                 return true;
             }
 
@@ -3341,8 +3354,8 @@ bool charedit_spells_win_message_filter(TigMessage* msg)
         if (msg->data.button.state == TIG_BUTTON_STATE_PRESSED) {
             for (index = 0; index < COLLEGE_COUNT; index++) {
                 if (msg->data.button.button_handle == charedit_college_buttons[index].button_handle) {
-                    if (dword_64E024 != index) {
-                        dword_64E024 = index;
+                    if (charedit_college != index) {
+                        charedit_college = index;
                         charedit_refresh_spells_win();
                     }
 
@@ -3351,18 +3364,18 @@ bool charedit_spells_win_message_filter(TigMessage* msg)
             }
 
             if (msg->data.button.button_handle == spell_plus_bid) {
-                v1 = spell_college_level_get(charedit_obj, dword_64E024);
-                spell_ui_add(charedit_obj, 5 * dword_64E024 + v1);
+                v1 = spell_college_level_get(charedit_obj, charedit_college);
+                spell_ui_add(charedit_obj, 5 * charedit_college + v1);
                 return true;
             }
 
             if (msg->data.button.button_handle == spell_minus_bid) {
-                v1 = spell_college_level_get(charedit_obj, dword_64E024);
-                if (v1 == charedit_initial_college_levels[dword_64E024]) {
+                v1 = spell_college_level_get(charedit_obj, charedit_college);
+                if (v1 == charedit_initial_college_levels[charedit_college]) {
                     charedit_error_msg.str = charedit_errors[CHAREDIT_ERR_SPELL_AT_ACCEPTED_LEVEL];
                     intgame_message_window_display_msg(&charedit_error_msg);
                 } else {
-                    spell_ui_remove(charedit_obj, 5 * dword_64E024 + v1 - 1);
+                    spell_ui_remove(charedit_obj, 5 * charedit_college + v1 - 1);
                 }
                 return true;
             }
@@ -3384,7 +3397,7 @@ bool charedit_scheme_win_message_filter(TigMessage* msg)
     if (msg->type == TIG_MESSAGE_BUTTON) {
         if (msg->data.button.state == TIG_BUTTON_STATE_MOUSE_INSIDE) {
             for (index = 0; index < 15; index++) {
-                if (msg->data.button.button_handle == dword_64C7E8[index]) {
+                if (msg->data.button.button_handle == charedit_scheme_row_buttons[index]) {
                     if (index < charedit_num_schemes) {
                         charedit_draw_text_rows(charedit_scheme_win, charedit_flare12_blue_font, &charedit_scheme_list_labels[index], NULL, -1, 1);
                     }
@@ -3398,7 +3411,7 @@ bool charedit_scheme_win_message_filter(TigMessage* msg)
 
         if (msg->data.button.state == TIG_BUTTON_STATE_MOUSE_OUTSIDE) {
             for (index = 0; index < 15; index++) {
-                if (msg->data.button.button_handle == dword_64C7E8[index]) {
+                if (msg->data.button.button_handle == charedit_scheme_row_buttons[index]) {
                     if (index < charedit_num_schemes) {
                         charedit_draw_text_rows(charedit_scheme_win, charedit_flare12_white_font, &charedit_scheme_list_labels[index], NULL, -1, 1);
                     }
@@ -3412,7 +3425,7 @@ bool charedit_scheme_win_message_filter(TigMessage* msg)
 
         if (msg->data.button.state == TIG_BUTTON_STATE_PRESSED) {
             for (index = 0; index < 15; index++) {
-                if (msg->data.button.button_handle == dword_64C7E8[index]) {
+                if (msg->data.button.button_handle == charedit_scheme_row_buttons[index]) {
                     if (index < charedit_num_schemes) {
                         auto_level_scheme_set(charedit_obj, charedit_scheme_ids[index + charedit_top_scheme_index]);
                         charedit_scheme_win_refresh();
@@ -3422,7 +3435,7 @@ bool charedit_scheme_win_message_filter(TigMessage* msg)
                 }
             }
 
-            if (msg->data.button.button_handle == dword_64CDD8) {
+            if (msg->data.button.button_handle == charedit_scheme_scroll_up_btn) {
                 if (charedit_top_scheme_index > 0) {
                     charedit_top_scheme_index--;
                     charedit_scheme_win_refresh();
@@ -3431,7 +3444,7 @@ bool charedit_scheme_win_message_filter(TigMessage* msg)
                 return true;
             }
 
-            if (msg->data.button.button_handle == dword_64D3AC) {
+            if (msg->data.button.button_handle == charedit_scheme_scroll_down_btn) {
                 if (charedit_top_scheme_index < charedit_num_schemes - 15) {
                     charedit_top_scheme_index++;
                     charedit_scheme_win_refresh();
@@ -3834,7 +3847,7 @@ void charedit_scheme_scrollbar_value_changed(int value)
 {
     if (charedit_scheme_scrollbar_initialized) {
         charedit_top_scheme_index = value;
-        if (dword_64E01C == 3) {
+        if (charedit_tab == 3) {
             charedit_scheme_win_refresh();
         }
     }
