@@ -13,6 +13,14 @@
 #include "tig/timer.h"
 #include "tig/video.h"
 
+// The art type occupies the top four bits, so every `TIG_ART_TYPE_*` constant
+// from 8 upward (MISC, LIGHT, ROOF, FACADE, MONSTER, UNIQUE_NPC, EYE_CANDY)
+// shifts into bit 31. Enum constants are `int`, and `8 << 28` overflows a
+// signed int - undefined behaviour, which UBSan flags at the first art id the
+// game builds. `tig_art_id_t` is `unsigned int`, so the *result* was always the
+// intended bit pattern; the cast at each site makes the shift itself defined
+// without changing a single bit. All fifteen id_create sites carry it, so they
+// stay uniform rather than only the seven that strictly need it.
 #define ART_ID_TYPE_SHIFT 28
 #define ART_ID_PALETTE_SHIFT 4
 #define ART_ID_ROTATION_SHIFT 11
@@ -447,7 +455,7 @@ int tig_art_misc_id_create(unsigned int num, unsigned int palette, tig_art_id_t*
         return TIG_ERR_INVALID_PARAM;
     }
 
-    *art_id_ptr = (TIG_ART_TYPE_MISC << ART_ID_TYPE_SHIFT)
+    *art_id_ptr = ((unsigned int)TIG_ART_TYPE_MISC << ART_ID_TYPE_SHIFT)
         | ((num & (ART_ID_MAX_NUM - 1)) << ART_ID_NUM_SHIFT)
         | ((palette & (MAX_PALETTES - 1)) << ART_ID_PALETTE_SHIFT);
 
@@ -1482,7 +1490,7 @@ int tig_art_tile_id_create(unsigned int num1, unsigned int num2, unsigned int a3
         return TIG_ERR_INVALID_PARAM;
     }
 
-    *art_id_ptr = (TIG_ART_TYPE_TILE << ART_ID_TYPE_SHIFT)
+    *art_id_ptr = ((unsigned int)TIG_ART_TYPE_TILE << ART_ID_TYPE_SHIFT)
         | ((num1 & (TILE_ID_MAX_NUM - 1)) << TILE_ID_NUM1_SHIFT)
         | ((num2 & (TILE_ID_MAX_NUM - 1)) << TILE_ID_NUM2_SHIFT)
         | ((type & (TILE_ID_MAX_TYPE - 1)) << TILE_ID_TYPE_SHIFT)
@@ -1675,7 +1683,7 @@ int tig_art_wall_id_create(unsigned int num, int p_piece, int variation, int rot
         return TIG_ERR_INVALID_PARAM;
     }
 
-    *art_id_ptr = (TIG_ART_TYPE_WALL << ART_ID_TYPE_SHIFT)
+    *art_id_ptr = ((unsigned int)TIG_ART_TYPE_WALL << ART_ID_TYPE_SHIFT)
         | ((num & (WALL_ID_MAX_NUM - 1)) << WALL_ID_NUM_SHIFT)
         | ((p_piece & (WALL_ID_MAX_P_PIECE - 1)) << WALL_ID_P_PIECE_SHIFT)
         | ((rotation & (MAX_ROTATIONS - 1)) << ART_ID_ROTATION_SHIFT)
@@ -1795,7 +1803,7 @@ int tig_art_critter_id_create(unsigned int gender, int body_type, int armor, uns
         return TIG_ERR_INVALID_PARAM;
     }
 
-    *art_id_ptr = (TIG_ART_TYPE_CRITTER << ART_ID_TYPE_SHIFT)
+    *art_id_ptr = ((unsigned int)TIG_ART_TYPE_CRITTER << ART_ID_TYPE_SHIFT)
         | ((gender & 1) << CRITTER_ID_GENDER_SHIFT)
         | ((body_type & 7) << CRITTER_ID_BODY_TYPE_SHIFT)
         | ((armor & 0xF) << CRITTER_ID_ARMOR_SHIFT)
@@ -1823,7 +1831,7 @@ int tig_art_monster_id_create(int specie, int armor, unsigned int shield, unsign
         return TIG_ERR_INVALID_PARAM;
     }
 
-    *art_id_ptr = (TIG_ART_TYPE_MONSTER << ART_ID_TYPE_SHIFT)
+    *art_id_ptr = ((unsigned int)TIG_ART_TYPE_MONSTER << ART_ID_TYPE_SHIFT)
         | ((specie & (TIG_ART_MONSTER_SPECIE_COUNT - 1)) << MONSTER_ID_SPECIE_SHIFT)
         | ((armor & 7) << MONSTER_ID_ARMOR_SHIFT)
         | ((shield & 1) << CRITTER_ID_SHIELD_SHIFT)
@@ -1849,7 +1857,7 @@ int tig_art_unique_npc_id_create(int num, unsigned int shield, unsigned int fram
         return TIG_ERR_INVALID_PARAM;
     }
 
-    *art_id_ptr = (TIG_ART_TYPE_UNIQUE_NPC << ART_ID_TYPE_SHIFT)
+    *art_id_ptr = ((unsigned int)TIG_ART_TYPE_UNIQUE_NPC << ART_ID_TYPE_SHIFT)
         | ((num & (UNIQUE_NPC_ID_MAX_NUM - 1)) << UNIQUE_NPC_ID_NUM_SHIFT)
         | ((shield & 1) << CRITTER_ID_SHIELD_SHIFT)
         | ((frame & (ART_ID_MAX_FRAME - 1)) << ART_ID_FRAME_SHIFT)
@@ -2100,7 +2108,7 @@ int tig_art_portal_id_create(unsigned int num, int type, int a3, unsigned int fr
         return TIG_ERR_INVALID_PARAM;
     }
 
-    *art_id_ptr = (TIG_ART_TYPE_PORTAL << ART_ID_TYPE_SHIFT)
+    *art_id_ptr = ((unsigned int)TIG_ART_TYPE_PORTAL << ART_ID_TYPE_SHIFT)
         | ((num & (ART_ID_MAX_NUM - 1)) << ART_ID_NUM_SHIFT)
         | ((frame & (ART_ID_MAX_FRAME - 1)) << ART_ID_FRAME_SHIFT)
         | ((rotation & (MAX_ROTATIONS - 1)) << ART_ID_ROTATION_SHIFT)
@@ -2132,7 +2140,7 @@ int tig_art_scenery_id_create(unsigned int num, int type, unsigned int frame, in
         return TIG_ERR_INVALID_PARAM;
     }
 
-    *art_id_ptr = (TIG_ART_TYPE_SCENERY << ART_ID_TYPE_SHIFT)
+    *art_id_ptr = ((unsigned int)TIG_ART_TYPE_SCENERY << ART_ID_TYPE_SHIFT)
         | ((num & (ART_ID_MAX_NUM - 1)) << ART_ID_NUM_SHIFT)
         | ((frame & (ART_ID_MAX_FRAME - 1)) << ART_ID_FRAME_SHIFT)
         | ((rotation & (MAX_ROTATIONS - 1)) << ART_ID_ROTATION_SHIFT)
@@ -2161,7 +2169,7 @@ int tig_art_interface_id_create(unsigned int num, unsigned int frame, unsigned c
         return TIG_ERR_INVALID_PARAM;
     }
 
-    *art_id_ptr = (TIG_ART_TYPE_INTERFACE << ART_ID_TYPE_SHIFT)
+    *art_id_ptr = ((unsigned int)TIG_ART_TYPE_INTERFACE << ART_ID_TYPE_SHIFT)
         | ((num & (INTERFACE_ID_MAX_NUM - 1)) << INTERFACE_ID_NUM_SHIFT)
         | ((frame & (INTERFACE_ID_MAX_FRAME - 1)) << INTERFACE_ID_FRAME_SHIFT)
         | ((a3 & 1) << 7)
@@ -2195,7 +2203,7 @@ int tig_art_item_id_create(int num, int disposition, int damaged, int destroyed,
         return TIG_ERR_INVALID_PARAM;
     }
 
-    *art_id_ptr = (TIG_ART_TYPE_ITEM << ART_ID_TYPE_SHIFT)
+    *art_id_ptr = ((unsigned int)TIG_ART_TYPE_ITEM << ART_ID_TYPE_SHIFT)
         | ((num & 0x7FF) << 17)
         | ((armor_coverage & (ITEM_ID_MAX_ARMOR_COVERAGE - 1)) << ITEM_ID_ARMOR_COVERAGE_SHIFT)
         | ((disposition & (ITEM_ID_MAX_DISPOSITION - 1)) << ITEM_ID_DISPOSITION_SHIFT)
@@ -2320,7 +2328,7 @@ int tig_art_container_id_create(unsigned int num, int type, unsigned int frame, 
         return TIG_ERR_INVALID_PARAM;
     }
 
-    *art_id_ptr = (TIG_ART_TYPE_CONTAINER << ART_ID_TYPE_SHIFT)
+    *art_id_ptr = ((unsigned int)TIG_ART_TYPE_CONTAINER << ART_ID_TYPE_SHIFT)
         | ((num & (ART_ID_MAX_NUM - 1)) << ART_ID_NUM_SHIFT)
         | ((frame & (ART_ID_MAX_FRAME - 1)) << ART_ID_FRAME_SHIFT)
         | ((rotation & (MAX_ROTATIONS - 1)) << ART_ID_ROTATION_SHIFT)
@@ -2349,7 +2357,7 @@ int tig_art_light_id_create(unsigned int num, unsigned int frame, unsigned int r
         return TIG_ERR_INVALID_PARAM;
     }
 
-    *art_id_ptr = (TIG_ART_TYPE_LIGHT << ART_ID_TYPE_SHIFT)
+    *art_id_ptr = ((unsigned int)TIG_ART_TYPE_LIGHT << ART_ID_TYPE_SHIFT)
         | ((num & (ART_ID_MAX_NUM - 1)) << ART_ID_NUM_SHIFT)
         | ((frame & (LIGHT_ID_MAX_FRAME - 1)) << LIGHT_ID_FRAME_SHIFT)
         | ((rotation & (MAX_ROTATIONS - 1)) << LIGHT_ID_ROTATION_SHIFT)
@@ -2419,7 +2427,7 @@ int tig_art_roof_id_create(unsigned int num, int piece, unsigned int fill, unsig
         palette = 0;
     }
 
-    *art_id_ptr = (TIG_ART_TYPE_ROOF << ART_ID_TYPE_SHIFT)
+    *art_id_ptr = ((unsigned int)TIG_ART_TYPE_ROOF << ART_ID_TYPE_SHIFT)
         | ((num & (ART_ID_MAX_NUM - 1)) << ART_ID_NUM_SHIFT)
         | ((piece & 0x1F) << 14)
         | ((fill & 1) << ROOF_FILL_SHIFT)
@@ -2538,7 +2546,7 @@ int tig_art_facade_id_create(unsigned int num, unsigned int tile_num, unsigned i
         return TIG_ERR_INVALID_PARAM;
     }
 
-    *art_id_ptr = (TIG_ART_TYPE_FACADE << ART_ID_TYPE_SHIFT)
+    *art_id_ptr = ((unsigned int)TIG_ART_TYPE_FACADE << ART_ID_TYPE_SHIFT)
         | ((num < 256 ? 0 : 1) << FACADE_ID_NUM_HIGH_SHIFT)
         | ((flippable & 1) << FACADE_ID_FLIPPABLE_SHIFT)
         | ((type & (TILE_ID_MAX_TYPE - 1)) << FACADE_ID_TYPE_SHIFT)
@@ -2601,7 +2609,7 @@ int tig_art_eye_candy_id_create(unsigned int num, unsigned int frame, int rotati
         return TIG_ERR_INVALID_PARAM;
     }
 
-    *art_id = (TIG_ART_TYPE_EYE_CANDY << ART_ID_TYPE_SHIFT)
+    *art_id = ((unsigned int)TIG_ART_TYPE_EYE_CANDY << ART_ID_TYPE_SHIFT)
         | ((num & (ART_ID_MAX_NUM - 1)) << ART_ID_NUM_SHIFT)
         | ((frame & (EYE_CANDY_ID_MAX_FRAME - 1)) << EYE_CANDY_ID_FRAME_SHIFT)
         | ((rotation & (MAX_ROTATIONS - 1)) << EYE_CANDY_ID_ROTATION_SHIFT)

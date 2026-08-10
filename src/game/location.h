@@ -51,7 +51,14 @@ static inline int64_t location_get_y(int64_t location)
 
 static inline int64_t location_make(int64_t x, int64_t y)
 {
-    return x | (y << 32);
+    // The shift goes through `uint64_t` because y occupies the top 32 bits: a
+    // y of 0x80000000 or above lands in bit 63, and shifting into the sign bit
+    // of a signed type is undefined. In the original both halves are plain
+    // 32-bit unsigned fields, so this is an artifact of CE widening them to
+    // `int64_t` rather than anything Troika did. The bit pattern is unchanged -
+    // this only makes the shift defined, and UBSan stops aborting on the first
+    // location the game builds.
+    return x | (int64_t)((uint64_t)y << 32);
 }
 
 #endif /* ARCANUM_GAME_LOCATION_H_ */

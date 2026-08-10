@@ -64,6 +64,20 @@
             }
         },
         {
+            "name": "linux-x64-asan",
+            "displayName": "Linux x64 Debug + ASan/UBSan",
+            "description": "Debug build with AddressSanitizer and UndefinedBehaviorSanitizer. Kept separate from linux-x64-debug on purpose: the smoke gate's baseline (exit 137, four stock InvenSource.mes errors) is calibrated against the plain debug build, and sanitizers change timing, memory layout and exit status.",
+            "inherits": [
+                "linux-base"
+            ],
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Debug",
+                "ARCANUM_BUILD_TESTS": "ON",
+                "CMAKE_C_FLAGS": "-fsanitize=address,undefined -fno-omit-frame-pointer -fno-sanitize-recover=undefined",
+                "CMAKE_EXE_LINKER_FLAGS": "-fsanitize=address,undefined"
+            }
+        },
+        {
             "name": "linux-x64-release",
             "inherits": [
                 "linux-base"
@@ -171,6 +185,10 @@
         {
             "name": "linux-x64-debug",
             "configurePreset": "linux-x64-debug"
+        },
+        {
+            "name": "linux-x64-asan",
+            "configurePreset": "linux-x64-asan"
         },
         {
             "name": "linux-x64-release",
