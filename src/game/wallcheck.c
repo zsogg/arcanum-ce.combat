@@ -11,11 +11,11 @@ typedef struct S5A3EA8 {
     /* 0008 */ int offset_y;
 } S5A3EA8;
 
-typedef struct S5E0A10 {
+typedef struct WallcheckFadedRoof {
     /* 0000 */ int64_t field_0;
     /* 0008 */ int field_8;
     /* 000C */ int field_C;
-} S5E0A10;
+} WallcheckFadedRoof;
 
 typedef struct S5E0E20 {
     /* 0000 */ unsigned int flags;
@@ -631,28 +631,37 @@ static int wallcheck_step_dy[8] = {
 };
 
 // 0x5E0A00
-static IsoInvalidateRectFunc* dword_5E0A00;
+static IsoInvalidateRectFunc* wallcheck_invalidate_rect;
 
 // 0x5E0A08
-static int64_t qword_5E0A08;
+static int64_t wallcheck_pending_loc;
 
 // 0x5E0A10
-static S5E0A10 stru_5E0A10[64];
+// Roofs currently faded out, kept sorted by `field_0` (the roof object) so
+// `sub_4387C0` can binary-search it. `field_8` is a reference count, not a
+// flag: `sub_438720` calls `roof_fade_on` only on the transition to 1, because
+// several critters can stand under the same roof and it must stay faded until
+// the last of them leaves.
+static WallcheckFadedRoof wallcheck_faded_roofs[64];
 
 // 0x5E0E10
-static int dword_5E0E10;
+// A one-entry memo for the wall scan, paired with `wallcheck_cached_loc`: the
+// scan bails early when it is asked about the same location again and the
+// direction bits it wants are already in the set it found last time. Both must
+// be updated together or the memo answers for the wrong tile.
+static int wallcheck_cached_direction_bits;
 
 // 0x5E0E18
-static int64_t qword_5E0E18;
+static int64_t wallcheck_cached_loc;
 
 // 0x5E0E20
 static S5E0E20 wallcheck_tracked_walls[256];
 
 // 0x5E2E24
-static int dword_5E2E24;
+static int wallcheck_tracked_walls_count;
 
 // 0x5E2E28
-static int dword_5E2E28;
+static int wallcheck_faded_roofs_count;
 
 // 0x5DE6E8
 static bool wallcheck_dirty;
@@ -663,9 +672,9 @@ static ObjectList wallcheck_scan_walls[34][3];
 // 0x437D90
 bool wallcheck_init(GameInitInfo* init_info)
 {
-    dword_5E2E24 = 0;
-    dword_5E2E28 = 0;
-    dword_5E0A00 = init_info->invalidate_rect_func;
+    wallcheck_tracked_walls_count = 0;
+    wallcheck_faded_roofs_count = 0;
+    wallcheck_invalidate_rect = init_info->invalidate_rect_func;
 
     return true;
 }
@@ -675,8 +684,8 @@ void wallcheck_reset(void)
 {
     int index;
 
-    if (dword_5E2E24 > 0) {
-        for (index = 0; index < dword_5E2E24; index++) {
+    if (wallcheck_tracked_walls_count > 0) {
+        for (index = 0; index < wallcheck_tracked_walls_count; index++) {
             wallcheck_tracked_walls[index].flags &= ~0x2;
             wallcheck_tracked_walls[index].flags |= 0x1;
         }
@@ -684,8 +693,8 @@ void wallcheck_reset(void)
         sub_438830();
     }
 
-    qword_5E0E18 = 0;
-    dword_5E0E10 = 0;
+    wallcheck_cached_loc = 0;
+    wallcheck_cached_direction_bits = 0;
     wallcheck_dirty = false;
 }
 
@@ -693,7 +702,7 @@ void wallcheck_reset(void)
 void wallcheck_exit(void)
 {
     wallcheck_reset();
-    dword_5E0A00 = 0;
+    wallcheck_invalidate_rect = 0;
 }
 
 // 0x437E10
@@ -702,8 +711,8 @@ void wallcheck_ping(tig_timestamp_t timestamp)
     (void)timestamp;
 
     if (wallcheck_dirty) {
-        roof_recalc(qword_5E0A08);
-        wallcheck_recalc(qword_5E0A08);
+        roof_recalc(wallcheck_pending_loc);
+        wallcheck_recalc(wallcheck_pending_loc);
         wallcheck_dirty = false;
     }
 }
@@ -767,15 +776,15 @@ void wallcheck_recalc(int64_t loc)
     y -= v2;
     v3 = wallcheck_offset_masks[v2][v1];
 
-    if (qword_5E0E18 == LOCATION_MAKE(x, y)
-        && (dword_5E0E10 & v3) != 0) {
+    if (wallcheck_cached_loc == LOCATION_MAKE(x, y)
+        && (wallcheck_cached_direction_bits & v3) != 0) {
         return;
     }
 
-    qword_5E0E18 = LOCATION_MAKE(x, y);
-    dword_5E0E10 = v3;
+    wallcheck_cached_loc = LOCATION_MAKE(x, y);
+    wallcheck_cached_direction_bits = v3;
 
-    for (int i = 0; i < dword_5E2E24; i++) {
+    for (int i = 0; i < wallcheck_tracked_walls_count; i++) {
         wallcheck_tracked_walls[i].flags &= ~0x02;
         wallcheck_tracked_walls[i].flags |= 0x01;
     }
@@ -819,7 +828,7 @@ void wallcheck_recalc(int64_t loc)
                 }
 
                 for (int j = 0; j < 4; j++) {
-                    if ((wallcheck_direction_bits[j] & dword_5E0E10) != 0) {
+                    if ((wallcheck_direction_bits[j] & wallcheck_cached_direction_bits) != 0) {
                         for (int k = 0; k < 5; k++) {
                             if (wallcheck_scan_tbl[i].field_40[j][k] == -1) {
                                 break;
@@ -933,7 +942,7 @@ bool wallcheck_is_enabled(void)
 void sub_438530(int64_t obj)
 {
     if (player_is_local_pc_obj(obj)) {
-        qword_5E0A08 = obj_field_int64_get(obj, OBJ_F_LOCATION);
+        wallcheck_pending_loc = obj_field_int64_get(obj, OBJ_F_LOCATION);
         wallcheck_dirty = true;
     }
 }
@@ -947,7 +956,7 @@ void sub_438570(int64_t obj, int64_t sector_id, int type)
     if (!sub_4386B0(obj, &index)) {
         memmove(&(wallcheck_tracked_walls[index + 1]),
             &(wallcheck_tracked_walls[index]),
-            sizeof(*wallcheck_tracked_walls) * (dword_5E2E24 - index));
+            sizeof(*wallcheck_tracked_walls) * (wallcheck_tracked_walls_count - index));
         wallcheck_tracked_walls[index].flags = 0;
         wallcheck_tracked_walls[index].sector_id = sector_id;
         wallcheck_tracked_walls[index].obj = obj;
@@ -955,7 +964,7 @@ void sub_438570(int64_t obj, int64_t sector_id, int type)
 
         sector_lock(sector_id, &sector);
         sub_438720(wallcheck_tracked_walls[index].field_18);
-        dword_5E2E24++;
+        wallcheck_tracked_walls_count++;
     }
 
     if (type == 1 || type == 16) {
@@ -976,7 +985,7 @@ bool sub_4386B0(int64_t obj, int* index_ptr)
     int64_t curr;
 
     l = 0;
-    r = dword_5E2E24 - 1;
+    r = wallcheck_tracked_walls_count - 1;
     while (l <= r) {
         m = (l + r) / 2;
         curr = wallcheck_tracked_walls[m].obj;
@@ -1001,15 +1010,15 @@ void sub_438720(int64_t a1)
     int index;
 
     if (!sub_4387C0(a1, &index)) {
-        memmove(&(stru_5E0A10[index + 1]),
-            &(stru_5E0A10[index]),
-            sizeof(*stru_5E0A10) * (dword_5E2E28 - index));
-        stru_5E0A10[index].field_0 = a1;
-        stru_5E0A10[index].field_8 = 0;
-        dword_5E2E28++;
+        memmove(&(wallcheck_faded_roofs[index + 1]),
+            &(wallcheck_faded_roofs[index]),
+            sizeof(*wallcheck_faded_roofs) * (wallcheck_faded_roofs_count - index));
+        wallcheck_faded_roofs[index].field_0 = a1;
+        wallcheck_faded_roofs[index].field_8 = 0;
+        wallcheck_faded_roofs_count++;
     }
 
-    if (++stru_5E0A10[index].field_8 == 1) {
+    if (++wallcheck_faded_roofs[index].field_8 == 1) {
         roof_fade_on(a1);
     }
 }
@@ -1023,10 +1032,10 @@ bool sub_4387C0(int64_t a1, int* index_ptr)
     int64_t curr;
 
     l = 0;
-    r = dword_5E2E28 - 1;
+    r = wallcheck_faded_roofs_count - 1;
     while (l <= r) {
         m = (l + r) / 2;
-        curr = stru_5E0A10[m].field_0;
+        curr = wallcheck_faded_roofs[m].field_0;
 
         if (curr < a1) {
             l = m + 1;
@@ -1051,7 +1060,7 @@ void sub_438830(void)
     TigRect obj_rect;
     unsigned int new_wall_flags;
 
-    for (idx = 0; idx < dword_5E2E24; idx++) {
+    for (idx = 0; idx < wallcheck_tracked_walls_count; idx++) {
         if ((wallcheck_tracked_walls[idx].flags & 0x01) != 0) {
             wall_flags = obj_field_int32_get(wallcheck_tracked_walls[idx].obj, OBJ_F_WALL_FLAGS);
             if ((wall_flags & 0x01) == 0) {
@@ -1063,7 +1072,7 @@ void sub_438830(void)
                 obj_field_int32_set(wallcheck_tracked_walls[idx].obj, OBJ_F_RENDER_FLAGS, render_flags);
 
                 object_get_rect(wallcheck_tracked_walls[idx].obj, 0, &obj_rect);
-                dword_5E0A00(&obj_rect);
+                wallcheck_invalidate_rect(&obj_rect);
             }
 
             wallcheck_roof_faded_clear(wallcheck_tracked_walls[idx].field_18);
@@ -1072,8 +1081,8 @@ void sub_438830(void)
 
             memmove(&(wallcheck_tracked_walls[idx]),
                 &(wallcheck_tracked_walls[idx + 1]),
-                sizeof(wallcheck_tracked_walls[0]) * (dword_5E2E24 - idx - 1));
-            dword_5E2E24--;
+                sizeof(wallcheck_tracked_walls[0]) * (wallcheck_tracked_walls_count - idx - 1));
+            wallcheck_tracked_walls_count--;
             idx--;
         } else if ((wallcheck_tracked_walls[idx].flags & 0x02) != 0) {
             wall_flags = obj_field_int32_get(wallcheck_tracked_walls[idx].obj, OBJ_F_WALL_FLAGS);
@@ -1096,7 +1105,7 @@ void sub_438830(void)
                     obj_field_int32_set(wallcheck_tracked_walls[idx].obj, OBJ_F_RENDER_FLAGS, render_flags);
 
                     object_get_rect(wallcheck_tracked_walls[idx].obj, 0, &obj_rect);
-                    dword_5E0A00(&obj_rect);
+                    wallcheck_invalidate_rect(&obj_rect);
                 }
             }
 
@@ -1115,11 +1124,11 @@ void wallcheck_roof_faded_clear(int64_t a1)
         return;
     }
 
-    if (stru_5E0A10[index].field_8-- == 1) {
+    if (wallcheck_faded_roofs[index].field_8-- == 1) {
         roof_fade_off(a1);
-        memmove(&(stru_5E0A10[index]),
-            &(stru_5E0A10[index + 1]),
-            sizeof(*stru_5E0A10) * (dword_5E2E28 - index - 1));
-        dword_5E2E28--;
+        memmove(&(wallcheck_faded_roofs[index]),
+            &(wallcheck_faded_roofs[index + 1]),
+            sizeof(*wallcheck_faded_roofs) * (wallcheck_faded_roofs_count - index - 1));
+        wallcheck_faded_roofs_count--;
     }
 }
