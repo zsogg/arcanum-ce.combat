@@ -1,0 +1,27 @@
+# Unit tests for CE's pure-logic code.
+#
+# Off by default so the normal build is untouched; enable with
+# -DARCANUM_BUILD_TESTS=ON.
+#
+# Links the real `tig` rather than stubbing its dependencies. `str_parse.c`
+# needs exactly one external symbol, `tig_debug_printf`, and taking it from the
+# library keeps the code under test identical to the shipped code - a stub is
+# another thing that can drift.
+
+add_executable(arcanum-tests
+    "test_harness.c"
+    "test_harness.h"
+    "test_str_parse.c"
+    "tests_main.c"
+)
+
+target_include_directories(arcanum-tests PRIVATE
+    "${CMAKE_CURRENT_SOURCE_DIR}"
+)
+
+target_link_libraries(arcanum-tests PRIVATE
+    tig
+    SDL3::SDL3
+)
+
+add_test(NAME arcanum-tests COMMAND arcanum-tests)

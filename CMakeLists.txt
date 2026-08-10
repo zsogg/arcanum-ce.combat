@@ -402,3 +402,16 @@ if(APPLE)
 
     include(CPack)
 endif()
+
+# ------------------------------------------------------------------------------
+# TESTS
+# ------------------------------------------------------------------------------
+
+# Unit tests over CE's pure-logic code (no assets, no display, no network).
+# Off by default; the normal build is unaffected.
+option(ARCANUM_BUILD_TESTS "Build the unit tests" OFF)
+
+if(ARCANUM_BUILD_TESTS)
+    enable_testing()
+    add_subdirectory("tests")
+endif()
