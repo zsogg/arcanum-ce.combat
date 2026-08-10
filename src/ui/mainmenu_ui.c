@@ -62,7 +62,7 @@ typedef struct MainMenuAnim {
 
 static void mainmenu_ui_dismiss_ex(bool exiting);
 static TigWindowModalDialogChoice mainmenu_ui_confirm(int num);
-static void sub_541830(char* dst, const char* src);
+static void mainmenu_ui_expand_tabs(char* dst, const char* src);
 static void mainmenu_ui_draw_text(char* str, TigRect* rect, tig_font_handle_t font, unsigned int flags);
 static void mainmenu_ui_create_mainmenu(void);
 static void mainmenu_ui_draw_version(void);
@@ -151,7 +151,7 @@ static void sub_547EF0(void);
 static void sub_5480C0(int a1);
 static void mmUIWinRefreshScrollBar(void);
 static void sub_548FF0(int a1);
-static void sub_549450(void);
+static void mainmenu_ui_textedit_unfocus(void);
 static void mainmenu_ui_textedit_on_enter(TextEdit* textedit);
 static void mainmenu_ui_textedit_on_change(TextEdit* textedit);
 static void mainmenu_ui_feedback(int num);
@@ -411,12 +411,30 @@ static mes_file_handle_t mainmenu_ui_mainmenu_mes_file = MES_FILE_HANDLE_INVALID
 // 0x5C3FB8
 static int dword_5C3FB8 = -1;
 
+// NOTE: Unused, and unused in the original too - `search_instructions` finds no
+// instruction anywhere in the exe with either address as an operand. Troika's
+// own dead data, not something the port dropped.
+//
 // 0x5C3FC0
 static TigRect stru_5C3FC0 = { 260, 293, 60, 20 };
 
 // 0x5C3FD0
 static TigRect stru_5C3FD0 = { 160, 263, 150, 20 };
 
+// NOTE: These two are the click rects of the two text fields on the original's
+// window type 17, and CE has no such window: its `MainMenuWindowType` is a
+// compressed renumbering that drops it (see the enum's comment). 17 is the
+// multiplayer host/join screen - its create function at 0x585D50 calls three
+// routines in TIG's networking range, which CE stubs out entirely in
+// `net_compat.h`.
+//
+// The original hit-tests them in `mainmenu_ui_message_filter` at 0x54710B and
+// 0x54717C and again in the click handler at 0x545FD0, which focuses the shared
+// `mainmenu_ui_textedit_buffer` for the first and `byte_64C394` for the second.
+// So the data here is faithful; only the window that reads it is unported.
+// Multiplayer is back-burner, so they stay unnamed rather than guess which
+// field is which.
+//
 // 0x5C3FE0
 static TigRect stru_5C3FE0 = { 160, 263, 150, 20 };
 
@@ -1071,6 +1089,9 @@ static TigRect mainmenu_ui_new_char_race_hover_rect = { 22, 281, 276, 40 };
 // 0x5C4F30
 static TigRect mainmenu_ui_shared_char_background_rect = { 66, 343, 186, 19 };
 
+// NOTE: Unused, and unused in the original too - no instruction anywhere in
+// the exe takes this address as an operand.
+//
 // 0x5C4F40
 static TigRect stru_5C4F40 = { 22, 331, 276, 40 };
 
@@ -1093,6 +1114,9 @@ static TigRect mainmenu_ui_stat_rects[15] = {
     { 618, 86, 147, 15 },
 };
 
+// NOTE: Unused, and unused in the original too - no instruction anywhere in
+// the exe takes this address as an operand.
+//
 // 0x5C5040
 static TigRect stru_5C5040 = { 618, 105, 145, 15 };
 
@@ -1381,7 +1405,7 @@ static tig_font_handle_t mainmenu_ui_version_fonts[3];
 static tig_font_handle_t mainmenu_ui_version_fonts_red[3];
 
 // 0x64BC1C
-static char byte_64BC1C[1000];
+static char mainmenu_ui_draw_text_buffer[1000];
 
 // 0x64C004
 static MainMenuWindowType mainmenu_ui_window_stack[50];
@@ -1406,7 +1430,7 @@ static MainMenuWindowType mainmenu_ui_window_stack[50];
 static tig_font_handle_t mainmenu_ui_body_fonts[2][3];
 
 // 0x64C0F0
-static char byte_64C0F0[128];
+static char mainmenu_ui_textedit_saved_buffer[128];
 
 // 0x64C170
 static tig_font_handle_t mainmenu_ui_fonts_tbl[MM_FONT_COUNT][MM_COLOR_COUNT];
@@ -1456,6 +1480,11 @@ static bool dword_64C38C;
 // 0x64C390
 static int mainmenu_ui_num_windows;
 
+// NOTE: The second text entry buffer of the original's window type 17, the
+// multiplayer host/join screen CE does not have - see the note on
+// `stru_5C3FE0`. Cleared and focused by the click handler at 0x545FD0;
+// nothing in CE reaches it.
+//
 // 0x64C394
 static char byte_64C394[128];
 
@@ -1475,7 +1504,7 @@ int dword_64C420;
 static bool mainmenu_ui_auto_equip_items_on_start;
 
 // 0x64C428
-static bool dword_64C428;
+static bool mainmenu_ui_textedit_focused;
 
 // NOTE: Never written, in CE or in the original - 0x64C42C has two reads in
 // mainmenu_ui_init and no writes anywhere. So all three entries are 0 and every
@@ -1515,7 +1544,7 @@ static MainMenuUiNewCharHoverMode mainmenu_ui_new_char_hover_mode;
 static int64_t qword_64C460;
 
 // 0x64C468
-static int dword_64C468;
+static int mainmenu_ui_key_shortcuts_disable_count;
 
 // 0x540930
 /**
@@ -2062,12 +2091,21 @@ void mainmenu_ui_push_window_stack(MainMenuWindowType window_type)
     mainmenu_ui_window_stack[mainmenu_ui_num_windows++] = window_type;
 }
 
+// Expands the two-character sequence `\t` as it appears in .mes strings into
+// five spaces.
+//
 // 0x541830
-void sub_541830(char* dst, const char* src)
+void mainmenu_ui_expand_tabs(char* dst, const char* src)
 {
     while (*src != '\0') {
         if (src[0] == '\\' && src[1] == 't') {
-            strcpy(dst, "    ");
+            // FIX: Was `strcpy(dst, "    ")` - four spaces plus the terminator
+            // strcpy appends - followed by `dst += 5`. That left a NUL at
+            // `dst[4]` that nothing overwrote, so every string containing a tab
+            // was truncated at the tab. The original writes five spaces and no
+            // terminator: `mov edx, 0x20202020` / `mov [esi], edx` /
+            // `mov [esi + 4], dl` at 0x54184D, with `dl` holding 0x20.
+            memcpy(dst, "     ", 5);
             dst += 5;
             src += 2;
         } else {
@@ -2101,9 +2139,9 @@ void mainmenu_ui_draw_text(char* str, TigRect* rect, tig_font_handle_t font, uns
             *newline = '\0';
         }
 
-        sub_541830(byte_64BC1C, str);
+        mainmenu_ui_expand_tabs(mainmenu_ui_draw_text_buffer, str);
 
-        chunk = byte_64BC1C;
+        chunk = mainmenu_ui_draw_text_buffer;
         if ((flags & 0x1) != 0) {
             font_desc.width = 0;
             font_desc.height = 0;
@@ -2145,7 +2183,7 @@ void mainmenu_ui_draw_text(char* str, TigRect* rect, tig_font_handle_t font, uns
 
         tig_font_push(font);
         if (tig_font_write(vb, chunk, &text_rect, &dirty_rect) != TIG_OK) {
-            tig_debug_printf("MainMenu-UI: mmUITextWrite_func: ERROR: Couldn't write text: '%s'!\n", byte_64BC1C);
+            tig_debug_printf("MainMenu-UI: mmUITextWrite_func: ERROR: Couldn't write text: '%s'!\n", mainmenu_ui_draw_text_buffer);
         }
         tig_font_pop();
 
@@ -3674,12 +3712,12 @@ void sub_544290(void)
     MainMenuWindowInfo* window;
 
     window = main_menu_window_info[mainmenu_ui_window_type];
-    sub_549450();
+    mainmenu_ui_textedit_unfocus();
 
     if (!mainmenu_ui_gsi_loaded) {
         if (window->selected_index == 0) {
             mainmenu_ui_textedit_buffer[0] = 0;
-            sub_5493C0(mainmenu_ui_textedit_buffer, 23);
+            mainmenu_ui_textedit_focus(mainmenu_ui_textedit_buffer, 23);
         }
         return;
     }
@@ -3693,7 +3731,7 @@ void sub_544290(void)
         }
     } else {
         mainmenu_ui_textedit_buffer[0] = 0;
-        sub_5493C0(mainmenu_ui_textedit_buffer, 23);
+        mainmenu_ui_textedit_focus(mainmenu_ui_textedit_buffer, 23);
     }
 }
 
@@ -4080,10 +4118,10 @@ bool mainmenu_ui_new_char_button_released(tig_button_handle_t button_handle)
 
     if (index >= 10) {
         if (button_handle == mainmenu_ui_new_char_name_button.button_handle
-            && sub_549520() == NULL) {
-            strcpy(byte_64C0F0, mainmenu_ui_textedit_buffer);
+            && mainmenu_ui_textedit_focused_buffer() == NULL) {
+            strcpy(mainmenu_ui_textedit_saved_buffer, mainmenu_ui_textedit_buffer);
             mainmenu_ui_textedit_buffer[0] = '\0';
-            sub_5493C0(mainmenu_ui_textedit_buffer, 23);
+            mainmenu_ui_textedit_focus(mainmenu_ui_textedit_buffer, 23);
         }
 
         return true;
@@ -5141,7 +5179,7 @@ void sub_546DD0(void)
     int index;
 
     if (mainmenu_ui_active) {
-        sub_549450();
+        mainmenu_ui_textedit_unfocus();
         timeevent_clear_all_typed(TIMEEVENT_TYPE_MAINMENU);
 
         for (index = 0; index < 2; index++) {
@@ -5229,7 +5267,7 @@ bool mainmenu_ui_message_filter(TigMessage* msg)
                     || msg->data.mouse.y < mainmenu_ui_window_partial_rect.y
                     || msg->data.mouse.x >= mainmenu_ui_window_partial_rect.x + mainmenu_ui_window_partial_rect.width
                     || msg->data.mouse.y >= mainmenu_ui_window_partial_rect.y + mainmenu_ui_window_partial_rect.height)) {
-                sub_549450();
+                mainmenu_ui_textedit_unfocus();
             }
         }
 
@@ -5559,7 +5597,7 @@ bool mainmenu_ui_message_filter(TigMessage* msg)
                 return false;
             }
         } else {
-            if (sub_549A60()) {
+            if (mainmenu_ui_key_shortcuts_disable_count_get()) {
                 return false;
             }
 
@@ -5952,13 +5990,13 @@ bool mainmenu_ui_return_to_mainmenu(tig_button_handle_t button_handle)
 }
 
 // 0x5493C0
-void sub_5493C0(char* buffer, int size)
+void mainmenu_ui_textedit_focus(char* buffer, int size)
 {
     MainMenuWindowInfo* curr_window_info;
 
-    if (!dword_64C428) {
+    if (!mainmenu_ui_textedit_focused) {
         if (mainmenu_ui_textedit_buffer[0] != '\0') {
-            strcpy(byte_64C0F0, buffer);
+            strcpy(mainmenu_ui_textedit_saved_buffer, buffer);
         }
 
         mainmenu_ui_textedit.size = size;
@@ -5967,31 +6005,31 @@ void sub_5493C0(char* buffer, int size)
             : 0;
         mainmenu_ui_textedit.buffer = buffer;
         textedit_ui_focus(&mainmenu_ui_textedit);
-        dword_64C428 = true;
+        mainmenu_ui_textedit_focused = true;
 
         curr_window_info = main_menu_window_info[mainmenu_ui_window_type];
         curr_window_info->refresh_func(&(curr_window_info->content_rect));
 
-        sub_549A40();
+        mainmenu_ui_key_shortcuts_disable();
     }
 }
 
 // 0x549450
-void sub_549450(void)
+void mainmenu_ui_textedit_unfocus(void)
 {
     MainMenuWindowInfo* curr_window_info;
 
-    if (dword_64C428) {
+    if (mainmenu_ui_textedit_focused) {
         if (mainmenu_ui_textedit.buffer[0] == '\0') {
-            strcpy(mainmenu_ui_textedit.buffer, byte_64C0F0);
+            strcpy(mainmenu_ui_textedit.buffer, mainmenu_ui_textedit_saved_buffer);
         }
         textedit_ui_unfocus(&mainmenu_ui_textedit);
-        dword_64C428 = false;
+        mainmenu_ui_textedit_focused = false;
 
         curr_window_info = main_menu_window_info[mainmenu_ui_window_type];
         curr_window_info->refresh_func(&(curr_window_info->content_rect));
 
-        sub_549A50();
+        mainmenu_ui_key_shortcuts_enable();
     }
 }
 
@@ -6006,7 +6044,7 @@ void mainmenu_ui_textedit_on_enter(TextEdit* textedit)
         strncpy(mainmenu_ui_textedit_buffer, mes_file_entry.str, 23);
     }
 
-    sub_549450();
+    mainmenu_ui_textedit_unfocus();
 
     if (mainmenu_ui_window_type == MM_WINDOW_SAVE_GAME) {
         mainmenu_ui_save_game_execute(-1);
@@ -6014,9 +6052,9 @@ void mainmenu_ui_textedit_on_enter(TextEdit* textedit)
 }
 
 // 0x549520
-char* sub_549520(void)
+char* mainmenu_ui_textedit_focused_buffer(void)
 {
-    return dword_64C428 != 0 ? mainmenu_ui_textedit.buffer : NULL;
+    return mainmenu_ui_textedit_focused != 0 ? mainmenu_ui_textedit.buffer : NULL;
 }
 
 // 0x549540
@@ -6206,21 +6244,21 @@ void sub_549990(int* a1, int num)
 }
 
 // 0x549A40
-void sub_549A40(void)
+void mainmenu_ui_key_shortcuts_disable(void)
 {
-    dword_64C468++;
+    mainmenu_ui_key_shortcuts_disable_count++;
 }
 
 // 0x549A50
-void sub_549A50(void)
+void mainmenu_ui_key_shortcuts_enable(void)
 {
-    dword_64C468--;
+    mainmenu_ui_key_shortcuts_disable_count--;
 }
 
 // 0x549A60
-int sub_549A60(void)
+int mainmenu_ui_key_shortcuts_disable_count_get(void)
 {
-    return dword_64C468;
+    return mainmenu_ui_key_shortcuts_disable_count;
 }
 
 // 0x549A70

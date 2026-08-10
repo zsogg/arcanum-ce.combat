@@ -93,8 +93,8 @@ void mainmenu_ui_create_window(void);
 void mainmenu_ui_create_window_func(bool should_display);
 bool mainmenu_ui_process_callback(TimeEvent* timeevent);
 bool mainmenu_ui_return_to_mainmenu(tig_button_handle_t button_handle);
-void sub_5493C0(char* buffer, int size);
-char* sub_549520(void);
+void mainmenu_ui_textedit_focus(char* buffer, int size);
+char* mainmenu_ui_textedit_focused_buffer(void);
 void mainmenu_ui_exit_game(void);
 void mainmenu_ui_progressbar_init(int max_value);
 void mainmenu_ui_progressbar_update(int value);
@@ -111,9 +111,9 @@ mes_file_handle_t mainmenu_ui_mes_file(void);
 tig_font_handle_t mainmenu_ui_font(MainMenuFont font, MainMenuColor color);
 void sub_549960(void);
 void sub_549990(int* a1, int num);
-void sub_549A40(void);
-void sub_549A50(void);
-int sub_549A60(void);
+void mainmenu_ui_key_shortcuts_disable(void);
+void mainmenu_ui_key_shortcuts_enable(void);
+int mainmenu_ui_key_shortcuts_disable_count_get(void);
 void sub_549A70(void);
 
 #endif /* ARCANUM_UI_MAINMENU_UI_H_ */
