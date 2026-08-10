@@ -519,37 +519,48 @@ const char* object_field_names[] = {
 };
 
 // 0x5D10F0
-static int* dword_5D10F0;
+static int* object_change_array_base;
 
 // 0x5D10F4
-static int dword_5D10F4;
+static int object_data_index;
 
 // 0x5D10F8
 static bool obj_editor;
 
 // 0x5D10FC
-static int16_t word_5D10FC;
+static int16_t object_field_count;
 
 // 0x5D1100
-static int* dword_5D1100;
+static int* object_simple_array_count;
 
 // 0x5D1104
 static ObjectFieldInfo* object_fields;
 
 // 0x5D1108
-static Object* dword_5D1108;
+static Object* object_copy_src_obj;
 
+// The `object_*_enumerate_fields` callbacks' context. Those helpers invoke a
+// per-field callback with no user data, so everything the callback needs -
+// which stream, which buffer, which source object, how far through the data
+// array it is - has to be parked in a global first. `object_enum_stream`,
+// `object_enum_write_buffer`, `object_enum_read_cursor`,
+// `object_copy_src_obj`, `object_proto_copy_src_obj` and `object_data_index`
+// are all that, not loose module state.
+//
+// This is the fourth place in the tree with the shape (magictech,
+// anim_private, light, here), so it is the idiom rather than an oddity.
+//
 // 0x5D110C
-static TigFile* dword_5D110C;
+static TigFile* object_enum_stream;
 
 // 0x5D1110
-static Object* dword_5D1110;
+static Object* object_proto_copy_src_obj;
 
 // 0x5D1118
-static WriteBuffer* dword_5D1118;
+static WriteBuffer* object_enum_write_buffer;
 
 // 0x5D111C
-static uint8_t* dword_5D111C;
+static uint8_t* object_enum_read_cursor;
 
 // 0x5D1120
 static int16_t* object_fields_count_per_type;
@@ -576,8 +587,8 @@ bool obj_init(GameInitInfo* init_info)
     Object object;
 
     object_fields = (ObjectFieldInfo*)CALLOC(OBJ_F_MAX, sizeof(ObjectFieldInfo));
-    dword_5D10F0 = (int*)CALLOC(21, sizeof(int));
-    dword_5D1100 = (int*)CALLOC(21, sizeof(int));
+    object_change_array_base = (int*)CALLOC(21, sizeof(int));
+    object_simple_array_count = (int*)CALLOC(21, sizeof(int));
     object_fields_count_per_type = (int16_t*)CALLOC(18, sizeof(int16_t));
     obj_editor = init_info->editor;
     bitset_pool_init();
@@ -590,10 +601,10 @@ bool obj_init(GameInitInfo* init_info)
     object.prototype_oid.type = OID_TYPE_BLOCKED;
     for (index = 0; index < 18; index++) {
         object.type = index;
-        word_5D10FC = 0;
-        dword_5D10F4 = 0;
+        object_field_count = 0;
+        object_data_index = 0;
         object_proto_enumerate_fields(&object, sub_40C560);
-        object_fields_count_per_type[index] = word_5D10FC;
+        object_fields_count_per_type[index] = object_field_count;
     }
 
     obj_initialized = true;
@@ -611,8 +622,8 @@ void obj_exit(void)
     bitset_pool_exit();
 
     FREE(object_fields);
-    FREE(dword_5D10F0);
-    FREE(dword_5D1100);
+    FREE(object_change_array_base);
+    FREE(object_simple_array_count);
     FREE(object_fields_count_per_type);
 
     obj_initialized = false;
@@ -829,7 +840,7 @@ void obj_create_proto(int type, int64_t* obj_ptr)
     object->num_fields = object_fields_count_per_type[type];
     object->data = (intptr_t*)CALLOC(object->num_fields, sizeof(*object->data));
 
-    dword_5D10F4 = 0;
+    object_data_index = 0;
     object_proto_enumerate_fields(object, sub_40C6B0);
 
     obj_unlock(handle);
@@ -948,7 +959,7 @@ void obj_deallocate(int64_t obj)
             object_transient_field_dealloc(object, fld);
         }
     } else {
-        dword_5D10F4 = 0;
+        object_data_index = 0;
         object_proto_enumerate_fields(object, object_proto_field_dealloc);
         sub_40C640(object);
     }
@@ -976,7 +987,7 @@ void sub_405CC0(int64_t obj)
             object_transient_field_dealloc(object, fld);
         }
     } else {
-        dword_5D10F4 = 0;
+        object_data_index = 0;
         object_proto_enumerate_fields(object, object_proto_field_dealloc);
         sub_40C640(object);
     }
@@ -1012,7 +1023,7 @@ void sub_405D60(int64_t* new_obj_ptr, int64_t obj)
     if (object->prototype_oid.type != OID_TYPE_BLOCKED) {
         sub_40C5C0(new_object, object);
 
-        dword_5D1108 = object;
+        object_copy_src_obj = object;
         object_inst_enumerate_overridden_fields(new_object, object_inst_field_copy);
 
         memset(new_object->transient_properties, 0, sizeof(new_object->transient_properties));
@@ -1022,8 +1033,8 @@ void sub_405D60(int64_t* new_obj_ptr, int64_t obj)
     } else {
         sub_40C650(new_object, object);
 
-        dword_5D10F4 = 0;
-        dword_5D1110 = object;
+        object_data_index = 0;
+        object_proto_copy_src_obj = object;
         object_proto_enumerate_fields(new_object, object_proto_field_copy);
     }
 
@@ -1075,7 +1086,7 @@ void obj_perm_dup(int64_t* copy_obj_ptr, int64_t existing_obj)
     sub_40C5C0(copy_object, existing_object);
     memset(copy_object->field_4C, 0, 4 * obj_type_change_array_len(copy_object->type));
 
-    dword_5D1108 = existing_object;
+    object_copy_src_obj = existing_object;
     object_inst_enumerate_overridden_fields(copy_object, object_inst_field_copy);
     memset(copy_object->transient_properties, 0, sizeof(copy_object->transient_properties));
 
@@ -1354,7 +1365,7 @@ bool obj_dif_write(TigFile* stream, int64_t obj)
         }
     }
 
-    dword_5D110C = stream;
+    object_enum_stream = stream;
     written = object_inst_enumerate_overridden_fields(object, object_field_write_if_dif);
     obj_unlock(obj);
 
@@ -1431,7 +1442,7 @@ bool obj_dif_read(TigFile* stream, int64_t obj)
 
     object->modified = true;
 
-    dword_5D110C = stream;
+    object_enum_stream = stream;
     if (!object_inst_enumerate_available_fields(object, object_field_read_if_dif)) {
         tig_debug_println("Error in obj_dif_read:\n  Unable to read one of the fields.");
         obj_unlock(obj);
@@ -2936,8 +2947,8 @@ bool obj_proto_write_file(TigFile* stream, int64_t obj)
         return false;
     }
 
-    dword_5D10F4 = 0;
-    dword_5D110C = stream;
+    object_data_index = 0;
+    object_enum_stream = stream;
     if (!object_proto_enumerate_fields(object, obj_proto_field_write_file)) {
         obj_unlock(obj);
         return false;
@@ -2983,8 +2994,8 @@ bool obj_proto_read_file(TigFile* stream, int64_t* obj_ptr, ObjectID oid)
     object->num_fields = object_fields_count_per_type[object->type];
     object->data = (intptr_t*)CALLOC(object->num_fields, sizeof(*object->data));
 
-    dword_5D10F4 = 0;
-    dword_5D110C = stream;
+    object_data_index = 0;
+    object_enum_stream = stream;
     if (!object_proto_enumerate_fields(object, obj_proto_field_read_file)) {
         obj_unlock(obj);
         obj_pool_deallocate(obj);
@@ -3037,7 +3048,7 @@ bool obj_inst_write_file(TigFile* stream, int64_t obj)
         return false;
     }
 
-    dword_5D110C = stream;
+    object_enum_stream = stream;
     if (!object_inst_enumerate_overridden_fields(object, object_field_write)) {
         obj_unlock(obj);
         return false;
@@ -3087,7 +3098,7 @@ bool obj_inst_read_file(TigFile* stream, int64_t* obj_ptr, ObjectID oid)
         return false;
     }
 
-    dword_5D110C = stream;
+    object_enum_stream = stream;
     if (!object_inst_enumerate_overridden_fields(object, object_field_read)) {
         obj_unlock(obj);
         obj_pool_deallocate(obj);
@@ -3122,8 +3133,8 @@ void obj_proto_write_mem(WriteBuffer* wb, int64_t obj)
     write_buffer_append(&(object->type), sizeof(object->type), wb);
     cnt = obj_type_change_array_len(object->type);
     write_buffer_append(object->field_4C, sizeof(object->field_4C[0]) * cnt, wb);
-    dword_5D10F4 = 0;
-    dword_5D1118 = wb;
+    object_data_index = 0;
+    object_enum_write_buffer = wb;
     object_proto_enumerate_fields(object, obj_proto_field_write_mem);
     obj_unlock(obj);
 }
@@ -3150,8 +3161,8 @@ bool obj_proto_read_mem(uint8_t* data, int64_t* obj_ptr)
     object->num_fields = object_fields_count_per_type[object->type];
     object->data = (intptr_t*)CALLOC(object->num_fields, sizeof(*object->data));
 
-    dword_5D10F4 = 0;
-    dword_5D111C = data;
+    object_data_index = 0;
+    object_enum_read_cursor = data;
     if (!object_proto_enumerate_fields(object, obj_proto_field_read_mem)) {
         obj_unlock(obj);
         obj_pool_deallocate(obj);
@@ -3183,7 +3194,7 @@ void obj_inst_write_mem(WriteBuffer* wb, int64_t obj)
     write_buffer_append(&(object->num_fields), sizeof(object->num_fields), wb);
     cnt = obj_type_change_array_len(object->type);
     write_buffer_append(object->field_48, sizeof(object->field_48[0]) * cnt, wb);
-    dword_5D1118 = wb;
+    object_enum_write_buffer = wb;
 
     object_inst_enumerate_overridden_fields(object, obj_inst_field_write_mem);
     obj_unlock(obj);
@@ -3209,7 +3220,7 @@ bool obj_inst_read_mem(uint8_t* data, int64_t* obj_ptr)
     object->data = (intptr_t*)CALLOC(object->num_fields, sizeof(*object->data));
     mem_read_advance(object->field_48, 4 * obj_type_change_array_len(object->type), &data);
 
-    dword_5D111C = data;
+    object_enum_read_cursor = data;
     if (!object_inst_enumerate_overridden_fields(object, obj_inst_field_read_mem)) {
         obj_unlock(obj);
         obj_pool_deallocate(obj);
@@ -3238,12 +3249,12 @@ bool obj_proto_field_write_file(Object* object, int fld)
     ObjDataDescriptor v1;
 
     v1.type = object_fields[fld].type;
-    v1.ptr = &(object->data[dword_5D10F4]);
-    if (!obj_data_write_file(&v1, dword_5D110C)) {
+    v1.ptr = &(object->data[object_data_index]);
+    if (!obj_data_write_file(&v1, object_enum_stream)) {
         return false;
     }
 
-    dword_5D10F4++;
+    object_data_index++;
 
     return true;
 }
@@ -3254,9 +3265,9 @@ bool obj_proto_field_write_mem(Object* object, int fld)
     ObjDataDescriptor v1;
 
     v1.type = object_fields[fld].type;
-    v1.ptr = &(object->data[dword_5D10F4]);
-    obj_data_write_mem(&v1, dword_5D1118);
-    dword_5D10F4++;
+    v1.ptr = &(object->data[object_data_index]);
+    obj_data_write_mem(&v1, object_enum_write_buffer);
+    object_data_index++;
 
     return true;
 }
@@ -3267,12 +3278,12 @@ bool obj_proto_field_read_file(Object* object, int fld)
     ObjDataDescriptor v1;
 
     v1.type = object_fields[fld].type;
-    v1.ptr = &(object->data[dword_5D10F4]);
-    if (!obj_data_read_file_slow(&v1, dword_5D110C)) {
+    v1.ptr = &(object->data[object_data_index]);
+    if (!obj_data_read_file_slow(&v1, object_enum_stream)) {
         return false;
     }
 
-    dword_5D10F4++;
+    object_data_index++;
 
     return true;
 }
@@ -3283,9 +3294,9 @@ bool obj_proto_field_read_mem(Object* object, int fld)
     ObjDataDescriptor v1;
 
     v1.type = object_fields[fld].type;
-    v1.ptr = &(object->data[dword_5D10F4]);
-    obj_data_read_mem(&v1, &dword_5D111C);
-    dword_5D10F4++;
+    v1.ptr = &(object->data[object_data_index]);
+    obj_data_read_mem(&v1, &object_enum_read_cursor);
+    object_data_index++;
 
     return true;
 }
@@ -3297,7 +3308,7 @@ bool object_field_write(Object* object, int idx, ObjectFieldInfo* info)
 
     v1.type = info->type;
     v1.ptr = &(object->data[idx]);
-    if (!obj_data_write_file(&v1, dword_5D110C)) {
+    if (!obj_data_write_file(&v1, object_enum_stream)) {
         return false;
     }
 
@@ -3311,7 +3322,7 @@ bool obj_inst_field_write_mem(Object* object, int idx, ObjectFieldInfo* info)
 
     v1.type = info->type;
     v1.ptr = &(object->data[idx]);
-    obj_data_write_mem(&v1, dword_5D1118);
+    obj_data_write_mem(&v1, object_enum_write_buffer);
 
     return true;
 }
@@ -3323,7 +3334,7 @@ bool object_field_read(Object* object, int idx, ObjectFieldInfo* info)
 
     v1.type = info->type;
     v1.ptr = &(object->data[idx]);
-    if (!obj_data_read_file_fast(&v1, dword_5D110C)) {
+    if (!obj_data_read_file_fast(&v1, object_enum_stream)) {
         return false;
     }
 
@@ -3337,7 +3348,7 @@ bool obj_inst_field_read_mem(Object* object, int idx, ObjectFieldInfo* info)
 
     v1.type = info->type;
     v1.ptr = &(object->data[idx]);
-    obj_data_read_mem(&v1, &dword_5D111C);
+    obj_data_read_mem(&v1, &object_enum_read_cursor);
 
     return true;
 }
@@ -3442,7 +3453,7 @@ void sub_40A400(void)
                 break;
             }
 
-            dword_5D1100[sub_40A790(fld)] = v2;
+            object_simple_array_count[sub_40A790(fld)] = v2;
         } else if (info->type == OD_TYPE_END) {
             info->complex_array_idx = -1;
             info->change_array_idx = -1;
@@ -3467,7 +3478,7 @@ void sub_40A400(void)
         } else {
             sub_40A740(fld, &v3, &idx);
             info->simple_array_idx = v2++;
-            info->change_array_idx = idx / 32 + dword_5D10F0[sub_40A790(v3)];
+            info->change_array_idx = idx / 32 + object_change_array_base[sub_40A790(v3)];
             info->bit = idx % 32;
             info->mask = 1u << info->bit;
 
@@ -3917,7 +3928,7 @@ void sub_40B8E0(int fld)
 {
     switch (fld) {
     case OBJ_F_BEGIN:
-        dword_5D10F0[sub_40A790(fld)] = 0;
+        object_change_array_base[sub_40A790(fld)] = 0;
         break;
     case OBJ_F_WALL_BEGIN:
     case OBJ_F_PORTAL_BEGIN:
@@ -3927,7 +3938,7 @@ void sub_40B8E0(int fld)
     case OBJ_F_ITEM_BEGIN:
     case OBJ_F_CRITTER_BEGIN:
     case OBJ_F_TRAP_BEGIN:
-        dword_5D10F0[sub_40A790(fld)] = object_fields[OBJ_F_PAD_I64AS_1].change_array_idx + 1;
+        object_change_array_base[sub_40A790(fld)] = object_fields[OBJ_F_PAD_I64AS_1].change_array_idx + 1;
         break;
     case OBJ_F_WEAPON_BEGIN:
     case OBJ_F_AMMO_BEGIN:
@@ -3939,11 +3950,11 @@ void sub_40B8E0(int fld)
     case OBJ_F_KEY_RING_BEGIN:
     case OBJ_F_WRITTEN_BEGIN:
     case OBJ_F_GENERIC_BEGIN:
-        dword_5D10F0[sub_40A790(fld)] = object_fields[OBJ_F_ITEM_PAD_I64AS_1].change_array_idx + 1;
+        object_change_array_base[sub_40A790(fld)] = object_fields[OBJ_F_ITEM_PAD_I64AS_1].change_array_idx + 1;
         break;
     case OBJ_F_PC_BEGIN:
     case OBJ_F_NPC_BEGIN:
-        dword_5D10F0[sub_40A790(fld)] = object_fields[OBJ_F_CRITTER_PAD_I64AS_1].change_array_idx + 1;
+        object_change_array_base[sub_40A790(fld)] = object_fields[OBJ_F_CRITTER_PAD_I64AS_1].change_array_idx + 1;
         break;
     }
 }
@@ -4373,8 +4384,8 @@ bool sub_40C560(Object* object, int fld)
     (void)object;
     (void)fld;
 
-    word_5D10FC++;
-    dword_5D10F4++;
+    object_field_count++;
+    object_data_index++;
 
     return true;
 }
@@ -4446,7 +4457,7 @@ bool sub_40C6B0(Object* object, int fld)
 {
     (void)fld;
 
-    object->data[dword_5D10F4++] = 0;
+    object->data[object_data_index++] = 0;
 
     return true;
 }
@@ -4457,9 +4468,9 @@ bool object_proto_field_dealloc(Object* object, int fld)
     ObjDataDescriptor free_op;
 
     free_op.type = object_fields[fld].type;
-    free_op.ptr = &(object->data[dword_5D10F4]);
+    free_op.ptr = &(object->data[object_data_index]);
     obj_data_reset(&free_op);
-    dword_5D10F4++;
+    object_data_index++;
 
     return true;
 }
@@ -4470,9 +4481,9 @@ bool object_proto_field_copy(Object* object, int fld)
     ObjDataDescriptor copy_op;
 
     copy_op.type = object_fields[fld].type;
-    copy_op.ptr = &(dword_5D1110->data[dword_5D10F4]);
-    obj_data_copy(&copy_op, &(object->data[dword_5D10F4]));
-    dword_5D10F4++;
+    copy_op.ptr = &(object_proto_copy_src_obj->data[object_data_index]);
+    obj_data_copy(&copy_op, &(object->data[object_data_index]));
+    object_data_index++;
 
     return true;
 }
@@ -4483,7 +4494,7 @@ bool object_inst_field_copy(Object* object, int storage_idx, ObjectFieldInfo* in
     ObjDataDescriptor copy_op;
 
     copy_op.type = info->type;
-    copy_op.ptr = &(dword_5D1108->data[storage_idx]);
+    copy_op.ptr = &(object_copy_src_obj->data[storage_idx]);
     obj_data_copy(&copy_op, &(object->data[storage_idx]));
 
     return true;
