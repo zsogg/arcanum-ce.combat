@@ -193,8 +193,18 @@ int mainmenu_ui_mp_char_idx = -1;
 // 0x5C361C
 static int mainmenu_ui_pregen_char_cnt = 9;
 
+// Whether the last four pregenerated characters - `BP_VICTORIA_WARRINGTON`
+// through `BP_KEREE_MELANGE`, the female ones - are absent from the loaded
+// data. `sub_549A80` probes for Victoria's prototype and her art during init
+// and, when both are there, raises `mainmenu_ui_pregen_char_cnt` from 9 to 13
+// and the new character screen from 9 buttons to 10. When they are not, this
+// stays set and the gender arrows on the new character screen do nothing.
+//
+// It starts out set, so the probe is a no-op until `sub_549A70` clears it -
+// which `main` does unconditionally at startup, before the UI exists.
+//
 // 0x5C3620
-static bool dword_5C3620 = true;
+static bool mainmenu_ui_female_chars_missing = true;
 
 // 0x5C3624
 static tig_window_handle_t mainmenu_ui_window_handle = TIG_WINDOW_HANDLE_INVALID;
@@ -447,11 +457,21 @@ static TigRect stru_5C3FE0 = { 160, 263, 150, 20 };
 // 0x5C3FF0
 static TigRect stru_5C3FF0 = { 560, 203, 150, 20 };
 
+// NOTE: Always true, in the original as well as here. It starts true and the
+// only instruction that writes it sets it to 1 again (`sub_541170`, 0x541170,
+// which nothing in CE calls); the two reads are the ones below. So the
+// `MM_TYPE_1` branches it guards are unreachable, and unnamed for want of any
+// evidence of what it was meant to distinguish.
+//
 // 0x5C4000
 static bool dword_5C4000 = true;
 
+// Whether the menu was opened in its pre-game form (`MM_TYPE_DEFAULT` or
+// `MM_TYPE_1`) rather than over a running game. Set by `mainmenu_ui_start` on
+// every path, read once, by `mainmenu_ui_dismiss_ex` on the way back out.
+//
 // 0x5C4004
-static bool dword_5C4004 = true;
+static bool mainmenu_ui_outside_game = true;
 
 // 0x64C2F8
 static char mainmenu_ui_textedit_buffer[128];
@@ -1791,25 +1811,25 @@ void mainmenu_ui_start(MainMenuType type)
         switch (type) {
         case MM_TYPE_IN_PLAY:
             mainmenu_ui_window_type = MM_WINDOW_MAINMENU_IN_PLAY;
-            dword_5C4004 = false;
+            mainmenu_ui_outside_game = false;
             mainmenu_ui_open();
             object_hover_obj_set(OBJ_HANDLE_NULL);
             break;
         case MM_TYPE_IN_PLAY_LOCKED:
             mainmenu_ui_window_type = MM_WINDOW_MAINMENU_IN_PLAY_LOCKED;
-            dword_5C4004 = false;
+            mainmenu_ui_outside_game = false;
             mainmenu_ui_open();
             object_hover_obj_set(OBJ_HANDLE_NULL);
             break;
         case MM_TYPE_OPTIONS:
             mainmenu_ui_window_type = MM_WINDOW_OPTIONS;
-            dword_5C4004 = false;
+            mainmenu_ui_outside_game = false;
             mainmenu_ui_open();
             object_hover_obj_set(OBJ_HANDLE_NULL);
             break;
         case MM_TYPE_5:
             mainmenu_ui_window_type = MM_WINDOW_26;
-            dword_5C4004 = false;
+            mainmenu_ui_outside_game = false;
             mainmenu_ui_open();
             object_hover_obj_set(OBJ_HANDLE_NULL);
             break;
@@ -1819,7 +1839,7 @@ void mainmenu_ui_start(MainMenuType type)
                 exit(EXIT_FAILURE);
             }
             mainmenu_ui_window_type = MM_WINDOW_0;
-            dword_5C4004 = true;
+            mainmenu_ui_outside_game = true;
             mainmenu_ui_open();
             object_hover_obj_set(OBJ_HANDLE_NULL);
             break;
@@ -1924,7 +1944,7 @@ void mainmenu_ui_dismiss_ex(bool exiting)
 
                 wmap_rnd_schedule();
             } else {
-                if (dword_5C4004) {
+                if (mainmenu_ui_outside_game) {
                     sub_40FED0();
                 }
                 gamelib_draw();
@@ -4211,12 +4231,12 @@ bool mainmenu_ui_new_char_button_released(tig_button_handle_t button_handle)
         }
         return true;
     case 8:
-        if (!dword_5C3620 && mainmenu_ui_new_char_prev_gender(pc_obj)) {
+        if (!mainmenu_ui_female_chars_missing && mainmenu_ui_new_char_prev_gender(pc_obj)) {
             window->refresh_func(NULL);
         }
         return true;
     case 9:
-        if (!dword_5C3620 && mainmenu_ui_new_char_next_gender(pc_obj)) {
+        if (!mainmenu_ui_female_chars_missing && mainmenu_ui_new_char_next_gender(pc_obj)) {
             window->refresh_func(NULL);
         }
         return true;
@@ -6289,7 +6309,7 @@ int mainmenu_ui_key_shortcuts_disable_count_get(void)
 // 0x549A70
 void sub_549A70(void)
 {
-    dword_5C3620 = false;
+    mainmenu_ui_female_chars_missing = false;
 }
 
 // 0x549A80
@@ -6297,15 +6317,15 @@ void sub_549A80(void)
 {
     int64_t obj;
 
-    if (!dword_5C3620) {
+    if (!mainmenu_ui_female_chars_missing) {
         obj = obj_pool_perm_lookup(obj_get_id(proto_get_by_description(BP_VICTORIA_WARRINGTON)));
         if (obj != OBJ_HANDLE_NULL
             && tig_art_exists(obj_field_int32_get(obj, OBJ_F_CURRENT_AID)) == TIG_OK) {
-            dword_5C3620 = false;
+            mainmenu_ui_female_chars_missing = false;
             mainmenu_ui_pregen_char_cnt = 13;
             mainmenu_ui_new_char_window_info.num_buttons = 10;
         } else {
-            dword_5C3620 = true;
+            mainmenu_ui_female_chars_missing = true;
         }
     }
 }
