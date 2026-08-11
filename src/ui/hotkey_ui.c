@@ -292,7 +292,7 @@ bool hotkey_ui_load(GameLoadInfo* load_info)
             return false;
         }
 
-        sub_57EFA0(hotkey.type, hotkey.data, hotkey.item_obj.obj);
+        hotkey_ui_add_recent_action(hotkey.type, hotkey.data, hotkey.item_obj.obj);
     }
 
     for (index = 0; index < 10; index++) {
@@ -305,7 +305,17 @@ bool hotkey_ui_load(GameLoadInfo* load_info)
 }
 
 // 0x57DC20
-void sub_57DC20(void)
+// Starts dragging the item the inventory UI is currently holding onto the
+// quick-slot bar, so a drag begun in the inventory can finish on a hotkey.
+//
+// NOTE: UAP gates this on no dialog being open. Its cave at 0x57DC57 is
+// `cmp DWORD PTR ds:0x64c6cc, 0` / `jne` - 0x64C6CC being
+// `intgame_dialog_process_event_func`, which is non-NULL while a conversation
+// is running - and the changelog entry is "It's no longer possible to break out
+// of dialog by clicking on quick slots." Not ported: the faithful path is to
+// let the click through, and the fix belongs behind `uap fixes` with the other
+// engine changes if anyone wants it.
+void hotkey_ui_begin_inventory_drag(void)
 {
     hotkey_ui_dragged.slot = -1;
     hotkey_ui_dragged.type = HOTKEY_ITEM;
@@ -348,7 +358,7 @@ bool hotkey_ui_process_event(TigMessage* msg)
                 if (msg->data.button.button_handle == hotkey_ui_slots[index].info.button_handle) {
                     if (hotkey_ui_dragging || inven_ui_drag_item_obj_get() != OBJ_HANDLE_NULL) {
                         if (inven_ui_drag_item_obj_get() != OBJ_HANDLE_NULL) {
-                            sub_57DC20();
+                            hotkey_ui_begin_inventory_drag();
                         }
                         sub_57E8D0(TIG_MESSAGE_MOUSE_LEFT_BUTTON_UP);
                     } else {
@@ -1109,7 +1119,11 @@ void hotkey_ui_clear(int index)
 }
 
 // 0x57EFA0
-void sub_57EFA0(int type, int data, int64_t item_obj)
+// Pushes an action onto the two-entry most-recently-used list behind the pair
+// of recent-action buttons, shifting the old first entry into second place.
+// Re-using the action that is already first is a no-op, so holding a key down
+// does not push the list along.
+void hotkey_ui_add_recent_action(int type, int data, int64_t item_obj)
 {
     tig_art_id_t new_art_id;
     tig_art_id_t old_art_id;
@@ -1256,7 +1270,7 @@ void hotkey_ui_notify_item_inserted_or_removed(int64_t item_obj, bool removed)
             hotkey = &(hotkey_ui_recent_actions[index]);
             if (hotkey->item_obj.obj == item_obj) {
                 hotkey_ui_clear_slot(hotkey);
-                sub_57EFA0(2, intgame_recent_action_default_skill(index), hotkey->item_obj.obj);
+                hotkey_ui_add_recent_action(2, intgame_recent_action_default_skill(index), hotkey->item_obj.obj);
             }
         }
     }
@@ -1273,7 +1287,7 @@ void hotkey_ui_notify_spell_removed(int spell)
         if (hotkey->type == HOTKEY_SPELL && hotkey->data == spell) {
             hotkey_ui_clear_slot(hotkey);
             hotkey->data = intgame_recent_action_default_skill(index);
-            sub_57EFA0(HOTKEY_SKILL, hotkey->data, OBJ_HANDLE_NULL);
+            hotkey_ui_add_recent_action(HOTKEY_SKILL, hotkey->data, OBJ_HANDLE_NULL);
         }
     }
 

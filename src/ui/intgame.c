@@ -182,7 +182,7 @@ static void intgame_hover_on_mouse_move(TigMessage* msg);
 static void intgame_examine_critter(int64_t pc_obj, int64_t critter_obj, char* str);
 static void intgame_message_window_draw_image(tig_window_handle_t window_handle, int num);
 static void intgame_draw_progress_bar(int a1, int a2, TigRect* rect, int value);
-static void sub_554830(int64_t a1, int64_t a2);
+static void intgame_examine_combat_target(int64_t pc_obj, int64_t target_obj);
 static void intgame_message_window_draw_art(tig_window_handle_t window_handle, int art_num, int x, int y);
 static int intgame_item_icon_get(int64_t item_obj);
 static void intgame_examine_item(int64_t pc_obj, int64_t item_obj, char* str);
@@ -2128,7 +2128,7 @@ bool intgame_process_message(TigMessage* msg)
             break;
         case TIG_MESSAGE_MOUSE_RIGHT_BUTTON_UP:
             if (inven_ui_drag_item_obj_get() != OBJ_HANDLE_NULL) {
-                sub_57DC20();
+                hotkey_ui_begin_inventory_drag();
             }
             if (sub_57E8D0(TIG_MESSAGE_MOUSE_RIGHT_BUTTON_UP)) {
                 return true;
@@ -2136,7 +2136,7 @@ bool intgame_process_message(TigMessage* msg)
             break;
         case TIG_MESSAGE_MOUSE_LEFT_BUTTON_UP:
             if (inven_ui_drag_item_obj_get() != OBJ_HANDLE_NULL) {
-                sub_57DC20();
+                hotkey_ui_begin_inventory_drag();
             }
             if (sub_57E8D0(TIG_MESSAGE_MOUSE_LEFT_BUTTON_UP)) {
                 return true;
@@ -2249,7 +2249,7 @@ bool intgame_process_message(TigMessage* msg)
                     if (intgame_spell_buttons[5 * intgame_selected_college + index].art_num != -1
                         && msg->data.button.button_handle == intgame_spell_buttons[5 * intgame_selected_college + index].button_handle) {
                         if (spell_is_known(player_get_local_pc_obj(), 5 * intgame_selected_college + index)) {
-                            sub_57EFA0(3, 5 * intgame_selected_college + index, OBJ_HANDLE_NULL);
+                            hotkey_ui_add_recent_action(3, 5 * intgame_selected_college + index, OBJ_HANDLE_NULL);
                             spell_ui_activate(player_get_local_pc_obj(), 5 * intgame_selected_college + index);
                             return true;
                         }
@@ -2259,7 +2259,7 @@ bool intgame_process_message(TigMessage* msg)
             case ROTWIN_TYPE_SKILLS:
                 for (index = 0; index < 4; index++) {
                     if (msg->data.button.button_handle == intgame_skill_buttons[index].button_handle) {
-                        sub_57EFA0(2, index, OBJ_HANDLE_NULL);
+                        hotkey_ui_add_recent_action(2, index, OBJ_HANDLE_NULL);
                         sub_579FA0(player_get_local_pc_obj(), index);
                         return true;
                     }
@@ -6670,7 +6670,7 @@ void intgame_examine_critter(int64_t pc_obj, int64_t critter_obj, char* str)
     if (pc_obj != critter_obj
         && combat_critter_is_combat_mode_active(pc_obj)
         && !critter_is_dead(critter_obj)) {
-        sub_554830(pc_obj, critter_obj);
+        intgame_examine_combat_target(pc_obj, critter_obj);
     } else {
         if (is_detecting_alignment) {
             int step = (stat_level_max(critter_obj, STAT_ALIGNMENT) - stat_level_min(critter_obj, STAT_ALIGNMENT)) / 6;
@@ -6950,7 +6950,15 @@ void intgame_draw_progress_bar(int a1, int a2, TigRect* rect, int value)
 }
 
 // 0x554830
-void sub_554830(int64_t a1, int64_t a2)
+// The combat branch of examining a critter: instead of a description, the
+// message window gets the chance to hit it. Effectiveness is the wielded
+// weapon's skill less the invocation's difficulty and any magic/tech penalty,
+// floored at zero when the shot is blocked or out of range, and drawn as a
+// percentage with an icon for each penalty that applies.
+//
+// Reached from `intgame_examine_critter` only when the PC is in combat mode and
+// the target is someone else and still alive.
+void intgame_examine_combat_target(int64_t pc_obj, int64_t target_obj)
 {
     tig_window_handle_t window_handle;
     int64_t weapon_obj;
@@ -6972,17 +6980,17 @@ void sub_554830(int64_t a1, int64_t a2)
     // UAP (0x554863): the icon drops two pixels, from y 57 to 59.
     intgame_message_window_draw_art(window_handle, 582, 207, uap_fixes_enabled() ? 59 : 57);
 
-    weapon_obj = item_wield_get(a1, ITEM_INV_LOC_WEAPON);
+    weapon_obj = item_wield_get(pc_obj, ITEM_INV_LOC_WEAPON);
     skill = item_weapon_skill(weapon_obj);
     if (IS_TECH_SKILL(skill)) {
-        effectiveness = tech_skill_effectiveness(a1, GET_TECH_SKILL(skill), a2);
+        effectiveness = tech_skill_effectiveness(pc_obj, GET_TECH_SKILL(skill), target_obj);
     } else {
-        effectiveness = basic_skill_effectiveness(a1, GET_BASIC_SKILL(skill), a2);
+        effectiveness = basic_skill_effectiveness(pc_obj, GET_BASIC_SKILL(skill), target_obj);
     }
 
     skill_invocation_init(&skill_invocation);
-    object_ref_init(a1, &(skill_invocation.source));
-    object_ref_init(a2, &(skill_invocation.target));
+    object_ref_init(pc_obj, &(skill_invocation.source));
+    object_ref_init(target_obj, &(skill_invocation.target));
     object_ref_init(weapon_obj, &(skill_invocation.item));
     skill_invocation.skill = skill;
 
@@ -6990,7 +6998,7 @@ void sub_554830(int64_t a1, int64_t a2)
 
     if (weapon_obj != OBJ_HANDLE_NULL
         && skill != SKILL_THROWING) {
-        v3 = sub_461620(weapon_obj, a1, a2);
+        v3 = sub_461620(weapon_obj, pc_obj, target_obj);
         if (v3 > 0) {
             if (v3 > 20) {
                 skill_invocation.flags |= SKILL_INVOCATION_MAGIC_TECH_PENALTY;
