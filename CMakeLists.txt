@@ -347,6 +347,18 @@ target_link_libraries(arcanum-game PUBLIC
     ${TIG_LIBRARY}
 )
 
+# Function-entry census: which of the port's functions does play actually reach?
+# Off by default and touching nothing when off. See tests/coverage.c.
+#
+# Instruments `arcanum-game` only - the question is about the port's own naming
+# backlog, and instrumenting tig and SDL would bury it. PIE is turned off so a
+# logged runtime address is the link-time address `nm` reports.
+option(ARCANUM_COVERAGE "Instrument the game library to record which functions run" OFF)
+
+if(ARCANUM_COVERAGE)
+    target_compile_options(arcanum-game PRIVATE -finstrument-functions -fno-pie)
+endif()
+
 if(ANDROID)
     add_library(arcanum-ce SHARED)
 else()
@@ -360,6 +372,13 @@ target_sources(arcanum-ce PRIVATE
 target_link_libraries(arcanum-ce PUBLIC
     arcanum-game
 )
+
+if(ARCANUM_COVERAGE)
+    # The hooks themselves must not be instrumented, so they are compiled into
+    # the executable rather than the instrumented library.
+    target_sources(arcanum-ce PRIVATE "tests/coverage.c")
+    target_link_options(arcanum-ce PRIVATE -no-pie)
+endif()
 
 # SDL HID on Android requires C++ linker.
 if(ANDROID)
