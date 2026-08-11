@@ -22,6 +22,7 @@ void test_bsearch_suite(void);
 void test_palette_suite(void);
 void test_mes_suite(void);
 void test_random_suite(void);
+void test_stat_suite(void);
 
 int main(void)
 {
@@ -33,6 +34,7 @@ int main(void)
     test_palette_suite();
     test_mes_suite();
     test_random_suite();
+    test_stat_suite();
 
     return test_report();
 }
