@@ -123,6 +123,16 @@ bool mes_load(const char* path, mes_file_handle_t* mes_file_handle_ptr)
     mes_load_internal(&mes_file);
 
     // Check if any entries were loaded.
+    //
+    // NOTE: A file that opened but parsed to zero entries leaks the data buffer
+    // `mes_load_internal` allocated for it - nothing frees `mes_file.data` on
+    // this path. Faithful: 0x4D4317..0x4D4333 sets the handle to -1 and returns
+    // 0 with no free call either. Left alone, and cheap in practice, since a
+    // .mes that is simply absent fails earlier, before the allocation.
+    //
+    // Note also that this makes an entry-less file indistinguishable from a
+    // missing one, and every accessor below indexes `mes_files[handle]` without
+    // validating - so a caller that ignores this `false` reads `mes_files[-1]`.
     if (mes_file.num_entries == 0) {
         if (mes_file_handle_ptr != NULL) {
             *mes_file_handle_ptr = MES_FILE_HANDLE_INVALID;
@@ -596,7 +606,15 @@ bool parse_field(TigFile* stream, char* buffer)
         }
 
         // Store character in buffer if there's space.
-        if (pos < MAX_STRING) {
+        //
+        // FIX: The bound was `pos < MAX_STRING`, which let `pos` reach
+        // MAX_STRING and made the `buffer[pos] = '\0'` below write one byte
+        // past the end of the caller's `char buffer[MAX_STRING]` - and then
+        // `parse_entry` `strcpy`'d MAX_STRING + 1 bytes into another array of
+        // the same size. The original reserves the terminator's slot:
+        // 0x4D4BF2 is `cmp esi, 0x7cf` (1999), so it stops one short. Reachable
+        // from data alone - any .mes message of MAX_STRING characters or more.
+        if (pos < MAX_STRING - 1) {
             buffer[pos++] = (char)ch;
         } else {
             too_long = true;

@@ -20,6 +20,7 @@ void test_idxtable_suite(void);
 void test_color_suite(void);
 void test_bsearch_suite(void);
 void test_palette_suite(void);
+void test_mes_suite(void);
 
 int main(void)
 {
@@ -29,6 +30,7 @@ int main(void)
     test_color_suite();
     test_bsearch_suite();
     test_palette_suite();
+    test_mes_suite();
 
     return test_report();
 }

@@ -1,0 +1,15 @@
+# LeakSanitizer suppressions for the unit tests.
+#
+# Only for leaks that are *faithful to the original binary* and therefore
+# deliberately not fixed. Anything else should be fixed, not suppressed - the
+# whole value of running the suites under the sanitizer preset is that it fails.
+#
+# Usage:
+#   LSAN_OPTIONS=suppressions=tests/lsan.supp \
+#     ./out/build/linux-x64-asan/tests/arcanum-tests
+#
+# mes_load_internal: a .mes file that opens but parses to zero entries leaks the
+# data buffer allocated for it - `mes_load` returns false without freeing it.
+# The original does the same: 0x4D4317..0x4D4333 sets the handle to -1 and
+# returns 0 with no free call. See the NOTE in src/game/mes.c.
+leak:mes_load_internal
