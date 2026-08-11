@@ -5,6 +5,17 @@
 #include "game/obj.h"
 #include "game/timeevent.h"
 
+// Order verified against the original's own keyword table at 0x5B40BC (and its
+// duplicate at 0x5BB90C): unknown, mentioned, active, achieved, completed,
+// other, botched. That order is load-bearing - quest state is serialised into
+// saves and indexed positionally out of the dialog tables - so it is worth
+// having checked rather than assumed.
+//
+// NOTE for modding: Troika's keywords are not these names. The editor and
+// ScrMaker spell `QUEST_STATE_ACCEPTED` as **qs_active** and
+// `QUEST_STATE_OTHER_COMPLETED` as **qs_other**. No shipped data file uses the
+// keywords - they are tools-side vocabulary - which is why CE has no table for
+// them and does not need one.
 typedef enum QuestState {
     QUEST_STATE_UNKNOWN,
     QUEST_STATE_MENTIONED,

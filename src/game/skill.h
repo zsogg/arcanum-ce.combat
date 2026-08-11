@@ -5,6 +5,11 @@
 #include "game/obj.h"
 #include "game/object.h"
 
+// Order verified against the original's keyword table at 0x5B6FF4: bs_bow,
+// bs_dodge, bs_melee, bs_throwing, bs_backstab, bs_pick_pocket, bs_prowling,
+// bs_spot_trap, bs_gambling, bs_haggle, bs_heal, bs_persuasion - identical to
+// the enum below. Positional, so the order matters: it indexes
+// `basic_skill_stats` (0x5B6F04) and the critter's skill array.
 typedef enum BasicSkill {
     BASIC_SKILL_BOW,
     BASIC_SKILL_DODGE,
@@ -23,6 +28,8 @@ typedef enum BasicSkill {
 
 #define IS_BASIC_SKILL_VALID(bs) ((bs) >= 0 && (bs) < BASIC_SKILL_COUNT)
 
+// Order verified against the keyword table at 0x5B7024: ts_repair, ts_firearms,
+// ts_pick_lock, ts_disarm_trap.
 typedef enum TechSkill {
     TECH_SKILL_REPAIR,
     TECH_SKILL_FIREARMS,
@@ -57,6 +64,11 @@ typedef enum Skill {
 #define GET_BASIC_SKILL(sk) (sk)
 #define GET_TECH_SKILL(sk) ((sk) - BASIC_SKILL_COUNT)
 
+// Order verified against the keyword table at 0x5B7034: st_untrained,
+// st_beginner, st_expert, st_master.
+//
+// NOTE for modding: Troika's keyword for `TRAINING_APPRENTICE` is
+// **st_beginner**.
 typedef enum Training {
     TRAINING_NONE,
     TRAINING_APPRENTICE,
