@@ -25,6 +25,7 @@ void test_random_suite(void);
 void test_stat_suite(void);
 void test_skill_suite(void);
 void test_location_suite(void);
+void test_obj_harness_suite(void);
 
 int main(void)
 {
@@ -39,6 +40,7 @@ int main(void)
     test_stat_suite();
     test_skill_suite();
     test_location_suite();
+    test_obj_harness_suite();
 
     return test_report();
 }

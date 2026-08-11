@@ -27,6 +27,9 @@ add_executable(arcanum-tests
     "test_stat.c"
     "test_skill.c"
     "test_location.c"
+    "test_obj_harness.c"
+    "obj_harness.c"
+    "obj_harness.h"
     "tests_main.c"
 )
 
@@ -41,3 +44,4 @@ target_link_libraries(arcanum-tests PRIVATE
 )
 
 add_test(NAME arcanum-tests COMMAND arcanum-tests)
+
