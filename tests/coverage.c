@@ -80,7 +80,11 @@ void __cyg_profile_func_enter(void* this_fn, void* call_site)
         if (path == NULL) {
             path = "coverage.txt";
         }
-        coverage_out = fopen(path, "w");
+        // Append, not truncate: a coverage session is usually several runs of
+        // the game, and opening with "w" would silently discard everything the
+        // previous run learned. Duplicate lines across runs are harmless - the
+        // consumer dedupes.
+        coverage_out = fopen(path, "a");
         if (coverage_out == NULL) {
             coverage_failed = 1;
             return;
