@@ -315,7 +315,36 @@ set(SRCS
     "src/ui/written_ui.c"
     "src/ui/written_ui.h"
     "src/net_compat.h"
-    "src/main.c"
+)
+
+# Everything except the entry point lives in a static library, so the unit tests
+# can link the game the same way the executable does. `src/main.c` is
+# deliberately not in here: it defines `main`, and nothing outside it references
+# any of its symbols, so this split costs nothing.
+#
+# STATIC rather than OBJECT on purpose. A static library lets the linker take
+# only the objects a target actually needs, so a suite that exercises one module
+# does not drag the whole game - and its unresolved externals - into the test
+# binary. The executable is unaffected: every module is reachable from `main`
+# through the `gamelib`/`gameuilib` module tables, so nothing is dropped. The
+# smoke run in verify-build.sh is what proves that, since it starts the real
+# game.
+add_library(arcanum-game STATIC)
+
+# PRIVATE, not PUBLIC. `target_sources(... PUBLIC)` puts the sources on the
+# target's INTERFACE, so every consumer *recompiles* them rather than linking
+# the archive - which defeats the point and made the first version of this split
+# build the whole game into the test binary.
+target_sources(arcanum-game PRIVATE
+    ${SRCS}
+)
+
+target_include_directories(arcanum-game PUBLIC
+    "${CMAKE_CURRENT_SOURCE_DIR}/src"
+)
+
+target_link_libraries(arcanum-game PUBLIC
+    ${TIG_LIBRARY}
 )
 
 if(ANDROID)
@@ -324,16 +353,12 @@ else()
     add_executable(arcanum-ce WIN32 MACOSX_BUNDLE)
 endif()
 
-target_sources(arcanum-ce PUBLIC
-    ${SRCS}
-)
-
-target_include_directories(arcanum-ce PUBLIC
-    "${CMAKE_CURRENT_SOURCE_DIR}/src"
+target_sources(arcanum-ce PRIVATE
+    "src/main.c"
 )
 
 target_link_libraries(arcanum-ce PUBLIC
-    ${TIG_LIBRARY}
+    arcanum-game
 )
 
 # SDL HID on Android requires C++ linker.

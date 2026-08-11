@@ -3,10 +3,15 @@
 # Off by default so the normal build is untouched; enable with
 # -DARCANUM_BUILD_TESTS=ON.
 #
-# Links the real `tig` rather than stubbing its dependencies. `str_parse.c`
-# needs exactly one external symbol, `tig_debug_printf`, and taking it from the
-# library keeps the code under test identical to the shipped code - a stub is
-# another thing that can drift.
+# Links the real `tig` and the real game rather than stubbing their
+# dependencies, so the code under test is byte-for-byte the shipped code - a
+# stub is another thing that can drift.
+#
+# `arcanum-game` is every game source except `src/main.c` (see the top-level
+# CMakeLists). Because it is a STATIC library the linker takes only the objects
+# a suite actually reaches, so covering one module does not pull the whole game
+# into the test binary. That is what makes game-side suites cheap to add: write
+# `test_foo.c`, call its runner from `tests_main.c`, and the module comes in.
 
 add_executable(arcanum-tests
     "test_harness.c"
@@ -19,20 +24,14 @@ add_executable(arcanum-tests
     "test_palette.c"
     "test_mes.c"
     "tests_main.c"
-
-    # The first suite to cover game code rather than tig. `mes.c` is the only
-    # game module that can be linked on its own - it includes `game/mes.h` and
-    # `tig/tig.h` and nothing else - so it comes in as a source rather than
-    # needing the game split into a library.
-    "${CMAKE_SOURCE_DIR}/src/game/mes.c"
 )
 
 target_include_directories(arcanum-tests PRIVATE
     "${CMAKE_CURRENT_SOURCE_DIR}"
-    "${CMAKE_SOURCE_DIR}/src"
 )
 
 target_link_libraries(arcanum-tests PRIVATE
+    arcanum-game
     tig
     SDL3::SDL3
 )
