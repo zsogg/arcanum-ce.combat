@@ -23,6 +23,7 @@ void test_palette_suite(void);
 void test_mes_suite(void);
 void test_random_suite(void);
 void test_stat_suite(void);
+void test_skill_suite(void);
 
 int main(void)
 {
@@ -35,6 +36,7 @@ int main(void)
     test_mes_suite();
     test_random_suite();
     test_stat_suite();
+    test_skill_suite();
 
     return test_report();
 }

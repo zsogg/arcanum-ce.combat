@@ -25,6 +25,7 @@ add_executable(arcanum-tests
     "test_mes.c"
     "test_random.c"
     "test_stat.c"
+    "test_skill.c"
     "tests_main.c"
 )
 
