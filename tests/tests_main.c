@@ -16,11 +16,13 @@
 
 void test_str_parse_suite(void);
 void test_rect_suite(void);
+void test_idxtable_suite(void);
 
 int main(void)
 {
     test_str_parse_suite();
     test_rect_suite();
+    test_idxtable_suite();
 
     return test_report();
 }

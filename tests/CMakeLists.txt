@@ -13,6 +13,7 @@ add_executable(arcanum-tests
     "test_harness.h"
     "test_str_parse.c"
     "test_rect.c"
+    "test_idxtable.c"
     "tests_main.c"
 )
 
