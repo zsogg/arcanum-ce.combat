@@ -126,6 +126,16 @@ static inline tig_color_t tig_color_blend_alpha(tig_color_t src, tig_color_t dst
         | ((b2 + ((alpha * (b1 - b2)) >> 8)) & tig_color_blue_mask);
 }
 
+// Reads a blend weight out of a palette entry.
+//
+// NOTE: This deliberately reads the *red* channel, not the alpha one, despite
+// the name. Its only callers pass a palette colour from an alpha-mask art, and
+// those palettes hold greyscale weights, so red is the value wanted. Reading
+// the alpha channel instead would be useless: `tig_color_make` hardcodes alpha
+// to `tig_color_alpha_mask`, so every colour tig builds is fully opaque and
+// this would return the same constant for every pixel - making the
+// `tig_color_blend_alpha` calls in art.c no-ops. Read as a copy-paste slip
+// otherwise, so it is spelled out here.
 static inline int tig_color_alpha(tig_color_t color)
 {
     return (color & tig_color_red_mask) >> tig_color_red_shift;

@@ -14,6 +14,7 @@ add_executable(arcanum-tests
     "test_str_parse.c"
     "test_rect.c"
     "test_idxtable.c"
+    "test_color.c"
     "tests_main.c"
 )
 
