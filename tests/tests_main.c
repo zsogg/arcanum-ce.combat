@@ -15,10 +15,12 @@
 #include "test_harness.h"
 
 void test_str_parse_suite(void);
+void test_rect_suite(void);
 
 int main(void)
 {
     test_str_parse_suite();
+    test_rect_suite();
 
     return test_report();
 }

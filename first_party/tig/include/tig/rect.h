@@ -65,6 +65,21 @@ int tig_rect_clip(const TigRect* a, const TigRect* b, TigRect* rects);
 
 // Adds a rectangle to a rect list, splitting it so the list stays free of
 // overlaps while covering the same area. Used to accumulate dirty rects.
+//
+// PRECONDITION: `*node_ptr` must not be NULL. The function walks the list to
+// find the node to append after, so an empty list leaves that pointer NULL and
+// it is then dereferenced. Seed the first node yourself:
+//
+//     if (head != NULL) {
+//         tig_rect_list_add_disjoint(&head, &rect);
+//     } else {
+//         head = tig_rect_node_create();
+//         head->rect = rect;
+//     }
+//
+// Every caller in the tree already does exactly this, which is why the crash
+// has never been seen. Documented rather than guarded against, to keep the
+// function identical to 0x52D480.
 void tig_rect_list_add_disjoint(TigRectListNode** node_ptr, TigRect* rect);
 
 // Computes a union of two rectangles.
