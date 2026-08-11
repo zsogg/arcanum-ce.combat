@@ -59,6 +59,12 @@ void tig_palette_copy(TigPalette* dst, const TigPalette* src);
 // Both `src_palette` and `dst_palette` must not be NULL, but might be the same
 // palette object, in this case the operation is performed in-place. Otherwise
 // `src_palette` is copied into `dst_palette`.
+//
+// NOTE: That last sentence does not hold when `flags` is 0 - the function
+// returns before the copy, so a caller asking for no operation gets its
+// destination left untouched rather than overwritten with the source. Both
+// operations together are applied greyscale first, then tint, which is not
+// commutative.
 void tig_palette_modify(const TigPaletteModifyInfo* modify_info);
 
 // Returns amount of system memory required for palette (including overhead).
