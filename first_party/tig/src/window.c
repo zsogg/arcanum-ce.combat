@@ -1802,15 +1802,26 @@ int tig_window_move(tig_window_handle_t window_handle, int x, int y)
     window_index = tig_window_handle_to_index(window_handle);
     win = &(windows[window_index]);
 
-    if ((win->flags & TIG_WINDOW_HIDDEN) != 0) {
-        tig_window_invalidate_rect(&(win->frame));
-    }
+    // CE: Repaint what the window uncovers and what it now covers. This was
+    // guarded by `(flags & TIG_WINDOW_HIDDEN) != 0`, which is backwards - a
+    // hidden window that moves changes nothing on screen, and a visible one is
+    // the case that needs both rects repainted. The guard also made the two
+    // real callers useless in opposite ways: `intgame_hide` hides before
+    // moving, so the invalidate fired when there was nothing to repaint, while
+    // `intgame_show` shows before moving, so `tig_window_show` invalidated the
+    // *old* position and the move then skipped the new one entirely. Nothing
+    // showed only because both callers sit inside a menu transition that
+    // redraws the screen anyway. Invalidating unconditionally costs a repaint
+    // of a region that may not need one; missing one costs a stale rectangle.
+    tig_window_invalidate_rect(&(win->frame));
 
     dx = x - win->frame.x;
     dy = y - win->frame.y;
 
     win->frame.x = x;
     win->frame.y = y;
+
+    tig_window_invalidate_rect(&(win->frame));
 
     // CE: Carry the window's buttons with it. Their rects are cached in screen
     // space by `tig_button_create`, so without this they keep the origin the
@@ -1823,10 +1834,6 @@ int tig_window_move(tig_window_handle_t window_handle, int x, int y)
         for (index = 0; index < win->num_buttons; index++) {
             tig_button_translate(win->buttons[index], dx, dy);
         }
-    }
-
-    if ((win->flags & TIG_WINDOW_HIDDEN) != 0) {
-        tig_window_invalidate_rect(&(win->frame));
     }
 
     return TIG_OK;
