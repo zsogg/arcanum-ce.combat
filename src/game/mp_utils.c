@@ -522,7 +522,7 @@ void sub_4EF830(int64_t a1, int64_t a2)
 
     if (!tig_net_is_active()
         || tig_net_is_host()) {
-        sub_4445A0(a1, a2);
+        object_pull_to_actor(a1, a2);
         return;
     }
 
@@ -541,7 +541,7 @@ void sub_4EF8B0(Packet118* pkt)
     if (tig_net_is_host()) {
         mp_oid_to_obj(pkt->field_8, &v1);
         mp_oid_to_obj(pkt->field_20, &v2);
-        sub_4445A0(v1, v2);
+        object_pull_to_actor(v1, v2);
     }
 }
 

@@ -68,7 +68,7 @@ typedef struct ObjectRenderColorsNode {
 } ObjectRenderColorsNode;
 
 static void object_hover_underlay_draw(GameDrawInfo* draw_info);
-static void sub_43CEA0(int64_t obj, unsigned int flags, const char* path);
+static void object_destroy_internal(int64_t obj, unsigned int flags, const char* path);
 static int object_hp_from_pts(int64_t obj);
 static int object_hp_from_stats(int64_t obj);
 static int object_calc_traversal_cost_func(int64_t obj, int64_t loc, int rot, int orig_rot, unsigned int flags, int64_t* block_obj_ptr, int* block_obj_type_ptr, bool* is_window_ptr);
@@ -78,7 +78,7 @@ static bool object_duplicate_func(int64_t proto_obj, int64_t loc, ObjectID* oids
 static bool object_place_in_world(int64_t obj, int64_t loc);
 static void object_set_offset_internal(int64_t obj, int offset_x, int offset_y);
 static void object_render_palette_clear(int64_t obj);
-static void sub_442D90(int64_t obj, ObjectRenderColors* colors);
+static void object_render_colors_calc(int64_t obj, ObjectRenderColors* colors);
 static TigPalette* object_render_palette_get(int64_t obj);
 static void object_render_colors_set(int64_t obj, ObjectRenderColors* colors);
 static void object_render_colors_clear(int64_t obj);
@@ -1321,7 +1321,7 @@ void object_destroy(int64_t obj)
     if (object_editor) {
         char* save_path;
         map_paths(NULL, &save_path);
-        sub_43CEA0(obj, -1, save_path);
+        object_destroy_internal(obj, -1, save_path);
         return;
     }
 
@@ -1380,8 +1380,15 @@ void object_destroy(int64_t obj)
     obj_field_int32_set(obj, OBJ_F_FLAGS, flags);
 }
 
+// The body of `object_destroy`: invalidates the object's screen rect, throws
+// away anything it was carrying, removes its `.mob` file if it had one, and
+// then hands off to the per-type teardown.
+//
+// Only the mobile types get a `.mob` deleted - the static ones live in their
+// sector's data rather than in a file of their own.
+//
 // 0x43CEA0
-void sub_43CEA0(int64_t obj, unsigned int flags, const char* path)
+void object_destroy_internal(int64_t obj, unsigned int flags, const char* path)
 {
     TigRect rect;
     int type;
@@ -1606,7 +1613,7 @@ void object_flags_unset(int64_t obj, unsigned int flags)
 
     if (visibility_changed) {
         if (!object_editor) {
-            sub_43F710(obj);
+            object_scenery_animation_refresh(obj);
         }
     }
 }
@@ -1853,8 +1860,11 @@ bool object_is_static(int64_t obj)
     return (obj_field_int32_get(obj, OBJ_F_FLAGS) & OF_DYNAMIC) == 0;
 }
 
+// Finds the topmost object under a screen position, which is what mouse
+// targeting is built on.
+//
 // 0x43D9F0
-bool sub_43D9F0(int x, int y, int64_t* obj_ptr, unsigned int flags)
+bool object_at_screen_pos(int x, int y, int64_t* obj_ptr, unsigned int flags)
 {
     TigRect rect;
     LocRect loc_rect;
@@ -2406,7 +2416,7 @@ void object_set_current_aid(int64_t obj, tig_art_id_t aid)
         object_get_rect(obj, 0x7, &update_rect);
         tig_rect_union(&dirty_rect, &update_rect, &dirty_rect);
         object_iso_invalidate_rect(&dirty_rect);
-        sub_43F710(obj);
+        object_scenery_animation_refresh(obj);
     }
 }
 
@@ -2553,8 +2563,14 @@ void object_remove_flags(int64_t obj, unsigned int flags)
     }
 }
 
+// Tells the renderer an object's art id has been replaced: invalidates the
+// screen rect and drops the cached render state that belonged to the old art.
+//
+// Skipped entirely for a destroyed object, which has no rect worth
+// invalidating.
+//
 // 0x43F030
-void sub_43F030(int64_t obj)
+void object_art_changed(int64_t obj)
 {
     TigRect rect;
 
@@ -2588,8 +2604,11 @@ void object_cycle_palette(int64_t obj)
     }
 }
 
+// Switches an object to a specific palette, where `object_cycle_palette`
+// advances to the next one.
+//
 // 0x43F130
-void sub_43F130(int64_t obj, int palette)
+void object_set_palette(int64_t obj, int palette)
 {
     tig_art_id_t aid;
     TigRect rect;
@@ -2597,7 +2616,11 @@ void sub_43F130(int64_t obj, int palette)
     if ((obj_field_int32_get(obj, OBJ_F_FLAGS) & OF_DESTROYED) == 0) {
         aid = obj_field_int32_get(obj, OBJ_F_CURRENT_AID);
         aid = tig_art_id_palette_set(aid, palette);
-        // NOTE: Looks wrong.
+        // The palette is applied only when the art *fails* to resolve, which
+        // is backwards from `object_cycle_palette` next door and reads like a
+        // porting slip. It is not: 0x43F130 does `test eax, eax; je` past the
+        // whole block, and TIG_OK is 0, so the original applies on non-zero
+        // exactly as this does. Troika's oddity, transcribed faithfully.
         if (sub_502E00(aid) != TIG_OK) {
             obj_field_int32_set(obj, OBJ_F_CURRENT_AID, aid);
             object_get_rect(obj, 0, &rect);
@@ -2809,8 +2832,16 @@ bool object_is_busted(int64_t obj)
     return false;
 }
 
+// Starts or stops a scenery object's idle animation loop after something
+// changed that might affect it.
+//
+// Scenery animates by default; it is stopped when the object opts out with
+// OSCF_NO_AUTO_ANIMATE, or when there is nothing to play - a single-frame art
+// with no accompanying sound. The `anim_is_processing_run` guard keeps it from
+// interrupting goals while the animation system is mid-pass.
+//
 // 0x43F710
-void sub_43F710(int64_t obj)
+void object_scenery_animation_refresh(int64_t obj)
 {
     TigArtAnimData art_anim_data;
 
@@ -3861,8 +3892,14 @@ void object_list_copy(ObjectList* dst, ObjectList* src)
     }
 }
 
+// Counts the members of an object's party.
+//
+// NOTE: no callers, in CE or the original. Note also that the loop is a
+// do/while, so an object with no party still counts as one - which may be why
+// nobody uses it. Left as transcribed.
+//
 // 0x441540
-int sub_441540(int64_t obj)
+int object_party_size(int64_t obj)
 {
     int cnt = 0;
     int party_member_index;
@@ -4446,8 +4483,11 @@ void object_set_offset_internal(int64_t obj, int offset_x, int offset_y)
     sub_4DD0A0(obj, offset_x, offset_y);
 }
 
+// Recomputes an object's render flags from its blit flags and lighting, and
+// invalidates its rect if they changed.
+//
 // 0x442520
-void sub_442520(int64_t obj)
+void object_render_flags_update(int64_t obj)
 {
     unsigned int render_flags;
     unsigned int new_render_flags;
@@ -4552,7 +4592,7 @@ void sub_442520(int64_t obj)
 
         obj_field_int32_set(obj, OBJ_F_COLOR, color);
         obj_field_int32_set(obj, OBJ_F_RENDER_FLAGS, new_render_flags | ORF_02000000);
-        sub_442D90(obj, &colors);
+        object_render_colors_calc(obj, &colors);
     }
 
     object_get_rect(obj, 0x07, &obj_rect);
@@ -4571,8 +4611,12 @@ void object_render_palette_clear(int64_t obj)
     }
 }
 
+// Works out the palette and colour treatment an object should be drawn with -
+// grayscale when stoned, unlit when OF_DONTLIGHT or an additive/multiplicative
+// blend is in play, and so on.
+//
 // 0x442D90
-void sub_442D90(int64_t obj, ObjectRenderColors* colors)
+void object_render_colors_calc(int64_t obj, ObjectRenderColors* colors)
 {
     unsigned int obj_flags;
     unsigned int render_flags;
@@ -4783,7 +4827,7 @@ void object_setup_blit(int64_t obj, TigArtBlitInfo* blit_info)
 
     render_flags = obj_field_int32_get(obj, OBJ_F_RENDER_FLAGS);
     if ((render_flags & (ORF_02000000 | ORF_01000000)) != (ORF_02000000 | ORF_01000000)) {
-        sub_442520(obj);
+        object_render_flags_update(obj);
         render_flags = obj_field_int32_get(obj, OBJ_F_RENDER_FLAGS);
     }
 
@@ -5467,27 +5511,34 @@ int64_t get_fire_at_location(int64_t loc)
     return node != NULL ? obj : OBJ_HANDLE_NULL;
 }
 
+// Drags an object onto the actor's own tile - the Alt+click shortcut, per
+// `intgame`'s use of it on items and on dead critters.
+//
+// Refuses at any distance greater than one tile, and says so only when the
+// actor is the local PC. Items already inside an inventory are skipped, which
+// is what the OF_INVENTORY test is for.
+//
 // 0x4445A0
-void sub_4445A0(int64_t a1, int64_t a2)
+void object_pull_to_actor(int64_t actor_obj, int64_t obj)
 {
     int type;
     int64_t loc;
 
-    type = obj_field_int32_get(a2, OBJ_F_TYPE);
+    type = obj_field_int32_get(obj, OBJ_F_TYPE);
     // FIXED: Was reading `OBJ_F_TYPE` and masking it with `OF_INVENTORY`
     // (0x1000), which no object type can ever have, so the "skip items held
     // in an inventory" guard was always true. The original reads field 0x13
     // (`OBJ_F_FLAGS`) here - see `push 0x13; call 0x406ca0; test ah, 0x10` at
     // 0x4445DB.
     if (obj_type_is_critter(type)
-        || (obj_type_is_item(type) && (obj_field_int32_get(a2, OBJ_F_FLAGS) & OF_INVENTORY) == 0)) {
-        if (object_dist(a1, a2) > 1) {
-            if (player_is_local_pc_obj(a1)) {
+        || (obj_type_is_item(type) && (obj_field_int32_get(obj, OBJ_F_FLAGS) & OF_INVENTORY) == 0)) {
+        if (object_dist(actor_obj, obj) > 1) {
+            if (player_is_local_pc_obj(actor_obj)) {
                 ui_feedback_msg(0);
             }
         } else {
-            loc = obj_field_int64_get(a1, OBJ_F_LOCATION);
-            object_move_to(a2, loc, 0, 0);
+            loc = obj_field_int64_get(actor_obj, OBJ_F_LOCATION);
+            object_move_to(obj, loc, 0, 0);
         }
     }
 }

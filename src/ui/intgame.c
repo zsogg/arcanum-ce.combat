@@ -3645,7 +3645,7 @@ void intgame_perform_action_on_target(TargetDescriptor* td)
                 }
 
                 if (tig_kb_get_modifier(SDL_KMOD_ALT)) {
-                    sub_4445A0(pc_obj, td->obj);
+                    object_pull_to_actor(pc_obj, td->obj);
                     return;
                 }
 
@@ -3669,7 +3669,7 @@ void intgame_perform_action_on_target(TargetDescriptor* td)
                     }
 
                     if (tig_kb_get_modifier(SDL_KMOD_ALT)) {
-                        sub_4445A0(pc_obj, td->obj);
+                        object_pull_to_actor(pc_obj, td->obj);
                         return;
                     }
 

@@ -323,7 +323,7 @@ bool sub_4F28A0(int x, int y, TargetDescriptor* td)
         }
     }
 
-    if (sub_43D9F0(x, y, &v2, 0x3)) {
+    if (object_at_screen_pos(x, y, &v2, 0x3)) {
         sub_4F2C60(&v2);
         target_descriptor_set_obj(td, v2);
         if (sub_4F2680(&v1)) {

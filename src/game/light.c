@@ -1307,7 +1307,7 @@ uint8_t sub_4DCE10(int64_t obj)
     tig_color_t color;
 
     if ((obj_field_int32_get(obj, OBJ_F_RENDER_FLAGS) & ORF_02000000) == 0) {
-        sub_442520(obj);
+        object_render_flags_update(obj);
     }
 
     color = obj_field_int32_get(obj, OBJ_F_COLOR);

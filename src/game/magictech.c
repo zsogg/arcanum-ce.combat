@@ -1983,7 +1983,7 @@ void magictech_effect_summon(MagicTechSummonInfo* summon_info)
 
             if (obj_field_int32_get(obj, OBJ_F_TYPE) == OBJ_TYPE_SCENERY) {
                 anim_interrupt_all_goals_of_obj(obj, 5, false, false);
-                sub_43F710(obj);
+                object_scenery_animation_refresh(obj);
             }
         } else {
             if (!multiplayer_is_locked()) {

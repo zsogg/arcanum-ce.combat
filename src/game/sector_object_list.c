@@ -544,7 +544,7 @@ bool objlist_insert_internal(SectorObjectList* list, int64_t obj)
     sub_4F20A0(list, node);
 
     if (object_is_static_type(obj)) {
-        sub_43F710(obj);
+        object_scenery_animation_refresh(obj);
     } else {
         sub_435CE0(obj);
     }

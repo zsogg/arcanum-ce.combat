@@ -1735,7 +1735,7 @@ void critter_set_concealed_internal(int64_t obj, bool concealed)
     // Apply new animation if active.
     if (critter_is_active(obj)) {
         object_set_current_aid(obj, new_art_id);
-        sub_43F030(obj);
+        object_art_changed(obj);
     }
 
     // Trigger fidget animation if revealed in combat.
