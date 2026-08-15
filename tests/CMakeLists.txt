@@ -45,3 +45,18 @@ target_link_libraries(arcanum-tests PRIVATE
 
 add_test(NAME arcanum-tests COMMAND arcanum-tests)
 
+# The CE half of the emulation differential. Driven by
+# `arcanum-work/harness/emudiff`, which runs the same functions out of the
+# original Arcanum.exe under emulation and compares. Not registered with
+# `add_test`: the driver needs the original binary, which is not part of this
+# repository.
+add_executable(arcanum-emudiff-oracle
+    "emudiff_oracle.c"
+)
+
+target_link_libraries(arcanum-emudiff-oracle PRIVATE
+    arcanum-game
+    tig
+    SDL3::SDL3
+)
+

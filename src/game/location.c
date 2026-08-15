@@ -291,7 +291,18 @@ void location_origin_significant_change_callback_set(LocationOriginSignificantCh
     location_origin_significant_change_callback = func;
 }
 
-// NOTE: Original code is likely different.
+// NOTE: Original code is different, and the difference has been measured.
+//
+// As in `location_dist`, the original subtracts the packed halves as
+// zero-extended 64-bit values where this works in 32-bit ints. The boundary
+// sits one bit lower here than there, because `ddx`/`ddy` double the delta
+// and `2 * abs(dx)` overflows int32 first.
+//
+// The emulation differential (`arcanum-work/harness/emudiff`) runs 0x4B8D50
+// itself against this function: they agree on every coordinate below 2^30 and
+// disagree above it. Map extents come from `map_properties`, in tiles, and
+// nothing approaches 2^30 tiles - so this is equivalent everywhere the game
+// can reach, and the case is kept to hold that boundary still.
 //
 // 0x4B8D50
 int location_rot(int64_t a, int64_t b)
@@ -529,7 +540,16 @@ bool location_normalize(int64_t* loc, int* offset_x, int* offset_y)
     return true;
 }
 
-// NOTE: Original code is likely different.
+// NOTE: Original code is different, and the difference has been measured.
+//
+// The original zero-extends each packed half to 64 bits and subtracts with
+// `sub`/`sbb`, then compares the two magnitudes as signed 64-bit; this
+// subtracts them as 32-bit signed ints, which wraps where the original widens.
+//
+// The emulation differential (`arcanum-work/harness/emudiff`) runs 0x4B96F0
+// itself against this function: they agree on every coordinate below 2^31 and
+// disagree at or above it. No map declares extents anywhere near that, so the
+// two are equivalent everywhere the game can reach.
 //
 // 0x4B96F0
 int64_t location_dist(int64_t a, int64_t b)
