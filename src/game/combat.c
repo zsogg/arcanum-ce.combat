@@ -533,7 +533,7 @@ void sub_4B2690(int64_t proj_obj, int64_t a2, int64_t a3, CombatContext* combat,
             obj_field_int32_set(a2, OBJ_F_CRITTER_FLAGS2, critter_flags2);
 
             object_destroy(proj_obj);
-            sub_4A9AD0(a2, a3);
+            ai_start_attacking(a2, a3);
         }
     } else {
         object_destroy(proj_obj);

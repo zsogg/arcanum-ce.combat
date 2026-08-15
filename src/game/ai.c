@@ -86,8 +86,8 @@ static bool ai_look_for_item(Ai* ai);
 static bool ai_look_for_item_func(int64_t obj, unsigned int flags);
 static void sub_4A92D0(Ai* ai);
 static void ai_redirect_func(int64_t source_obj, int64_t target_obj);
-static void sub_4A9B80(int64_t a1, int64_t a2, int a3, int a4);
-static void sub_4A9C00(int64_t a1, int64_t a2, int64_t a3, int a4, int a5, int a6);
+static void ai_notify_followers_of_attack(int64_t leader_obj, int64_t target_obj, int allow_complaint, int suppress_reaction);
+static void ai_follower_react_to_attack(int64_t follower_obj, int64_t leader_obj, int64_t target_obj, int allow_complaint, int suppress_reaction, int lock_target);
 static void ai_notify_attack_witnesses(int64_t a1, int64_t a2, int loudness);
 static void ai_witness_attack(int64_t a1, int64_t a2, int64_t a3, int loudness);
 static void sub_4AA420(int64_t obj, int64_t a2);
@@ -945,13 +945,13 @@ void ai_attack(int64_t source_obj, int64_t target_obj, int loudness, unsigned in
         if ((flags & 0x04) != 0) {
             leader_obj = critter_leader_get(source_obj);
             if (leader_obj != OBJ_HANDLE_NULL) {
-                sub_4A9C00(source_obj, leader_obj, target_obj, 1, 0, 1);
+                ai_follower_react_to_attack(source_obj, leader_obj, target_obj, 1, 0, 1);
             }
             return;
         }
 
         if ((flags & 0x02) == 0) {
-            sub_4A9B80(source_obj, target_obj, 1, (flags & 0x01) != 0);
+            ai_notify_followers_of_attack(source_obj, target_obj, 1, (flags & 0x01) != 0);
         }
 
         if (obj_type_is_critter(target_obj_type)) {
@@ -972,10 +972,10 @@ void ai_attack(int64_t source_obj, int64_t target_obj, int loudness, unsigned in
 
             if ((flags & 0x02) == 0) {
                 if (target_obj_type == OBJ_TYPE_PC) {
-                    sub_4A9AD0(target_obj, source_obj);
+                    ai_start_attacking(target_obj, source_obj);
                 }
 
-                sub_4A9B80(target_obj, source_obj, 0, (flags & 0x01) != 0);
+                ai_notify_followers_of_attack(target_obj, source_obj, 0, (flags & 0x01) != 0);
 
                 if ((flags & 0x01) == 0) {
                     ai_notify_attack_witnesses(target_obj, source_obj, loudness);
@@ -1051,8 +1051,15 @@ void ai_attack(int64_t source_obj, int64_t target_obj, int loudness, unsigned in
     }
 }
 
+// Puts a critter into combat and starts it swinging - the counterpart to
+// `ai_stop_attacking`.
+//
+// The attack goal is only issued if the critter is free to take it (idle, or
+// not already mid-animation) and has auto-attack switched on, so this asks
+// rather than forces. In turn-based mode it also hands the turn to the target.
+//
 // 0x4A9AD0
-void sub_4A9AD0(int64_t attacker_obj, int64_t target_obj)
+void ai_start_attacking(int64_t attacker_obj, int64_t target_obj)
 {
     if (attacker_obj == target_obj) {
         return;
@@ -1078,75 +1085,98 @@ void sub_4A9AD0(int64_t attacker_obj, int64_t target_obj)
     }
 }
 
+// Lets each of a critter's followers respond to a fight their leader is in.
+//
+// `ai_attack` calls this twice, once for each side, and the two differ only in
+// `allow_complaint`: the attacker's followers may object to what their leader
+// is doing, the victim's may not, since there is nothing to object to.
+//
 // 0x4A9B80
-void sub_4A9B80(int64_t a1, int64_t a2, int a3, int a4)
+void ai_notify_followers_of_attack(int64_t leader_obj, int64_t target_obj, int allow_complaint, int suppress_reaction)
 {
     ObjectList followers;
     ObjectNode* node;
 
-    if (a1 != a2) {
-        object_list_followers(a1, &followers);
+    if (leader_obj != target_obj) {
+        object_list_followers(leader_obj, &followers);
         node = followers.head;
         while (node != NULL) {
-            sub_4A9C00(node->obj, a1, a2, a3, a4, 0);
+            ai_follower_react_to_attack(node->obj, leader_obj, target_obj, allow_complaint, suppress_reaction, 0);
             node = node->next;
         }
         object_list_destroy(&followers);
     }
 }
 
+// One follower's response to its leader fighting `target_obj`: join in, or
+// object to it.
+//
+// `ai_check_upset_attacking` decides which. A follower that disapproves of the
+// target - the wrong faction, a bystander, someone it likes - complains rather
+// than helps, floats a line about it, and docks its opinion of the leader by
+// five reaction points. A follower that has no objection joins the fight.
+//
+// The complaint is doubly gated: `allow_complaint` must be set, and the target
+// must not already be in combat mode, so a follower grumbles when its leader
+// picks a fight and not when it is defending itself.
+//
+// `lock_target` selects how joining works. It is set only on the path where a
+// critter attacks on its leader's behalf, and locks the target rather than
+// running it through `ai_react_to_threat`'s retargeting policy - so an
+// ordered attack sticks where an opportunistic one may be reconsidered.
+//
 // 0x4A9C00
-void sub_4A9C00(int64_t source_obj, int64_t a2, int64_t target_obj, int a4, int a5, int a6)
+void ai_follower_react_to_attack(int64_t follower_obj, int64_t leader_obj, int64_t target_obj, int allow_complaint, int suppress_reaction, int lock_target)
 {
     int target_obj_type;
     int rc;
     char str[1000];
     int speech_id;
 
-    if (a2 == target_obj) {
+    if (leader_obj == target_obj) {
         return;
     }
 
     target_obj_type = obj_field_int32_get(target_obj, OBJ_F_TYPE);
     if (obj_type_is_critter(target_obj_type)) {
-        if (source_obj == target_obj || critter_is_dead(source_obj)) {
+        if (follower_obj == target_obj || critter_is_dead(follower_obj)) {
             return;
         }
 
-        rc = ai_check_upset_attacking(source_obj, target_obj, a2);
+        rc = ai_check_upset_attacking(follower_obj, target_obj, leader_obj);
         if (rc != 0) {
-            if (a4
+            if (allow_complaint
                 && !combat_critter_is_combat_mode_active(target_obj)
-                && !a5
+                && !suppress_reaction
                 && ai_float_line_func != NULL) {
-                if (critter_is_active(source_obj)) {
-                    dialog_copy_npc_upset_attacking_msg(source_obj, a2, rc, str, &speech_id);
-                    ai_float_line_func(source_obj, a2, str, speech_id);
+                if (critter_is_active(follower_obj)) {
+                    dialog_copy_npc_upset_attacking_msg(follower_obj, leader_obj, rc, str, &speech_id);
+                    ai_float_line_func(follower_obj, leader_obj, str, speech_id);
                 }
 
-                reaction_adj(source_obj, a2, -5);
+                reaction_adj(follower_obj, leader_obj, -5);
             }
             return;
         }
 
-        if (a5) {
+        if (suppress_reaction) {
             return;
         }
 
-        if (a6) {
-            ai_target_lock(source_obj, target_obj);
+        if (lock_target) {
+            ai_target_lock(follower_obj, target_obj);
         } else {
-            ai_react_to_threat(source_obj, target_obj);
+            ai_react_to_threat(follower_obj, target_obj);
         }
     } else {
-        if (a5) {
+        if (suppress_reaction) {
             return;
         }
 
-        if (a6) {
-            ai_target_lock(source_obj, target_obj);
+        if (lock_target) {
+            ai_target_lock(follower_obj, target_obj);
         } else {
-            ai_apply_danger_type(source_obj,
+            ai_apply_danger_type(follower_obj,
                 AI_DANGER_SOURCE_TYPE_COMBAT_FOCUS,
                 target_obj,
                 NULL);
