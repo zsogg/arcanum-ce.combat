@@ -391,7 +391,7 @@ void sub_5681C0(int64_t pc_obj, int64_t npc_obj)
 {
     char text[1000];
 
-    sub_4132A0(npc_obj, pc_obj, text);
+    dialog_copy_npc_greeting_msg(npc_obj, pc_obj, text);
     dialog_ui_npc_say(npc_obj, pc_obj, TB_TYPE_WHITE, TB_EXPIRE_DEFAULT, text, -1);
 }
 

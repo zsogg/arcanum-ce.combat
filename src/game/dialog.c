@@ -404,7 +404,7 @@ void dialog_exit(void)
 
     for (index = 0; index < dialog_files_capacity; index++) {
         if (dialog_files[index].path[0] != '\0') {
-            sub_412F60(index);
+            dialog_file_free(index);
         }
     }
 
@@ -452,8 +452,11 @@ void dialog_unload(int dlg)
     dialog_files[dlg].refcount--;
 }
 
+// Releases a loaded dialog file: frees every entry, then the entry array, and
+// blanks the path so the slot reads as unused.
+//
 // 0x412F60
-void sub_412F60(int dlg)
+void dialog_file_free(int dlg)
 {
     int index;
 
@@ -568,8 +571,15 @@ void dialog_end(DialogState* state)
     sub_4C10A0(state->npc_obj, state->pc_obj);
 }
 
+// Builds the line an NPC greets the PC with, or an empty string if it cannot
+// speak - one of the `dialog_copy_npc_*_msg` family.
+//
+// A party member is greeted differently: the "1 0, 2 0, ... 8 0" string is a
+// set of dialog tests that steers `dialog_build_greeting` towards the
+// follower-specific lines instead of the stranger ones.
+//
 // 0x4132A0
-void sub_4132A0(int64_t npc_obj, int64_t pc_obj, char* buffer)
+void dialog_copy_npc_greeting_msg(int64_t npc_obj, int64_t pc_obj, char* buffer)
 {
     DialogState state;
 
@@ -750,16 +760,22 @@ void dialog_copy_npc_let_me_handle_msg(int64_t npc_obj, int64_t pc_obj, char* bu
     }
 }
 
+// Builds the NPC's line for `state->num` into `state->reply`.
+//
+// `force` skips the `ai_can_speak` check. Script actions pass true, because a
+// script that says to speak a line means it; the DIALOG_ACTION_FL float-line
+// path passes false, so a critter that has been silenced stays silent.
+//
 // 0x413A30
-void sub_413A30(DialogState* a1, bool a2)
+void dialog_build_line(DialogState* state, bool force)
 {
-    if (a2 || ai_can_speak(a1->npc_obj, a1->pc_obj, false) == AI_SPEAK_OK) {
-        a1->status_num = a1->num;
-        a1->status = DIALOG_STATUS_CONTINUE;
-        dialog_build_npc_reply(a1, 0);
+    if (force || ai_can_speak(state->npc_obj, state->pc_obj, false) == AI_SPEAK_OK) {
+        state->status_num = state->num;
+        state->status = DIALOG_STATUS_CONTINUE;
+        dialog_build_npc_reply(state, 0);
     } else {
-        a1->reply[0] = '\0';
-        a1->speech_id = -1;
+        state->reply[0] = '\0';
+        state->speech_id = -1;
     }
 }
 
@@ -1992,7 +2008,7 @@ bool dialog_perform_actions(DialogState* a1, char* a2, int a3)
             break;
         case DIALOG_ACTION_FL:
             a1->num = value;
-            sub_413A30(a1, false);
+            dialog_build_line(a1, false);
             a1->status = DIALOG_STATUS_FLOAT_AND_END;
             v57 = false;
             break;
@@ -2630,7 +2646,7 @@ bool find_dialog(const char* path, int* index_ptr)
     if (candidate != -1) {
         *index_ptr = candidate;
         if (dialog_files[candidate].path[0] != '\0') {
-            sub_412F60(candidate);
+            dialog_file_free(candidate);
         }
         return false;
     }
@@ -3832,7 +3848,7 @@ bool dialog_apply_status_flags(unsigned int flags, int a2, DialogState* a3)
 {
     if ((flags & 0x1) != 0) {
         a3->num = a2;
-        sub_413A30(a3, 0);
+        dialog_build_line(a3, 0);
         a3->status = DIALOG_STATUS_FLOAT_AND_END;
         return true;
     }

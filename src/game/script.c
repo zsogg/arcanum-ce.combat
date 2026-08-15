@@ -2943,7 +2943,7 @@ void script_float_line(ScriptAction* action, ScriptState* state)
     cnt = script_resolve_focus_obj(action->op_type[1], action->op_value[1], state, objs, &objects);
     for (index = 0; index < cnt; index++) {
         v1.npc_obj = objs[index];
-        sub_413A30(&v1, true);
+        dialog_build_line(&v1, true);
         script_float_line_func(objs[index], v1.pc_obj, v1.reply, v1.speech_id);
     }
 
@@ -2979,7 +2979,7 @@ void script_print_line(ScriptAction* action, ScriptState* state)
     v1.pc_obj = state->invocation->triggerer_obj;
     v1.num = script_get_value(action->op_type[0], action->op_value[0], state);
     v1.script_num = state->invocation->script->num;
-    sub_413A30(&v1, true);
+    dialog_build_line(&v1, true);
 
     ui_message.type = script_get_value(action->op_type[1], action->op_value[1], state);
     ui_message.str = v1.reply;
