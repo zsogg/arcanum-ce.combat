@@ -103,9 +103,9 @@ static void ai_engage_or_flee(int64_t a1, int64_t a2);
 static bool ai_should_flee(int64_t source_obj, int64_t target_obj);
 static int64_t ai_find_target(int64_t a1);
 static bool sub_4AB990(int64_t a1, int64_t a2);
-static void sub_4ABC20(Ai* ai);
-static bool sub_4ABC70(Ai* ai);
-static int sub_4ABE20(Ai* ai);
+static void ai_choose_action(Ai* ai);
+static bool ai_choose_magictech_action(Ai* ai);
+static int ai_magictech_chance(Ai* ai);
 static bool ai_is_stronger(int64_t attacker_obj, int64_t target_obj);
 static bool ai_choose_action_from_list(Ai* ai, S4ABF10* a2);
 static void ai_action_perform(Ai* ai);
@@ -786,7 +786,7 @@ void sub_4A92D0(Ai* ai)
         danger_source_obj = ai_find_target(ai->obj);
         if (danger_source_obj != OBJ_HANDLE_NULL) {
             ai->danger_source = danger_source_obj;
-            sub_4ABC20(ai);
+            ai_choose_action(ai);
             ai->danger_type = ai_apply_danger_type(ai->obj,
                 AI_DANGER_SOURCE_TYPE_COMBAT_FOCUS,
                 danger_source_obj,
@@ -797,7 +797,7 @@ void sub_4A92D0(Ai* ai)
         danger_source_obj = sub_4ABBC0(ai->obj);
         if (danger_source_obj != OBJ_HANDLE_NULL) {
             ai->danger_source = danger_source_obj;
-            sub_4ABC20(ai);
+            ai_choose_action(ai);
             ai->danger_type = ai_apply_danger_type(ai->obj,
                 AI_DANGER_SOURCE_TYPE_COMBAT_FOCUS,
                 danger_source_obj,
@@ -808,7 +808,7 @@ void sub_4A92D0(Ai* ai)
         obj_field_obj_get(ai->obj, OBJ_F_NPC_WHO_HIT_ME_LAST, &danger_source_obj);
         ai->danger_source = danger_source_obj;
         if (sub_4AB990(ai->obj, ai->danger_source)) {
-            sub_4ABC20(ai);
+            ai_choose_action(ai);
             ai->danger_type = ai_apply_danger_type(ai->obj,
                 AI_DANGER_SOURCE_TYPE_COMBAT_FOCUS,
                 danger_source_obj,
@@ -819,7 +819,7 @@ void sub_4A92D0(Ai* ai)
         danger_source_obj = ai_shitlist_get(ai->obj);
         ai->danger_source = danger_source_obj;
         if (ai->danger_source != OBJ_HANDLE_NULL) {
-            sub_4ABC20(ai);
+            ai_choose_action(ai);
             ai->danger_type = ai_apply_danger_type(ai->obj,
                 AI_DANGER_SOURCE_TYPE_COMBAT_FOCUS,
                 danger_source_obj,
@@ -2191,18 +2191,37 @@ int64_t sub_4ABBC0(int64_t obj)
     return ai_find_target(obj);
 }
 
+// Decides what the critter opens with once it has a target.
+//
+// Called from `ai_process` immediately after `ai->danger_source` is set and
+// before the danger type is applied, so it runs once per newly chosen target
+// rather than every tick. Anything it does not fill in stays
+// `AI_ACTION_TYPE_UNKNOWN`, which is the plain-attack fallback against
+// CAST_SPELL / USE_ITEM / USE_SKILL.
+//
+// An invulnerable or nigh-invulnerable critter short-circuits and never
+// reaches the chooser at all.
+//
 // 0x4ABC20
-void sub_4ABC20(Ai* ai)
+void ai_choose_action(Ai* ai)
 {
     if ((obj_field_int32_get(ai->obj, OBJ_F_FLAGS) & OF_INVULNERABLE) != 0
         || (obj_field_int32_get(ai->obj, OBJ_F_CRITTER_FLAGS2) & OCF2_NIGH_INVULNERABLE) != 0
-        || !sub_4ABC70(ai)) {
+        || !ai_choose_magictech_action(ai)) {
         ai->action_type = AI_ACTION_TYPE_UNKNOWN;
     }
 }
 
+// Tries the critter's spell lists in priority order and takes the first
+// castable thing it finds: summoning, then defensive, then offensive.
+//
+// Summoning is only considered when it has no followers already, and the
+// defensive pass is itself behind a second roll, so a critter that fails both
+// gates still gets its offensive attempt. Returns false when nothing was
+// chosen, which is what leaves the caller at AI_ACTION_TYPE_UNKNOWN.
+//
 // 0x4ABC70
-bool sub_4ABC70(Ai* ai)
+bool ai_choose_magictech_action(Ai* ai)
 {
     MagicTechAi magictech_ai;
     S4ABF10 v3;
@@ -2212,7 +2231,7 @@ bool sub_4ABC70(Ai* ai)
         return false;
     }
 
-    if (random_between(1, 100) > sub_4ABE20(ai)) {
+    if (random_between(1, 100) > ai_magictech_chance(ai)) {
         return false;
     }
 
@@ -2257,8 +2276,16 @@ bool sub_4ABC70(Ai* ai)
     return false;
 }
 
+// The percentage chance that this critter reaches for a spell at all,
+// rolled against `random_between(1, 100)` by `ai_choose_magictech_action`.
+//
+// A healthy follower does not bother: a critter with a leader, where both are
+// above half health and the critter does not already outmatch what is
+// threatening it, returns 0 and so never casts. Otherwise it is 25, or 50 for
+// the more spell-inclined AI parameter set.
+//
 // 0x4ABE20
-int sub_4ABE20(Ai* ai)
+int ai_magictech_chance(Ai* ai)
 {
     AiParams ai_params;
 
