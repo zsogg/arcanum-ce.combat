@@ -136,11 +136,11 @@ static int ai_check_leader(int64_t npc_obj, int64_t pc_obj);
 static int ai_check_upset_attacking(int64_t source_obj, int64_t target_obj, int64_t leader_obj);
 static void ai_calc_party_size_and_level_internal(int64_t obj, int* cnt_ptr, int* lvl_ptr);
 static int ai_check_protect(int64_t source_obj, int64_t target_obj);
-static int64_t sub_4AE450(int64_t a1, int64_t a2);
-static int sub_4AE720(int64_t attacker_obj, int64_t item_obj, int64_t target_obj, int spell);
+static int64_t ai_avenge_target(int64_t obj, int64_t ally_obj);
+static int ai_check_use_spell(int64_t attacker_obj, int64_t item_obj, int64_t target_obj, int spell);
 static bool ai_is_indoor_to_outdoor_transition(int64_t portal_obj, int dir);
 static int ai_perception_distance(int value);
-static int sub_4AF640(int64_t source_obj, int64_t target_obj);
+static int ai_line_of_sound_cost(int64_t source_obj, int64_t target_obj);
 static bool ai_check_decoy(int64_t source_obj, int64_t target_obj);
 static void ai_shitlist_add_team(int64_t a1, int64_t a2);
 static void ai_shitlist_add(int64_t npc_obj, int64_t shit_obj);
@@ -2151,7 +2151,7 @@ int64_t ai_find_target(int64_t critter_obj)
                 }
             }
 
-            candidate_obj = sub_4AE450(critter_obj, handles[idx]);
+            candidate_obj = ai_avenge_target(critter_obj, handles[idx]);
             if (candidate_obj != OBJ_HANDLE_NULL) {
                 concealed = critter_is_concealed(candidate_obj);
                 if (ai_can_hear(critter_obj, candidate_obj, concealed_to_loudness(concealed)) == 0
@@ -2479,7 +2479,7 @@ bool ai_choose_action_from_list(Ai* ai, S4ABF10* a2)
         }
 
         if (!magictech_is_under_influence_of(obj, entry->spell)
-            && sub_4AE720(ai->obj, entry->item_obj, obj, entry->spell) == 0) {
+            && ai_check_use_spell(ai->obj, entry->item_obj, obj, entry->spell) == 0) {
             if (entry->item_obj != OBJ_HANDLE_NULL
                 && mt_item_valid_ai_action(entry->item_obj)) {
                 ai->action_type = AI_ACTION_TYPE_USE_ITEM;
@@ -3736,17 +3736,24 @@ int ai_check_protect(int64_t source_obj, int64_t target_obj)
     return AI_PROTECT_NO;
 }
 
+// Inherits a dead ally's fight: given the corpse of an NPC this critter was
+// protecting, returns whoever that NPC was fighting when it died.
+//
+// `ai_find_target` runs this over every nearby object, so a critter that
+// arrives after the fact will still take up the quarrel of someone it cared
+// about - the grudge outlives the ally.
+//
 // 0x4AE450
-int64_t sub_4AE450(int64_t a1, int64_t a2)
+int64_t ai_avenge_target(int64_t obj, int64_t ally_obj)
 {
     int64_t combat_focus_obj;
 
-    if (critter_is_dead(a2)
-        && obj_field_int32_get(a2, OBJ_F_TYPE) == OBJ_TYPE_NPC
-        && obj_field_obj_get(a2, OBJ_F_NPC_COMBAT_FOCUS, &combat_focus_obj)
+    if (critter_is_dead(ally_obj)
+        && obj_field_int32_get(ally_obj, OBJ_F_TYPE) == OBJ_TYPE_NPC
+        && obj_field_obj_get(ally_obj, OBJ_F_NPC_COMBAT_FOCUS, &combat_focus_obj)
         && combat_focus_obj != OBJ_HANDLE_NULL
-        && ai_is_valid_target(a1, combat_focus_obj)
-        && ai_check_protect(a1, a2) != AI_PROTECT_NO) {
+        && ai_is_valid_target(obj, combat_focus_obj)
+        && ai_check_protect(obj, ally_obj) != AI_PROTECT_NO) {
         return combat_focus_obj;
     }
 
@@ -3816,8 +3823,29 @@ int ai_check_use_skill(int64_t source_obj, int64_t target_obj, int64_t item_obj,
     return AI_USE_SKILL_OK;
 }
 
+// Whether this critter could cast `spell` at `target_obj` right now, either
+// from an item or from its own memory. Returns 0 when it can, and otherwise a
+// code saying why not - a member of the same `ai_check_*` family as
+// `ai_check_use_skill` and `ai_check_upset_attacking`.
+//
+// The two halves are quite different. Casting *from an item* needs only that
+// the item has mana stored and that the odds are decent; casting *from memory*
+// additionally checks the spell is known, that there is fatigue to spend, and
+// that intelligence and willpower reach the spell's minimums.
+//
+// The codes are left as bare integers deliberately. Reading the branches gives
+// 1 unknown spell, 2 not enough fatigue or no stored mana, 3 intelligence,
+// 4 not the college's highest under ONF_CAST_HIGHEST, 5 no line of fire,
+// 6 an aptitude restriction, 7 willpower, 8 failure chance at or above 38% -
+// but those are inferred from the code rather than attested anywhere, and
+// CE's single caller only tests `== 0`, so naming them would dress up a guess
+// as a fact for no benefit.
+//
+// One quirk worth not tidying: white necromancy is exempted from the
+// failure-chance check while the target is above 30% health, on both halves.
+//
 // 0x4AE720
-int sub_4AE720(int64_t attacker_obj, int64_t item_obj, int64_t target_obj, int spell)
+int ai_check_use_spell(int64_t attacker_obj, int64_t item_obj, int64_t target_obj, int spell)
 {
     int attacker_obj_type = obj_field_int32_get(attacker_obj, OBJ_F_TYPE);
 
@@ -4337,7 +4365,7 @@ int ai_can_hear(int64_t source_obj, int64_t target_obj, int loudness)
         perception += perception * diff / -100;
     }
 
-    hear_dist = (ai_loudness_radius_tbl[loudness] - ai_loudness_radius_tbl[LOUDNESS_SILENT] + ai_perception_distance(perception - 4)) / 2 - sub_4AF640(source_obj, target_obj);
+    hear_dist = (ai_loudness_radius_tbl[loudness] - ai_loudness_radius_tbl[LOUDNESS_SILENT] + ai_perception_distance(perception - 4)) / 2 - ai_line_of_sound_cost(source_obj, target_obj);
     if ((int)dist > hear_dist) {
         return (int)dist - hear_dist;
     }
@@ -4345,8 +4373,20 @@ int ai_can_hear(int64_t source_obj, int64_t target_obj, int loudness)
     return 0;
 }
 
+// How much the scenery between two critters muffles sound - the hearing
+// counterpart to `ai_line_of_fire_cost`.
+//
+// Walks the straight line between them and sums each step's traversal cost
+// under `OBJ_TRAVERSAL_SOUND`, so walls and closed doors accumulate. The
+// result is *subtracted* from the audible range in `ai_can_hear`, which is why
+// a blocked path with no straight line at all returns a flat 100 rather than
+// zero: no line means no hearing, not perfect hearing.
+//
+// The final step sets `OBJ_TRAVERSAL_SKIP_OBJECTS` so the target itself does
+// not muffle the sound it is making.
+//
 // 0x4AF640
-int sub_4AF640(int64_t source_obj, int64_t target_obj)
+int ai_line_of_sound_cost(int64_t source_obj, int64_t target_obj)
 {
     int cost = 0;
     int64_t source_loc;
