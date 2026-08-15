@@ -70,9 +70,9 @@ static void obj_field_store(Object* object, int fld, void* value_ptr);
 static void obj_arrayfield_store(Object* object, int fld, int index, void* value_ptr);
 static void obj_field_fetch(Object* object, int fld, void* value_ptr);
 static void obj_arrayfield_fetch(Object* object, int fld, int index, void* value);
-static void sub_408D60(Object* object, int fld, int* value_ptr);
-static void sub_408E70(Object* object, int fld, int value);
-static bool sub_408F40(Object* object, int fld, SizeableArray*** ptr, int64_t* proto_handle_ptr);
+static void obj_field_array_length_get(Object* object, int fld, int* length_ptr);
+static void obj_field_array_length_set(Object* object, int fld, int length);
+static bool obj_field_array_locate(Object* object, int fld, SizeableArray*** ptr, int64_t* proto_handle_ptr);
 static void obj_set_defaults(int64_t obj);
 static void set_item_defaults(int64_t obj, int subtype);
 static bool obj_proto_write_file(TigFile* stream, int64_t obj);
@@ -798,7 +798,7 @@ bool obj_validate_system(unsigned int flags)
                             object = obj_lock(obj);
                             obj_arrayfield_fetch(object, inventory_list_fld, cnt - 1, &oid);
                             obj_arrayfield_store(object, inventory_list_fld, idx, &oid);
-                            sub_408E70(object, inventory_list_fld, cnt - 1);
+                            obj_field_array_length_set(object, inventory_list_fld, cnt - 1);
                             cnt--;
                             idx--;
                             obj_field_store(object, inventory_num_fld, &cnt);
@@ -813,8 +813,15 @@ bool obj_validate_system(unsigned int flags)
     return true;
 }
 
+// Dumps an object's overridden fields to the debug log.
+//
+// NOTE: no direct callers, in CE or in the original - obj.h exports it but
+// nothing reaches it. Kept because it is a diagnostic worth having when this
+// layer misbehaves, and because deleting exported API would diverge from the
+// original's surface.
+//
 // 0x405790
-void sub_405790(int64_t obj)
+void obj_debug_print_difs(int64_t obj)
 {
     Object* object;
 
@@ -986,8 +993,20 @@ void obj_deallocate(int64_t obj)
     obj_pool_deallocate(obj);
 }
 
+// Frees an object's field storage and returns it to the pool, but leaves the
+// world's indexes alone.
+//
+// Exactly `obj_deallocate` minus `obj_find_remove` and
+// `obj_pool_perm_oid_remove` - so it destroys the object without taking it out
+// of the spatial find index or the permanent OID map.
+//
+// NOTE: no direct callers in CE or the original, so the name describes what it
+// does rather than what it was for; the intended use is not recoverable.
+// Calling it on an object that *is* registered would leave both structures
+// pointing at freed memory.
+//
 // 0x405CC0
-void sub_405CC0(int64_t obj)
+void obj_deallocate_without_deregister(int64_t obj)
 {
     Object* object;
     int fld;
@@ -1014,8 +1033,14 @@ void sub_405CC0(int64_t obj)
     obj_pool_deallocate(obj);
 }
 
+// Deep-copies an object, including its bitmaps and every overridden field.
+//
+// NOTE: no direct callers in CE or the original. Note also that the copy keeps
+// the source's `oid`, so the two share an identity - whatever this was for,
+// the caller was expected to fix that up.
+//
 // 0x405D60
-void sub_405D60(int64_t* new_obj_ptr, int64_t obj)
+void obj_clone(int64_t* new_obj_ptr, int64_t obj)
 {
     int64_t new_obj;
     Object* new_object;
@@ -1480,8 +1505,19 @@ bool obj_dif_read(TigFile* stream, int64_t obj)
     return true;
 }
 
+// Forgets which fields differ from the prototype, marking the object clean.
+//
+// Called after a sector is written out: the `dif` bitmap is the record of what
+// still needs saving, so clearing it says "this is now on disk". The stored
+// values are untouched - only the record of them being dirty goes.
+//
+// NOTE: this locks the object and never unlocks it. That is faithful, not a
+// porting slip - 0x406B80 ends `pop esi; ret` with no unlock call, so the leak
+// is Troika's. Verified by disassembly, which also confirms the field offsets
+// used here: `modified` at +0x44 and `dif` at +0x4C.
+//
 // 0x406B80
-void sub_406B80(int64_t obj)
+void obj_difs_clear(int64_t obj)
 {
     Object* object;
     int cnt;
@@ -1687,8 +1723,13 @@ bool obj_field_obj_get(int64_t obj, int fld, int64_t* value_ptr)
     return false;
 }
 
+// Reads an `ObjectID`-typed field, the OID sibling of `obj_field_int32_get`
+// and friends.
+//
+// NOTE: no direct callers in CE or the original.
+//
 // 0x407100
-ObjectID sub_407100(int64_t obj, int fld)
+ObjectID obj_field_oid_get(int64_t obj, int fld)
 {
     Object* object;
     ObjectID oid;
@@ -2036,7 +2077,7 @@ int obj_arrayfield_length_get(int64_t obj, int fld)
         return 0;
     }
 
-    sub_408D60(object, fld, &length);
+    obj_field_array_length_get(object, fld, &length);
     obj_unlock(obj);
 
     return length;
@@ -2054,7 +2095,7 @@ void obj_arrayfield_length_set(int64_t obj, int fld, int length)
         return;
     }
 
-    sub_408E70(object, fld, length);
+    obj_field_array_length_set(object, fld, length);
     obj_unlock(obj);
 }
 
@@ -2068,7 +2109,7 @@ void obj_arrayfield_pc_rumor_copy_to_flat(int64_t obj, int fld, int cnt, void* d
 
     object = obj_lock(obj);
     if (object_field_valid(object->type, fld)) {
-        prototype_locked = sub_408F40(object, fld, &sa_ptr, &prototype_obj);
+        prototype_locked = obj_field_array_locate(object, fld, &sa_ptr, &prototype_obj);
         sa_array_copy_to_flat(data, sa_ptr, cnt, sizeof(uint64_t));
         if (prototype_locked) {
             obj_unlock(prototype_obj);
@@ -2089,7 +2130,7 @@ void obj_arrayfield_pc_quest_copy_to_flat(int64_t obj, int fld, int cnt, void* d
 
     object = obj_lock(obj);
     if (object_field_valid(object->type, fld)) {
-        prototype_locked = sub_408F40(object, fld, &sa_ptr, &prototype_obj);
+        prototype_locked = obj_field_array_locate(object, fld, &sa_ptr, &prototype_obj);
         sa_array_copy_to_flat(data, sa_ptr, cnt, sizeof(PcQuestState));
         if (prototype_locked) {
             obj_unlock(prototype_obj);
@@ -2636,8 +2677,15 @@ void obj_arrayfield_fetch(Object* object, int fld, int index, void* value)
     }
 }
 
+// Reads an array field's length, from wherever that field actually lives.
+//
+// The three-way resolution is the same throughout this layer: a prototype
+// reads its own data, a transient field reads `transient_properties`, and an
+// instance reads its own copy if it has taken one and the prototype's
+// otherwise.
+//
 // 0x408D60
-void sub_408D60(Object* object, int fld, int* value_ptr)
+void obj_field_array_length_get(Object* object, int fld, int* length_ptr)
 {
     ObjDataDescriptor v1;
     int64_t proto_handle;
@@ -2647,28 +2695,39 @@ void sub_408D60(Object* object, int fld, int* value_ptr)
 
     if (object->prototype_oid.type == OID_TYPE_BLOCKED) {
         v1.ptr = &(object->data[obj_field_simple_index(object, fld)]);
-        *value_ptr = obj_data_count_idx(&v1);
+        *length_ptr = obj_data_count_idx(&v1);
     } else {
         if (fld > OBJ_F_TRANSIENT_BEGIN && fld < OBJ_F_TRANSIENT_END) {
             v1.ptr = &(object->transient_properties[fld - OBJ_F_TRANSIENT_BEGIN - 1]);
-            *value_ptr = obj_data_count_idx(&v1);
+            *length_ptr = obj_data_count_idx(&v1);
         }
 
         if (obj_field_is_changed(object, fld)) {
             v1.ptr = &(object->data[obj_field_changed_index(object, fld)]);
-            *value_ptr = obj_data_count_idx(&v1);
+            *length_ptr = obj_data_count_idx(&v1);
         } else {
             proto_handle = obj_get_prototype_handle(object);
             proto = obj_lock(proto_handle);
             v1.ptr = &(proto->data[obj_field_simple_index(proto, fld)]);
-            *value_ptr = obj_data_count_idx(&v1);
+            *length_ptr = obj_data_count_idx(&v1);
             obj_unlock(proto_handle);
         }
     }
 }
 
+// Shortens an array field to `length`.
+//
+// Implemented as a *removal*, which is the confusing part: it deletes the
+// element whose sparse key is `length`, and for the dense arrays these fields
+// hold - keys 0..count-1 - deleting key `length` is exactly truncation to
+// `length`. Every caller passes `cnt - 1`, having first moved the element it
+// wants gone to the end, so the effect is always "drop the last one".
+//
+// Unlike the getter this is a write, so it takes the copy-on-write path
+// through `obj_field_make_changed` and marks the object modified.
+//
 // 0x408E70
-void sub_408E70(Object* object, int fld, int value)
+void obj_field_array_length_set(Object* object, int fld, int length)
 {
     ObjDataDescriptor v1;
 
@@ -2690,12 +2749,20 @@ void sub_408E70(Object* object, int fld, int value)
     }
 
     v1.type = object_fields[fld].type;
-    v1.idx = value;
+    v1.idx = length;
     obj_data_remove_idx(&v1);
 }
 
+// Resolves where an array field's storage lives and hands back a pointer to
+// it, without copying anything.
+//
+// **Returns true when the storage belongs to the prototype**, in which case
+// `proto_handle_ptr` has been filled in and the caller owns an `obj_lock` it
+// must release. False means the pointer is into this object and nothing was
+// locked. Getting that backwards leaks a lock on every call.
+//
 // 0x408F40
-bool sub_408F40(Object* object, int fld, SizeableArray*** ptr, int64_t* proto_handle_ptr)
+bool obj_field_array_locate(Object* object, int fld, SizeableArray*** ptr, int64_t* proto_handle_ptr)
 {
     Object* proto;
 
@@ -4118,7 +4185,7 @@ void object_convert_array_handles_to_ids(Object* object)
         fld = obj_array_handle_fields[idx];
         if (object_field_valid(object->type, fld)
             && obj_field_is_changed(object, fld)) {
-            sub_408F40(object, fld, &sa_ptr, &prototype_obj);
+            obj_field_array_locate(object, fld, &sa_ptr, &prototype_obj);
             if (*sa_ptr != NULL) {
                 if (!sa_enumerate(sa_ptr, convert_handle_to_id)) {
                     tig_debug_printf("Error converting array of object handles to ids (oft_as_count: %d)", idx);
@@ -4167,7 +4234,7 @@ void object_convert_array_ids_to_handles(Object* object)
         fld = obj_array_handle_fields[idx];
         if (object_field_valid(object->type, fld)
             && obj_field_is_changed(object, fld)) {
-            sub_408F40(object, fld, &sa_ptr, &prototype_obj);
+            obj_field_array_locate(object, fld, &sa_ptr, &prototype_obj);
             if (*sa_ptr != NULL) {
                 if (!sa_enumerate(sa_ptr, convert_id_to_handle)) {
                     tig_debug_printf("Can't convert sizeable array of objects to handles (oft_as_count: %d)\n", idx);

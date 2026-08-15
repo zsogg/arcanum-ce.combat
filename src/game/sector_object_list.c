@@ -159,7 +159,7 @@ bool objlist_load(SectorObjectList* list, TigFile* stream, int64_t sector_id)
             tile = tile_id_from_loc(obj_field_int64_get(obj, OBJ_F_LOCATION));
             loc = location_make(x + TILE_X(tile), y + TILE_Y(tile));
             obj_field_int64_set(obj, OBJ_F_LOCATION, loc);
-            sub_406B80(obj);
+            obj_difs_clear(obj);
         }
 
         obj_load_postprocess(obj);
@@ -257,7 +257,7 @@ bool objlist_load_with_difs(SectorObjectList* list, TigFile* sec_stream, TigFile
             loc = obj_field_int64_get(obj, OBJ_F_LOCATION);
             tile = tile_id_from_loc(loc);
             obj_field_int64_set(obj, OBJ_F_LOCATION, LOCATION_MAKE(x + (tile & 0x3F), y + ((tile >> 6) & 0x3F)));
-            sub_406B80(obj);
+            obj_difs_clear(obj);
         }
 
         if (dif) {
@@ -318,7 +318,7 @@ bool objlist_save(SectorObjectList* list, TigFile* stream)
                     return false;
                 }
                 obj_load_postprocess(node->obj);
-                sub_406B80(node->obj);
+                obj_difs_clear(node->obj);
                 cnt++;
             }
             node = node->next;
