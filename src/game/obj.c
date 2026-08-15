@@ -93,12 +93,12 @@ static bool object_field_read(Object* object, int idx, ObjectFieldInfo* info);
 static bool obj_inst_field_read_mem(Object* object, int idx, ObjectFieldInfo* info);
 static bool object_field_write_if_dif(Object* object, int idx, ObjectFieldInfo* info);
 static bool object_field_read_if_dif(Object* object, int idx, ObjectFieldInfo* info);
-static void sub_40A400(void);
-static void sub_40A740(int fld, int* start_ptr, int* length_ptr);
-static int sub_40A790(int a1);
-static void sub_40A7B0(void);
-static void sub_40A8A0(void);
-static void sub_40B8E0(int fld);
+static void obj_field_info_init(void);
+static void obj_field_block_position(int fld, int* start_ptr, int* length_ptr);
+static int obj_type_block_index(int fld);
+static void obj_field_counts_init(void);
+static void obj_field_types_init(void);
+static void obj_change_array_base_set(int fld);
 static void obj_handle_field_lists_init(void);
 static void obj_handle_field_lists_exit(void);
 static void object_convert_scalar_handles_to_ids(Object* object);
@@ -609,7 +609,7 @@ bool obj_init(GameInitInfo* init_info)
     obj_pool_init(sizeof(Object), obj_editor);
     obj_data_init();
     obj_find_init();
-    sub_40A400();
+    obj_field_info_init();
     obj_handle_field_lists_init();
 
     object.prototype_oid.type = OID_TYPE_BLOCKED;
@@ -3402,8 +3402,17 @@ bool object_field_read_if_dif(Object* object, int idx, ObjectFieldInfo* info)
     return true;
 }
 
+// Builds the whole `object_fields` metadata table, once, at `obj_init`.
+//
+// Types and element counts are filled in first, then this walks every field
+// computing where its value and its bits live: `simple_array_idx` and
+// `complex_array_idx` for storage, and `change_array_idx`/`mask`/`bit` for the
+// two per-object bitmaps. Nothing here is data-driven - the layout is derived
+// from the enum order, which is why the enum order is load-bearing and why
+// `skill.c`'s and `stat.c`'s enum-order checks matter.
+//
 // 0x40A400
-void sub_40A400(void)
+void obj_field_info_init(void)
 {
     int fld;
     ObjectFieldInfo* info;
@@ -3418,13 +3427,13 @@ void sub_40A400(void)
     int v9;
     int v10;
 
-    sub_40A8A0();
-    sub_40A7B0();
+    obj_field_types_init();
+    obj_field_counts_init();
 
     for (fld = OBJ_F_BEGIN; fld < OBJ_F_TOTAL_NORMAL; fld++) {
         info = &(object_fields[fld]);
         if (info->type == OD_TYPE_BEGIN) {
-            sub_40B8E0(fld);
+            obj_change_array_base_set(fld);
             info->complex_array_idx = -1;
             info->change_array_idx = -1;
             info->mask = 0;
@@ -3467,7 +3476,7 @@ void sub_40A400(void)
                 break;
             }
 
-            object_simple_array_count[sub_40A790(fld)] = v2;
+            object_simple_array_count[obj_type_block_index(fld)] = v2;
         } else if (info->type == OD_TYPE_END) {
             info->complex_array_idx = -1;
             info->change_array_idx = -1;
@@ -3490,9 +3499,9 @@ void sub_40A400(void)
                 break;
             }
         } else {
-            sub_40A740(fld, &v3, &idx);
+            obj_field_block_position(fld, &v3, &idx);
             info->simple_array_idx = v2++;
-            info->change_array_idx = idx / 32 + object_change_array_base[sub_40A790(v3)];
+            info->change_array_idx = idx / 32 + object_change_array_base[obj_type_block_index(v3)];
             info->bit = idx % 32;
             info->mask = 1u << info->bit;
 
@@ -3525,8 +3534,14 @@ void sub_40A400(void)
     }
 }
 
+// Locates a field within its type block: `start_ptr` gets the `OBJ_F_*_BEGIN`
+// marker the field belongs to, `length_ptr` its ordinal inside that block.
+//
+// NOTE: the ordinal is counted down in a loop rather than subtracted. It is a
+// faithful transcription - the original counts too - so it is left alone.
+//
 // 0x40A740
-void sub_40A740(int fld, int* start_ptr, int* length_ptr)
+void obj_field_block_position(int fld, int* start_ptr, int* length_ptr)
 {
     int index;
 
@@ -3547,21 +3562,36 @@ void sub_40A740(int fld, int* start_ptr, int* length_ptr)
     }
 }
 
+// Maps an `OBJ_F_*_BEGIN` marker to its slot in `obj_type_field_starts`, which
+// is how `object_change_array_base` and `object_simple_array_count` are
+// indexed.
+//
+// Returns 0 for anything that is not a block marker, so it is only meaningful
+// on a value already known to be one.
+//
 // 0x40A790
-int sub_40A790(int a1)
+int obj_type_block_index(int fld)
 {
     int index;
 
     for (index = 0; index < 21; index++) {
-        if (obj_type_field_starts[index] == a1) {
+        if (obj_type_field_starts[index] == fld) {
             return index;
         }
     }
     return 0;
 }
 
+// Fills in each field's element count: 1 for an ordinary scalar, 0 for the
+// block markers and for everything past `OBJ_F_TOTAL_NORMAL`, and an explicit
+// width for the array fields listed at the end.
+//
+// Those widths are why the enums they come from cannot be reordered freely -
+// STAT_COUNT, BASIC_SKILL_COUNT and TECH_SKILL_COUNT size fields that are
+// serialized positionally into every save.
+//
 // 0x40A7B0
-void sub_40A7B0(void)
+void obj_field_counts_init(void)
 {
     int fld;
 
@@ -3586,8 +3616,12 @@ void sub_40A7B0(void)
     object_fields[OBJ_F_SHADOW_HANDLES].cnt = 5;
 }
 
+// Assigns every field its `OD_TYPE_*`, which is what decides how the field is
+// stored, copied and serialized. Written out one field at a time in the
+// original, and kept that way.
+//
 // 0x40A8A0
-void sub_40A8A0(void)
+void obj_field_types_init(void)
 {
     object_fields[OBJ_F_BEGIN].type = OD_TYPE_BEGIN;
     object_fields[OBJ_F_CURRENT_AID].type = OD_TYPE_INT32;
@@ -3937,12 +3971,22 @@ void sub_40A8A0(void)
     object_fields[OBJ_F_FIND_NODE].type = OD_TYPE_PTR;
 }
 
+// Sets where a type's own fields start in the change bitmap, which is what
+// makes field inheritance work.
+//
+// Each type block begins immediately after its parent's padding field ends:
+// the base types start after `OBJ_F_PAD_I64AS_1`, the ten item subtypes after
+// `OBJ_F_ITEM_PAD_I64AS_1`, and PC and NPC after `OBJ_F_CRITTER_PAD_I64AS_1`.
+// So a weapon's bitmap holds the generic fields, then the item fields, then
+// its own, and the same `change_array_idx` means different things for
+// different object types.
+//
 // 0x40B8E0
-void sub_40B8E0(int fld)
+void obj_change_array_base_set(int fld)
 {
     switch (fld) {
     case OBJ_F_BEGIN:
-        object_change_array_base[sub_40A790(fld)] = 0;
+        object_change_array_base[obj_type_block_index(fld)] = 0;
         break;
     case OBJ_F_WALL_BEGIN:
     case OBJ_F_PORTAL_BEGIN:
@@ -3952,7 +3996,7 @@ void sub_40B8E0(int fld)
     case OBJ_F_ITEM_BEGIN:
     case OBJ_F_CRITTER_BEGIN:
     case OBJ_F_TRAP_BEGIN:
-        object_change_array_base[sub_40A790(fld)] = object_fields[OBJ_F_PAD_I64AS_1].change_array_idx + 1;
+        object_change_array_base[obj_type_block_index(fld)] = object_fields[OBJ_F_PAD_I64AS_1].change_array_idx + 1;
         break;
     case OBJ_F_WEAPON_BEGIN:
     case OBJ_F_AMMO_BEGIN:
@@ -3964,11 +4008,11 @@ void sub_40B8E0(int fld)
     case OBJ_F_KEY_RING_BEGIN:
     case OBJ_F_WRITTEN_BEGIN:
     case OBJ_F_GENERIC_BEGIN:
-        object_change_array_base[sub_40A790(fld)] = object_fields[OBJ_F_ITEM_PAD_I64AS_1].change_array_idx + 1;
+        object_change_array_base[obj_type_block_index(fld)] = object_fields[OBJ_F_ITEM_PAD_I64AS_1].change_array_idx + 1;
         break;
     case OBJ_F_PC_BEGIN:
     case OBJ_F_NPC_BEGIN:
-        object_change_array_base[sub_40A790(fld)] = object_fields[OBJ_F_CRITTER_PAD_I64AS_1].change_array_idx + 1;
+        object_change_array_base[obj_type_block_index(fld)] = object_fields[OBJ_F_CRITTER_PAD_I64AS_1].change_array_idx + 1;
         break;
     }
 }
