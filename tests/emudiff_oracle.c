@@ -29,6 +29,7 @@
 #include "game/random.h"
 #include "game/skill.h"
 #include "game/stat.h"
+#include "game/timeevent.h"
 
 #define MAX_ARGS 8
 #define MAX_LINE 512
@@ -93,6 +94,33 @@ static int64_t o_location_dist(const int64_t* a)
     return location_dist(a[0], a[1]);
 }
 
+// A function whose answer is written through a pointer rather than returned.
+//
+// `DateTime` is a union over a `uint64_t`, so the whole struct travels as one
+// integer and the line protocol stays what it is: the packed value goes in and
+// the packed value comes back out. On the emulator's side the driver allocates
+// the eight bytes, writes them, passes the address and reads them back - see
+// `DateTimeArg` in `cases.py`.
+static int64_t o_datetime_sub_milliseconds(const int64_t* a)
+{
+    DateTime datetime;
+
+    datetime.value = (uint64_t)a[0];
+    datetime_sub_milliseconds(&datetime, (unsigned int)a[1]);
+
+    return (int64_t)datetime.value;
+}
+
+static int64_t o_datetime_add_milliseconds(const int64_t* a)
+{
+    DateTime datetime;
+
+    datetime.value = (uint64_t)a[0];
+    datetime_add_milliseconds(&datetime, (unsigned int)a[1]);
+
+    return (int64_t)datetime.value;
+}
+
 static const OracleEntry oracle_entries[] = {
     { "random_seed", 1, o_random_seed },
     { "random_rand", 0, o_random_rand },
@@ -104,6 +132,8 @@ static const OracleEntry oracle_entries[] = {
     { "tech_skill_stat", 1, o_tech_skill_stat },
     { "location_rot", 2, o_location_rot },
     { "location_dist", 2, o_location_dist },
+    { "datetime_sub_milliseconds", 2, o_datetime_sub_milliseconds },
+    { "datetime_add_milliseconds", 2, o_datetime_add_milliseconds },
 };
 
 #define ORACLE_ENTRY_COUNT ((int)(sizeof(oracle_entries) / sizeof(oracle_entries[0])))
