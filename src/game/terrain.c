@@ -361,8 +361,27 @@ bool sub_4E7F90(void)
     vb_to_bmp_info.flags = 0;
     vb_to_bmp_info.video_buffer = vb;
     compat_splitpath(terrain_base_path, drive, dir, fname, NULL);
-    // NOTE: Original is slightly different and looks wrong.
-    compat_makepath(vb_to_bmp_info.path, drive, dir, fname, "bmp");
+
+    // FIX: Was `compat_makepath(path, drive, dir, fname, "bmp")`.
+    //
+    // The original drops the trailing separator from `dir` and then passes the
+    // result in the *fname* slot with no dir at all (0x4E7FE9-0x4E8003):
+    //
+    //     FUN_0058A3B0(terrain_base_path, drive, dir, fname, 0)   ; _splitpath
+    //     ... inline strlen over `dir` ...
+    //     dir[~len - 2] = '\0'                                    ; strlen - 1
+    //     FUN_0058B67B(path, drive, 0, dir, 0x5B9AD0)             ; _makepath, "bmp"
+    //
+    // `terrain_base_path` is always "<base>\\terrain.tdf" (the only two writers
+    // are the `snprintf`s above), so `dir` is "<base>\\" and the original writes
+    // the dump to **<base>.bmp**, a sibling of the terrain directory. Passing
+    // `dir` and `fname` through unchanged wrote <base>\terrain.bmp instead.
+    //
+    // Unexercised either way: everything here is behind `terrain_editor`, and
+    // `main.c` sets `game_init_info.editor = false`. `sub_4E80C0`, which fills
+    // the buffer being dumped, is still marked incomplete.
+    dir[strlen(dir) - 1] = '\0';
+    compat_makepath(vb_to_bmp_info.path, drive, NULL, dir, "bmp");
     vb_to_bmp_info.rect = NULL;
     if (tig_video_buffer_save_to_bmp(&vb_to_bmp_info) != TIG_OK) {
         // FIXME: Leaking `vb`.
