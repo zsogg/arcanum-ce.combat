@@ -310,7 +310,7 @@ int datetime_compare(const DateTime* datetime1, const DateTime* datetime2)
 }
 
 // 0x45A9B0
-bool sub_45A9B0(DateTime* datetime, unsigned int milliseconds)
+bool datetime_is_at_least_milliseconds(DateTime* datetime, unsigned int milliseconds)
 {
     DateTime other;
 

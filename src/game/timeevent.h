@@ -121,7 +121,7 @@ int datetime_get_month(DateTime* datetime);
 int datetime_get_year(DateTime* datetime);
 void datetime_from_milliseconds(DateTime* datetime, unsigned int milliseconds);
 int datetime_compare(const DateTime* datetime1, const DateTime* datetime2);
-bool sub_45A9B0(DateTime* datetime, unsigned int milliseconds);
+bool datetime_is_at_least_milliseconds(DateTime* datetime, unsigned int milliseconds);
 void datetime_sub_milliseconds(DateTime* datetime, unsigned int milliseconds);
 void datetime_add_milliseconds(DateTime* datetime, unsigned int milliseconds);
 void datetime_add_datetime(DateTime* datetime, DateTime* other);

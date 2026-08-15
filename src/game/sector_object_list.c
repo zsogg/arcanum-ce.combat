@@ -456,7 +456,7 @@ bool objlist_save_with_dif(SectorObjectList* list, TigFile* stream)
 }
 
 // 0x4F1CD0
-void objlist_fold(SectorObjectList* list, int64_t location, int a4)
+void objlist_fold(SectorObjectList* list, int64_t location, int first_heartbeat)
 {
     int64_t obj;
     FindNode* iter;
@@ -466,7 +466,7 @@ void objlist_fold(SectorObjectList* list, int64_t location, int a4)
             if ((obj_field_int32_get(obj, OBJ_F_FLAGS) & OF_INVENTORY) == 0
                 && !object_is_static(obj)) {
                 objlist_insert_internal(list, obj);
-                sub_441FC0(obj, a4);
+                object_npc_ai_start(obj, first_heartbeat);
                 sub_438530(obj);
             }
         } while (obj_find_walk_next(&obj, &iter));

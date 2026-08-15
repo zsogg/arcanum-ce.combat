@@ -191,7 +191,7 @@ bool object_locked_get(int64_t obj);
 bool object_locked_set(int64_t obj, bool locked);
 bool object_lock_timeevent_process(TimeEvent* timeevent);
 bool object_jammed_set(int64_t obj, bool jammed);
-void sub_441FC0(int64_t obj, int a2);
+void object_npc_ai_start(int64_t obj, int first_heartbeat);
 void object_blit_flags_set(unsigned int flags);
 int object_blit_flags_get(void);
 void sub_442050(uint8_t** data_ptr, int* size_ptr, int64_t obj);

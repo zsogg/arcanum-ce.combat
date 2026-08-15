@@ -1446,7 +1446,7 @@ bool sector_load_editor(int64_t id, Sector* sector)
     }
 
     sector_validate_editor("sector post-load (pre-fold)");
-    objlist_fold(&(sector->objects), id, sub_45A9B0(&(sector->datetime), 3000));
+    objlist_fold(&(sector->objects), id, datetime_is_at_least_milliseconds(&(sector->datetime), 3000));
     sector_light_list_fold(&(sector->lights), id, &(sector->tiles));
     sector_validate_editor("sector post-fold");
 
@@ -1720,7 +1720,7 @@ bool sector_load_game(int64_t id, Sector* sector)
 
     sector_validate_game("sector post-load (pre-fold)");
     li_update();
-    objlist_fold(&(sector->objects), id, sub_45A9B0(&(sector->datetime), 3000));
+    objlist_fold(&(sector->objects), id, datetime_is_at_least_milliseconds(&(sector->datetime), 3000));
     li_update();
     sector_light_list_fold(&(sector->lights), id, &(sector->tiles));
     sector_validate_game("sector post-fold");

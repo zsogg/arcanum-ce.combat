@@ -2317,7 +2317,7 @@ void combat_heal(CombatContext* combat)
     }
 
     if (v2 && type != OBJ_TYPE_PC) {
-        sub_4AD6E0(combat->target_obj);
+        ai_timeevent_schedule(combat->target_obj);
     }
 
     if (type == OBJ_TYPE_NPC) {

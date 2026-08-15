@@ -130,8 +130,8 @@ static bool sub_4AD4D0(int64_t obj);
 static int ai_timeevent_delay(int64_t obj);
 static int ai_distance_to_nearest_player(int64_t obj);
 static bool ai_timeevent_check(TimeEvent* timeevent);
-static void sub_4AD700(int64_t obj, int millis);
-static void sub_4AD730(int64_t obj, DateTime* datetime);
+static void ai_timeevent_add_delay_millis(int64_t obj, int millis);
+static void ai_timeevent_add_delay(int64_t obj, DateTime* datetime);
 static int ai_check_leader(int64_t npc_obj, int64_t pc_obj);
 static int ai_check_upset_attacking(int64_t source_obj, int64_t target_obj, int64_t leader_obj);
 static void ai_calc_party_size_and_level_internal(int64_t obj, int* cnt_ptr, int* lvl_ptr);
@@ -2895,7 +2895,7 @@ bool ai_timeevent_process(TimeEvent* timeevent)
         if (object_script_execute(obj, obj, OBJ_HANDLE_NULL, SAP_HEARTBEAT, 0)) {
             if ((obj_field_int32_get(obj, OBJ_F_NPC_FLAGS) & ONF_GENERATOR) != 0) {
                 if (monstergen_process(obj, &datetime)) {
-                    sub_4AD730(obj, &datetime);
+                    ai_timeevent_add_delay(obj, &datetime);
                     return true;
                 }
 
@@ -2933,7 +2933,7 @@ bool ai_timeevent_process(TimeEvent* timeevent)
     if (timeevent->params[1].integer_value != 0) {
         millis += random_between(0, 5000);
     }
-    sub_4AD700(obj, millis);
+    ai_timeevent_add_delay_millis(obj, millis);
     return true;
 }
 
@@ -3021,22 +3021,22 @@ bool ai_timeevent_check(TimeEvent* timeevent)
 }
 
 // 0x4AD6E0
-void sub_4AD6E0(int64_t obj)
+void ai_timeevent_schedule(int64_t obj)
 {
-    sub_4AD700(obj, ai_timeevent_delay(obj));
+    ai_timeevent_add_delay_millis(obj, ai_timeevent_delay(obj));
 }
 
 // 0x4AD700
-void sub_4AD700(int64_t obj, int millis)
+void ai_timeevent_add_delay_millis(int64_t obj, int millis)
 {
     DateTime datetime;
 
     datetime_from_milliseconds(&datetime, millis);
-    sub_4AD730(obj, &datetime);
+    ai_timeevent_add_delay(obj, &datetime);
 }
 
 // 0x4AD730
-void sub_4AD730(int64_t obj, DateTime* datetime)
+void ai_timeevent_add_delay(int64_t obj, DateTime* datetime)
 {
     TimeEvent timeevent;
 
@@ -3048,8 +3048,21 @@ void sub_4AD730(int64_t obj, DateTime* datetime)
     timeevent_add_delay(&timeevent, datetime);
 }
 
+// Schedules the AI heartbeat to run at the next opportunity.
+//
+// `first_heartbeat` is stored in the event and read back by
+// `ai_timeevent_process`, where a non-zero value is what selects the
+// re-entry path: re-check the wielded weapon, run waypoints or standpoints,
+// and fire the `SAP_FIRST_HEARTBEAT` script rather than the ordinary
+// `SAP_HEARTBEAT` one. It also jitters the following delay by up to five
+// seconds, which keeps a sector's worth of NPCs from all ticking together.
+//
+// It is set when a sector is folded back in after being away at least three
+// seconds of game time - see `objlist_fold`, which is the only caller that
+// passes anything but zero.
+//
 // 0x4AD790
-void sub_4AD790(int64_t obj, int a2)
+void ai_timeevent_add_immediate(int64_t obj, int first_heartbeat)
 {
     TimeEvent timeevent;
 
@@ -3057,7 +3070,7 @@ void sub_4AD790(int64_t obj, int a2)
 
     timeevent.type = TIMEEVENT_TYPE_AI;
     timeevent.params[0].object_value = obj;
-    timeevent.params[1].integer_value = a2;
+    timeevent.params[1].integer_value = first_heartbeat;
     timeevent_add_immediate(&timeevent);
 }
 

@@ -4190,12 +4190,12 @@ bool object_jammed_set(int64_t obj, bool jammed)
 }
 
 // 0x441FC0
-void sub_441FC0(int64_t obj, int a2)
+void object_npc_ai_start(int64_t obj, int first_heartbeat)
 {
     if (!object_editor) {
         if (obj_field_int32_get(obj, OBJ_F_TYPE) == OBJ_TYPE_NPC
             && (obj_field_int32_get(obj, OBJ_F_FLAGS) & OF_DESTROYED) == 0) {
-            sub_4AD790(obj, a2);
+            ai_timeevent_add_immediate(obj, first_heartbeat);
         }
     }
 }
@@ -4326,7 +4326,7 @@ bool sub_442260(int64_t obj, int64_t loc)
 
     if (!object_editor) {
         if (type == OBJ_TYPE_NPC) {
-            sub_4AD6E0(obj);
+            ai_timeevent_schedule(obj);
         }
     }
 
