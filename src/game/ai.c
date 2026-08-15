@@ -78,13 +78,13 @@ typedef struct S4ABF10 {
     /* 0010 */ int64_t obj;
 } S4ABF10;
 
-static bool sub_4A8570(Ai* ai);
-static void sub_4A88D0(Ai* ai, int64_t obj);
+static bool ai_prepare_to_act(Ai* ai);
+static void ai_setup(Ai* ai, int64_t obj);
 static bool ai_heal(Ai* ai);
 static bool ai_heal_func(Ai* ai, int64_t obj, bool a3);
 static bool ai_look_for_item(Ai* ai);
 static bool ai_look_for_item_func(int64_t obj, unsigned int flags);
-static void sub_4A92D0(Ai* ai);
+static void ai_update_danger_state(Ai* ai);
 static void ai_redirect_func(int64_t source_obj, int64_t target_obj);
 static void ai_notify_followers_of_attack(int64_t leader_obj, int64_t target_obj, int allow_complaint, int suppress_reaction);
 static void ai_follower_react_to_attack(int64_t follower_obj, int64_t leader_obj, int64_t target_obj, int allow_complaint, int suppress_reaction, int lock_target);
@@ -96,7 +96,7 @@ static bool ai_npc_wait_here_timeevent_check(TimeEvent* timeevent);
 static void ai_copy_params(int64_t obj, AiParams* params);
 static void ai_danger_source(int64_t obj, int* type_ptr, int64_t* danger_source_ptr);
 static int ai_apply_danger_type(int64_t source_obj, int danger_type, int64_t target_obj, int* sound_id_ptr);
-static bool sub_4AAF50(Ai* ai);
+static bool ai_choose_flee_action(Ai* ai);
 static bool ai_can_stop_fleeing(int64_t a1, int64_t a2);
 static int64_t ai_choose_target(int64_t attacker_obj, int64_t candidate1_obj, int64_t candidate2_obj);
 static void ai_engage_or_flee(int64_t a1, int64_t a2);
@@ -294,21 +294,35 @@ void ai_process(int64_t obj)
         return;
     }
 
-    sub_4A88D0(&ai, obj);
+    ai_setup(&ai, obj);
 
-    if (!sub_4A8570(&ai)) {
+    if (!ai_prepare_to_act(&ai)) {
         return;
     }
 
     if (!ai_heal(&ai) && !ai_look_for_item(&ai)) {
-        sub_4A92D0(&ai);
+        ai_update_danger_state(&ai);
     }
 
     ai_action_perform(&ai);
 }
 
+// Decides whether this critter acts at all this tick, and does the once-a-tick
+// upkeep on the way.
+//
+// It is a gate first: dead, switched off, stoned, unconscious, not its turn in
+// turn-based, busy with a high-priority animation, or a spawn generator, all
+// return false. But it is not only a gate - the checks are interleaved with
+// state changes that must happen whether or not the critter goes on to act,
+// and that is why the whole thing cannot be reordered into a pure predicate:
+//
+//   - blindness wears off on a 1-in-160 roll, crippling on 1-in-8000
+//   - stun is cleared once the stun animation is no longer running
+//   - ONF_CHECK_WIELD / ONF_CHECK_WEAPON re-equip and clear themselves
+//   - maintained spells are dropped when the leader is gone or out of combat
+//
 // 0x4A8570
-bool sub_4A8570(Ai* ai)
+bool ai_prepare_to_act(Ai* ai)
 {
     int64_t pc_obj;
     int64_t v1;
@@ -420,8 +434,16 @@ bool sub_4A8570(Ai* ai)
     return true;
 }
 
+// Fills in one tick's worth of AI working state for `obj`.
+//
+// `Ai` is a scratch context built fresh on `ai_process`'s stack every tick,
+// not stored on the critter, so everything durable is read back out of object
+// fields here - `ai_danger_source` supplies danger_type and danger_source
+// together. The sentinels matter: spell is 10000 and skill is -1, both
+// "nothing chosen", which is what `ai_action_perform` tests.
+//
 // 0x4A88D0
-void sub_4A88D0(Ai* ai, int64_t obj)
+void ai_setup(Ai* ai, int64_t obj)
 {
     ai->obj = obj;
     ai->danger_source = OBJ_HANDLE_NULL;
@@ -784,7 +806,7 @@ bool ai_look_for_item_func(int64_t obj, unsigned int flags)
 }
 
 // 0x4A92D0
-void sub_4A92D0(Ai* ai)
+void ai_update_danger_state(Ai* ai)
 {
     int64_t danger_source_obj;
 
@@ -844,7 +866,7 @@ void sub_4A92D0(Ai* ai)
             &(ai->sound_id));
         break;
     case 2:
-        sub_4AAF50(ai);
+        ai_choose_flee_action(ai);
         break;
     case 3:
         if (ai_object_hp_ratio(ai->obj) >= 80 && random_between(1, 500) == 1) {
@@ -1827,8 +1849,15 @@ int ai_apply_danger_type(int64_t source_obj, int danger_type, int64_t target_obj
     return danger_type;
 }
 
+// Tries to escape by magic rather than on foot, at most once per flight.
+//
+// `OCF_SPELL_FLEE` is the latch: set when an escape spell is chosen, and the
+// first thing checked on the way back in, where finding it set clears it and
+// refuses. So a fleeing critter gets one magical escape attempt and then has
+// to run, instead of casting every tick it stays afraid.
+//
 // 0x4AAF50
-bool sub_4AAF50(Ai* ai)
+bool ai_choose_flee_action(Ai* ai)
 {
     unsigned int critter_flags;
     S4ABF10 v1;
