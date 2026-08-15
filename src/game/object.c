@@ -75,7 +75,7 @@ static int object_calc_traversal_cost_func(int64_t obj, int64_t loc, int rot, in
 static void object_list_vicinity_loc(int64_t loc, unsigned int flags, ObjectList* objects);
 static bool object_create_func(int64_t proto_obj, int64_t loc, int64_t* obj_ptr, ObjectID oid);
 static bool object_duplicate_func(int64_t proto_obj, int64_t loc, ObjectID* oids, int64_t* obj_ptr);
-static bool sub_442260(int64_t obj, int64_t loc);
+static bool object_place_in_world(int64_t obj, int64_t loc);
 static void object_set_offset_internal(int64_t obj, int offset_x, int offset_y);
 static void object_render_palette_clear(int64_t obj);
 static void sub_442D90(int64_t obj, ObjectRenderColors* colors);
@@ -91,9 +91,9 @@ static void object_setup_blit(int64_t obj, TigArtBlitInfo* blit_info);
 static void object_enqueue_blit(TigArtBlitInfo* blit_info, int order);
 static void object_flush_pending_blits(void);
 static int object_compare_blits(const void* va, const void* vb);
-static void sub_443620(unsigned int flags, int scale, int x, int y, tig_art_id_t art_id, TigRect* rect);
-static void sub_4437C0(int64_t obj);
-static bool sub_443880(TigRect* rect, tig_art_id_t art_id);
+static void object_calc_art_rect(unsigned int flags, int scale, int x, int y, tig_art_id_t art_id, TigRect* rect);
+static void object_shadow_clear(int64_t obj);
+static bool object_hover_art_rect(TigRect* rect, tig_art_id_t art_id);
 static bool load_reaction_colors(void);
 static void object_location_changed(int64_t obj, int a2);
 static void object_lighting_changed(void);
@@ -369,7 +369,7 @@ void object_ping(tig_timestamp_t timestamp)
         object_hover_underlay_art_id = tig_art_id_frame_inc(object_hover_underlay_art_id);
         object_hover_underlay_last_time = timestamp;
         if (object_hover_animating) {
-            sub_443880(&rect, object_hover_underlay_art_id);
+            object_hover_art_rect(&rect, object_hover_underlay_art_id);
             object_iso_invalidate_rect(&rect);
         }
     }
@@ -378,7 +378,7 @@ void object_ping(tig_timestamp_t timestamp)
         object_hover_overlay_art_id = tig_art_id_frame_inc(object_hover_overlay_art_id);
         object_hover_overlay_last_time = timestamp;
         if (object_hover_animating) {
-            sub_443880(&rect, object_hover_overlay_art_id);
+            object_hover_art_rect(&rect, object_hover_overlay_art_id);
             object_iso_invalidate_rect(&rect);
         }
     }
@@ -601,7 +601,7 @@ void object_draw(GameDrawInfo* draw_info)
                                                             // FIX: Ignore shrunk objects so they match 100% scale. This makes the reaction
                                                             // underlay perfectly match the hover underlay size (the hover underlay is not
                                                             // scaled and is unaffected by shrinking).
-                                                            sub_443620(obj_flags & ~OF_SHRUNK, 100, (int)loc_x, (int)loc_y, art_id, &eye_candy_rect);
+                                                            object_calc_art_rect(obj_flags & ~OF_SHRUNK, 100, (int)loc_x, (int)loc_y, art_id, &eye_candy_rect);
 
                                                             rect_node = *draw_info->rects;
                                                             while (rect_node != NULL) {
@@ -658,7 +658,7 @@ void object_draw(GameDrawInfo* draw_info)
                                                         for (int fld = OBJ_F_OVERLAY_FORE; fld <= OBJ_F_OVERLAY_BACK; fld++) {
                                                             art_id = obj_arrayfield_uint32_get(obj_node->obj, fld, idx);
                                                             if (art_id != TIG_ART_ID_INVALID) {
-                                                                sub_443620(obj_flags, scale, (int)loc_x, (int)loc_y, art_id, &eye_candy_rect);
+                                                                object_calc_art_rect(obj_flags, scale, (int)loc_x, (int)loc_y, art_id, &eye_candy_rect);
 
                                                                 rect_node = *draw_info->rects;
                                                                 while (rect_node != NULL) {
@@ -741,7 +741,7 @@ void object_draw(GameDrawInfo* draw_info)
                                                                     break;
                                                                 }
 
-                                                                sub_443620(obj_flags, scale, (int)loc_x, (int)loc_y, shadow->art_id, &eye_candy_rect);
+                                                                object_calc_art_rect(obj_flags, scale, (int)loc_x, (int)loc_y, shadow->art_id, &eye_candy_rect);
                                                                 art_blit_info.art_id = shadow->art_id;
                                                                 art_blit_info.color = shadow->color;
 
@@ -986,7 +986,7 @@ void object_hover_obj_set(int64_t obj)
     int reaction_type;
 
     if (object_hover_obj != obj) {
-        if (sub_4437E0(&rect)) {
+        if (object_hover_get_rect(&rect)) {
             object_iso_invalidate_rect(&rect);
         }
 
@@ -1022,7 +1022,7 @@ void object_hover_obj_set(int64_t obj)
                     }
                 }
 
-                if (sub_4437E0(&rect)) {
+                if (object_hover_get_rect(&rect)) {
                     object_iso_invalidate_rect(&rect);
                 }
             }
@@ -1057,7 +1057,7 @@ void sub_43C5C0(GameDrawInfo* draw_info)
     TigRectListNode* node;
 
     if (object_hover_animating) {
-        if (sub_443880(&rect, object_hover_underlay_art_id)) {
+        if (object_hover_art_rect(&rect, object_hover_underlay_art_id)) {
             art_blit_info.flags = TIG_ART_BLT_BLEND_ADD | TIG_ART_BLT_BLEND_COLOR_CONST;
             art_blit_info.art_id = object_hover_underlay_art_id;
             art_blit_info.src_rect = &src_rect;
@@ -1097,7 +1097,7 @@ void sub_43C690(GameDrawInfo* draw_info)
     if (object_hover_animating) {
         TigRect rect;
 
-        if (sub_443880(&rect, object_hover_overlay_art_id)) {
+        if (object_hover_art_rect(&rect, object_hover_overlay_art_id)) {
             art_blit_info.flags = TIG_ART_BLT_BLEND_COLOR_CONST | TIG_ART_BLT_BLEND_ADD;
             art_blit_info.art_id = object_hover_overlay_art_id;
             art_blit_info.src_rect = &src_rect;
@@ -1342,7 +1342,7 @@ void object_destroy(int64_t obj)
     anim_force_interrupt_all_goals_of_obj(obj);
     magictech_interrupt_runs_for_obj(obj);
     ui_notify_object_destroyed(obj);
-    sub_443770(obj);
+    object_render_clear(obj);
 
     if (obj_type == OBJ_TYPE_WALL) {
         loc = obj_field_int64_get(obj, OBJ_F_LOCATION);
@@ -1406,7 +1406,7 @@ void object_remove_from_sector(int64_t obj)
     int64_t sector_id;
     Sector* sector;
 
-    sub_443770(obj);
+    object_render_clear(obj);
 
     sector_id = sector_id_from_loc(obj_field_int64_get(obj, OBJ_F_LOCATION));
     if (object_is_static(obj) || sector_loaded(sector_id)) {
@@ -1436,7 +1436,7 @@ void object_delete(int64_t obj)
     magictech_interrupt_runs_for_obj(obj);
     ai_timeevent_clear(obj);
     ui_notify_object_destroyed(obj);
-    sub_443770(obj);
+    object_render_clear(obj);
     obj_deallocate(obj);
 }
 
@@ -2240,7 +2240,7 @@ void object_get_rect(int64_t obj, unsigned int flags, TigRect* rect)
         }
 
         if (obj == object_hover_obj) {
-            sub_4437E0(&extra_rect);
+            object_hover_get_rect(&extra_rect);
             tig_rect_union(rect, &extra_rect, rect);
         }
     }
@@ -4216,16 +4216,27 @@ int object_blit_flags_get(void)
     return object_blit_flags;
 }
 
+// Serializes an object into a freshly allocated buffer.
+//
+// The save/load bracket around the write is the point: `obj_save_preprocess`
+// converts live handles into persistent IDs, and the *load* postprocess is
+// what converts them back, so the object is left usable rather than full of
+// dangling IDs. Reusing the load half to undo the save half looks like a slip
+// and is the original's own arrangement.
+//
 // 0x442050
-void sub_442050(uint8_t** data_ptr, int* size_ptr, int64_t obj)
+void object_write_mem(uint8_t** data_ptr, int* size_ptr, int64_t obj)
 {
     obj_save_preprocess(obj);
     obj_write_mem(data_ptr, size_ptr, obj);
     obj_load_postprocess(obj);
 }
 
+// Rebuilds an object from a buffer written by `object_write_mem` and brings
+// it into the world at `loc`.
+//
 // 0x4420D0
-bool sub_4420D0(uint8_t* data, int64_t* obj_ptr, int64_t loc)
+bool object_read_mem(uint8_t* data, int64_t* obj_ptr, int64_t loc)
 {
     if (!obj_read_mem(data, obj_ptr)) {
         return false;
@@ -4233,7 +4244,7 @@ bool sub_4420D0(uint8_t* data, int64_t* obj_ptr, int64_t loc)
 
     obj_load_postprocess(*obj_ptr);
     obj_field_int64_set(*obj_ptr, OBJ_F_LOCATION, loc);
-    if (!sub_442260(*obj_ptr, loc)) {
+    if (!object_place_in_world(*obj_ptr, loc)) {
         return false;
     }
 
@@ -4249,7 +4260,7 @@ bool object_create_func(int64_t proto_obj, int64_t loc, int64_t* obj_ptr, Object
         obj_create_inst_with_oid(proto_obj, loc, oid, obj_ptr);
     }
 
-    return sub_442260(*obj_ptr, loc);
+    return object_place_in_world(*obj_ptr, loc);
 }
 
 // 0x4421A0
@@ -4261,7 +4272,7 @@ bool object_duplicate_func(int64_t proto_obj, int64_t loc, ObjectID* oids, int64
         obj_inst_dup(obj_ptr, proto_obj, oids);
     }
 
-    if (!sub_442260(*obj_ptr, loc)) {
+    if (!object_place_in_world(*obj_ptr, loc)) {
         return false;
     }
 
@@ -4275,8 +4286,21 @@ bool object_duplicate_func(int64_t proto_obj, int64_t loc, ObjectID* oids, int64
     return true;
 }
 
+// The common tail of every path that produces a new live object -
+// `object_create_func`, `object_duplicate_func` and `object_read_mem` all end
+// here.
+//
+// It does the things that make an object *exist* rather than merely be
+// allocated: marks it dynamic so it is saved with the sector (and its carried
+// inventory too, which is why the loop walks the container or critter
+// inventory list), inserts it into its sector's object list, gives it a light,
+// starts the AI heartbeat if it is an NPC, and invalidates its screen rect.
+//
+// The `object_editor` guard on the dynamic marking is deliberate: objects the
+// editor places are authored content, not runtime spawns.
+//
 // 0x442260
-bool sub_442260(int64_t obj, int64_t loc)
+bool object_place_in_world(int64_t obj, int64_t loc)
 {
     int type;
     unsigned int flags;
@@ -4863,8 +4887,17 @@ int object_compare_blits(const void* va, const void* vb)
     }
 }
 
+// Screen rect for one art frame at a given scale and position, accounting for
+// the frame's hot spot.
+//
+// Eye-candy art carries its own scale class, which is folded into the caller's
+// scale unless the class is 4 - the identity. An art id whose frame data
+// cannot be read yields an empty rect rather than a failure, because every
+// caller is computing a region to invalidate and an empty region is the safe
+// answer.
+//
 // 0x443620
-void sub_443620(unsigned int flags, int scale, int x, int y, tig_art_id_t art_id, TigRect* rect)
+void object_calc_art_rect(unsigned int flags, int scale, int x, int y, tig_art_id_t art_id, TigRect* rect)
 {
     TigArtFrameData art_frame_data;
     int scale_type;
@@ -4918,11 +4951,14 @@ void sub_443620(unsigned int flags, int scale, int x, int y, tig_art_id_t art_id
     }
 }
 
+// Strips everything the renderer has hung on an object - shadow, palette,
+// colour overrides and the render flags that switch them on.
+//
 // 0x443770
-void sub_443770(int64_t obj)
+void object_render_clear(int64_t obj)
 {
     sub_4D9A90(obj);
-    sub_4437C0(obj);
+    object_shadow_clear(obj);
     object_render_palette_clear(obj);
     object_render_colors_clear(obj);
     obj_field_int32_set(obj,
@@ -4931,13 +4967,19 @@ void sub_443770(int64_t obj)
 }
 
 // 0x4437C0
-void sub_4437C0(int64_t obj)
+void object_shadow_clear(int64_t obj)
 {
     shadow_clear(obj);
 }
 
+// Screen rect of the hover highlight, if anything is hovered.
+//
+// A still highlight is just the object's own rect. An animating one is drawn
+// from two art layers, so the rect is the union of both - and each layer is
+// optional, hence the fallback to whichever one resolves.
+//
 // 0x4437E0
-bool sub_4437E0(TigRect* rect)
+bool object_hover_get_rect(TigRect* rect)
 {
     TigRect tmp_rect;
 
@@ -4951,19 +4993,22 @@ bool sub_4437E0(TigRect* rect)
         return true;
     }
 
-    if (!sub_443880(rect, object_hover_underlay_art_id)) {
-        return sub_443880(rect, object_hover_overlay_art_id);
+    if (!object_hover_art_rect(rect, object_hover_underlay_art_id)) {
+        return object_hover_art_rect(rect, object_hover_overlay_art_id);
     }
 
-    if (sub_443880(&tmp_rect, object_hover_overlay_art_id)) {
+    if (object_hover_art_rect(&tmp_rect, object_hover_overlay_art_id)) {
         tig_rect_union(rect, &tmp_rect, rect);
     }
 
     return true;
 }
 
+// Screen rect for one layer of the hover highlight, positioned on the hovered
+// object's tile plus its pixel offsets.
+//
 // 0x443880
-bool sub_443880(TigRect* rect, tig_art_id_t art_id)
+bool object_hover_art_rect(TigRect* rect, tig_art_id_t art_id)
 {
     TigArtFrameData art_frame_data;
     int64_t loc;

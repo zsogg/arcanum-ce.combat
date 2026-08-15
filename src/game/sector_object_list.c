@@ -41,7 +41,7 @@ bool sector_object_list_reset(SectorObjectList* list)
             if (object_is_static(node->obj)) {
                 object_delete(node->obj);
             } else {
-                sub_443770(node->obj);
+                object_render_clear(node->obj);
             }
 
             object_node_destroy(node);

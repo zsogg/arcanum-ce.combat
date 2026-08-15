@@ -805,7 +805,7 @@ void multiplayer_start_play(PlayerCreateInfo* player_create_info)
     modal_dialog_info.redraw = gamelib_redraw;
 
     if (multiplayer_player_data_exists(0)) {
-        if (!sub_4420D0(sub_4A4180(0), &(player_create_info->obj), player_create_info->loc)) {
+        if (!object_read_mem(sub_4A4180(0), &(player_create_info->obj), player_create_info->loc)) {
             exit(EXIT_FAILURE);
         }
 
@@ -1637,7 +1637,7 @@ bool save_char(const char* path, int64_t obj)
 
     sub_4A6010(obj);
 
-    sub_442050(&data, &size, obj);
+    object_write_mem(&data, &size, obj);
 
     stream = tig_file_fopen(path, "wb");
     if (stream == NULL) {
@@ -1800,7 +1800,7 @@ bool load_char(const char* path, int64_t* obj_ptr)
 
     tig_file_fclose(stream);
 
-    if (!sub_4420D0(data, obj_ptr, location_make(1, 1))) {
+    if (!object_read_mem(data, obj_ptr, location_make(1, 1))) {
         FREE(data);
         *obj_ptr = OBJ_HANDLE_NULL;
         return false;
