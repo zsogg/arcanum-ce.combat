@@ -102,7 +102,7 @@ static int64_t ai_choose_target(int64_t attacker_obj, int64_t candidate1_obj, in
 static void ai_engage_or_flee(int64_t a1, int64_t a2);
 static bool ai_should_flee(int64_t source_obj, int64_t target_obj);
 static int64_t ai_find_target(int64_t a1);
-static bool sub_4AB990(int64_t a1, int64_t a2);
+static bool ai_is_valid_target(int64_t a1, int64_t a2);
 static void ai_choose_action(Ai* ai);
 static bool ai_choose_magictech_action(Ai* ai);
 static int ai_magictech_chance(Ai* ai);
@@ -126,7 +126,7 @@ static void ai_wake_up(int64_t npc_obj);
 static int64_t ai_find_nearest_bed(int64_t obj);
 static void ai_move_to(int64_t obj, int64_t loc, int range);
 static bool ai_should_run_heartbeat(int64_t obj);
-static bool sub_4AD4D0(int64_t obj);
+static bool ai_follower_catch_up(int64_t obj);
 static int ai_timeevent_delay(int64_t obj);
 static int ai_distance_to_nearest_player(int64_t obj);
 static bool ai_timeevent_check(TimeEvent* timeevent);
@@ -142,7 +142,7 @@ static bool ai_is_indoor_to_outdoor_transition(int64_t portal_obj, int dir);
 static int ai_perception_distance(int value);
 static int sub_4AF640(int64_t source_obj, int64_t target_obj);
 static bool ai_check_decoy(int64_t source_obj, int64_t target_obj);
-static void sub_4AF8C0(int64_t a1, int64_t a2);
+static void ai_shitlist_add_team(int64_t a1, int64_t a2);
 static void ai_shitlist_add(int64_t npc_obj, int64_t shit_obj);
 static void ai_shitlist_remove(int64_t npc_obj, int64_t shit_obj);
 static int64_t ai_shitlist_get(int64_t obj);
@@ -827,7 +827,7 @@ void ai_update_danger_state(Ai* ai)
         }
         break;
     case 1:
-        danger_source_obj = sub_4ABBC0(ai->obj);
+        danger_source_obj = ai_keep_or_find_target(ai->obj);
         if (danger_source_obj != OBJ_HANDLE_NULL) {
             ai->danger_source = danger_source_obj;
             ai_choose_action(ai);
@@ -840,7 +840,7 @@ void ai_update_danger_state(Ai* ai)
 
         obj_field_obj_get(ai->obj, OBJ_F_NPC_WHO_HIT_ME_LAST, &danger_source_obj);
         ai->danger_source = danger_source_obj;
-        if (sub_4AB990(ai->obj, ai->danger_source)) {
+        if (ai_is_valid_target(ai->obj, ai->danger_source)) {
             ai_choose_action(ai);
             ai->danger_type = ai_apply_danger_type(ai->obj,
                 AI_DANGER_SOURCE_TYPE_COMBAT_FOCUS,
@@ -1025,10 +1025,10 @@ void ai_attack(int64_t source_obj, int64_t target_obj, int loudness, unsigned in
                     obj_field_handle_set(target_obj, OBJ_F_NPC_WHO_HIT_ME_LAST, source_obj);
                 }
 
-                sub_4AF8C0(target_obj, source_obj);
+                ai_shitlist_add_team(target_obj, source_obj);
 
                 if (source_obj_type == OBJ_TYPE_NPC) {
-                    sub_4AF8C0(source_obj, target_obj);
+                    ai_shitlist_add_team(source_obj, target_obj);
                 } else if (source_obj_type == OBJ_TYPE_PC) {
                     ai_copy_params(target_obj, &ai_params);
                     if (leader_obj == source_obj) {
@@ -2130,7 +2130,7 @@ int64_t ai_find_target(int64_t critter_obj)
 
                 if (obj_type == OBJ_TYPE_NPC) {
                     ai_danger_source(handles[idx], &candidate_danger_type, &candidate_obj);
-                    if (sub_4AB990(critter_obj, candidate_obj)
+                    if (ai_is_valid_target(critter_obj, candidate_obj)
                         && (candidate_danger_type == AI_DANGER_SOURCE_TYPE_COMBAT_FOCUS
                             || candidate_danger_type == AI_DANGER_SOURCE_TYPE_FLEE
                             || candidate_danger_type == AI_DANGER_SOURCE_TYPE_SURRENDER)) {
@@ -2175,8 +2175,27 @@ int64_t ai_find_target(int64_t critter_obj)
     return danger_source_obj;
 }
 
+// Whether `target_obj` is something this critter may attack at all.
+//
+// Most of it is what you would expect - not null, destroyed, switched off,
+// invulnerable, dead, stoned, a wall or already busted. The parts worth
+// knowing:
+//
+//   - **Nothing in its own party.** Its leader, its leader's other followers,
+//     and its own followers are all rejected.
+//   - **Unconscious targets are spared conditionally**: refused outright under
+//     OCF_NON_LETHAL_COMBAT, and otherwise only attacked when there is nothing
+//     else to attack, so a critter finishes off the fallen only as a last
+//     resort.
+//   - **Range is checked twice**, against the critter and against its leader,
+//     so a follower will not run off after something its leader is nowhere
+//     near.
+//   - **A master prowler is invisible to it.** A concealed target trained to
+//     TRAINING_MASTER is rejected unless perceived cleanly - note `ai_can_see`
+//     returns a penalty, so `!= 0` here is the *obstructed* case.
+//
 // 0x4AB990
-bool sub_4AB990(int64_t source_obj, int64_t target_obj)
+bool ai_is_valid_target(int64_t source_obj, int64_t target_obj)
 {
     int64_t source_leader_obj;
     int64_t target_leader_obj;
@@ -2270,13 +2289,20 @@ bool sub_4AB990(int64_t source_obj, int64_t target_obj)
     return true;
 }
 
+// Keeps the critter's current combat focus if it is still worth attacking,
+// and otherwise drops the lock and looks for something else.
+//
+// The unlock matters: without it a target that has become invalid - dead,
+// stoned, recruited into the party - would stay locked and the critter would
+// keep trying to attack it.
+//
 // 0x4ABBC0
-int64_t sub_4ABBC0(int64_t obj)
+int64_t ai_keep_or_find_target(int64_t obj)
 {
     int64_t combat_focus_obj;
 
     obj_field_obj_get(obj, OBJ_F_NPC_COMBAT_FOCUS, &combat_focus_obj);
-    if (sub_4AB990(obj, combat_focus_obj)) {
+    if (ai_is_valid_target(obj, combat_focus_obj)) {
         return combat_focus_obj;
     }
 
@@ -3078,7 +3104,7 @@ bool ai_timeevent_process(TimeEvent* timeevent)
             v1 = true;
         }
 
-        if (!sub_4AD4D0(obj) && !v1) {
+        if (!ai_follower_catch_up(obj) && !v1) {
             if (!combat_turn_based_is_active()
                 && (obj_field_int32_get(obj, OBJ_F_CRITTER_FLAGS) & OCF_ENCOUNTER) != 0) {
                 object_destroy(obj);
@@ -3117,8 +3143,20 @@ bool ai_should_run_heartbeat(int64_t obj)
     return false;
 }
 
+// Snaps a follower that has been left behind to its leader's tile.
+//
+// `object_move_to` relocates rather than walks, so this is a teleport. It is
+// only reachable from `ai_timeevent_process` on the branch where the critter
+// is not running a normal heartbeat - i.e. it is off in an unloaded sector
+// where nobody can see it happen - and it is refused outright in turn-based
+// mode, where a critter appearing next to the party would be visible and
+// unfair.
+//
+// Returns whether it moved, which the caller uses to decide the follower is
+// still worth keeping rather than destroying as a stray encounter critter.
+//
 // 0x4AD4D0
-bool sub_4AD4D0(int64_t obj)
+bool ai_follower_catch_up(int64_t obj)
 {
     int64_t pc_leader_obj;
 
@@ -3606,7 +3644,7 @@ int ai_check_kos(int64_t source_obj, int64_t target_obj)
     unsigned int critter_flags;
     AiParams ai_params;
 
-    if (sub_4AB990(source_obj, target_obj)) {
+    if (ai_is_valid_target(source_obj, target_obj)) {
         pc_leader_obj = critter_pc_leader_get(source_obj);
         obj_type = obj_field_int32_get(target_obj, OBJ_F_TYPE);
 
@@ -3707,7 +3745,7 @@ int64_t sub_4AE450(int64_t a1, int64_t a2)
         && obj_field_int32_get(a2, OBJ_F_TYPE) == OBJ_TYPE_NPC
         && obj_field_obj_get(a2, OBJ_F_NPC_COMBAT_FOCUS, &combat_focus_obj)
         && combat_focus_obj != OBJ_HANDLE_NULL
-        && sub_4AB990(a1, combat_focus_obj)
+        && ai_is_valid_target(a1, combat_focus_obj)
         && ai_check_protect(a1, a2) != AI_PROTECT_NO) {
         return combat_focus_obj;
     }
@@ -4395,23 +4433,29 @@ void ai_npc_fighting_toggle(void)
     ui_display_msg(&ui_message);
 }
 
+// Puts an entire team on a critter's shitlist, not just the one who provoked
+// it - so attacking a follower makes the whole party an enemy.
+//
+// The mirror of `ai_make_peace`, which resolves to the PC leader the same way
+// and clears the grudge across the party.
+//
 // 0x4AF8C0
-void sub_4AF8C0(int64_t a1, int64_t a2)
+void ai_shitlist_add_team(int64_t obj, int64_t enemy_obj)
 {
-    int64_t v1;
+    int64_t leader_obj;
     ObjectList objects;
     ObjectNode* node;
 
-    v1 = critter_pc_leader_get(a2);
-    if (v1 == OBJ_HANDLE_NULL) {
-        v1 = a2;
+    leader_obj = critter_pc_leader_get(enemy_obj);
+    if (leader_obj == OBJ_HANDLE_NULL) {
+        leader_obj = enemy_obj;
     }
 
-    object_list_team(v1, &objects);
+    object_list_team(leader_obj, &objects);
 
     node = objects.head;
     while (node != NULL) {
-        ai_shitlist_add(a1, node->obj);
+        ai_shitlist_add(obj, node->obj);
         node = node->next;
     }
 
@@ -4475,7 +4519,7 @@ int64_t ai_shitlist_get(int64_t obj)
 
     for (index = 0; index < cnt; index++) {
         obj_arrayfield_obj_get(obj, OBJ_F_NPC_SHIT_LIST_IDX, (start + index) % cnt, &shit_obj);
-        if (sub_4AB990(obj, shit_obj)) {
+        if (ai_is_valid_target(obj, shit_obj)) {
             return shit_obj;
         }
     }

@@ -141,7 +141,7 @@ bool ai_npc_wait_here_timeevent_process(TimeEvent* timeevent);
 bool ai_is_fighting(int64_t obj);
 int ai_object_hp_ratio(int64_t obj);
 int ai_critter_fatigue_ratio(int64_t obj);
-int64_t sub_4ABBC0(int64_t obj);
+int64_t ai_keep_or_find_target(int64_t obj);
 bool ai_timeevent_process(TimeEvent* timeevent);
 void ai_timeevent_schedule(int64_t obj);
 void ai_timeevent_clear(int64_t obj);
