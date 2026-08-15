@@ -67,10 +67,10 @@ typedef struct ObjectRenderColorsNode {
     struct ObjectRenderColorsNode* next;
 } ObjectRenderColorsNode;
 
-static void sub_43C5C0(GameDrawInfo* draw_info);
+static void object_hover_underlay_draw(GameDrawInfo* draw_info);
 static void sub_43CEA0(int64_t obj, unsigned int flags, const char* path);
-static int sub_43D690(int64_t obj);
-static int sub_43D630(int64_t obj);
+static int object_hp_from_pts(int64_t obj);
+static int object_hp_from_stats(int64_t obj);
 static int object_calc_traversal_cost_func(int64_t obj, int64_t loc, int rot, int orig_rot, unsigned int flags, int64_t* block_obj_ptr, int* block_obj_type_ptr, bool* is_window_ptr);
 static void object_list_vicinity_loc(int64_t loc, unsigned int flags, ObjectList* objects);
 static bool object_create_func(int64_t proto_obj, int64_t loc, int64_t* obj_ptr, ObjectID oid);
@@ -972,7 +972,7 @@ void object_draw(GameDrawInfo* draw_info)
         }
     }
 
-    sub_43C5C0(draw_info);
+    object_hover_underlay_draw(draw_info);
     object_flush_pending_blits();
 }
 
@@ -1047,8 +1047,21 @@ int64_t object_hover_obj_get(void)
     return object_hover_obj;
 }
 
+// Draws the hover highlight that ends up *on top* of the object pass.
+//
+// It is enqueued at order 99999999, and `object_compare_blits` sorts ascending
+// with the queue drawn in that order, so this lands above every object blit.
+//
+// NOTE: named for the art id it uses, which is upstream's
+// `object_hover_underlay_art_id` (interface art 467) - but the layering is the
+// opposite way round from what that name suggests. This one draws over the
+// objects, and `object_hover_overlay_draw` draws under them, before
+// `object_draw` is even called. The two upstream globals appear to be swapped;
+// they are left alone here because renaming another project's public symbols
+// on inference is worse than documenting the discrepancy.
+//
 // 0x43C5C0
-void sub_43C5C0(GameDrawInfo* draw_info)
+void object_hover_underlay_draw(GameDrawInfo* draw_info)
 {
     TigRect rect;
     TigArtBlitInfo art_blit_info;
@@ -1079,8 +1092,15 @@ void sub_43C5C0(GameDrawInfo* draw_info)
     }
 }
 
+// Draws the hover highlight that ends up *beneath* the objects.
+//
+// `gamelib` calls it between `tile_draw` and `object_draw`, so it is painted
+// before any object is. See `object_hover_underlay_draw` for why the name
+// reads backwards - it follows upstream's art-id globals, which appear to be
+// swapped.
+//
 // 0x43C690
-void sub_43C690(GameDrawInfo* draw_info)
+void object_hover_overlay_draw(GameDrawInfo* draw_info)
 {
     TigRectListNode* rect_node;
     TigArtBlitInfo art_blit_info;
@@ -1659,10 +1679,10 @@ int object_hp_max(int64_t obj)
     int value;
     int obj_type;
 
-    value = object_hp_adj_get(obj) + sub_43D690(obj);
+    value = object_hp_adj_get(obj) + object_hp_from_pts(obj);
     obj_type = obj_field_int32_get(obj, OBJ_F_TYPE);
     if (obj_type_is_critter(obj_type)) {
-        value = effect_adjust_max_hit_points(obj, sub_43D630(obj) + value);
+        value = effect_adjust_max_hit_points(obj, object_hp_from_stats(obj) + value);
     }
     return value;
 }
@@ -1673,8 +1693,11 @@ int object_hp_current(int64_t obj)
     return object_hp_max(obj) - object_hp_damage_get(obj);
 }
 
+// The stat-derived half of a critter's maximum hit points:
+// willpower + 2 * (strength + level) + 4. Non-critters contribute nothing.
+//
 // 0x43D630
-int sub_43D630(int64_t obj)
+int object_hp_from_stats(int64_t obj)
 {
     int obj_type;
 
@@ -1688,8 +1711,12 @@ int sub_43D630(int64_t obj)
     return 0;
 }
 
+// The half of maximum hit points that comes from the object's own hit-point
+// field, weighted by kind: a critter gets four hit points per stored point,
+// everything else exactly one.
+//
 // 0x43D690
-int sub_43D690(int64_t obj)
+int object_hp_from_pts(int64_t obj)
 {
     int obj_type;
 
@@ -1792,8 +1819,16 @@ int object_get_ac(int64_t obj, bool a2)
     return ac;
 }
 
+// Whether an object's *type* is one of the static kinds - walls, portals,
+// scenery and the like, as opposed to projectiles, containers, critters and
+// items.
+//
+// This is `object_is_static` without its `OF_DYNAMIC` check, so it answers
+// "could this ever be static" where the other answers "is it static now".
+// An object of a static type that was spawned at runtime is dynamic.
+//
 // 0x43D940
-bool sub_43D940(int64_t obj)
+bool object_is_static_type(int64_t obj)
 {
     int obj_type = obj_field_int32_get(obj, OBJ_F_TYPE);
     if (obj_type == OBJ_TYPE_PROJECTILE
@@ -3415,7 +3450,7 @@ void object_list_location(int64_t loc, unsigned int flags, ObjectList* objects)
 
         if (obj_find_walk_first(sector_id, &obj, &iter)) {
             do {
-                if (!sub_43D940(obj)
+                if (!object_is_static_type(obj)
                     && (obj_field_int32_get(obj, OBJ_F_FLAGS) & OF_INVENTORY) == 0
                     && obj_field_int64_get(obj, OBJ_F_LOCATION) == loc
                     && (object_skip_flags & obj_field_int32_get(obj, OBJ_F_FLAGS)) == 0
@@ -3492,7 +3527,7 @@ void object_list_rect(LocRect* loc_rect, unsigned int flags, ObjectList* objects
             for (row = 0; row < v2->num_cols; row++) {
                 if (obj_find_walk_first(v2->sector_ids[row], &obj, &iter)) {
                     do {
-                        if (!sub_43D940(obj)
+                        if (!object_is_static_type(obj)
                             && (obj_field_int32_get(obj, OBJ_F_FLAGS) & OF_INVENTORY) == 0
                             && (object_skip_flags & obj_field_int32_get(obj, OBJ_F_FLAGS)) == 0
                             && types[obj_field_int32_get(obj, OBJ_F_TYPE)]) {

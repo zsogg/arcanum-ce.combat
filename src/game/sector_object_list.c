@@ -543,7 +543,7 @@ bool objlist_insert_internal(SectorObjectList* list, int64_t obj)
     node->next = NULL;
     sub_4F20A0(list, node);
 
-    if (sub_43D940(obj)) {
+    if (object_is_static_type(obj)) {
         sub_43F710(obj);
     } else {
         sub_435CE0(obj);

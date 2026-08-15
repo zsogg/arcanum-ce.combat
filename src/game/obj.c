@@ -2183,7 +2183,7 @@ ObjectID obj_get_id(int64_t obj)
         object = obj_lock(obj);
         if (object->oid.type == OID_TYPE_NULL) {
             if (!obj_editor
-                && sub_43D940(obj)
+                && object_is_static_type(obj)
                 && object_is_static(obj)) {
                 objid_id_perm_by_load_order(&(object->oid), obj);
             } else {
