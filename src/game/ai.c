@@ -88,18 +88,18 @@ static void sub_4A92D0(Ai* ai);
 static void ai_redirect_func(int64_t source_obj, int64_t target_obj);
 static void sub_4A9B80(int64_t a1, int64_t a2, int a3, int a4);
 static void sub_4A9C00(int64_t a1, int64_t a2, int64_t a3, int a4, int a5, int a6);
-static void sub_4A9E10(int64_t a1, int64_t a2, int loudness);
-static void sub_4A9F10(int64_t a1, int64_t a2, int64_t a3, int loudness);
+static void ai_notify_attack_witnesses(int64_t a1, int64_t a2, int loudness);
+static void ai_witness_attack(int64_t a1, int64_t a2, int64_t a3, int loudness);
 static void sub_4AA420(int64_t obj, int64_t a2);
-static void sub_4AA620(int64_t a1, int64_t a2);
+static void ai_react_to_threat(int64_t a1, int64_t a2);
 static bool ai_npc_wait_here_timeevent_check(TimeEvent* timeevent);
 static void ai_copy_params(int64_t obj, AiParams* params);
 static void ai_danger_source(int64_t obj, int* type_ptr, int64_t* danger_source_ptr);
 static int ai_apply_danger_type(int64_t source_obj, int danger_type, int64_t target_obj, int* sound_id_ptr);
 static bool sub_4AAF50(Ai* ai);
-static bool sub_4AB030(int64_t a1, int64_t a2);
+static bool ai_can_stop_fleeing(int64_t a1, int64_t a2);
 static int64_t ai_choose_target(int64_t attacker_obj, int64_t candidate1_obj, int64_t candidate2_obj);
-static void sub_4AB2A0(int64_t a1, int64_t a2);
+static void ai_engage_or_flee(int64_t a1, int64_t a2);
 static bool ai_should_flee(int64_t source_obj, int64_t target_obj);
 static int64_t ai_find_target(int64_t a1);
 static bool sub_4AB990(int64_t a1, int64_t a2);
@@ -978,7 +978,7 @@ void ai_attack(int64_t source_obj, int64_t target_obj, int loudness, unsigned in
                 sub_4A9B80(target_obj, source_obj, 0, (flags & 0x01) != 0);
 
                 if ((flags & 0x01) == 0) {
-                    sub_4A9E10(target_obj, source_obj, loudness);
+                    ai_notify_attack_witnesses(target_obj, source_obj, loudness);
                 }
             }
 
@@ -1039,7 +1039,7 @@ void ai_attack(int64_t source_obj, int64_t target_obj, int loudness, unsigned in
 
                 if ((flags & 0x01) == 0
                     || !critter_faction_same(source_obj, target_obj)) {
-                    sub_4AA620(target_obj, source_obj);
+                    ai_react_to_threat(target_obj, source_obj);
                 }
             }
         }
@@ -1136,7 +1136,7 @@ void sub_4A9C00(int64_t source_obj, int64_t a2, int64_t target_obj, int a4, int 
         if (a6) {
             ai_target_lock(source_obj, target_obj);
         } else {
-            sub_4AA620(source_obj, target_obj);
+            ai_react_to_threat(source_obj, target_obj);
         }
     } else {
         if (a5) {
@@ -1154,8 +1154,17 @@ void sub_4A9C00(int64_t source_obj, int64_t a2, int64_t target_obj, int a4, int 
     }
 }
 
+// Tells every NPC who could have noticed an attack about it.
+//
+// Both ends of the fight get a sweep, because a witness standing next to the
+// victim is as much a witness as one standing next to the attacker - and the
+// two sweeps are gated differently. The attacker's neighbourhood is only
+// searched while the two are within twice the loud-noise radius of each other,
+// and the victim's only when they are more than one tile apart, so a
+// point-blank fight notifies one neighbourhood rather than the same one twice.
+//
 // 0x4A9E10
-void sub_4A9E10(int64_t a1, int64_t a2, int loudness)
+void ai_notify_attack_witnesses(int64_t target_obj, int64_t source_obj, int loudness)
 {
     int radius;
     int dist;
@@ -1163,60 +1172,74 @@ void sub_4A9E10(int64_t a1, int64_t a2, int loudness)
     ObjectNode* node;
 
     radius = ai_loudness_radius_tbl[loudness];
-    dist = (int)object_dist(a2, a1);
+    dist = (int)object_dist(source_obj, target_obj);
     if (dist < 2 * ai_loudness_radius_tbl[LOUDNESS_LOUD]) {
-        ai_objects_in_radius(a2, radius, &objects, OBJ_TM_NPC);
+        ai_objects_in_radius(source_obj, radius, &objects, OBJ_TM_NPC);
         node = objects.head;
         while (node != NULL) {
-            sub_4A9F10(node->obj, a2, a1, loudness);
+            ai_witness_attack(node->obj, source_obj, target_obj, loudness);
             node = node->next;
         }
         object_list_destroy(&objects);
     }
     if (dist > 1) {
-        ai_objects_in_radius(a1, radius, &objects, OBJ_TM_NPC);
+        ai_objects_in_radius(target_obj, radius, &objects, OBJ_TM_NPC);
         node = objects.head;
         while (node != NULL) {
-            sub_4A9F10(node->obj, a2, a1, loudness);
+            ai_witness_attack(node->obj, source_obj, target_obj, loudness);
             node = node->next;
         }
         object_list_destroy(&objects);
     }
 }
 
+// One NPC's response to having witnessed an attack.
+//
+// Who it sides with is decided by `ai_check_protect`, not by who it likes:
+// a witness protecting the victim turns on the attacker, and one protecting
+// the *attacker* turns on the victim. A witness protecting neither flees from
+// the attacker instead - unless it is a guard, which stands, or it is already
+// dealing with some other danger.
+//
+// Both the seeing and the hearing test are made against the victim in every
+// branch, never against the attacker. `ai_can_see` and `ai_can_hear` return a
+// *penalty* rather than a flag - 1000 when the critter is blind, asleep,
+// unconscious, facing away or out of range - so `== 0` is the unobstructed
+// case, and the witness reacts only when it perceives the victim clearly.
+//
 // 0x4A9F10
-void sub_4A9F10(int64_t a1, int64_t a2, int64_t a3, int loudness)
+void ai_witness_attack(int64_t npc_obj, int64_t source_obj, int64_t target_obj, int loudness)
 {
     int64_t leader_obj;
     int danger_type;
 
-    if ((obj_field_int32_get(a1, OBJ_F_NPC_FLAGS) & ONF_AI_WAIT_HERE) != 0) {
+    if ((obj_field_int32_get(npc_obj, OBJ_F_NPC_FLAGS) & ONF_AI_WAIT_HERE) != 0) {
         leader_obj = OBJ_HANDLE_NULL;
     } else {
-        leader_obj = critter_leader_get(a1);
+        leader_obj = critter_leader_get(npc_obj);
     }
 
-    if (a1 != a3 && a1 != a2 && leader_obj != a2 && leader_obj != a3) {
-        if (critter_is_sleeping(a1)) {
-            ai_wake_up(a1);
+    if (npc_obj != target_obj && npc_obj != source_obj && leader_obj != source_obj && leader_obj != target_obj) {
+        if (critter_is_sleeping(npc_obj)) {
+            ai_wake_up(npc_obj);
         }
 
-        if (ai_check_protect(a1, a3) != AI_PROTECT_NO) {
-            if (ai_can_see(a1, a3) == 0 || ai_can_hear(a1, a3, loudness) == 0) {
-                sub_4AA620(a1, a2);
+        if (ai_check_protect(npc_obj, target_obj) != AI_PROTECT_NO) {
+            if (ai_can_see(npc_obj, target_obj) == 0 || ai_can_hear(npc_obj, target_obj, loudness) == 0) {
+                ai_react_to_threat(npc_obj, source_obj);
             }
-        } else if (ai_check_protect(a1, a2) != AI_PROTECT_NO) {
-            if (ai_can_see(a1, a3) == 0 || ai_can_hear(a1, a3, loudness) == 0) {
-                sub_4AA620(a1, a3);
+        } else if (ai_check_protect(npc_obj, source_obj) != AI_PROTECT_NO) {
+            if (ai_can_see(npc_obj, target_obj) == 0 || ai_can_hear(npc_obj, target_obj, loudness) == 0) {
+                ai_react_to_threat(npc_obj, target_obj);
             }
-        } else if (critter_social_class_get(a1) != SOCIAL_CLASS_GUARD
-            && (obj_field_int32_get(a1, OBJ_F_CRITTER_FLAGS) & OCF_NO_FLEE) == 0) {
-            ai_danger_source(a1, &danger_type, NULL);
+        } else if (critter_social_class_get(npc_obj) != SOCIAL_CLASS_GUARD
+            && (obj_field_int32_get(npc_obj, OBJ_F_CRITTER_FLAGS) & OCF_NO_FLEE) == 0) {
+            ai_danger_source(npc_obj, &danger_type, NULL);
             if (danger_type == AI_DANGER_SOURCE_TYPE_NONE
-                && (ai_can_see(a1, a3) == 0 || ai_can_hear(a1, a3, loudness) == 0)) {
-                ai_apply_danger_type(a1,
+                && (ai_can_see(npc_obj, target_obj) == 0 || ai_can_hear(npc_obj, target_obj, loudness) == 0)) {
+                ai_apply_danger_type(npc_obj,
                     AI_DANGER_SOURCE_TYPE_FLEE,
-                    a2,
+                    source_obj,
                     NULL);
             }
         }
@@ -1406,51 +1429,61 @@ void sub_4AA580(int64_t obj)
     }
 }
 
+// Presents `threat_obj` to a critter and lets whatever it is already doing
+// decide the response.
+//
+// The switch is over what the critter is *currently* dealing with, so this is
+// the retargeting policy: idle critters take the new threat outright; ones
+// already fighting take it only if `ai_choose_target` prefers it to their
+// present target; ones fleeing take it only once they have escaped what they
+// were running from; and ones that have surrendered beg instead of fighting
+// unless the new threat is the one they surrendered to.
+//
 // 0x4AA620
-void sub_4AA620(int64_t a1, int64_t a2)
+void ai_react_to_threat(int64_t obj, int64_t threat_obj)
 {
     int danger_type;
     int64_t danger_source_obj;
     char str[1000];
     int speech_id;
 
-    if (critter_is_dead(a1)) {
+    if (critter_is_dead(obj)) {
         return;
     }
 
-    ai_danger_source(a1, &danger_type, &danger_source_obj);
+    ai_danger_source(obj, &danger_type, &danger_source_obj);
 
     switch (danger_type) {
     case AI_DANGER_SOURCE_TYPE_NONE:
-        sub_4AB2A0(a1, a2);
+        ai_engage_or_flee(obj, threat_obj);
         break;
     case AI_DANGER_SOURCE_TYPE_COMBAT_FOCUS:
-        if (danger_source_obj == a2
-            || ai_choose_target(a1, danger_source_obj, a2) == a2) {
-            sub_4AB2A0(a1, a2);
+        if (danger_source_obj == threat_obj
+            || ai_choose_target(obj, danger_source_obj, threat_obj) == threat_obj) {
+            ai_engage_or_flee(obj, threat_obj);
         }
         break;
     case AI_DANGER_SOURCE_TYPE_FLEE:
-        if (danger_source_obj != a2
-            && sub_4AB030(a1, danger_source_obj)) {
-            sub_4AB2A0(a1, a2);
+        if (danger_source_obj != threat_obj
+            && ai_can_stop_fleeing(obj, danger_source_obj)) {
+            ai_engage_or_flee(obj, threat_obj);
         }
         break;
     case AI_DANGER_SOURCE_TYPE_SURRENDER:
-        if (danger_source_obj == a2
-            || ai_choose_target(a1, danger_source_obj, a2) == a2) {
-            sub_4AB2A0(a1, a2);
+        if (danger_source_obj == threat_obj
+            || ai_choose_target(obj, danger_source_obj, threat_obj) == threat_obj) {
+            ai_engage_or_flee(obj, threat_obj);
         } else {
-            if (critter_is_active(a1)) {
-                dialog_copy_npc_fleeing_msg(a1, a2, str, &speech_id);
-                ai_float_line_func(a1, a2, str, speech_id);
+            if (critter_is_active(obj)) {
+                dialog_copy_npc_fleeing_msg(obj, threat_obj, str, &speech_id);
+                ai_float_line_func(obj, threat_obj, str, speech_id);
             }
-            anim_goal_flee(a1, a2);
+            anim_goal_flee(obj, threat_obj);
         }
         break;
     }
 
-    combat_turn_based_add_critter(a1);
+    combat_turn_based_add_critter(obj);
 }
 
 // 0x4AA7A0
@@ -1758,18 +1791,23 @@ bool sub_4AAF50(Ai* ai)
     return true;
 }
 
+// Whether a critter currently fleeing `danger_obj` is free to stop and deal
+// with something else - either because it has put enough distance between
+// them, or because it is mind-controlled and not really running away on its
+// own account.
+//
 // 0x4AB030
-bool sub_4AB030(int64_t a1, int64_t a2)
+bool ai_can_stop_fleeing(int64_t obj, int64_t danger_obj)
 {
     AiParams params;
 
-    if ((obj_field_int32_get(a1, OBJ_F_SPELL_FLAGS) & OSF_MIND_CONTROLLED) != 0) {
+    if ((obj_field_int32_get(obj, OBJ_F_SPELL_FLAGS) & OSF_MIND_CONTROLLED) != 0) {
         return true;
     }
 
-    ai_copy_params(a1, &params);
+    ai_copy_params(obj, &params);
 
-    return object_dist(a1, a2) > params.field_10;
+    return object_dist(obj, danger_obj) > params.field_10;
 }
 
 // 0x4AB0B0
@@ -1838,12 +1876,12 @@ int64_t ai_choose_target(int64_t attacker_obj, int64_t candidate1_obj, int64_t c
 }
 
 // 0x4AB2A0
-void sub_4AB2A0(int64_t a1, int64_t a2)
+void ai_engage_or_flee(int64_t obj, int64_t threat_obj)
 {
-    if (ai_should_flee(a1, a2)) {
-        ai_apply_danger_type(a1, AI_DANGER_SOURCE_TYPE_FLEE, a2, 0);
+    if (ai_should_flee(obj, threat_obj)) {
+        ai_apply_danger_type(obj, AI_DANGER_SOURCE_TYPE_FLEE, threat_obj, 0);
     } else {
-        ai_apply_danger_type(a1, AI_DANGER_SOURCE_TYPE_COMBAT_FOCUS, a2, 0);
+        ai_apply_danger_type(obj, AI_DANGER_SOURCE_TYPE_COMBAT_FOCUS, threat_obj, 0);
     }
 }
 
