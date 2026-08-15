@@ -74,9 +74,9 @@ typedef struct ScriptState {
 
 static int script_execute_condition(ScriptCondition* condition, int line, ScriptState* state);
 static int script_execute_action(ScriptAction* action, int line, ScriptState* state);
-static bool sub_44AFF0(TimeEvent* timeevent);
-static void sub_44B030(ScriptAction* action, ScriptState* state);
-static void sub_44B170(ScriptAction* action, ScriptState* state);
+static bool script_timeevent_check(TimeEvent* timeevent);
+static void script_call_script(ScriptAction* action, ScriptState* state);
+static void script_call_script_ex(ScriptAction* action, ScriptState* state);
 static void script_float_line(ScriptAction* action, ScriptState* state);
 static void script_print_line(ScriptAction* action, ScriptState* state);
 static int script_resolve_focus_obj(ScriptFocusObject type, int index, ScriptState* state, int64_t* objs, ObjectList* l);
@@ -85,9 +85,9 @@ static int64_t script_get_obj(ScriptFocusObject type, int index, ScriptState* st
 static void script_set_obj(ScriptFocusObject type, int index, ScriptState* state, int64_t obj);
 static int script_get_value(ScriptValueType type, int index, ScriptState* state);
 static void script_set_value(ScriptValueType type, int index, ScriptState* state, int value);
-static int sub_44BC60(ScriptState* state);
-static bool sub_44C140(Script* scr, unsigned int index, ScriptCondition* entry);
-static bool sub_44C1B0(ScriptFile* script_file, unsigned int index, ScriptCondition* entry);
+static int script_skip_to_loop_end(ScriptState* state);
+static bool script_entry_get(Script* scr, unsigned int index, ScriptCondition* entry);
+static bool script_file_entry_get(ScriptFile* script_file, unsigned int index, ScriptCondition* entry);
 static ScriptFile* script_lock(int script_id);
 static void script_unlock(int script_id);
 static bool script_file_create(ScriptFile** script_file_ptr);
@@ -132,7 +132,7 @@ static bool script_editor;
 static IsoRedrawFunc* script_iso_window_draw;
 
 // 0x5E2FE4
-static int dword_5E2FE4;
+static int script_timeevent_match_num;
 
 // 0x5E2FE8
 static ScriptFloatLineFunc script_float_line_func;
@@ -144,7 +144,7 @@ static ScriptStartDialogFunc script_start_dialog_func;
 static ScriptCacheEntry* script_cache_entries;
 
 // 0x5E2FF8
-static int64_t qword_5E2FF8;
+static int64_t script_timeevent_match_obj;
 
 // 0x4446E0
 bool script_init(GameInitInfo* init_info)
@@ -350,7 +350,7 @@ bool script_execute(ScriptInvocation* invocation)
 
         // NOTE: Original code is probably different.
         for (iter = 0; iter < 1000; iter++) {
-            if (!sub_44C1B0(script_file, line, &statement)) {
+            if (!script_file_entry_get(script_file, line, &statement)) {
                 run_default = false;
                 break;
             }
@@ -1539,7 +1539,7 @@ int script_execute_action(ScriptAction* action, int line, ScriptState* state)
         state->script_num = script_get_value(action->op_type[0], action->op_value[0], state);
         return NEXT;
     case SAT_CALL_SCRIPT:
-        sub_44B030(action, state);
+        script_call_script(action, state);
         return NEXT;
     case SAT_SET_LOCAL_FLAG: {
         int flag = script_get_value(action->op_type[0], action->op_value[0], state);
@@ -1639,7 +1639,7 @@ int script_execute_action(ScriptAction* action, int line, ScriptState* state)
         }
 
         script_release_focus_objs(state->field_398, &(state->objects));
-        return sub_44BC60(state);
+        return script_skip_to_loop_end(state);
     case SAT_LOOP_END:
         if (state->loop_cnt <= 0) {
             tig_debug_printf("Script: script_execute_action: sat_loop_end: ERROR: Not in a loop!\n");
@@ -1662,7 +1662,7 @@ int script_execute_action(ScriptAction* action, int line, ScriptState* state)
 
         state->loop_cnt = 0;
         script_release_focus_objs(state->field_398, &(state->objects));
-        return sub_44BC60(state);
+        return script_skip_to_loop_end(state);
     case SAT_CRITTER_FOLLOW: {
         int64_t follower_obj = script_get_obj(action->op_type[0], action->op_value[0], state);
         int64_t leader_obj = script_get_obj(action->op_type[1], action->op_value[1], state);
@@ -2244,7 +2244,7 @@ int script_execute_action(ScriptAction* action, int line, ScriptState* state)
         return NEXT;
     }
     case SAT_CALL_SCRIPT_EX:
-        sub_44B170(action, state);
+        script_call_script_ex(action, state);
         return NEXT;
     case SAT_PLAY_SOUND: {
         int sound_id = script_get_value(action->op_type[0], action->op_value[0], state);
@@ -2663,9 +2663,9 @@ int script_execute_action(ScriptAction* action, int line, ScriptState* state)
         return NEXT;
     }
     case SAT_REMOVE_SCRIPT_CALL: {
-        dword_5E2FE4 = script_get_value(action->op_type[0], action->op_value[0], state);
-        qword_5E2FF8 = script_get_obj(action->op_type[1], action->op_value[1], state);
-        timeevent_clear_one_ex(TIMEEVENT_TYPE_SCRIPT, sub_44AFF0);
+        script_timeevent_match_num = script_get_value(action->op_type[0], action->op_value[0], state);
+        script_timeevent_match_obj = script_get_obj(action->op_type[1], action->op_value[1], state);
+        timeevent_clear_one_ex(TIMEEVENT_TYPE_SCRIPT, script_timeevent_check);
         return NEXT;
     }
     case SAT_DESTROY_ITEM_NAMED: {
@@ -2824,15 +2824,28 @@ int script_execute_action(ScriptAction* action, int line, ScriptState* state)
     }
 }
 
+// Predicate for SAT_REMOVE_SCRIPT_CALL: matches the pending script timeevent
+// with a given script number on a given object.
+//
+// The two globals it reads exist only because `timeevent_clear_one_ex` takes a
+// bare predicate with no user data - they are the missing parameters, set
+// immediately before the call and read only here. Not stale state.
+//
 // 0x44AFF0
-bool sub_44AFF0(TimeEvent* timeevent)
+bool script_timeevent_check(TimeEvent* timeevent)
 {
-    return timeevent->params[0].integer_value == dword_5E2FE4
-        && timeevent->params[3].object_value == qword_5E2FF8;
+    return timeevent->params[0].integer_value == script_timeevent_match_num
+        && timeevent->params[3].object_value == script_timeevent_match_obj;
 }
 
+// SAT_CALL_SCRIPT: runs another script by number, starting at a given line.
+//
+// Both the triggerer and the attachee operands resolve to *lists*, and the
+// script is run once for every pair - so a call naming a group on both sides
+// executes triggerers x attachees times, not once.
+//
 // 0x44B030
-void sub_44B030(ScriptAction* action, ScriptState* state)
+void script_call_script(ScriptAction* action, ScriptState* state)
 {
     Script scr;
     ScriptInvocation invocation;
@@ -2876,8 +2889,11 @@ void sub_44B030(ScriptAction* action, ScriptState* state)
     script_release_focus_objs(action->op_type[3], &attachees);
 }
 
+// SAT_CALL_SCRIPT_EX: fires an object's own script at a chosen attachment
+// point, rather than invoking a script by number as SAT_CALL_SCRIPT does.
+//
 // 0x44B170
-void sub_44B170(ScriptAction* action, ScriptState* state)
+void script_call_script_ex(ScriptAction* action, ScriptState* state)
 {
     object_script_execute(script_get_obj(action->op_type[3], action->op_value[3], state),
         script_get_obj(action->op_type[0], action->op_value[0], state),
@@ -3273,15 +3289,23 @@ void script_set_value(ScriptValueType type, int index, ScriptState* state, int v
     }
 }
 
+// Returns the line just past the matching SAT_LOOP_END, which is where both
+// "the loop had nothing to iterate" and SAT_LOOP_BREAK need to continue from.
+//
+// The scan takes the first *unconditional* LOOP_END it finds (`condition.type
+// == 0`), so it does not pair loops by nesting depth - a nested loop inside
+// the body would end the scan early. The scripts this runs are authored in
+// ScrMaker, which does not offer nesting.
+//
 // 0x44BC60
-int sub_44BC60(ScriptState* state)
+int script_skip_to_loop_end(ScriptState* state)
 {
     unsigned int index;
     ScriptCondition condition;
 
     index = state->field_C;
-    while (sub_44C140(state->invocation->script, index, &condition)) {
-        if (condition.type == 0 && condition.action.type == 19) {
+    while (script_entry_get(state->invocation->script, index, &condition)) {
+        if (condition.type == 0 && condition.action.type == SAT_LOOP_END) {
             break;
         }
         index++;
@@ -3312,15 +3336,18 @@ bool script_load_hdr(Script* scr)
     return rc;
 }
 
+// Reads one entry out of a script, locking the script file around the access.
+// Mirrors `script_flags`.
+//
 // 0x44C140
-bool sub_44C140(Script* scr, unsigned int index, ScriptCondition* entry)
+bool script_entry_get(Script* scr, unsigned int index, ScriptCondition* entry)
 {
     ScriptFile* script_file;
     bool success;
 
     script_file = script_lock(scr->num);
     if (script_file != NULL) {
-        success = sub_44C1B0(script_file, index, entry);
+        success = script_file_entry_get(script_file, index, entry);
         script_unlock(scr->num);
         return success;
     }
@@ -3328,8 +3355,14 @@ bool sub_44C140(Script* scr, unsigned int index, ScriptCondition* entry)
     return false;
 }
 
+// Reads one entry out of an already-locked script file.
+//
+// The bounds check compares against `num_entries` cast to unsigned, so a
+// negative entry count would let any index through. Faithful, and the count
+// comes from a file the game ships.
+//
 // 0x44C1B0
-bool sub_44C1B0(ScriptFile* script_file, unsigned int index, ScriptCondition* entry)
+bool script_file_entry_get(ScriptFile* script_file, unsigned int index, ScriptCondition* entry)
 {
     // NOTE: Unsigned math.
     if (index < (unsigned int)script_file->num_entries) {
