@@ -27,8 +27,22 @@ typedef struct Object {
     /* 0040 */ int field_40;
     /* 0044 */ int16_t modified;
     /* 0046 */ int16_t num_fields;
-    /* 0048 */ int* field_48;
-    /* 004C */ int* field_4C;
+    // Two per-field bitmaps, both indexed by an `ObjectFieldInfo`'s
+    // `change_array_idx` and tested with its `mask`.
+    //
+    // `changed` means the instance has taken its own copy of a field instead
+    // of inheriting the prototype's; `dif` means the field is carried in the
+    // serialized difference stream. They are not the same thing, and
+    // `object_field_read_if_dif` needs both: a field present in the stream but
+    // not yet marked changed is promoted on the spot.
+    //
+    // A prototype has no prototype of its own, so it allocates `dif` alone
+    // (`obj_proto_dif_bitmap_alloc`). An instance allocates the pair in one
+    // block, `changed` first (`obj_inst_bitmaps_alloc`) - which is why freeing
+    // an instance frees only `changed`, and why the two must not be freed
+    // separately.
+    /* 0048 */ int* changed;
+    /* 004C */ int* dif;
     /* 0050 */ intptr_t* data;
     /* 0054 */ intptr_t transient_properties[19];
 } Object;
@@ -95,15 +109,15 @@ static bool convert_handle_to_id(void* entry, int index);
 static bool convert_id_to_handle(void* entry, int index);
 static int obj_type_change_array_len(ObjectType object_type);
 static bool object_field_valid(int type, int fld);
-static bool sub_40C560(Object* object, int fld);
-static void sub_40C580(Object* object);
-static void sub_40C5B0(Object* object);
-static void sub_40C5C0(Object* dst, Object* src);
-static void sub_40C610(Object* object);
-static void sub_40C640(Object* object);
-static void sub_40C650(Object* dst, Object* src);
-static void sub_40C690(Object* object);
-static bool sub_40C6B0(Object* object, int fld);
+static bool object_proto_field_count(Object* object, int fld);
+static void obj_inst_bitmaps_alloc(Object* object);
+static void obj_inst_bitmaps_free(Object* object);
+static void obj_inst_bitmaps_copy(Object* dst, Object* src);
+static void obj_proto_dif_bitmap_alloc(Object* object);
+static void obj_proto_dif_bitmap_free(Object* object);
+static void obj_proto_dif_bitmap_copy(Object* dst, Object* src);
+static void obj_proto_dif_bitmap_clear(Object* object);
+static bool object_proto_field_clear(Object* object, int fld);
 static bool object_proto_field_dealloc(Object* object, int fld);
 static bool object_proto_field_copy(Object* object, int fld);
 static bool object_inst_field_copy(Object* object, int storage_idx, ObjectFieldInfo* info);
@@ -118,15 +132,15 @@ static bool object_inst_enumerate_overridden_fields_func(Object* object, int beg
 static bool object_inst_enumerate_available_fields(Object* object, ObjectInstEnumerateFieldsCallback callback);
 static bool object_inst_enumerate_available_fields_func(Object* object, int begin, int end, ObjectInstEnumerateFieldsCallback callback);
 static int obj_field_changed_index(Object* object, int fld);
-static void sub_40D2A0(Object* object, int fld);
+static void obj_field_make_changed(Object* object, int fld);
 static bool obj_field_is_changed(Object* object, int fld);
 static bool sub_40D350(Object* object, int fld);
 static void obj_field_set_changed(Object* object, int fld, bool enabled);
 static void obj_field_info_set_changed(Object* object, ObjectFieldInfo* info, int enabled);
-static bool sub_40D3D0(Object* object, int fld);
+static bool obj_field_is_dif(Object* object, int fld);
 static void obj_field_set_dif(Object* object, int fld, bool enabled);
-static void sub_40D450(Object* object, int fld);
-static void sub_40D470(Object* object, int fld);
+static void obj_field_data_insert(Object* object, int fld);
+static void obj_data_insert_slot(Object* object, int at);
 static bool obj_version_write_file(TigFile* stream);
 static bool obj_version_read_file(TigFile* stream);
 static void obj_version_write_mem(WriteBuffer* wb);
@@ -603,7 +617,7 @@ bool obj_init(GameInitInfo* init_info)
         object.type = index;
         object_field_count = 0;
         object_data_index = 0;
-        object_proto_enumerate_fields(&object, sub_40C560);
+        object_proto_enumerate_fields(&object, object_proto_field_count);
         object_fields_count_per_type[index] = object_field_count;
     }
 
@@ -831,7 +845,7 @@ void obj_create_proto(int type, int64_t* obj_ptr)
     object->prototype_oid.type = OID_TYPE_BLOCKED;
     object->prototype_obj = OBJ_HANDLE_NULL;
     object->field_40 = 0;
-    sub_40C610(object);
+    obj_proto_dif_bitmap_alloc(object);
 
     for (index = 0; index < 19; index++) {
         object->transient_properties[index] = -1;
@@ -841,12 +855,12 @@ void obj_create_proto(int type, int64_t* obj_ptr)
     object->data = (intptr_t*)CALLOC(object->num_fields, sizeof(*object->data));
 
     object_data_index = 0;
-    object_proto_enumerate_fields(object, sub_40C6B0);
+    object_proto_enumerate_fields(object, object_proto_field_clear);
 
     obj_unlock(handle);
 
     obj_set_defaults(handle);
-    sub_40C690(object);
+    obj_proto_dif_bitmap_clear(object);
 
     *obj_ptr = handle;
 }
@@ -870,7 +884,7 @@ void obj_create_inst(int64_t proto_obj, int64_t loc, int64_t* obj_ptr)
 
     object->num_fields = 0;
     object->modified = false;
-    sub_40C580(object);
+    obj_inst_bitmaps_alloc(object);
 
     object->data = NULL;
     memset(object->transient_properties, 0, sizeof(object->transient_properties));
@@ -953,7 +967,7 @@ void obj_deallocate(int64_t obj)
 
     if (object->prototype_oid.type != OID_TYPE_BLOCKED) {
         object_inst_enumerate_overridden_fields(object, object_inst_field_dealloc);
-        sub_40C5B0(object);
+        obj_inst_bitmaps_free(object);
 
         for (fld = OBJ_F_TRANSIENT_BEGIN + 1; fld < OBJ_F_TRANSIENT_END; fld++) {
             object_transient_field_dealloc(object, fld);
@@ -961,7 +975,7 @@ void obj_deallocate(int64_t obj)
     } else {
         object_data_index = 0;
         object_proto_enumerate_fields(object, object_proto_field_dealloc);
-        sub_40C640(object);
+        obj_proto_dif_bitmap_free(object);
     }
 
     if (object->data != NULL) {
@@ -981,7 +995,7 @@ void sub_405CC0(int64_t obj)
     object = obj_lock(obj);
     if (object->prototype_oid.type != OID_TYPE_BLOCKED) {
         object_inst_enumerate_overridden_fields(object, object_inst_field_dealloc);
-        sub_40C5B0(object);
+        obj_inst_bitmaps_free(object);
 
         for (fld = OBJ_F_TRANSIENT_BEGIN + 1; fld < OBJ_F_TRANSIENT_END; fld++) {
             object_transient_field_dealloc(object, fld);
@@ -989,7 +1003,7 @@ void sub_405CC0(int64_t obj)
     } else {
         object_data_index = 0;
         object_proto_enumerate_fields(object, object_proto_field_dealloc);
-        sub_40C640(object);
+        obj_proto_dif_bitmap_free(object);
     }
 
     if (object->data != NULL) {
@@ -1021,7 +1035,7 @@ void sub_405D60(int64_t* new_obj_ptr, int64_t obj)
     new_object->data = (intptr_t*)CALLOC(object->num_fields, sizeof(*new_object->data));
 
     if (object->prototype_oid.type != OID_TYPE_BLOCKED) {
-        sub_40C5C0(new_object, object);
+        obj_inst_bitmaps_copy(new_object, object);
 
         object_copy_src_obj = object;
         object_inst_enumerate_overridden_fields(new_object, object_inst_field_copy);
@@ -1031,7 +1045,7 @@ void sub_405D60(int64_t* new_obj_ptr, int64_t obj)
             object_transient_field_copy(new_object, object, fld);
         }
     } else {
-        sub_40C650(new_object, object);
+        obj_proto_dif_bitmap_copy(new_object, object);
 
         object_data_index = 0;
         object_proto_copy_src_obj = object;
@@ -1083,8 +1097,8 @@ void obj_perm_dup(int64_t* copy_obj_ptr, int64_t existing_obj)
     copy_object->num_fields = existing_object->num_fields;
     copy_object->modified = false;
     copy_object->data = (intptr_t*)CALLOC(copy_object->num_fields, sizeof(*copy_object->data));
-    sub_40C5C0(copy_object, existing_object);
-    memset(copy_object->field_4C, 0, 4 * obj_type_change_array_len(copy_object->type));
+    obj_inst_bitmaps_copy(copy_object, existing_object);
+    memset(copy_object->dif, 0, 4 * obj_type_change_array_len(copy_object->type));
 
     object_copy_src_obj = existing_object;
     object_inst_enumerate_overridden_fields(copy_object, object_inst_field_copy);
@@ -1359,7 +1373,7 @@ bool obj_dif_write(TigFile* stream, int64_t obj)
 
     cnt = obj_type_change_array_len(object->type);
     for (index = 0; index < cnt; index++) {
-        if (!objf_write(&(object->field_4C[index]), sizeof(object->field_4C[0]), stream)) {
+        if (!objf_write(&(object->dif[index]), sizeof(object->dif[0]), stream)) {
             obj_unlock(obj);
             return false;
         }
@@ -1433,7 +1447,7 @@ bool obj_dif_read(TigFile* stream, int64_t obj)
 
     cnt = obj_type_change_array_len(object->type);
     for (idx = 0; idx < cnt; idx++) {
-        if (!objf_read(&(object->field_4C[idx]), 4, stream)) {
+        if (!objf_read(&(object->dif[idx]), 4, stream)) {
             tig_debug_println("Error in obj_dif_read:\n  Unable to read one of the modified flag vars.");
             obj_unlock(obj);
             return false;
@@ -1477,7 +1491,7 @@ void sub_406B80(int64_t obj)
     if (object->modified) {
         cnt = obj_type_change_array_len(object->type);
         for (index = 0; index < cnt; index++) {
-            object->field_4C[index] = 0;
+            object->dif[index] = 0;
         }
         object->modified = false;
     }
@@ -2105,7 +2119,7 @@ void obj_field_reset(int64_t obj, int fld)
                 object_inst_field_dealloc(object, obj_field_changed_index(object, fld), &(object_fields[fld]));
                 obj_field_set_dif(object, fld, true);
             } else {
-                sub_40D450(object, fld);
+                obj_field_data_insert(object, fld);
                 obj_field_set_changed(object, fld, true);
                 obj_field_set_dif(object, fld, true);
             }
@@ -2425,7 +2439,7 @@ void obj_field_store(Object* object, int fld, void* value_ptr)
             store_op.ptr = &(object->data[storage_idx]);
             obj_field_set_dif(object, fld, true);
         } else {
-            sub_40D450(object, fld);
+            obj_field_data_insert(object, fld);
             obj_field_set_changed(object, fld, true);
             storage_idx = obj_field_changed_index(object, fld);
             store_op.ptr = &(object->data[storage_idx]);
@@ -2473,7 +2487,7 @@ void obj_arrayfield_store(Object* object, int fld, int index, void* value_ptr)
     } else {
         if (!sub_40D350(object, fld)) {
             if (!obj_field_is_changed(object, fld)) {
-                sub_40D2A0(object, fld);
+                obj_field_make_changed(object, fld);
             }
         }
         storage_idx = obj_field_changed_index(object, fld);
@@ -2666,7 +2680,7 @@ void sub_408E70(Object* object, int fld, int value)
     } else {
         if (!sub_40D350(object, fld)) {
             if (!obj_field_is_changed(object, fld)) {
-                sub_40D2A0(object, fld);
+                obj_field_make_changed(object, fld);
             }
         }
 
@@ -2942,7 +2956,7 @@ bool obj_proto_write_file(TigFile* stream, int64_t obj)
     }
 
     cnt = obj_type_change_array_len(object->type);
-    if (!objf_write(object->field_4C, sizeof(object->field_4C[0]) * cnt, stream)) {
+    if (!objf_write(object->dif, sizeof(object->dif[0]) * cnt, stream)) {
         obj_unlock(obj);
         return false;
     }
@@ -2982,8 +2996,8 @@ bool obj_proto_read_file(TigFile* stream, int64_t* obj_ptr, ObjectID oid)
     }
 
     size = 4 * obj_type_change_array_len(object->type);
-    object->field_4C = MALLOC(size);
-    if (!objf_read(object->field_4C, size, stream)) {
+    object->dif = MALLOC(size);
+    if (!objf_read(object->dif, size, stream)) {
         obj_unlock(obj);
         obj_pool_deallocate(obj);
         return false;
@@ -3043,7 +3057,7 @@ bool obj_inst_write_file(TigFile* stream, int64_t obj)
     }
 
     cnt = obj_type_change_array_len(object->type);
-    if (!objf_write(object->field_48, sizeof(object->field_48[0]) * cnt, stream)) {
+    if (!objf_write(object->changed, sizeof(object->changed[0]) * cnt, stream)) {
         obj_unlock(obj);
         return false;
     }
@@ -3088,11 +3102,11 @@ bool obj_inst_read_file(TigFile* stream, int64_t* obj_ptr, ObjectID oid)
 
     object->field_40 = 0;
     object->modified = false;
-    sub_40C580(object);
+    obj_inst_bitmaps_alloc(object);
 
     object->data = (intptr_t*)CALLOC(object->num_fields, sizeof(*object->data));
 
-    if (!objf_read(object->field_48, sizeof(*object->field_48) * obj_type_change_array_len(object->type), stream)) {
+    if (!objf_read(object->changed, sizeof(*object->changed) * obj_type_change_array_len(object->type), stream)) {
         obj_unlock(obj);
         obj_pool_deallocate(obj);
         return false;
@@ -3132,7 +3146,7 @@ void obj_proto_write_mem(WriteBuffer* wb, int64_t obj)
     write_buffer_append(&(object->oid), sizeof(object->oid), wb);
     write_buffer_append(&(object->type), sizeof(object->type), wb);
     cnt = obj_type_change_array_len(object->type);
-    write_buffer_append(object->field_4C, sizeof(object->field_4C[0]) * cnt, wb);
+    write_buffer_append(object->dif, sizeof(object->dif[0]) * cnt, wb);
     object_data_index = 0;
     object_enum_write_buffer = wb;
     object_proto_enumerate_fields(object, obj_proto_field_write_mem);
@@ -3152,9 +3166,9 @@ bool obj_proto_read_mem(uint8_t* data, int64_t* obj_ptr)
     mem_read_advance(&(object->oid), sizeof(object->oid), &data);
     mem_read_advance(&(object->type), sizeof(object->type), &data);
 
-    size = sizeof(*object->field_4C) * obj_type_change_array_len(object->type);
-    object->field_4C = MALLOC(size);
-    mem_read_advance(object->field_4C, size, &data);
+    size = sizeof(*object->dif) * obj_type_change_array_len(object->type);
+    object->dif = MALLOC(size);
+    mem_read_advance(object->dif, size, &data);
 
     object->field_40 = 0;
     object->modified = false;
@@ -3193,7 +3207,7 @@ void obj_inst_write_mem(WriteBuffer* wb, int64_t obj)
     write_buffer_append(&(object->type), sizeof(object->type), wb);
     write_buffer_append(&(object->num_fields), sizeof(object->num_fields), wb);
     cnt = obj_type_change_array_len(object->type);
-    write_buffer_append(object->field_48, sizeof(object->field_48[0]) * cnt, wb);
+    write_buffer_append(object->changed, sizeof(object->changed[0]) * cnt, wb);
     object_enum_write_buffer = wb;
 
     object_inst_enumerate_overridden_fields(object, obj_inst_field_write_mem);
@@ -3215,10 +3229,10 @@ bool obj_inst_read_mem(uint8_t* data, int64_t* obj_ptr)
 
     object->field_40 = 0;
     object->modified = false;
-    sub_40C580(object);
+    obj_inst_bitmaps_alloc(object);
 
     object->data = (intptr_t*)CALLOC(object->num_fields, sizeof(*object->data));
-    mem_read_advance(object->field_48, 4 * obj_type_change_array_len(object->type), &data);
+    mem_read_advance(object->changed, 4 * obj_type_change_array_len(object->type), &data);
 
     object_enum_read_cursor = data;
     if (!object_inst_enumerate_overridden_fields(object, obj_inst_field_read_mem)) {
@@ -3356,7 +3370,7 @@ bool obj_inst_field_read_mem(Object* object, int idx, ObjectFieldInfo* info)
 // 0x40A310
 bool object_field_write_if_dif(Object* object, int idx, ObjectFieldInfo* info)
 {
-    if ((object->field_4C[info->change_array_idx] & info->mask) == 0) {
+    if ((object->dif[info->change_array_idx] & info->mask) == 0) {
         return true;
     }
 
@@ -3371,12 +3385,12 @@ bool object_field_write_if_dif(Object* object, int idx, ObjectFieldInfo* info)
 // 0x40A370
 bool object_field_read_if_dif(Object* object, int idx, ObjectFieldInfo* info)
 {
-    if ((object->field_4C[info->change_array_idx] & info->mask) == 0) {
+    if ((object->dif[info->change_array_idx] & info->mask) == 0) {
         return true;
     }
 
-    if ((object->field_48[info->change_array_idx] & info->mask) == 0) {
-        sub_40D470(object, idx);
+    if ((object->changed[info->change_array_idx] & info->mask) == 0) {
+        obj_data_insert_slot(object, idx);
         obj_field_info_set_changed(object, info, true);
     }
 
@@ -4179,7 +4193,7 @@ bool convert_id_to_handle(void* entry, int index)
 
 /**
  * Number of 32-bit words in `object_type`'s change/presence bitmap arrays
- * (`field_48`/`field_4C`): the change_array_idx of the type's last field,
+ * (`changed`/`dif`): the change_array_idx of the type's last field,
  * plus one. Serialization walks exactly this many words when reading or
  * writing a bitmap.
  *
@@ -4378,8 +4392,13 @@ bool object_field_valid(int type, int fld)
     return false;
 }
 
+// Enumerate callback used once at startup to size each object type: it
+// counts fields rather than touching any, which is why both parameters are
+// unused. `obj_init` runs it over all 18 types to fill
+// `object_fields_count_per_type`.
+//
 // 0x40C560
-bool sub_40C560(Object* object, int fld)
+bool object_proto_field_count(Object* object, int fld)
 {
     (void)object;
     (void)fld;
@@ -4390,70 +4409,80 @@ bool sub_40C560(Object* object, int fld)
     return true;
 }
 
+// Allocates an instance's `changed` and `dif` bitmaps as a single block,
+// `changed` first. `dif` points into the middle of it, so only `changed` is
+// ever freed - see `obj_inst_bitmaps_free`.
+//
 // 0x40C580
-void sub_40C580(Object* object)
+void obj_inst_bitmaps_alloc(Object* object)
 {
     int cnt;
 
     cnt = obj_type_change_array_len(object->type);
-    object->field_48 = (int*)CALLOC(sizeof(int) * 2 * cnt, 1);
-    object->field_4C = &(object->field_48[cnt]);
+    object->changed = (int*)CALLOC(sizeof(int) * 2 * cnt, 1);
+    object->dif = &(object->changed[cnt]);
 }
 
 // 0x40C5B0
-void sub_40C5B0(Object* object)
+void obj_inst_bitmaps_free(Object* object)
 {
-    FREE(object->field_48);
+    FREE(object->changed);
 }
 
 // 0x40C5C0
-void sub_40C5C0(Object* dst, Object* src)
+void obj_inst_bitmaps_copy(Object* dst, Object* src)
 {
     int cnt;
 
     cnt = obj_type_change_array_len(dst->type);
-    dst->field_48 = (int*)MALLOC(sizeof(int) * 2 * cnt);
-    dst->field_4C = &(dst->field_48[cnt]);
-    memcpy(dst->field_48, src->field_48, sizeof(int) * 2 * cnt);
+    dst->changed = (int*)MALLOC(sizeof(int) * 2 * cnt);
+    dst->dif = &(dst->changed[cnt]);
+    memcpy(dst->changed, src->changed, sizeof(int) * 2 * cnt);
 }
 
+// Allocates a prototype's `dif` bitmap alone. A prototype has no prototype to
+// differ from, so it has no `changed` bitmap at all.
+//
 // 0x40C610
-void sub_40C610(Object* object)
+void obj_proto_dif_bitmap_alloc(Object* object)
 {
     int cnt;
 
     cnt = obj_type_change_array_len(object->type);
-    object->field_4C = (int*)CALLOC(sizeof(int) * cnt, 1);
+    object->dif = (int*)CALLOC(sizeof(int) * cnt, 1);
 }
 
 // 0x40C640
-void sub_40C640(Object* object)
+void obj_proto_dif_bitmap_free(Object* object)
 {
-    FREE(object->field_4C);
+    FREE(object->dif);
 }
 
 // 0x40C650
-void sub_40C650(Object* dst, Object* src)
+void obj_proto_dif_bitmap_copy(Object* dst, Object* src)
 {
     int cnt;
 
     cnt = obj_type_change_array_len(dst->type);
-    dst->field_4C = (int*)MALLOC(sizeof(int) * cnt);
+    dst->dif = (int*)MALLOC(sizeof(int) * cnt);
 
-    memcpy(dst->field_4C, src->field_4C, sizeof(int) * cnt);
+    memcpy(dst->dif, src->dif, sizeof(int) * cnt);
 }
 
 // 0x40C690
-void sub_40C690(Object* object)
+void obj_proto_dif_bitmap_clear(Object* object)
 {
     int cnt;
 
     cnt = obj_type_change_array_len(object->type);
-    memset(object->field_4C, 0, sizeof(int) * cnt);
+    memset(object->dif, 0, sizeof(int) * cnt);
 }
 
+// Enumerate callback that zeroes each of a new prototype's data slots,
+// walking `object_data_index` in step with the enumeration.
+//
 // 0x40C6B0
-bool sub_40C6B0(Object* object, int fld)
+bool object_proto_field_clear(Object* object, int fld)
 {
     (void)fld;
 
@@ -4841,18 +4870,18 @@ bool object_inst_enumerate_overridden_fields_func(Object* object, int begin, int
     int fld;
 
     for (index = 0; index < object_fields[begin + 1].change_array_idx; index++) {
-        v1 += bitset_count_bits(object->field_48[index], 32);
+        v1 += bitset_count_bits(object->changed[index], 32);
     }
 
-    v1 += bitset_count_bits(object->field_48[index], object_fields[begin + 1].bit);
+    v1 += bitset_count_bits(object->changed[index], object_fields[begin + 1].bit);
 
     for (fld = begin + 1; fld < end; fld++) {
-        if ((object->field_48[object_fields[fld].change_array_idx] & object_fields[fld].mask) != 0) {
+        if ((object->changed[object_fields[fld].change_array_idx] & object_fields[fld].mask) != 0) {
             if (!callback(object, v1, &(object_fields[fld]))) {
                 return false;
             }
 
-            if ((object->field_48[object_fields[fld].change_array_idx] & object_fields[fld].mask) != 0) {
+            if ((object->changed[object_fields[fld].change_array_idx] & object_fields[fld].mask) != 0) {
                 v1++;
             }
         }
@@ -5008,17 +5037,17 @@ bool object_inst_enumerate_available_fields_func(Object* object, int begin, int 
     int fld;
 
     for (index = 0; index < object_fields[begin + 1].change_array_idx; index++) {
-        v1 += bitset_count_bits(object->field_48[index], 32);
+        v1 += bitset_count_bits(object->changed[index], 32);
     }
 
-    v1 += bitset_count_bits(object->field_48[index], object_fields[begin + 1].bit);
+    v1 += bitset_count_bits(object->changed[index], object_fields[begin + 1].bit);
 
     for (fld = begin + 1; fld < end; fld++) {
         if (!callback(object, v1, &(object_fields[fld]))) {
             return false;
         }
 
-        if ((object->field_48[object_fields[fld].change_array_idx] & object_fields[fld].mask) != 0) {
+        if ((object->changed[object_fields[fld].change_array_idx] & object_fields[fld].mask) != 0) {
             v1++;
         }
     }
@@ -5033,23 +5062,31 @@ int obj_field_changed_index(Object* object, int fld)
     int index;
 
     for (index = 0; index < object_fields[fld].change_array_idx; index++) {
-        v1 += bitset_count_bits(object->field_48[index], 32);
+        v1 += bitset_count_bits(object->changed[index], 32);
     }
 
-    v1 += bitset_count_bits(object->field_48[index], object_fields[fld].bit);
+    v1 += bitset_count_bits(object->changed[index], object_fields[fld].bit);
 
     return v1;
 }
 
+// Gives a field its own instance-level storage, seeded with the value it was
+// inheriting - the copy-on-write step behind every field write on an instance.
+//
+// Making room, marking the field changed and copying the prototype's value in
+// have to happen together: the new slot is uninitialised, and code that reads
+// a changed field goes to the instance rather than the prototype, so a gap
+// between the mark and the copy would expose garbage.
+//
 // 0x40D2A0
-void sub_40D2A0(Object* object, int fld)
+void obj_field_make_changed(Object* object, int fld)
 {
     Object* prototype;
     ObjDataDescriptor v1;
     int v2;
     int v3;
 
-    sub_40D450(object, fld);
+    obj_field_data_insert(object, fld);
     obj_field_set_changed(object, fld, true);
 
     prototype = obj_lock(obj_get_prototype_handle(object));
@@ -5063,7 +5100,7 @@ void sub_40D2A0(Object* object, int fld)
 // 0x40D320
 bool obj_field_is_changed(Object* object, int fld)
 {
-    return (object->field_48[object_fields[fld].change_array_idx] & object_fields[fld].mask) != 0;
+    return (object->changed[object_fields[fld].change_array_idx] & object_fields[fld].mask) != 0;
 }
 
 // NOTE: Left unnamed. It is behaviourally identical to `obj_field_is_changed`,
@@ -5088,51 +5125,78 @@ void obj_field_set_changed(Object* object, int fld, bool enabled)
 void obj_field_info_set_changed(Object* object, ObjectFieldInfo* info, int enabled)
 {
     if (enabled) {
-        object->field_48[info->change_array_idx] |= info->mask;
+        object->changed[info->change_array_idx] |= info->mask;
     } else {
-        object->field_48[info->change_array_idx] &= ~info->mask;
+        object->changed[info->change_array_idx] &= ~info->mask;
     }
 }
 
+// Whether a field is carried in the serialized difference stream - the reader
+// for the bitmap `obj_field_set_dif` writes.
+//
+// NOTE: nothing calls this. It is the obvious counterpart to the pair
+// `obj_field_is_changed`/`obj_field_set_changed` and is kept for symmetry, but
+// CE reaches the `dif` bitmap directly in the two `*_if_dif` functions.
+//
 // 0x40D3D0
-bool sub_40D3D0(Object* object, int fld)
+bool obj_field_is_dif(Object* object, int fld)
 {
-    return (object->field_4C[object_fields[fld].change_array_idx] & object_fields[fld].mask) != 0;
+    return (object->dif[object_fields[fld].change_array_idx] & object_fields[fld].mask) != 0;
 }
 
 // 0x40D400
 void obj_field_set_dif(Object* object, int fld, bool enabled)
 {
     if (enabled) {
-        object->field_4C[object_fields[fld].change_array_idx] |= object_fields[fld].mask;
+        object->dif[object_fields[fld].change_array_idx] |= object_fields[fld].mask;
     } else {
-        object->field_4C[object_fields[fld].change_array_idx] &= ~object_fields[fld].mask;
+        object->dif[object_fields[fld].change_array_idx] &= ~object_fields[fld].mask;
     }
 }
 
+// Opens an empty data slot for `fld` at the position its changed-index says
+// it belongs, without seeding it from the prototype.
+//
 // 0x40D450
-void sub_40D450(Object* object, int fld)
+void obj_field_data_insert(Object* object, int fld)
 {
-    sub_40D470(object, obj_field_changed_index(object, fld));
+    obj_data_insert_slot(object, obj_field_changed_index(object, fld));
 }
 
+// Grows `data` by one and shifts everything from `at` upwards, leaving a
+// zeroed slot behind.
+//
+// NOTE: the parameter is a *data index*, not a field id, though CE had it as
+// `fld`. Both callers pass an already-resolved index - `obj_field_data_insert`
+// via `obj_field_changed_index`, and `object_field_read_if_dif` the index it
+// is iterating. Passing a field id here would corrupt the object silently,
+// which is why it is no longer spelled like one.
+//
 // 0x40D470
-void sub_40D470(Object* object, int fld)
+void obj_data_insert_slot(Object* object, int at)
 {
     int index;
 
     object->num_fields++;
     object->data = (intptr_t*)REALLOC(object->data, sizeof(*object->data) * object->num_fields);
 
-    for (index = object->num_fields - 1; index > fld; index--) {
+    for (index = object->num_fields - 1; index > at; index--) {
         object->data[index] = object->data[index - 1];
     }
 
-    object->data[fld] = 0;
+    object->data[at] = 0;
 }
 
+// Releases a field's instance storage and closes the gap, the inverse of
+// `obj_field_data_insert`.
+//
+// NOTE: nothing calls this. Kept because it is the matching half of an
+// otherwise complete set, and because its absence is more interesting than
+// its presence - an instance never gives a field back once it has taken its
+// own copy.
+//
 // 0x40D4D0
-void sub_40D4D0(Object* object, int fld)
+void obj_field_data_remove(Object* object, int fld)
 {
     int v1;
     ObjDataDescriptor v2;
@@ -5210,7 +5274,7 @@ bool obj_field_debug_print_dif(Object* object, int a2, ObjectFieldInfo* field_in
 {
     (void)a2;
 
-    if ((object->field_4C[field_info->change_array_idx] & field_info->mask) != 0) {
+    if ((object->dif[field_info->change_array_idx] & field_info->mask) != 0) {
         tig_debug_printf("\t #%d", (int)(field_info - object_fields));
     }
     return true;
