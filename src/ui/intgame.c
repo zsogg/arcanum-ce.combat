@@ -4029,7 +4029,21 @@ void sub_550000(int64_t critter_obj, Hotkey* hotkey, int inventory_location)
     if (item_obj != OBJ_HANDLE_NULL) {
         sound_id = sfx_item_sound(item_obj, critter_obj, OBJ_HANDLE_NULL, ITEM_SOUND_DROP);
     } else {
-        // FIXME: Looks wrong.
+        // NOTE: Faithful, and Troika's. The original takes the same branch at
+        // 0x5500FE:
+        //
+        //     mov eax, esi / or eax, ebp   ; item_obj != NULL?
+        //     je  0x5500FE
+        //     ...                          ; sfx_item_sound(..., ITEM_SOUND_DROP)
+        //     jmp 0x550102
+        //     mov eax, [esp+0x20]          ; 0x5500FE: inventory_location
+        //     cmp eax, 0xFFFFFFFF          ; 0x550102: the shared `!= -1` test
+        //
+        // `[esp+0x20]` is the third argument - the same slot read at 0x5500A6 and
+        // passed to `item_wield_set` - so the sound id really is the inventory
+        // location. That is one of ITEM_INV_LOC_HELMET..BOOTS (1000..1008), and
+        // no `snd_*.mes` defines an entry in that range, so nothing plays. The
+        // effect is a missing sound when the slot was empty, not a wrong one.
         sound_id = inventory_location;
     }
 

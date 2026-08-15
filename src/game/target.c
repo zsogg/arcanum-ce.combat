@@ -1029,8 +1029,20 @@ bool target_context_evaluate(TargetContext* ctx)
         }
     }
 
+    // NOTE: Faithful, and the duplicated argument is Troika's. The original
+    // loads one field and pushes it as both parameters, at 0x4F3E56:
+    //
+    //     mov  ecx, [esi+0x3C]   ; orig_target_loc, high half
+    //     mov  eax, [esi+0x38]   ; orig_target_loc, low half
+    //     push ecx / push eax / push ecx / push eax
+    //     call 0x4B96F0          ; location_dist
+    //
+    // (`TargetCtx+0x38` is `orig_target_loc` and `TargetParams+0x10` is
+    // `radius`, so the operands are identified.) The distance is therefore
+    // always 0 and TGT_TILE_RADIUS rejects nothing unless `radius` is negative -
+    // the check is dead in the original too. Presumably one side was meant to be
+    // `target_loc`, but that is a guess, so it is left as the original has it.
     if ((tgt & TGT_TILE_RADIUS) != 0
-        // TODO: Sames args looks wrong, check.
         && location_dist(ctx->orig_target_loc, ctx->orig_target_loc) > ctx->params->radius) {
         return false;
     }

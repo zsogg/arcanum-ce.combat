@@ -5711,7 +5711,31 @@ bool mainmenu_ui_message_filter(TigMessage* msg)
                     switch (idx) {
                     case 3:
                         if (mainmenu_ui_confirm_quit() == TIG_WINDOW_MODAL_DIALOG_CHOICE_OK) {
-                            // FIXME: Looks wrong.
+                            // NOTE: Faithful. The original pushes the literal 3
+                            // too, at 0x547C83:
+                            //
+                            //     call 0x541690   ; mainmenu_ui_confirm_quit
+                            //     test eax, eax
+                            //     jne  0x547D7D   ; not OK -> return true
+                            //     push 0x3
+                            //     call 0x538840   ; tig_button_hide
+                            //     ...
+                            //     push 0x3
+                            //     call 0x549310   ; mainmenu_ui_return_to_mainmenu
+                            //
+                            // So Troika passes the *switch index* where
+                            // `tig_button_hide` wants a `tig_button_handle_t`.
+                            // It reads wrong and it is theirs; whichever button
+                            // happens to hold handle 3 is hidden. Not repaired
+                            // because the intended handle cannot be recovered.
+                            //
+                            // The original also skips the
+                            // `mainmenu_ui_return_to_mainmenu` call when
+                            // `tig_net` is active (`ds:0x62AC6C & 1` at
+                            // 0x547C8A, deferring via 0x4A38B0 instead). CE
+                            // defines `tig_net_is_active()` as 0
+                            // (`src/net_compat.h`), so that path is unreachable
+                            // here by design, not dropped by accident.
                             tig_button_hide(3);
 
                             return mainmenu_ui_return_to_mainmenu(3);
@@ -5733,7 +5757,11 @@ bool mainmenu_ui_message_filter(TigMessage* msg)
                     switch (idx) {
                     case 1:
                         if (mainmenu_ui_confirm_quit() == TIG_WINDOW_MODAL_DIALOG_CHOICE_OK) {
-                            // FIXME: Looks wrong.
+                            // NOTE: Faithful, same shape as the MM_WINDOW_
+                            // MAINMENU_IN_PLAY case above - see the note there.
+                            // Here the original pushes `esi` rather than a
+                            // literal (0x547D25), but it has just tested
+                            // `cmp si, 1` to reach this arm, so the value is 1.
                             tig_button_hide(1);
 
                             return mainmenu_ui_return_to_mainmenu(1);

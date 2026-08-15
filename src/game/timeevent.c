@@ -323,7 +323,23 @@ void datetime_sub_milliseconds(DateTime* datetime, unsigned int milliseconds)
 {
     if (datetime->milliseconds < milliseconds) {
         datetime->milliseconds = milliseconds - datetime->milliseconds;
-        // TODO: Looks wrong, check.
+        // NOTE: Faithful. This borrow is wrong, but it is Troika's, transcribed
+        // exactly - the two lines are instruction-for-instruction the original's
+        // 0x45A9F7-0x45AA05:
+        //
+        //     mov eax, esi      ; milliseconds
+        //     sub eax, ecx      ; eax = milliseconds - old ms
+        //     mov ecx, [edx]    ; days
+        //     mov [edx+4], eax  ; ->milliseconds = milliseconds - old ms
+        //     sub eax, esi      ; eax = -old ms
+        //     add ecx, eax      ; days += -old ms
+        //     mov [edx], ecx
+        //
+        // So the branch subtracts the *old milliseconds* from `days` instead of
+        // borrowing one day, and never adds 86400000 back. A correct borrow
+        // would be `days -= 1; milliseconds = 86400000 - (milliseconds - old)`.
+        // Left alone deliberately: the single caller (`script.c:1993`) is the
+        // only way to reach it, and changing it would diverge from the original.
         datetime->days += datetime->milliseconds - milliseconds;
     } else {
         datetime->milliseconds -= milliseconds;
