@@ -167,8 +167,20 @@ void invensource_exit(void)
 void invensource_get_id_list(int id, InvenSourceSet* set)
 {
     if (invensource_initialized) {
-        // TODO: Since `id` is 1-based, `id < invensource_num_sets` looks wrong.
-        if (id > 0 && id < invensource_num_sets) {
+        // FIX: Was `id < invensource_num_sets`, which drops the last set.
+        //
+        // Ids are 1-based and `invensource_num_sets` is the entry count
+        // (`mes_entries_count`), so the valid range is 1..count inclusive. The
+        // original bounds it that way at 0x4BF5E4:
+        //
+        //     cmp DWORD PTR ds:0x5FC524, eax   ; invensource_num_sets vs id
+        //     jl  0x4BF619                     ; error iff num_sets < id
+        //
+        // The strict `<` made the highest-numbered source unreachable, so any
+        // critter or container whose OBJ_F_*_INVENTORY_SOURCE named it restocked
+        // empty and logged a range error: set 123 "Multi-Magic(Dark)" on stock
+        // data, 124 "General(sm-fem)PC" under UAP.
+        if (id > 0 && id <= invensource_num_sets) {
             *set = invensource_sets[id - 1].set;
             return;
         }
