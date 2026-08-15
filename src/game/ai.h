@@ -132,9 +132,9 @@ void ai_attack(int64_t source_obj, int64_t target_obj, int loudness, unsigned in
 void ai_start_attacking(int64_t attacker_obj, int64_t target_obj);
 void ai_notify_explosion_dynamite(int64_t pc_obj);
 void ai_notify_killed(int64_t victim_obj, int64_t killer_obj);
-void sub_4AA300(int64_t a1, int64_t a2);
+void ai_make_peace(int64_t obj, int64_t other_obj);
 void ai_stop_attacking(int64_t obj);
-void sub_4AA580(int64_t obj);
+void ai_allow_attacking(int64_t obj);
 void ai_npc_wait(int64_t obj);
 void ai_npc_unwait(int64_t obj, bool force);
 bool ai_npc_wait_here_timeevent_process(TimeEvent* timeevent);

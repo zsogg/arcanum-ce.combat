@@ -345,7 +345,7 @@ void broadcast_msg_client(int64_t pc_obj, Broadcast* bcast)
                     if (target_obj != OBJ_HANDLE_NULL
                         && (combat_critter_is_combat_mode_active(pc_obj)
                             || critter_pc_leader_get(target_obj) != candidate_obj)) {
-                        sub_4AA580(candidate_obj);
+                        ai_allow_attacking(candidate_obj);
                         ai_attack(candidate_obj, target_obj, LOUDNESS_LOUD, 0x4);
                     }
                     break;

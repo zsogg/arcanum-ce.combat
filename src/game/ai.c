@@ -90,7 +90,7 @@ static void ai_notify_followers_of_attack(int64_t leader_obj, int64_t target_obj
 static void ai_follower_react_to_attack(int64_t follower_obj, int64_t leader_obj, int64_t target_obj, int allow_complaint, int suppress_reaction, int lock_target);
 static void ai_notify_attack_witnesses(int64_t a1, int64_t a2, int loudness);
 static void ai_witness_attack(int64_t a1, int64_t a2, int64_t a3, int loudness);
-static void sub_4AA420(int64_t obj, int64_t a2);
+static void ai_forget_enemy(int64_t obj, int64_t enemy_obj);
 static void ai_react_to_threat(int64_t a1, int64_t a2);
 static bool ai_npc_wait_here_timeevent_check(TimeEvent* timeevent);
 static void ai_copy_params(int64_t obj, AiParams* params);
@@ -504,7 +504,18 @@ bool ai_heal_func(Ai* ai, int64_t obj, bool a3)
     int hp_ratio;
     int64_t item_obj;
 
-    if ((obj_field_int32_get(obj, OBJ_F_CRITTER_FLAGS) & ONF_NO_ATTACK) != 0) {
+    // NOTE: This read `ONF_NO_ATTACK`, which is a *NPC*-flags constant that
+    // happens to share bit 0x20000000 with `OCF_MECHANICAL`. The generated
+    // code is identical either way, so this is a readability fix and not a
+    // behaviour change - but the old spelling said something false, and the
+    // obvious "correction" of switching the field to OBJ_F_NPC_FLAGS to match
+    // the constant would have been a real bug.
+    //
+    // The original settles it: 0x4A8AA0 passes field 218, which is
+    // OBJ_F_CRITTER_FLAGS, and tests 0x20000000. In the critter-flags
+    // namespace that bit is OCF_MECHANICAL, and refusing to heal a mechanical
+    // critter is what the surrounding function is for.
+    if ((obj_field_int32_get(obj, OBJ_F_CRITTER_FLAGS) & OCF_MECHANICAL) != 0) {
         return false;
     }
 
@@ -1335,59 +1346,76 @@ void ai_notify_killed(int64_t victim_obj, int64_t killer_obj)
     }
 }
 
+// Ends a critter's hostility towards another, and towards that other's whole
+// party.
+//
+// The other side is resolved to its PC leader first, so making peace with a
+// follower makes peace with the party it belongs to rather than with one
+// member of it - and the follower sweep at the end clears the grudge in the
+// opposite direction too.
+//
+// Against a PC it also floors the reaction at 50, the neutral value: an NPC
+// that stops fighting you does not stay hostile in conversation. It is a
+// floor, not an assignment, so an NPC that already liked you is not brought
+// back down.
+//
 // 0x4AA300
-void sub_4AA300(int64_t a1, int64_t a2)
+void ai_make_peace(int64_t obj, int64_t other_obj)
 {
-    int64_t v1;
+    int64_t leader_obj;
     int obj_type;
     int reaction;
 
-    v1 = critter_pc_leader_get(a2);
-    if (v1 == OBJ_HANDLE_NULL) {
-        v1 = a2;
+    leader_obj = critter_pc_leader_get(other_obj);
+    if (leader_obj == OBJ_HANDLE_NULL) {
+        leader_obj = other_obj;
     }
 
-    obj_field_handle_set(a1, OBJ_F_NPC_COMBAT_FOCUS, OBJ_HANDLE_NULL);
-    obj_field_handle_set(a1, OBJ_F_NPC_WHO_HIT_ME_LAST, OBJ_HANDLE_NULL);
-    ai_shitlist_remove(a1, v1);
+    obj_field_handle_set(obj, OBJ_F_NPC_COMBAT_FOCUS, OBJ_HANDLE_NULL);
+    obj_field_handle_set(obj, OBJ_F_NPC_WHO_HIT_ME_LAST, OBJ_HANDLE_NULL);
+    ai_shitlist_remove(obj, leader_obj);
 
-    obj_type = obj_field_int32_get(v1, OBJ_F_TYPE);
+    obj_type = obj_field_int32_get(leader_obj, OBJ_F_TYPE);
     if (obj_type == OBJ_TYPE_PC) {
-        reaction = reaction_get(a1, v1);
+        reaction = reaction_get(obj, leader_obj);
         if (reaction < 50) {
-            reaction_adj(a1, v1, 50 - reaction);
+            reaction_adj(obj, leader_obj, 50 - reaction);
         }
     }
 
-    ai_apply_danger_type(a1, AI_DANGER_SOURCE_TYPE_NONE, OBJ_HANDLE_NULL, NULL);
-    sub_44E050(a1, v1);
+    ai_apply_danger_type(obj, AI_DANGER_SOURCE_TYPE_NONE, OBJ_HANDLE_NULL, NULL);
+    sub_44E050(obj, leader_obj);
 
     if (obj_type_is_critter(obj_type)) {
         ObjectList objects;
         ObjectNode* node;
 
-        object_list_all_followers(v1, &objects);
+        object_list_all_followers(leader_obj, &objects);
         node = objects.head;
         while (node != NULL) {
-            sub_4AA420(node->obj, a1);
-            ai_shitlist_remove(a1, node->obj);
-            sub_44E0E0(node->obj, a1);
+            ai_forget_enemy(node->obj, obj);
+            ai_shitlist_remove(obj, node->obj);
+            sub_44E0E0(node->obj, obj);
             node = node->next;
         }
         object_list_destroy(&objects);
     }
 }
 
+// Drops one critter from another's grudges: current target, last attacker and
+// shitlist. Both handle clears are conditional, so this cannot disturb a fight
+// with somebody else.
+//
 // 0x4AA420
-void sub_4AA420(int64_t obj, int64_t a2)
+void ai_forget_enemy(int64_t obj, int64_t enemy_obj)
 {
-    if (obj_field_handle_get(obj, OBJ_F_NPC_COMBAT_FOCUS) == a2) {
+    if (obj_field_handle_get(obj, OBJ_F_NPC_COMBAT_FOCUS) == enemy_obj) {
         obj_field_handle_set(obj, OBJ_F_NPC_COMBAT_FOCUS, OBJ_HANDLE_NULL);
     }
-    if (obj_field_handle_get(obj, OBJ_F_NPC_WHO_HIT_ME_LAST) == a2) {
+    if (obj_field_handle_get(obj, OBJ_F_NPC_WHO_HIT_ME_LAST) == enemy_obj) {
         obj_field_handle_set(obj, OBJ_F_NPC_WHO_HIT_ME_LAST, OBJ_HANDLE_NULL);
     }
-    ai_shitlist_remove(obj, a2);
+    ai_shitlist_remove(obj, enemy_obj);
 }
 
 // 0x4AA4A0
@@ -1402,7 +1430,7 @@ void ai_stop_attacking(int64_t obj)
 
         combat_focus_obj = obj_field_handle_get(obj, OBJ_F_NPC_COMBAT_FOCUS);
         if (combat_focus_obj != OBJ_HANDLE_NULL) {
-            sub_4AA300(obj, combat_focus_obj);
+            ai_make_peace(obj, combat_focus_obj);
             anim_interrupt_all_goals_of_obj(obj, 3, 0, 0);
             combat_critter_deactivate_combat_mode(obj);
         }
@@ -1428,8 +1456,15 @@ void ai_stop_attacking(int64_t obj)
     }
 }
 
+// Lifts the attack ban `ai_stop_attacking` puts on a party, clearing exactly
+// the `ONF_NO_ATTACK` it sets and recursing over a PC's followers the same
+// way. Only followers are affected - an NPC with no PC leader was never
+// banned.
+//
+// This only removes the prohibition; nothing resumes on its own.
+//
 // 0x4AA580
-void sub_4AA580(int64_t obj)
+void ai_allow_attacking(int64_t obj)
 {
     int type;
     unsigned int flags;
@@ -1450,7 +1485,7 @@ void sub_4AA580(int64_t obj)
 
         node = objects.head;
         while (node != NULL) {
-            sub_4AA580(node->obj);
+            ai_allow_attacking(node->obj);
             node = node->next;
         }
 

@@ -4192,7 +4192,7 @@ void magictech_component_obj_flag(int64_t obj, int64_t a2, int fld, int a4, int 
             } else if ((a4 & OSF_CHARMED) != 0) {
                 if (obj_type == OBJ_TYPE_NPC) {
                     if ((obj_field_int32_get(obj, OBJ_F_CRITTER_FLAGS) & OCF_ANIMAL) != 0) {
-                        sub_4AA300(obj, a6);
+                        ai_make_peace(obj, a6);
                     } else if (player_is_pc_obj(a6)) {
                         // CE: Bypass effects to make this bonus reversible.
                         reaction_adj_ex(obj, a6, 30, false);

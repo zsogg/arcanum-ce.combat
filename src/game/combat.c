@@ -1384,7 +1384,7 @@ void combat_critter_toggle_combat_mode(int64_t obj)
     } else {
         if (is_pc) {
             combat_callbacks.field_0(1);
-            sub_4AA580(obj);
+            ai_allow_attacking(obj);
         }
 
         if (!v1 && !is_tb) {

@@ -1446,7 +1446,7 @@ void wmap_ui_close(void)
     if (pc_obj != OBJ_HANDLE_NULL
         && (obj_field_int32_get(pc_obj, OBJ_F_FLAGS) & OF_OFF) != 0) {
         critter_toggle_on_off(pc_obj);
-        sub_4AA580(pc_obj);
+        ai_allow_attacking(pc_obj);
     }
 
     if (intgame_mode_set(INTGAME_MODE_MAIN) && wmap_ui_created) {
@@ -1747,7 +1747,7 @@ bool wmap_ui_state_set(WmapUiState state)
             if (pc_obj != OBJ_HANDLE_NULL
                 && (obj_field_int32_get(pc_obj, OBJ_F_FLAGS) & OF_OFF) != 0) {
                 critter_toggle_on_off(pc_obj);
-                sub_4AA580(pc_obj);
+                ai_allow_attacking(pc_obj);
             }
             timeevent_clear_all_typed(TIMEEVENT_TYPE_WORLDMAP);
             wmap_ui_state = state;
