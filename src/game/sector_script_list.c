@@ -141,8 +141,20 @@ bool sector_script_list_save_with_dif(SectorScriptList* list, TigFile* stream)
         return false;
     }
 
-    // FIXME: This looks wrong. This flag should be unset after script list is
-    // saved.
+    // NOTE: Faithful. The original sets the flag here too, at 0x4F62F7:
+    //
+    //     4F62EB: call 0x4F6270           ; sector_script_list_save
+    //     4F62F3: test eax, eax
+    //     4F62F5: je   0x4F6304           ; failed -> return false
+    //     4F62F7: mov  eax, [esi]
+    //     4F62F9: or   al, 0x1            ; SECTOR_SCRIPT_LIST_MODIFIED
+    //     4F62FB: mov  [esi], eax
+    //
+    // The two `_with_dif` wrappers are instruction-for-instruction identical
+    // apart from the inner call, so `save` really does mark the list modified
+    // exactly as `load` does. Clearing it after a save may well be what was
+    // intended, but that is a design opinion about the original, not a
+    // divergence in the port.
     list->flags |= SECTOR_SCRIPT_LIST_MODIFIED;
 
     return true;

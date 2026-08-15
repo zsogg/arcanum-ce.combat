@@ -776,7 +776,26 @@ bool obj_validate_system(unsigned int flags)
 
                                 item_obj = obj_pool_perm_lookup(oid);
 
-                                // TODO: Looks wrong, validates `obj` instead of `item_obj`.
+                                // NOTE: Faithful. The original validates the
+                                // owner too, and the stack slots settle it
+                                // (0x405583):
+                                //
+                                //     call 0x4E50E0        ; obj_pool_perm_lookup
+                                //     mov  ecx, [esp+0x40] ; \ obj, high
+                                //     mov  [esp+0x48], edx ;  ) item_obj saved
+                                //     mov  edx, [esp+0x3C] ; / obj, low
+                                //     push ecx / push edx
+                                //     mov  [esp+0x4C], eax ;   item_obj, low
+                                //     call 0x4E5470        ; obj_handle_is_valid
+                                //
+                                // The handle passed in comes from +0x3C/+0x40,
+                                // while the lookup's result is stored away at
+                                // +0x44/+0x48 - and the `item_obj == obj`
+                                // comparison below reads +0x3C/+0x40 as `obj`,
+                                // which identifies both. So the check is
+                                // Troika's mistake, not a transcription slip.
+                                // Diagnostic-only either way: this whole
+                                // function just prints "!VS " lines.
                                 if (!obj_handle_is_valid(obj)) {
                                     tig_debug_printf("!VS  Inventory entry id resolved to invalid handle.  H: %" PRIx64 "\n", item_obj);
                                 }

@@ -10158,7 +10158,21 @@ bool AGbeginStunAnim(AnimRunInfo* run_info)
     if (tig_art_anim_data(art_id, &art_anim_data) != TIG_OK) {
         tig_debug_printf("Anim: AGbeginStunAnim: Failed to find Aid: %d, defaulting to 10 fps!", art_id);
         run_info->pause_time.milliseconds = 100;
-        // NOTE: Looks wrong, other functions still set 0x10 and return true.
+        // NOTE: Faithful. The inconsistency with the sibling handlers is
+        // Troika's. The original sets the flag only on the success path
+        // (0x42E02E), and its failure path stores 100 and returns 0 without
+        // touching it:
+        //
+        //     42E017: test eax, eax
+        //     42E019: jne  0x42E041          ; not TIG_OK
+        //     42E01B: mov eax, 0x3E8 / div   ; 1000 / fps
+        //     42E028: mov [ebp+0xCFC], eax   ; pause_time.milliseconds
+        //     42E02E: mov eax, [ebp+0xC]
+        //     42E031: or  al, 0x10           ; flags |= 0x10, success only
+        //     42E037: mov eax, 1             ; return true
+        //     42E041: ... tig_debug_printf
+        //     42E04F: mov DWORD PTR [ebp+0xCFC], 0x64   ; = 100
+        //     42E05C: xor eax, eax           ; return false
         return false;
     }
 
@@ -13733,7 +13747,19 @@ bool anim_goal_run_to_tile(int64_t obj, int64_t loc)
     run_info = &(anim_run_info[anim_scratch_goal_id.slot_num]);
     run_info->flags |= 0x40;
 
-    // TODO: Looks wrong, checking for 0 immediately after OR'ing 0x40.
+    // NOTE: Faithful, and the dead branch is Troika's. The original writes the
+    // flag and then tests the same slot for zero, so the encumbrance check can
+    // never run:
+    //
+    //     433F08: mov edx, [eax+0xC] / or edx, 0x40 / mov [eax+0xC], edx
+    //     433F15: mov ecx, [eax+0xC]
+    //     433F18: test ecx, ecx
+    //     433F1A: jne 0x433F42            ; always taken
+    //
+    // It is not a one-off transcription slip either: the same `|= 0x40` then
+    // `== 0` pair appears three times in this one function in the original, and
+    // all three are reproduced below. Presumably the test was meant to run
+    // before the OR, but that is a guess, so it is left as written.
     if (run_info->flags == 0
         && critter_encumbrance_level_get(run_info->anim_obj) < ENCUMBRANCE_LEVEL_SIGNIFICANT) {
         run_info->flags |= 0x40;
