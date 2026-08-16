@@ -710,8 +710,8 @@ bool wmap_rnd_terrain_clear(uint16_t tid)
     int base_terrain_type;
     int comp_terrain_type;
 
-    base_terrain_type = sub_4E8DC0(tid);
-    comp_terrain_type = sub_4E8DD0(tid);
+    base_terrain_type = terrain_tid_base(tid);
+    comp_terrain_type = terrain_tid_from(tid);
     if (!TERRAIN_TYPE_IS_VALID(base_terrain_type) || !TERRAIN_TYPE_IS_VALID(comp_terrain_type)) {
         tig_debug_println("Error:  Unknown terrain encountered in wmap_rnd_terrain_clear");
         return false;
@@ -1088,12 +1088,12 @@ int wmap_rnd_determine_terrain(int64_t loc)
     int terrain_base_type;
 
     sec = sector_id_from_loc(loc);
-    tid = sub_4E87F0(sec);
+    tid = terrain_tid_get(sec);
     if (!wmap_rnd_terrain_clear(tid)) {
         return WMAP_TERRAIN_TYPE_INVALID;
     }
 
-    terrain_base_type = sub_4E8DC0(tid);
+    terrain_base_type = terrain_tid_base(tid);
     if (terrain_base_type < 0 || terrain_base_type >= 19) {
         tig_debug_println("Error:  Unknown terrain base encountered inwmap_rnd_determine_terrain");
         return WMAP_TERRAIN_TYPE_INVALID;
