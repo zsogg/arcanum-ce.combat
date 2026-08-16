@@ -25,6 +25,13 @@
 //
 // The archives are written to disk because `tig_database_open` takes a path,
 // and are removed by the tests that write them.
+//
+// Where a test pins a quirk rather than an obvious contract, the quirk was
+// checked against the original first, so the suite does not cement a
+// divergence: the end-of-entry clamp and its EOF flag are 0x53C4A0's
+// `cmp esi, ecx / jbe` then `or ecx, 0x2`, and `ungetc` refusing to stack and
+// walking the position back is 0x53C460's `test cl, 0x5` then `dec ecx` on
+// +0x10. Both are instruction-for-instruction what CE does.
 
 #include <stdio.h>
 #include <stdlib.h>
