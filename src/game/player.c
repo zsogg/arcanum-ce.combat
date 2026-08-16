@@ -107,7 +107,7 @@ bool player_load(GameLoadInfo* load_info)
 }
 
 // 0x40D860
-void sub_40D860(void)
+void player_pc_obj_relookup(void)
 {
     if (player_pc_oid.type != OID_TYPE_NULL) {
         player_pc_obj = obj_pool_perm_lookup(player_pc_oid);
@@ -184,7 +184,7 @@ int64_t player_get_local_pc_obj(void)
 }
 
 // 0x40DAB0
-bool sub_40DAB0(void)
+bool player_destroy(void)
 {
     if (player_pc_obj == OBJ_HANDLE_NULL) {
         return false;
@@ -198,7 +198,7 @@ bool sub_40DAB0(void)
 }
 
 // 0x40DAF0
-bool sub_40DAF0(int64_t obj)
+bool player_pc_obj_set(int64_t obj)
 {
     player_pc_obj = obj;
     if (obj != OBJ_HANDLE_NULL) {
@@ -246,7 +246,7 @@ bool player_obj_create_player(PlayerCreateInfo* player_create_info)
 
     if ((player_create_info->flags & PLAYER_CREATE_INFO_NETWORK) == 0) {
         if (player_pc_obj != OBJ_HANDLE_NULL) {
-            sub_40DAB0();
+            player_destroy();
         }
     }
 

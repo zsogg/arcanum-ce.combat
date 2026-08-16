@@ -23,7 +23,8 @@ bool objlist_save_with_dif(SectorObjectList* list, TigFile* stream);
 bool objlist_tile_of_object(SectorObjectList* list, int64_t obj, int* tile_ptr);
 void objlist_precache_art(SectorObjectList* list);
 void objlist_fold(SectorObjectList* list, int64_t location, int first_heartbeat);
-void sub_4F2230(int64_t obj, int* a2, int* a3);
+void objlist_draw_position_get(int64_t obj, int* x_ptr, int* y_ptr);
+bool objlist_validate(SectorObjectList* list, int64_t sector_id);
 void objlist_notify_sector_changed(int64_t sec, int64_t pc_obj);
 
 #endif /* ARCANUM_GAME_SECTOR_OBJECT_LIST_H_ */

@@ -3,7 +3,7 @@
 #include "game/gamelib.h"
 #include "ui/intgame.h"
 
-static void sub_557F30(void);
+static void iso_load_screen_font_create(void);
 
 // 0x64C6F8
 static TigRect stru_64C6F8;
@@ -39,13 +39,13 @@ bool iso_init(GameInitInfo* init_info)
     iso_content_rect.y = 0;
     iso_content_rect.width = window_data.rect.width;
     iso_content_rect.height = window_data.rect.height;
-    sub_558130(&iso_content_rect);
+    iso_content_rect_cache_set(&iso_content_rect);
 
     iso_interface_create(iso_window_handle);
     iso_interface_created = true;
 
     dword_64C710 = 0;
-    sub_557F30();
+    iso_load_screen_font_create();
 
     return true;
 }
@@ -63,7 +63,7 @@ void iso_exit(void)
 void iso_reset(void)
 {
     intgame_mode_stack_reset();
-    sub_557FD0(NULL);
+    iso_load_screen_draw(NULL);
 }
 
 // 0x557ED0
@@ -75,7 +75,7 @@ void iso_resize(GameResizeInfo* resize_info)
 }
 
 // 0x557F30
-void sub_557F30(void)
+void iso_load_screen_font_create(void)
 {
     TigFont font;
 
@@ -87,7 +87,7 @@ void sub_557F30(void)
 }
 
 // 0x557FD0
-void sub_557FD0(const char* str)
+void iso_load_screen_draw(const char* str)
 {
     TigRect rect;
     TigWindowData window_data;
@@ -126,7 +126,10 @@ bool iso_redraw(void)
 }
 
 // 0x558130
-void sub_558130(TigRect* rect)
+// NOTE: stru_64C6F8 is never read, here or in the original (the only two
+// instruction references to 0x64C6F8 in the exe are the stores in this
+// function) - a write-only cache, kept for layout fidelity.
+void iso_content_rect_cache_set(TigRect* rect)
 {
     if (rect != NULL) {
         stru_64C6F8 = *rect;

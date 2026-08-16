@@ -1028,7 +1028,7 @@ static int64_t intgame_examine_obj;
 
 // NOTE: Never written, here or in the original - the only instruction naming
 // 0x64C698 is the PUSH in `intgame_pc_lens_do` that passes it. So the blackout
-// path hands `sub_558130` a zero rect, which is presumably the point: the
+// path hands `iso_content_rect_cache_set` a zero rect, which is presumably the point: the
 // other two modes pass NULL and the real lens rect.
 //
 // 0x64C698
@@ -3312,17 +3312,17 @@ void intgame_apply_mode_to_target(TargetDescriptor* td)
 
         switch (intgame_mode_get()) {
         case INTGAME_MODE_SPELL:
-            if (sub_4F2680(&v1)) {
+            if (target_is_valid(&v1)) {
                 spell_ui_apply(td);
             }
             break;
         case INTGAME_MODE_SKILL:
-            if (sub_4F2680(&v1)) {
+            if (target_is_valid(&v1)) {
                 skill_ui_apply(td);
             }
             break;
         case INTGAME_MODE_ITEM:
-            if (sub_4F2680(&v1)) {
+            if (target_is_valid(&v1)) {
                 item_ui_apply(td);
             }
             break;
@@ -4631,7 +4631,7 @@ void intgame_pc_lens_do(PcLensMode mode, PcLens* pc_lens)
     switch (mode) {
     case PC_LENS_MODE_NONE:
         intgame_pc_lens.window_handle = TIG_WINDOW_HANDLE_INVALID;
-        sub_558130(NULL);
+        iso_content_rect_cache_set(NULL);
         iso_redraw();
 
         if (intgame_pc_lens_renderlock_balance < 1) {
@@ -4656,7 +4656,7 @@ void intgame_pc_lens_do(PcLensMode mode, PcLens* pc_lens)
             intgame_pc_lens_redraw();
         }
 
-        sub_558130(&intgame_pc_lens_dst_rect);
+        iso_content_rect_cache_set(&intgame_pc_lens_dst_rect);
 
         if (intgame_pc_lens_renderlock_balance < 1) {
             gamelib_renderlock_release();
@@ -4691,7 +4691,7 @@ void intgame_pc_lens_do(PcLensMode mode, PcLens* pc_lens)
         blit_info.dst_rect = &dst_rect;
         tig_window_blit_art(intgame_pc_lens.window_handle, &blit_info);
 
-        sub_558130(&stru_64C698);
+        iso_content_rect_cache_set(&stru_64C698);
 
         gamelib_renderlock_acquire();
         intgame_pc_lens_renderlock_balance--;

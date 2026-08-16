@@ -244,7 +244,7 @@ bool teleport_process(TeleportData* teleport_data)
             }
 
             location_origin_set(teleport_data->loc);
-            sub_40D860();
+            player_pc_obj_relookup();
         }
 
         if (oid.type != OID_TYPE_NULL) {
@@ -485,7 +485,7 @@ void teleport_obj_prepare(int64_t obj)
     // NOTE: Conditions looks odd, check (note fallthrough from npc block).
     switch (type) {
     case OBJ_TYPE_NPC:
-        sub_45F710(obj);
+        critter_teleport_map_ensure(obj);
         obj_field_handle_set(obj, OBJ_F_NPC_COMBAT_FOCUS, OBJ_HANDLE_NULL);
         obj_field_handle_set(obj, OBJ_F_NPC_WHO_HIT_ME_LAST, OBJ_HANDLE_NULL);
         obj_field_reset(obj, OBJ_F_NPC_SHIT_LIST_IDX);
@@ -507,7 +507,7 @@ void teleport_obj_move_map(int64_t obj)
     teleport_obj_prepare(obj);
     combat_critter_deactivate_combat_mode(obj);
     if (obj_field_int32_get(obj, OBJ_F_TYPE) == OBJ_TYPE_NPC) {
-        sub_45F710(obj);
+        critter_teleport_map_ensure(obj);
     }
     ai_timeevent_clear(obj);
     ui_notify_object_destroyed(obj);

@@ -1944,7 +1944,7 @@ void mainmenu_ui_dismiss_ex(bool exiting)
 
                 mes_file_entry.num = 6000; // "Please Wait"
                 mes_get_msg(mainmenu_ui_mainmenu_mes_file, &mes_file_entry);
-                sub_557FD0(mes_file_entry.str);
+                iso_load_screen_draw(mes_file_entry.str);
 
                 timeevent.type = TIMEEVENT_TYPE_NEWSPAPERS;
                 datetime_from_milliseconds(&datetime, 86400000 - datetime_start_time_in_milliseconds_get());
@@ -3189,7 +3189,7 @@ bool mainmenu_ui_load_game_by_name(const char* name)
 
     if (mainmenu_ui_gsi.version == 25) {
         mainmenu_ui_reset();
-        sub_40DAB0();
+        player_destroy();
 
         if (gamelib_load(name)) {
             gamelib_current_mode_name_set(mainmenu_ui_gsi.module_name);

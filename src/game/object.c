@@ -1338,7 +1338,7 @@ void object_destroy(int64_t obj)
 
     obj_type = obj_field_int32_get(obj, OBJ_F_TYPE);
     if (obj_type_is_critter(obj_type)) {
-        sub_45E180(obj);
+        critter_remove_from_group(obj);
         ai_timeevent_clear(obj);
 
         if (obj_type == OBJ_TYPE_NPC) {

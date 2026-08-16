@@ -10,7 +10,7 @@
 #include "game/stat.h"
 #include "game/tile.h"
 
-static bool sub_4F28A0(int x, int y, TargetDescriptor* td);
+static bool target_pick(int x, int y, TargetDescriptor* td);
 static void target_list_add_obj_unless_off(TargetList* list, int64_t obj);
 static void target_list_add_obj_unless_destroyed(TargetList* list, int64_t obj);
 static void target_list_add_loc(TargetList* list, int64_t loc);
@@ -172,7 +172,7 @@ void target_context_init(TargetContext* ctx, TargetParams* params, int64_t sourc
 }
 
 // 0x4F2680
-bool sub_4F2680(S4F2680* a1)
+bool target_is_valid(S4F2680* a1)
 {
     stru_603CB8.source_obj = a1->field_0;
 
@@ -261,11 +261,11 @@ bool target_pick_at_screen_xy(int x, int y, TargetDescriptor* td, bool fullscree
         y -= target_iso_content_rect.y;
     }
 
-    return sub_4F28A0(x, y, td);
+    return target_pick(x, y, td);
 }
 
 // 0x4F28A0
-bool sub_4F28A0(int x, int y, TargetDescriptor* td)
+bool target_pick(int x, int y, TargetDescriptor* td)
 {
     int64_t pc_obj;
     S4F2680 v1;
@@ -324,9 +324,9 @@ bool sub_4F28A0(int x, int y, TargetDescriptor* td)
     }
 
     if (object_at_screen_pos(x, y, &v2, 0x3)) {
-        sub_4F2C60(&v2);
+        target_obj_resolve(&v2);
         target_descriptor_set_obj(td, v2);
-        if (sub_4F2680(&v1)) {
+        if (target_is_valid(&v1)) {
             ret = true;
         }
     }
@@ -337,9 +337,9 @@ bool sub_4F28A0(int x, int y, TargetDescriptor* td)
             node = objects.head;
             while (node != NULL) {
                 v2 = node->obj;
-                sub_4F2C60(&v2);
+                target_obj_resolve(&v2);
                 target_descriptor_set_obj(td, v2);
-                if (sub_4F2680(&v1)) {
+                if (target_is_valid(&v1)) {
                     ret = true;
                     break;
                 }
@@ -349,7 +349,7 @@ bool sub_4F28A0(int x, int y, TargetDescriptor* td)
 
             if (!ret) {
                 target_descriptor_set_loc(td, loc);
-                if (sub_4F2680(&v1)) {
+                if (target_is_valid(&v1)) {
                     ret = true;
                 }
             }
@@ -395,7 +395,7 @@ bool sub_4F28A0(int x, int y, TargetDescriptor* td)
 }
 
 // 0x4F2C60
-int sub_4F2C60(int64_t* obj_ptr)
+int target_obj_resolve(int64_t* obj_ptr)
 {
     int type;
     int64_t whos_in_me_obj;
@@ -435,7 +435,7 @@ bool target_pick_at_screen_xy_ex(int x, int y, TargetDescriptor* td, uint64_t tg
 
     old_tgt = target_flags_get();
     target_flags_set(tgt);
-    rc = sub_4F28A0(x, y, td);
+    rc = target_pick(x, y, td);
     target_flags_set(old_tgt);
     return rc;
 }
@@ -1267,7 +1267,7 @@ void target_context_build_list(TargetContext* ctx)
         obj_node = objects.head;
         while (obj_node != NULL) {
             int64_t tmp_obj = obj_node->obj;
-            if (sub_4F2C60(&tmp_obj) != OBJ_TYPE_SCENERY || all) {
+            if (target_obj_resolve(&tmp_obj) != OBJ_TYPE_SCENERY || all) {
                 tmp_target_ctx.target_obj = tmp_obj;
                 if (target_context_evaluate(&tmp_target_ctx)) {
                     target_list_add_obj_unless_off(targets, tmp_obj);
@@ -1478,7 +1478,7 @@ void target_context_build_list(TargetContext* ctx)
                         obj_node = objects.head;
                         while (obj_node != NULL) {
                             int64_t tmp_obj = obj_node->obj;
-                            if (sub_4F2C60(&tmp_obj) != OBJ_TYPE_SCENERY
+                            if (target_obj_resolve(&tmp_obj) != OBJ_TYPE_SCENERY
                                 || all) {
                                 tmp_target_ctx.target_obj = tmp_obj;
                                 if (target_context_evaluate(&tmp_target_ctx)) {

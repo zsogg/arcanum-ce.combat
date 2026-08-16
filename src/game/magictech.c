@@ -5252,7 +5252,7 @@ bool magictech_target_is_valid(int mt_id)
     v3.field_0 = run_info->source_obj.obj;
     v3.field_8 = run_info->parent_obj.obj;
     v3.td = &td;
-    rc = sub_4F2680(&v3);
+    rc = target_is_valid(&v3);
     target_flags_set(prev_tgt);
 
     return rc;

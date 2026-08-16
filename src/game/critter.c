@@ -703,7 +703,7 @@ void critter_notify_killed(int64_t victim_obj, int64_t killer_obj, int anim)
                 obj_field_int32_set(victim_obj, OBJ_F_NPC_EXPERIENCE_WORTH, 0);
 
                 // Adjust alignment.
-                sub_45DC90(pc_killer_obj, victim_obj, true);
+                critter_alignment_adjust(pc_killer_obj, victim_obj, true);
 
                 // Record kill.
                 logbook_add_kill(pc_killer_obj, victim_obj);
@@ -757,11 +757,12 @@ void critter_notify_killed(int64_t victim_obj, int64_t killer_obj, int anim)
 }
 
 /**
- * Adjusts alignment based on killing another critter.
+ * Adjusts the source's alignment toward the target's after killing it or
+ * stealing from it (halved for theft).
  *
  * 0x45DC90
  */
-void sub_45DC90(int64_t killer_obj, int64_t victim_obj, bool a3)
+void critter_alignment_adjust(int64_t source_obj, int64_t target_obj, bool full_adjustment)
 {
     int64_t summoner_obj;
     int alignment1;
@@ -770,10 +771,10 @@ void sub_45DC90(int64_t killer_obj, int64_t victim_obj, bool a3)
     int v1;
     int alignment;
 
-    if (!magictech_find_effect_caster(victim_obj, OSF_SUMMONED, &summoner_obj) || summoner_obj != killer_obj) {
-        alignment2 = stat_level_get(victim_obj, STAT_ALIGNMENT);
+    if (!magictech_find_effect_caster(target_obj, OSF_SUMMONED, &summoner_obj) || summoner_obj != source_obj) {
+        alignment2 = stat_level_get(target_obj, STAT_ALIGNMENT);
         if (alignment2 < 0) {
-            alignment1 = stat_level_get(killer_obj, STAT_ALIGNMENT);
+            alignment1 = stat_level_get(source_obj, STAT_ALIGNMENT);
             if (alignment1 > alignment2) {
                 alignment2 = -alignment2;
                 adj = 100 - alignment2;
@@ -786,32 +787,32 @@ void sub_45DC90(int64_t killer_obj, int64_t victim_obj, bool a3)
         }
 
         v1 = alignment2 / 20;
-        if (!a3) {
+        if (!full_adjustment) {
             v1 /= 2;
         }
 
         // TODO: Check.
         if (v1 < 0) {
-            alignment = stat_base_get(killer_obj, STAT_ALIGNMENT);
+            alignment = stat_base_get(source_obj, STAT_ALIGNMENT);
             if (adj >= 0) {
                 if (alignment + v1 > adj) {
                     if (alignment > adj) {
-                        stat_base_set(killer_obj, STAT_ALIGNMENT, alignment);
+                        stat_base_set(source_obj, STAT_ALIGNMENT, alignment);
                     } else {
-                        stat_base_set(killer_obj, STAT_ALIGNMENT, adj);
+                        stat_base_set(source_obj, STAT_ALIGNMENT, adj);
                     }
                 } else {
-                    stat_base_set(killer_obj, STAT_ALIGNMENT, alignment + v1);
+                    stat_base_set(source_obj, STAT_ALIGNMENT, alignment + v1);
                 }
             } else {
                 if (alignment + v1 < adj) {
                     if (alignment < adj) {
-                        stat_base_set(killer_obj, STAT_ALIGNMENT, alignment);
+                        stat_base_set(source_obj, STAT_ALIGNMENT, alignment);
                     } else {
-                        stat_base_set(killer_obj, STAT_ALIGNMENT, adj);
+                        stat_base_set(source_obj, STAT_ALIGNMENT, adj);
                     }
                 } else {
-                    stat_base_set(killer_obj, STAT_ALIGNMENT, alignment + v1);
+                    stat_base_set(source_obj, STAT_ALIGNMENT, alignment + v1);
                 }
             }
         }
@@ -1035,7 +1036,7 @@ void critter_disband_internal(int64_t obj)
  *
  * 0x45E180
  */
-bool sub_45E180(int64_t obj)
+bool critter_remove_from_group(int64_t obj)
 {
     int type;
 
@@ -2102,7 +2103,11 @@ int critter_teleport_map_get(int64_t obj)
 }
 
 // 0x45F710
-void sub_45F710(int64_t obj)
+// NOTE: In the original this is a separate forwarding entry to the
+// critter_teleport_map_get at 0x45F6D0 (both argument words passed on,
+// the getter's return value riding out in eax unobserved), not a jmp.
+// Teleport prepares NPCs by making sure their teleport map is initialized.
+void critter_teleport_map_ensure(int64_t obj)
 {
     critter_teleport_map_get(obj);
 }

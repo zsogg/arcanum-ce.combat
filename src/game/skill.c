@@ -1664,7 +1664,7 @@ bool skill_invocation_run(SkillInvocation* skill_invocation)
 
                     if (moved) {
                         // Adjust alignment.
-                        sub_45DC90(source_obj, target_obj, false);
+                        critter_alignment_adjust(source_obj, target_obj, false);
 
                         // Mark item as stolen.
                         unsigned int critter_flags2 = obj_field_int32_get(target_obj, OBJ_F_CRITTER_FLAGS2);

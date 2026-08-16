@@ -731,7 +731,7 @@ bool sub_49CC70(const char* a1, const char* a2)
     }
 
     tig_net_local_server_set_description(a1);
-    sub_40DAB0();
+    player_destroy();
 
     if (a2 != NULL) {
         if (gamelib_load(a2)) {
@@ -810,7 +810,7 @@ void multiplayer_start_play(PlayerCreateInfo* player_create_info)
         }
 
         stru_5E8AD0[0].field_8 = obj_get_id(player_create_info->obj);
-        sub_40DAF0(player_create_info->obj);
+        player_pc_obj_set(player_create_info->obj);
         critter_fatigue_damage_set(player_create_info->obj, 0);
         object_hp_damage_set(player_create_info->obj, 0);
         object_flags_unset(player_create_info->obj, OF_OFF);
