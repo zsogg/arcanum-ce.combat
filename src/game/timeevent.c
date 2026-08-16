@@ -70,12 +70,12 @@ static TimeEventNode* timeevent_node_create(void);
 static void timeevent_node_destroy(TimeEventNode* node);
 static bool timeevent_recover_handles(TimeEventNode* timeevent);
 static bool timeevent_recover_handles_internal(TimeEventNode* node, bool force);
-static void sub_45B750(void);
-static bool sub_45B7A0(TimeEventNode* node);
-static bool sub_45BAF0(TimeEvent* timeevent);
-static bool sub_45BB40(TimeEventNode* node);
+static void timeevent_commit_new_events(void);
+static bool timeevent_node_handles_valid(TimeEventNode* node);
+static bool timeevent_add_loaded(TimeEvent* timeevent);
+static bool timeevent_node_insert(TimeEventNode* node);
 static void timeevent_save_nodes_to_map(const char* name);
-static int sub_45C500(TimeEventNode* node);
+static int timeevent_node_teleport_state(TimeEventNode* node);
 static void timeevent_load_nodes_from_map(const char* name);
 static void timeevent_break_nodes_to_map(const char* name);
 static bool debug_timeevent_process(TimeEvent* timeevent);
@@ -208,9 +208,12 @@ DateTime timeevent_current_datetime(void)
     return timeevent_game_time;
 }
 
-// TODO: Check generated assembly (return value is eax:edx without first param?)
+// Returns timeevent_game_time - *other. The original returns days in eax and
+// milliseconds in edx (0x45A7D0-0x45A7EA); CE returns the same two fields in
+// the same order through the small-struct return.
+//
 // 0x45A7D0
-DateTime sub_45A7D0(DateTime* other)
+DateTime timeevent_game_time_elapsed(DateTime* other)
 {
     DateTime new_time;
 
@@ -226,8 +229,11 @@ int timeevent_game_seconds_get(void)
     return datetime_seconds_since_reference_date(&timeevent_game_time);
 }
 
+// Game-time seconds between the current clock and a timestamp stored as
+// whole seconds (decay/recharge/resting event parameters).
+//
 // 0x45A820
-int sub_45A820(unsigned int milliseconds)
+int timeevent_elapsed_game_seconds(unsigned int milliseconds)
 {
     return datetime_seconds_since_reference_date(&timeevent_game_time) - milliseconds;
 }
@@ -523,7 +529,7 @@ void datetime_set_start_hour(int hour)
  *
  * 0x45AD70
  */
-int sub_45AD70(void)
+int datetime_start_time_in_milliseconds_get(void)
 {
     return datetime_start_time_in_milliseconds;
 }
@@ -742,7 +748,7 @@ bool timeevent_load(GameLoadInfo* load_info)
                 return false;
             }
 
-            if (!sub_45BAF0(&timeevent)) {
+            if (!timeevent_add_loaded(&timeevent)) {
                 return false;
             }
         }
@@ -941,7 +947,7 @@ void timeevent_ping(tig_timestamp_t timestamp)
 
     timeevent_in_ping = false;
 
-    sub_45B750();
+    timeevent_commit_new_events();
 
     if (tig_net_is_active()
         && tig_net_is_host()
@@ -1011,8 +1017,12 @@ bool timeevent_recover_handles_internal(TimeEventNode* node, bool force)
     return true;
 }
 
+// Moves every node queued on the new-event lists onto the active lists after
+// a ping. Nodes whose object handles no longer resolve are destroyed; valid
+// ones are inserted in datetime order by timeevent_node_insert.
+//
 // 0x45B750
-void sub_45B750(void)
+void timeevent_commit_new_events(void)
 {
     int index;
     TimeEventNode** node_ptr;
@@ -1023,8 +1033,8 @@ void sub_45B750(void)
         while (*node_ptr != NULL) {
             node = *node_ptr;
             *node_ptr = node->next;
-            if (sub_45B7A0(node)) {
-                sub_45BB40(node);
+            if (timeevent_node_handles_valid(node)) {
+                timeevent_node_insert(node);
             } else {
                 timeevent_node_destroy(node);
             }
@@ -1032,8 +1042,11 @@ void sub_45B750(void)
     }
 }
 
+// True when every object-valued parameter declared by this event type still
+// resolves to a live handle.
+//
 // 0x45B7A0
-bool sub_45B7A0(TimeEventNode* node)
+bool timeevent_node_handles_valid(TimeEventNode* node)
 {
     TimeEventTypeInfo* info;
     int index;
@@ -1193,8 +1206,13 @@ bool timeevent_add_delay_base_at(TimeEvent* timeevent, DateTime* delay, DateTime
     return timeevent_add_base_at_func(timeevent, &time, at);
 }
 
+// Builds a node from a deserialized TimeEvent and inserts it. This is the
+// load-path sibling of timeevent_add_base_at_func: the datetime is already
+// final, so there is no delay/base calculation and no editor guard beyond the
+// one here.
+//
 // 0x45BAF0
-bool sub_45BAF0(TimeEvent* timeevent)
+bool timeevent_add_loaded(TimeEvent* timeevent)
 {
     TimeEventNode* node;
 
@@ -1214,11 +1232,14 @@ bool sub_45BAF0(TimeEvent* timeevent)
     node->te = *timeevent;
     node->next = NULL;
     // NOTE: Unsafe, leaking memory if underlying function fails.
-    return sub_45BB40(node);
+    return timeevent_node_insert(node);
 }
 
+// Inserts an already-built node into the correct time-type list in datetime
+// order and fills its object locators.
+//
 // 0x45BB40
-bool sub_45BB40(TimeEventNode* node)
+bool timeevent_node_insert(TimeEventNode* node)
 {
     TimeEventNode** node_ptr;
     int time_type;
@@ -1502,8 +1523,10 @@ bool timeevent_clear_one_ex(int list, TimeEventEnumerateFunc callback)
     return true;
 }
 
+// True when at least one queued or active event has type `list`.
+//
 // 0x45C0E0
-bool sub_45C0E0(int list)
+bool timeevent_type_exists(int list)
 {
     TimeEventNode* node;
 
@@ -1651,7 +1674,7 @@ void timeevent_save_nodes_to_map(const char* name)
         node_ptr = &(timeevent_lists[time_type]);
         while (*node_ptr != NULL) {
             node = *node_ptr;
-            if (sub_45C500(node) < 0) {
+            if (timeevent_node_teleport_state(node) < 0) {
                 *node_ptr = node->next;
 
                 if (!timeevent_save_node(&(timeevent_type_info[node->te.type]), node, stream)) {
@@ -1693,8 +1716,12 @@ void timeevent_save_nodes_to_map(const char* name)
     tig_file_fclose(stream);
 }
 
+// Classifies a node by the teleport state of its object-valued params:
+// -1 = has a non-teleporting object, 1 = only teleporting objects, 0 = none.
+// save_nodes_to_map keeps -1 nodes, break_nodes_to_map keeps 1 nodes.
+//
 // 0x45C500
-int sub_45C500(TimeEventNode* node)
+int timeevent_node_teleport_state(TimeEventNode* node)
 {
     int count1 = 0;
     int count2 = 0;
@@ -1719,8 +1746,11 @@ int sub_45C500(TimeEventNode* node)
     }
 }
 
+// Post-map-open recovery hook: force-recover every event object handle, then
+// load this map's persisted TimeEvent/Anim/MagicTech nodes.
+//
 // 0x45C580
-void sub_45C580(void)
+void timeevent_map_open(void)
 {
     int time_type;
     TimeEventNode* node;
@@ -1781,7 +1811,7 @@ void timeevent_load_nodes_from_map(const char* name)
             break;
         }
 
-        if (!sub_45BAF0(&timeevent)) {
+        if (!timeevent_add_loaded(&timeevent)) {
             break;
         }
     }
@@ -1873,7 +1903,7 @@ void timeevent_break_nodes_to_map(const char* name)
         node_ptr = &(timeevent_lists[time_type]);
         while (*node_ptr != NULL) {
             node = *node_ptr;
-            if (sub_45C500(node) > 0) {
+            if (timeevent_node_teleport_state(node) > 0) {
                 *node_ptr = node->next;
 
                 if (!timeevent_save_node(&(timeevent_type_info[node->te.type]), node, stream)) {

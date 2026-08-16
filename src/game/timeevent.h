@@ -108,9 +108,9 @@ typedef struct TimeEventFuncs {
 } TimeEventFuncs;
 
 DateTime timeevent_current_datetime(void);
-DateTime sub_45A7D0(DateTime* other);
+DateTime timeevent_game_time_elapsed(DateTime* other);
 int timeevent_game_seconds_get(void);
-int sub_45A820(unsigned int milliseconds);
+int timeevent_elapsed_game_seconds(unsigned int milliseconds);
 int datetime_seconds_since_reference_date(DateTime* datetime);
 int datetime_get_hour(DateTime* datetime);
 int datetime_get_hour_since_reference_date(DateTime* datetime);
@@ -137,7 +137,7 @@ void datetime_format_date(DateTime* time, char* dest, size_t maxlen);
 bool game_time_is_day(void);
 void datetime_set_start_year(int year);
 void datetime_set_start_hour(int ratio);
-int sub_45AD70(void);
+int datetime_start_time_in_milliseconds_get(void);
 bool timeevent_init(GameInitInfo* init_info);
 bool timeevent_set_funcs(TimeEventFuncs* funcs);
 void timeevent_reset(void);
@@ -160,12 +160,12 @@ bool timeevent_clear_all_typed(int list);
 bool timeevent_clear_one_typed(int list);
 bool timeevent_clear_all_ex(int list, TimeEventEnumerateFunc callback);
 bool timeevent_clear_one_ex(int list, TimeEventEnumerateFunc callback);
-bool sub_45C0E0(int list);
+bool timeevent_type_exists(int list);
 bool timeevent_any(int list, TimeEventEnumerateFunc callback);
 bool timeevent_inc_milliseconds(unsigned int milliseconds);
 bool timeevent_inc_datetime(DateTime* datetime);
 void timeevent_sync(DateTime* game_time, DateTime* anim_time);
-void sub_45C580(void);
+void timeevent_map_open(void);
 void timeevent_notify_pc_teleported(int map);
 void timeevent_debug_lists(void);
 

@@ -6772,7 +6772,7 @@ bool magictech_recharge_timeevent_process(TimeEvent* timeevent)
         return false;
     }
 
-    v3 = sub_45A820(v1) / 120;
+    v3 = timeevent_elapsed_game_seconds(v1) / 120;
     if (v3 < 1) {
         v3 = 1;
     }

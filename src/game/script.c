@@ -1990,7 +1990,7 @@ int script_execute_action(ScriptAction* action, int line, ScriptState* state)
         if (action->type == SAT_CALL_SCRIPT_AT) {
             datetime = timeevent_current_datetime();
             datetime.milliseconds += 86400000;
-            datetime_sub_milliseconds(&datetime, sub_45AD70());
+            datetime_sub_milliseconds(&datetime, datetime_start_time_in_milliseconds_get());
 
             int v1 = datetime_seconds_since_reference_date(&datetime) % 86400;
             seconds = seconds % 86400 - v1 + (seconds % 86400 - v1 < 0 ? 86400 : 0);

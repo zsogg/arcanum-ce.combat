@@ -942,7 +942,7 @@ bool sector_lock(int64_t id, Sector** sector_ptr)
         datetime = sector_datetime_invalid;
         for (unsigned int j = 0; j < sector_history_size; j++) {
             if (sector_history_entries[j].id == id) {
-                datetime = sub_45A7D0(&(sector_history_entries[j].datetime));
+                datetime = timeevent_game_time_elapsed(&(sector_history_entries[j].datetime));
                 memmove(&(sector_history_entries[j]),
                     &(sector_history_entries[j + 1]),
                     sizeof(*sector_history_entries) * (sector_history_size - j - 1));

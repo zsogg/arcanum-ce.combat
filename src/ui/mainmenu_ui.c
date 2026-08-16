@@ -1947,7 +1947,7 @@ void mainmenu_ui_dismiss_ex(bool exiting)
                 sub_557FD0(mes_file_entry.str);
 
                 timeevent.type = TIMEEVENT_TYPE_NEWSPAPERS;
-                datetime_from_milliseconds(&datetime, 86400000 - sub_45AD70());
+                datetime_from_milliseconds(&datetime, 86400000 - datetime_start_time_in_milliseconds_get());
                 timeevent_add_delay(&timeevent, &datetime);
 
                 wmap_rnd_schedule();

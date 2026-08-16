@@ -836,7 +836,7 @@ bool map_open_in_game(int map, bool a2, bool a3)
         map_precache_sectors(map_starting_loc);
     }
 
-    sub_45C580();
+    timeevent_map_open();
     ui_reset_interface();
 
     if (!obj_validate_system(1)) {

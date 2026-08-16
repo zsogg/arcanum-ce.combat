@@ -1323,7 +1323,7 @@ bool critter_fatigue_timeevent_process(TimeEvent* timeevent)
     }
 
     // TODO: Figure out math.
-    v3 = sub_45A820(timeevent->params[2].integer_value) / 8 / 10;
+    v3 = timeevent_elapsed_game_seconds(timeevent->params[2].integer_value) / 8 / 10;
     if (v3 < 1) {
         v3 = 1;
     }
@@ -1472,7 +1472,7 @@ bool critter_resting_timeevent_process(TimeEvent* timeevent)
         return true;
     }
 
-    hours = sub_45A820(timeevent->params[1].integer_value) / 3600;
+    hours = timeevent_elapsed_game_seconds(timeevent->params[1].integer_value) / 3600;
     if (hours < 1) {
         hours = 1;
     }

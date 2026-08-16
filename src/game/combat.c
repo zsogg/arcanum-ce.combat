@@ -3107,7 +3107,7 @@ void combat_turn_based_anims_complete(void)
         }
     }
 
-    if (!sub_45C0E0(TIMEEVENT_TYPE_TB_COMBAT)) {
+    if (!timeevent_type_exists(TIMEEVENT_TYPE_TB_COMBAT)) {
         timeevent.type = TIMEEVENT_TYPE_TB_COMBAT;
         datetime_from_milliseconds(&datetime, 2);
         timeevent_add_delay(&timeevent, &datetime);
