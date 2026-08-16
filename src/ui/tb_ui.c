@@ -265,7 +265,7 @@ void tb_ui_examine_object(int64_t source_obj, int64_t target_obj)
 
     if (tb_ui_build_examine_text(source_obj, target_obj, buffer)) {
         intgame_examine_object(source_obj, target_obj, buffer);
-        sub_557370(source_obj, target_obj);
+        intgame_target_interact(source_obj, target_obj);
     }
 }
 

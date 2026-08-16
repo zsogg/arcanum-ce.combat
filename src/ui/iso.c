@@ -62,7 +62,7 @@ void iso_exit(void)
 // 0x557EC0
 void iso_reset(void)
 {
-    sub_54AA30();
+    intgame_mode_stack_reset();
     sub_557FD0(NULL);
 }
 

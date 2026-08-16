@@ -791,7 +791,7 @@ bool hotkey_ui_begin_drag(void)
     }
 
     if (!intgame_is_compact_interface()) {
-        index = sub_557CF0();
+        index = intgame_spell_button_hit_test();
         if (index < 5) {
             hotkey_ui_dragged.type = HOTKEY_SPELL;
             hotkey_ui_dragged.data = index + 5 * intgame_selected_college_get();
@@ -812,7 +812,7 @@ bool hotkey_ui_begin_drag(void)
             return true;
         }
 
-        index = sub_557C00();
+        index = intgame_mt_spell_button_hit_test();
         if (index < 5) {
             spl = mt_item_spell(intgame_magictech_item_get(), index);
             hotkey_ui_dragged.type = HOTKEY_ITEM_SPELL;

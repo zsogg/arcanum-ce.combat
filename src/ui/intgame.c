@@ -142,10 +142,10 @@ static void intgame_secondary_button_toggle(IntgameSecondaryButton btn, Rotating
 static bool handle_button_unhover(TigMessage* msg);
 static void intgame_center_on_player(void);
 static void intgame_combat_mode_toggle(void);
-static void sub_54ECD0(void);
+static void intgame_examine_refresh(void);
 static void intgame_perform_action_on_target(TargetDescriptor* td);
-static void sub_550000(int64_t critter_obj, Hotkey* a2, int inventory_location);
-static bool sub_5501C0(void);
+static void intgame_hotkey_equip_item(int64_t critter_obj, Hotkey* a2, int inventory_location);
+static bool intgame_interface_controls_create(void);
 static bool intgame_rotwin_button_draw_progress(RotatingWindowType window_type, int progress);
 static void iso_interface_window_disable(RotatingWindowType window_type);
 static void intgame_message_window_write_text_centered(char* str, TigRect* rect);
@@ -165,8 +165,8 @@ static void intgame_center_on_obj(int64_t obj);
 static void intgame_force_fullscreen(void);
 static void intgame_unforce_fullscreen(void);
 static void intgame_update_target_flags(void);
-static bool sub_552050(int x, int y, TargetDescriptor* td);
-static void sub_5520D0(RotatingWindowType window_type, int step);
+static bool intgame_target_pick(int x, int y, TargetDescriptor* td);
+static void iso_interface_window_rotate_step(RotatingWindowType window_type, int step);
 static void iso_interface_window_swap(RotatingWindowType window_type);
 static void intgame_clock_refresh(void);
 static void intgame_open_charedit(int64_t obj, ChareditMode mode);
@@ -444,7 +444,7 @@ static UiButtonInfo intgame_quantity_buttons[INTGAME_QUANTITY_BUTTON_COUNT] = {
     /*   INTGAME_QUANTITY_BUTTON_CANCEL */ { 545, 557, 32, TIG_BUTTON_HANDLE_INVALID },
 };
 
-// NOTE: Write-only, in the original too. `sub_5501C0` sets it to -1 and the two
+// NOTE: Write-only, in the original too. `intgame_interface_controls_create` sets it to -1 and the two
 // window-swap paths store the outgoing type into it (0x5503D4, 0x5520BC,
 // 0x552158), but nothing anywhere reads 0x5C6D58. It looks like a "previous
 // window" meant for a back gesture that was never built.
@@ -1207,7 +1207,7 @@ void intgame_reset(void)
 
     intgame_map_button = UI_PRIMARY_BUTTON_TOWNMAP;
     memcpy(intgame_ui_primary_button_icons, intgame_ui_primary_button_normal_icons, sizeof(intgame_ui_primary_button_icons));
-    sub_54AA30();
+    intgame_mode_stack_reset();
 }
 
 // 0x549F60
@@ -1447,7 +1447,7 @@ void iso_interface_create(tig_window_handle_t window_handle)
     }
 
     intgame_button_create(&intgame_sleep_button_info);
-    sub_5501C0();
+    intgame_interface_controls_create();
 
     intgame_iso_interface_created = true;
     intgame_selected_college = 0;
@@ -1594,7 +1594,7 @@ void iso_interface_destroy(void)
 }
 
 // 0x54AA30
-void sub_54AA30(void)
+void intgame_mode_stack_reset(void)
 {
     intgame_mode_stack_size = 0;
     intgame_mode_stack[intgame_mode_stack_size] = INTGAME_MODE_MAIN;
@@ -2789,7 +2789,7 @@ bool handle_button_unhover(TigMessage* msg)
         return false;
     }
 
-    sub_54ECD0();
+    intgame_examine_refresh();
 
     if (msg->data.button.button_handle == intgame_secondary_buttons[INTGAME_SECONDARY_BUTTON_SPELLS].button_handle
         || msg->data.button.button_handle == intgame_secondary_buttons[INTGAME_SECONDARY_BUTTON_SKILLS].button_handle
@@ -2885,7 +2885,7 @@ void intgame_process_event(TigMessage* msg)
             switch (msg->data.mouse.event) {
             case TIG_MESSAGE_MOUSE_LEFT_BUTTON_DOWN:
                 if (intgame_msg_is_over_iso_window(msg)
-                    && sub_552050(msg->data.mouse.x, msg->data.mouse.y, &td)) {
+                    && intgame_target_pick(msg->data.mouse.x, msg->data.mouse.y, &td)) {
                     if (td.is_loc) {
                         if (inven_ui_drag_item_obj_get() != OBJ_HANDLE_NULL) {
                             int64_t v2;
@@ -3297,7 +3297,7 @@ void intgame_process_event(TigMessage* msg)
 }
 
 // 0x54EA80
-void sub_54EA80(TargetDescriptor* td)
+void intgame_apply_mode_to_target(TargetDescriptor* td)
 {
     int64_t pc_obj;
     S4F2680 v1;
@@ -3415,7 +3415,7 @@ void intgame_combat_mode_toggle(void)
 }
 
 // 0x54ECD0
-void sub_54ECD0(void)
+void intgame_examine_refresh(void)
 {
     if (intgame_examine_obj == OBJ_HANDLE_NULL) {
         return;
@@ -3936,13 +3936,13 @@ void intgame_hotkey_activate(Hotkey* hotkey)
                 || (obj_field_int32_get(v2, OBJ_F_ITEM_FLAGS) & OIF_USE_IS_THROW) != 0) {
                 switch (obj_field_int32_get(v2, OBJ_F_TYPE)) {
                 case OBJ_TYPE_WEAPON:
-                    sub_550000(pc_obj, hotkey, ITEM_INV_LOC_WEAPON);
+                    intgame_hotkey_equip_item(pc_obj, hotkey, ITEM_INV_LOC_WEAPON);
                     break;
                 case OBJ_TYPE_AMMO:
                 case OBJ_TYPE_GOLD:
                     break;
                 case OBJ_TYPE_ARMOR:
-                    sub_550000(pc_obj, hotkey, item_location_get(v2));
+                    intgame_hotkey_equip_item(pc_obj, hotkey, item_location_get(v2));
                     break;
                 default:
                     v1 = inven_ui_drag_item_obj_get();
@@ -3986,7 +3986,7 @@ void intgame_hotkey_activate(Hotkey* hotkey)
 }
 
 // 0x550000
-void sub_550000(int64_t critter_obj, Hotkey* hotkey, int inventory_location)
+void intgame_hotkey_equip_item(int64_t critter_obj, Hotkey* hotkey, int inventory_location)
 {
     int64_t item_obj;
     int v1;
@@ -4079,7 +4079,7 @@ void intgame_hotkey_highlight(Hotkey* hotkey)
 }
 
 // 0x5501C0
-bool sub_5501C0(void)
+bool intgame_interface_controls_create(void)
 {
     int index;
     tig_button_handle_t college_radio_group[COLLEGE_COUNT];
@@ -5371,7 +5371,7 @@ void intgame_update_target_flags(void)
 }
 
 // 0x552050
-bool sub_552050(int x, int y, TargetDescriptor* td)
+bool intgame_target_pick(int x, int y, TargetDescriptor* td)
 {
     intgame_update_target_flags();
     return target_pick_at_screen_xy(x, y, td, intgame_fullscreen);
@@ -5387,7 +5387,7 @@ RotatingWindowType iso_interface_window_get(void)
 void iso_interface_window_set_animated(RotatingWindowType window_type)
 {
     if (window_type != ROTWIN_TYPE_INVALID) {
-        sub_5520D0(window_type, intgame_rotwin_step);
+        iso_interface_window_rotate_step(window_type, intgame_rotwin_step);
 
         if (intgame_rotwin_step < MAX_INTERFACE_WINDOW_ROTATION_STEPS) {
             intgame_rotwin_step++;
@@ -5399,7 +5399,7 @@ void iso_interface_window_set_animated(RotatingWindowType window_type)
 }
 
 // 0x5520D0
-void sub_5520D0(RotatingWindowType window_type, int step)
+void iso_interface_window_rotate_step(RotatingWindowType window_type, int step)
 {
     if (intgame_iso_window_type != window_type) {
         if (step == 0) {
@@ -8569,7 +8569,7 @@ void intgame_big_window_unlock(void)
 }
 
 // 0x557370
-void sub_557370(int64_t source_obj, int64_t target_obj)
+void intgame_target_interact(int64_t source_obj, int64_t target_obj)
 {
     unsigned int spell_flags;
     unsigned int critter_flags;
@@ -8681,7 +8681,7 @@ void intgame_there_is_nothing_to_loot(void)
 }
 
 // 0x5576B0
-void sub_5576B0(void)
+void intgame_interface_background_refresh(void)
 {
     TigRect rect;
     TigArtFrameData art_frame_data;
@@ -8959,7 +8959,7 @@ int intgame_skill_button_at_mouse(void)
 }
 
 // 0x557C00
-int sub_557C00(void)
+int intgame_mt_spell_button_hit_test(void)
 {
     TigMouseState mouse_state;
     TigWindowData window_data;
@@ -8976,10 +8976,16 @@ int sub_557C00(void)
     tig_mouse_get_state(&mouse_state);
 
     // Check if mouse position is within rotating window bounds.
+    // NOTE: The original has no window-level bounds test here - 0x557C00 (and
+    // 0x557CF0) subtract the window origin and go straight to the per-button
+    // tests, which reject out-of-window clicks by themselves. CE's added guard
+    // as transcribed compared mouse_state.y against rect.x + rect.width and
+    // never bounded x above; corrected to the standard four-way test. Either
+    // way it is redundant with the button loop below.
     if (tig_window_data(intgame_interface_window_handles[1], &window_data) != TIG_OK
         || mouse_state.x < window_data.rect.x
         || mouse_state.y < window_data.rect.y
-        || mouse_state.y >= window_data.rect.x + window_data.rect.width
+        || mouse_state.x >= window_data.rect.x + window_data.rect.width
         || mouse_state.y >= window_data.rect.y + window_data.rect.height) {
         return 5;
     }
@@ -9015,7 +9021,7 @@ int sub_557C00(void)
 }
 
 // 0x557CF0
-int sub_557CF0(void)
+int intgame_spell_button_hit_test(void)
 {
     TigMouseState mouse_state;
     TigWindowData window_data;
@@ -9032,10 +9038,16 @@ int sub_557CF0(void)
     tig_mouse_get_state(&mouse_state);
 
     // Check if mouse position is within rotating window bounds.
+    // NOTE: The original has no window-level bounds test here - 0x557C00 (and
+    // 0x557CF0) subtract the window origin and go straight to the per-button
+    // tests, which reject out-of-window clicks by themselves. CE's added guard
+    // as transcribed compared mouse_state.y against rect.x + rect.width and
+    // never bounded x above; corrected to the standard four-way test. Either
+    // way it is redundant with the button loop below.
     if (tig_window_data(intgame_interface_window_handles[1], &window_data) != TIG_OK
         || mouse_state.x < window_data.rect.x
         || mouse_state.y < window_data.rect.y
-        || mouse_state.y >= window_data.rect.x + window_data.rect.width
+        || mouse_state.x >= window_data.rect.x + window_data.rect.width
         || mouse_state.y >= window_data.rect.y + window_data.rect.height) {
         return 5;
     }

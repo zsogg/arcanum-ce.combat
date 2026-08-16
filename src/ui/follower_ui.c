@@ -879,7 +879,7 @@ bool follower_ui_message_filter(TigMessage* msg)
                 if (msg->data.button.button_handle == follower_ui_buttons[index]) {
                     object_ref_validate(&follower_ui_followers[follower_ui_top_index + index]);
                     target_descriptor_set_obj(&td, follower_ui_followers[follower_ui_top_index + index].obj);
-                    sub_54EA80(&td);
+                    intgame_apply_mode_to_target(&td);
                     return true;
                 }
             }

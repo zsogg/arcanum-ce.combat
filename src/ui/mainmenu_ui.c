@@ -3933,7 +3933,7 @@ void mainmenu_ui_create_single_player(void)
     mainmenu_ui_window_type = MM_WINDOW_SINGLE_PLAYER;
     mainmenu_ui_create_window();
     mainmenu_ui_draw_version();
-    sub_5576B0();
+    intgame_interface_background_refresh();
 }
 
 // 0x5446D0
