@@ -21,16 +21,16 @@ typedef enum ApColor {
 #define THREE 3
 #define TWENTY 20
 
-static void sub_56ECE0(int a1);
-static void sub_56ED00(void);
+static void combat_ui_combat_mode_changed(bool combat_ended);
+static void combat_ui_recreate(void);
 static void combat_ui_create(void);
-static void sub_56EF40(void);
+static void combat_ui_close(void);
 static void combat_ui_destroy(void);
 static void combat_ui_draw_compact_ap_bar(int available_ap);
 static void combat_ui_draw_ap_bar_segment(tig_window_handle_t window_handle, TigRect* rect, tig_color_t color);
-static void sub_56F430(int a1);
+static void combat_ui_draw_ap_bar(int action_points);
 static void combat_ui_draw_compact_npc_turn_indicator(void);
-static void sub_56F990(int64_t obj);
+static void combat_ui_turn_notify(int64_t obj);
 static bool combat_ui_message_filter(TigMessage* msg);
 
 // 0x5CAA20
@@ -103,11 +103,11 @@ bool combat_ui_init(GameInitInfo* init_info)
     TigArtFrameData art_frame_data;
     TigWindowData window_data;
 
-    callbacks.field_0 = sub_56ECE0;
-    callbacks.field_4 = sub_56ED00;
-    callbacks.field_8 = sub_56EF40;
-    callbacks.field_C = sub_56F430;
-    callbacks.field_10 = sub_56F990;
+    callbacks.field_0 = combat_ui_combat_mode_changed;
+    callbacks.field_4 = combat_ui_recreate;
+    callbacks.field_8 = combat_ui_close;
+    callbacks.field_C = combat_ui_draw_ap_bar;
+    callbacks.field_10 = combat_ui_turn_notify;
 
     if (!combat_set_callbacks(&callbacks)) {
         return false;
@@ -155,7 +155,7 @@ void combat_ui_exit(void)
 // 0x56EBF0
 void combat_ui_reset(void)
 {
-    sub_56EF40();
+    combat_ui_close();
 }
 
 // 0x56EC00
@@ -192,22 +192,26 @@ void combat_ui_resize(GameResizeInfo* resize_info)
 }
 
 // 0x56ECE0
-void sub_56ECE0(int a1)
+// NOTE: Called through the CombatCallbacks table when a critter enters or
+// leaves combat mode: arg 0 on entering, 1 on leaving (faithful to the
+// original's call sites in 0x4B3F80). The wmap close on the *exit* branch
+// is Troika's own choice, verified at 0x56ECE0.
+void combat_ui_combat_mode_changed(bool combat_ended)
 {
     intgame_refresh_cursor();
-    if (a1) {
+    if (combat_ended) {
         wmap_ui_close();
     }
 }
 
 // 0x56ED00
-void sub_56ED00(void)
+void combat_ui_recreate(void)
 {
     if (combat_ui_created) {
-        sub_56EF40();
+        combat_ui_close();
     }
     combat_ui_create();
-    sub_56F430(0);
+    combat_ui_draw_ap_bar(0);
 }
 
 // 0x56ED20
@@ -267,7 +271,7 @@ void combat_ui_create(void)
     dword_680EB4 = 0;
 
     combat_ui_refresh();
-    sub_56F430(0);
+    combat_ui_draw_ap_bar(0);
 
     if (intgame_is_compact_interface()) {
         tig_window_hide(combat_ui_ap_bar_window_handle);
@@ -292,7 +296,7 @@ void combat_ui_create(void)
 }
 
 // 0x56EF40
-void sub_56EF40(void)
+void combat_ui_close(void)
 {
     combat_ui_destroy();
 }
@@ -442,7 +446,7 @@ void combat_ui_draw_ap_bar_segment(tig_window_handle_t window_handle, TigRect* r
 }
 
 // 0x56F430
-void sub_56F430(int a1)
+void combat_ui_draw_ap_bar(int ap_total)
 {
     tig_art_id_t art_id;
     TigArtFrameData art_frame_data;
@@ -460,7 +464,7 @@ void sub_56F430(int a1)
         return;
     }
 
-    combat_ui_draw_compact_ap_bar(a1);
+    combat_ui_draw_compact_ap_bar(ap_total);
 
     if (tig_art_interface_id_create(294, 0, 0, 0, &art_id) == TIG_OK
         && tig_art_frame_data(art_id, &art_frame_data) == TIG_OK
@@ -477,17 +481,17 @@ void sub_56F430(int a1)
         tig_window_blit_art(combat_ui_ap_bar_window_handle, &art_blit_info);
     }
 
-    if (a1 != 0) {
+    if (ap_total != 0) {
         action_points = combat_required_action_points_get();
         orange = action_points;
-        green = a1 - action_points;
+        green = ap_total - action_points;
         if (green >= TWENTY) {
             green = TWENTY;
             orange = 0;
             red = 0;
-        } else if (action_points > a1) {
-            orange = a1;
-            red = action_points - a1;
+        } else if (action_points > ap_total) {
+            orange = ap_total;
+            red = action_points - ap_total;
             green = 0;
         }
 
@@ -640,7 +644,10 @@ void combat_ui_draw_compact_npc_turn_indicator(void)
 }
 
 // 0x56F990
-void sub_56F990(int64_t obj)
+// NOTE: Unreferenced - stored in the CombatCallbacks table but never invoked
+// in CE or the original. The original 0x56F990 is a conditional tail-jump to
+// player_get_local_pc_obj (0x40DA50) whose result the caller would discard.
+void combat_ui_turn_notify(int64_t obj)
 {
     if (obj != OBJ_HANDLE_NULL) {
         player_get_local_pc_obj();

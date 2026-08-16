@@ -35,11 +35,11 @@ typedef struct S5A3FF0 {
     /* 0040 */ int field_40[4][5];
 } S5A3FF0;
 
-static void sub_438570(int64_t obj, int64_t sector_id, int type);
-static bool sub_4386B0(int64_t obj, int* index_ptr);
-static void sub_438720(int64_t a1);
-static bool sub_4387C0(int64_t a1, int* index_ptr);
-static void sub_438830(void);
+static void wallcheck_track_wall(int64_t obj, int64_t sector_id, int type);
+static bool wallcheck_tracked_wall_find(int64_t obj, int* index_ptr);
+static void wallcheck_roof_fade_add(int64_t a1);
+static bool wallcheck_faded_roof_find(int64_t a1, int* index_ptr);
+static void wallcheck_process(void);
 static void wallcheck_roof_faded_clear(int64_t a1);
 
 // 0x5A3E90
@@ -638,8 +638,8 @@ static int64_t wallcheck_pending_loc;
 
 // 0x5E0A10
 // Roofs currently faded out, kept sorted by `field_0` (the roof object) so
-// `sub_4387C0` can binary-search it. `field_8` is a reference count, not a
-// flag: `sub_438720` calls `roof_fade_on` only on the transition to 1, because
+// `wallcheck_faded_roof_find` can binary-search it. `field_8` is a reference count, not a
+// flag: `wallcheck_roof_fade_add` calls `roof_fade_on` only on the transition to 1, because
 // several critters can stand under the same roof and it must stay faded until
 // the last of them leaves.
 static WallcheckFadedRoof wallcheck_faded_roofs[64];
@@ -690,7 +690,7 @@ void wallcheck_reset(void)
             wallcheck_tracked_walls[index].flags |= 0x1;
         }
 
-        sub_438830();
+        wallcheck_process();
     }
 
     wallcheck_cached_loc = 0;
@@ -866,7 +866,7 @@ void wallcheck_recalc(int64_t loc)
             for (int j = 0; j < 3; j++) {
                 if (wallcheck_scan_walls[i][j].head != NULL) {
                     v1 = true;
-                    sub_438570(wallcheck_scan_walls[i][j].head->obj,
+                    wallcheck_track_wall(wallcheck_scan_walls[i][j].head->obj,
                         wallcheck_scan_walls[i][j].sectors[0],
                         0);
                 }
@@ -901,11 +901,11 @@ void wallcheck_recalc(int64_t loc)
                 }
                 if (rot == 0 || rot == 4) {
                     if ((wallcheck_tile_offsets[i].flags & 0x03) != 0) {
-                        sub_438570(node->obj, walls.sectors[0], wallcheck_tile_offsets[i].flags & 0x03);
+                        wallcheck_track_wall(node->obj, walls.sectors[0], wallcheck_tile_offsets[i].flags & 0x03);
                     }
                 } else {
                     if ((wallcheck_tile_offsets[i].flags & 0x30) != 0) {
-                        sub_438570(node->obj, walls.sectors[0], wallcheck_tile_offsets[i].flags & 0x30);
+                        wallcheck_track_wall(node->obj, walls.sectors[0], wallcheck_tile_offsets[i].flags & 0x30);
                     }
                 }
                 node = node->next;
@@ -915,7 +915,7 @@ void wallcheck_recalc(int64_t loc)
         }
     }
 
-    sub_438830();
+    wallcheck_process();
 }
 
 // 0x4384F0
@@ -939,7 +939,7 @@ bool wallcheck_is_enabled(void)
 }
 
 // 0x438530
-void sub_438530(int64_t obj)
+void wallcheck_pc_moved(int64_t obj)
 {
     if (player_is_local_pc_obj(obj)) {
         wallcheck_pending_loc = obj_field_int64_get(obj, OBJ_F_LOCATION);
@@ -948,12 +948,12 @@ void sub_438530(int64_t obj)
 }
 
 // 0x438570
-void sub_438570(int64_t obj, int64_t sector_id, int type)
+void wallcheck_track_wall(int64_t obj, int64_t sector_id, int type)
 {
     int index;
     Sector* sector;
 
-    if (!sub_4386B0(obj, &index)) {
+    if (!wallcheck_tracked_wall_find(obj, &index)) {
         memmove(&(wallcheck_tracked_walls[index + 1]),
             &(wallcheck_tracked_walls[index]),
             sizeof(*wallcheck_tracked_walls) * (wallcheck_tracked_walls_count - index));
@@ -963,7 +963,7 @@ void sub_438570(int64_t obj, int64_t sector_id, int type)
         wallcheck_tracked_walls[index].field_18 = roof_normalize_loc(obj_field_int64_get(obj, OBJ_F_LOCATION));
 
         sector_lock(sector_id, &sector);
-        sub_438720(wallcheck_tracked_walls[index].field_18);
+        wallcheck_roof_fade_add(wallcheck_tracked_walls[index].field_18);
         wallcheck_tracked_walls_count++;
     }
 
@@ -977,7 +977,7 @@ void sub_438570(int64_t obj, int64_t sector_id, int type)
 }
 
 // 0x4386B0
-bool sub_4386B0(int64_t obj, int* index_ptr)
+bool wallcheck_tracked_wall_find(int64_t obj, int* index_ptr)
 {
     int l;
     int r;
@@ -1005,11 +1005,11 @@ bool sub_4386B0(int64_t obj, int* index_ptr)
 }
 
 // 0x438720
-void sub_438720(int64_t a1)
+void wallcheck_roof_fade_add(int64_t a1)
 {
     int index;
 
-    if (!sub_4387C0(a1, &index)) {
+    if (!wallcheck_faded_roof_find(a1, &index)) {
         memmove(&(wallcheck_faded_roofs[index + 1]),
             &(wallcheck_faded_roofs[index]),
             sizeof(*wallcheck_faded_roofs) * (wallcheck_faded_roofs_count - index));
@@ -1024,7 +1024,7 @@ void sub_438720(int64_t a1)
 }
 
 // 0x4387C0
-bool sub_4387C0(int64_t a1, int* index_ptr)
+bool wallcheck_faded_roof_find(int64_t a1, int* index_ptr)
 {
     int l;
     int r;
@@ -1052,7 +1052,7 @@ bool sub_4387C0(int64_t a1, int* index_ptr)
 }
 
 // 0x438830
-void sub_438830(void)
+void wallcheck_process(void)
 {
     int idx;
     unsigned int wall_flags;
@@ -1119,7 +1119,7 @@ void wallcheck_roof_faded_clear(int64_t a1)
 {
     int index;
 
-    if (!sub_4387C0(a1, &index)) {
+    if (!wallcheck_faded_roof_find(a1, &index)) {
         tig_debug_printf("Warning: unable to find roof to clear in wallcheck_roof_faded_clear()\n");
         return;
     }

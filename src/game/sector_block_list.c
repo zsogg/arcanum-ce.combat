@@ -1,7 +1,7 @@
 #include "game/sector_block_list.h"
 
-static void sub_4F83A0(void);
-static void sub_4F83D0(void);
+static void sector_block_list_node_reserve(void);
+static void sector_block_list_node_clear(void);
 
 // 0x603DE4
 static SectorBlockListNode* sector_block_list_head;
@@ -79,14 +79,16 @@ bool sector_block_list_save_with_dif(SectorBlockList* list, TigFile* stream)
 }
 
 // 0x4F8330
-void sub_4F8330(void)
+// NOTE: Empty in the original too - 0x4F8330 is a bare `ret`. Called from
+// light_init as the node-pool init step; nothing needed initialising.
+void sector_block_list_node_pool_init(void)
 {
 }
 
 // 0x4F8340
-void sub_4F8340(void)
+void sector_block_list_node_pool_exit(void)
 {
-    sub_4F83D0();
+    sector_block_list_node_clear();
 }
 
 // 0x4F8350
@@ -95,7 +97,7 @@ SectorBlockListNode* sector_block_list_node_create(void)
     SectorBlockListNode* node;
 
     if (sector_block_list_head == NULL) {
-        sub_4F83A0();
+        sector_block_list_node_reserve();
     }
 
     node = sector_block_list_head;
@@ -114,7 +116,7 @@ void sector_block_list_node_destroy(SectorBlockListNode* node)
 }
 
 // 0x4F83A0
-void sub_4F83A0(void)
+void sector_block_list_node_reserve(void)
 {
     int index;
     SectorBlockListNode* node;
@@ -129,7 +131,7 @@ void sub_4F83A0(void)
 }
 
 // 0x4F83D0
-void sub_4F83D0(void)
+void sector_block_list_node_clear(void)
 {
     SectorBlockListNode* next;
 

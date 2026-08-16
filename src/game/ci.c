@@ -81,25 +81,28 @@ void ci_exit(void)
 }
 
 // 0x4BB8E0
-void sub_4BB8E0(void)
+void ci_lock(void)
 {
     dword_5FC3DC++;
 }
 
 // 0x4BB8F0
-void sub_4BB8F0(void)
+void ci_unlock(void)
 {
     dword_5FC3DC--;
 }
 
 // 0x4BB900
-int sub_4BB900(void)
+int ci_lock_count(void)
 {
     return dword_5FC3DC;
 }
 
 // 0x4BB910
-void sub_4BB910(void)
+// NOTE: The locked section of the ci update - and empty in the original too:
+// 0x4BB910 is a bare `ret`, so the lock/count trio guards nothing in either
+// binary. Named from its call pattern in combat.c, not its body.
+void ci_update(void)
 {
 }
 

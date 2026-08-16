@@ -35,10 +35,10 @@ typedef struct TeleportObjectNode {
 
 static bool teleport_process(TeleportData* teleport_data);
 static bool schedule_teleport_obj_recursively(int64_t obj, int64_t loc);
-static bool sub_4D39A0(TeleportData* teleport_data);
-static void sub_4D3D60(int64_t obj);
-static void sub_4D3E20(int64_t obj);
-static void sub_4D3E80(void);
+static bool teleport_run(TeleportData* teleport_data);
+static void teleport_obj_prepare(int64_t obj);
+static void teleport_obj_move_map(int64_t obj);
+static void teleport_obj_nodes_destroy(void);
 static TeleportObjectNode* teleport_obj_node_create(void);
 static void teleport_obj_node_destroy(TeleportObjectNode* node);
 static void teleport_obj_node_reserve(void);
@@ -221,7 +221,7 @@ bool teleport_process(TeleportData* teleport_data)
         timeevent_notify_pc_teleported(teleport_data->map);
     }
 
-    if (!sub_4D39A0(teleport_data)) {
+    if (!teleport_run(teleport_data)) {
         return false;
     }
 
@@ -366,7 +366,7 @@ bool schedule_teleport_obj_recursively(int64_t obj, int64_t loc)
 }
 
 // 0x4D39A0
-bool sub_4D39A0(TeleportData* teleport_data)
+bool teleport_run(TeleportData* teleport_data)
 {
     int curr_map;
     char* curr_map_name;
@@ -399,7 +399,7 @@ bool sub_4D39A0(TeleportData* teleport_data)
 
         node = teleport_obj_node_head;
         while (node != NULL) {
-            sub_4D3E20(node->obj);
+            teleport_obj_move_map(node->obj);
             node = node->next;
         }
 
@@ -446,14 +446,14 @@ bool sub_4D39A0(TeleportData* teleport_data)
             node = node->next;
         }
 
-        sub_4D3E80();
+        teleport_obj_nodes_destroy();
         return true;
     }
 
     node = teleport_obj_node_head;
     while (node != NULL) {
         if ((obj_field_int32_get(node->obj, OBJ_F_FLAGS) & OF_INVENTORY) == 0) {
-            sub_4D3D60(node->obj);
+            teleport_obj_prepare(node->obj);
 
             if (player_is_local_pc_obj(node->obj)) {
                 wallcheck_flush();
@@ -469,13 +469,13 @@ bool sub_4D39A0(TeleportData* teleport_data)
         node = node->next;
     }
 
-    sub_4D3E80();
+    teleport_obj_nodes_destroy();
 
     return true;
 }
 
 // 0x4D3D60
-void sub_4D3D60(int64_t obj)
+void teleport_obj_prepare(int64_t obj)
 {
     int type;
 
@@ -502,9 +502,9 @@ void sub_4D3D60(int64_t obj)
 }
 
 // 0x4D3E20
-void sub_4D3E20(int64_t obj)
+void teleport_obj_move_map(int64_t obj)
 {
-    sub_4D3D60(obj);
+    teleport_obj_prepare(obj);
     combat_critter_deactivate_combat_mode(obj);
     if (obj_field_int32_get(obj, OBJ_F_TYPE) == OBJ_TYPE_NPC) {
         sub_45F710(obj);
@@ -515,7 +515,7 @@ void sub_4D3E20(int64_t obj)
 }
 
 // 0x4D3E80
-void sub_4D3E80(void)
+void teleport_obj_nodes_destroy(void)
 {
     TeleportObjectNode* next;
 

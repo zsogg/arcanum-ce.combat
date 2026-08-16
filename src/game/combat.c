@@ -3039,16 +3039,16 @@ void combat_turn_based_whos_turn_set(int64_t obj)
     if (player_is_local_pc_obj(obj)) {
         combat_callbacks.field_C(combat_action_points);
 
-        if (!sub_4BB900()) {
-            sub_4BB8E0();
+        if (!ci_lock_count()) {
+            ci_lock();
         }
     } else {
         combat_callbacks.field_C(0);
-        sub_4BB910();
+        ci_update();
         sub_4B7010(obj);
 
-        if (sub_4BB900()) {
-            sub_4BB8F0();
+        if (ci_lock_count()) {
+            ci_unlock();
         }
     }
 

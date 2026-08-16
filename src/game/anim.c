@@ -12261,7 +12261,7 @@ bool AGbeginAnimEyeCandy(AnimRunInfo* run_info)
         animfx_list = animfx_list_get(run_info->cur_stack_data->params[AGDATA_SKILL_DATA].data);
         animfx_node_init(animfx_list, &node, obj, -1, run_info->cur_stack_data->params[AGDATA_SCRATCH_VAL4].data);
         node.art_id_ptr = &art_id;
-        if (!sub_4CD7A0(&node)) {
+        if (!animfx_overlay_slots_find(&node)) {
             return false;
         }
 
@@ -12646,7 +12646,7 @@ bool AGbeginAnimEyeCandyReverse(AnimRunInfo* run_info)
         animfx_list = animfx_list_get(run_info->cur_stack_data->params[AGDATA_SKILL_DATA].data);
         animfx_node_init(animfx_list, &node, obj, -1, run_info->cur_stack_data->params[AGDATA_SCRATCH_VAL4].data);
         node.art_id_ptr = &art_id;
-        if (!sub_4CD7A0(&node)) {
+        if (!animfx_overlay_slots_find(&node)) {
             return false;
         }
 

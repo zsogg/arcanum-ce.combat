@@ -467,7 +467,7 @@ void objlist_fold(SectorObjectList* list, int64_t location, int first_heartbeat)
                 && !object_is_static(obj)) {
                 objlist_insert_internal(list, obj);
                 object_npc_ai_start(obj, first_heartbeat);
-                sub_438530(obj);
+                wallcheck_pc_moved(obj);
             }
         } while (obj_find_walk_next(&obj, &iter));
     }

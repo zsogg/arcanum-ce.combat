@@ -86,7 +86,7 @@ void animfx_node_init(AnimFxList* list, AnimFxNode* node, int64_t obj, int mt_id
 void animfx_preload_art(AnimFxNode* node);
 bool animfx_has(AnimFxNode* node);
 bool animfx_add(AnimFxNode* node);
-bool sub_4CD7A0(AnimFxNode* node);
+bool animfx_overlay_slots_find(AnimFxNode* node);
 void animfx_remove(AnimFxList* list, int64_t obj, int fx_id, int mt_id);
 bool animfx_list_init(AnimFxList* list);
 bool animfx_list_load(AnimFxList* list);

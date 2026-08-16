@@ -209,7 +209,7 @@ bool light_init(GameInitInfo* init_info)
     TigWindowData window_data;
 
     light_shadow_palettes = (TigPalette**)CALLOC(7, sizeof(*light_shadow_palettes));
-    sub_4F8330();
+    sector_block_list_node_pool_init();
     light_iso_window_handle = init_info->iso_window_handle;
     light_iso_window_invalidate_rect = init_info->invalidate_rect_func;
     light_editor = init_info->editor;
@@ -260,7 +260,7 @@ void light_exit(void)
     light_buffers_exit();
     light_iso_window_handle = TIG_WINDOW_HANDLE_INVALID;
     light_iso_window_invalidate_rect = NULL;
-    sub_4F8340();
+    sector_block_list_node_pool_exit();
     FREE(light_shadow_palettes);
 }
 

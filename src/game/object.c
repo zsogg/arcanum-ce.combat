@@ -4278,7 +4278,7 @@ void object_blit_flags_set(unsigned int flags)
     object_blit_flags = flags;
     if (object_iso_invalidate_rect != NULL) {
         object_iso_invalidate_rect(NULL);
-        sub_438530(player_get_local_pc_obj());
+        wallcheck_pc_moved(player_get_local_pc_obj());
     }
 }
 
