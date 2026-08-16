@@ -58,13 +58,13 @@ typedef struct MagicTechSummonTable {
 static bool magictech_run_info_save(MagicTechRunInfo* run_info, TigFile* stream);
 static bool magictech_run_info_load(MagicTechRunInfo* run_info, TigFile* stream);
 static bool magictech_load_spell_list(int a1, const char* path, int a3);
-static bool sub_44FFA0(int a1, const char* a2, int a3);
+static bool magictech_effects_load_all(int a1, const char* a2, int a3);
 static void magictech_load_spell(mes_file_handle_t msg_file, MagicTechInfo* info, int num, int magictech);
 static void magictech_load_spell_effects(mes_file_handle_t msg_file, MagicTechInfo* info, int num, int magictech);
-static void sub_450240(void);
+static void magictech_spell_components_free(void);
 static bool magictech_charge_spell_fatigue(int64_t obj, int magictech);
-static int sub_450B90(int64_t obj);
-static void sub_450C10(int64_t obj, unsigned int flags);
+static int magictech_maintain_capacity_get(int64_t obj);
+static void magictech_spell_flags_add(int64_t obj, unsigned int flags);
 static void magictech_process(void);
 static void MTComponentAGoal_ProcFunc(void);
 static void MTComponentAGoalTerminate_ProcFunc(void);
@@ -923,7 +923,7 @@ bool magictech_post_init(GameInitInfo* init_info)
 {
     (void)init_info;
 
-    if (!sub_44FFA0(0, "Rules\\spelllist.mes", 1000)) {
+    if (!magictech_effects_load_all(0, "Rules\\spelllist.mes", 1000)) {
         FREE(magictech_component_names);
         FREE(magictech_run_info);
         magictech_initialized = false;
@@ -943,7 +943,7 @@ void magictech_exit(void)
             }
         }
 
-        sub_450240();
+        magictech_spell_components_free();
 
         mes_unload(magictech_spell_mes_file);
         mes_unload(magictech_mes_file);
@@ -1444,7 +1444,7 @@ bool magictech_load_spell_list(int a1, const char* path, int a3)
 }
 
 // 0x44FFA0
-bool sub_44FFA0(int a1, const char* a2, int a3)
+bool magictech_effects_load_all(int a1, const char* a2, int a3)
 {
     int magictech = 0;
 
@@ -1537,7 +1537,7 @@ void magictech_load_spell_effects(mes_file_handle_t msg_file, MagicTechInfo* inf
 }
 
 // 0x450240
-void sub_450240(void)
+void magictech_spell_components_free(void)
 {
     int index;
     int action;
@@ -1562,7 +1562,7 @@ int magictech_get_range(int magictech)
 }
 
 // 0x4502B0
-int sub_4502B0(int magictech)
+int magictech_aoe_radius_get(int magictech)
 {
     if (magictech_initialized) {
         return magictech_spells[magictech].target_params[0].radius;
@@ -1614,7 +1614,7 @@ bool magictech_is_aggressive(int magictech)
 }
 
 // 0x4503A0
-bool sub_4503A0(int magictech)
+bool magictech_has_maintenance(int magictech)
 {
     if (magictech_initialized) {
         return magictech_spells[magictech].maintenance.period > 0;
@@ -1792,7 +1792,7 @@ bool magictech_charge_fatigue(int64_t obj, int cost, bool a3, int magictech)
 }
 
 // 0x4507B0
-void sub_4507B0(int64_t obj, int magictech)
+void magictech_charge_wmap_spell_fatigue(int64_t obj, int magictech)
 {
     magictech_charge_spell_fatigue(obj, magictech);
 }
@@ -1889,7 +1889,7 @@ bool magictech_charge_run_fatigue(int mt_id)
 }
 
 // 0x450A50
-int64_t sub_450A50(int64_t obj)
+int64_t magictech_invocation_parent_get(int64_t obj)
 {
     int type;
 
@@ -1910,7 +1910,7 @@ int64_t sub_450A50(int64_t obj)
 }
 
 // 0x450AC0
-int sub_450AC0(int64_t obj)
+int magictech_maintained_count_get(int64_t obj)
 {
     int index;
 
@@ -1922,15 +1922,19 @@ int sub_450AC0(int64_t obj)
         return 0;
     }
 
+    // NOTE: Faithful to the original. 0x450AC0 walks the same 512-entry
+    // run-info pool, but its inner block only computes an entry address into
+    // a dead stack slot, and the function ends `xor eax, eax; ret` - the
+    // maintained count is never produced in either binary. The live capacity
+    // check does this count inline in `magictech_maintain_capacity_check`.
     for (index = 0; index < 512; index++) {
-        // NOTE: Unclear, likely no-op.
     }
 
     return 0;
 }
 
 // 0x450B40
-int sub_450B40(int64_t obj)
+int magictech_maintain_capacity_remaining(int64_t obj)
 {
     if (obj == OBJ_HANDLE_NULL) {
         return 0;
@@ -1940,17 +1944,17 @@ int sub_450B40(int64_t obj)
         return 0;
     }
 
-    return sub_450B90(obj) - sub_450AC0(obj);
+    return magictech_maintain_capacity_get(obj) - magictech_maintained_count_get(obj);
 }
 
 // 0x450B90
-int sub_450B90(int64_t obj)
+int magictech_maintain_capacity_get(int64_t obj)
 {
     return stat_level_get(obj, STAT_INTELLIGENCE) / 4;
 }
 
 // 0x450C10
-void sub_450C10(int64_t obj, unsigned int flags)
+void magictech_spell_flags_add(int64_t obj, unsigned int flags)
 {
     obj_field_int32_set(obj, OBJ_F_SPELL_FLAGS, obj_field_int32_get(obj, OBJ_F_SPELL_FLAGS) | flags);
 }
@@ -2006,7 +2010,7 @@ void magictech_effect_summon(MagicTechSummonInfo* summon_info)
 
     *summon_info->summoned_obj_ptr = obj;
 
-    sub_450C10(obj, OSF_SUMMONED);
+    magictech_spell_flags_add(obj, OSF_SUMMONED);
 
     if ((obj_field_int32_get(obj, OBJ_F_TYPE) == OBJ_TYPE_NPC)) {
         tig_art_id_t art_id;
@@ -3999,7 +4003,7 @@ bool sub_4545E0(MagicTechRunInfo* run_info)
         }
     }
 
-    if (sub_450B90(run_info->parent_obj.obj) < cnt) {
+    if (magictech_maintain_capacity_get(run_info->parent_obj.obj) < cnt) {
         return false;
     }
 
@@ -4757,7 +4761,7 @@ void magictech_invocation_init(MagicTechInvocation* mt_invocation, int64_t obj, 
     }
     object_ref_init(OBJ_HANDLE_NULL, &(mt_invocation->target_obj));
     mt_invocation->target_loc = 0;
-    object_ref_init(sub_450A50(obj), &(mt_invocation->parent_obj));
+    object_ref_init(magictech_invocation_parent_get(obj), &(mt_invocation->parent_obj));
     object_ref_init(OBJ_HANDLE_NULL, &(mt_invocation->attacker_obj));
     mt_invocation->trigger = 0;
     mt_invocation->flags = 0;
@@ -6317,13 +6321,22 @@ tig_art_id_t magictech_projectile_art_id_get(int mt_id)
 }
 
 // 0x458C00
-void sub_458C00(int spell, int64_t obj)
+void magictech_projectile_impact_fx(int mt_id, int64_t obj)
 {
     MagicTechRunInfo* run_info;
     AnimFxListEntry* fx_info;
 
-    if (obj == OBJ_HANDLE_NULL
-        && magictech_id_to_run_info(spell, &run_info)
+    // Porting bug #13: the port inverted the original's null test. The
+    // original bails when no run id or object is present (0x458C0E: `or
+    // eax, edi; je` over mt_id and the handle's high word), so the impact
+    // light and sound run only for a real object; CE ran them only when
+    // `obj` was null - never, since the sole caller `anim_projectile_create`
+    // always passes a real object. (The original's own calls then receive a
+    // mangled handle - its low word is the mt_id, the real low word having
+    // been clobbered by the run_info out-param - so CE passing the intact
+    // `obj` is plainly the intent.)
+    if (obj != OBJ_HANDLE_NULL
+        && magictech_id_to_run_info(mt_id, &run_info)
         && animfx_id_get(&spell_eye_candies, run_info->spell * 6 + MAGICTECH_EYE_CANDY_TYPE_PROJECTILE, &fx_info)) {
         if (tig_art_exists(fx_info->light_art_id) == TIG_OK) {
             object_set_light(obj, 0x20, fx_info->light_art_id, fx_info->light_color);
@@ -7224,7 +7237,7 @@ void magictech_debug_lists(void)
     }
 
     tig_debug_printf("Local PC Has %d Maintained Spells\n",
-        sub_450AC0(player_get_local_pc_obj()));
+        magictech_maintained_count_get(player_get_local_pc_obj()));
     tig_debug_printf("\n\n");
 }
 

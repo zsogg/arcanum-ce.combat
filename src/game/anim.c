@@ -4438,7 +4438,7 @@ bool anim_projectile_create(tig_art_id_t art_id, int64_t self_obj, int64_t targe
             ASSERT(0); // 3126, "0"
         }
 
-        sub_458C00(spell, *obj_ptr);
+        magictech_projectile_impact_fx(spell, *obj_ptr);
     }
 
     return true;

@@ -3851,8 +3851,8 @@ int ai_check_use_spell(int64_t attacker_obj, int64_t item_obj, int64_t target_ob
 
     if (item_obj != OBJ_HANDLE_NULL) {
         if (attacker_obj_type == OBJ_TYPE_NPC
-            && sub_4503A0(spell)
-            && !sub_450B40(attacker_obj)) {
+            && magictech_has_maintenance(spell)
+            && !magictech_maintain_capacity_remaining(attacker_obj)) {
             return 6;
         }
 
@@ -3878,7 +3878,7 @@ int ai_check_use_spell(int64_t attacker_obj, int64_t item_obj, int64_t target_ob
                 return 2;
             }
 
-            if (sub_4503A0(spell) && !sub_450B40(attacker_obj)) {
+            if (magictech_has_maintenance(spell) && !magictech_maintain_capacity_remaining(attacker_obj)) {
                 return 6;
             }
         }

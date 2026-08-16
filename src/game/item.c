@@ -3528,7 +3528,7 @@ int item_weapon_aoe_radius(int64_t obj)
         return 0;
     }
 
-    return sub_4502B0(mt_item_spell_to_magictech_spell(10000));
+    return magictech_aoe_radius_get(mt_item_spell_to_magictech_spell(10000));
 }
 
 // 0x466260

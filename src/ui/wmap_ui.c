@@ -1957,7 +1957,7 @@ bool wmap_ui_message_filter(TigMessage* msg)
                     int64_t pc_obj = player_get_local_pc_obj();
                     if (antiteleport_check(pc_obj, loc)) {
                         if (player_is_local_pc_obj(wmap_ui_obj)) {
-                            sub_4507B0(wmap_ui_obj, wmap_ui_spell);
+                            magictech_charge_wmap_spell_fatigue(wmap_ui_obj, wmap_ui_spell);
                         }
 
                         if (area_get_last_known_area(pc_obj) == area) {
