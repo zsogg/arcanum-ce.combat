@@ -209,6 +209,61 @@ TEST(an_ignore_sidecar_falls_through_to_the_next_repository)
     remove_fixtures();
 }
 
+// The one case where they really do disagree, and it is deliberate: an entry
+// read out of an archive **stops looking for an override**.
+//
+// `tig_database_open` marks every entry 0x100 ("not yet resolved"). Opening one
+// makes `tig_file_open_internal_native` scan the directory repositories ahead of
+// its archive; if none has the file it clears both 0x100 and 0x200, and the test
+// at the top of that scan - `if ((flags & (0x100 | 0x200)) != 0 ...)` - then
+// skips it for good. So a directory copy that appears *after* the first read is
+// never picked up, while `tig_file_exists`, which walks the list every time,
+// reports it immediately.
+//
+// Faithful: the original tests the same two bits, `test ah, 0x3` at 0x530D0B.
+//
+// It matters for the game because `data/` is mounted at startup, before
+// anything is read - but it means a file dropped in mid-session does not take
+// effect, and that the memo lives in the loaded index rather than on disk:
+// remounting the archive clears it.
+TEST(an_entry_already_read_from_an_archive_ignores_a_later_override)
+{
+    TigFileInfo info;
+    char buffer[64];
+
+    write_fixtures();
+    CHECK(tig_file_repository_add(BASE_PATH));
+    CHECK_STR(read_path("rules\\hello.txt", buffer, sizeof(buffer)),
+        "from the base archive");
+
+    tig_file_mkdir(DIR_PATH);
+    tig_file_mkdir(DIR_RULES);
+    CHECK(write_text(DIR_HELLO, "from the directory"));
+    CHECK(tig_file_repository_add(DIR_PATH));
+
+    // The list says the directory has it...
+    CHECK(tig_file_exists("rules\\hello.txt", &info));
+    CHECK_INT(info.size, strlen("from the directory"));
+
+    // ... and the read does not agree, because this entry is already resolved.
+    CHECK_STR(read_path("rules\\hello.txt", buffer, sizeof(buffer)),
+        "from the base archive");
+
+    // Remounting rebuilds the index, and with it the flags. Both repositories
+    // have to be re-added, in that order: `add` prepends, so re-adding the
+    // archive by itself would put it ahead of the directory, and then the
+    // directory would lose on order rather than on the memo - which is what
+    // this test would otherwise be quietly measuring.
+    tig_file_repository_remove(BASE_PATH);
+    tig_file_repository_remove(DIR_PATH);
+    CHECK(tig_file_repository_add(BASE_PATH));
+    CHECK(tig_file_repository_add(DIR_PATH));
+    CHECK_STR(read_path("rules\\hello.txt", buffer, sizeof(buffer)),
+        "from the directory");
+
+    remove_fixtures();
+}
+
 // `tig_file_exists` walks the list itself rather than sharing a code path with
 // `fopen`, so the two can disagree in principle. Pinned because a file the game
 // checks for and then cannot open, or the reverse, is a nasty class of bug.
@@ -241,5 +296,6 @@ void test_file_suite(void)
     RUN(a_directory_mounted_after_an_archive_beats_it);
     RUN(a_directory_mounted_before_an_archive_loses_to_it);
     RUN(an_ignore_sidecar_falls_through_to_the_next_repository);
+    RUN(an_entry_already_read_from_an_archive_ignores_a_later_override);
     RUN(exists_agrees_with_fopen);
 }
