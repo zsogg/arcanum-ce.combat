@@ -111,20 +111,20 @@ static bool magictech_target_in_range(int64_t source_loc, int64_t target_loc, in
 static void magictech_setup_maintain_timeevent(TimeEvent* timeevent, int a2, int a3, DateTime* datetime);
 static bool magictech_maintain_schedule(TimeEvent* timeevent, DateTime* datetime);
 static bool magictech_timeevent_ensure_scheduled(TimeEvent* timeevent, DateTime* a2, DateTime* a3);
-static int sub_455100(int64_t obj, int fld, unsigned int a3, bool a4);
-static bool sub_4551C0(int64_t a1, int64_t a2, int64_t a3);
-static void sub_455250(MagicTechRunInfo* run_info, DateTime* datetime);
-static void sub_455350(int64_t obj, int64_t target_loc);
-static void sub_4554B0(MagicTechRunInfo* run_info, int64_t obj);
-static bool sub_455550(TargetContext* target_ctx, MagicTechRunInfo* run_info);
-static void sub_455710(void);
+static int magictech_spell_flag_effect_count(int64_t obj, int fld, unsigned int a3, bool a4);
+static bool magictech_can_unlock(int64_t a1, int64_t a2, int64_t a3);
+static void magictech_duration_adjust(MagicTechRunInfo* run_info, DateTime* datetime);
+static void magictech_teleport_move(int64_t obj, int64_t target_loc);
+static void magictech_summoned_obj_add(MagicTechRunInfo* run_info, int64_t obj);
+static bool magictech_target_shield_check(TargetContext* target_ctx, MagicTechRunInfo* run_info);
+static void magictech_run_info_clear_all(void);
 static void magictech_id_new_lock(MagicTechRunInfo** lock_ptr);
-static bool sub_455820(MagicTechRunInfo* run_info);
+static bool magictech_run_info_validate(MagicTechRunInfo* run_info);
 static void magictech_id_free_lock(int mt_id);
-static void sub_455960(MagicTechRunInfo* run_info);
-static void sub_4559E0(MagicTechRunInfo* run_info);
-static void sub_455C30(MagicTechInvocation* mt_invocation);
-static bool sub_456430(int64_t a1, int64_t a2, MagicTechInfo* magictech);
+static void magictech_run_info_release(MagicTechRunInfo* run_info);
+static void magictech_run_info_clear(MagicTechRunInfo* run_info);
+static void magictech_invocation_process(MagicTechInvocation* mt_invocation);
+static bool magictech_disallowed_flags_check(int64_t a1, int64_t a2, MagicTechInfo* magictech);
 static void magictech_preload_art(MagicTechRunInfo* run_info);
 static void magictech_run_action_in_callback(int mt_id, int action);
 static bool magictech_timeevent_matches_current(TimeEvent* timeevent);
@@ -852,7 +852,7 @@ bool magictech_init(GameInitInfo* init_info)
     magictech_editor = init_info->editor;
     magictech_component_names = (const char**)CALLOC(25, sizeof(const char*));
     magictech_run_info = (MagicTechRunInfo*)CALLOC(512, sizeof(MagicTechRunInfo));
-    sub_455710();
+    magictech_run_info_clear_all();
 
     if (!mes_load("Rules\\magictech.mes", &magictech_mes_file)) {
         FREE(magictech_component_names);
@@ -1347,7 +1347,7 @@ void magictech_load_nodes_from_map(const char* map)
     tmp_run_info.summoned_obj = NULL;
 
     for (index = 0; index < cnt; index++) {
-        sub_4559E0(&tmp_run_info);
+        magictech_run_info_clear(&tmp_run_info);
         if (!magictech_run_info_load(&tmp_run_info, stream)) {
             break;
         }
@@ -2110,7 +2110,7 @@ void magictech_process(void)
     magictech_cur_id = magictech_cur_run_info->id;
 
     if (magictech_cur_run_info->action == MAGICTECH_ACTION_BEGIN
-        && !sub_456430(magictech_cur_run_info->parent_obj.obj, magictech_cur_run_info->target_obj.obj, magictech_cur_spell_info)) {
+        && !magictech_disallowed_flags_check(magictech_cur_run_info->parent_obj.obj, magictech_cur_run_info->target_obj.obj, magictech_cur_spell_info)) {
         magictech_cur_id = -1;
         if (magictech_cur_run_info->action < MAGICTECH_ACTION_END) {
             magictech_interrupt_delayed(magictech_cur_run_info->id);
@@ -2161,7 +2161,7 @@ void magictech_process(void)
                 magictech_cur_target_obj_type = obj_field_int32_get(magictech_cur_target_ctx.target_obj, OBJ_F_TYPE);
             }
 
-            if (sub_455550(&magictech_cur_target_ctx, magictech_cur_run_info)) {
+            if (magictech_target_shield_check(&magictech_cur_target_ctx, magictech_cur_run_info)) {
                 if (magictech_resistance_roll()) {
                     for (comp = 0; comp < magictech_cur_component_list->cnt; comp++) {
                         magictech_cur_component = &(magictech_cur_component_list->entries[comp]);
@@ -2800,7 +2800,7 @@ void MTComponentMovement_ProcFunc(void)
         }
 
         if (loc != 0) {
-            sub_455350(magictech_cur_target_ctx.target_obj, loc);
+            magictech_teleport_move(magictech_cur_target_ctx.target_obj, loc);
         }
     }
 }
@@ -2884,7 +2884,7 @@ void MTComponentSummon_ProcFunc(void)
     magictech_effect_summon(&summon_info);
 
     magictech_cur_target_ctx.summoned_obj = magictech_scratch_obj;
-    sub_4554B0(magictech_cur_run_info, magictech_scratch_obj);
+    magictech_summoned_obj_add(magictech_cur_run_info, magictech_scratch_obj);
 }
 
 // 0x452900
@@ -3928,7 +3928,7 @@ void magictech_run_advance(void)
 
                 datetime.milliseconds *= 1000;
 
-                sub_455250(magictech_cur_run_info, &datetime);
+                magictech_duration_adjust(magictech_cur_run_info, &datetime);
 
                 datetime.milliseconds *= 8;
                 if (magictech_timeevent_ensure_scheduled(&timeevent, &datetime, &magictech_cur_run_info->field_148)) {
@@ -4042,7 +4042,7 @@ void magictech_setup_maintain_timeevent(TimeEvent* timeevent, int a2, int a3, Da
     timeevent->params[2].integer_value = 1;
     magictech_cur_run_info->action = MAGICTECH_ACTION_MAINTAIN;
     datetime_from_milliseconds(datetime, 1000 * a3);
-    sub_455250(magictech_cur_run_info, datetime);
+    magictech_duration_adjust(magictech_cur_run_info, datetime);
     datetime->milliseconds *= 8;
 }
 
@@ -4151,7 +4151,7 @@ void magictech_component_obj_flag(int64_t obj, int64_t a2, int fld, int a4, int 
     flags = obj_field_int32_get(obj, fld);
 
     if (a5 == 1) {
-        if (sub_455100(obj, fld, a4, true) > 0) {
+        if (magictech_spell_flag_effect_count(obj, fld, a4, true) > 0) {
             return;
         }
 
@@ -4241,7 +4241,7 @@ void magictech_component_obj_flag(int64_t obj, int64_t a2, int fld, int a4, int 
             break;
         }
     } else if (a5 == 0) {
-        if (sub_455100(obj, fld, a4, false) > 1) {
+        if (magictech_spell_flag_effect_count(obj, fld, a4, false) > 1) {
             return;
         }
 
@@ -4315,7 +4315,7 @@ void magictech_component_obj_flag(int64_t obj, int64_t a2, int fld, int a4, int 
             break;
         case OBJ_F_PORTAL_FLAGS:
             if ((a4 & OPF_LOCKED) != 0) {
-                if (!sub_4551C0(a6, a7, obj)) {
+                if (!magictech_can_unlock(a6, a7, obj)) {
                     v16 = false;
                     magictech_add_resurrect_fx(a6, obj);
                 }
@@ -4331,7 +4331,7 @@ void magictech_component_obj_flag(int64_t obj, int64_t a2, int fld, int a4, int 
             break;
         case OBJ_F_CONTAINER_FLAGS:
             if ((a4 & OCOF_LOCKED) != 0) {
-                if (!sub_4551C0(a6, a7, obj)) {
+                if (!magictech_can_unlock(a6, a7, obj)) {
                     v16 = false;
                     magictech_add_resurrect_fx(a6, obj);
                 }
@@ -4356,7 +4356,7 @@ void magictech_component_obj_flag(int64_t obj, int64_t a2, int fld, int a4, int 
 }
 
 // 0x455100
-int sub_455100(int64_t obj, int fld, unsigned int a3, bool a4)
+int magictech_spell_flag_effect_count(int64_t obj, int fld, unsigned int a3, bool a4)
 {
     unsigned int flags;
     int mt_id;
@@ -4385,7 +4385,7 @@ int sub_455100(int64_t obj, int fld, unsigned int a3, bool a4)
 }
 
 // 0x4551C0
-bool sub_4551C0(int64_t a1, int64_t a2, int64_t a3)
+bool magictech_can_unlock(int64_t a1, int64_t a2, int64_t a3)
 {
     int lock_difficulty;
 
@@ -4412,7 +4412,7 @@ bool sub_4551C0(int64_t a1, int64_t a2, int64_t a3)
 }
 
 // 0x455250
-void sub_455250(MagicTechRunInfo* run_info, DateTime* datetime)
+void magictech_duration_adjust(MagicTechRunInfo* run_info, DateTime* datetime)
 {
     unsigned int millis;
     int source_aptitude;
@@ -4447,6 +4447,11 @@ void sub_455250(MagicTechRunInfo* run_info, DateTime* datetime)
                 delta = target_aptitude - source_aptitude;
             }
 
+            // NOTE: Dead in the original too - delta is an absolute
+            // difference, so it can never be negative. 0x455250 computes the
+            // same delta and then tests `test eax, eax; jge` over it,
+            // skipping the identical scaling unconditionally (0x455324).
+            // Faithful, so the aptitude scaling never runs in either binary.
             if (delta < 0) {
                 millis = 100 * millis / (delta + 100);
             }
@@ -4457,7 +4462,7 @@ void sub_455250(MagicTechRunInfo* run_info, DateTime* datetime)
 }
 
 // 0x455350
-void sub_455350(int64_t obj, int64_t target_loc)
+void magictech_teleport_move(int64_t obj, int64_t target_loc)
 {
     int64_t source_loc;
     AnimPath path;
@@ -4496,7 +4501,7 @@ void sub_455350(int64_t obj, int64_t target_loc)
 }
 
 // 0x4554B0
-void sub_4554B0(MagicTechRunInfo* run_info, int64_t obj)
+void magictech_summoned_obj_add(MagicTechRunInfo* run_info, int64_t obj)
 {
     MagicTechObjectNode* node;
 
@@ -4518,7 +4523,7 @@ void sub_4554B0(MagicTechRunInfo* run_info, int64_t obj)
 }
 
 // 0x455550
-bool sub_455550(TargetContext* target_ctx, MagicTechRunInfo* run_info)
+bool magictech_target_shield_check(TargetContext* target_ctx, MagicTechRunInfo* run_info)
 {
     MesFileEntry mes_file_entry;
     int64_t parent_obj;
@@ -4603,7 +4608,7 @@ bool sub_455550(TargetContext* target_ctx, MagicTechRunInfo* run_info)
 }
 
 // 0x455710
-void sub_455710(void)
+void magictech_run_info_clear_all(void)
 {
     int index;
     MagicTechRunInfo* run_info;
@@ -4641,7 +4646,7 @@ bool magictech_id_to_run_info(int mt_id, MagicTechRunInfo** run_info_ptr)
 {
     if (mt_id != -1
         && magictech_run_info[mt_id].id != -1
-        && sub_455820(&(magictech_run_info[mt_id]))) {
+        && magictech_run_info_validate(&(magictech_run_info[mt_id]))) {
         *run_info_ptr = &(magictech_run_info[mt_id]);
         return true;
     }
@@ -4651,7 +4656,7 @@ bool magictech_id_to_run_info(int mt_id, MagicTechRunInfo** run_info_ptr)
 }
 
 // 0x455820
-bool sub_455820(MagicTechRunInfo* run_info)
+bool magictech_run_info_validate(MagicTechRunInfo* run_info)
 {
     bool success = true;
     MagicTechObjectNode* node;
@@ -4695,7 +4700,7 @@ void magictech_id_free_lock(int mt_id)
         timeevent_clear_one_ex(TIMEEVENT_TYPE_MAGICTECH, magictech_timeevent_matches_current);
         magictech_timeevent_match_id = -1;
 
-        sub_455960(run_info);
+        magictech_run_info_release(run_info);
         magictech_active_run_count--;
 
         if (tig_net_is_active()
@@ -4708,7 +4713,7 @@ void magictech_id_free_lock(int mt_id)
 }
 
 // 0x455960
-void sub_455960(MagicTechRunInfo* run_info)
+void magictech_run_info_release(MagicTechRunInfo* run_info)
 {
     MagicTechObjectNode* node;
     MagicTechObjectNode* next;
@@ -4739,7 +4744,7 @@ void sub_455960(MagicTechRunInfo* run_info)
 }
 
 // 0x4559E0
-void sub_4559E0(MagicTechRunInfo* run_info)
+void magictech_run_info_clear(MagicTechRunInfo* run_info)
 {
     if (run_info->id != -1) {
         run_info->id = -1;
@@ -4788,7 +4793,7 @@ void magictech_invocation_run(MagicTechInvocation* mt_invocation)
             object_ref_init(mt_invocation->attacker_obj.obj, &(mt_invocation->attacker_obj));
             pkt.invocation = *mt_invocation;
             tig_net_send_app_all(&pkt, sizeof(pkt));
-            sub_455C30(mt_invocation);
+            magictech_invocation_process(mt_invocation);
         } else {
             PacketPlayerRequestCastSpell pkt;
 
@@ -4802,12 +4807,12 @@ void magictech_invocation_run(MagicTechInvocation* mt_invocation)
             tig_net_send_app_all(&pkt, sizeof(pkt));
         }
     } else {
-        sub_455C30(mt_invocation);
+        magictech_invocation_process(mt_invocation);
     }
 }
 
 // 0x455C30
-void sub_455C30(MagicTechInvocation* mt_invocation)
+void magictech_invocation_process(MagicTechInvocation* mt_invocation)
 {
     MagicTechInfo* info;
     MagicTechRunInfo* run_info;
@@ -5011,7 +5016,7 @@ void sub_455C30(MagicTechInvocation* mt_invocation)
 }
 
 // 0x456430
-bool sub_456430(int64_t a1, int64_t a2, MagicTechInfo* magictech)
+bool magictech_disallowed_flags_check(int64_t a1, int64_t a2, MagicTechInfo* magictech)
 {
     if (a1 == OBJ_HANDLE_NULL) {
         return true;
@@ -5064,7 +5069,7 @@ bool magictech_invocation_check(MagicTechInvocation* mt_invocation)
         return false;
     }
 
-    if (!sub_456430(mt_invocation->parent_obj.obj, mt_invocation->target_obj.obj, info)) {
+    if (!magictech_disallowed_flags_check(mt_invocation->parent_obj.obj, mt_invocation->target_obj.obj, info)) {
         return false;
     }
 
@@ -5178,7 +5183,7 @@ bool magictech_invocation_check(MagicTechInvocation* mt_invocation)
 }
 
 // 0x456A10
-bool sub_456A10(int64_t a1, int64_t a2, int64_t a3)
+bool magictech_item_spell_user_check(int64_t a1, int64_t a2, int64_t a3)
 {
     int aptitude;
 
@@ -5307,7 +5312,7 @@ void magictech_preload_art(MagicTechRunInfo* run_info)
 }
 
 // 0x456D20
-bool sub_456D20(int mt_id, tig_art_id_t* art_id_ptr, tig_art_id_t* light_art_id_ptr, tig_color_t* light_color_ptr, int* a5, int* a6, int* a7, int* a8)
+bool magictech_eye_candy_overlay_add(int mt_id, tig_art_id_t* art_id_ptr, tig_art_id_t* light_art_id_ptr, tig_color_t* light_color_ptr, int* a5, int* a6, int* a7, int* a8)
 {
     MagicTechRunInfo* run_info;
     AnimFxNode node;
@@ -5477,7 +5482,7 @@ bool magictech_timeevent_matches_current(TimeEvent* timeevent)
 // 0x457100
 void sub_457100(void)
 {
-    sub_455710();
+    magictech_run_info_clear_all();
 }
 
 // 0x457110

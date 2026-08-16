@@ -462,7 +462,7 @@ void sub_4CC930(MagicTechAi* magictech_ai, int64_t item_obj)
             spell = obj_field_int32_get(item_obj, 100 + index);
             if (spell != 10000
                 && magictech_spells[spell].ai.values[dword_5B7558] != -1
-                && sub_456A10(magictech_ai->obj, magictech_ai->field_18, item_obj)) {
+                && magictech_item_spell_user_check(magictech_ai->obj, magictech_ai->field_18, item_obj)) {
                 sub_4CCB10(spell, item_obj);
             }
         }

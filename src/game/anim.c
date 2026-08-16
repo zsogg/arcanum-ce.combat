@@ -7578,7 +7578,7 @@ bool anim_load_spell_visuals(AnimRunInfo* run_info)
         return false;
     }
 
-    if (!sub_456D20(run_info->params[0].data, &art_id, &light_art_id, &light_color, &overlay_fore_idx, &overlay_back_idx, &overlay_light_idx, &fx_idx)) {
+    if (!magictech_eye_candy_overlay_add(run_info->params[0].data, &art_id, &light_art_id, &light_color, &overlay_fore_idx, &overlay_back_idx, &overlay_light_idx, &fx_idx)) {
         run_info->cur_stack_data->params[AGDATA_SCRATCH_VAL1].data = -1;
         run_info->cur_stack_data->params[AGDATA_SCRATCH_VAL2].data = -1;
         run_info->cur_stack_data->params[AGDATA_SCRATCH_VAL3].data = -1;
