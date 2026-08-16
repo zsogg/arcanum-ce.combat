@@ -1098,7 +1098,7 @@ void obj_clone(int64_t* new_obj_ptr, int64_t obj)
 
     obj_unlock(obj);
     obj_unlock(new_obj);
-    sub_464470(new_obj, NULL, NULL);
+    item_inventory_reparent(new_obj, NULL, NULL);
 
     *new_obj_ptr = new_obj;
 }

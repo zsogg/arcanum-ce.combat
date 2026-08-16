@@ -288,7 +288,7 @@ bool player_obj_create_player(PlayerCreateInfo* player_create_info)
     }
 
     level_set(player_create_info->obj, 1);
-    sub_463E20(player_create_info->obj);
+    item_inventory_restock_contents(player_create_info->obj);
     obj_field_int32_set(player_create_info->obj, OBJ_F_CRITTER_INVENTORY_SOURCE, 0);
     ui_spell_maintain_refresh();
 

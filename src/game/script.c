@@ -2239,7 +2239,7 @@ int script_execute_action(ScriptAction* action, int line, ScriptState* state)
         int64_t item_obj = script_get_obj(action->op_type[1], action->op_value[1], state);
         int64_t source_obj = script_get_obj(action->op_type[2], action->op_value[2], state);
         int64_t target_obj = script_get_obj(action->op_type[3], action->op_value[3], state);
-        int ratio = sub_461620(item_obj, source_obj, target_obj);
+        int ratio = item_adjust_magic_target(item_obj, source_obj, target_obj);
         script_set_value(action->op_type[4], action->op_value[4], state, value * (100 - ratio) / 100);
         return NEXT;
     }

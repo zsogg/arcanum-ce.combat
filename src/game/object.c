@@ -2743,7 +2743,7 @@ void object_bust(int64_t obj, int64_t triggerer_obj)
 
             object_hp_damage_set(obj, 0);
 
-            if (item_parent(obj, NULL) && !sub_464C80(obj)) {
+            if (item_parent(obj, NULL) && !item_unequip(obj)) {
                 item_drop(obj);
             }
 
@@ -4426,7 +4426,7 @@ bool object_place_in_world(int64_t obj, int64_t loc)
         }
     }
 
-    sub_463C60(obj);
+    item_inventory_restock(obj);
     object_location_changed(obj, 2);
 
     object_get_rect(obj, 0x7, &rect);

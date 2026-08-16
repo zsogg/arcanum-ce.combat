@@ -892,7 +892,7 @@ int sub_4B3170(CombatContext* combat)
 
         int v3 = 0;
         if (combat->weapon_obj != OBJ_HANDLE_NULL && combat->skill != SKILL_THROWING) {
-            v3 = sub_461620(combat->weapon_obj, combat->attacker_obj, combat->target_obj);
+            v3 = item_adjust_magic_target(combat->weapon_obj, combat->attacker_obj, combat->target_obj);
         }
 
         bool cont = true;

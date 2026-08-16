@@ -4748,11 +4748,11 @@ void mainmenu_ui_shop_refresh(TigRect* rect)
     }
 
     reaction_forget(npc_obj, pc_obj);
-    sub_463E20(npc_obj);
+    item_inventory_restock_contents(npc_obj);
 
     substitute_inventory_obj = critter_substitute_inventory_get(npc_obj);
     if (substitute_inventory_obj != OBJ_HANDLE_NULL) {
-        sub_463E20(substitute_inventory_obj);
+        item_inventory_restock_contents(substitute_inventory_obj);
     }
 
     if (!inven_ui_open(pc_obj, npc_obj, INVEN_UI_MODE_BARTER)) {

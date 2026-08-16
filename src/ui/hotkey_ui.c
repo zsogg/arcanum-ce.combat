@@ -884,7 +884,7 @@ bool sub_57E8D0(TigMessageMouseEvent mouse_event)
             return false;
         }
 
-        if (sub_462A30(parent_obj, hotkey_ui_dragged.item_obj.obj)) {
+        if (item_find_hotkeyed_of_prototype(parent_obj, hotkey_ui_dragged.item_obj.obj)) {
             mes_file_entry.num = 4000; // "You already have a duplicate item on the hotkey bank."
             mes_get_msg(intgame_hotkey_mes_file(), &mes_file_entry);
 

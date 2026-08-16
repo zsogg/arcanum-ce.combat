@@ -3924,7 +3924,7 @@ void intgame_hotkey_activate(Hotkey* hotkey)
         if (obj_field_handle_get(hotkey->item_obj.obj, OBJ_F_ITEM_PARENT) == pc_obj) {
             v2 = hotkey->item_obj.obj;
             if (obj_field_int32_get(v2, OBJ_F_TYPE) != OBJ_TYPE_WRITTEN
-                || (sub_462C30(pc_obj, v2)
+                || (item_check_usable(pc_obj, v2)
                     && (obj_field_int32_get(v2, OBJ_F_ITEM_FLAGS) & OIF_USE_IS_THROW) == 0)) {
                 v1 = item_find_first_matching_prototype(pc_obj, v2);
                 if (v1 != OBJ_HANDLE_NULL) {
@@ -3932,7 +3932,7 @@ void intgame_hotkey_activate(Hotkey* hotkey)
                 }
             }
 
-            if (sub_462C30(pc_obj, v2)
+            if (item_check_usable(pc_obj, v2)
                 || (obj_field_int32_get(v2, OBJ_F_ITEM_FLAGS) & OIF_USE_IS_THROW) != 0) {
                 switch (obj_field_int32_get(v2, OBJ_F_TYPE)) {
                 case OBJ_TYPE_WEAPON:
@@ -3975,7 +3975,7 @@ void intgame_hotkey_activate(Hotkey* hotkey)
         if (obj_field_handle_get(hotkey->item_obj.obj, OBJ_F_ITEM_PARENT) == pc_obj) {
             if (weapon_obj == hotkey->item_obj.obj) {
                 sub_57C080(hotkey->item_obj.obj, hotkey->data);
-            } else if (weapon_obj == OBJ_HANDLE_NULL || sub_464C80(weapon_obj)) {
+            } else if (weapon_obj == OBJ_HANDLE_NULL || item_unequip(weapon_obj)) {
                 if (item_wield_set(hotkey->item_obj.obj, ITEM_INV_LOC_WEAPON)) {
                     sub_57C080(hotkey->item_obj.obj, hotkey->data);
                 }
@@ -4004,7 +4004,7 @@ void sub_550000(int64_t critter_obj, Hotkey* hotkey, int inventory_location)
             return;
         }
 
-        if (!sub_464C80(item_obj)) {
+        if (!item_unequip(item_obj)) {
             return;
         }
     }
@@ -7012,7 +7012,7 @@ void intgame_examine_combat_target(int64_t pc_obj, int64_t target_obj)
 
     if (weapon_obj != OBJ_HANDLE_NULL
         && skill != SKILL_THROWING) {
-        v3 = sub_461620(weapon_obj, pc_obj, target_obj);
+        v3 = item_adjust_magic_target(weapon_obj, pc_obj, target_obj);
         if (v3 > 0) {
             if (v3 > 20) {
                 skill_invocation.flags |= SKILL_INVOCATION_MAGIC_TECH_PENALTY;

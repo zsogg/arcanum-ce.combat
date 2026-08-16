@@ -3011,8 +3011,8 @@ void magictech_component_trait(int64_t obj, MagicTechComponentTrait* trait, int 
             int rot;
 
             for (inventory_location = FIRST_WEAR_INV_LOC; inventory_location <= LAST_WEAR_INV_LOC; inventory_location++) {
-                sub_464C50(obj, inventory_location);
-                if (!sub_464C50(obj, inventory_location)) {
+                item_unequip_location(obj, inventory_location);
+                if (!item_unequip_location(obj, inventory_location)) {
                     int64_t item_obj = item_wield_get(obj, inventory_location);
                     if (item_obj != OBJ_HANDLE_NULL) {
                         if (!item_drop(item_obj)) {

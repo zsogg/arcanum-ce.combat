@@ -730,7 +730,7 @@ void critter_notify_killed(int64_t victim_obj, int64_t killer_obj, int anim)
         monstergen_notify_killed(victim_obj);
     } else {
         // Move items from hotkey bar to inventory.
-        sub_467520(victim_obj);
+        item_drop_hotkeyed_items(victim_obj);
     }
 
     // Remove weapon from death animation.

@@ -720,7 +720,7 @@ bool ai_look_for_item_func(int64_t obj, unsigned int flags)
     node = objects.head;
     while (node != NULL) {
         if ((obj_field_int32_get(node->obj, OBJ_F_ITEM_FLAGS) & (OIF_NO_DISPLAY | OIF_NO_NPC_PICKUP)) == 0
-            && !sub_461F60(node->obj)
+            && !item_is_worthless(node->obj)
             && item_check_insert(node->obj, obj, NULL) == ITEM_CANNOT_OK) {
             dist = object_dist(obj, node->obj);
             if (nearest_obj == OBJ_HANDLE_NULL
@@ -791,7 +791,7 @@ bool ai_look_for_item_func(int64_t obj, unsigned int flags)
             if (item_obj != OBJ_HANDLE_NULL
                 && (obj_field_int32_get(item_obj, OBJ_F_FLAGS) & OF_OFF) == 0
                 && (obj_field_int32_get(item_obj, OBJ_F_ITEM_FLAGS) & (OIF_NO_DISPLAY | OIF_NO_NPC_PICKUP)) == 0
-                && !sub_461F60(item_obj)
+                && !item_is_worthless(item_obj)
                 && item_check_insert(item_obj, obj, NULL) == ITEM_CANNOT_OK
                 && anim_goal_pickup_item(obj, item_obj)) {
                 found = true;
