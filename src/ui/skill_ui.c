@@ -20,14 +20,14 @@
 
 #define FOUR 4
 
-static bool sub_57A5E0(int64_t obj);
-static void sub_57A620(SkillInvocation* skill_invocation);
-static void sub_57A6B0(SkillInvocation* skill_invocation);
-static bool sub_57A710(int64_t a1, int64_t a2);
-static bool sub_57A770(int64_t source_obj, int64_t target_obj, bool success);
+static bool skill_ui_is_pickpocket_immune(int64_t obj);
+static void skill_ui_delegate_to_follower(SkillInvocation* skill_invocation);
+static void skill_ui_run_invocation(SkillInvocation* skill_invocation);
+static bool skill_ui_open_steal_loot(int64_t a1, int64_t a2);
+static bool skill_ui_success_fail_msg_field_0(int64_t source_obj, int64_t target_obj, bool success);
 static bool skill_ui_steal_item(int64_t source_obj, int64_t target_obj, int64_t item_obj, bool success);
 static bool skill_ui_plant_item(int64_t source_obj, int64_t target_obj, int64_t item_obj, bool success);
-static bool sub_57A990(int64_t source_obj, int64_t target_obj, bool success);
+static bool skill_ui_success_fail_msg_field_C(int64_t source_obj, int64_t target_obj, bool success);
 static bool skill_ui_disarm_trap(int64_t source_obj, int64_t target_obj, bool success);
 static bool skill_ui_repair(int64_t source_obj, int64_t target_obj, bool success);
 static bool skill_ui_no_repair(int64_t source_obj, int64_t target_obj, bool success);
@@ -67,7 +67,7 @@ static uint64_t skill_ui_target_flags[FOUR] = {
 };
 
 // 0x5CB270
-static int dword_5CB270 = -1;
+static int skill_ui_current_type = -1;
 
 // 0x683478
 static char* skill_ui_names[FOUR];
@@ -76,7 +76,7 @@ static char* skill_ui_names[FOUR];
 static mes_file_handle_t skill_ui_mes_file;
 
 // 0x683490
-static int64_t qword_683490;
+static int64_t skill_ui_current_obj;
 
 // 0x579E80
 bool skill_ui_init(GameInitInfo* init_info)
@@ -87,10 +87,10 @@ bool skill_ui_init(GameInitInfo* init_info)
 
     (void)init_info;
 
-    callbacks.field_0 = sub_57A770;
+    callbacks.field_0 = skill_ui_success_fail_msg_field_0;
     callbacks.steal_item_func = skill_ui_steal_item;
     callbacks.plant_item_output = skill_ui_plant_item;
-    callbacks.field_C = sub_57A990;
+    callbacks.field_C = skill_ui_success_fail_msg_field_C;
     callbacks.disarm_trap_func = skill_ui_disarm_trap;
     callbacks.repair_func = skill_ui_repair;
     callbacks.no_repair_func = skill_ui_no_repair;
@@ -114,7 +114,7 @@ bool skill_ui_init(GameInitInfo* init_info)
 // 0x579F30
 void skill_ui_reset(void)
 {
-    qword_683490 = OBJ_HANDLE_NULL;
+    skill_ui_current_obj = OBJ_HANDLE_NULL;
 }
 
 // 0x579F40
@@ -136,13 +136,16 @@ int skill_ui_icon_art_num(int index)
 }
 
 // 0x579F90
-int sub_579F90(void)
+int skill_ui_current_type_get(void)
 {
-    return dword_5CB270;
+    return skill_ui_current_type;
 }
 
+// Entry point from the skill buttons and hotkeyed skills: remembers obj/type,
+// cancels an active skill mode, and starts the skill UI or preprocessing.
+//
 // 0x579FA0
-void sub_579FA0(int64_t obj, int type)
+void skill_ui_begin(int64_t obj, int type)
 {
     int64_t pc_obj;
 
@@ -163,8 +166,8 @@ void sub_579FA0(int64_t obj, int type)
         skill_ui_cancel();
     }
 
-    qword_683490 = obj;
-    dword_5CB270 = type;
+    skill_ui_current_obj = obj;
+    skill_ui_current_type = type;
 
     if ((skill_ui_target_flags[type] & 0x2000000) != 0
         || intgame_mode_set(INTGAME_MODE_MAIN)) {
@@ -180,8 +183,8 @@ void skill_ui_preprocess(int64_t obj, int type)
     SkillInvocation skill_invocation;
 
     is_pc = player_is_local_pc_obj(obj);
-    qword_683490 = obj;
-    dword_5CB270 = type;
+    skill_ui_current_obj = obj;
+    skill_ui_current_type = type;
 
     tgt = skill_ui_target_flags[type];
     skill_invocation_init(&skill_invocation);
@@ -218,7 +221,7 @@ void skill_ui_preprocess(int64_t obj, int type)
 void skill_ui_cancel(void)
 {
     intgame_mode_set(INTGAME_MODE_MAIN);
-    qword_683490 = OBJ_HANDLE_NULL;
+    skill_ui_current_obj = OBJ_HANDLE_NULL;
 }
 
 // 0x57A1F0
@@ -228,9 +231,9 @@ void skill_ui_apply(TargetDescriptor* td)
 
     pc_obj = player_get_local_pc_obj();
 
-    if ((pc_obj == qword_683490 || !critter_is_unconscious(pc_obj))
-        && !critter_is_unconscious(qword_683490)) {
-        skill_ui_activate(td, qword_683490, dword_5CB270);
+    if ((pc_obj == skill_ui_current_obj || !critter_is_unconscious(pc_obj))
+        && !critter_is_unconscious(skill_ui_current_obj)) {
+        skill_ui_activate(td, skill_ui_current_obj, skill_ui_current_type);
     }
 }
 
@@ -260,7 +263,7 @@ void skill_ui_activate(TargetDescriptor* td, int64_t obj, int a3)
             spell_flags = obj_field_int32_get(obj, OBJ_F_SPELL_FLAGS);
 
             if ((obj_field_int32_get(td->obj, OBJ_F_SPELL_FLAGS) & OSF_STONED) == 0) {
-                if (sub_57A5E0(td->obj)) {
+                if (skill_ui_is_pickpocket_immune(td->obj)) {
                     if (player_is_local_pc_obj(obj)) {
                         mes_file_entry.num = 525; // "You cannot pickpocket this creature."
                         mes_get_msg(skill_ui_mes_file, &mes_file_entry);
@@ -273,7 +276,7 @@ void skill_ui_activate(TargetDescriptor* td, int64_t obj, int a3)
                         ui_show_inven_loot(obj, td->obj);
                     }
                 } else {
-                    sub_57A710(obj, td->obj);
+                    skill_ui_open_steal_loot(obj, td->obj);
                 }
             }
         }
@@ -286,7 +289,7 @@ void skill_ui_activate(TargetDescriptor* td, int64_t obj, int a3)
             object_ref_init(OBJ_HANDLE_NULL, &(skill_invocation.item));
             skill_invocation.flags = 0;
             skill_invocation.skill = SKILL_REPAIR;
-            sub_57A6B0(&skill_invocation);
+            skill_ui_run_invocation(&skill_invocation);
         }
         return;
     case SKILL_DISARM_TRAPS:
@@ -297,8 +300,8 @@ void skill_ui_activate(TargetDescriptor* td, int64_t obj, int a3)
             object_ref_init(OBJ_HANDLE_NULL, &(skill_invocation.item));
             skill_invocation.flags = SKILL_INVOCATION_0x04;
             skill_invocation.skill = SKILL_DISARM_TRAPS;
-            sub_57A620(&skill_invocation);
-            sub_57A6B0(&skill_invocation);
+            skill_ui_delegate_to_follower(&skill_invocation);
+            skill_ui_run_invocation(&skill_invocation);
         }
         return;
     default:
@@ -309,15 +312,21 @@ void skill_ui_activate(TargetDescriptor* td, int64_t obj, int a3)
     }
 }
 
+// Pickpocketing is refused for mechanical critters and for critters flagged
+// OCF2_NO_PICKPOCKET.
+//
 // 0x57A5E0
-bool sub_57A5E0(int64_t obj)
+bool skill_ui_is_pickpocket_immune(int64_t obj)
 {
     return (obj_field_int32_get(obj, OBJ_F_CRITTER_FLAGS2) & OCF2_NO_PICKPOCKET) != 0
         || (obj_field_int32_get(obj, OBJ_F_CRITTER_FLAGS) & OCF_MECHANICAL) != 0;
 }
 
+// Unless CTRL is held, let the best-qualified follower attempt the skill and
+// float the "let me handle it" line when ownership changes.
+//
 // 0x57A620
-void sub_57A620(SkillInvocation* skill_invocation)
+void skill_ui_delegate_to_follower(SkillInvocation* skill_invocation)
 {
     int64_t obj;
     char str[1000];
@@ -339,7 +348,7 @@ int skill_ui_skill(int index)
 }
 
 // 0x57A6B0
-void sub_57A6B0(SkillInvocation* skill_invocation)
+void skill_ui_run_invocation(SkillInvocation* skill_invocation)
 {
     skill_invocation_run(skill_invocation);
 }
@@ -367,8 +376,11 @@ char* skill_ui_name(int index)
     return skill_ui_names[index];
 }
 
+// Opens the target inventory in steal mode for critters and loot mode for
+// containers/corpses.
+//
 // 0x57A710
-bool sub_57A710(int64_t pc_obj, int64_t target_obj)
+bool skill_ui_open_steal_loot(int64_t pc_obj, int64_t target_obj)
 {
     int mode;
 
@@ -382,8 +394,12 @@ bool sub_57A710(int64_t pc_obj, int64_t target_obj)
     return true;
 }
 
+// Generic success/fail feedback for SkillCallbacks.field_0. The original also
+// never reads field_0 after skill_ui_init assigns it (xrefs to 0x6876A0 have
+// only skill_set_callbacks/skill_init writes); kept as the named callback slot.
+//
 // 0x57A770
-bool sub_57A770(int64_t source_obj, int64_t target_obj, bool success)
+bool skill_ui_success_fail_msg_field_0(int64_t source_obj, int64_t target_obj, bool success)
 {
     MesFileEntry mes_file_entry;
     UiMessage ui_message;
@@ -476,8 +492,12 @@ bool skill_ui_plant_item(int64_t source_obj, int64_t target_obj, int64_t item_ob
     return true;
 }
 
+// Byte-identical twin of skill_ui_success_fail_msg_field_0, wired to
+// SkillCallbacks.field_C and invoked by the non-trap-handling disarm path in
+// skill_invocation_run.
+//
 // 0x57A990
-bool sub_57A990(int64_t source_obj, int64_t target_obj, bool success)
+bool skill_ui_success_fail_msg_field_C(int64_t source_obj, int64_t target_obj, bool success)
 {
     MesFileEntry mes_file_entry;
     UiMessage ui_message;

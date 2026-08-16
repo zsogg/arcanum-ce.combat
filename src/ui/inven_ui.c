@@ -1814,7 +1814,7 @@ static inline bool inven_ui_message_filter_handle_mouse_lbutton_up_accept_drop(T
     }
 
     if (inventory_location - inven_ui_drag_grab_offset < 0) {
-        if (!sub_57EDA0(TIG_MESSAGE_MOUSE_LEFT_BUTTON_UP)) {
+        if (!hotkey_ui_drop_inventory_item(TIG_MESSAGE_MOUSE_LEFT_BUTTON_UP)) {
             inven_ui_drop_dragged_item();
         }
     } else if (v2 == inven_ui_pc_obj) {
@@ -1827,7 +1827,7 @@ static inline bool inven_ui_message_filter_handle_mouse_lbutton_up_accept_drop(T
         }
     }
 
-    sub_57F260();
+    hotkey_ui_clear_dragged_flags();
 
     inven_ui_drag_item_obj = OBJ_HANDLE_NULL;
     return false;
@@ -2037,7 +2037,7 @@ static inline bool inven_ui_message_filter_handle_mouse_lbutton_up(int x, int y,
                 }
             } else {
                 if (inventory_location - inven_ui_drag_grab_offset < 0) {
-                    if (!sub_57EDA0(TIG_MESSAGE_MOUSE_LEFT_BUTTON_UP)) {
+                    if (!hotkey_ui_drop_inventory_item(TIG_MESSAGE_MOUSE_LEFT_BUTTON_UP)) {
                         inven_ui_drop_dragged_item();
                     }
                 } else if (parent_obj == inven_ui_pc_obj) {
@@ -2049,7 +2049,7 @@ static inline bool inven_ui_message_filter_handle_mouse_lbutton_up(int x, int y,
                         inven_ui_transfer_to_target(inventory_location - inven_ui_drag_grab_offset);
                     }
                 }
-                sub_57F260();
+                hotkey_ui_clear_dragged_flags();
                 inven_ui_drag_item_obj = OBJ_HANDLE_NULL;
             }
         }
@@ -2563,7 +2563,7 @@ void inven_ui_drop_dragged_item(void)
             sound_id = sfx_item_sound(inven_ui_drag_item_obj, inven_ui_drag_source_obj, OBJ_HANDLE_NULL, ITEM_SOUND_DROP);
             gsound_play_sfx(sound_id, 1);
 
-            if (!sub_57F260()) {
+            if (!hotkey_ui_clear_dragged_flags()) {
                 item_insert(inven_ui_drag_item_obj, inven_ui_drag_source_obj, inven_ui_drag_source_location);
             }
 
@@ -2586,7 +2586,7 @@ void inven_ui_drop_dragged_item(void)
         sound_id = sfx_item_sound(inven_ui_drag_item_obj, inven_ui_drag_source_obj, OBJ_HANDLE_NULL, ITEM_SOUND_DROP);
         gsound_play_sfx(sound_id, 1);
 
-        sub_57F260();
+        hotkey_ui_clear_dragged_flags();
         inven_ui_drag_item_obj = OBJ_HANDLE_NULL;
         redraw_inven(false);
     } else {

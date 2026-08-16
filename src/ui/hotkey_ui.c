@@ -19,10 +19,10 @@
 
 static bool intgame_save_hotkey(Hotkey* hotkey, TigFile* stream);
 static bool intgame_load_hotkey(Hotkey* hotkey, TigFile* stream);
-static int sub_57E460(void);
+static int hotkey_ui_slot_at_mouse(void);
 static void intgame_hotkey_mouse_load(tig_art_id_t art_id, bool a2);
-static void sub_57ED60(Hotkey* hotkey, int a2);
-static void sub_57EE30(int64_t a1, int inventory_location);
+static void hotkey_ui_restore_drag_source(Hotkey* hotkey, int a2);
+static void hotkey_ui_assign_item_location(int64_t a1, int inventory_location);
 static bool button_create_no_art(UiButtonInfo* button_info, int width, int height);
 
 // 0x5CB494
@@ -360,7 +360,7 @@ bool hotkey_ui_process_event(TigMessage* msg)
                         if (inven_ui_drag_item_obj_get() != OBJ_HANDLE_NULL) {
                             hotkey_ui_begin_inventory_drag();
                         }
-                        sub_57E8D0(TIG_MESSAGE_MOUSE_LEFT_BUTTON_UP);
+                        hotkey_ui_drop(TIG_MESSAGE_MOUSE_LEFT_BUTTON_UP);
                     } else {
                         intgame_hotkey_activate(&(hotkey_ui_slots[index]));
                     }
@@ -377,7 +377,7 @@ bool hotkey_ui_process_event(TigMessage* msg)
                 intgame_hotkey_highlight(&(hotkey_ui_recent_actions[1]));
                 return true;
             }
-            index = sub_57E460();
+            index = hotkey_ui_slot_at_mouse();
             if (index < 10 && hotkey_ui_slots[index].type) {
                 intgame_hotkey_highlight(&(hotkey_ui_slots[index]));
                 return true;
@@ -645,8 +645,11 @@ void intgame_hotkey_refresh(int index)
     }
 }
 
+// Which quick-slot, if any, the mouse is over. Returns 10 when inside the bar
+// but between slots, 11 when outside the bar.
+//
 // 0x57E460
-int sub_57E460(void)
+int hotkey_ui_slot_at_mouse(void)
 {
     TigMouseState mouse_state;
     TigRect rect;
@@ -743,7 +746,7 @@ bool hotkey_ui_begin_drag(void)
     hotkey_ui_dragged.item_obj.obj = OBJ_HANDLE_NULL;
     hotkey_ui_dragged.item_obj.locator.objid.type = OID_TYPE_NULL;
 
-    index = sub_57E460();
+    index = hotkey_ui_slot_at_mouse();
     if (index < 10) {
         hotkey = &(hotkey_ui_slots[index]);
         if ((hotkey->flags & HOTKEY_DRAGGED) != 0) {
@@ -838,8 +841,11 @@ void hotkey_ui_cancel_drag(void)
     hotkey_ui_dragging_index = -1;
 }
 
+// Completes a quick-slot drag on mouse-up: same-slot drop, move/swap between
+// slots, inventory-item assignment, or cancel when released outside the bar.
+//
 // 0x57E8D0
-bool sub_57E8D0(TigMessageMouseEvent mouse_event)
+bool hotkey_ui_drop(TigMessageMouseEvent mouse_event)
 {
     int64_t parent_obj;
     MesFileEntry mes_file_entry;
@@ -900,7 +906,7 @@ bool sub_57E8D0(TigMessageMouseEvent mouse_event)
         }
     }
 
-    index = sub_57E460();
+    index = hotkey_ui_slot_at_mouse();
     if (index < 10) {
         hotkey = &(hotkey_ui_slots[index]);
         if (hotkey_ui_dragging_index == index) {
@@ -937,7 +943,7 @@ bool sub_57E8D0(TigMessageMouseEvent mouse_event)
             if (hotkey->type == HOTKEY_NONE) {
                 intgame_hotkey_refresh(hotkey_ui_dragging_index);
             } else {
-                sub_57ED60(hotkey, hotkey_ui_dragging_index);
+                hotkey_ui_restore_drag_source(hotkey, hotkey_ui_dragging_index);
             }
             hotkey_ui_dragging_index = -1;
         }
@@ -1031,8 +1037,11 @@ bool sub_57E8D0(TigMessageMouseEvent mouse_event)
     return true;
 }
 
+// Copies a displaced slot's type/data back into the slot the drag started
+// from and refreshes it.
+//
 // 0x57ED60
-void sub_57ED60(Hotkey* hotkey, int a2)
+void hotkey_ui_restore_drag_source(Hotkey* hotkey, int a2)
 {
     hotkey_ui_slots[hotkey_ui_dragging_index].flags = 0;
     hotkey_ui_slots[hotkey_ui_dragging_index].type = hotkey->type;
@@ -1040,8 +1049,11 @@ void sub_57ED60(Hotkey* hotkey, int a2)
     intgame_hotkey_refresh(a2);
 }
 
+// Inventory-side entry: if the inventory is dragging an item, adopt it as a
+// HOTKEY_ITEM drag and let hotkey_ui_drop finish it on the quick bar.
+//
 // 0x57EDA0
-bool sub_57EDA0(TigMessageMouseEvent mouse_event)
+bool hotkey_ui_drop_inventory_item(TigMessageMouseEvent mouse_event)
 {
     if (inven_ui_drag_item_obj_get() != OBJ_HANDLE_NULL) {
         hotkey_ui_dragged.slot = -1;
@@ -1050,21 +1062,24 @@ bool sub_57EDA0(TigMessageMouseEvent mouse_event)
         hotkey_ui_dragging = true;
     }
 
-    return sub_57E8D0(mouse_event);
+    return hotkey_ui_drop(mouse_event);
 }
 
 // 0x57EDF0
 void hotkey_ui_set_item_location(int64_t obj, int64_t a2, int a3)
 {
     if (player_is_local_pc_obj(obj)) {
-        sub_57EE30(a2, a3);
+        hotkey_ui_assign_item_location(a2, a3);
     } else {
         item_location_set(a2, a3);
     }
 }
 
+// Moves obj into hotkey inventory location `inventory_location`, evicting the
+// item that used to occupy that slot first.
+//
 // 0x57EE30
-void sub_57EE30(int64_t obj, int inventory_location)
+void hotkey_ui_assign_item_location(int64_t obj, int inventory_location)
 {
     int64_t v1 = OBJ_HANDLE_NULL;
     Hotkey* hotkey;
@@ -1203,8 +1218,11 @@ bool button_create_no_art(UiButtonInfo* button_info, int width, int height)
     return tig_button_create(&button_data, &(button_info->button_handle)) == TIG_OK;
 }
 
+// Keyboard hotkey activation (the 1-0 row). Ignored while a slot is being
+// dragged or empty.
+//
 // 0x57F1D0
-void sub_57F1D0(int index)
+void hotkey_ui_activate_slot(int index)
 {
     Hotkey* hotkey;
 
@@ -1230,20 +1248,23 @@ void hotkey_ui_clear_index(int index)
 }
 
 // 0x57F240
-Hotkey* sub_57F240(int index)
+Hotkey* hotkey_ui_slot_get(int index)
 {
     return &(hotkey_ui_slots[index]);
 }
 
+// Clears HOTKEY_DRAGGED from item-type slots after a drag ends; returns true
+// when at least one slot was refreshed. Also resets the global drag state.
+//
 // 0x57F260
-bool sub_57F260(void)
+bool hotkey_ui_clear_dragged_flags(void)
 {
     bool ret = false;
     int index;
     Hotkey* hotkey;
 
     for (index = 0; index < 10; index++) {
-        hotkey = sub_57F240(index);
+        hotkey = hotkey_ui_slot_get(index);
         if (hotkey->type == HOTKEY_ITEM || hotkey->type == HOTKEY_ITEM_SPELL) {
             if ((hotkey->flags & HOTKEY_DRAGGED) != 0) {
                 hotkey->flags &= ~HOTKEY_DRAGGED;
@@ -1292,7 +1313,7 @@ void hotkey_ui_notify_spell_removed(int spell)
     }
 
     for (index = 0; index < 10; index++) {
-        hotkey = sub_57F240(index);
+        hotkey = hotkey_ui_slot_get(index);
         if (hotkey->type == HOTKEY_SPELL && hotkey->data == spell) {
             hotkey_ui_clear_slot(hotkey);
             intgame_hotkey_refresh(hotkey->slot);
@@ -1329,7 +1350,7 @@ void intgame_hotkeys_recover(void)
     }
 
     for (index = 0; index < 10; index++) {
-        hotkey = sub_57F240(index);
+        hotkey = hotkey_ui_slot_get(index);
         if (hotkey->type == HOTKEY_ITEM || hotkey->type == HOTKEY_ITEM_SPELL) {
             if (hotkey->item_obj.obj != OBJ_HANDLE_NULL) {
                 if (!object_ref_validate(&(hotkey->item_obj))) {

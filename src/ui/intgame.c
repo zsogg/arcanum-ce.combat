@@ -2130,7 +2130,7 @@ bool intgame_process_message(TigMessage* msg)
             if (inven_ui_drag_item_obj_get() != OBJ_HANDLE_NULL) {
                 hotkey_ui_begin_inventory_drag();
             }
-            if (sub_57E8D0(TIG_MESSAGE_MOUSE_RIGHT_BUTTON_UP)) {
+            if (hotkey_ui_drop(TIG_MESSAGE_MOUSE_RIGHT_BUTTON_UP)) {
                 return true;
             }
             break;
@@ -2138,7 +2138,7 @@ bool intgame_process_message(TigMessage* msg)
             if (inven_ui_drag_item_obj_get() != OBJ_HANDLE_NULL) {
                 hotkey_ui_begin_inventory_drag();
             }
-            if (sub_57E8D0(TIG_MESSAGE_MOUSE_LEFT_BUTTON_UP)) {
+            if (hotkey_ui_drop(TIG_MESSAGE_MOUSE_LEFT_BUTTON_UP)) {
                 return true;
             }
             break;
@@ -2260,7 +2260,7 @@ bool intgame_process_message(TigMessage* msg)
                 for (index = 0; index < 4; index++) {
                     if (msg->data.button.button_handle == intgame_skill_buttons[index].button_handle) {
                         hotkey_ui_add_recent_action(2, index, OBJ_HANDLE_NULL);
-                        sub_579FA0(player_get_local_pc_obj(), index);
+                        skill_ui_begin(player_get_local_pc_obj(), index);
                         return true;
                     }
                 }
@@ -2872,9 +2872,9 @@ void intgame_process_event(TigMessage* msg)
         // it: the digit keys pick dialog options, so without this they fired a
         // hotkey at the same time. The patch redirects this call into ten bytes
         // of padding before `button_create_no_art` that tail-jumps to
-        // `sub_57F1D0` only when no dialog handler is installed.
+        // `hotkey_ui_activate_slot` only when no dialog handler is installed.
         if (!uap_fixes_enabled() || !intgame_dialog_is_active()) {
-            sub_57F1D0(msg->data.keyboard.scancode - SDL_SCANCODE_1);
+            hotkey_ui_activate_slot(msg->data.keyboard.scancode - SDL_SCANCODE_1);
         }
     }
 
@@ -3963,7 +3963,7 @@ void intgame_hotkey_activate(Hotkey* hotkey)
         }
         break;
     case HOTKEY_SKILL:
-        sub_579FA0(pc_obj, hotkey->data);
+        skill_ui_begin(pc_obj, hotkey->data);
         break;
     case HOTKEY_SPELL:
         spell_ui_activate(pc_obj, hotkey->data);
@@ -8458,7 +8458,7 @@ void intgame_notify_item_inserted_or_removed(int64_t item_obj, bool removed, int
     Hotkey* hotkey;
 
     for (index = 0; index < 10; index++) {
-        hotkey = sub_57F240(index);
+        hotkey = hotkey_ui_slot_get(index);
         if (removed && hotkey->item_obj.obj == item_obj) {
             hotkey_ui_clear(index);
         }
