@@ -136,28 +136,28 @@ static int charedit_stat_value_get(int64_t obj, int stat);
 static void charedit_stat_value_set(int64_t obj, int stat, int value);
 static void charedit_draw_text_rows(tig_window_handle_t window_handle, tig_font_handle_t font, S5C8150* a3, const char** list, int a5, int a6);
 static bool charedit_create_skills_win(void);
-static void sub_55BD10(int group);
+static void charedit_skill_group_set(int group);
 static void charedit_refresh_skills_win(void);
 static bool charedit_create_tech_win(void);
 static void charedit_draw_tech_degree_icon(int index);
 static void charedit_refresh_tech_win(void);
 static bool charedit_create_spells_win(void);
-static void sub_55CA70(int a1, int a2);
+static void charedit_spell_icon_draw(int index, int college_level);
 static void charedit_refresh_spells_win(void);
 static bool charedit_scheme_win_create(void);
 static void charedit_scheme_win_refresh(void);
 static bool charedit_skills_win_message_filter(TigMessage* msg);
-static bool sub_55D6F0(TigMessage* msg);
+static bool charedit_skills_win_tech_filter(TigMessage* msg);
 static bool charedit_tech_win_message_filter(TigMessage* msg);
 static bool charedit_spells_win_message_filter(TigMessage* msg);
 static bool charedit_scheme_win_message_filter(TigMessage* msg);
 static bool charedit_labels_init(void);
 static void charedit_labels_exit(void);
 static void charedit_refresh_alignment_aptitude_bars(void);
-static void sub_55EFB0(void);
-static void sub_55EFE0(void);
-static void sub_55EFF0(void);
-static void sub_55F0D0(void);
+static void charedit_scheme_scrollbar_destroy(void);
+static void charedit_scheme_scrollbar_ensure(void);
+static void charedit_scheme_scrollbar_create(void);
+static void charedit_scheme_scrollbar_release(void);
 static void charedit_scheme_scrollbar_value_changed(int value);
 static void charedit_scheme_scrollbar_refresh_rect(TigRect* rect);
 
@@ -866,7 +866,8 @@ static bool charedit_created;
 // Which of the four lower panels is on top: 0 skills, 1 tech, 2 spells,
 // 3 scheme. The four `charedit_*_tab_btn` handlers each raise their window and
 // store their own number here; 3 is special-cased because leaving the scheme
-// tab has to commit it (`sub_55EFE0`/`sub_55F0D0`).
+// tab has to commit it (`charedit_scheme_scrollbar_ensure`/
+// `charedit_scheme_scrollbar_release`).
 static int charedit_tab;
 
 // 0x64E020
@@ -1126,7 +1127,7 @@ bool charedit_open(int64_t obj, ChareditMode mode)
     }
 
     charedit_tab = 0;
-    sub_55BD10(charedit_skill_group);
+    charedit_skill_group_set(charedit_skill_group);
 
     if (charedit_obj != OBJ_HANDLE_NULL) {
         charedit_level_up_btn = TIG_BUTTON_HANDLE_INVALID;
@@ -1276,7 +1277,7 @@ void charedit_close(void)
         charedit_obj = OBJ_HANDLE_NULL;
         iso_interface_refresh();
         intgame_mode_set(INTGAME_MODE_MAIN);
-        sub_55EFB0();
+        charedit_scheme_scrollbar_destroy();
         if (charedit_combat_auto_attack_was_set) {
             combat_auto_attack_set(true);
             charedit_combat_auto_attack_was_set = false;
@@ -1591,7 +1592,7 @@ bool charedit_window_message_filter(TigMessage* msg)
 
             if (msg->data.button.button_handle == charedit_skills_tab_btn) {
                 if (charedit_tab == 3) {
-                    sub_55F0D0();
+                    charedit_scheme_scrollbar_release();
                 }
                 sub_51E850(charedit_skills_win);
                 charedit_tab = 0;
@@ -1601,7 +1602,7 @@ bool charedit_window_message_filter(TigMessage* msg)
 
             if (msg->data.button.button_handle == charedit_tech_tab_btn) {
                 if (charedit_tab == 3) {
-                    sub_55F0D0();
+                    charedit_scheme_scrollbar_release();
                 }
                 sub_51E850(charedit_tech_win);
                 charedit_tab = 1;
@@ -1611,7 +1612,7 @@ bool charedit_window_message_filter(TigMessage* msg)
 
             if (msg->data.button.button_handle == charedit_spells_tab_btn) {
                 if (charedit_tab == 3) {
-                    sub_55F0D0();
+                    charedit_scheme_scrollbar_release();
                 }
                 sub_51E850(charedit_spells_win);
                 charedit_tab = 2;
@@ -1622,7 +1623,7 @@ bool charedit_window_message_filter(TigMessage* msg)
             if (msg->data.button.button_handle == charedit_scheme_tab_btn) {
                 sub_51E850(charedit_scheme_win);
                 if (charedit_tab != 3) {
-                    sub_55EFE0();
+                    charedit_scheme_scrollbar_ensure();
                 }
                 charedit_tab = 3;
                 charedit_refresh_internal();
@@ -2194,7 +2195,7 @@ bool charedit_create_skills_win(void)
 }
 
 // 0x55BD10
-void sub_55BD10(int group)
+void charedit_skill_group_set(int group)
 {
     int index;
     tig_art_id_t art_id;
@@ -2661,7 +2662,7 @@ bool charedit_create_spells_win(void)
 }
 
 // 0x55CA70
-void sub_55CA70(int a1, int a2)
+void charedit_spell_icon_draw(int index, int college_level)
 {
     int art_num;
     tig_art_id_t art_id;
@@ -2673,7 +2674,7 @@ void sub_55CA70(int a1, int a2)
     TigPaletteModifyInfo palette_modify_info;
     TigPalette* tmp_palette;
 
-    art_num = spell_icon(a1 + 5 * charedit_college);
+    art_num = spell_icon(index + 5 * charedit_college);
     if (art_num != -1) {
         tig_art_interface_id_create(art_num, 0, 0, 0, &art_id);
         tig_art_frame_data(art_id, &art_frame_data);
@@ -2686,7 +2687,7 @@ void sub_55CA70(int a1, int a2)
         art_blit_info.art_id = art_id;
         art_blit_info.src_rect = &src_rect;
 
-        if (a1 < a2) {
+        if (index < college_level) {
             art_blit_info.flags = 0;
             tmp_palette = NULL;
         } else {
@@ -2702,8 +2703,8 @@ void sub_55CA70(int a1, int a2)
             art_blit_info.palette = tmp_palette;
         }
 
-        dst_rect.x = charedit_spell_row_x[a1] - 503;
-        dst_rect.y = charedit_spell_row_y[a1] - 104;
+        dst_rect.x = charedit_spell_row_x[index] - 503;
+        dst_rect.y = charedit_spell_row_y[index] - 104;
         dst_rect.width = art_frame_data.width;
         dst_rect.height = art_frame_data.height;
 
@@ -2775,7 +2776,7 @@ void charedit_refresh_spells_win(void)
     }
 
     for (index = 0; index < 5; index++) {
-        sub_55CA70(index, cnt);
+        charedit_spell_icon_draw(index, cnt);
     }
 
     for (index = 0; index < 5; index++) {
@@ -3084,7 +3085,7 @@ bool charedit_skills_win_message_filter(TigMessage* msg)
 
             for (index = 0; index < CHAREDIT_SKILL_GROUP_COUNT; index++) {
                 if (msg->data.button.button_handle == charedit_skill_group_buttons[index].button_handle) {
-                    sub_55BD10(index);
+                    charedit_skill_group_set(index);
                     return true;
                 }
             }
@@ -3095,11 +3096,11 @@ bool charedit_skills_win_message_filter(TigMessage* msg)
         break;
     }
 
-    return sub_55D6F0(msg);
+    return charedit_skills_win_tech_filter(msg);
 }
 
 // 0x55D6F0
-bool sub_55D6F0(TigMessage* msg)
+bool charedit_skills_win_tech_filter(TigMessage* msg)
 {
     int index;
 
@@ -3787,7 +3788,7 @@ void charedit_refresh_alignment_aptitude_bars(void)
 }
 
 // 0x55EFB0
-void sub_55EFB0(void)
+void charedit_scheme_scrollbar_destroy(void)
 {
     if (charedit_scheme_scrollbar_initialized) {
         scrollbar_ui_control_destroy(charedit_scheme_scrollbar);
@@ -3796,13 +3797,16 @@ void sub_55EFB0(void)
 }
 
 // 0x55EFE0
-void sub_55EFE0(void)
+// NOTE: In the original this entry is a bare `jmp 0x55EFF0` compiled as
+// its own function; the tab switch handler calls it when entering the scheme
+// tab.
+void charedit_scheme_scrollbar_ensure(void)
 {
-    sub_55EFF0();
+    charedit_scheme_scrollbar_create();
 }
 
 // 0x55EFF0
-void sub_55EFF0(void)
+void charedit_scheme_scrollbar_create(void)
 {
     ScrollbarUiControlInfo sb;
 
@@ -3837,9 +3841,12 @@ void sub_55EFF0(void)
 }
 
 // 0x55F0D0
-void sub_55F0D0(void)
+// NOTE: In the original this entry is a bare `jmp 0x55EFB0` compiled as
+// its own function; the tab switch handler calls it when leaving the scheme
+// tab.
+void charedit_scheme_scrollbar_release(void)
 {
-    sub_55EFB0();
+    charedit_scheme_scrollbar_destroy();
 }
 
 // 0x55F0E0

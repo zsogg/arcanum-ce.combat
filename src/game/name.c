@@ -9,13 +9,13 @@
 static void name_missing_art_init(void);
 static bool name_missing_art_load(void);
 static bool name_missing_art_save(void);
-static int sub_41D390(void);
+static int name_missing_art_count(void);
 static void fix_missing_art(int num, int cnt, unsigned int* missing, int* anim_ptr, int* weapon_ptr);
-static tig_art_id_t sub_41DFC0(int type, int* extra);
-static tig_art_id_t sub_41E200(tig_art_id_t art_id);
-static int sub_41E960(int a1);
-static bool sub_41F190(TigMessage* msg);
-static void sub_41F240(void);
+static tig_art_id_t name_art_id_first(int type, int* extra);
+static tig_art_id_t name_art_id_next(tig_art_id_t art_id);
+static tig_art_id_t name_art_id_prev(tig_art_id_t art_id);
+static bool name_art_browser_message_filter(TigMessage* msg);
+static void name_art_browser_refresh(void);
 
 // 0x5A1064
 static const char* name_art_dir = "art";
@@ -218,7 +218,7 @@ static bool name_initialized;
 // 0x5D5624
 static bool name_missing_art_initialized;
 
-// State of the modal art browser `sub_41F090` runs: it creates a window, spins
+// State of the modal art browser `name_art_browser_run` runs: it creates a window, spins
 // its own message loop until `name_browser_result` leaves 0 (RETURN sets 1,
 // ESC sets -1), then destroys the window and returns
 // `name_browser_selection` through its third argument. A/Z step the selection.
@@ -235,21 +235,16 @@ static tig_window_handle_t name_browser_window;
 static int name_browser_result;
 
 // 0x739E50
-// NOTE: Left unnamed with `dword_739E58` above. These two carry
-// `sub_41F090`'s first two arguments into its key handler, which passes them
-// straight to `sub_41DFC0` to seed the selection. Both that function and
-// `sub_41F090` itself are still unnamed, and `sub_41E960` in the same chain is
-// a CE stub marked "TODO: Incomplete" - so what the pair actually mean is not
-// recoverable from this file yet. Naming them after their argument positions
-// would describe the plumbing and assert nothing true about the contents.
-// Revisit once the `sub_41DFC0` / `sub_41E200` / `sub_41E960` chain is named.
-static int* dword_739E50;
+// Carries `name_art_browser_run`'s first two arguments into its key handler,
+// which passes them straight to `name_art_id_first` to seed the selection:
+// the art type to browse and the per-type extra arguments.
+static int* name_browser_extra;
 
 // 0x739E54
 static int name_browser_selection;
 
 // 0x739E58
-static int dword_739E58;
+static int name_browser_type;
 
 // 0x41CA40
 bool name_init(GameInitInfo* init_info)
@@ -541,7 +536,7 @@ bool name_missing_art_load(void)
         return false;
     }
 
-    expected_cnt = sub_41D390();
+    expected_cnt = name_missing_art_count();
 
     if (tig_file_fread(&actual_cnt, sizeof(actual_cnt), 1, stream) != 1) {
         tig_file_fclose(stream);
@@ -579,7 +574,7 @@ bool name_missing_art_save(void)
     int cnt;
     TigFile* stream;
 
-    cnt = sub_41D390();
+    cnt = name_missing_art_count();
     tig_file_mkdir(name_art_dir);
 
     stream = tig_file_fopen(name_missing_art_path, "wb");
@@ -613,7 +608,7 @@ bool name_missing_art_save(void)
 }
 
 // 0x41D390
-int sub_41D390(void)
+int name_missing_art_count(void)
 {
     int cnt = 0;
     TigFileList dir_list;
@@ -1074,7 +1069,7 @@ int name_resolve_path(tig_art_id_t aid, char* path, size_t maxlen)
 }
 
 // 0x41DFC0
-tig_art_id_t sub_41DFC0(int type, int* extra)
+tig_art_id_t name_art_id_first(int type, int* extra)
 {
     tig_art_id_t aid = TIG_ART_ID_INVALID;
 
@@ -1166,7 +1161,7 @@ tig_art_id_t sub_41DFC0(int type, int* extra)
 
     if (aid != TIG_ART_ID_INVALID) {
         if (tig_art_exists(aid) != TIG_OK || sub_502E00(aid) != TIG_OK) {
-            aid = sub_41E200(aid);
+            aid = name_art_id_next(aid);
         }
     }
 
@@ -1174,7 +1169,7 @@ tig_art_id_t sub_41DFC0(int type, int* extra)
 }
 
 // 0x41E200
-tig_art_id_t sub_41E200(tig_art_id_t art_id)
+tig_art_id_t name_art_id_next(tig_art_id_t art_id)
 {
     if (art_id == TIG_ART_ID_INVALID) {
         return TIG_ART_ID_INVALID;
@@ -1450,18 +1445,271 @@ tig_art_id_t sub_41E200(tig_art_id_t art_id)
 }
 
 // 0x41E960
-int sub_41E960(int a1)
+// The A key of the art browser: step an art id to the previous existing art.
+// The mirror of name_art_id_next: walk the palette, then num, then the type
+// fields, downwards; when no lower id exists, return TIG_ART_ID_INVALID.
+// Unlike name_art_id_next, the fallback creates in each case do not check
+// their return value in the original - every rung falls straight through to
+// the exists check below.
+tig_art_id_t name_art_id_prev(tig_art_id_t art_id)
 {
-    // TODO: Incomplete.
+    int art_type = tig_art_type(art_id);
+
+    for (;;) {
+        if (art_id == TIG_ART_ID_INVALID) {
+            return TIG_ART_ID_INVALID;
+        }
+
+        switch (art_type) {
+        case TIG_ART_TYPE_TILE: {
+            int num = tig_art_tile_id_num1_get(art_id) - 1;
+            int type = tig_art_tile_id_type_get(art_id);
+            int flippable = tig_art_tile_id_flippable_get(art_id);
+
+            if (tig_art_tile_id_create(num, num, 0, 0, type, flippable, flippable, 0, &art_id) != TIG_OK) {
+                if (type == 0) {
+                    if (flippable == 0) {
+                        flippable = 1;
+                    } else {
+                        type = 1;
+                        flippable = 0;
+                    }
+
+                    num = 0;
+                } else if (flippable == 0) {
+                    flippable = 1;
+                    num = 0;
+                }
+            }
+
+            if (tig_art_tile_id_create(num, num, 0, 0, type, flippable, flippable, 0, &art_id) != TIG_OK) {
+                return TIG_ART_ID_INVALID;
+            }
+
+            break;
+        }
+        case TIG_ART_TYPE_WALL: {
+            int num = tig_art_wall_id_num_get(art_id);
+            int p_piece = tig_art_wall_id_p_piece_get(art_id);
+            int variation = tig_art_wall_id_variation_get(art_id);
+            int palette = tig_art_id_palette_get(art_id);
+            int damaged = tig_art_id_damaged_get(art_id);
+
+            if (damaged == 128) {
+                if (tig_art_wall_id_create(num, p_piece, variation, 0, palette, 1024, &art_id) == TIG_OK) {
+                    break;
+                }
+
+                if (tig_art_wall_id_create(num, p_piece, variation, 0, palette, 0, &art_id) == TIG_OK) {
+                    break;
+                }
+            } else if (damaged == 1024) {
+                if (tig_art_wall_id_create(num, p_piece, variation, 0, palette, 0, &art_id) == TIG_OK) {
+                    break;
+                }
+            }
+
+            if (palette != 0) {
+                tig_art_wall_id_create(num, p_piece, variation, 0, palette - 1, 128, &art_id);
+            } else if (variation != 0) {
+                tig_art_wall_id_create(num, p_piece, variation - 1, 0, 3, 128, &art_id);
+            } else if (p_piece != 0) {
+                tig_art_wall_id_create(num, p_piece - 1, 3, 0, 3, 128, &art_id);
+            } else if (num != 0) {
+                tig_art_wall_id_create(num - 1, 45, 3, 0, 3, 128, &art_id);
+            } else {
+                return TIG_ART_ID_INVALID;
+            }
+
+            break;
+        }
+        case TIG_ART_TYPE_CRITTER: {
+            int palette = tig_art_id_palette_get(art_id);
+            int gender = tig_art_critter_id_gender_get(art_id);
+            int body_type = tig_art_critter_id_body_type_get(art_id);
+            int armor = tig_art_critter_id_armor_get(art_id);
+
+            if (palette != 0) {
+                tig_art_critter_id_create(gender, body_type, armor, 0, 0, 3, 0, 0, palette - 1, &art_id);
+            } else if (gender != 0) {
+                tig_art_critter_id_create(gender - 1, body_type, armor, 0, 0, 3, 0, 0, 3, &art_id);
+            } else if (body_type != 0) {
+                tig_art_critter_id_create(1, body_type - 1, armor, 0, 0, 3, 0, 0, 3, &art_id);
+            } else if (armor != 0) {
+                tig_art_critter_id_create(1, 4, armor - 1, 0, 0, 3, 0, 0, 3, &art_id);
+            } else {
+                return TIG_ART_ID_INVALID;
+            }
+
+            break;
+        }
+        case TIG_ART_TYPE_PORTAL: {
+            int palette = tig_art_id_palette_get(art_id);
+            int type = tig_art_portal_id_type_get(art_id);
+            int num = tig_art_num_get(art_id);
+            int damaged = tig_art_id_damaged_get(art_id);
+
+            if (damaged != 512
+                || tig_art_portal_id_create(num, type, 0, 0, 0, palette, &art_id) != TIG_OK) {
+                if (palette != 0) {
+                    tig_art_portal_id_create(num, type, 512, 0, 0, palette - 1, &art_id);
+                } else if (type != 0) {
+                    tig_art_portal_id_create(num, type - 1, 512, 0, 0, 3, &art_id);
+                } else if (num != 0) {
+                    tig_art_portal_id_create(num - 1, 1, 512, 0, 0, 3, &art_id);
+                } else {
+                    return TIG_ART_ID_INVALID;
+                }
+            }
+
+            break;
+        }
+        case TIG_ART_TYPE_SCENERY: {
+            int type = tig_art_scenery_id_type_get(art_id);
+            int palette = tig_art_id_palette_get(art_id);
+            int num = tig_art_num_get(art_id);
+
+            if (palette != 0) {
+                tig_art_scenery_id_create(num, type, 0, 0, palette - 1, &art_id);
+            } else if (num != 0) {
+                tig_art_scenery_id_create(num - 1, type, 0, 0, 3, &art_id);
+            } else {
+                return TIG_ART_ID_INVALID;
+            }
+
+            break;
+        }
+        case TIG_ART_TYPE_INTERFACE: {
+            int palette = tig_art_id_palette_get(art_id);
+            int num = tig_art_num_get(art_id);
+
+            if (palette != 0) {
+                tig_art_interface_id_create(num, 0, 0, palette - 1, &art_id);
+            } else if (num != 0) {
+                tig_art_interface_id_create(num - 1, 0, 0, 3, &art_id);
+            } else {
+                return TIG_ART_ID_INVALID;
+            }
+
+            break;
+        }
+        case TIG_ART_TYPE_ITEM: {
+            int palette = tig_art_id_palette_get(art_id);
+            int num = tig_art_num_get(art_id);
+            int subtype = tig_art_item_id_subtype_get(art_id);
+            int type = tig_art_item_id_type_get(art_id);
+            int destroyed = tig_art_item_id_destroyed_get(art_id);
+            int disposition = tig_art_item_id_disposition_get(art_id);
+            int armor_coverage = tig_art_item_id_armor_coverage_get(art_id);
+
+            if (palette != 0) {
+                tig_art_item_id_create(num, disposition, 0, destroyed, subtype, type, armor_coverage, palette - 1, &art_id);
+            } else if (num != 0) {
+                tig_art_item_id_create(num - 1, disposition, 0, destroyed, subtype, type, armor_coverage, 3, &art_id);
+            } else if (subtype != 0) {
+                tig_art_item_id_create(19, disposition, 0, destroyed, subtype - 1, type, armor_coverage, 3, &art_id);
+            } else {
+                return TIG_ART_ID_INVALID;
+            }
+
+            break;
+        }
+        case TIG_ART_TYPE_CONTAINER: {
+            int type = tig_art_container_id_type_get(art_id);
+            int palette = tig_art_id_palette_get(art_id);
+            int num = tig_art_num_get(art_id);
+
+            if (palette != 0) {
+                tig_art_container_id_create(num, type, 0, 0, palette - 1, &art_id);
+            } else if (num != 0) {
+                tig_art_container_id_create(num - 1, type, 0, 0, 3, &art_id);
+            } else {
+                return TIG_ART_ID_INVALID;
+            }
+
+            break;
+        }
+        case TIG_ART_TYPE_LIGHT: {
+            int num = tig_art_num_get(art_id);
+
+            if (num == 0) {
+                return TIG_ART_ID_INVALID;
+            }
+
+            tig_art_light_id_create(num - 1, 0, 0, 0, &art_id);
+            break;
+        }
+        case TIG_ART_TYPE_MONSTER: {
+            int palette = tig_art_id_palette_get(art_id);
+            int specie = tig_art_monster_id_specie_get(art_id);
+
+            if (palette != 0) {
+                tig_art_monster_id_create(specie, 0, 0, 0, 3, 0, 0, palette - 1, &art_id);
+            } else if (specie != 0) {
+                tig_art_monster_id_create(specie - 1, 0, 0, 0, 3, 0, 0, 3, &art_id);
+            } else {
+                return TIG_ART_ID_INVALID;
+            }
+
+            break;
+        }
+        case TIG_ART_TYPE_UNIQUE_NPC: {
+            int palette = tig_art_id_palette_get(art_id);
+            int num = tig_art_num_get(art_id);
+
+            if (palette != 0) {
+                tig_art_unique_npc_id_create(num, 0, 0, 3, 0, 0, palette - 1, &art_id);
+            } else if (num != 0) {
+                tig_art_unique_npc_id_create(num - 1, 0, 0, 3, 0, 0, 3, &art_id);
+            } else {
+                return TIG_ART_ID_INVALID;
+            }
+
+            break;
+        }
+        case TIG_ART_TYPE_EYE_CANDY: {
+            int num = tig_art_num_get(art_id);
+            int type = tig_art_eye_candy_id_type_get(art_id);
+            int palette = tig_art_id_palette_get(art_id);
+
+            if (palette != 0) {
+                tig_art_eye_candy_id_create(num, 0, 0, 0, type, palette - 1, 4, &art_id);
+            } else if (type != 0) {
+                tig_art_eye_candy_id_create(num, 0, 0, 0, type - 1, 3, 4, &art_id);
+            } else if (num != 0) {
+                tig_art_eye_candy_id_create(num - 1, 0, 0, 0, 2, 3, 4, &art_id);
+            } else {
+                return TIG_ART_ID_INVALID;
+            }
+
+            break;
+        }
+        default:
+            break;
+        }
+
+        if (art_id == TIG_ART_ID_INVALID) {
+            return TIG_ART_ID_INVALID;
+        }
+
+        if (tig_art_exists(art_id) == TIG_OK
+            && sub_502E00(art_id) == TIG_OK) {
+            return art_id;
+        }
+
+        if (art_id == TIG_ART_ID_INVALID) {
+            return TIG_ART_ID_INVALID;
+        }
+    }
 }
 
 // 0x41F090
-bool sub_41F090(int a1, int* a2, int* a3)
+bool name_art_browser_run(int type, int* extra, int* result)
 {
     TigWindowData window_data;
 
-    dword_739E58 = a1;
-    dword_739E50 = a2;
+    name_browser_type = type;
+    name_browser_extra = extra;
     name_browser_selection = -1;
 
     window_data.rect.x = 40;
@@ -1469,14 +1717,14 @@ bool sub_41F090(int a1, int* a2, int* a3)
     window_data.rect.width = 100;
     window_data.rect.height = 100;
     window_data.flags = TIG_WINDOW_ALWAYS_ON_TOP | TIG_WINDOW_MODAL | TIG_WINDOW_MESSAGE_FILTER;
-    window_data.message_filter = sub_41F190;
+    window_data.message_filter = name_art_browser_message_filter;
     window_data.background_color = tig_color_make(30, 30, 30);
 
     if (tig_window_create(&window_data, &name_browser_window) != TIG_OK) {
         return false;
     }
 
-    sub_41F240();
+    name_art_browser_refresh();
 
     name_browser_result = 0;
     while (name_browser_result == 0) {
@@ -1490,13 +1738,13 @@ bool sub_41F090(int a1, int* a2, int* a3)
         return false;
     }
 
-    *a3 = name_browser_selection;
+    *result = name_browser_selection;
 
     return true;
 }
 
 // 0x41F190
-bool sub_41F190(TigMessage* msg)
+bool name_art_browser_message_filter(TigMessage* msg)
 {
     int v1;
 
@@ -1505,20 +1753,20 @@ bool sub_41F190(TigMessage* msg)
         switch (msg->data.keyboard.key) {
         case SDLK_A:
             if (name_browser_selection != -1) {
-                name_browser_selection = sub_41E960(name_browser_selection);
-                sub_41F240();
+                name_browser_selection = name_art_id_prev(name_browser_selection);
+                name_art_browser_refresh();
             }
             break;
         case SDLK_Z:
             if (name_browser_selection == -1) {
-                name_browser_selection = sub_41DFC0(dword_739E58, dword_739E50);
-                sub_41F240();
+                name_browser_selection = name_art_id_first(name_browser_type, name_browser_extra);
+                name_art_browser_refresh();
             } else {
-                v1 = sub_41E200(name_browser_selection);
+                v1 = name_art_id_next(name_browser_selection);
                 if (v1 != -1) {
                     name_browser_selection = v1;
                 }
-                sub_41F240();
+                name_art_browser_refresh();
             }
             break;
         case SDLK_ESCAPE:
@@ -1534,7 +1782,7 @@ bool sub_41F190(TigMessage* msg)
 }
 
 // 0x41F240
-void sub_41F240(void)
+void name_art_browser_refresh(void)
 {
     TigRect dst_rect;
     TigRect src_rect;
