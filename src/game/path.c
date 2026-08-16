@@ -18,17 +18,17 @@ typedef struct StraightPathState {
     /* 0020 */ int8_t* rotations;
 } StraightPathState;
 
-static int sub_41F6C0(PathCreateInfo* path_create_info);
-static int sub_41F840(PathCreateInfo* path_create_info);
-static int sub_41F9F0(PathCreateInfo* path_create_info);
+static int path_make_back_off(PathCreateInfo* path_create_info);
+static int path_make_direct(PathCreateInfo* path_create_info);
+static int path_make_astar(PathCreateInfo* path_create_info);
 static int path_dist(int src, int dst, int width);
-static int sub_420110(int a1, int a2, int a3);
-static void sub_420330(int64_t x, int64_t y, StraightPathState* a5);
-static void sub_4203B0(int64_t from_x, int64_t from_y, int64_t to_x, int64_t to_y, StraightPathState* a5, void (*fn)(int64_t, int64_t, StraightPathState*));
-static int sub_420660(int64_t from, int64_t to, int8_t* rotations);
-static int sub_420900(WmapPathInfo* path_info);
-static int sub_4209C0(WmapPathInfo* path_info);
-static int sub_420E30(PathCreateInfo* path_create_info, tig_duration_t ms);
+static int path_index_delta_to_rotation(int a1, int a2, int a3);
+static void path_straight_sample(int64_t x, int64_t y, StraightPathState* a5);
+static void path_line_walk(int64_t from_x, int64_t from_y, int64_t to_x, int64_t to_y, StraightPathState* a5, void (*fn)(int64_t, int64_t, StraightPathState*));
+static int path_make_straight_flag_0x0080(int64_t from, int64_t to, int8_t* rotations);
+static int wmap_path_find_detour(WmapPathInfo* path_info);
+static int wmap_path_make_astar(WmapPathInfo* path_info);
+static int path_make_timed(PathCreateInfo* path_create_info, tig_duration_t ms);
 
 // 0x5A15C0
 static int path_limit = 10;
@@ -50,14 +50,20 @@ static int wmap_path_backtrack_tbl[756];
 // 0x5DE1F8
 static int wmap_path_cost_tbl[256];
 
+// Start of the current 1-second NPC pathfinding accounting window.
+//
 // 0x5DE5F8
-static tig_timestamp_t dword_5DE5F8;
+static tig_timestamp_t path_search_window_timestamp;
 
+// NPC path searches run in the current window.
+//
 // 0x5DE5FC
-static int dword_5DE5FC;
+static int path_search_count;
 
+// NPC pathfinding milliseconds accumulated in the current window.
+//
 // 0x5DE600
-static tig_duration_t dword_5DE600;
+static tig_duration_t path_search_time_ms;
 
 // 0x41F3C0
 int path_make(PathCreateInfo* path_create_info)
@@ -65,7 +71,7 @@ int path_make(PathCreateInfo* path_create_info)
     bool v1 = false;
 
     if ((path_create_info->flags & PATH_FLAG_0x0800) != 0) {
-        return sub_41F6C0(path_create_info);
+        return path_make_back_off(path_create_info);
     }
 
     path_create_info->field_24 = 0;
@@ -79,7 +85,7 @@ int path_make(PathCreateInfo* path_create_info)
     }
 
     if ((path_create_info->flags & PATH_FLAG_0x0080) != 0) {
-        return sub_420660(path_create_info->from, path_create_info->to, path_create_info->rotations);
+        return path_make_straight_flag_0x0080(path_create_info->from, path_create_info->to, path_create_info->rotations);
     }
 
     if ((path_create_info->flags & PATH_FLAG_0x0100) != 0) {
@@ -115,18 +121,18 @@ int path_make(PathCreateInfo* path_create_info)
 
     int v2 = 0;
     if ((path_create_info->flags & PATH_FLAG_0x0200) == 0) {
-        v2 = sub_41F840(path_create_info);
+        v2 = path_make_direct(path_create_info);
     }
 
     if (v2 == 0) {
         if ((path_create_info->flags & PATH_FLAG_0x1000) != 0) {
-            v2 = sub_420E30(path_create_info, 300);
+            v2 = path_make_timed(path_create_info, 300);
         } else {
             if ((path_create_info->flags & PATH_FLAG_0x0020) != 0) {
                 return 0;
             }
 
-            v2 = sub_41F9F0(path_create_info);
+            v2 = path_make_astar(path_create_info);
         }
     }
 
@@ -157,8 +163,12 @@ unsigned int path_translate_flags(PathFlags flags)
     return new_flags;
 }
 
+// PATH_FLAG_0x0800: choose a tile at the requested range around `from`, on the
+// far side from `to`, and run the direct pathfinder to it. This is the
+// backing-off path used by ai_action_perform_baking_off.
+//
 // 0x41F6C0
-int sub_41F6C0(PathCreateInfo* path_create_info)
+int path_make_back_off(PathCreateInfo* path_create_info)
 {
     int64_t dist;
     int rotations[8];
@@ -182,6 +192,12 @@ int sub_41F6C0(PathCreateInfo* path_create_info)
 
     dist = location_dist(path_create_info->from, path_create_info->to);
 
+    // FIX: The original returns here when dist >= field_24 (0x41F73E-0x41F751);
+    // CE skipped the test and let location_in_range see a negative range.
+    if (dist >= path_create_info->field_24) {
+        return 0;
+    }
+
     if (dist >= INT_MAX) {
         return 0;
     }
@@ -195,7 +211,7 @@ int sub_41F6C0(PathCreateInfo* path_create_info)
             (base_rot + rotations[idx]) % 8,
             range,
             &(path_create_info->to));
-        v1 = sub_41F840(path_create_info);
+        v1 = path_make_direct(path_create_info);
         if (v1 != 0) {
             break;
         }
@@ -210,14 +226,18 @@ int sub_41F6C0(PathCreateInfo* path_create_info)
 
     if (v1 == 0 && v2 > 0) {
         path_create_info->to = loc;
-        v1 = sub_41F840(path_create_info);
+        v1 = path_make_direct(path_create_info);
     }
 
     return v1;
 }
 
+// Greedy one-tile-at-a-time path from `from` straight toward `to`. Stops at
+// the first blocked tile and records how far it got in field_24; path_make
+// falls back to the grid search when this returns 0.
+//
 // 0x41F840
-int sub_41F840(PathCreateInfo* path_create_info)
+int path_make_direct(PathCreateInfo* path_create_info)
 {
     bool v1 = false;
     unsigned int flags;
@@ -292,8 +312,12 @@ int sub_41F840(PathCreateInfo* path_create_info)
     return idx;
 }
 
+// 64x64 A* over the tiles surrounding from/to, with trap/window/fire/light
+// cost adjustments. NPCs are rate-limited and time-limited through the
+// path_search_* accounting globals above.
+//
 // 0x41F9F0
-int sub_41F9F0(PathCreateInfo* path_create_info)
+int path_make_astar(PathCreateInfo* path_create_info)
 {
     tig_timestamp_t timestamp;
     bool v1 = false;
@@ -312,22 +336,22 @@ int sub_41F9F0(PathCreateInfo* path_create_info)
     int best_estimated_cost;
 
     if (obj_field_int32_get(path_create_info->obj, OBJ_F_TYPE) == OBJ_TYPE_NPC) {
-        if (dword_5DE5F8 == 0
-            || tig_timer_elapsed(dword_5DE5F8) >= 1000) {
-            tig_timer_now(&dword_5DE5F8);
-            dword_5DE5FC = 0;
-            dword_5DE600 = 0;
+        if (path_search_window_timestamp == 0
+            || tig_timer_elapsed(path_search_window_timestamp) >= 1000) {
+            tig_timer_now(&path_search_window_timestamp);
+            path_search_count = 0;
+            path_search_time_ms = 0;
         }
 
-        if (dword_5DE5FC > path_limit) {
+        if (path_search_count > path_limit) {
             return 0;
         }
 
-        if (dword_5DE600 > path_time_limit) {
+        if (path_search_time_ms > path_time_limit) {
             return 0;
         }
 
-        dword_5DE5FC++;
+        path_search_count++;
 
         tig_timer_now(&timestamp);
     } else {
@@ -403,7 +427,7 @@ int sub_41F9F0(PathCreateInfo* path_create_info)
         // If no node has been found, path is not reachable.
         if (current_index == -1) {
             if (timestamp != 0) {
-                dword_5DE600 += tig_timer_elapsed(timestamp);
+                path_search_time_ms += tig_timer_elapsed(timestamp);
             }
 
             return 0;
@@ -500,7 +524,7 @@ int sub_41F9F0(PathCreateInfo* path_create_info)
 
             // Add additional cost in case direction change is needed.
             if (path_backtrack_tbl[current_index] != -1
-                && sub_420110(path_backtrack_tbl[current_index], current_index, 64) != rot) {
+                && path_index_delta_to_rotation(path_backtrack_tbl[current_index], current_index, 64) != rot) {
                 cost++;
             }
 
@@ -530,7 +554,7 @@ int sub_41F9F0(PathCreateInfo* path_create_info)
     // If the number of steps exceeds allowed maximum, there is no valid path.
     if (step > path_create_info->max_rotations) {
         if (timestamp != 0) {
-            dword_5DE600 += tig_timer_elapsed(timestamp);
+            path_search_time_ms += tig_timer_elapsed(timestamp);
         }
 
         return 0;
@@ -538,7 +562,7 @@ int sub_41F9F0(PathCreateInfo* path_create_info)
 
     // Reconstruct the path backwards from dst to src.
     for (int i = step - 1; i >= 0; i--) {
-        path_create_info->rotations[i] = sub_420110(path_backtrack_tbl[target_index], target_index, 64);
+        path_create_info->rotations[i] = path_index_delta_to_rotation(path_backtrack_tbl[target_index], target_index, 64);
         target_index = path_backtrack_tbl[target_index];
     }
 
@@ -547,7 +571,7 @@ int sub_41F9F0(PathCreateInfo* path_create_info)
     }
 
     if (timestamp != 0) {
-        dword_5DE600 += tig_timer_elapsed(timestamp);
+        path_search_time_ms += tig_timer_elapsed(timestamp);
     }
 
     // Return the number of steps in the computed path.
@@ -577,8 +601,11 @@ int path_dist(int src, int dst, int width)
     }
 }
 
+// Rotation from grid index a1 to a2 in a grid a3 cells wide. This is the
+// shared direction decoder for path reconstruction in both A* searches.
+//
 // 0x420110
-int sub_420110(int a1, int a2, int a3)
+int path_index_delta_to_rotation(int a1, int a2, int a3)
 {
     int v3;
     int v4;
@@ -638,14 +665,14 @@ int path_make_straight(int64_t from, int64_t to, int8_t* rotations)
     state.last_x = from_x;
     state.last_y = from_y;
 
-    sub_4203B0(from_x, from_y, to_x, to_y, &state, sub_420330);
+    path_line_walk(from_x, from_y, to_x, to_y, &state, path_straight_sample);
 
     if (state.cnt == -1) {
         return 0;
     }
 
     while (state.sample_counter != 0) {
-        sub_420330(to_x, to_y, &state);
+        path_straight_sample(to_x, to_y, &state);
     }
 
     if (state.cnt == -1) {
@@ -655,8 +682,12 @@ int path_make_straight(int64_t from, int64_t to, int8_t* rotations)
     return state.cnt;
 }
 
+// Bresenham callback used by the two straight-line path makers: every tenth
+// point the low byte deltas from the previous sample become the next two
+// rotation entries.
+//
 // 0x420330
-void sub_420330(int64_t x, int64_t y, StraightPathState* state)
+void path_straight_sample(int64_t x, int64_t y, StraightPathState* state)
 {
     if (state->cnt == -1 || state->cnt >= 200) {
         state->cnt = -1;
@@ -673,8 +704,11 @@ void sub_420330(int64_t x, int64_t y, StraightPathState* state)
     }
 }
 
+// Generic Bresenham line walk from (from_x, from_y) to (to_x, to_y); invokes
+// fn for every visited point.
+//
 // 0x4203B0
-void sub_4203B0(int64_t from_x, int64_t from_y, int64_t to_x, int64_t to_y, StraightPathState* a5, void (*fn)(int64_t, int64_t, StraightPathState*))
+void path_line_walk(int64_t from_x, int64_t from_y, int64_t to_x, int64_t to_y, StraightPathState* a5, void (*fn)(int64_t, int64_t, StraightPathState*))
 {
     int64_t dx;
     int64_t dy;
@@ -735,8 +769,12 @@ void sub_4203B0(int64_t from_x, int64_t from_y, int64_t to_x, int64_t to_y, Stra
     }
 }
 
+// PATH_FLAG_0x0080 straight-line path. Byte-identical to path_make_straight
+// in the original too; the two entries exist because path_make dispatches
+// 0x0080 here and 0x0100 to path_make_straight.
+//
 // 0x420660
-int sub_420660(int64_t from, int64_t to, int8_t* rotations)
+int path_make_straight_flag_0x0080(int64_t from, int64_t to, int8_t* rotations)
 {
     StraightPathState state;
     int64_t from_x;
@@ -749,7 +787,10 @@ int sub_420660(int64_t from, int64_t to, int8_t* rotations)
     state.cnt = 0;
     state.last_x = 0;
     state.last_y = 0;
-    state.rotations = NULL;
+    // FIX: The original stores the rotations argument here (0x420714-0x420720);
+    // CE set NULL, so PATH_FLAG_0x0080 paths wrote through a null pointer as
+    // soon as the sampler reached its tenth point.
+    state.rotations = rotations;
 
     location_xy(from, &from_x, &from_y);
     from_x += 40;
@@ -761,14 +802,14 @@ int sub_420660(int64_t from, int64_t to, int8_t* rotations)
 
     state.last_x = from_x;
     state.last_y = from_y;
-    sub_4203B0(from_x, from_y, to_x, to_y, &state, sub_420330);
+    path_line_walk(from_x, from_y, to_x, to_y, &state, path_straight_sample);
 
     if (state.cnt == -1) {
         return 0;
     }
 
     while (state.sample_counter != 0) {
-        sub_420330(to_x, to_y, &state);
+        path_straight_sample(to_x, to_y, &state);
     }
 
     if (state.cnt == -1) {
@@ -803,7 +844,7 @@ int wmap_path_make(WmapPathInfo* path_info)
             next_path_info.from = sec;
             next_path_info.max_rotations -= idx;
             next_path_info.rotations += idx;
-            len = sub_420900(&next_path_info);
+            len = wmap_path_find_detour(&next_path_info);
             if (len == 0) {
                 break;
             }
@@ -823,8 +864,12 @@ int wmap_path_make(WmapPathInfo* path_info)
     return idx;
 }
 
+// When the greedy sector hop is blocked, walk outward along the direct line
+// until an open adjacent sector appears, set it as the temporary target, and
+// hand the rest to the 16x16 world-map A*.
+//
 // 0x420900
-int sub_420900(WmapPathInfo* path_info)
+int wmap_path_find_detour(WmapPathInfo* path_info)
 {
     int64_t sec = path_info->from;
     int64_t adjacent_sec;
@@ -837,7 +882,7 @@ int sub_420900(WmapPathInfo* path_info)
         if (!sector_is_blocked(adjacent_sec)
             && (sector_exists(adjacent_sec) || !terrain_is_blocked(adjacent_sec))) {
             path_info->to = adjacent_sec;
-            return sub_4209C0(path_info);
+            return wmap_path_make_astar(path_info);
         }
 
         sec = adjacent_sec;
@@ -846,8 +891,11 @@ int sub_420900(WmapPathInfo* path_info)
     return 0;
 }
 
+// 16x16 A* over the sectors surrounding from/to. Called by wmap_path_make
+// through wmap_path_find_detour when the direct sector chain is blocked.
+//
 // 0x4209C0
-int sub_4209C0(WmapPathInfo* path_info)
+int wmap_path_make_astar(WmapPathInfo* path_info)
 {
     int64_t from_x = SECTOR_X(path_info->from);
     int64_t from_y = SECTOR_Y(path_info->from);
@@ -963,7 +1011,7 @@ int sub_4209C0(WmapPathInfo* path_info)
 
             // Add additional cost in case direction change is needed.
             if (wmap_path_backtrack_tbl[current_index] != -1
-                && sub_420110(wmap_path_backtrack_tbl[current_index], current_index, 16) != rot) {
+                && path_index_delta_to_rotation(wmap_path_backtrack_tbl[current_index], current_index, 16) != rot) {
                 cost++;
             }
 
@@ -997,7 +1045,7 @@ int sub_4209C0(WmapPathInfo* path_info)
 
     // Reconstruct the path backwards from dst to src.
     for (int i = step - 1; i >= 0; i--) {
-        path_info->rotations[i] = sub_420110(wmap_path_backtrack_tbl[target_index], target_index, 16);
+        path_info->rotations[i] = path_index_delta_to_rotation(wmap_path_backtrack_tbl[target_index], target_index, 16);
         target_index = wmap_path_backtrack_tbl[target_index];
     }
 
@@ -1005,10 +1053,20 @@ int sub_4209C0(WmapPathInfo* path_info)
     return step;
 }
 
+// PATH_FLAG_0x1000, PC objects only: a time-limited A* over the townmap grid
+// (the original allocates width*height cost/backtrack arrays and abandons the
+// search after `ms`). Unreachable by current CE callers because nothing sets
+// PATH_FLAG_0x1000; left as a named untranscribed stub until that path is
+// needed. The original is at 0x420E30-0x421AAD.
+//
 // 0x420E30
-int sub_420E30(PathCreateInfo* path_create_info, tig_duration_t ms)
+int path_make_timed(PathCreateInfo* path_create_info, tig_duration_t ms)
 {
+    (void)path_create_info;
+    (void)ms;
+
     // TODO: Incomplete.
+    return 0;
 }
 
 // 0x421AC0
