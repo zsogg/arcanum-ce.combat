@@ -879,8 +879,14 @@ int tig_database_find_entry_by_path(const void* a1, const void* a2)
 //
 // Mapping '/' onto '\' rather than re-sorting the array keeps the entries in
 // the order the original enumerates them in, which is observable through
-// `tig_database_find_next_entry`. On Windows no path holds a '/', so this is
-// `strcmp` there.
+// `tig_database_find_next_entry`.
+//
+// On Windows the entry side never holds a '/' - that is the separator dbmaker
+// wrote - so the array orders exactly as `strcmp` did. The one behaviour this
+// adds there is that a *caller* who asks for "art/a.txt" now finds it, where
+// before the search key kept its '/' (`compat_windows_path_to_native` is a
+// no-op on Windows) and missed. Deliberate: that lookup could only ever have
+// failed, and the same lookup already succeeds on every other platform.
 int tig_database_path_compare(const char* a, const char* b)
 {
     unsigned char ca;

@@ -72,3 +72,16 @@ target_link_libraries(arcanum-emudiff-oracle PRIVATE
     SDL3::SDL3
 )
 
+
+# The CE half of the archive differential. `arcanum-work/scripts/dbmaker_diff.py`
+# compares its output against Troika's own `dbmaker.exe`, which is the only
+# reader of this format that did not come from us. Not registered with
+# `add_test`: it needs the game's archives.
+add_executable(arcanum-dat-dump
+    "dat_dump.c"
+)
+
+target_link_libraries(arcanum-dat-dump PRIVATE
+    tig
+    SDL3::SDL3
+)
