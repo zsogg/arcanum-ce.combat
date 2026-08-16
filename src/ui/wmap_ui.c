@@ -198,7 +198,7 @@ static bool wmap_ui_town_note_load(WmapNote* note, TigFile* stream);
 static bool wmap_ui_rect_read(TigRect* rect, TigFile* stream);
 static void wmap_ui_open_internal(void);
 static bool wmap_load_worldmap_info(void);
-static void sub_560EE0(void);
+static void wmap_ui_info_loaded_hook(void);
 static void wmap_ui_can_travel_update(void);
 static bool wmap_ui_create(void);
 static void wmap_ui_center_on_location(int64_t location);
@@ -210,7 +210,7 @@ static void wmap_ui_coords_to_loc(WmapCoords* coords, int64_t* loc_ptr);
 static bool wmap_ui_teleport(int64_t loc);
 static bool wmap_ui_message_filter(TigMessage* msg);
 static bool wmap_ui_can_travel_to_coords(WmapCoords* coords);
-static bool sub_5627F0(int64_t loc);
+static bool wmap_ui_loc_travel_allowed(int64_t loc);
 static void wmap_ui_add_area_note(int id);
 static void wmap_ui_draw_coords(WmapCoords* coords);
 static void wmap_ui_navigate(int x, int y);
@@ -237,7 +237,7 @@ static void wmap_continent_xy_to_coords(int x, int y, WmapCoords* coords);
 static void wmap_town_xy_to_coords(int x, int y, WmapCoords* coords);
 static bool wmap_ui_add_note(WmapNote* note);
 static void wmap_ui_note_calc_rect(WmapNote* note);
-static void sub_563D80(int a1, int a2);
+static void wmap_ui_note_added_hook(int a1, int a2);
 static WmapNote* wmap_ui_find_note(int id);
 static bool find_note_by_coords(WmapCoords* coords, int* id_ptr);
 static bool find_note_by_coords_mode(WmapCoords* coords, int* id_ptr, WmapUiMode mode);
@@ -249,20 +249,20 @@ static void wmap_ui_textedit_on_enter(TextEdit* textedit);
 static bool wmap_note_add(WmapNote* note);
 static bool wmap_note_add_mode(WmapNote* note, WmapUiMode mode);
 static bool wmap_note_remove(WmapNote* note);
-static void sub_5642E0(int id, WmapUiMode mode);
+static void wmap_ui_note_removed_hook(int id, WmapUiMode mode);
 static void wmap_ui_note_free_buffer(WmapNote* note);
 static void wmap_ui_textedit_on_change(TextEdit* textedit);
 static void wmap_ui_edit_note(int id);
 static bool wmap_ui_str_has_content(const char* str);
 static bool wmap_ui_add_waypoint(WmapCoords* coords);
 static bool wmap_ui_waypoint_at_coords(WmapCoords* coords, int* idx_ptr);
-static void sub_564830(int a1, WmapCoords* coords);
+static void wmap_ui_waypoint_update_hook(int a1, WmapCoords* coords);
 static void wmap_ui_remove_waypoint(int a1);
-static void sub_5648E0(int a1, int a2, bool a3);
+static void wmap_ui_waypoint_field_4_set(int a1, int a2, bool a3);
 static void wmap_ui_snap_selected_waypoint(void);
 static void wmap_ui_snap_waypoint_to_area(WmapRouteWaypoint* wp);
-static void sub_5649C0(void);
-static void sub_5649D0(int a1);
+static void wmap_ui_route_changed_hook(void);
+static void wmap_ui_waypoint_field_4_hook(int a1);
 static bool wmap_ui_travel_to_loc(int64_t loc);
 static void wmap_ui_discover_area(int64_t pc_obj, int64_t loc);
 static void wmap_ui_coords_to_known_loc(WmapCoords* coords, int64_t* loc_ptr);
@@ -277,7 +277,7 @@ static void wmap_ui_travel_step(WmapCoords* coords);
 static void wmap_continent_refresh(void);
 static void wmap_continent_scale_coords(int x, int y, WmapCoords* coords);
 static void wmap_world_refresh_rect(TigRect* rect);
-static bool sub_565CF0(WmapNote* note);
+static bool wmap_ui_note_is_drawable(WmapNote* note);
 static void wmap_note_blit(WmapNote* note, TigRect* a2, TigRect* a3);
 static void wmap_note_vbid_lock(WmapNote* note);
 static void wmap_note_background_blit(TigVideoBuffer* video_buffer, TigRect* rect);
@@ -1408,7 +1408,7 @@ bool wmap_load_worldmap_info(void)
     wmap_ui_note_width = wmap_note_type_info[WMAP_NOTE_TYPE_LOC].width;
     wmap_ui_note_height = wmap_note_type_info[WMAP_NOTE_TYPE_LOC].height;
     qword_66D850 = 320;
-    sub_560EE0();
+    wmap_ui_info_loaded_hook();
 
     wmap_ui_info_loaded = true;
 
@@ -1416,12 +1416,12 @@ bool wmap_load_worldmap_info(void)
 }
 
 // NOTE: Empty in the original too - 0x560EE0 is a bare `ret`, a sixth
-// instance of the stubbed-hook class documented above sub_563D80. Called
+// instance of the stubbed-hook class documented above wmap_ui_note_added_hook. Called
 // once, right after the wmap info loads. Left as `sub_`; an empty body
 // gives nothing to name from.
 //
 // 0x560EE0
-void sub_560EE0(void)
+void wmap_ui_info_loaded_hook(void)
 {
 }
 
@@ -1774,7 +1774,7 @@ bool wmap_ui_state_set(WmapUiState state)
         wmap_ui_state = state;
 
         if (refresh) {
-            sub_5649C0();
+            wmap_ui_route_changed_hook();
             wmap_ui_mode_info[wmap_ui_mode].refresh();
         }
     }
@@ -1858,7 +1858,7 @@ bool wmap_ui_message_filter(TigMessage* msg)
                 case WMAP_UI_STATE_NORMAL: {
                     if (wmap_ui_routes[WMAP_ROUTE_TYPE_WORLD].field_3C8) {
                         if (wmap_ui_waypoint_at_coords(&wmap_ui_mouse_coords, &wmap_ui_selected_waypoint)) {
-                            sub_5649D0(wmap_ui_routes[WMAP_ROUTE_TYPE_WORLD].waypoints[wmap_ui_selected_waypoint].field_4);
+                            wmap_ui_waypoint_field_4_hook(wmap_ui_routes[WMAP_ROUTE_TYPE_WORLD].waypoints[wmap_ui_selected_waypoint].field_4);
                             wmap_ui_state_set(WMAP_UI_STATE_1);
                             wmap_ui_routes[WMAP_ROUTE_TYPE_WORLD].field_3C8 = 0;
                             return true;
@@ -1887,7 +1887,7 @@ bool wmap_ui_message_filter(TigMessage* msg)
                         return true;
                     }
 
-                    sub_564830(wmap_ui_selected_waypoint, &wmap_ui_mouse_coords);
+                    wmap_ui_waypoint_update_hook(wmap_ui_selected_waypoint, &wmap_ui_mouse_coords);
 
                     return true;
                 case WMAP_UI_STATE_EDITING: {
@@ -1910,7 +1910,7 @@ bool wmap_ui_message_filter(TigMessage* msg)
                 case WMAP_UI_STATE_NORMAL:
                     if (wmap_ui_routes[WMAP_ROUTE_TYPE_TOWN].field_3C8) {
                         if (wmap_ui_waypoint_at_coords(&wmap_ui_mouse_coords, &wmap_ui_selected_waypoint)) {
-                            sub_5649D0(wmap_ui_routes[WMAP_ROUTE_TYPE_TOWN].waypoints[wmap_ui_selected_waypoint].field_4);
+                            wmap_ui_waypoint_field_4_hook(wmap_ui_routes[WMAP_ROUTE_TYPE_TOWN].waypoints[wmap_ui_selected_waypoint].field_4);
                             wmap_ui_routes[WMAP_ROUTE_TYPE_TOWN].field_3C8 = 0;
                             return true;
                         }
@@ -2086,7 +2086,7 @@ bool wmap_ui_message_filter(TigMessage* msg)
                     if (wmap_info) {
                         wmap_ui_edge_scroll(msg->data.mouse.x, msg->data.mouse.y);
                         if (wmap_ui_can_travel_to_coords(&wmap_ui_mouse_coords)) {
-                            sub_564830(wmap_ui_selected_waypoint, &wmap_ui_mouse_coords);
+                            wmap_ui_waypoint_update_hook(wmap_ui_selected_waypoint, &wmap_ui_mouse_coords);
                         }
                     }
 
@@ -2403,17 +2403,15 @@ bool wmap_ui_can_travel_to_coords(WmapCoords* coords)
     }
 
     wmap_ui_coords_to_loc(coords, &loc);
-    return sub_5627F0(loc);
+    return wmap_ui_loc_travel_allowed(loc);
 }
 
-// NOTE: Always true, and 0x5627F0 in the exe is a bare `return 1` too, so the
-// location is genuinely ignored rather than dropped in the port. Its only
-// caller is `wmap_ui_can_travel_to_coords`, which therefore also always says
-// yes - whatever check Troika meant to put here never shipped. Left as `sub_`;
-// there is no body to name it from.
+// Constant-true predicate: 0x5627F0 is literally `mov eax, 1; ret` in the exe,
+// so the location is ignored and wmap_ui_can_travel_to_coords always says yes.
+// The name records what the call site asks, not a check that shipped.
 //
 // 0x5627F0
-bool sub_5627F0(int64_t loc)
+bool wmap_ui_loc_travel_allowed(int64_t loc)
 {
     (void)loc;
 
@@ -3293,7 +3291,7 @@ bool wmap_ui_add_note(WmapNote* note)
         wmap_ui_note_calc_rect(&(wmap_info->notes[index]));
         note->flags &= ~0x4;
         (*wmap_info->num_notes)++;
-        sub_563D80(wmap_info->notes[index].id, wmap_ui_mode);
+        wmap_ui_note_added_hook(wmap_info->notes[index].id, wmap_ui_mode);
         return true;
     }
 
@@ -3316,12 +3314,12 @@ void wmap_ui_note_calc_rect(WmapNote* note)
 // stubbed rather than dead code, and an empty body gives nothing to name from.
 // Left as `sub_`, same as the anim goal table's constant stubs.
 //
-// sub_563D80 and sub_5642E0 are a pair: same `(note id, WmapUiMode)` signature,
+// wmap_ui_note_added_hook and wmap_ui_note_removed_hook are a pair: same `(note id, WmapUiMode)` signature,
 // called from opposite ends of note handling. Whatever notification Troika
 // meant to send when a note appeared or went away, neither half shipped.
 //
 // 0x563D80
-void sub_563D80(int a1, int a2)
+void wmap_ui_note_added_hook(int a1, int a2)
 {
     (void)a1;
     (void)a2;
@@ -3513,7 +3511,7 @@ bool wmap_note_add_mode(WmapNote* note, WmapUiMode mode)
     wmap_ui_mode_info[mode].notes[note_index] = *note;
     wmap_ui_note_calc_rect(&(wmap_ui_mode_info[mode].notes[note_index]));
     (*wmap_ui_mode_info[mode].num_notes)++;
-    sub_563D80(wmap_ui_mode_info[mode].notes[note_index].id, mode);
+    wmap_ui_note_added_hook(wmap_ui_mode_info[mode].notes[note_index].id, mode);
 
     return true;
 }
@@ -3547,7 +3545,7 @@ bool wmap_note_remove(WmapNote* note)
     }
 
     wmap_ui_note_free_buffer(&(wmap_info->notes[index]));
-    sub_5642E0(wmap_info->notes[index].id, wmap_ui_mode);
+    wmap_ui_note_removed_hook(wmap_info->notes[index].id, wmap_ui_mode);
 
     (*wmap_info->num_notes)--;
 
@@ -3561,7 +3559,7 @@ bool wmap_note_remove(WmapNote* note)
 }
 
 // 0x5642E0
-void sub_5642E0(int id, WmapUiMode mode)
+void wmap_ui_note_removed_hook(int id, WmapUiMode mode)
 {
     (void)id;
     (void)mode;
@@ -3718,10 +3716,10 @@ bool wmap_ui_add_waypoint(WmapCoords* coords)
     wp->loc = to;
     wp->field_4 = -1;
 
-    sub_5648E0(wmap_ui_routes[route_type].length, wmap_ui_routes[route_type].field_3C4, false);
+    wmap_ui_waypoint_field_4_set(wmap_ui_routes[route_type].length, wmap_ui_routes[route_type].field_3C4, false);
     wmap_ui_routes[route_type].length++;
 
-    sub_5649C0();
+    wmap_ui_route_changed_hook();
 
     wmap_ui_mode_info[wmap_ui_mode].refresh();
 
@@ -3755,8 +3753,11 @@ bool wmap_ui_waypoint_at_coords(WmapCoords* coords, int* idx_ptr)
     return false;
 }
 
+// Empty-hook twin from the note above sub_563D80; the call site is the
+// "selected waypoint follows the mouse" path.
+//
 // 0x564830
-void sub_564830(int a1, WmapCoords* coords)
+void wmap_ui_waypoint_update_hook(int a1, WmapCoords* coords)
 {
     (void)a1;
     (void)coords;
@@ -3778,7 +3779,7 @@ void wmap_ui_remove_waypoint(int a1)
             wmap_ui_routes[route_type].waypoints[index] = wmap_ui_routes[route_type].waypoints[index + 1];
         }
 
-        sub_5649C0();
+        wmap_ui_route_changed_hook();
         wmap_ui_mode_info[wmap_ui_mode].refresh();
 
         if (wmap_ui_routes[route_type].length == 0) {
@@ -3787,13 +3788,13 @@ void wmap_ui_remove_waypoint(int a1)
     }
 }
 
-// NOTE: Left unnamed. It sets `waypoints[a1].field_4`, and that field goes
-// nowhere: it is initialised to -1, written only here, and read only to be
-// handed to sub_5649D0 - which is one of the empty hooks above. So the value is
-// write-only in the shipped game, and there is nothing to say what it meant.
+// Sets `waypoints[a1].field_4`. The field is write-only in the shipped game:
+// initialised to -1, written only here, and read only to be handed to
+// wmap_ui_waypoint_field_4_hook (an empty hook). The field_4 name records the
+// storage, not an inferred meaning.
 //
 // 0x5648E0
-void sub_5648E0(int a1, int a2, bool a3)
+void wmap_ui_waypoint_field_4_set(int a1, int a2, bool a3)
 {
     WmapRouteType route_type;
 
@@ -3811,7 +3812,7 @@ void sub_5648E0(int a1, int a2, bool a3)
     wmap_ui_routes[route_type].waypoints[a1].field_4 = a2;
 
     if (a3) {
-        sub_5649C0();
+        wmap_ui_route_changed_hook();
         wmap_ui_mode_info[wmap_ui_mode].refresh();
     }
 }
@@ -3836,17 +3837,19 @@ void wmap_ui_snap_waypoint_to_area(WmapRouteWaypoint* wp)
     }
 }
 
-// NOTE: An empty hook - see the note above sub_563D80.
+// Empty hook called after route edits; see the note above
+// wmap_ui_note_added_hook.
 //
 // 0x5649C0
-void sub_5649C0(void)
+void wmap_ui_route_changed_hook(void)
 {
 }
 
-// NOTE: An empty hook - see the note above sub_563D80.
+// Empty hook that receives a waypoint's write-only field_4; see the note
+// above wmap_ui_note_added_hook.
 //
 // 0x5649D0
-void sub_5649D0(int a1)
+void wmap_ui_waypoint_field_4_hook(int a1)
 {
     (void)a1;
 }
@@ -3995,7 +3998,7 @@ bool wmap_ui_bkg_process_callback(TimeEvent* timeevent)
 
         wmap_ui_set_scroll_origin(&wmap_info->field_3C, false);
         wmap_ui_compass_arrow_frame_set(wmap_ui_compass_arrow_frame_calc(&wmap_info->field_3C, &wmap_ui_routes[WMAP_ROUTE_TYPE_WORLD].waypoints[0].coords));
-        sub_5649C0();
+        wmap_ui_route_changed_hook();
         wmap_ui_mode_info[wmap_ui_mode].refresh();
     }
 
@@ -4450,7 +4453,7 @@ void wmap_world_refresh_rect(TigRect* rect)
     for (idx = 0; idx < *wmap_info->num_notes; idx++) {
         note = &(wmap_info->notes[idx]);
         if (wmap_note_type_info[note->type].enabled
-            && sub_565CF0(note)) {
+            && wmap_ui_note_is_drawable(note)) {
             wmap_note_icon_blit(note->type, &(note->coords), &tmp_rect, rect, wmap_info);
             wmap_note_blit(note, &tmp_rect, rect);
         }
@@ -4501,13 +4504,12 @@ void wmap_world_refresh_rect(TigRect* rect)
     }
 }
 
-// NOTE: Always true, and 0x565CF0 in the exe is literally `mov eax, 1; ret`,
-// so the note filter is a stub in the shipped game rather than dropped in
-// the port. Called once, as the drawability test in the note-drawing loop.
-// Left as `sub_`, same as sub_5627F0 - there is no body to name it from.
+// Constant-true note drawability filter: 0x565CF0 is literally
+// `mov eax, 1; ret` in the exe. The name records the draw loop's question;
+// the filter never shipped.
 //
 // 0x565CF0
-bool sub_565CF0(WmapNote* note)
+bool wmap_ui_note_is_drawable(WmapNote* note)
 {
     (void)note;
 
