@@ -1420,7 +1420,7 @@ bool sub_44EB40(int64_t obj, int64_t from, int64_t to)
         return false;
     }
 
-    if (!sub_426560(obj, from, to, &anim_scratch_path, 0)) {
+    if (!anim_path_create(obj, from, to, &anim_scratch_path, 0)) {
         return false;
     }
 

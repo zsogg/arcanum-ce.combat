@@ -385,7 +385,7 @@ void main_loop(void)
     object_set_current_aid(pc_obj, art_id);
 
     object_flags_unset(pc_obj, OF_OFF);
-    sub_430460();
+    anim_fidget_schedule();
     iso_interface_refresh();
     intgame_draw_bar(INTGAME_BAR_HEALTH);
     intgame_draw_bar(INTGAME_BAR_FATIGUE);

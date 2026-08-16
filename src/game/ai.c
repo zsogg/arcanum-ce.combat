@@ -2629,8 +2629,8 @@ void ai_action_perform_non_combat(Ai* ai)
             }
         }
     } else if (!ai_waypoints_process(ai->obj, false) && !ai_standpoints_process(ai->obj, false)) {
-        sub_435CE0(ai->obj);
-        sub_4364D0(ai->obj);
+        anim_goal_auto_fidget(ai->obj);
+        anim_make_room_for_critter(ai->obj);
     }
 
     if (!critter_is_sleeping(ai->obj)) {

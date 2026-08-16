@@ -34,7 +34,7 @@
 #include "game/uap.h"
 #include "game/ui.h"
 
-static bool sub_421CE0(AnimID* anim_id, AnimRunInfo* run_info);
+static bool anim_id_matches_run_info(AnimID* anim_id, AnimRunInfo* run_info);
 static void violence_filter_changed(void);
 static bool anim_run_info_save(AnimRunInfo* run_info, TigFile* stream);
 static bool anim_goal_data_save(AnimGoalData* goal_data, TigFile* stream);
@@ -43,11 +43,11 @@ static bool anim_load_internal(GameLoadInfo* load_info);
 static bool anim_run_info_load(AnimRunInfo* run_info, TigFile* stream);
 static bool anim_goal_data_load(AnimGoalData* goal_data, TigFile* stream);
 static bool anim_run_info_param_load(AnimRunInfoParam* param, ObjectLocator* a2, int type, TigFile* stream);
-static bool sub_423C80(AnimRunInfo* run_info, DateTime* a2, int delay);
+static bool anim_schedule_next_ping(AnimRunInfo* run_info, DateTime* a2, int delay);
 static void anim_pop_goal(AnimRunInfo* run_info, unsigned int* flags_ptr, AnimGoalNode** goal_node_ptr, AnimGoalData** goal_data_ptr, bool* a5);
 static int anim_goal_pending_active_goals_count(void);
 static bool sub_436220(int64_t obj, int64_t target_obj, int64_t item_obj);
-static bool sub_436720(int64_t* source_obj_ptr, int64_t* block_obj_ptr);
+static bool anim_find_blocking_critter(int64_t* source_obj_ptr, int64_t* block_obj_ptr);
 static void sub_436CB0(AnimID anim_id);
 static void notify_speed_recalc(AnimID* anim_id);
 static void sub_437460(AGModifyData* modify_data);
@@ -67,16 +67,16 @@ static bool anim_finish_move(AnimRunInfo* run_info);
 static bool anim_finish_move_near(AnimRunInfo* run_info);
 static bool anim_finish_move_near_combat(AnimRunInfo* run_info);
 static bool anim_has_path(AnimRunInfo* run_info);
-static bool sub_425760(int64_t obj, int64_t loc, int64_t adjacent_loc, int rot);
-static void sub_4257E0(int64_t obj, unsigned int* flags_ptr);
-static bool sub_425840(int64_t a1, int64_t a2, int64_t a3, int a4, int64_t a5);
+static bool anim_tile_is_blocked(int64_t obj, int64_t loc, int64_t adjacent_loc, int rot);
+static void anim_get_obj_traversal_flags(int64_t obj, unsigned int* flags_ptr);
+static bool anim_target_traversal_is_blocked(int64_t a1, int64_t a2, int64_t a3, int a4, int64_t a5);
 static bool anim_create_wander_path(AnimRunInfo* run_info);
 static bool anim_set_path_flags(PathCreateInfo* path_create_info, bool a2);
 static bool anim_create_wander_dark_path(AnimRunInfo* run_info);
 static bool anim_create_path_to_tile(AnimRunInfo* run_info);
 static void anim_create_path_max_length(int64_t a1, const char* msg, int value);
 static int anim_path_calc_max_length(AnimPath* anim_path, int64_t from, int64_t to, int64_t obj);
-static int sub_426500(int64_t obj, int64_t to, AnimPath* path, unsigned int flags);
+static int anim_path_create_from_obj(int64_t obj, int64_t to, AnimPath* path, unsigned int flags);
 static bool anim_create_straight_path(AnimRunInfo* run_info);
 static bool anim_create_knockback_path(AnimRunInfo* run_info);
 static bool anim_create_projectile_path(AnimRunInfo* run_info);
@@ -231,8 +231,8 @@ static bool sub_42FEC0(AnimRunInfo* run_info);
 static bool anim_add_death_blood(AnimRunInfo* run_info);
 static bool anim_finish_death(AnimRunInfo* run_info);
 static bool anim_cleanup_dying(AnimRunInfo* run_info);
-static int sub_4302D0(LocRect* loc_rect, ObjectList* objects);
-static bool sub_4303D0(int64_t obj);
+static int anim_collect_fidget_candidates(LocRect* loc_rect, ObjectList* objects);
+static bool anim_can_fidget(int64_t obj);
 static bool AGupdateAnimMove(AnimRunInfo* run_info);
 static bool anim_cleanup_move_path(AnimRunInfo* run_info);
 static int anim_spend_move_cost(AnimRunInfo* run_info);
@@ -2847,7 +2847,7 @@ bool anim_id_to_run_info(AnimID* anim_id, AnimRunInfo** run_info_ptr)
 
     if (anim_id->slot_num != -1) {
         for (index = 0; index < 216; index++) {
-            if (sub_421CE0(anim_id, &(anim_run_info[index]))) {
+            if (anim_id_matches_run_info(anim_id, &(anim_run_info[index]))) {
                 *run_info_ptr = &(anim_run_info[index]);
                 return true;
             }
@@ -2859,7 +2859,9 @@ bool anim_id_to_run_info(AnimID* anim_id, AnimRunInfo** run_info_ptr)
 }
 
 // 0x421CE0
-bool sub_421CE0(AnimID* anim_id, AnimRunInfo* run_info)
+// True when `run_info` carries `anim_id`. The slot number is part of
+// the identity only in single-player; the network path trusts the unique id.
+bool anim_id_matches_run_info(AnimID* anim_id, AnimRunInfo* run_info)
 {
     ASSERT(anim_id != NULL); // pAnimID != NULL
     ASSERT(run_info != NULL); // pRunInfo != NULL
@@ -3674,7 +3676,7 @@ bool anim_timeevent_process(TimeEvent* timeevent)
             delay = 100;
         }
 
-        return sub_423C80(run_info, &(timeevent->datetime), delay);
+        return anim_schedule_next_ping(run_info, &(timeevent->datetime), delay);
     }
 
     ASSERT(run_info->current_goal >= 0); // 2022, "pRunInfo->current_goal >= 0"
@@ -3893,14 +3895,16 @@ bool anim_timeevent_process(TimeEvent* timeevent)
     }
 
     if ((run_info->flags & 0x01) != 0) {
-        return sub_423C80(run_info, &(timeevent->datetime), delay);
+        return anim_schedule_next_ping(run_info, &(timeevent->datetime), delay);
     }
 
     return true;
 }
 
 // 0x423C80
-bool sub_423C80(AnimRunInfo* run_info, DateTime* a2, int delay)
+// Schedules the run's next animation timeevent. The delay is expressed in
+// game-time milliseconds and scaled by the anim timeevent's factor of 8.
+bool anim_schedule_next_ping(AnimRunInfo* run_info, DateTime* a2, int delay)
 {
     TimeEvent timeevent;
     DateTime datetime;
@@ -4559,7 +4563,7 @@ bool anim_pick_step_aside_tile(AnimRunInfo* run_info)
     for (idx = rot; idx < 8; idx++) {
         if (location_in_dir(source_loc, idx, &(adjacent_locs[idx]))) {
             adjacent_objs[idx] = OBJ_HANDLE_NULL;
-            if (!sub_425760(source_obj, source_loc, adjacent_locs[idx], rot)) {
+            if (!anim_tile_is_blocked(source_obj, source_loc, adjacent_locs[idx], rot)) {
                 run_info->cur_stack_data->params[AGDATA_TARGET_TILE].loc = adjacent_locs[idx];
                 return true;
             }
@@ -4569,7 +4573,7 @@ bool anim_pick_step_aside_tile(AnimRunInfo* run_info)
     for (idx = 0; idx < rot; idx++) {
         if (location_in_dir(source_loc, idx, &(adjacent_locs[idx]))) {
             adjacent_objs[idx] = OBJ_HANDLE_NULL;
-            if (!sub_425760(source_obj, source_loc, adjacent_locs[idx], idx)) {
+            if (!anim_tile_is_blocked(source_obj, source_loc, adjacent_locs[idx], idx)) {
                 run_info->cur_stack_data->params[AGDATA_TARGET_TILE].loc = adjacent_locs[idx];
                 return true;
             }
@@ -4632,7 +4636,7 @@ bool anim_target_in_range(AnimRunInfo* run_info)
     }
 
     rot = location_rot(source_loc, target_loc);
-    if (sub_425840(source_obj, source_loc, target_loc, rot, target_obj)) {
+    if (anim_target_traversal_is_blocked(source_obj, source_loc, target_loc, rot, target_obj)) {
         return false;
     }
 
@@ -4838,11 +4842,14 @@ bool anim_has_path(AnimRunInfo* run_info)
 }
 
 // 0x425760
-bool sub_425760(int64_t obj, int64_t loc, int64_t adjacent_loc, int rot)
+// True when this critter cannot step from `loc` into `adjacent_loc`: the tile
+// itself blocks, or object traversal blocks with the critter's portal/window
+// capabilities taken into account.
+bool anim_tile_is_blocked(int64_t obj, int64_t loc, int64_t adjacent_loc, int rot)
 {
     unsigned int flags = 0;
 
-    sub_4257E0(obj, &flags);
+    anim_get_obj_traversal_flags(obj, &flags);
 
     if (tile_is_blocking(adjacent_loc, false)) {
         return true;
@@ -4852,7 +4859,9 @@ bool sub_425760(int64_t obj, int64_t loc, int64_t adjacent_loc, int rot)
 }
 
 // 0x4257E0
-void sub_4257E0(int64_t obj, unsigned int* flags_ptr)
+// Collects the OBJ_TRAVERSAL_* flags implied by the critter's current form
+// and abilities (polymorphed, cannot open portals, cannot jump windows).
+void anim_get_obj_traversal_flags(int64_t obj, unsigned int* flags_ptr)
 {
     if ((obj_field_int32_get(obj, OBJ_F_SPELL_FLAGS) & OSF_POLYMORPHED) != 0) {
         *flags_ptr |= OBJ_TRAVERSAL_PORTAL_BLOCKS | OBJ_TRAVERSAL_WINDOW_BLOCKS;
@@ -4868,7 +4877,10 @@ void sub_4257E0(int64_t obj, unsigned int* flags_ptr)
 }
 
 // 0x425840
-bool sub_425840(int64_t a1, int64_t a2, int64_t a3, int a4, int64_t a5)
+// True when traversal from `a2` to `a3` is blocked. `a5` (the target object)
+// is temporarily given OF_NO_BLOCK so a container or NPC does not block the
+// movement that is trying to reach it.
+bool anim_target_traversal_is_blocked(int64_t a1, int64_t a2, int64_t a3, int a4, int64_t a5)
 {
     unsigned int flags = 0;
     bool v1 = true;
@@ -4876,7 +4888,7 @@ bool sub_425840(int64_t a1, int64_t a2, int64_t a3, int a4, int64_t a5)
     int64_t v3;
     int v4;
 
-    sub_4257E0(a1, &flags);
+    anim_get_obj_traversal_flags(a1, &flags);
 
     if (tile_is_blocking(a3, false)) {
         return true;
@@ -5145,7 +5157,7 @@ bool anim_create_path_to_tile(AnimRunInfo* run_info)
         return false;
     }
 
-    if (sub_426500(obj, run_info->params[1].loc, &(run_info->path), flags)) {
+    if (anim_path_create_from_obj(obj, run_info->params[1].loc, &(run_info->path), flags)) {
         return true;
     }
 
@@ -5155,13 +5167,15 @@ bool anim_create_path_to_tile(AnimRunInfo* run_info)
 
     run_info->flags |= 0x400;
 
-    rc = sub_426500(obj, run_info->params[1].loc, &(run_info->path), flags | PATH_FLAG_0x0040 | PATH_FLAG_0x0020 | PATH_FLAG_0x0010 | PATH_FLAG_0x0008);
+    rc = anim_path_create_from_obj(obj, run_info->params[1].loc, &(run_info->path), flags | PATH_FLAG_0x0040 | PATH_FLAG_0x0020 | PATH_FLAG_0x0010 | PATH_FLAG_0x0008);
 
     return rc;
 }
 
 // 0x4261E0
-int sub_4261E0(int64_t a1, int64_t a2)
+// Path length from `a1`'s current tile to `a2`, using the normal
+// pathfinding flags. Used by combat_move_cost for non-adjacent moves.
+int anim_path_length_to_tile(int64_t a1, int64_t a2)
 {
     AnimPath path;
 
@@ -5173,7 +5187,7 @@ int sub_4261E0(int64_t a1, int64_t a2)
     path.baseRot = 0;
     path.field_CC = sizeof(path.rotations); // FIX: Initialize to prevent errors in `anim_path_calc_max_length`.
 
-    if (!sub_426500(a1, a2, &path, 0)) {
+    if (!anim_path_create_from_obj(a1, a2, &path, 0)) {
         return 0;
     }
 
@@ -5181,7 +5195,9 @@ int sub_4261E0(int64_t a1, int64_t a2)
 }
 
 // 0x426250
-int sub_426250(int64_t a1, int64_t a2)
+// Straight-line path length from `a1` to `a2` (PATH_FLAG_0x0001, no
+// pathfinding), used by combat_move_cost for adjacent moves.
+int anim_straight_path_length_to_tile(int64_t a1, int64_t a2)
 {
     AnimPath path;
 
@@ -5193,7 +5209,7 @@ int sub_426250(int64_t a1, int64_t a2)
     path.baseRot = 0;
     path.field_CC = sizeof(path.rotations); // FIX: Initialize to prevent errors in `anim_path_calc_max_length`.
 
-    if (!sub_426500(a1, a2, &path, PATH_FLAG_0x0001)) {
+    if (!anim_path_create_from_obj(a1, a2, &path, PATH_FLAG_0x0001)) {
         return 0;
     }
 
@@ -5273,15 +5289,18 @@ int anim_path_calc_max_length(AnimPath* anim_path, int64_t from, int64_t to, int
 }
 
 // 0x426500
-int sub_426500(int64_t obj, int64_t to, AnimPath* path, unsigned int flags)
+// Creates a path for `obj` from its current tile to `to`.
+int anim_path_create_from_obj(int64_t obj, int64_t to, AnimPath* path, unsigned int flags)
 {
     ASSERT(obj != OBJ_HANDLE_NULL); // 4493, "obj != OBJ_HANDLE_NULL"
 
-    return sub_426560(obj, obj_field_int64_get(obj, OBJ_F_LOCATION), to, path, flags);
+    return anim_path_create(obj, obj_field_int64_get(obj, OBJ_F_LOCATION), to, path, flags);
 }
 
 // 0x426560
-bool sub_426560(int64_t obj, int64_t from, int64_t to, AnimPath* path, unsigned int flags)
+// Low-level path creation from an explicit `from` tile into `path`. Shared
+// by the run_info path creators above and the combat move-cost helpers.
+bool anim_path_create(int64_t obj, int64_t from, int64_t to, AnimPath* path, unsigned int flags)
 {
     int v1;
     int8_t* rotations;
@@ -5759,7 +5778,7 @@ bool anim_check_next_step(AnimRunInfo* run_info, int64_t obj, int64_t loc)
     }
 
     if ((run_info->flags & 0x400) != 0
-        && sub_425760(obj, loc, adjacent_loc, rot)) {
+        && anim_tile_is_blocked(obj, loc, adjacent_loc, rot)) {
         return true;
     }
 
@@ -6688,7 +6707,7 @@ bool anim_use_object(AnimRunInfo* run_info)
     target_loc = obj_field_int64_get(target_obj, OBJ_F_LOCATION);
     rot = location_rot(source_loc, target_loc);
 
-    if (sub_425840(source_obj, source_loc, target_loc, rot, target_obj)) {
+    if (anim_target_traversal_is_blocked(source_obj, source_loc, target_loc, rot, target_obj)) {
         if (tig_net_is_active()
             && tig_net_is_host()) {
             anim_interrupt_all_goals_of_obj(source_obj, 2, false, false);
@@ -7120,7 +7139,7 @@ bool anim_can_reach_target(int64_t source_obj, int64_t target_obj)
         path.baseRot = 0;
         path.field_CC = sizeof(path.rotations); // FIX: Initialize to prevent errors in `anim_path_calc_max_length`.
 
-        if (!sub_426500(source_obj, target_loc, &path, PATH_FLAG_0x0001)) {
+        if (!anim_path_create_from_obj(source_obj, target_loc, &path, PATH_FLAG_0x0001)) {
             return false;
         }
     }
@@ -10658,7 +10677,7 @@ bool AGbeginAnimMove(AnimRunInfo* run_info)
             rot = run_info->path.rotations[run_info->path.curr];
         }
 
-        if (sub_425760(obj, loc, next_loc, rot)) {
+        if (anim_tile_is_blocked(obj, loc, next_loc, rot)) {
             return false;
         }
     }
@@ -11409,7 +11428,7 @@ bool anim_fidget_timeevent_process(TimeEvent* timeevent)
     if (location_screen_rect_to_loc_rect(&rect, &loc_rect)) {
         datetime_from_milliseconds(&datetime, 4000);
 
-        cnt = sub_4302D0(&loc_rect, &objects);
+        cnt = anim_collect_fidget_candidates(&loc_rect, &objects);
         if (cnt != 0) {
             if (cnt > 1) {
                 if (object_list_remove(&objects, anim_fidget_obj)) {
@@ -11460,7 +11479,10 @@ bool anim_fidget_timeevent_process(TimeEvent* timeevent)
 }
 
 // 0x4302D0
-int sub_4302D0(LocRect* loc_rect, ObjectList* objects)
+// Fills `objects` with critters in `loc_rect` that can fidget right now and
+// returns how many remain. Ineligible nodes are removed, restarting the scan
+// so the returned list contains only candidates.
+int anim_collect_fidget_candidates(LocRect* loc_rect, ObjectList* objects)
 {
     ObjectNode* node;
     int cnt = 0;
@@ -11471,7 +11493,7 @@ int sub_4302D0(LocRect* loc_rect, ObjectList* objects)
     object_list_rect(loc_rect, OBJ_TM_PC | OBJ_TM_NPC, objects);
     node = objects->head;
     while (node != NULL) {
-        if (sub_4303D0(node->obj)) {
+        if (anim_can_fidget(node->obj)) {
             cnt++;
             node = node->next;
             continue;
@@ -11491,7 +11513,9 @@ int sub_4302D0(LocRect* loc_rect, ObjectList* objects)
 }
 
 // 0x4303D0
-bool sub_4303D0(int64_t obj)
+// A critter can fidget when it is active, idle, out of combat mode, standing,
+// and either a PC or an NPC not currently reacting to the local PC.
+bool anim_can_fidget(int64_t obj)
 {
     if (!anim_is_busy(obj, 0)
         && !combat_critter_is_combat_mode_active(obj)
@@ -11508,7 +11532,8 @@ bool sub_4303D0(int64_t obj)
 }
 
 // 0x430460
-void sub_430460(void)
+// Arms the recurring fidget timeevent; called once when the game starts.
+void anim_fidget_schedule(void)
 {
     DateTime datetime;
     TimeEvent timeevent;
@@ -14081,26 +14106,26 @@ bool anim_goal_follow_obj(int64_t source_obj, int64_t target_obj)
         switch (run_info->cur_stack_data->type) {
         // NOTE: Not sure why this one was specified explicitly.
         case AG_RUN_NEAR_OBJ:
-            sub_4364D0(source_obj);
+            anim_make_room_for_critter(source_obj);
             return true;
         case AG_MOVE_NEAR_OBJ:
         case AG_ATTEMPT_MOVE_NEAR:
             source_loc = obj_field_int64_get(source_obj, OBJ_F_LOCATION);
             target_loc = obj_field_int64_get(target_obj, OBJ_F_LOCATION);
             if (location_dist(source_loc, target_loc) <= range) {
-                sub_4364D0(source_obj);
+                anim_make_room_for_critter(source_obj);
                 return true;
             }
             break;
         default:
-            sub_4364D0(source_obj);
+            anim_make_room_for_critter(source_obj);
             return true;
         }
     } else {
         source_loc = obj_field_int64_get(source_obj, OBJ_F_LOCATION);
         target_loc = obj_field_int64_get(target_obj, OBJ_F_LOCATION);
         if (location_dist(source_loc, target_loc) <= range) {
-            sub_4364D0(source_obj);
+            anim_make_room_for_critter(source_obj);
             return true;
         }
     }
@@ -14230,42 +14255,42 @@ bool anim_goal_attack_ex(int64_t attacker_obj, int64_t target_obj, int sound_id)
 
     if ((spell_flags & OSF_BODY_OF_AIR) != 0
         && (critter_flags2 & OCF2_ELEMENTAL) == 0) {
-        sub_4364D0(attacker_obj);
+        anim_make_room_for_critter(attacker_obj);
         return false;
     }
 
     if (!anim_goal_data_init_no_interrupt(&goal_data, attacker_obj, AG_ATTACK)) {
-        sub_4364D0(attacker_obj);
+        anim_make_room_for_critter(attacker_obj);
         return false;
     }
 
     goal_data.params[AGDATA_TARGET_OBJ].obj = target_obj;
 
     if (sub_44E6F0(attacker_obj, &goal_data)) {
-        sub_4364D0(attacker_obj);
+        anim_make_room_for_critter(attacker_obj);
         return false;
     }
 
     source_obj = attacker_obj;
-    if (sub_436720(&source_obj, &block_obj)) {
+    if (anim_find_blocking_critter(&source_obj, &block_obj)) {
         anim_goal_please_move(block_obj, source_obj);
         return false;
     }
 
     if (!anim_interrupt_all_goals_of_obj(attacker_obj, 3, false, false)) {
-        sub_4364D0(attacker_obj);
+        anim_make_room_for_critter(attacker_obj);
         return false;
     }
 
     if ((obj_field_int32_get(source_obj, OBJ_F_CRITTER_FLAGS2) & OCF2_USING_BOOMERANG) != 0) {
-        sub_4364D0(attacker_obj);
+        anim_make_room_for_critter(attacker_obj);
         return false;
     }
 
     goal_data.params[AGDATA_SCRATCH_VAL5].data = sound_id;
 
     if (!anim_goal_add(&goal_data, &anim_scratch_goal_id)) {
-        sub_4364D0(attacker_obj);
+        anim_make_room_for_critter(attacker_obj);
         return false;
     }
 
@@ -14820,7 +14845,9 @@ bool anim_goal_fidget(int64_t critter_obj)
 }
 
 // 0x435CE0
-bool sub_435CE0(int64_t critter_obj)
+// Starts a fidget goal for an idle, auto-animating NPC. Real-time only;
+// turn-based combat has its own fidget handling.
+bool anim_goal_auto_fidget(int64_t critter_obj)
 {
     ASSERT(critter_obj != OBJ_HANDLE_NULL); // 16444, "critterObj != OBJ_HANDLE_NULL"
     if (critter_obj == OBJ_HANDLE_NULL) return false;
@@ -14906,7 +14933,7 @@ bool anim_goal_wander(int64_t obj, int64_t tether_loc, int radius)
         && critter_is_active(obj)
         && !anim_is_busy(obj, NULL)) {
         source_obj = obj;
-        if (sub_436720(&source_obj, &block_obj)) {
+        if (anim_find_blocking_critter(&source_obj, &block_obj)) {
             anim_goal_please_move(block_obj, source_obj);
         } else if (anim_goal_data_init(&goal_data, obj, AG_WANDER)) {
             goal_data.params[AGDATA_RANGE_DATA].data = radius;
@@ -14946,7 +14973,7 @@ bool anim_goal_wander_seek_darkness(int64_t obj, int64_t tether_loc, int radius)
         && critter_is_active(obj)
         && !anim_is_busy(obj, NULL)) {
         source_obj = obj;
-        if (sub_436720(&source_obj, &block_obj)) {
+        if (anim_find_blocking_critter(&source_obj, &block_obj)) {
             anim_goal_please_move(block_obj, source_obj);
         } else if (anim_goal_data_init(&goal_data, obj, AG_WANDER_SEEK_DARKNESS)) {
             goal_data.params[AGDATA_RANGE_DATA].data = radius;
@@ -15056,7 +15083,10 @@ bool anim_goal_please_move(int64_t obj, int64_t target_obj)
 }
 
 // 0x4364D0
-void sub_4364D0(int64_t obj)
+// Asks idle critters sharing `obj`'s tile to PLEASE_MOVE, so the tile has
+// room for `obj` to act. The lowest-handle idle NPC is the anchor; every
+// other idle NPC moves off it, and in hosted multiplayer idle PCs do too.
+void anim_make_room_for_critter(int64_t obj)
 {
     int64_t loc;
     ObjectList critters;
@@ -15160,7 +15190,10 @@ void sub_4364D0(int64_t obj)
 }
 
 // 0x436720
-bool sub_436720(int64_t* source_obj_ptr, int64_t* block_obj_ptr)
+// Finds an idle NPC on the same tile as `*source_obj_ptr` and returns it in
+// `*block_obj_ptr`. When both are NPCs the lower handle becomes the source,
+// matching the PLEASE_MOVE convention used by callers.
+bool anim_find_blocking_critter(int64_t* source_obj_ptr, int64_t* block_obj_ptr)
 {
     int64_t loc;
     ObjectList objects;

@@ -3548,9 +3548,9 @@ int combat_move_cost(int64_t source_obj, int64_t target_loc, bool adjacent)
     }
 
     if (adjacent) {
-        return mult * sub_426250(source_obj, target_loc);
+        return mult * anim_straight_path_length_to_tile(source_obj, target_loc);
     } else {
-        return mult * sub_4261E0(source_obj, target_loc);
+        return mult * anim_path_length_to_tile(source_obj, target_loc);
     }
 }
 
