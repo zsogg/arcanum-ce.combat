@@ -336,7 +336,7 @@ bool spell_ui_maintain_add(int mt_id)
     int cnt;
     int index;
 
-    if (!sub_459FF0(mt_id)) {
+    if (!magictech_run_spell_valid(mt_id)) {
         return false;
     }
 

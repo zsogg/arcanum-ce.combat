@@ -130,21 +130,21 @@ static void magictech_run_action_in_callback(int mt_id, int action);
 static bool magictech_timeevent_matches_current(TimeEvent* timeevent);
 static void magictech_end(int mt_id);
 static void magictech_clear_run_source(int mt_id);
-static void sub_457580(MagicTechInfo* info, int magictech);
+static void magictech_spell_info_init(MagicTechInfo* info, int magictech);
 static void magictech_build_aoe_info(MagicTechInfo* info, char* str);
-static void sub_4578F0(MagicTechInfo* info, char* str);
-static void sub_457B20(MagicTechInfo* info, char* str);
-static void sub_457D00(MagicTechInfo* info, char* str);
+static void magictech_build_spell_stats(MagicTechInfo* info, char* str);
+static void magictech_build_spell_anim_info(MagicTechInfo* info, char* str);
+static void magictech_build_spell_conflict_info(MagicTechInfo* info, char* str);
 static void magictech_build_ai_info(MagicTechInfo* info, char* str);
 static void magictech_build_effect_info(MagicTechInfo* info, char* str);
 static bool magictech_find_first(int64_t obj, int* mt_id_ptr);
 static bool magictech_find_next(int64_t obj, int* mt_id_ptr);
-static bool sub_459290(int64_t obj, int spell, int* index_ptr);
-static void sub_459490(int mt_id);
+static bool magictech_find_by_spell(int64_t obj, int spell, int* index_ptr);
+static void magictech_timeevent_maintain_process(int mt_id);
 static bool magictech_reschedule_timeevent_match(TimeEvent* timeevent);
 static bool magictech_recharge_timeevent_schedule(int64_t item_obj, int mana_cost, bool add);
 static bool magictech_recharge_timeevent_add(TimeEvent* timeevent);
-static void sub_45A480(MagicTechRunInfo* run_info);
+static void magictech_run_info_destroy(MagicTechRunInfo* run_info);
 static void magictech_debug_print_obj(int64_t obj, const char* msg);
 
 // 0x596140
@@ -1481,7 +1481,7 @@ void magictech_load_spell(mes_file_handle_t msg_file, MagicTechInfo* info, int n
 
     magictech_loading_spell = magictech;
 
-    sub_457580(info, magictech);
+    magictech_spell_info_init(info, magictech);
 
     mes_file_entry.num = magictech;
     mes_get_msg(magictech_spell_mes_file, &mes_file_entry);
@@ -1493,18 +1493,18 @@ void magictech_load_spell(mes_file_handle_t msg_file, MagicTechInfo* info, int n
 
     mes_file_entry.num++;
     mes_get_msg(msg_file, &mes_file_entry);
-    sub_4578F0(info, mes_file_entry.str);
+    magictech_build_spell_stats(info, mes_file_entry.str);
 
     mes_file_entry.num++;
     if (mes_search(msg_file, &mes_file_entry)) {
         mes_get_msg(msg_file, &mes_file_entry);
-        sub_457B20(info, mes_file_entry.str);
+        magictech_build_spell_anim_info(info, mes_file_entry.str);
     }
 
     mes_file_entry.num++;
     if (mes_search(msg_file, &mes_file_entry)) {
         mes_get_msg(msg_file, &mes_file_entry);
-        sub_457D00(info, mes_file_entry.str);
+        magictech_build_spell_conflict_info(info, mes_file_entry.str);
     }
 
     memset(&(info->ai), 0xFF, sizeof(info->ai));
@@ -5480,8 +5480,10 @@ bool magictech_timeevent_matches_current(TimeEvent* timeevent)
 }
 
 // 0x457100
-void sub_457100(void)
+void magictech_reset_run_infos(void)
 {
+    // NOTE: The original 0x457100 is a bare `jmp 0x455710` - the same
+    // run-info pool clear under a second address, exported for map_reset.
     magictech_run_info_clear_all();
 }
 
@@ -5641,7 +5643,7 @@ void magictech_clear_run_source(int mt_id)
 }
 
 // 0x457580
-void sub_457580(MagicTechInfo* info, int magictech)
+void magictech_spell_info_init(MagicTechInfo* info, int magictech)
 {
     int index;
 
@@ -5770,7 +5772,7 @@ void magictech_build_aoe_info(MagicTechInfo* info, char* str)
 }
 
 // 0x4578F0
-void sub_4578F0(MagicTechInfo* info, char* str)
+void magictech_build_spell_stats(MagicTechInfo* info, char* str)
 {
     char* curr = str;
     int value1;
@@ -5838,7 +5840,7 @@ void sub_4578F0(MagicTechInfo* info, char* str)
 }
 
 // 0x457B20
-void sub_457B20(MagicTechInfo* info, char* str)
+void magictech_build_spell_anim_info(MagicTechInfo* info, char* str)
 {
     char* curr = str;
     int value;
@@ -5901,7 +5903,7 @@ void sub_457B20(MagicTechInfo* info, char* str)
 }
 
 // 0x457D00
-void sub_457D00(MagicTechInfo* info, char* str)
+void magictech_build_spell_conflict_info(MagicTechInfo* info, char* str)
 {
     char* curr = str;
     unsigned int flags;
@@ -6570,7 +6572,7 @@ bool magictech_find_effect_run(int64_t obj, unsigned int flags, int* index_ptr)
 }
 
 // 0x459290
-bool sub_459290(int64_t obj, int spell, int* index_ptr)
+bool magictech_find_by_spell(int64_t obj, int spell, int* index_ptr)
 {
     int idx;
     MagicTechObjectNode* node;
@@ -6640,7 +6642,7 @@ bool magictech_stop_spell(int64_t obj, int magictech)
 {
     int mt_id;
 
-    if (!sub_459290(obj, magictech, &mt_id)) {
+    if (!magictech_find_by_spell(obj, magictech, &mt_id)) {
         return false;
     }
 
@@ -6656,7 +6658,7 @@ bool magictech_timeevent_process(TimeEvent* timeevent)
 
     switch (timeevent->params[2].integer_value) {
     case 1:
-        sub_459490(timeevent->params[0].integer_value);
+        magictech_timeevent_maintain_process(timeevent->params[0].integer_value);
         break;
     case 2:
         magictech_interrupt(timeevent->params[0].integer_value);
@@ -6672,7 +6674,7 @@ bool magictech_timeevent_process(TimeEvent* timeevent)
 }
 
 // 0x459490
-void sub_459490(int mt_id)
+void magictech_timeevent_maintain_process(int mt_id)
 {
     MagicTechRunInfo* run_info;
 
@@ -6856,7 +6858,7 @@ void magictech_interrupt_runs_for_obj(int64_t obj)
 }
 
 // 0x4598D0
-void sub_4598D0(int64_t obj)
+void magictech_end_runs_for_obj(int64_t obj)
 {
     int idx;
     MagicTechObjectNode* node;
@@ -6905,8 +6907,12 @@ void sub_4598D0(int64_t obj)
 }
 
 // 0x459A20
-void sub_459A20(int64_t obj)
+void magictech_mirrored_hit(int64_t obj)
 {
+    // NOTE: Empty in the original too - 0x459A20 is exactly `ret`. The
+    // combat code calls this when a target under OSF_MIRRORED takes damage;
+    // the mirror never did anything in either binary.
+    (void)obj;
 }
 
 // 0x459A30
@@ -6951,7 +6957,7 @@ void magictech_anim_play_hit_fx(int64_t obj, CombatContext* combat)
 
     if ((spell_flags & OSF_ENTANGLED) != 0) {
         if (magictech_find_effect_run(obj, OSF_ENTANGLED, &magictech)) {
-            if (!sub_459C10(obj, magictech)) {
+            if (!magictech_effect_resist_check(obj, magictech)) {
                 magictech_add_resurrect_fx(combat->attacker_obj, obj);
                 magictech_interrupt_delayed(magictech);
             }
@@ -6966,7 +6972,7 @@ void magictech_anim_play_hit_fx(int64_t obj, CombatContext* combat)
 }
 
 // 0x459C10
-bool sub_459C10(int64_t obj, int mt_id)
+bool magictech_effect_resist_check(int64_t obj, int mt_id)
 {
     MagicTechRunInfo* run_info;
     MagicTechInfo* info;
@@ -7044,7 +7050,7 @@ bool sub_459C10(int64_t obj, int mt_id)
 }
 
 // 0x459EA0
-void sub_459EA0(int64_t obj)
+void magictech_death_flags_clear(int64_t obj)
 {
     unsigned int flags;
     int64_t leader_obj;
@@ -7075,8 +7081,11 @@ bool magictech_target_flags_get(int magictech, uint64_t** a2)
 }
 
 // 0x459F50
-void sub_459F50(void)
+void magictech_mt_ai_reset(void)
 {
+    // NOTE: The original 0x459F50 is a bare `jmp mt_ai_reset` (0x4CC210) -
+    // a second exported entry for teleport.c to reset the tech-AI after a
+    // cross-map teleport.
     mt_ai_reset();
 }
 
@@ -7099,7 +7108,7 @@ bool magictech_is_tech(int magictech)
 }
 
 // 0x459FF0
-bool sub_459FF0(int mt_id)
+bool magictech_run_spell_valid(int mt_id)
 {
     MagicTechRunInfo* run_info;
 
@@ -7132,7 +7141,10 @@ int magictech_get_aptitude_adj(int64_t sector_id)
 }
 
 // 0x45A480
-void sub_45A480(MagicTechRunInfo* run_info)
+// NOTE: Unreferenced in CE and in the original (xrefs.tsv: named=0 anon=0).
+// Kept as exported surface: it is the only caller-shaped destructor for a
+// heap run-info, and the pool itself is never freed piecewise.
+void magictech_run_info_destroy(MagicTechRunInfo* run_info)
 {
     MagicTechObjectNode* node;
 
@@ -7152,7 +7164,10 @@ void sub_45A480(MagicTechRunInfo* run_info)
 }
 
 // 0x45A4F0
-void sub_45A4F0(int64_t obj, int fx_id, int mt_id)
+// NOTE: Unreferenced in CE and in the original (xrefs.tsv: named=0 anon=0).
+// The likely shape is a packet-77 receive hook for magictech_fx_remove; the
+// direct call is a faithful transcription of the original's body.
+void magictech_fx_remove_ex(int64_t obj, int fx_id, int mt_id)
 {
     animfx_remove(&spell_eye_candies, obj, fx_id, mt_id);
 }
@@ -7178,7 +7193,7 @@ void magictech_error_unressurectable(int64_t obj)
 }
 
 // 0x45A580
-bool sub_45A580(int64_t a1, int64_t a2)
+bool magictech_invisibility_target_check(int64_t a1, int64_t a2)
 {
     if ((obj_field_int32_get(a2, OBJ_F_SPELL_FLAGS) & OSF_INVISIBLE) == 0
         || (obj_field_int32_get(a1, OBJ_F_SPELL_FLAGS) & OSF_DETECTING_INVISIBLE) != 0) {

@@ -1790,7 +1790,7 @@ void combat_dmg(CombatContext* combat)
 
         if (dam > 0
             && (obj_field_int32_get(combat->target_obj, OBJ_F_SPELL_FLAGS) & OSF_MIRRORED) != 0) {
-            sub_459A20(combat->target_obj);
+            magictech_mirrored_hit(combat->target_obj);
         }
 
         int hp_ratio_before;

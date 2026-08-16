@@ -1597,7 +1597,7 @@ bool save_char(const char* path, int64_t obj)
         tf_remove(obj);
     }
 
-    sub_4598D0(obj);
+    magictech_end_runs_for_obj(obj);
     anim_interrupt_all_goals_of_obj(obj, PRIORITY_HIGHEST, false, true);
 
     scheme = auto_level_scheme_get(obj);

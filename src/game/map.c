@@ -235,7 +235,7 @@ void map_reset(void)
 
         tig_debug_printf("map_reset: clearing magictech...");
         tig_timer_now(&start);
-        sub_457100();
+        magictech_reset_run_infos();
         tig_debug_printf("done. Time (ms): %d\n", tig_timer_elapsed(start));
 
         tig_debug_printf("map_reset: interrupting anims...");

@@ -983,7 +983,7 @@ void critter_disband_internal(int64_t obj)
         return;
     }
 
-    sub_459EA0(obj);
+    magictech_death_flags_clear(obj);
 
     // Find and remove the critter from the leader's follower list.
     cnt = obj_arrayfield_length_get(leader_obj, OBJ_F_CRITTER_FOLLOWER_IDX);

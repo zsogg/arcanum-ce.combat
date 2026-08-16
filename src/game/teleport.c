@@ -216,7 +216,7 @@ bool teleport_process(TeleportData* teleport_data)
     }
 
     if (teleport_data->map != map && player_is_pc_obj(teleport_data->obj)) {
-        sub_459F50();
+        magictech_mt_ai_reset();
         anim_notify_pc_teleported();
         timeevent_notify_pc_teleported(teleport_data->map);
     }

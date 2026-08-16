@@ -2252,7 +2252,7 @@ bool ai_is_valid_target(int64_t source_obj, int64_t target_obj)
             return false;
         }
 
-        if (!sub_45A580(source_obj, target_obj)) {
+        if (!magictech_invisibility_target_check(source_obj, target_obj)) {
             return false;
         }
 
