@@ -12,7 +12,7 @@
 #include "game/ui.h"
 
 static bool anim_allocate_this_run_index(AnimID* anim_id);
-static bool sub_44D240(int index);
+static bool anim_goal_restart_run_index(int index);
 static bool anim_goal_add_func(AnimGoalData* goal_data, AnimID* anim_id, bool a3, unsigned int flags);
 static bool anim_subgoal_add_func(AnimID anim_id, AnimGoalData* goal_data);
 static bool anim_interrupt_timeevent_match(TimeEvent* timeevent);
@@ -217,8 +217,12 @@ int dword_739E40;
 // 0x739E44
 int dword_739E44;
 
+// Adds one to animNumActiveGoals for goals that count toward the active-goal
+// total (priority 2+, not concurrent, not endless). Mirrored by the decrement
+// twin below, and cross-checked by anim_validate_active_goals.
+//
 // 0x44C840
-void sub_44C840(AnimRunInfo* run_info, AnimGoalNode* goal_node)
+void anim_active_goal_count_increment(AnimRunInfo* run_info, AnimGoalNode* goal_node)
 {
     ASSERT(run_info != NULL); // pRunInfo != NULL
     ASSERT(goal_node != NULL); // pGoalNode != NULL
@@ -230,8 +234,10 @@ void sub_44C840(AnimRunInfo* run_info, AnimGoalNode* goal_node)
     }
 }
 
+// The matching decrement; see the increment twin above.
+//
 // 0x44C8F0
-void sub_44C8F0(AnimRunInfo* run_info, AnimGoalNode* goal_node)
+void anim_active_goal_count_decrement(AnimRunInfo* run_info, AnimGoalNode* goal_node)
 {
     ASSERT(run_info != NULL); // pRunInfo != NULL
     ASSERT(goal_node != NULL); // pGoalNode != NULL
@@ -517,7 +523,7 @@ bool mp_deallocate_run_index(AnimID* anim_id)
 
         for (stack_index = 0; stack_index <= run_info->current_goal; stack_index++) {
             if (run_info->goals[stack_index].type >= 0 && run_info->goals[stack_index].type < ANIM_GOAL_MAX) {
-                sub_44C8F0(run_info, anim_goal_nodes[run_info->goals[stack_index].type]);
+                anim_active_goal_count_decrement(run_info, anim_goal_nodes[run_info->goals[stack_index].type]);
             }
         }
 
@@ -548,6 +554,12 @@ bool mp_deallocate_run_index(AnimID* anim_id)
     return true;
 }
 
+// NOTE: Deliberately left as sub_44D0C0 - 0x44D0C0 is a bare `ret` in the
+// original too. Every caller is a multiplayer host path that modifies a run
+// right before broadcasting Packet8, so this reads like a hook Troika compiled
+// empty in the release build. Naming it would invent a behaviour it does not
+// have.
+//
 // 0x44D0C0
 void sub_44D0C0(AnimRunInfo* run_info)
 {
@@ -571,8 +583,13 @@ bool anim_free_run_index(AnimID* anim_id)
     return mp_deallocate_run_index(anim_id);
 }
 
+// Resets one run slot and clears its pending restart timeevent. The original's
+// only caller is the unported, unreferenced 0x44D2B0 loop (iterate every slot
+// with flags & 3, call this, then anim_refresh_active_goal_count), which CE
+// deliberately does not transcribe.
+//
 // 0x44D240
-bool sub_44D240(int index)
+bool anim_goal_restart_run_index(int index)
 {
     AnimRunInfo* run_info;
 
@@ -764,7 +781,7 @@ bool anim_goal_add_func(AnimGoalData* goal_data, AnimID* anim_id, bool a3, unsig
     for (idx = 0; idx < 5; idx++) {
         object_locator_init(run_info->goals[0].params[idx].obj, &(run_info->goals[0].field_B0[idx]));
     }
-    sub_44C840(run_info, anim_goal_nodes[run_info->goals[0].type]);
+    anim_active_goal_count_increment(run_info, anim_goal_nodes[run_info->goals[0].type]);
     anim_validate_active_goals("GoalAdd");
     if ((goal_data->type == AG_ATTACK
             || goal_data->type == AG_ATTEMPT_ATTACK)
@@ -827,7 +844,7 @@ bool anim_subgoal_add_func(AnimID anim_id, AnimGoalData* goal_data)
         run_info->path_attached_to_stack_index++;
     }
 
-    sub_44C840(run_info, anim_goal_nodes[goal_data->type]);
+    anim_active_goal_count_increment(run_info, anim_goal_nodes[goal_data->type]);
     anim_validate_active_goals("SubGoal Add");
 
     return true;
@@ -932,16 +949,24 @@ bool anim_recover_handles(AnimRunInfo* run_info, AnimGoalSubNode* goal_subnode)
     return true;
 }
 
+// Stops `attacker_obj` if it is currently attacking `target_obj` directly or
+// attacking one of target_obj's followers. ai_make_peace uses this for the
+// peacemaking NPC itself, then uses the direct-only twin below for each
+// follower of the other party.
+//
 // 0x44E050
-void sub_44E050(int64_t a1, int64_t a2)
+void anim_interrupt_attack_on_obj_or_follower(int64_t a1, int64_t a2)
 {
     AnimID anim_id;
     AnimRunInfo* run_info;
 
     if (anim_is_busy(a1, &anim_id)) {
         run_info = &(anim_run_info[anim_id.slot_num]);
+        // FIX: The original compares goals[0].type against both AG_ATTACK
+        // (0x12) and AG_ATTEMPT_ATTACK (0x13) at 0x44E070-0x44E095; CE read
+        // goals[1] for the second comparison.
         if (run_info->goals[0].type == AG_ATTACK
-            || run_info->goals[1].type == AG_ATTEMPT_ATTACK) {
+            || run_info->goals[0].type == AG_ATTEMPT_ATTACK) {
             if (run_info->goals[0].params[AGDATA_TARGET_OBJ].obj == a2
                 || critter_pc_leader_get(run_info->goals[0].params[AGDATA_TARGET_OBJ].obj) == a2) {
                 anim_interrupt(&anim_id, PRIORITY_5);
@@ -950,16 +975,20 @@ void sub_44E050(int64_t a1, int64_t a2)
     }
 }
 
+// Direct-target version of the twin above; no follower resolution.
+//
 // 0x44E0E0
-void sub_44E0E0(int64_t a1, int64_t a2)
+void anim_interrupt_attack_on_obj(int64_t a1, int64_t a2)
 {
     AnimID anim_id;
     AnimRunInfo* run_info;
 
     if (anim_is_busy(a1, &anim_id)) {
         run_info = &(anim_run_info[anim_id.slot_num]);
+        // FIX: Same goals[1] transcription error as the twin above; the
+        // original reads goals[0].type for both comparisons.
         if (run_info->goals[0].type == AG_ATTACK
-            || run_info->goals[1].type == AG_ATTEMPT_ATTACK) {
+            || run_info->goals[0].type == AG_ATTEMPT_ATTACK) {
             if (run_info->goals[0].params[AGDATA_TARGET_OBJ].obj == a2) {
                 anim_interrupt(&anim_id, PRIORITY_5);
             }
@@ -1189,14 +1218,18 @@ bool anim_find_next_of_type(int64_t obj, int type, AnimID* anim_id)
     return false;
 }
 
+// True when obj already has goal_data (type plus all five params) as its
+// current goal, including equivalent goal types. The _ex twin returns the run
+// id for callers that need to inspect or modify the existing run.
+//
 // 0x44E6F0
-bool sub_44E6F0(int64_t obj, AnimGoalData* goal_data)
+bool anim_is_current_goal(int64_t obj, AnimGoalData* goal_data)
 {
-    return sub_44E710(obj, goal_data, NULL);
+    return anim_is_current_goal_ex(obj, goal_data, NULL);
 }
 
 // 0x44E710
-bool sub_44E710(int64_t obj, AnimGoalData* goal_data, AnimID* anim_id)
+bool anim_is_current_goal_ex(int64_t obj, AnimGoalData* goal_data, AnimID* anim_id)
 {
     int prev_slot;
     int slot;
@@ -1404,8 +1437,12 @@ bool anim_goal_type_is_concurrent(int index)
     return anim_goal_nodes[index]->concurrent == 1;
 }
 
+// True if a path exists from `from` to `to` for obj, using the reusable
+// anim_scratch_path buffer. wmap_ui uses it to reject waypoints whose path is
+// blocked.
+//
 // 0x44EB40
-bool sub_44EB40(int64_t obj, int64_t from, int64_t to)
+bool anim_path_is_possible(int64_t obj, int64_t from, int64_t to)
 {
     ASSERT(obj != OBJ_HANDLE_NULL); // 4489, "obj != OBJ_HANDLE_NULL"
 
@@ -1439,8 +1476,13 @@ void anim_path_destroy(AnimPath* path)
     (void)path;
 }
 
+// Non-host path creators call this instead of building a path. 0x10000 makes
+// anim_timeevent_process park the run on run_info->pause_time until the host's
+// Packet8 modification arrives; path flag 0x1 means the run is still using its
+// current rotation in the meantime.
+//
 // 0x44EBF0
-void sub_44EBF0(AnimRunInfo* run_info)
+void anim_path_mark_net_update_pending(AnimRunInfo* run_info)
 {
     ASSERT(run_info != NULL); // pRunInfo != NULL
 

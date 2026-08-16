@@ -3670,7 +3670,7 @@ bool wmap_ui_add_waypoint(WmapCoords* coords)
 
         townmap_coords_to_loc(&wmap_ui_tmi, coords->x, coords->y, &to);
 
-        steps = sub_44EB40(player_get_local_pc_obj(), from, to);
+        steps = anim_path_is_possible(player_get_local_pc_obj(), from, to);
         if (steps == 0) {
             // "Your path is blocked. Try clicking closer to the previous
             // waypoint."

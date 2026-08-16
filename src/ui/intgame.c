@@ -3734,7 +3734,7 @@ void intgame_perform_action_on_target(TargetDescriptor* td)
     }
 
     if (combat_auto_attack_get(pc_obj)) {
-        if (sub_44E6F0(pc_obj, &goal_data)
+        if (anim_is_current_goal(pc_obj, &goal_data)
             || !anim_interrupt_all_goals_of_obj(pc_obj, 3, 0, 0)) {
             return;
         }
@@ -3782,7 +3782,7 @@ void intgame_perform_action_on_target(TargetDescriptor* td)
                     }
                 }
             }
-        } else if (sub_44E6F0(pc_obj, &goal_data)) {
+        } else if (anim_is_current_goal(pc_obj, &goal_data)) {
             if (anim == AG_ATTACK || anim == AG_ATTEMPT_ATTACK) {
                 if (num_goal_subslots_in_use(&anim_id) < 4) {
                     if (is_anim_forever(&anim_id)) {

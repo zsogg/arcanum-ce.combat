@@ -3796,7 +3796,7 @@ bool anim_timeevent_process(TimeEvent* timeevent)
 
                     goal_data->type = state_change & ANIM_FLOW_GOAL_MASK;
                     goal_node = anim_goal_nodes[goal_data->type];
-                    sub_44C840(run_info, goal_node);
+                    anim_active_goal_count_increment(run_info, goal_node);
                     anim_validate_active_goals("Running: PushGoal");
                 } else {
                     anim_id_to_str(&(run_info->id), str);
@@ -3958,7 +3958,7 @@ void anim_pop_goal(AnimRunInfo* run_info, unsigned int* state_change_ptr, AnimGo
         run_info->path.flags = 0x01;
     }
 
-    sub_44C8F0(run_info, *goal_node_ptr);
+    anim_active_goal_count_decrement(run_info, *goal_node_ptr);
 
     run_info->current_goal--;
 
@@ -5154,7 +5154,7 @@ bool anim_create_path_to_tile(AnimRunInfo* run_info)
 
     if (tig_net_is_active()
         && !tig_net_is_host()) {
-        sub_44EBF0(run_info);
+        anim_path_mark_net_update_pending(run_info);
         return true;
     }
 
@@ -5535,7 +5535,7 @@ bool anim_create_path_away_from_obj(AnimRunInfo* run_info)
 
     if (tig_net_is_active()
         && !tig_net_is_host()) {
-        sub_44EBF0(run_info);
+        anim_path_mark_net_update_pending(run_info);
         return true;
     }
 
@@ -6028,7 +6028,7 @@ bool anim_create_path_near_tile(AnimRunInfo* run_info)
 
     if (tig_net_is_active()
         && !tig_net_is_host()) {
-        sub_44EBF0(run_info);
+        anim_path_mark_net_update_pending(run_info);
         return true;
     }
 
@@ -6110,7 +6110,7 @@ bool anim_create_path_near_obj(AnimRunInfo* run_info)
 
     if (tig_net_is_active()
         && !tig_net_is_host()) {
-        sub_44EBF0(run_info);
+        anim_path_mark_net_update_pending(run_info);
         return true;
     }
 
@@ -6315,7 +6315,7 @@ bool anim_create_path_near_obj_combat(AnimRunInfo* run_info)
 
     if (tig_net_is_active()
         && !tig_net_is_host()) {
-        sub_44EBF0(run_info);
+        anim_path_mark_net_update_pending(run_info);
         return true;
     }
 
@@ -14123,7 +14123,7 @@ bool anim_goal_follow_obj(int64_t source_obj, int64_t target_obj)
         range = 7;
     }
 
-    if (sub_44E710(source_obj, &goal_data, &anim_id)) {
+    if (anim_is_current_goal_ex(source_obj, &goal_data, &anim_id)) {
         run_info = &(anim_run_info[anim_id.slot_num]);
         switch (run_info->cur_stack_data->type) {
         // NOTE: Not sure why this one was specified explicitly.
@@ -14288,7 +14288,7 @@ bool anim_goal_attack_ex(int64_t attacker_obj, int64_t target_obj, int sound_id)
 
     goal_data.params[AGDATA_TARGET_OBJ].obj = target_obj;
 
-    if (sub_44E6F0(attacker_obj, &goal_data)) {
+    if (anim_is_current_goal(attacker_obj, &goal_data)) {
         anim_make_room_for_critter(attacker_obj);
         return false;
     }
@@ -14414,7 +14414,7 @@ bool anim_goal_throw_item(int64_t obj, int64_t item_obj, int64_t target_loc)
     goal_data.params[AGDATA_TARGET_TILE].loc = target_loc;
     goal_data.params[AGDATA_SCRATCH_OBJ].obj = item_obj;
 
-    if (sub_44E6F0(obj, &goal_data)) {
+    if (anim_is_current_goal(obj, &goal_data)) {
         return false;
     }
 
@@ -15306,7 +15306,7 @@ bool anim_goal_attempt_spread_out(int64_t obj, int64_t target_obj)
 
     goal_data.params[AGDATA_TARGET_OBJ].obj = target_obj;
 
-    if (sub_44E710(obj, &goal_data, &anim_id)) {
+    if (anim_is_current_goal_ex(obj, &goal_data, &anim_id)) {
         run_info = &(anim_run_info[anim_id.slot_num]);
 
         // FIXME: Unused.
@@ -15893,7 +15893,7 @@ void anim_pop_current_goal(AnimRunInfo* run_info)
             goal_node->subnodes[14].func(run_info);
         }
 
-        sub_44C8F0(run_info, goal_node);
+        anim_active_goal_count_decrement(run_info, goal_node);
     }
 
     run_info->current_goal--;

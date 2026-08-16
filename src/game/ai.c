@@ -1406,7 +1406,7 @@ void ai_make_peace(int64_t obj, int64_t other_obj)
     }
 
     ai_apply_danger_type(obj, AI_DANGER_SOURCE_TYPE_NONE, OBJ_HANDLE_NULL, NULL);
-    sub_44E050(obj, leader_obj);
+    anim_interrupt_attack_on_obj_or_follower(obj, leader_obj);
 
     if (obj_type_is_critter(obj_type)) {
         ObjectList objects;
@@ -1417,7 +1417,7 @@ void ai_make_peace(int64_t obj, int64_t other_obj)
         while (node != NULL) {
             ai_forget_enemy(node->obj, obj);
             ai_shitlist_remove(obj, node->obj);
-            sub_44E0E0(node->obj, obj);
+            anim_interrupt_attack_on_obj(node->obj, obj);
             node = node->next;
         }
         object_list_destroy(&objects);
