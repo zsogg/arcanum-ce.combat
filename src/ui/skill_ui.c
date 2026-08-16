@@ -169,6 +169,10 @@ void skill_ui_begin(int64_t obj, int type)
     skill_ui_current_obj = obj;
     skill_ui_current_type = type;
 
+    // The original also broadcasts a skill-mode Packet1E here when
+    // multiplayer_is_locked() is false. CE never reaches that branch:
+    // tig_net_is_active() is always 0, so multiplayer_is_locked() is always
+    // true. The branch is deliberately not transcribed.
     if ((skill_ui_target_flags[type] & 0x2000000) != 0
         || intgame_mode_set(INTGAME_MODE_MAIN)) {
         skill_ui_preprocess(obj, type);

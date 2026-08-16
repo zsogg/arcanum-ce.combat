@@ -3753,7 +3753,7 @@ bool wmap_ui_waypoint_at_coords(WmapCoords* coords, int* idx_ptr)
     return false;
 }
 
-// Empty-hook twin from the note above sub_563D80; the call site is the
+// Empty-hook twin from the note above wmap_ui_note_added_hook; the call site is the
 // "selected waypoint follows the mouse" path.
 //
 // 0x564830
