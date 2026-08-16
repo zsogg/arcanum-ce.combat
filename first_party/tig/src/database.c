@@ -36,6 +36,7 @@ typedef struct TigDatabaseFileHandle {
     TigDatabaseFileHandle* next;
 } TigDatabaseFileHandle;
 
+static int tig_database_path_compare(const char* a, const char* b);
 static void tig_database_find_prepare(TigDatabaseFindFileData* ffd);
 static void tig_database_load_ignored(TigDatabase* database);
 static int num_path_segments(const char* path);
@@ -92,6 +93,34 @@ TigDatabase* tig_database_open(const char* path)
     if (id == FOURCC_DAT) {
         memset(&guid, 0, sizeof(guid));
     } else if (id == FOURCC_DAT1) {
+        // NOTE: Faithful, and the off-by-four is Troika's. The original seeks
+        // to -24 and reads 16 bytes here as well (0x53BCE8: `push 2 / push
+        // 0xffffffe8 / call fseek`, then `push 1 / lea eax, [esp+0x30] / push
+        // 0x10 / call fread`), then re-reads the dword at -8 into `id`, which
+        // is why `id` no longer holds the fourcc below.
+        //
+        // But the writer disagrees with the reader. A DAT1 footer is, measured
+        // against Troika's own `mod-info/dbmaker.exe` and confirmed on every
+        // shipped archive (the entry table ends at exactly EOF-28 in all 17):
+        //
+        //     [-28, -12)  16-byte guid
+        //     [-12,  -8)  fourcc "1TAD"
+        //     [ -8,  -4)  name table size
+        //     [ -4,   0)  entry table offset
+        //
+        // Reading from -24 therefore takes the guid's *last twelve* bytes plus
+        // the literal fourcc, and drops its first four. Every archive's guid as
+        // this function reports it ends in 44 41 54 31. (Building the same
+        // input three times with `dbmaker -r` produces three different 16-byte
+        // values at [-28, -12) and the same bytes everywhere else, which is
+        // what identifies that window as the guid.)
+        //
+        // Harmless in practice, because nothing compares this against a guid
+        // from outside: `map_preprocess_mobile` writes whatever it gets here
+        // into the preprocessed mobile-objects file and compares it back
+        // against itself, so it works as a cache key regardless. Not repaired -
+        // fixing it would invalidate every existing preprocessed map file for
+        // no behavioural gain.
         if (fseek(stream, -24, SEEK_END) != 0) {
             fclose(stream);
             return false;
@@ -292,7 +321,10 @@ void tig_database_find_prepare(TigDatabaseFindFileData* ffd)
     // name).
     while (l <= r) {
         m = (l + r) / 2;
-        cmp = SDL_strcmp(ffd->database->entries[m].path, ffd->pattern);
+        // FIX: Same separator ordering as `tig_database_find_entry_by_path` -
+        // this search reads the same array and has to agree with how it is
+        // sorted.
+        cmp = tig_database_path_compare(ffd->database->entries[m].path, ffd->pattern);
         if (cmp < 0) {
             l = m + 1;
         } else if (cmp > 0) {
@@ -504,6 +536,25 @@ char* tig_database_fgets(char* buffer, int max_count, TigDatabaseFileHandle* str
             if (count == 0) {
                 return NULL;
             }
+
+            // FIX: Stop at end of file instead of storing the -1 and going
+            // round again. Storing it wrote 0xFF into the buffer and kept
+            // looping, so a final line with no newline came back as the line
+            // followed by `max_count - 1` bytes of 0xFF.
+            //
+            // The original breaks out here and terminates the string: at
+            // 0x53C419 it compares the character against -1 and jumps to
+            // 0x53C431, which returns NULL only when nothing has been read yet
+            // (`test esi, esi / jne`) and otherwise falls into the same
+            // `buffer[count] = '\0'` the newline path uses.
+            //
+            // 60 of the 257 shipped .mes files and 31 of the 1,059 .dlg files
+            // end without a newline, so this fires on real data. Their parsers
+            // absorb it - both read through this a character at a time and skip
+            // anything that is not a brace - but `Rules\map.patch` (map.c) tests
+            // the last character of the line it just read, so an archived
+            // map.patch whose last line has no newline loses that line.
+            break;
         }
 
         buffer[count++] = (unsigned char)ch;
@@ -800,7 +851,61 @@ int tig_database_find_entry_by_path(const void* a1, const void* a2)
 {
     const char* path = (const char*)a1;
     const TigDatabaseEntry* entry = (const TigDatabaseEntry*)a2;
-    return SDL_strcmp(path, entry->path);
+    return tig_database_path_compare(path, entry->path);
+}
+
+// FIX: Compare entry paths in the order the entry table is actually sorted in,
+// which is by the path as the archiver wrote it - with backslash separators.
+//
+// The original gets this for free: it is Windows-only, keeps the separators it
+// was given, and `SDL_strcmp` (`strcmp` at 0x53CEB0) therefore sees exactly the
+// order `dbmaker.exe` sorted the table into. `tig_database_open` rewrites those
+// separators to the platform's, and '/' (0x2F) does not sort where '\' (0x5C)
+// did, so on every other platform the array the two binary searches over it
+// assume is sorted is not.
+//
+// Measured against Troika's archiver: `dbmaker -r` on `art\a.txt` and
+// `art2\b.txt` emits them in the order `art`, `art2`, `art2\b.txt`,
+// `art\a.txt`, because '2' < '\'. Rewrite the separator and '2' > '/', so
+// `tig_database_get_entry`'s `bsearch` walks the wrong way and reports
+// `art\a.txt` missing. Any archive holding a directory whose name is a prefix
+// of a sibling entry's is affected - the character that follows only has to
+// sort between '/' and '\', which every digit and capital letter does.
+//
+// None of the 17 shipped archives contain the pattern, so nothing in the base
+// game exercises it, but a mod built with the tool Troika shipped can. See
+// `tests/test_database.c`,
+// `finds_an_entry_when_a_sibling_directory_shares_its_prefix`.
+//
+// Mapping '/' onto '\' rather than re-sorting the array keeps the entries in
+// the order the original enumerates them in, which is observable through
+// `tig_database_find_next_entry`. On Windows no path holds a '/', so this is
+// `strcmp` there.
+int tig_database_path_compare(const char* a, const char* b)
+{
+    unsigned char ca;
+    unsigned char cb;
+
+    for (;;) {
+        ca = (unsigned char)*a++;
+        cb = (unsigned char)*b++;
+
+        if (ca == '/') {
+            ca = '\\';
+        }
+
+        if (cb == '/') {
+            cb = '\\';
+        }
+
+        if (ca != cb) {
+            return ca < cb ? -1 : 1;
+        }
+
+        if (ca == '\0') {
+            return 0;
+        }
+    }
 }
 
 // 0x53CED0
@@ -917,7 +1022,26 @@ bool tig_database_fread_internal(void* buffer, size_t size, TigDatabaseFileHandl
     int rc;
 
     if ((stream->entry->flags & TIG_DATABASE_ENTRY_PLAIN) != 0) {
-        if (fread(buffer, size, 1, stream->underlying_stream) != 1) {
+        // FIX: A zero-byte read is not a failure. `fread` with an element size
+        // of 0 returns 0, which this then read as an error and latched into the
+        // stream - and a latched error makes every later `tig_database_fseek`
+        // fail (its first test), so the handle cannot be rewound.
+        //
+        // The original reads through `ReadFile`, not the CRT: 0x53CF8E opens
+        // the archive with `CreateFileA` (GENERIC_READ, OPEN_EXISTING,
+        // FILE_FLAG_RANDOM_ACCESS) and 0x53D0C7 calls a five-argument stdcall
+        // import on that handle with the buffer, the size and an out pointer.
+        // `ReadFile` succeeds when asked for zero bytes, so the original leaves
+        // the stream clean.
+        //
+        // Reached two ways, both from data alone: a zero-length entry (there
+        // are none in the 21,613 shipped ones, but nothing stops a mod from
+        // having one), and `tig_database_fread` called at the end of an entry,
+        // where the clamp above leaves nothing to read.
+        //
+        // The compressed branch below already handles this correctly - zlib is
+        // asked for zero bytes of output and the loop does not run.
+        if (size != 0 && fread(buffer, size, 1, stream->underlying_stream) != 1) {
             stream->flags |= TIG_DATABASE_FILE_ERROR;
             return false;
         }

@@ -22,6 +22,7 @@ void test_color_suite(void);
 void test_bsearch_suite(void);
 void test_palette_suite(void);
 void test_mes_suite(void);
+void test_database_suite(void);
 void test_random_suite(void);
 void test_stat_suite(void);
 void test_skill_suite(void);
@@ -48,6 +49,7 @@ int main(void)
     test_bsearch_suite();
     test_palette_suite();
     test_mes_suite();
+    test_database_suite();
     test_random_suite();
     test_stat_suite();
     test_skill_suite();

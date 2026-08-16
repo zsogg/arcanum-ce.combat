@@ -24,6 +24,7 @@ add_executable(arcanum-tests
     "test_bsearch.c"
     "test_palette.c"
     "test_mes.c"
+    "test_database.c"
     "test_random.c"
     "test_stat.c"
     "test_skill.c"
