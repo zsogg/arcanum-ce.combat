@@ -862,12 +862,12 @@ static int64_t charedit_obj;
 // 0x64E018
 static bool charedit_created;
 
-// 0x64E01C
 // Which of the four lower panels is on top: 0 skills, 1 tech, 2 spells,
 // 3 scheme. The four `charedit_*_tab_btn` handlers each raise their window and
 // store their own number here; 3 is special-cased because leaving the scheme
 // tab has to commit it (`charedit_scheme_scrollbar_ensure`/
 // `charedit_scheme_scrollbar_release`).
+// 0x64E01C
 static int charedit_tab;
 
 // 0x64E020

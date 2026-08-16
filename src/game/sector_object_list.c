@@ -473,12 +473,12 @@ void objlist_fold(SectorObjectList* list, int64_t location, int first_heartbeat)
     }
 }
 
-// 0x4F1D80
 // Debug consistency check over all 4096 buckets: every node's handle must be
 // valid, and its location's sector and tile must match the bucket it sits in.
 // Unreferenced in CE; the original calls it from the sector validation walk
 // (0x4CF2D0), which is not transcribed. The error strings come from the
 // original; one of them names this function.
+// 0x4F1D80
 bool objlist_validate(SectorObjectList* list, int64_t sector_id)
 {
     ObjectNode* node;

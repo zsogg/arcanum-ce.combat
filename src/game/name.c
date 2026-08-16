@@ -1444,13 +1444,13 @@ tig_art_id_t name_art_id_next(tig_art_id_t art_id)
     }
 }
 
-// 0x41E960
 // The A key of the art browser: step an art id to the previous existing art.
 // The mirror of name_art_id_next: walk the palette, then num, then the type
 // fields, downwards; when no lower id exists, return TIG_ART_ID_INVALID.
 // Unlike name_art_id_next, the fallback creates in each case do not check
 // their return value in the original - every rung falls straight through to
 // the exists check below.
+// 0x41E960
 tig_art_id_t name_art_id_prev(tig_art_id_t art_id)
 {
     int art_type = tig_art_type(art_id);
