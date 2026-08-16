@@ -2893,7 +2893,7 @@ void intgame_process_event(TigMessage* msg)
                             v2 = inven_ui_drag_item_obj_get();
                             if (hotkey_ui_is_dragging()) {
                                 hotkey_ui_cancel_drag();
-                                sub_573740(v2, false);
+                                inven_ui_begin_drag_transfer(v2, false);
                                 if (inven_ui_drag_item_obj_get() != OBJ_HANDLE_NULL) {
                                     v2 = inven_ui_drag_item_obj_get();
                                 }
@@ -2901,7 +2901,7 @@ void intgame_process_event(TigMessage* msg)
 
                             if (!hotkey_ui_is_dragging()) {
                                 if (critter_is_active(pc_obj)) {
-                                    sub_573840();
+                                    inven_ui_drag_clear();
                                     intgame_refresh_cursor();
                                     anim_goal_throw_item(pc_obj, v2, td.loc);
                                 } else {
@@ -2955,7 +2955,7 @@ void intgame_process_event(TigMessage* msg)
                         }
 
                         if (anim_interrupt_all_goals_of_obj(pc_obj, 3, 0, 0)) {
-                            sub_4B4320(pc_obj);
+                            combat_critter_fidget_restart(pc_obj);
 
                             tig_mouse_get_state(&mouse_state);
                             if (location_at(mouse_state.x, mouse_state.y, &loc)
@@ -3476,7 +3476,7 @@ void intgame_perform_action_on_target(TargetDescriptor* td)
         item_obj = inven_ui_drag_item_obj_get();
         if (hotkey_ui_is_dragging()) {
             hotkey_ui_cancel_drag();
-            sub_573740(item_obj, false);
+            inven_ui_begin_drag_transfer(item_obj, false);
         }
 
         if (hotkey_ui_is_dragging()) {
@@ -3488,7 +3488,7 @@ void intgame_perform_action_on_target(TargetDescriptor* td)
             item_obj = inven_ui_drag_item_obj_get();
         }
 
-        sub_573840();
+        inven_ui_drag_clear();
         intgame_refresh_cursor();
 
         anim = AG_THROW_ITEM;
@@ -3951,7 +3951,7 @@ void intgame_hotkey_activate(Hotkey* hotkey)
                             inven_ui_drop_dragged_item();
                         }
                         inven_ui_destroy();
-                        sub_573740(v2, true);
+                        inven_ui_begin_drag_transfer(v2, true);
                     }
                     break;
                 }
@@ -6462,7 +6462,7 @@ void intgame_refresh_cursor(void)
         tig_art_interface_id_create(art_num, 0, 0, 0, &art_id);
         tig_mouse_cursor_set_art_id(art_id);
 
-        sub_5736E0();
+        inven_ui_drag_cursor_refresh();
     }
 }
 

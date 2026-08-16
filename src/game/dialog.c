@@ -491,7 +491,7 @@ bool dialog_begin(DialogState* state)
         return false;
     }
 
-    sub_4C1020(state->npc_obj, state->pc_obj);
+    reaction_current_set(state->npc_obj, state->pc_obj);
 
     if (critter_is_dead(state->npc_obj) || ai_check_kos(state->npc_obj, state->pc_obj) == AI_KOS_NO) {
         if (player_is_local_pc_obj(state->pc_obj)) {
@@ -568,7 +568,7 @@ void dialog_select_option(DialogState* state, int index)
 // 0x413280
 void dialog_end(DialogState* state)
 {
-    sub_4C10A0(state->npc_obj, state->pc_obj);
+    reaction_current_reset(state->npc_obj, state->pc_obj);
 }
 
 // Builds the line an NPC greets the PC with, or an empty string if it cannot
@@ -3393,7 +3393,7 @@ void dialog_ask_money(int amt, int accept_type, int accept_num, int decline_type
 {
     char buffer[1000];
 
-    amt = sub_4C1150(state->npc_obj, state->pc_obj, amt);
+    amt = reaction_price_scale(state->npc_obj, state->pc_obj, amt);
     if (amt == 1) {
         amt = 2;
     }

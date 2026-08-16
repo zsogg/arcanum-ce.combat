@@ -69,30 +69,30 @@ static void mainmenu_ui_draw_version(void);
 static bool mainmenu_ui_press_mainmenu_in_play(tig_button_handle_t button_handle);
 static bool mainmenu_ui_press_mainmenu_in_play_locked(tig_button_handle_t button_handle);
 static void mainmenu_ui_create_options(void);
-static void sub_541D40(void);
+static void mainmenu_ui_options_close_game_screens(void);
 static void mainmenu_ui_destroy_options(void);
 static bool mainmenu_ui_press_options(tig_button_handle_t button_handle);
-static void sub_541E20(int a1);
+static void mainmenu_ui_options_tab_switch(int a1);
 static void mainmenu_ui_load_game_create(void);
-static void sub_542200(void);
+static void mainmenu_ui_close_game_screens(void);
 static void mainmenu_ui_load_game_destroy(void);
-static void sub_542280(int a1);
-static void sub_5422A0(TigRect* rect);
+static void mainmenu_ui_scrollbar_value_changed(int a1);
+static void mainmenu_ui_scrollbar_refresh_rect(TigRect* rect);
 static bool mainmenu_ui_load_game_execute(int btn);
 static bool mainmenu_ui_load_game_button_pressed(tig_button_handle_t button_handle);
 static bool mainmenu_ui_load_game_button_released(tig_button_handle_t button_handle);
 static void mainmenu_ui_load_game_mouse_up(int a1, int a2);
-static void sub_542560(void);
+static void mainmenu_ui_load_saveinfo_reload(void);
 static void mainmenu_ui_load_game_refresh(TigRect* rect);
-static void sub_542D00(char* str, TigRect* rect, tig_font_handle_t font);
+static void mainmenu_ui_draw_text_ellipsized(char* str, TigRect* rect, tig_font_handle_t font);
 static void mainmenu_ui_draw_centered_text(char* str, TigRect* rect, tig_font_handle_t font);
-static void sub_542EA0(char* str, TigRect* rect, tig_font_handle_t font);
+static void mainmenu_ui_draw_right_aligned_text(char* str, TigRect* rect, tig_font_handle_t font);
 static void mmUITextWriteCenteredToArray(char* str, TigRect* rects, int cnt, tig_font_handle_t font);
-static char* sub_543040(int index);
-static void sub_543060(void);
-static void sub_5430D0(void);
+static char* mainmenu_ui_savelist_display_name(int index);
+static void mainmenu_ui_load_select_prev(void);
+static void mainmenu_ui_load_select_next(void);
 static bool mainmenu_ui_load_game_handle_delete(void);
-static bool sub_5432B0(const char* name);
+static bool mainmenu_ui_load_game_by_name(const char* name);
 static void mainmenu_ui_save_game_create(void);
 static void mainmenu_ui_save_game_destroy(void);
 static bool mainmenu_ui_save_game_execute(int btn);
@@ -100,10 +100,10 @@ static bool mainmenu_ui_save_game_button_pressed(tig_button_handle_t button_hand
 static bool mainmenu_ui_save_game_button_released(tig_button_handle_t button_handle);
 static void mainmenu_ui_save_game_mouse_up(int x, int y);
 static void mainmenu_ui_save_game_refresh(TigRect* rect);
-static void sub_544100(const char* str, TigRect* rect, tig_font_handle_t font);
-static void sub_544210(void);
-static void sub_544250(void);
-static void sub_544290(void);
+static void mainmenu_ui_textedit_draw(const char* str, TigRect* rect, tig_font_handle_t font);
+static void mainmenu_ui_save_select_prev(void);
+static void mainmenu_ui_save_select_next(void);
+static void mainmenu_ui_save_saveinfo_reload(void);
 static bool mainmenu_ui_save_game_handle_delete(void);
 static void mainmenu_ui_last_save_create(void);
 static void mainmenu_ui_intro_create(void);
@@ -143,21 +143,21 @@ static bool main_menu_button_create(MainMenuButtonInfo* info, int width, int hei
 static bool main_menu_button_create_ex(MainMenuButtonInfo* info, int width, int height, unsigned int flags);
 static void mainmenu_ui_apply_compact_options(void);
 static void mainmenu_ui_refresh_text(tig_window_handle_t window_handle, const char* str, TigRect* rect, unsigned int flags);
-static void sub_546DD0(void);
+static void mainmenu_ui_windows_destroy(void);
 static void mainmenu_ui_create_shared_radio_buttons(void);
 static bool mainmenu_ui_message_filter(TigMessage* msg);
 static void mainmenu_ui_refresh_button_text(int btn, unsigned int flags);
-static void sub_547EF0(void);
-static void sub_5480C0(int a1);
+static void mainmenu_ui_anims_start(void);
+static void mainmenu_ui_window_cmd(int a1);
 static void mmUIWinRefreshScrollBar(void);
-static void sub_548FF0(int a1);
+static void mainmenu_ui_top_index_set(int a1);
 static void mainmenu_ui_textedit_unfocus(void);
 static void mainmenu_ui_textedit_on_enter(TextEdit* textedit);
 static void mainmenu_ui_textedit_on_change(TextEdit* textedit);
 static void mainmenu_ui_feedback(int num);
 static void mainmenu_fonts_init(void);
 static void mainmenu_fonts_exit(void);
-static void sub_549A80(void);
+static void mainmenu_ui_female_chars_probe(void);
 
 // 0x5993D0
 static int mainmenu_font_nums[MM_FONT_COUNT] = {
@@ -195,12 +195,12 @@ static int mainmenu_ui_pregen_char_cnt = 9;
 
 // Whether the last four pregenerated characters - `BP_VICTORIA_WARRINGTON`
 // through `BP_KEREE_MELANGE`, the female ones - are absent from the loaded
-// data. `sub_549A80` probes for Victoria's prototype and her art during init
+// data. `mainmenu_ui_female_chars_probe` probes for Victoria's prototype and her art during init
 // and, when both are there, raises `mainmenu_ui_pregen_char_cnt` from 9 to 13
 // and the new character screen from 9 buttons to 10. When they are not, this
 // stays set and the gender arrows on the new character screen do nothing.
 //
-// It starts out set, so the probe is a no-op until `sub_549A70` clears it -
+// It starts out set, so the probe is a no-op until `mainmenu_ui_female_chars_missing_clear` clears it -
 // which `main` does unconditionally at startup, before the UI exists.
 //
 // 0x5C3620
@@ -458,7 +458,7 @@ static TigRect stru_5C3FE0 = { 160, 263, 150, 20 };
 static TigRect stru_5C3FF0 = { 560, 203, 150, 20 };
 
 // NOTE: Always true, in the original as well as here. It starts true and the
-// only instruction that writes it sets it to 1 again (`sub_541170`, 0x541170,
+// only instruction that writes it sets it to 1 again (`mainmenu_ui_default_type_flag_set`, 0x541170,
 // which nothing in CE calls); the two reads are the ones below. So the
 // `MM_TYPE_1` branches it guards are unreachable, and unnamed for want of any
 // evidence of what it was meant to distinguish.
@@ -1728,7 +1728,7 @@ bool mainmenu_ui_init(GameInitInfo* init_info)
 
     gamelib_thumbnail_size_set(468, 300);
     mainmenu_ui_start_new_game = false;
-    sub_549A80();
+    mainmenu_ui_female_chars_probe();
     mainmenu_ui_savelist_module_name = NULL;
 
     return true;
@@ -1767,16 +1767,24 @@ void mainmenu_ui_exit(void)
     mainmenu_ui_initialized = false;
 }
 
+// NOTE: Unreferenced in CE, and in the original too - no instruction in
+// Arcanum.exe calls 0x541150. A dead exported entry that resets the menu to
+// the main-menu window and clears the start flags.
+//
 // 0x541150
-void sub_541150(void)
+void mainmenu_ui_mainmenu_defaults_set(void)
 {
     mainmenu_ui_window_type = MM_WINDOW_MAINMENU;
     mainmenu_ui_start_new_game = false;
     mainmenu_ui_auto_equip_items_on_start = false;
 }
 
+// NOTE: The sole writer of `dword_5C4000` - the flag that keeps a default
+// open from turning into MM_TYPE_1 - and, like 0x541150, unreferenced in both
+// binaries: no instruction in Arcanum.exe calls 0x541170.
+//
 // 0x541170
-void sub_541170(void)
+void mainmenu_ui_default_type_flag_set(void)
 {
     dword_5C4000 = true;
 }
@@ -2107,7 +2115,7 @@ void mainmenu_ui_close(bool back)
         main_menu_window_info[mainmenu_ui_window_type]->exit_func();
     }
 
-    sub_546DD0();
+    mainmenu_ui_windows_destroy();
 
     if (back) {
         mainmenu_ui_window_type = mainmenu_ui_pop_window_stack();
@@ -2369,7 +2377,7 @@ void mainmenu_ui_create_options(void)
     int64_t pc_obj;
     int64_t loc;
 
-    sub_541D40();
+    mainmenu_ui_options_close_game_screens();
     mainmenu_ui_window_type = MM_WINDOW_OPTIONS;
     mainmenu_ui_create_window_func(false);
     mainmenu_ui_options_tab = 0;
@@ -2391,8 +2399,13 @@ void mainmenu_ui_create_options(void)
     tig_window_display();
 }
 
+// NOTE: Body identical to 0x542200 (`mainmenu_ui_close_game_screens`) in the
+// original as well - Troika compiled the same close-everything sequence twice.
+// Kept as two entries to preserve the original's call topology (this one is
+// only `mainmenu_ui_create_options`; 0x542200 serves the load/save paths).
+//
 // 0x541D40
-void sub_541D40(void)
+void mainmenu_ui_options_close_game_screens(void)
 {
     inven_ui_destroy();
     charedit_close();
@@ -2426,7 +2439,7 @@ bool mainmenu_ui_press_options(tig_button_handle_t button_handle)
     }
 
     if (index != 3) {
-        sub_541E20(index);
+        mainmenu_ui_options_tab_switch(index);
         return true;
     }
 
@@ -2449,7 +2462,7 @@ bool mainmenu_ui_press_options(tig_button_handle_t button_handle)
 }
 
 // 0x541E20
-void sub_541E20(int a1)
+void mainmenu_ui_options_tab_switch(int a1)
 {
     if (mainmenu_ui_options_tab != a1 && options_ui_load_module()) {
         options_ui_close();
@@ -2479,7 +2492,7 @@ void mainmenu_ui_load_game_create(void)
     mainmenu_ui_window_type = MM_WINDOW_LOAD_GAME;
     window = main_menu_window_info[mainmenu_ui_window_type];
 
-    sub_542200();
+    mainmenu_ui_close_game_screens();
 
     if (mainmenu_ui_savelist_module_name) {
         gamelib_savelist_create_module(mainmenu_ui_savelist_module_name, &mainmenu_ui_gsl);
@@ -2539,8 +2552,8 @@ void mainmenu_ui_load_game_create(void)
     }
     mainmenu_ui_scrollbar_info.value = window->selected_index < 7 ? 0 : window->selected_index;
     mainmenu_ui_scrollbar_info.line_step = 1;
-    mainmenu_ui_scrollbar_info.on_value_changed = sub_542280;
-    mainmenu_ui_scrollbar_info.on_refresh = sub_5422A0;
+    mainmenu_ui_scrollbar_info.on_value_changed = mainmenu_ui_scrollbar_value_changed;
+    mainmenu_ui_scrollbar_info.on_refresh = mainmenu_ui_scrollbar_refresh_rect;
     mainmenu_ui_scrollbar_info.content_rect.x = 34;
     mainmenu_ui_scrollbar_info.content_rect.y = 110;
     mainmenu_ui_scrollbar_info.content_rect.width = 195;
@@ -2570,8 +2583,12 @@ void mainmenu_ui_load_game_create(void)
     tig_window_display();
 }
 
+// NOTE: Body identical to 0x541D40 (`mainmenu_ui_options_close_game_screens`)
+// in the original as well; see the note there. This is the copy the load/save
+// and quick-load paths use.
+//
 // 0x542200
-void sub_542200(void)
+void mainmenu_ui_close_game_screens(void)
 {
     inven_ui_destroy();
     charedit_close();
@@ -2601,13 +2618,13 @@ void mainmenu_ui_load_game_destroy(void)
 }
 
 // 0x542280
-void sub_542280(int a1)
+void mainmenu_ui_scrollbar_value_changed(int a1)
 {
     main_menu_window_info[mainmenu_ui_window_type]->top_index = a1;
 }
 
 // 0x5422A0
-void sub_5422A0(TigRect* rect)
+void mainmenu_ui_scrollbar_refresh_rect(TigRect* rect)
 {
     (void)rect;
 
@@ -2630,7 +2647,7 @@ bool mainmenu_ui_load_game_execute(int btn)
     strncpy(name, mainmenu_ui_gsl.names[index], 8);
     name[8] = '\0';
 
-    return sub_5432B0(name);
+    return mainmenu_ui_load_game_by_name(name);
 }
 
 // 0x542420
@@ -2656,7 +2673,7 @@ bool mainmenu_ui_load_game_button_released(tig_button_handle_t button_handle)
 
     for (index = 0; index < 2; index++) {
         if (button_handle == window->buttons[index].button_handle) {
-            sub_5480C0(index + 2);
+            mainmenu_ui_window_cmd(index + 2);
             return true;
         }
     }
@@ -2688,13 +2705,13 @@ void mainmenu_ui_load_game_mouse_up(int x, int y)
     if (window->selected_index >= window->cnt) {
         window->selected_index = -1;
     }
-    sub_542560();
+    mainmenu_ui_load_saveinfo_reload();
     window->refresh_func(NULL);
     scrollbar_ui_control_redraw(mainmenu_ui_scrollbar);
 }
 
 // 0x542560
-void sub_542560(void)
+void mainmenu_ui_load_saveinfo_reload(void)
 {
     MainMenuWindowInfo* window;
 
@@ -2784,9 +2801,9 @@ void mainmenu_ui_load_game_refresh(TigRect* rect)
 
                 font = window->selected_index == index ? mainmenu_ui_selected_font : mainmenu_ui_text_fonts[0];
                 tig_font_push(font);
-                name = sub_543040(index);
+                name = mainmenu_ui_savelist_display_name(index);
                 if (*name != '\0') {
-                    sub_542D00(name, &dst_rect, font);
+                    mainmenu_ui_draw_text_ellipsized(name, &dst_rect, font);
                 }
                 dst_rect.y += 20;
                 tig_font_pop();
@@ -2866,10 +2883,10 @@ void mainmenu_ui_load_game_refresh(TigRect* rect)
                         mainmenu_ui_draw_centered_text(area_name, &mainmenu_ui_saveinfo_area_rect, font);
 
                         datetime_format_date(&(mainmenu_ui_gsi.datetime), str, sizeof(str));
-                        sub_542EA0(str, &mainmenu_ui_saveinfo_date_rect, font);
+                        mainmenu_ui_draw_right_aligned_text(str, &mainmenu_ui_saveinfo_date_rect, font);
 
                         datetime_format_time(&(mainmenu_ui_gsi.datetime), str, sizeof(str));
-                        sub_542EA0(str, &mainmenu_ui_saveinfo_time_rect, font);
+                        mainmenu_ui_draw_right_aligned_text(str, &mainmenu_ui_saveinfo_time_rect, font);
 
                         story_state_desc = script_story_state_info(mainmenu_ui_gsi.story_state);
                         if (story_state_desc != NULL && *story_state_desc != '\0') {
@@ -2923,7 +2940,7 @@ void mainmenu_ui_load_game_refresh(TigRect* rect)
 }
 
 // 0x542D00
-void sub_542D00(char* str, TigRect* rect, tig_font_handle_t font)
+void mainmenu_ui_draw_text_ellipsized(char* str, TigRect* rect, tig_font_handle_t font)
 {
     TigFont font_desc;
     TigRect text_rect;
@@ -2977,7 +2994,7 @@ void mainmenu_ui_draw_centered_text(char* str, TigRect* rect, tig_font_handle_t 
 }
 
 // 0x542EA0
-void sub_542EA0(char* str, TigRect* rect, tig_font_handle_t font)
+void mainmenu_ui_draw_right_aligned_text(char* str, TigRect* rect, tig_font_handle_t font)
 {
     TigFont font_desc;
     TigRect text_rect;
@@ -3053,7 +3070,7 @@ void mmUITextWriteCenteredToArray(char* str, TigRect* rects, int cnt, tig_font_h
 }
 
 // 0x543040
-char* sub_543040(int index)
+char* mainmenu_ui_savelist_display_name(int index)
 {
     if (mainmenu_ui_gsl.names != NULL) {
         return mainmenu_ui_gsl.names[index] + 8;
@@ -3063,7 +3080,7 @@ char* sub_543040(int index)
 }
 
 // 0x543060
-void sub_543060(void)
+void mainmenu_ui_load_select_prev(void)
 {
     MainMenuWindowInfo* window;
 
@@ -3074,14 +3091,14 @@ void sub_543060(void)
             scrollbar_ui_control_set(mainmenu_ui_scrollbar, SCROLLBAR_CURRENT_VALUE, window->selected_index);
         }
         gsound_play_sfx(0, 1);
-        sub_542560();
+        mainmenu_ui_load_saveinfo_reload();
         window->refresh_func(NULL);
         scrollbar_ui_control_redraw(mainmenu_ui_scrollbar);
     }
 }
 
 // 0x5430D0
-void sub_5430D0(void)
+void mainmenu_ui_load_select_next(void)
 {
     MainMenuWindowInfo* window;
 
@@ -3092,7 +3109,7 @@ void sub_5430D0(void)
             scrollbar_ui_control_set(mainmenu_ui_scrollbar, SCROLLBAR_CURRENT_VALUE, window->selected_index - window->content_rect.height / 20);
         }
         gsound_play_sfx(0, 1);
-        sub_542560();
+        mainmenu_ui_load_saveinfo_reload();
         window->refresh_func(NULL);
         scrollbar_ui_control_redraw(mainmenu_ui_scrollbar);
     }
@@ -3134,7 +3151,7 @@ bool mainmenu_ui_load_game_handle_delete(void)
 }
 
 // 0x543220
-bool sub_543220(void)
+bool mainmenu_ui_quick_load(void)
 {
     const char* path;
     char name[256];
@@ -3153,7 +3170,7 @@ bool sub_543220(void)
     strncpy(name, path, 8);
     name[8] = '\0';
 
-    rc = sub_5432B0(name);
+    rc = mainmenu_ui_load_game_by_name(name);
     if (mainmenu_ui_gsi_loaded) {
         gamelib_saveinfo_exit(&mainmenu_ui_gsi);
         mainmenu_ui_gsi_loaded = false;
@@ -3163,12 +3180,12 @@ bool sub_543220(void)
 }
 
 // 0x5432B0
-bool sub_5432B0(const char* name)
+bool mainmenu_ui_load_game_by_name(const char* name)
 {
     MesFileEntry mes_file_entry;
     UiMessage ui_message;
 
-    sub_542200();
+    mainmenu_ui_close_game_screens();
 
     if (mainmenu_ui_gsi.version == 25) {
         mainmenu_ui_reset();
@@ -3213,7 +3230,7 @@ void mainmenu_ui_save_game_create(void)
     mainmenu_ui_window_type = MM_WINDOW_SAVE_GAME;
     window = main_menu_window_info[mainmenu_ui_window_type];
 
-    sub_542200();
+    mainmenu_ui_close_game_screens();
     gamelib_savelist_create(&mainmenu_ui_gsl);
     gamelib_savelist_sort(&mainmenu_ui_gsl, GAME_SAVE_LIST_ORDER_DATE, false);
     mainmenu_ui_textedit_buffer[0] = '\0';
@@ -3253,8 +3270,8 @@ void mainmenu_ui_save_game_create(void)
     }
     mainmenu_ui_scrollbar_info.value = 0;
     mainmenu_ui_scrollbar_info.line_step = 1;
-    mainmenu_ui_scrollbar_info.on_value_changed = sub_542280;
-    mainmenu_ui_scrollbar_info.on_refresh = sub_5422A0;
+    mainmenu_ui_scrollbar_info.on_value_changed = mainmenu_ui_scrollbar_value_changed;
+    mainmenu_ui_scrollbar_info.on_refresh = mainmenu_ui_scrollbar_refresh_rect;
     mainmenu_ui_scrollbar_info.content_rect.x = 34;
     mainmenu_ui_scrollbar_info.content_rect.y = 110;
     mainmenu_ui_scrollbar_info.content_rect.width = 195;
@@ -3357,7 +3374,7 @@ bool mainmenu_ui_save_game_execute(int btn)
         }
     }
 
-    sub_542200();
+    mainmenu_ui_close_game_screens();
 
     if (mainmenu_ui_textedit_buffer[0] != '\0') {
         char* pch = mainmenu_ui_textedit_buffer;
@@ -3419,7 +3436,7 @@ bool mainmenu_ui_save_game_button_released(tig_button_handle_t button_handle)
     window = main_menu_window_info[mainmenu_ui_window_type];
     for (index = 0; index < 2; index++) {
         if (button_handle == window->buttons[index].button_handle) {
-            sub_5480C0(index + 2);
+            mainmenu_ui_window_cmd(index + 2);
             return true;
         }
     }
@@ -3451,7 +3468,7 @@ void mainmenu_ui_save_game_mouse_up(int x, int y)
     if (window->selected_index >= window->cnt) {
         window->selected_index = window->cnt - 1;
     }
-    sub_544290();
+    mainmenu_ui_save_saveinfo_reload();
     window->refresh_func(NULL);
     scrollbar_ui_control_redraw(mainmenu_ui_scrollbar);
 }
@@ -3523,11 +3540,11 @@ void mainmenu_ui_save_game_refresh(TigRect* rect)
 
             char* name;
             if (idx > 0) {
-                name = sub_543040(idx - 1);
+                name = mainmenu_ui_savelist_display_name(idx - 1);
             } else if (idx == 0) {
                 if (textedit_ui_is_focused()) {
                     name = NULL;
-                    sub_544100(mainmenu_ui_textedit_buffer, &dst_rect, font);
+                    mainmenu_ui_textedit_draw(mainmenu_ui_textedit_buffer, &dst_rect, font);
                 } else {
                     mes_file_entry.num = 5055;
                     mes_get_msg(mainmenu_ui_mainmenu_mes_file, &mes_file_entry);
@@ -3536,7 +3553,7 @@ void mainmenu_ui_save_game_refresh(TigRect* rect)
             }
 
             if (name != NULL && *name != '\0') {
-                sub_542D00(name, &dst_rect, font);
+                mainmenu_ui_draw_text_ellipsized(name, &dst_rect, font);
             }
 
             dst_rect.y += 20;
@@ -3615,10 +3632,10 @@ void mainmenu_ui_save_game_refresh(TigRect* rect)
                     mainmenu_ui_draw_centered_text(area_name, &mainmenu_ui_saveinfo_area_rect, font);
 
                     datetime_format_date(&(mainmenu_ui_gsi.datetime), str, sizeof(str));
-                    sub_542EA0(str, &mainmenu_ui_saveinfo_date_rect, font);
+                    mainmenu_ui_draw_right_aligned_text(str, &mainmenu_ui_saveinfo_date_rect, font);
 
                     datetime_format_time(&(mainmenu_ui_gsi.datetime), str, sizeof(str));
-                    sub_542EA0(str, &mainmenu_ui_saveinfo_time_rect, font);
+                    mainmenu_ui_draw_right_aligned_text(str, &mainmenu_ui_saveinfo_time_rect, font);
 
                     story_state_desc = script_story_state_info(mainmenu_ui_gsi.story_state);
                     if (story_state_desc != NULL && *story_state_desc != '\0') {
@@ -3669,7 +3686,7 @@ void mainmenu_ui_save_game_refresh(TigRect* rect)
 }
 
 // 0x544100
-void sub_544100(const char* str, TigRect* rect, tig_font_handle_t font)
+void mainmenu_ui_textedit_draw(const char* str, TigRect* rect, tig_font_handle_t font)
 {
     char mutable_str[200];
     TigFont font_desc;
@@ -3724,7 +3741,7 @@ void sub_544100(const char* str, TigRect* rect, tig_font_handle_t font)
 }
 
 // 0x544210
-void sub_544210(void)
+void mainmenu_ui_save_select_prev(void)
 {
     MainMenuWindowInfo* window;
 
@@ -3732,13 +3749,13 @@ void sub_544210(void)
     if (window->selected_index > 0) {
         window->selected_index--;
         gsound_play_sfx(0, 1);
-        sub_544290();
+        mainmenu_ui_save_saveinfo_reload();
         window->refresh_func(NULL);
     }
 }
 
 // 0x544250
-void sub_544250(void)
+void mainmenu_ui_save_select_next(void)
 {
     MainMenuWindowInfo* window;
 
@@ -3746,13 +3763,13 @@ void sub_544250(void)
     if (window->selected_index < window->cnt - 1) {
         window->selected_index++;
         gsound_play_sfx(0, 1);
-        sub_544290();
+        mainmenu_ui_save_saveinfo_reload();
         window->refresh_func(NULL);
     }
 }
 
 // 0x544290
-void sub_544290(void)
+void mainmenu_ui_save_saveinfo_reload(void)
 {
     MainMenuWindowInfo* window;
 
@@ -3857,7 +3874,7 @@ void mainmenu_ui_last_save_create(void)
             tig_window_display();
             strncpy(name, path, 8);
             name[8] = '\0';
-            sub_5432B0(name);
+            mainmenu_ui_load_game_by_name(name);
 
             if (mainmenu_ui_gsi_loaded) {
                 gamelib_saveinfo_exit(&mainmenu_ui_gsi);
@@ -3984,7 +4001,7 @@ void mainmenu_ui_new_char_refresh(TigRect* rect)
         mes_get_msg(mainmenu_ui_mainmenu_mes_file, &mes_file_entry);
 
         if (textedit_ui_is_focused()) {
-            sub_544100(str, &mainmenu_ui_shared_char_name_rect, mainmenu_ui_text_fonts_red[1]);
+            mainmenu_ui_textedit_draw(str, &mainmenu_ui_shared_char_name_rect, mainmenu_ui_text_fonts_red[1]);
         } else {
             mainmenu_ui_draw_centered_text(str, &mainmenu_ui_shared_char_name_rect, mainmenu_ui_text_fonts_red[1]);
         }
@@ -4653,7 +4670,7 @@ void mainmenu_ui_charedit_destroy(void)
 bool mainmenu_ui_charedit_button_released(tig_button_handle_t button_handle)
 {
     if (button_handle == mainmenu_ui_charedit_buttons[0].button_handle) {
-        sub_5480C0(2);
+        mainmenu_ui_window_cmd(2);
         return true;
     }
 
@@ -5017,7 +5034,7 @@ void mainmenu_ui_create_window_func(bool should_display)
             }
         }
 
-        sub_547EF0();
+        mainmenu_ui_anims_start();
     }
 
     mes_file_entry.num = window->num;
@@ -5219,7 +5236,7 @@ void mainmenu_ui_refresh_text(tig_window_handle_t window_handle, const char* str
 }
 
 // 0x546DD0
-void sub_546DD0(void)
+void mainmenu_ui_windows_destroy(void)
 {
     int index;
 
@@ -5581,10 +5598,10 @@ bool mainmenu_ui_message_filter(TigMessage* msg)
                     }
                     return true;
                 case SDL_SCANCODE_UP:
-                    sub_543060();
+                    mainmenu_ui_load_select_prev();
                     return true;
                 case SDL_SCANCODE_DOWN:
-                    sub_5430D0();
+                    mainmenu_ui_load_select_next();
                     return true;
                 case SDL_SCANCODE_BACKSPACE:
                 case SDL_SCANCODE_DELETE:
@@ -5593,7 +5610,7 @@ bool mainmenu_ui_message_filter(TigMessage* msg)
                     return true;
                 case SDL_SCANCODE_RETURN:
                 case SDL_SCANCODE_KP_ENTER:
-                    sub_5480C0(2);
+                    mainmenu_ui_window_cmd(2);
                     return true;
                 default:
                     break;
@@ -5609,10 +5626,10 @@ bool mainmenu_ui_message_filter(TigMessage* msg)
                     }
                     return true;
                 case SDL_SCANCODE_UP:
-                    sub_544210();
+                    mainmenu_ui_save_select_prev();
                     return true;
                 case SDL_SCANCODE_DOWN:
-                    sub_544250();
+                    mainmenu_ui_save_select_next();
                     return true;
                 case SDL_SCANCODE_BACKSPACE:
                 case SDL_SCANCODE_DELETE:
@@ -5621,7 +5638,7 @@ bool mainmenu_ui_message_filter(TigMessage* msg)
                     return true;
                 case SDL_SCANCODE_RETURN:
                 case SDL_SCANCODE_KP_ENTER:
-                    sub_5480C0(2);
+                    mainmenu_ui_window_cmd(2);
                     return true;
                 default:
                     break;
@@ -5650,7 +5667,7 @@ bool mainmenu_ui_message_filter(TigMessage* msg)
                 && msg->data.keyboard.key == SDLK_RETURN
                 && iso_interface_window_get() != ROTWIN_TYPE_QUANTITY) {
                 gsound_play_sfx(0, 1);
-                sub_5480C0(2);
+                mainmenu_ui_window_cmd(2);
                 return true;
             }
 
@@ -5836,7 +5853,7 @@ void mainmenu_ui_refresh_button_text(int btn, unsigned int flags)
 }
 
 // 0x547EF0
-void sub_547EF0(void)
+void mainmenu_ui_anims_start(void)
 {
     TigArtAnimData art_anim_data;
     DateTime datetime;
@@ -5909,18 +5926,28 @@ bool mainmenu_ui_process_callback(TimeEvent* timeevent)
     return true;
 }
 
+// Command dispatch for the generic MM window machinery:
+//   0 scroll up, 1 scroll down (top_index -1/+1, clamped),
+//   2 execute: run the window's execute_func(-1) and advance to the next
+//     window (load/save OK, charedit/shop continue, RETURN keys),
+//   3 close the current window (load/save cancel),
+//   4/5 toggle window->flags bit 0x1 off/on and adjust selected_index for
+//     flags 0x2/0x4 - NOTE: no caller in CE, and none in the original
+//     either: the two 0x5480C0 call sites in the exe's message filter
+//     (0x5477C3, 0x547B08) both push 2.
+//
 // 0x5480C0
-void sub_5480C0(int a1)
+void mainmenu_ui_window_cmd(int a1)
 {
     MainMenuWindowInfo* window;
 
     window = main_menu_window_info[mainmenu_ui_window_type];
     switch (a1) {
     case 0:
-        sub_548FF0(window->top_index - 1);
+        mainmenu_ui_top_index_set(window->top_index - 1);
         return;
     case 1:
-        sub_548FF0(window->top_index + 1);
+        mainmenu_ui_top_index_set(window->top_index + 1);
         return;
     case 2:
         if (window->execute_func != NULL) {
@@ -6013,7 +6040,7 @@ void mmUIWinRefreshScrollBar(void)
 }
 
 // 0x548FF0
-void sub_548FF0(int a1)
+void mainmenu_ui_top_index_set(int a1)
 {
     MainMenuWindowInfo* curr_window_info;
 
@@ -6182,8 +6209,12 @@ void mainmenu_ui_progressbar_update(int value)
     }
 }
 
+// NOTE: Unreferenced in CE; the original's charedit/shop screens call it
+// (0x581958, 0x581E69, 0x583B29, 0x583C88) where CE reaches the table
+// directly. Kept as the exported accessor it is in the original.
+//
 // 0x5496C0
-MainMenuWindowInfo* sub_5496C0(int index)
+MainMenuWindowInfo* mainmenu_ui_window_info_get(int index)
 {
     return main_menu_window_info[index];
 }
@@ -6299,8 +6330,12 @@ tig_font_handle_t mainmenu_ui_font(MainMenuFont font, MainMenuColor color)
     return mainmenu_ui_fonts_tbl[font][color];
 }
 
+// NOTE: Unreferenced in CE. The original's shop/charedit screens call it on
+// open (0x548BD5, 0x582845, 0x583819, 0x5850AB, 0x5883C5); CE refreshes its
+// button texts inline instead.
+//
 // 0x549960
-void sub_549960(void)
+void mainmenu_ui_button_texts_refresh(void)
 {
     int index;
 
@@ -6309,8 +6344,16 @@ void sub_549960(void)
     }
 }
 
+// Installs a return path over the current window: the caller's list of
+// window types goes on the stack above the entry already pushed for the
+// active window.
+//
+// NOTE: Unreferenced in CE. The original's charedit/shop/pregen screens build
+// their multi-window return paths with it (0x5818A4, 0x5834ED, 0x583B02,
+// 0x584BE6, 0x585E07); CE pushes and pops its stack explicitly instead.
+//
 // 0x549990
-void sub_549990(int* a1, int num)
+void mainmenu_ui_window_stack_set(int* a1, int num)
 {
     memcpy(&(mainmenu_ui_window_stack[1]), a1, sizeof(*a1) * num);
     mainmenu_ui_num_windows = num + 1;
@@ -6335,13 +6378,13 @@ int mainmenu_ui_key_shortcuts_disable_count_get(void)
 }
 
 // 0x549A70
-void sub_549A70(void)
+void mainmenu_ui_female_chars_missing_clear(void)
 {
     mainmenu_ui_female_chars_missing = false;
 }
 
 // 0x549A80
-void sub_549A80(void)
+void mainmenu_ui_female_chars_probe(void)
 {
     int64_t obj;
 

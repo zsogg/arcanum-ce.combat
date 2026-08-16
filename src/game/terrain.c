@@ -466,7 +466,7 @@ void terrain_fill(Sector* sector)
     tig_art_tile_id_create(7, 7, 15, 0, 0, 0, 0, 0, &art_id);
 
     for (index = 0; index < 4096; index++) {
-        sector->tiles.art_ids[index] = sub_4D7480(art_id, 7, 0, 15);
+        sector->tiles.art_ids[index] = tile_variant_art_id_get(art_id, 7, 0, 15);
     }
 }
 

@@ -351,7 +351,7 @@ bool ai_prepare_to_act(Ai* ai)
 
     critter_flags = obj_field_int32_get(ai->obj, OBJ_F_CRITTER_FLAGS);
 
-    v1 = sub_4C1110(ai->obj);
+    v1 = reaction_current_pc_get(ai->obj);
     if (v1) {
         if (pc_obj == v1
             && dword_5F848C != NULL
@@ -1062,7 +1062,7 @@ void ai_attack(int64_t source_obj, int64_t target_obj, int loudness, unsigned in
                         if ((flags & 0x01) != 0) {
                             reaction_adj(target_obj, source_obj, -10);
                         } else {
-                            v3 = sub_4C0CE0(target_obj, source_obj);
+                            v3 = reaction_get_for_ai(target_obj, source_obj);
                             if (v3 > ai_params.field_28) {
                                 reaction_adj(target_obj, source_obj, ai_params.field_28 - v3);
                             }
@@ -1818,7 +1818,7 @@ int ai_apply_danger_type(int64_t source_obj, int danger_type, int64_t target_obj
             }
 
             if (obj_field_int32_get(target_obj, OBJ_F_TYPE) == OBJ_TYPE_PC) {
-                v1 = sub_4C0CE0(source_obj, target_obj);
+                v1 = reaction_get_for_ai(source_obj, target_obj);
                 ai_copy_params(source_obj, &ai_params);
                 if (v1 > ai_params.field_28) {
                     reaction_adj(source_obj, target_obj, ai_params.field_28 - v1);
@@ -3331,7 +3331,7 @@ int ai_can_speak(int64_t npc_obj, int64_t pc_obj, bool a3)
             }
         }
 
-        reaction_pc_obj = sub_4C1110(npc_obj);
+        reaction_pc_obj = reaction_current_pc_get(npc_obj);
         if (reaction_pc_obj != OBJ_HANDLE_NULL
             && reaction_pc_obj != pc_obj) {
             return AI_SPEAK_REACTION;
@@ -3675,7 +3675,7 @@ int ai_check_kos(int64_t source_obj, int64_t target_obj)
                     ai_copy_params(source_obj, &ai_params);
 
                     if (obj_type == OBJ_TYPE_PC
-                        && sub_4C0CE0(source_obj, target_obj) <= ai_params.field_28) {
+                        && reaction_get_for_ai(source_obj, target_obj) <= ai_params.field_28) {
                         return AI_KOS_REACTION;
                     }
 

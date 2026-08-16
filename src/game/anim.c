@@ -3885,16 +3885,16 @@ bool anim_timeevent_process(TimeEvent* timeevent)
         bool rc = anim_interrupt(&(run_info->id), PRIORITY_HIGHEST);
 
         if (!combat_turn_based_is_active()) {
-            sub_4B4320(anim_obj);
+            combat_critter_fidget_restart(anim_obj);
             return rc;
         }
 
         if (obj_type_is_critter(obj_field_int32_get(anim_obj, OBJ_F_TYPE))) {
-            sub_4B7010(anim_obj);
+            combat_turn_based_npc_turn(anim_obj);
         }
 
         if (combat_action_points_get() > 0) {
-            sub_4B4320(anim_obj);
+            combat_critter_fidget_restart(anim_obj);
         }
 
         return rc;
@@ -7884,7 +7884,7 @@ bool anim_apply_attack(AnimRunInfo* run_info)
     }
 
     if ((obj_field_int32_get(target_obj, OBJ_F_FLAGS) & (OF_DESTROYED | OF_OFF)) == 0) {
-        sub_4B3BB0(source_obj, target_obj, hit_loc);
+        combat_attack_weapon_wear(source_obj, target_obj, hit_loc);
     }
 
     return true;
@@ -9112,7 +9112,7 @@ bool AGperformRotateAnim(AnimRunInfo* run_info)
         return true;
     }
 
-    if (sub_4B8040(obj)) {
+    if (combat_turn_based_critter_can_fastforward(obj)) {
         next_rot = new_rot;
         rc = false;
     } else {
@@ -9314,7 +9314,7 @@ bool anim_cleanup_projectile(AnimRunInfo* run_info)
         parent_obj = goal_data->params[AGDATA_PARENT_OBJ].obj;
         if (self_obj != OBJ_HANDLE_NULL
             && (obj_field_int32_get(self_obj, OBJ_F_FLAGS) & OF_DESTROYED) == 0) {
-            sub_4B2650(self_obj, parent_obj, NULL);
+            combat_projectile_goal_end(self_obj, parent_obj, NULL);
         }
     }
 
@@ -10636,7 +10636,7 @@ bool AGbeginAnimMove(AnimRunInfo* run_info)
         return false;
     }
 
-    if (sub_4B8040(obj)) {
+    if (combat_turn_based_critter_can_fastforward(obj)) {
         loc = obj_field_int64_get(obj, OBJ_F_LOCATION);
         while (combat_action_points_get() > 0) {
             if (!anim_spend_move_cost(run_info)) {
@@ -11132,7 +11132,7 @@ bool AGupdateAnimProjectileMoveStraight(AnimRunInfo* run_info)
         if (new_loc != projectile_loc) {
             int range = (int)location_dist(run_info->cur_stack_data->params[AGDATA_ORIGINAL_TILE].loc,
                 obj_field_int64_get(projectile_obj, OBJ_F_LOCATION));
-            sub_4B2870(parent_obj, target_obj, target_loc, projectile_obj, range, new_loc, v1);
+            combat_projectile_arrive(parent_obj, target_obj, target_loc, projectile_obj, range, new_loc, v1);
 
             if ((run_info->flags & 0x02) != 0) {
                 return false;
@@ -11535,7 +11535,7 @@ bool anim_can_fidget(int64_t obj)
         && !combat_critter_is_combat_mode_active(obj)
         && critter_is_active(obj)) {
         if (obj_field_int32_get(obj, OBJ_F_TYPE) == OBJ_TYPE_PC
-            || !player_is_local_pc_obj(sub_4C1110(obj))) {
+            || !player_is_local_pc_obj(reaction_current_pc_get(obj))) {
             if (tig_art_id_anim_get(obj_field_int32_get(obj, OBJ_F_CURRENT_AID)) == TIG_ART_ANIM_STAND) {
                 return true;
             }
@@ -13690,7 +13690,7 @@ bool anim_can_start_move_goal(int64_t obj)
     return obj != OBJ_HANDLE_NULL
         && critter_is_active(obj)
         && (!combat_turn_based_is_active() || combat_turn_based_whos_turn_get() == obj)
-        && (player_is_pc_obj(obj) || !sub_4C1110(obj));
+        && (player_is_pc_obj(obj) || !reaction_current_pc_get(obj));
 }
 
 // 0x433A00

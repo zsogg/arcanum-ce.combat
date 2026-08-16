@@ -11,14 +11,14 @@
 #include "game/stat.h"
 #include "game/ui.h"
 
-static int sub_4C0D00(int64_t a1, int64_t a2, unsigned int flags);
-static int sub_4C1290(int64_t a1, int64_t a2);
+static int reaction_get_ex(int64_t a1, int64_t a2, unsigned int flags);
+static int reaction_stored_get(int64_t a1, int64_t a2);
 static int reaction_get_base(int64_t obj);
-static bool sub_4C12F0(int64_t a1, int64_t a2, bool a3, int* a4);
-static void sub_4C1360(int64_t npc_obj, int64_t pc_obj, int value);
-static void sub_4C1490(int64_t npc_obj, int64_t pc_obj, int level, int index);
-static int sub_4C1500(int64_t npc_obj, int64_t pc_obj, unsigned int flags);
-static int sub_4C15A0(int a1);
+static bool reaction_slot_find(int64_t a1, int64_t a2, bool a3, int* a4);
+static void reaction_set(int64_t npc_obj, int64_t pc_obj, int value);
+static void reaction_slot_set(int64_t npc_obj, int64_t pc_obj, int level, int index);
+static int reaction_modifiers_get(int64_t npc_obj, int64_t pc_obj, unsigned int flags);
+static int reaction_neutral_distance(int a1);
 
 // 0x5FC88C
 static mes_file_handle_t reaction_mes_file;
@@ -186,23 +186,27 @@ bool reaction_met_before(int64_t npc_obj, int64_t pc_obj)
         return false;
     }
 
-    return sub_4C12F0(npc_obj, pc_obj, false, &v1);
+    return reaction_slot_find(npc_obj, pc_obj, false, &v1);
 }
 
 // 0x4C0CC0
 int reaction_get(int64_t npc_obj, int64_t pc_obj)
 {
-    return sub_4C0D00(npc_obj, pc_obj, 0);
+    return reaction_get_ex(npc_obj, pc_obj, 0);
 }
 
+// The value ai.c uses for hostility decisions (attack/peace thresholds).
+// Only differs from `reaction_get` by flags bit 0x1, which floors the
+// race/stat-modifier term at -49 inside `reaction_modifiers_get`.
+//
 // 0x4C0CE0
-int sub_4C0CE0(int64_t npc_obj, int64_t pc_obj)
+int reaction_get_for_ai(int64_t npc_obj, int64_t pc_obj)
 {
-    return sub_4C0D00(npc_obj, pc_obj, 1);
+    return reaction_get_ex(npc_obj, pc_obj, 1);
 }
 
 // 0x4C0D00
-int sub_4C0D00(int64_t npc_obj, int64_t pc_obj, unsigned int flags)
+int reaction_get_ex(int64_t npc_obj, int64_t pc_obj, unsigned int flags)
 {
     int value;
     int64_t mind_controlled_by_obj;
@@ -221,7 +225,7 @@ int sub_4C0D00(int64_t npc_obj, int64_t pc_obj, unsigned int flags)
         return 50;
     }
 
-    value = sub_4C1500(npc_obj, pc_obj, flags) + sub_4C1290(npc_obj, pc_obj);
+    value = reaction_modifiers_get(npc_obj, pc_obj, flags) + reaction_stored_get(npc_obj, pc_obj);
     value = effect_adjust_reaction(npc_obj, value);
 
     if (value < 50
@@ -279,13 +283,13 @@ void reaction_adj_ex(int64_t npc_obj, int64_t pc_obj, int value, bool apply_effe
         return;
     }
 
-    base = sub_4C1290(npc_obj, pc_obj);
+    base = reaction_stored_get(npc_obj, pc_obj);
     if (apply_effects) {
         adjusted_value = effect_adjust_good_bad_reaction(pc_obj, value);
     } else {
         adjusted_value = value;
     }
-    sub_4C1360(npc_obj, pc_obj, base + adjusted_value);
+    reaction_set(npc_obj, pc_obj, base + adjusted_value);
 
     if (value < 0 && critter_leader_get(npc_obj) == pc_obj) {
         flags = obj_field_int32_get(npc_obj, OBJ_F_NPC_FLAGS);
@@ -332,8 +336,13 @@ const char* reaction_get_name(int reaction)
     return reaction_names[reaction];
 }
 
+// Called when a conversation starts (dialog.c): slot 0 becomes this PC's
+// current reaction, bumped to 100 by the FORCE_GOOD_REACTION fate when it is
+// below that. `reaction_current_reset` is the matching end-of-conversation
+// reset.
+//
 // 0x4C1020
-void sub_4C1020(int64_t npc_obj, int64_t pc_obj)
+void reaction_current_set(int64_t npc_obj, int64_t pc_obj)
 {
     int v1;
 
@@ -345,16 +354,20 @@ void sub_4C1020(int64_t npc_obj, int64_t pc_obj)
         return;
     }
 
-    v1 = sub_4C1290(npc_obj, pc_obj);
+    v1 = reaction_stored_get(npc_obj, pc_obj);
     if (v1 < 100 && fate_resolve(pc_obj, FATE_FORCE_GOOD_REACTION)) {
         v1 = 100;
     }
 
-    sub_4C1490(npc_obj, pc_obj, v1, 0);
+    reaction_slot_set(npc_obj, pc_obj, v1, 0);
 }
 
+// End of a conversation (dialog.c): slot 0 goes back to (nobody, base) and
+// the value it held is remembered in this PC's reaction slot. The matching
+// start-of-conversation setter is `reaction_current_set`.
+//
 // 0x4C10A0
-void sub_4C10A0(int64_t npc_obj, int64_t pc_obj)
+void reaction_current_reset(int64_t npc_obj, int64_t pc_obj)
 {
     int v1;
 
@@ -366,13 +379,13 @@ void sub_4C10A0(int64_t npc_obj, int64_t pc_obj)
         return;
     }
 
-    v1 = sub_4C1290(npc_obj, pc_obj);
-    sub_4C1490(npc_obj, 0, v1, 0);
-    sub_4C1360(npc_obj, pc_obj, v1);
+    v1 = reaction_stored_get(npc_obj, pc_obj);
+    reaction_slot_set(npc_obj, 0, v1, 0);
+    reaction_set(npc_obj, pc_obj, v1);
 }
 
 // 0x4C1110
-int64_t sub_4C1110(int64_t npc)
+int64_t reaction_current_pc_get(int64_t npc)
 {
     if (obj_field_int32_get(npc, OBJ_F_TYPE) != OBJ_TYPE_NPC) {
         return 0;
@@ -381,10 +394,15 @@ int64_t sub_4C1110(int64_t npc)
     return obj_arrayfield_handle_get(npc, OBJ_F_NPC_REACTION_PC_IDX, 0);
 }
 
-// TODO: Figure out the math.
+// Reaction-to-price mapping, settled against 0x4C1150 (the transcription is
+// exact: `cmp 0x64` clamps to 100, and the 0x66666667 /5 and 0x51EB851F /100
+// magic divisions are the two `v2` formulas). Percent of `a3` by reaction:
+// <= 0 (hatred) 200%, climbing to 102% just below 50, 100% at neutral,
+// then down to 80% at 100 and above. Hating NPCs charge double; loving ones
+// give 20% off.
 //
 // 0x4C1150
-int sub_4C1150(int64_t a1, int64_t a2, int a3)
+int reaction_price_scale(int64_t a1, int64_t a2, int a3)
 {
     int v1;
     int v2;
@@ -409,7 +427,7 @@ int sub_4C1150(int64_t a1, int64_t a2, int a3)
 }
 
 // 0x4C11D0
-void sub_4C11D0(int64_t a1, int64_t a2, int a3)
+void reaction_bargain_adj(int64_t a1, int64_t a2, int a3)
 {
     int v1;
 
@@ -439,11 +457,11 @@ void sub_4C11D0(int64_t a1, int64_t a2, int a3)
 }
 
 // 0x4C1290
-int sub_4C1290(int64_t npc_obj, int64_t pc_obj)
+int reaction_stored_get(int64_t npc_obj, int64_t pc_obj)
 {
     int v1;
 
-    if (sub_4C12F0(npc_obj, pc_obj, 1, &v1)) {
+    if (reaction_slot_find(npc_obj, pc_obj, 1, &v1)) {
         return v1;
     }
 
@@ -457,7 +475,7 @@ int reaction_get_base(int64_t obj)
 }
 
 // 0x4C12F0
-bool sub_4C12F0(int64_t npc_obj, int64_t pc_obj, bool a3, int* a4)
+bool reaction_slot_find(int64_t npc_obj, int64_t pc_obj, bool a3, int* a4)
 {
     int index;
 
@@ -472,8 +490,13 @@ bool sub_4C12F0(int64_t npc_obj, int64_t pc_obj, bool a3, int* a4)
     return false;
 }
 
+// Store a reaction for a PC: update its existing slot, take the first free
+// one, or evict the slot whose level is closest to neutral (least worth
+// remembering) when all ten are full. Slot 0 is the current reaction and is
+// only written through this path when the PC already owns it.
+//
 // 0x4C1360
-void sub_4C1360(int64_t npc_obj, int64_t pc_obj, int value)
+void reaction_set(int64_t npc_obj, int64_t pc_obj, int value)
 {
     int index;
     int candidate;
@@ -490,7 +513,7 @@ void sub_4C1360(int64_t npc_obj, int64_t pc_obj, int value)
     for (index = 0; index < 10; index++) {
         obj = obj_arrayfield_handle_get(npc_obj, OBJ_F_NPC_REACTION_PC_IDX, index);
         if (obj == pc_obj) {
-            sub_4C1490(npc_obj, pc_obj, value, index);
+            reaction_slot_set(npc_obj, pc_obj, value, index);
             return;
         }
 
@@ -502,14 +525,14 @@ void sub_4C1360(int64_t npc_obj, int64_t pc_obj, int value)
     }
 
     if (candidate != -1) {
-        sub_4C1490(npc_obj, pc_obj, value, candidate);
+        reaction_slot_set(npc_obj, pc_obj, value, candidate);
         return;
     }
 
     // FIXME: Unused.
     datetime_current_second();
 
-    v1 = sub_4C15A0(value);
+    v1 = reaction_neutral_distance(value);
     for (index = 0; index < 10; index++) {
         if (index != 0) {
             reaction_level = obj_arrayfield_uint32_get(npc_obj, OBJ_F_NPC_REACTION_LEVEL_IDX, index);
@@ -517,7 +540,7 @@ void sub_4C1360(int64_t npc_obj, int64_t pc_obj, int value)
             // FIXME: Unused.
             obj_arrayfield_uint32_get(npc_obj, OBJ_F_NPC_REACTION_TIME_IDX, index);
 
-            v2 = sub_4C15A0(reaction_level);
+            v2 = reaction_neutral_distance(reaction_level);
             if (v2 < v1 && (candidate == -1 || v2 < v3)) {
                 candidate = index;
                 v3 = v2;
@@ -526,13 +549,13 @@ void sub_4C1360(int64_t npc_obj, int64_t pc_obj, int value)
     }
 
     if (candidate != -1) {
-        sub_4C1490(npc_obj, pc_obj, value, candidate);
+        reaction_slot_set(npc_obj, pc_obj, value, candidate);
         return;
     }
 }
 
 // 0x4C1490
-void sub_4C1490(int64_t npc_obj, int64_t pc_obj, int level, int index)
+void reaction_slot_set(int64_t npc_obj, int64_t pc_obj, int level, int index)
 {
     obj_arrayfield_obj_set(npc_obj, OBJ_F_NPC_REACTION_PC_IDX, index, pc_obj);
     obj_arrayfield_uint32_set(npc_obj, OBJ_F_NPC_REACTION_LEVEL_IDX, index, level);
@@ -542,7 +565,7 @@ void sub_4C1490(int64_t npc_obj, int64_t pc_obj, int level, int index)
 }
 
 // 0x4C1500
-int sub_4C1500(int64_t npc_obj, int64_t pc_obj, unsigned int flags)
+int reaction_modifiers_get(int64_t npc_obj, int64_t pc_obj, unsigned int flags)
 {
     int v1 = 0;
     int modifier;
@@ -569,7 +592,7 @@ int sub_4C1500(int64_t npc_obj, int64_t pc_obj, unsigned int flags)
 }
 
 // 0x4C15A0
-int sub_4C15A0(int a1)
+int reaction_neutral_distance(int a1)
 {
     // FIXME: Unused.
     datetime_current_second();

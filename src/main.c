@@ -155,7 +155,7 @@ int main(int argc, char** argv)
         wmap_rnd_disable();
     }
 
-    sub_549A70();
+    mainmenu_ui_female_chars_missing_clear();
 
     // NOTE: These were original switches to set cheat level. They were removed
     // from Arcanum release version.
@@ -518,7 +518,7 @@ void main_loop(void)
                         }
 
                         mainmenu_ui_feedback_loading();
-                        sub_543220();
+                        mainmenu_ui_quick_load();
                         mainmenu_ui_feedback_loading_completed();
                         break;
                     }

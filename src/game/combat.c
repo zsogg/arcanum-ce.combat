@@ -43,9 +43,9 @@
 static void turn_based_changed(void);
 static void fast_turn_based_changed(void);
 static void combat_create_projectile(CombatContext* combat, int64_t loc, int a3, int a4, tig_art_id_t proj_aid);
-static void sub_4B2690(int64_t proj_obj, int64_t a2, int64_t a3, CombatContext* combat, bool a5);
+static void combat_projectile_end(int64_t proj_obj, int64_t a2, int64_t a3, CombatContext* combat, bool a5);
 static int combat_weapon_loudness(int64_t weapon_obj);
-static void sub_4B2F60(CombatContext* combat);
+static void combat_process_attack_result(CombatContext* combat);
 static void combat_process_melee_attack(CombatContext* combat);
 static void combat_process_ranged_attack(CombatContext* combat);
 static void combat_critter_toggle_combat_mode(int64_t obj);
@@ -60,17 +60,17 @@ static void combat_calc_dmg(CombatContext* combat);
 static void combat_apply_resistance(CombatContext* combat);
 static int combat_play_hit_fx(CombatContext* combat);
 static void combat_process_taunts(CombatContext* combat);
-static void sub_4B7080(void);
+static void combat_turn_based_anims_complete(void);
 static bool combat_turn_based_start(void);
 static void combat_turn_based_end(void);
 static bool combat_turn_based_begin_turn(void);
 static void combat_recalc_perception_range(void);
-static bool sub_4B7580(ObjectNode* object_node);
+static bool combat_turn_based_critter_skip(ObjectNode* object_node);
 static void combat_turn_based_subturn_start(void);
 static void combat_turn_based_subturn_end(void);
 static void combat_turn_based_end_turn(void);
 static int combat_move_cost(int64_t source_obj, int64_t target_loc, bool adjacent);
-static bool sub_4B7DC0(int64_t obj);
+static bool combat_turn_based_critter_is_dontdraw(int64_t obj);
 static void sort_combat_list(void);
 static void pc_switch_weapon(int64_t pc_obj, int64_t target_obj);
 
@@ -187,7 +187,7 @@ static int combat_last_action_points;
 
 // 0x5FC264
 // The turn-based stall detector, and only meaningful as a trio with
-// `combat_last_turn_obj` and `combat_last_action_points`. `sub_4B7080`
+// `combat_last_turn_obj` and `combat_last_action_points`. `combat_turn_based_anims_complete`
 // remembers whose turn it saw last and how many action points they had; if
 // both are unchanged since the previous pass the turn is making no progress,
 // so it sets this flag. `combat_tb_timeevent_process` then clears it and burns
@@ -439,7 +439,7 @@ void turn_based_changed(void)
 
     value = settings_get_value(&settings, TURN_BASED_KEY);
 
-    sub_4B6C90(value);
+    combat_turn_based_set(value);
 }
 
 // 0x4B2410
@@ -499,13 +499,13 @@ void combat_create_projectile(CombatContext* combat, int64_t loc, int a3, int a4
 }
 
 // 0x4B2650
-void sub_4B2650(int64_t a1, int64_t a2, CombatContext* combat)
+void combat_projectile_goal_end(int64_t a1, int64_t a2, CombatContext* combat)
 {
-    sub_4B2690(a1, a2, combat != NULL ? combat->field_28 : OBJ_HANDLE_NULL, combat, false);
+    combat_projectile_end(a1, a2, combat != NULL ? combat->field_28 : OBJ_HANDLE_NULL, combat, false);
 }
 
 // 0x4B2690
-void sub_4B2690(int64_t proj_obj, int64_t a2, int64_t a3, CombatContext* combat, bool a5)
+void combat_projectile_end(int64_t proj_obj, int64_t a2, int64_t a3, CombatContext* combat, bool a5)
 {
     unsigned int proj_flags;
     int64_t weapon_obj;
@@ -524,7 +524,7 @@ void sub_4B2690(int64_t proj_obj, int64_t a2, int64_t a3, CombatContext* combat,
             proj_flags |= 0x2000;
             obj_field_int32_set(proj_obj, OBJ_F_PROJECTILE_FLAGS_COMBAT, proj_flags);
             if (!anim_goal_projectile_retarget(proj_obj, obj_field_int64_get(a2, OBJ_F_LOCATION), a3)) {
-                sub_4B2690(proj_obj, a2, a3, combat, true);
+                combat_projectile_end(proj_obj, a2, a3, combat, true);
                 return;
             }
         } else {
@@ -568,7 +568,7 @@ int combat_weapon_loudness(int64_t weapon_obj)
 }
 
 // 0x4B2870
-bool sub_4B2870(int64_t attacker_obj, int64_t target_obj, int64_t target_loc, int64_t proj_obj, int range, int64_t cur_loc, int64_t a7)
+bool combat_projectile_arrive(int64_t attacker_obj, int64_t target_obj, int64_t target_loc, int64_t proj_obj, int range, int64_t cur_loc, int64_t a7)
 {
     unsigned int proj_flags;
     unsigned int proj_dam_flags;
@@ -620,7 +620,7 @@ bool sub_4B2870(int64_t attacker_obj, int64_t target_obj, int64_t target_loc, in
     if (proj_loc == target_loc) {
         if (target_obj == OBJ_HANDLE_NULL
             || (proj_flags & 0x2000) != 0) {
-            sub_4B2690(proj_obj, attacker_obj, a7, NULL, true);
+            combat_projectile_end(proj_obj, attacker_obj, a7, NULL, true);
 
             if (weapon_obj != OBJ_HANDLE_NULL) {
                 object_script_execute(attacker_obj, weapon_obj, target_obj, SAP_HIT, 0);
@@ -713,8 +713,8 @@ bool sub_4B2870(int64_t attacker_obj, int64_t target_obj, int64_t target_loc, in
         combat.weapon_obj = weapon_obj;
         combat.skill = item_weapon_skill(weapon_obj);
         combat.flags &= ~0xC000;
-        sub_4B2690(proj_obj, attacker_obj, target_obj, &combat, 1);
-        sub_4B2F60(&combat);
+        combat_projectile_end(proj_obj, attacker_obj, target_obj, &combat, 1);
+        combat_process_attack_result(&combat);
         combat_process_taunts(&combat);
         mt_item_notify_parent_attacks_loc(attacker_obj,
             weapon_obj,
@@ -736,7 +736,7 @@ bool sub_4B2870(int64_t attacker_obj, int64_t target_obj, int64_t target_loc, in
             proj_loc = obj_field_int64_get(proj_obj, OBJ_F_LOCATION);
         }
 
-        sub_4B2690(proj_obj, attacker_obj, target_obj, NULL, true);
+        combat_projectile_end(proj_obj, attacker_obj, target_obj, NULL, true);
 
         if (weapon_obj != OBJ_HANDLE_NULL) {
             object_script_execute(attacker_obj, weapon_obj, target_obj, SAP_MISS, 0);
@@ -754,7 +754,7 @@ bool sub_4B2870(int64_t attacker_obj, int64_t target_obj, int64_t target_loc, in
 }
 
 // 0x4B2F60
-void sub_4B2F60(CombatContext* combat)
+void combat_process_attack_result(CombatContext* combat)
 {
     int sound_id;
 
@@ -807,7 +807,7 @@ void sub_4B2F60(CombatContext* combat)
 }
 
 // 0x4B3170
-int sub_4B3170(CombatContext* combat)
+int combat_attack(CombatContext* combat)
 {
     bool was_in_bed = false;
     int sound_id;
@@ -1105,7 +1105,7 @@ void combat_process_ranged_attack(CombatContext* combat)
     }
 
     if (missile_art_id == TIG_ART_ID_INVALID) {
-        sub_4B2F60(combat);
+        combat_process_attack_result(combat);
         return;
     }
 
@@ -1139,7 +1139,7 @@ void combat_process_ranged_attack(CombatContext* combat)
 }
 
 // 0x4B3BB0
-void sub_4B3BB0(int64_t attacker_obj, int64_t target_obj, int hit_loc)
+void combat_attack_weapon_wear(int64_t attacker_obj, int64_t target_obj, int hit_loc)
 {
     CombatContext combat;
 
@@ -1147,7 +1147,7 @@ void sub_4B3BB0(int64_t attacker_obj, int64_t target_obj, int hit_loc)
     combat.hit_loc = hit_loc;
     combat.flags |= CF_WEAPON_WEAR;
     combat.flags |= 0x40000;
-    sub_4B3170(&combat);
+    combat_attack(&combat);
 }
 
 // 0x4B3C00
@@ -1175,7 +1175,7 @@ void combat_throw(int64_t attacker_obj, int64_t weapon_obj, int64_t target_obj, 
         combat.flags |= 0x40;
         object_flags_set(weapon_obj, OF_OFF);
         object_drop(weapon_obj, attacker_loc);
-        sub_4B3170(&combat);
+        combat_attack(&combat);
     } else {
         object_drop(weapon_obj, attacker_loc);
         item_transfer(weapon_obj, attacker_obj);
@@ -1398,7 +1398,7 @@ void combat_critter_toggle_combat_mode(int64_t obj)
 }
 
 // 0x4B4320
-void sub_4B4320(int64_t obj)
+void combat_critter_fidget_restart(int64_t obj)
 {
     if (obj != OBJ_HANDLE_NULL
         && (obj_field_int32_get(obj, OBJ_F_TYPE) == OBJ_TYPE_PC
@@ -2893,7 +2893,7 @@ bool combat_is_turn_based(void)
 }
 
 // 0x4B6C90
-bool sub_4B6C90(bool turn_based)
+bool combat_turn_based_set(bool turn_based)
 {
     int64_t pc;
 
@@ -3045,7 +3045,7 @@ void combat_turn_based_whos_turn_set(int64_t obj)
     } else {
         combat_callbacks.field_C(0);
         ci_update();
-        sub_4B7010(obj);
+        combat_turn_based_npc_turn(obj);
 
         if (ci_lock_count()) {
             ci_unlock();
@@ -3060,7 +3060,7 @@ void combat_turn_based_whos_turn_set(int64_t obj)
 }
 
 // 0x4B7010
-void sub_4B7010(int64_t obj)
+void combat_turn_based_npc_turn(int64_t obj)
 {
     if (obj == combat_whos_turn_node->obj
         && !player_is_pc_obj(obj)
@@ -3071,13 +3071,13 @@ void sub_4B7010(int64_t obj)
 
         if (!anim_is_busy(obj, NULL)) {
             combat_action_points = 0;
-            sub_4B7080();
+            combat_turn_based_anims_complete();
         }
     }
 }
 
 // 0x4B7080
-void sub_4B7080(void)
+void combat_turn_based_anims_complete(void)
 {
     DateTime datetime;
     TimeEvent timeevent;
@@ -3162,7 +3162,7 @@ bool combat_turn_based_start(void)
 
     combat_turn_index = 0;
 
-    anim_all_goals_finished_callback_set(sub_4B7080);
+    anim_all_goals_finished_callback_set(combat_turn_based_anims_complete);
 
     loc = obj_field_int64_get(player_get_local_pc_obj(), OBJ_F_LOCATION);
     combat_recalc_perception_range();
@@ -3244,7 +3244,7 @@ bool combat_turn_based_begin_turn(void)
 
     combat_turn_index = 0;
     combat_whos_turn_node = combat_critter_list.head;
-    while (sub_4B7580(combat_whos_turn_node) && combat_whos_turn_node != NULL) {
+    while (combat_turn_based_critter_skip(combat_whos_turn_node) && combat_whos_turn_node != NULL) {
         combat_turn_index++;
         combat_whos_turn_node = combat_whos_turn_node->next;
     }
@@ -3276,7 +3276,7 @@ bool combat_turn_based_begin_turn(void)
 }
 
 // 0x4B7580
-bool sub_4B7580(ObjectNode* object_node)
+bool combat_turn_based_critter_skip(ObjectNode* object_node)
 {
     if (combat_whos_turn_node == NULL) {
         return true;
@@ -3287,7 +3287,7 @@ bool sub_4B7580(ObjectNode* object_node)
         return true;
     }
 
-    if (sub_4B7DC0(object_node->obj)) {
+    if (combat_turn_based_critter_is_dontdraw(object_node->obj)) {
         return true;
     }
 
@@ -3332,14 +3332,14 @@ void combat_turn_based_next_subturn(void)
         return;
     }
 
-    if (sub_4B7580(combat_whos_turn_node)) {
+    if (combat_turn_based_critter_skip(combat_whos_turn_node)) {
         while (combat_whos_turn_node != NULL) {
             combat_whos_turn_node = combat_whos_turn_node->next;
             combat_turn_index++;
             if (combat_whos_turn_node == NULL) {
                 break;
             }
-            if (!sub_4B7580(combat_whos_turn_node)) {
+            if (!combat_turn_based_critter_skip(combat_whos_turn_node)) {
                 break;
             }
         }
@@ -3639,7 +3639,7 @@ bool combat_consume_action_points(int64_t obj, int action_points)
 }
 
 // 0x4B7DC0
-bool sub_4B7DC0(int64_t obj)
+bool combat_turn_based_critter_is_dontdraw(int64_t obj)
 {
     if ((obj_field_int32_get(obj, OBJ_F_FLAGS) & OF_DONTDRAW) != 0) {
         return !critter_is_sleeping(obj);
@@ -3669,7 +3669,7 @@ void combat_turn_based_add_critter(int64_t obj)
         return;
     }
 
-    if (sub_4B7DC0(obj)) {
+    if (combat_turn_based_critter_is_dontdraw(obj)) {
         tig_debug_printf("Combat: combat_turn_based_add_critter: WARNING: Attempt to add critter that is OF_DONTDRAW!\n");
     }
 
@@ -3789,7 +3789,7 @@ void sort_combat_list(void)
 }
 
 // 0x4B8040
-bool sub_4B8040(int64_t obj)
+bool combat_turn_based_critter_can_fastforward(int64_t obj)
 {
     if (!combat_turn_based_active) {
         return false;
@@ -3861,7 +3861,7 @@ void combat_recalc_reaction(int64_t obj)
     flags |= dword_5B5818[reaction_type];
     obj_field_int32_set(obj, OBJ_F_CRITTER_FLAGS2, flags);
 
-    if (critter_is_dead(obj) || sub_4B7DC0(obj)) {
+    if (critter_is_dead(obj) || combat_turn_based_critter_is_dontdraw(obj)) {
         animfx_remove(&combat_eye_candies, obj, 0, -1);
     } else {
         animfx_node_init(&combat_eye_candies, &node, obj, -1, 0);

@@ -862,7 +862,7 @@ bool sub_57E8D0(TigMessageMouseEvent mouse_event)
         return false;
     }
 
-    sub_573730();
+    inven_ui_mouse_capture_end();
 
     if (hotkey_ui_dragged.item_obj.obj != OBJ_HANDLE_NULL) {
         if (item_parent(hotkey_ui_dragged.item_obj.obj, &parent_obj)
@@ -913,7 +913,7 @@ bool sub_57E8D0(TigMessageMouseEvent mouse_event)
             intgame_hotkey_refresh(index);
 
             hotkey_ui_dragging = false;
-            sub_573840();
+            inven_ui_drag_clear();
             intgame_refresh_cursor();
             hotkey_ui_dragging_index = -1;
             return true;
@@ -953,7 +953,7 @@ bool sub_57E8D0(TigMessageMouseEvent mouse_event)
         case HOTKEY_NONE:
             break;
         case HOTKEY_ITEM:
-            sub_573840();
+            inven_ui_drag_clear();
             item_inventory_location_get(hotkey_ui_dragged.item_obj.obj); // FIXME: Useless.
             flags = obj_field_int32_get(hotkey_ui_dragged.item_obj.obj, OBJ_F_ITEM_FLAGS);
             flags &= ~OIF_NO_DISPLAY;

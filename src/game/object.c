@@ -1342,7 +1342,7 @@ void object_destroy(int64_t obj)
         ai_timeevent_clear(obj);
 
         if (obj_type == OBJ_TYPE_NPC) {
-            pc_obj = sub_4C1110(obj);
+            pc_obj = reaction_current_pc_get(obj);
             if (pc_obj != OBJ_HANDLE_NULL) {
                 ui_end_dialog(pc_obj, 0);
             }

@@ -185,7 +185,7 @@ void sub_4CA0F0(int a1, int a2, int a3)
             for (index = 0; index < dword_5FF570 * dword_5FF574; index++) {
                 if (dword_5FF5A0[index] != TIG_ART_ID_INVALID) {
                     tig_video_buffer_create(&vb_create_info, &(dword_5FF5A4[index]));
-                    sub_4D7590(dword_5FF5A0[index], dword_5FF5A4[index]);
+                    tile_cache_fill(dword_5FF5A0[index], dword_5FF5A4[index]);
                 } else {
                     dword_5FF5A4[index] = NULL;
                 }

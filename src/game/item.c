@@ -918,7 +918,7 @@ int item_cost(int64_t item_obj, int64_t seller_obj, int64_t buyer_obj, bool a4)
 
         mult = obj_field_int32_get(seller_obj, OBJ_F_NPC_RETAIL_PRICE_MULTIPLIER);
         haggle = basic_skill_effectiveness(buyer_obj, BASIC_SKILL_HAGGLE, item_obj);
-        cost = sub_4C1150(seller_obj, buyer_obj, worth + worth * mult * (100 - haggle) / 10000);
+        cost = reaction_price_scale(seller_obj, buyer_obj, worth + worth * mult * (100 - haggle) / 10000);
 
         if (cost <= worth) {
             cost = worth + 1;

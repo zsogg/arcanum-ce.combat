@@ -1031,7 +1031,7 @@ int script_execute_condition(ScriptCondition* condition, int line, ScriptState* 
         matched = 0;
         for (index = 0; index < cnt; index++) {
             if (obj_field_int32_get(objs[index], OBJ_F_TYPE) == OBJ_TYPE_NPC) {
-                if (sub_4C1110(objs[index])) {
+                if (reaction_current_pc_get(objs[index])) {
                     matched++;
                 }
             } else {

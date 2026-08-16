@@ -709,7 +709,7 @@ void trigger_trap(int64_t obj, ScriptInvocation* invocation)
             combat.flags |= 0x300;
             combat.weapon_obj = OBJ_HANDLE_NULL;
             combat.dam[DAMAGE_TYPE_NORMAL] = random_between(invocation->script->hdr.counters & 0xFF, (invocation->script->hdr.counters >> 8) & 0xFF);
-            sub_4B3170(&combat);
+            combat_attack(&combat);
         }
         break;
     case TRAP_SCRIPT_BULLET:

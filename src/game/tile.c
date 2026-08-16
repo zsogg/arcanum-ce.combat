@@ -19,15 +19,15 @@ typedef struct TileCacheEntry {
     unsigned int time;
 } TileCacheEntry;
 
-static void sub_4D7820(int64_t loc, tig_art_id_t art_id);
-static void sub_4D7980(void);
-static void sub_4D79C0(ViewOptions* view_options);
-static void sub_4D7A00(void);
-static void sub_4D7A40(int zoom);
-static void sub_4D7A90(void);
-static void sub_4D7AC0(int zoom);
-static void sub_4D7C70(void);
-static TigVideoBuffer* sub_4D7E90(unsigned int art_id);
+static void tile_art_id_set(int64_t loc, tig_art_id_t art_id);
+static void tile_caches_destroy(void);
+static void tile_cache_zoom_update(ViewOptions* view_options);
+static void tile_render_buffer_create(void);
+static void tile_cache_create(int zoom);
+static void tile_cache_destroy(void);
+static void tile_cache_lookup_tables_build(int zoom);
+static void tile_cache_lookup_tables_destroy(void);
+static TigVideoBuffer* tile_cache_get(unsigned int art_id);
 static void tile_draw_topdown(GameDrawInfo* draw_info);
 static void tile_draw_iso(GameDrawInfo* draw_info);
 
@@ -83,7 +83,7 @@ bool tile_init(GameInitInfo* init_info)
 // 0x4D68A0
 void tile_exit(void)
 {
-    sub_4D7980();
+    tile_caches_destroy();
     tile_iso_window_handle = TIG_WINDOW_HANDLE_INVALID;
     tile_invalidate_rect = NULL;
 }
@@ -102,7 +102,7 @@ void tile_resize(GameResizeInfo* resize_info)
 // 0x4D6900
 void tile_update_view(ViewOptions* view_options)
 {
-    sub_4D79C0(view_options);
+    tile_cache_zoom_update(view_options);
     tile_view_options = *view_options;
 }
 
@@ -207,14 +207,29 @@ bool tile_is_slippery(int64_t loc)
     return a_name_tile_is_slippery(tile_art_id_at(loc));
 }
 
+// NOTE: Not transcribed (upstream TODO). The original 0x4D71E0 is a
+// recursive transition-edge fixup: it picks a transition art for the given
+// location via 0x4D7480, writes it via 0x4D7820, and when the art is
+// flippable it walks to a neighbour location (0x4B8FF0 + 0x4D70B0) and
+// recurses (its only call sites in Arcanum.exe, 0x4D73EF and 0x4D7416, are
+// inside itself). Externally unreferenced in both binaries, so it stays a
+// stub until someone ports it deliberately.
+//
 // 0x4D71E0
-void sub_4D71E0(void)
+void sub_4D71E0(int64_t loc)
 {
+    (void)loc;
     // TODO: Incomplete.
 }
 
+// Sets the tile at loc to the first frame id after its current art that does
+// not exist - just past the end of the art's frame run (verified against
+// 0x4D7430; the advance-while-exists loop is identical). Unreferenced in CE
+// and in the original (no call sites to 0x4D7430 in Arcanum.exe); a dead
+// editor/debug export.
+//
 // 0x4D7430
-void sub_4D7430(int64_t loc)
+void tile_art_id_advance_end(int64_t loc)
 {
     tig_art_id_t art_id;
 
@@ -225,11 +240,11 @@ void sub_4D7430(int64_t loc)
         }
     } while (tig_art_exists(art_id) != TIG_OK);
 
-    sub_4D7820(loc, art_id);
+    tile_art_id_set(loc, art_id);
 }
 
 // 0x4D7480
-tig_art_id_t sub_4D7480(tig_art_id_t art_id, int num2, bool flippable2, int a4)
+tig_art_id_t tile_variant_art_id_get(tig_art_id_t art_id, int num2, bool flippable2, int a4)
 {
     int num1;
     int type;
@@ -242,7 +257,12 @@ tig_art_id_t sub_4D7480(tig_art_id_t art_id, int num2, bool flippable2, int a4)
 
     num1 = tig_art_tile_id_num1_get(art_id);
     type = tig_art_tile_id_type_get(art_id);
-    flippable1 = tig_art_tile_id_type_get(art_id);
+    // FIX (porting bug #14): this read `type` where the original calls the
+    // flippable1 getter (0x503950, not 0x5038C0). With TIG_ART_TYPE_TILE == 0
+    // the `if (flippable1)` branch could never run, so flippable transition
+    // tiles lost their swap and their +8 random variant. Latent in CE because
+    // the only current caller (`terrain_fill`) passes non-flippable base tiles.
+    flippable1 = tig_art_tile_id_flippable1_get(art_id);
     palette = tig_art_id_palette_get(art_id);
 
     if (flippable1) {
@@ -302,7 +322,7 @@ tig_art_id_t sub_4D7480(tig_art_id_t art_id, int num2, bool flippable2, int a4)
 }
 
 // 0x4D7590
-void sub_4D7590(tig_art_id_t art_id, TigVideoBuffer* video_buffer)
+void tile_cache_fill(tig_art_id_t art_id, TigVideoBuffer* video_buffer)
 {
     TigRect rect;
     TigArtBlitInfo art_blit_spec;
@@ -343,7 +363,7 @@ void sub_4D7590(tig_art_id_t art_id, TigVideoBuffer* video_buffer)
 }
 
 // 0x4D7820
-void sub_4D7820(int64_t loc, tig_art_id_t art_id)
+void tile_art_id_set(int64_t loc, tig_art_id_t art_id)
 {
     int64_t sector_id;
     Sector* sector;
@@ -378,36 +398,36 @@ void sub_4D7820(int64_t loc, tig_art_id_t art_id)
 }
 
 // 0x4D7980
-void sub_4D7980(void)
+void tile_caches_destroy(void)
 {
     if (dword_602DE0 != NULL) {
         tig_video_buffer_destroy(dword_602DE0);
         dword_602DE0 = NULL;
     }
 
-    sub_4D7C70();
-    sub_4D7A90();
+    tile_cache_lookup_tables_destroy();
+    tile_cache_destroy();
 
     dword_602E08 = false;
 }
 
 // 0x4D79C0
-void sub_4D79C0(ViewOptions* view_options)
+void tile_cache_zoom_update(ViewOptions* view_options)
 {
     if (view_options->type == VIEW_TYPE_TOP_DOWN) {
         if (view_options->zoom != tile_view_options.zoom) {
             if (!dword_602E08) {
-                sub_4D7A00();
+                tile_render_buffer_create();
             }
 
-            sub_4D7A40(view_options->zoom);
-            sub_4D7AC0(view_options->zoom);
+            tile_cache_create(view_options->zoom);
+            tile_cache_lookup_tables_build(view_options->zoom);
         }
     }
 }
 
 // 0x4D7A00
-void sub_4D7A00(void)
+void tile_render_buffer_create(void)
 {
     TigVideoBufferCreateInfo vb_create_info;
 
@@ -421,12 +441,12 @@ void sub_4D7A00(void)
 }
 
 // 0x4D7A40
-void sub_4D7A40(int zoom)
+void tile_cache_create(int zoom)
 {
     TigVideoBufferCreateInfo vb_create_info;
     int index;
 
-    sub_4D7A90();
+    tile_cache_destroy();
 
     vb_create_info.flags = TIG_VIDEO_BUFFER_CREATE_SYSTEM_MEMORY;
     vb_create_info.width = zoom;
@@ -440,7 +460,7 @@ void sub_4D7A40(int zoom)
 }
 
 // 0x4D7A90
-void sub_4D7A90(void)
+void tile_cache_destroy(void)
 {
     int index;
 
@@ -455,7 +475,7 @@ void sub_4D7A90(void)
 }
 
 // 0x4D7AC0
-void sub_4D7AC0(int zoom)
+void tile_cache_lookup_tables_build(int zoom)
 {
     double v1;
     double v2;
@@ -469,7 +489,7 @@ void sub_4D7AC0(int zoom)
     int x;
     int y;
 
-    sub_4D7C70();
+    tile_cache_lookup_tables_destroy();
 
     v1 = zoom * 0.5 - 1.0;
 
@@ -516,7 +536,7 @@ void sub_4D7AC0(int zoom)
 }
 
 // 0x4D7C70
-void sub_4D7C70(void)
+void tile_cache_lookup_tables_destroy(void)
 {
     if (dword_602DE8 != NULL) {
         FREE(dword_602DE8);
@@ -530,7 +550,7 @@ void sub_4D7C70(void)
 }
 
 // 0x4D7E90
-TigVideoBuffer* sub_4D7E90(unsigned int art_id)
+TigVideoBuffer* tile_cache_get(unsigned int art_id)
 {
     int candidate = -1;
     int found = -1;
@@ -559,7 +579,7 @@ TigVideoBuffer* sub_4D7E90(unsigned int art_id)
         found = candidate;
     }
 
-    sub_4D7590(art_id, stru_602AE0[found].video_buffer);
+    tile_cache_fill(art_id, stru_602AE0[found].video_buffer);
     stru_602AE0[found].art_id = art_id;
     stru_602AE0[found].time = gamelib_ping_time;
 
@@ -605,7 +625,7 @@ void tile_draw_topdown(GameDrawInfo* draw_info)
                             src_rect.height = dst_rect.height;
                             tig_window_copy_from_vbuffer(tile_iso_window_handle,
                                 &dst_rect,
-                                sub_4D7E90(sector->tiles.art_ids[tile]),
+                                tile_cache_get(sector->tiles.art_ids[tile]),
                                 &src_rect);
                         }
                         rect_node = rect_node->next;
