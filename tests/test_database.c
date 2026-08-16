@@ -9,18 +9,18 @@
 // falsify itself.
 //
 // The wide version of the same check lives in
-// `arcanum-work/scripts/dbmaker_diff.py`, which unpacks all 17 shipped archives
-// with dbmaker and compares 21,639 payloads against ours. This suite is the
-// part that needs neither Wine nor the game's assets, so it can run in CI:
+// `arcanum-work/scripts/dbmaker_diff.py`, which unpacks all 36 archives on this
+// machine with dbmaker and compares 221,681 payloads against ours. This suite is
+// the part that needs neither Wine nor the game's assets, so it can run in CI:
 // `arcanum-work/scripts/make_db_fixtures.py` rebuilds the two arrays below and
 // records the exact dbmaker commands.
 //
 // What the fixtures cover, chosen because the shipped corpus does not exercise
-// it: a zero-length entry (not one of the 221,681 file entries across the 36
-// archives here is empty), a
+// it: a zero-length entry (not one of those 221,681 entries is empty), a
 // stored-uncompressed entry next to a compressed one in the same archive, a
 // payload larger than the 16 KB decompression buffer so the inflate loop turns
-// over, and the separator-ordering hazard described at
+// over, the older `" TAD"` container that no archive anywhere uses, and the
+// separator-ordering hazard described at
 // `finds_an_entry_when_a_sibling_directory_shares_its_prefix`.
 //
 // The archives are written to disk because `tig_database_open` takes a path,
@@ -39,6 +39,7 @@
 
 #include "tig/compat.h"
 #include "tig/database.h"
+#include "tig/guid.h"
 
 #include "test_harness.h"
 
@@ -118,6 +119,33 @@ static void close_and_remove(TigDatabase* database, const char* path)
         tig_database_close(database);
     }
     remove(path);
+}
+
+// Rewrites a `1TAD` archive as the older `" TAD"` one, which has no guid:
+// drop the 16 bytes at [-28, -12) and pull the entry table offset in by the
+// same 16, which leaves the payload base where it was. Returns the new size.
+//
+// Doing it here rather than shipping a second fixture keeps the payload bytes
+// from being embedded twice, and puts the transformation where it can be read.
+// It is not invented: `dbmaker.exe` opens, lists and unpacks the result of this
+// exact rewrite, and gives back the same two files as the `1TAD` original, so
+// the older form is a real format and this produces a valid instance of it.
+static size_t to_older_dat_form(const unsigned char* src, size_t size, unsigned char* dst)
+{
+    unsigned int name_table_size;
+    unsigned int entry_table_offset;
+    size_t body = size - 28;
+
+    memcpy(&name_table_size, &src[size - 8], sizeof(name_table_size));
+    memcpy(&entry_table_offset, &src[size - 4], sizeof(entry_table_offset));
+    entry_table_offset -= 16;
+
+    memcpy(dst, src, body);
+    memcpy(&dst[body], " TAD", 4);
+    memcpy(&dst[body + 4], &name_table_size, sizeof(name_table_size));
+    memcpy(&dst[body + 8], &entry_table_offset, sizeof(entry_table_offset));
+
+    return body + 12;
 }
 
 // dbmaker writes one entry per file plus one per directory, in its own order.
@@ -528,6 +556,59 @@ TEST(an_ignore_sidecar_hides_matching_entries)
     remove(MIXED_IGNORE_PATH);
 }
 
+// The older `" TAD"` form. `tig_database_open` has a branch for it that **had
+// never executed**: all 36 archives on this machine are `1TAD`, so nothing in
+// the game, no mod, and no earlier check ever reached it. The difference is the
+// guid - `" TAD"` has none, and the reader zeroes the field instead of reading
+// one - and everything after the footer is identical, which is what this pins.
+TEST(reads_the_older_dat_form_with_no_guid)
+{
+    unsigned char converted[sizeof(FIXTURE_MIXED)];
+    size_t size = to_older_dat_form(FIXTURE_MIXED, sizeof(FIXTURE_MIXED), converted);
+    TigDatabase* database;
+    TigDatabaseEntry* entry = NULL;
+    TigDatabaseFileHandle* stream;
+    unsigned char buffer[4];
+    TigGuid zero;
+    int index;
+
+    memset(&zero, 0, sizeof(zero));
+
+    CHECK_INT(size, sizeof(FIXTURE_MIXED) - 16);
+    CHECK(write_fixture(ORDER_PATH, converted, size));
+
+    database = tig_database_open(ORDER_PATH);
+    CHECK(database != NULL);
+    if (database == NULL) {
+        remove(ORDER_PATH);
+        return;
+    }
+
+    // Same entries as the `1TAD` original, and no guid.
+    CHECK_INT(database->entries_count, 6);
+    CHECK_INT(memcmp(&(database->guid), &zero, sizeof(zero)), 0);
+
+    CHECK(tig_database_get_entry(database, "bin\\big.bin", &entry));
+    CHECK_INT(entry->size, BIG_SIZE);
+
+    // Payload offsets are relative to a base computed from the file size, so
+    // shortening the footer is exactly where this would go wrong if the
+    // arithmetic were wrong on either side. Read the last four bytes of the
+    // largest entry: if the base had shifted, this is what would show it.
+    stream = tig_database_fopen(database, "bin\\big.bin", "rb");
+    CHECK(stream != NULL);
+    if (stream != NULL) {
+        CHECK_INT(tig_database_fseek(stream, -4, SEEK_END), 0);
+        CHECK_INT(tig_database_fread(buffer, 1, 4, stream), 4);
+        for (index = 0; index < 4; index++) {
+            CHECK_INT(buffer[index], big_byte(BIG_SIZE - 4 + index));
+        }
+        tig_database_fclose(stream);
+    }
+
+    close_and_remove(database, ORDER_PATH);
+}
+
 // Porting bug #13, and the reason this fixture exists.
 //
 // dbmaker sorts the entry table by the path as *it* writes it, with backslash
@@ -591,5 +672,6 @@ void test_database_suite(void)
     RUN(ungetc_hands_the_byte_to_the_next_read);
     RUN(enumerates_entries_matching_a_pattern);
     RUN(an_ignore_sidecar_hides_matching_entries);
+    RUN(reads_the_older_dat_form_with_no_guid);
     RUN(finds_an_entry_when_a_sibling_directory_shares_its_prefix);
 }

@@ -85,3 +85,21 @@ target_link_libraries(arcanum-dat-dump PRIVATE
     tig
     SDL3::SDL3
 )
+
+# Resolves paths through the real repository layer, for
+# `arcanum-work/scripts/overlay_check.py`. Same reason as `arcanum-dat-dump`:
+# the Python model of which archive answers a lookup has never been checked
+# against the code it models. Needs the game's archives, so not a test.
+add_executable(arcanum-file-probe
+    "file_probe.c"
+)
+
+target_include_directories(arcanum-file-probe PRIVATE
+    ${ZLIB_INCLUDE_DIRS}
+)
+
+target_link_libraries(arcanum-file-probe PRIVATE
+    tig
+    SDL3::SDL3
+    ${ZLIB_LIBRARIES}
+)
