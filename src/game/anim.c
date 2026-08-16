@@ -242,10 +242,10 @@ static bool anim_float_begin(AnimRunInfo* run_info);
 static bool anim_float_end(AnimRunInfo* run_info);
 static bool anim_eye_candy_not_applied(AnimRunInfo* run_info);
 static bool AGupdateAnimEyeCandy(AnimRunInfo* run_info);
-static void sub_431550(AnimRunInfo* run_info, int64_t obj);
+static void anim_eye_candy_sound_restart(AnimRunInfo* run_info, int64_t obj);
 static bool AGbeginAnimEyeCandy(AnimRunInfo* run_info);
-static void sub_431960(AnimRunInfo* run_info, int64_t obj);
-static void sub_4319F0(AnimRunInfo* run_info, int64_t obj);
+static void anim_eye_candy_sound_begin(AnimRunInfo* run_info, int64_t obj);
+static void anim_eye_candy_sound_move(AnimRunInfo* run_info, int64_t obj);
 static bool AGendAnimEyeCandy(AnimRunInfo* run_info);
 static bool anim_cleanup_eye_candy(AnimRunInfo* run_info);
 static bool AGupdateAnimEyeCandyReverse(AnimRunInfo* run_info);
@@ -12152,13 +12152,15 @@ bool AGupdateAnimEyeCandy(AnimRunInfo* run_info)
         object_overlay_light_frame_inc(obj, overlay_light);
     }
 
-    sub_431550(run_info, obj);
+    anim_eye_candy_sound_restart(run_info, obj);
 
     return true;
 }
 
 // 0x431550
-void sub_431550(AnimRunInfo* run_info, int64_t obj)
+// Restarts the eye-candy animation sound when the previous animation id is
+// still valid. The four AGupdateAnimEyeCandy* variants all funnel here.
+void anim_eye_candy_sound_restart(AnimRunInfo* run_info, int64_t obj)
 {
     AnimGoalData* goal_data;
     tig_sound_handle_t sound_handle;
@@ -12300,13 +12302,16 @@ bool AGbeginAnimEyeCandy(AnimRunInfo* run_info)
         }
     }
 
-    sub_431960(run_info, obj);
+    anim_eye_candy_sound_begin(run_info, obj);
 
     return true;
 }
 
 // 0x431960
-void sub_431960(AnimRunInfo* run_info, int64_t obj)
+// Starts the eye-candy sound when the animation begins: looping when the high
+// flag bit is clear, otherwise a one-shot tracked in AGDATA_ANIM_ID_PREVIOUS.
+// An already-live sound is moved instead (anim_eye_candy_sound_move).
+void anim_eye_candy_sound_begin(AnimRunInfo* run_info, int64_t obj)
 {
     AnimGoalData* goal_data;
     tig_sound_handle_t sound_handle;
@@ -12331,12 +12336,13 @@ void sub_431960(AnimRunInfo* run_info, int64_t obj)
             }
         }
     } else {
-        sub_4319F0(run_info, obj);
+        anim_eye_candy_sound_move(run_info, obj);
     }
 }
 
 // 0x4319F0
-void sub_4319F0(AnimRunInfo* run_info, int64_t obj)
+// Keeps a looping eye-candy sound glued to the object as it moves.
+void anim_eye_candy_sound_move(AnimRunInfo* run_info, int64_t obj)
 {
     AnimGoalData* goal_data;
 
@@ -12554,7 +12560,7 @@ bool AGupdateAnimEyeCandyReverse(AnimRunInfo* run_info)
         object_overlay_light_frame_dec(obj, overlay_light);
     }
 
-    sub_431550(run_info, obj);
+    anim_eye_candy_sound_restart(run_info, obj);
 
     return true;
 }
@@ -12682,7 +12688,7 @@ bool AGbeginAnimEyeCandyReverse(AnimRunInfo* run_info)
         }
     }
 
-    sub_431960(run_info, obj);
+    anim_eye_candy_sound_begin(run_info, obj);
 
     return true;
 }
@@ -12839,7 +12845,7 @@ bool AGupdateAnimEyeCandyFireDmg(AnimRunInfo* run_info)
         object_overlay_light_frame_inc(obj, overlay_light);
     }
 
-    sub_431550(run_info, obj);
+    anim_eye_candy_sound_restart(run_info, obj);
 
     return true;
 }
@@ -12946,7 +12952,7 @@ bool AGupdateAnimEyeCandyReverseFireDmg(AnimRunInfo* run_info)
         object_overlay_light_frame_dec(obj, overlay_light);
     }
 
-    sub_431550(run_info, obj);
+    anim_eye_candy_sound_restart(run_info, obj);
 
     return true;
 }
