@@ -137,18 +137,18 @@ void anim_make_room_for_critter(int64_t obj);
 bool anim_goal_attempt_spread_out(int64_t a1, int64_t a2);
 void turn_on_flags(AnimID anim_id, unsigned int flags1, unsigned int flags2);
 void turn_on_running(AnimID anim_id);
-void sub_436C20(void);
-void sub_436C50(AnimID anim_id);
-void sub_436C80(void);
-void sub_436CF0(void);
-void sub_436D20(unsigned int flags1, unsigned int flags2);
-void sub_436ED0(AnimID anim_id);
+void anim_scratch_goal_turn_on_running(void);
+void anim_goal_turn_on_stand_in_place(AnimID anim_id);
+void anim_scratch_goal_turn_on_stand_in_place(void);
+void anim_scratch_goal_turn_on_stop_at_blockers(void);
+void anim_scratch_goal_turn_on_flags(unsigned int flags1, unsigned int flags2);
+void anim_goal_turn_on_direct_path(AnimID anim_id);
 void anim_speed_recalc(int64_t obj);
 bool anim_goal_parent_obj_set_all(int64_t a1, int64_t a2);
 int num_goal_subslots_in_use(AnimID* anim_id);
 bool is_anim_forever(AnimID* anim_id);
 bool anim_play_weapon_fx(CombatContext* combat, int64_t source_obj, int64_t target_obj, AnimWeaponEyeCandyType which);
-void sub_437980(void);
+void anim_notify_pc_teleported(void);
 bool sub_437CF0(int a1, int a2, int a3);
 
 #endif /* ARCANUM_GAME_ANIM_H_ */

@@ -48,7 +48,7 @@ static void anim_pop_goal(AnimRunInfo* run_info, unsigned int* flags_ptr, AnimGo
 static int anim_goal_pending_active_goals_count(void);
 static bool anim_goal_pick_lock(int64_t obj, int64_t target_obj, int64_t item_obj);
 static bool anim_find_blocking_critter(int64_t* source_obj_ptr, int64_t* block_obj_ptr);
-static void sub_436CB0(AnimID anim_id);
+static void anim_goal_turn_on_stop_at_blockers(AnimID anim_id);
 static void notify_speed_recalc(AnimID* anim_id);
 static void anim_modify_data_init(AGModifyData* modify_data);
 static bool sub_4246C0(AnimRunInfo* run_info);
@@ -3614,19 +3614,25 @@ bool anim_is_fidgeting(int64_t obj)
 }
 
 // 0x423530
-void sub_423530(AnimRunInfo* run_info)
+// Empty in the original. Called once per anim timeevent when the run's
+// object handle is still valid, before handle recovery.
+void anim_timeevent_pre_obj_hook(AnimRunInfo* run_info)
 {
     (void)run_info;
 }
 
 // 0x423540
-void sub_423540(AnimRunInfo* run_info)
+// Empty in the original. Called immediately before each goal sub-node
+// callback runs.
+void anim_subnode_pre_callback(AnimRunInfo* run_info)
 {
     (void)run_info;
 }
 
 // 0x423550
-void sub_423550(AnimRunInfo* run_info, int a2)
+// Empty in the original. Called immediately after each goal sub-node
+// callback, with the callback's return value.
+void anim_subnode_post_callback(AnimRunInfo* run_info, int a2)
 {
     (void)run_info;
     (void)a2;
@@ -3706,7 +3712,7 @@ bool anim_timeevent_process(TimeEvent* timeevent)
             ASSERT(0); // 2063, "!(object_flags_get(pRunInfo->animObj) & OF_DESTROYED)"
         }
 
-        sub_423530(run_info);
+        anim_timeevent_pre_obj_hook(run_info);
     } else {
         run_info->flags |= 0x02;
         err = true;
@@ -3733,11 +3739,11 @@ bool anim_timeevent_process(TimeEvent* timeevent)
             return true;
         }
 
-        sub_423540(run_info);
+        anim_subnode_pre_callback(run_info);
 
         bool rc = goal_subnode->func(run_info);
 
-        sub_423550(run_info, rc);
+        anim_subnode_post_callback(run_info, rc);
 
         if ((run_info->flags & 0x10000) != 0) {
             err = true;
@@ -4020,7 +4026,10 @@ int anim_goal_pending_active_goals_count(void)
 }
 
 // 0x423FB0
-void sub_423FB0(void)
+// Recomputes animNumActiveGoals from the live run table. CE has no caller:
+// the original calls it from the slot-reset walk at 0x44D2B6, which is not
+// ported, but the helper is kept as the binary's address anchor.
+void anim_refresh_active_goal_count(void)
 {
     animNumActiveGoals = anim_goal_pending_active_goals_count();
 }
@@ -6971,6 +6980,9 @@ bool anim_use_item_on_tile_with_skill(AnimRunInfo* run_info)
 // them Troika's own: pickup_item 6-9 and move_to_pause 2-3, documented on those
 // goal nodes, and attempt_spell_w_cast_anim sub-node 14, whose own stub is
 // reached only from a cell that jumps past it.
+//
+// sub_437CF0 has the same constant-true shape but is not referenced by a goal
+// table; it is also deliberately left as `sub_` for the same reason.
 //
 // 0x429370
 bool sub_429370(AnimRunInfo* run_info)
@@ -14219,7 +14231,7 @@ bool anim_goal_flee(int64_t obj, int64_t from_obj)
         return false;
     }
 
-    sub_436CB0(anim_scratch_goal_id);
+    anim_goal_turn_on_stop_at_blockers(anim_scratch_goal_id);
 
     return true;
 }
@@ -14465,7 +14477,7 @@ bool anim_goal_use_skill_on(int64_t obj, int64_t target_obj, int64_t item_obj, i
         return false;
     }
 
-    sub_436ED0(anim_scratch_goal_id);
+    anim_goal_turn_on_direct_path(anim_scratch_goal_id);
 
     if (obj_field_int32_get(obj, OBJ_F_TYPE) == OBJ_TYPE_NPC) {
         if (!tig_net_is_active()
@@ -14507,7 +14519,7 @@ bool anim_goal_use_item_on_obj_with_skill(int64_t obj, int64_t item_obj, int64_t
         return false;
     }
 
-    sub_436ED0(anim_scratch_goal_id);
+    anim_goal_turn_on_direct_path(anim_scratch_goal_id);
 
     if (obj_field_int32_get(obj, OBJ_F_TYPE) == OBJ_TYPE_NPC) {
         if (!tig_net_is_active()
@@ -14552,7 +14564,7 @@ bool anim_goal_use_item_on_obj(int64_t obj, int64_t target_obj, int64_t item_obj
         return false;
     }
 
-    sub_436ED0(anim_scratch_goal_id);
+    anim_goal_turn_on_direct_path(anim_scratch_goal_id);
 
     if (obj_field_int32_get(obj, OBJ_F_TYPE) == OBJ_TYPE_NPC) {
         if (!tig_net_is_active()
@@ -14632,7 +14644,7 @@ bool anim_goal_pickup_item(int64_t obj, int64_t item_obj)
         return false;
     }
 
-    sub_436ED0(anim_scratch_goal_id);
+    anim_goal_turn_on_direct_path(anim_scratch_goal_id);
 
     return true;
 }
@@ -15047,7 +15059,7 @@ bool anim_goal_pick_lock(int64_t obj, int64_t target_obj, int64_t item_obj)
         return false;
     }
 
-    sub_436ED0(anim_scratch_goal_id);
+    anim_goal_turn_on_direct_path(anim_scratch_goal_id);
 
     return true;
 }
@@ -15374,7 +15386,8 @@ void turn_on_running(AnimID anim_id)
 }
 
 // 0x436C20
-void sub_436C20(void)
+// Scratch-goal wrapper for turn_on_running.
+void anim_scratch_goal_turn_on_running(void)
 {
     turn_on_running(anim_scratch_goal_id);
 }
@@ -15382,21 +15395,26 @@ void sub_436C20(void)
 // NOTE: Passes AnimID by value.
 //
 // 0x436C50
-void sub_436C50(AnimID anim_id)
+// Sets the stand-in-place flag documented in the manual as SHIFT-click:
+// "Stand in place (don't walk when attacking, etc.)".
+void anim_goal_turn_on_stand_in_place(AnimID anim_id)
 {
     turn_on_flags(anim_id, 0x100, 0);
 }
 
 // 0x436C80
-void sub_436C80(void)
+// Scratch-goal wrapper for anim_goal_turn_on_stand_in_place.
+void anim_scratch_goal_turn_on_stand_in_place(void)
 {
-    sub_436C50(anim_scratch_goal_id);
+    anim_goal_turn_on_stand_in_place(anim_scratch_goal_id);
 }
 
 // NOTE: Passes AnimID by value.
 //
 // 0x436CB0
-void sub_436CB0(AnimID anim_id)
+// Marks a moving goal to stop at the next blocked tile. Only sent in
+// networked games; local single-player movement handles blockers elsewhere.
+void anim_goal_turn_on_stop_at_blockers(AnimID anim_id)
 {
     if (tig_net_is_active()) {
         turn_on_flags(anim_id, 0x400, 0);
@@ -15404,13 +15422,15 @@ void sub_436CB0(AnimID anim_id)
 }
 
 // 0x436CF0
-void sub_436CF0(void)
+// Scratch-goal wrapper for anim_goal_turn_on_stop_at_blockers.
+void anim_scratch_goal_turn_on_stop_at_blockers(void)
 {
-    sub_436CB0(anim_scratch_goal_id);
+    anim_goal_turn_on_stop_at_blockers(anim_scratch_goal_id);
 }
 
 // 0x436D20
-void sub_436D20(unsigned int flags1, unsigned int flags2)
+// Scratch-goal wrapper for turn_on_flags.
+void anim_scratch_goal_turn_on_flags(unsigned int flags1, unsigned int flags2)
 {
     turn_on_flags(anim_scratch_goal_id, flags1, flags2);
 }
@@ -15466,7 +15486,9 @@ void turn_on_flags(AnimID anim_id, unsigned int flags1, unsigned int flags2)
 // NOTE: Passes AnimID by value.
 //
 // 0x436ED0
-void sub_436ED0(AnimID anim_id)
+// Sets the direct-path flag used by object interactions: path creation
+// falls back to a straight line instead of route-finding around obstacles.
+void anim_goal_turn_on_direct_path(AnimID anim_id)
 {
     turn_on_flags(anim_id, 0x4000, 0);
 }
@@ -15646,7 +15668,9 @@ bool anim_play_weapon_fx(CombatContext* combat, int64_t source_obj, int64_t targ
 }
 
 // 0x437980
-void sub_437980(void)
+// Empty in the original. Called after a PC teleport changes maps; kept as
+// the binary's address anchor for that map-transition hook.
+void anim_notify_pc_teleported(void)
 {
 }
 
@@ -15838,6 +15862,8 @@ bool anim_path_location_after_steps(AnimRunInfo* run_info, int end, int64_t* x, 
 }
 
 // 0x437CF0
+// Deliberately left as `sub_`: a constant-true stub with no CE caller. See
+// the goal-table constant-stub note above.
 bool sub_437CF0(int a1, int a2, int a3)
 {
     (void)a1;
@@ -15848,7 +15874,9 @@ bool sub_437CF0(int a1, int a2, int a3)
 }
 
 // 0x437D00
-void sub_437D00(AnimRunInfo* run_info)
+// Pops the run's current goal outside the normal interpreter flow. CE has
+// no caller; the original invokes it when resetting attempt-move goals.
+void anim_pop_current_goal(AnimRunInfo* run_info)
 {
     AnimGoalData* goal_data;
     AnimGoalNode* goal_node;

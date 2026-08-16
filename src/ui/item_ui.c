@@ -232,7 +232,7 @@ void item_ui_apply(TargetDescriptor* td)
 
         anim_goal_use_item_on_obj(pc_obj, td->obj, item_obj, 0);
         if (tig_kb_get_modifier(SDL_KMOD_LSHIFT)) {
-            sub_436C80();
+            anim_scratch_goal_turn_on_stand_in_place();
             item_ui_deactivate();
             return;
         }
@@ -240,7 +240,7 @@ void item_ui_apply(TargetDescriptor* td)
         if (tig_kb_get_modifier(SDL_KMOD_LCTRL)
             || !tig_kb_get_modifier(SDL_KMOD_NUM)
             || (get_always_run(pc_obj) && !tig_kb_get_modifier(SDL_KMOD_LCTRL))) {
-            sub_436C20();
+            anim_scratch_goal_turn_on_running();
             item_ui_deactivate();
             return;
         }

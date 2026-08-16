@@ -2229,7 +2229,7 @@ bool wmap_ui_message_filter(TigMessage* msg)
                                         && !tig_net_is_host());
                             }
 
-                            sub_436D20(0x80000, 0);
+                            anim_scratch_goal_turn_on_flags(0x80000, 0);
                             wmap_ui_close();
                         }
                     }

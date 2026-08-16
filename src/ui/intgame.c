@@ -2919,7 +2919,7 @@ void intgame_process_event(TigMessage* msg)
                             }
 
                             if (intgame_drag_move_active) {
-                                sub_436CF0();
+                                anim_scratch_goal_turn_on_stop_at_blockers();
                             }
                             intgame_drag_move_active = true;
                         }
@@ -3172,7 +3172,7 @@ void intgame_process_event(TigMessage* msg)
                     }
 
                     if (intgame_drag_move_active) {
-                        sub_436CF0();
+                        anim_scratch_goal_turn_on_stop_at_blockers();
                     }
                     intgame_drag_move_active = true;
                 }
@@ -3802,7 +3802,7 @@ void intgame_perform_action_on_target(TargetDescriptor* td)
                 if (anim_interrupt_all_goals_of_obj(pc_obj, 3, false, false)
                     && anim_goal_add(&goal_data, &anim_id)) {
                     if (tig_kb_get_modifier(SDL_KMOD_SHIFT)) {
-                        sub_436C50(anim_id);
+                        anim_goal_turn_on_stand_in_place(anim_id);
                     } else if (tig_kb_get_modifier(SDL_KMOD_CTRL)) {
                         turn_on_running(anim_id);
                     } else {
@@ -3819,7 +3819,7 @@ void intgame_perform_action_on_target(TargetDescriptor* td)
                     }
 
                     if (v26) {
-                        sub_436ED0(anim_id);
+                        anim_goal_turn_on_direct_path(anim_id);
                     }
                 }
             }
@@ -3833,7 +3833,7 @@ void intgame_perform_action_on_target(TargetDescriptor* td)
             if (anim_goal_add(&goal_data, &anim_id)
                 && !tig_net_is_active()) {
                 if (tig_kb_get_modifier(SDL_KMOD_SHIFT)) {
-                    sub_436C50(anim_id);
+                    anim_goal_turn_on_stand_in_place(anim_id);
                 } else if (tig_kb_get_modifier(SDL_KMOD_CTRL)) {
                     turn_on_running(anim_id);
                 } else {
@@ -3850,7 +3850,7 @@ void intgame_perform_action_on_target(TargetDescriptor* td)
                 }
 
                 if (v26) {
-                    sub_436ED0(anim_id);
+                    anim_goal_turn_on_direct_path(anim_id);
                 }
             }
         }
@@ -3862,7 +3862,7 @@ void intgame_perform_action_on_target(TargetDescriptor* td)
 
     // 0x54FB19
     if (tig_kb_get_modifier(SDL_KMOD_SHIFT)) {
-        sub_436C50(anim_id);
+        anim_goal_turn_on_stand_in_place(anim_id);
     } else {
         if (tig_kb_get_modifier(SDL_KMOD_CTRL)) {
             turn_on_running(anim_id);
@@ -3881,7 +3881,7 @@ void intgame_perform_action_on_target(TargetDescriptor* td)
     }
 
     if (v26) {
-        sub_436ED0(anim_id);
+        anim_goal_turn_on_direct_path(anim_id);
     }
 }
 
