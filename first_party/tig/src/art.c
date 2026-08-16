@@ -1675,7 +1675,10 @@ int tig_art_tile_id_flippable2_get(tig_art_id_t art_id)
 int tig_art_wall_id_create(unsigned int num, int p_piece, int variation, int rotation, unsigned int palette, int damaged, tig_art_id_t* art_id_ptr)
 {
     if (num >= WALL_ID_MAX_NUM
-        || p_piece >= 46 // FIXME: Likely error, should be WALL_ID_MAX_P_PIECE(64).
+        // NOTE: Settled by emudiff (2026-08-16): the original bounds at 46
+        // too - the constructor case passes over p_piece 46..63, where a
+        // 64-bound would have differed. Faithful, not an error.
+        || p_piece >= 46
         || variation >= WALL_ID_MAX_VARIATION
         || rotation >= MAX_ROTATIONS
         || palette >= MAX_PALETTES
