@@ -630,7 +630,9 @@ void convert_screen_to_world_coords(int64_t sx, int64_t sy, int64_t* wx, int64_t
 }
 
 // 0x4B99C0
-bool sub_4B99C0(int64_t from, int64_t* to)
+// Finds a nearby empty tile (radius 3, pathable) from `from`; returns it
+// through `to`, or `from` itself when nothing qualifies.
+bool location_empty_tile_find(int64_t from, int64_t* to)
 {
     TargetParams target_params;
     PathCreateInfo path_create_info;

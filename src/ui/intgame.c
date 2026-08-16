@@ -2999,7 +2999,7 @@ void intgame_process_event(TigMessage* msg)
                 case SDL_SCANCODE_F5:
                 case SDL_SCANCODE_F6:
                     intgame_get_location_under_cursor(&loc);
-                    sub_4C3BE0(msg->data.keyboard.scancode - SDL_SCANCODE_F1, loc);
+                    broadcast_send(msg->data.keyboard.scancode - SDL_SCANCODE_F1, loc);
                     break;
                 case SDL_SCANCODE_HOME:
                     intgame_center_on_player();
@@ -3063,7 +3063,7 @@ void intgame_process_event(TigMessage* msg)
                     case SDL_SCANCODE_F5:
                     case SDL_SCANCODE_F6:
                         intgame_get_location_under_cursor(&loc);
-                        sub_4C3BE0(msg->data.keyboard.scancode - SDL_SCANCODE_F1, loc);
+                        broadcast_send(msg->data.keyboard.scancode - SDL_SCANCODE_F1, loc);
                         break;
                     case SDL_SCANCODE_HOME:
                         intgame_center_on_player();
@@ -3127,7 +3127,7 @@ void intgame_process_event(TigMessage* msg)
                     case SDL_SCANCODE_F5:
                     case SDL_SCANCODE_F6:
                         intgame_get_location_under_cursor(&loc);
-                        sub_4C3BE0(msg->data.keyboard.scancode - SDL_SCANCODE_F1, loc);
+                        broadcast_send(msg->data.keyboard.scancode - SDL_SCANCODE_F1, loc);
                         break;
                     case SDL_SCANCODE_HOME:
                         intgame_center_on_player();
@@ -3267,7 +3267,7 @@ void intgame_process_event(TigMessage* msg)
                 case SDL_SCANCODE_F5:
                 case SDL_SCANCODE_F6:
                     intgame_get_location_under_cursor(&loc);
-                    sub_4C3BE0(msg->data.keyboard.scancode - SDL_SCANCODE_F1, loc);
+                    broadcast_send(msg->data.keyboard.scancode - SDL_SCANCODE_F1, loc);
                     break;
                 case SDL_SCANCODE_HOME:
                     intgame_center_on_player();

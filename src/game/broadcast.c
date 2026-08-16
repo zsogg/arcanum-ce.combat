@@ -499,13 +499,13 @@ void broadcast_messages_load(void)
 }
 
 // 0x4C3BE0
-void sub_4C3BE0(unsigned int a1, int64_t loc)
+void broadcast_send(int index, int64_t loc)
 {
     Broadcast bcast;
 
-    if (a1 < 6) {
+    if (index < 6) {
         bcast.loc = loc;
-        strcpy(bcast.str, byte_5FDC90[a1]);
+        strcpy(bcast.str, byte_5FDC90[index]);
         broadcast_msg(player_get_local_pc_obj(), &bcast);
     }
 }

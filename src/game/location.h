@@ -33,7 +33,7 @@ int64_t location_dist(int64_t a, int64_t b);
 bool location_limits_set(int64_t x, int64_t y);
 void location_limits_get(int64_t* x, int64_t* y);
 int64_t location_center_get(void);
-bool sub_4B99C0(int64_t from, int64_t* to);
+bool location_empty_tile_find(int64_t from, int64_t* to);
 
 #define LOCATION_GET_X(l) ((l) & 0xFFFFFFFF)
 #define LOCATION_GET_Y(l) (((l) >> 32) & 0xFFFFFFFF)
