@@ -2223,7 +2223,7 @@ bool wmap_ui_message_filter(TigMessage* msg)
                                 wmap_ui_routes[WMAP_ROUTE_TYPE_TOWN].waypoints[0].loc);
 
                             for (int idx = 1; idx < wmap_ui_routes[WMAP_ROUTE_TYPE_TOWN].length; idx++) {
-                                sub_433A00(player_get_local_pc_obj(),
+                                anim_goal_move_to_tile_append(player_get_local_pc_obj(),
                                     wmap_ui_routes[WMAP_ROUTE_TYPE_TOWN].waypoints[idx].loc,
                                     tig_net_is_active()
                                         && !tig_net_is_host());

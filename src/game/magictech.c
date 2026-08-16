@@ -2058,7 +2058,7 @@ void magictech_effect_summon(MagicTechSummonInfo* summon_info)
             }
         }
     } else {
-        sub_4372B0(obj, summon_info->field_0.obj);
+        anim_goal_parent_obj_set_all(obj, summon_info->field_0.obj);
     }
 
     item_inventory_mark_summoned(obj);

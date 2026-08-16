@@ -46,11 +46,11 @@ static bool anim_run_info_param_load(AnimRunInfoParam* param, ObjectLocator* a2,
 static bool anim_schedule_next_ping(AnimRunInfo* run_info, DateTime* a2, int delay);
 static void anim_pop_goal(AnimRunInfo* run_info, unsigned int* flags_ptr, AnimGoalNode** goal_node_ptr, AnimGoalData** goal_data_ptr, bool* a5);
 static int anim_goal_pending_active_goals_count(void);
-static bool sub_436220(int64_t obj, int64_t target_obj, int64_t item_obj);
+static bool anim_goal_pick_lock(int64_t obj, int64_t target_obj, int64_t item_obj);
 static bool anim_find_blocking_critter(int64_t* source_obj_ptr, int64_t* block_obj_ptr);
 static void sub_436CB0(AnimID anim_id);
 static void notify_speed_recalc(AnimID* anim_id);
-static void sub_437460(AGModifyData* modify_data);
+static void anim_modify_data_init(AGModifyData* modify_data);
 static bool sub_4246C0(AnimRunInfo* run_info);
 static bool anim_is_not_turn_based(AnimRunInfo* run_info);
 static bool anim_add_parented_goal(AnimRunInfo* run_info);
@@ -255,12 +255,12 @@ static bool AGupdateAnimEyeCandyFireDmg(AnimRunInfo* run_info);
 static bool AGupdateAnimEyeCandyReverseFireDmg(AnimRunInfo* run_info);
 static bool AGbeginAnimAttack(AnimRunInfo* run_info);
 static bool AGupdateAnimAttack(AnimRunInfo* run_info);
-static bool sub_432CF0(int64_t critter_obj);
+static bool anim_weapon_has_ammo(int64_t critter_obj);
 static bool anim_obj_is_valid(AnimRunInfo* run_info);
 static bool anim_spend_action_points(AnimRunInfo* run_info);
-static bool sub_4339A0(int64_t obj);
-static int sub_437990(int64_t obj, tig_art_id_t art_id, int speed);
-static bool sub_437C50(AnimRunInfo* run_info, int end, int64_t* x, int64_t* y);
+static bool anim_can_start_move_goal(int64_t obj);
+static int anim_get_animation_fps(int64_t obj, tig_art_id_t art_id, int speed);
+static bool anim_path_location_after_steps(AnimRunInfo* run_info, int end, int64_t* x, int64_t* y);
 
 // Shared out-parameter for this file's goal helpers: `anim_goal_add` and
 // `anim_is_current_goal_type` write the goal's id here, and the caller reads it
@@ -5702,7 +5702,9 @@ bool AGendAnimStunAnim(AnimRunInfo* run_info)
 }
 
 // 0x427000
-bool sub_427000(int64_t obj)
+// Called when a stunned critter's TB turn arrives: shortens the
+// AG_ANIMATE_STUNNED goal by three ticks and interrupts it when exhausted.
+bool anim_advance_stun_goal(int64_t obj)
 {
     AnimID anim_id;
     AnimRunInfo* run_info;
@@ -10756,7 +10758,7 @@ void anim_move_pause_time_get(int64_t obj, DateTime* pause_time)
 
     speed = stat_level_get(obj, STAT_SPEED);
     art_id = obj_field_int32_get(obj, OBJ_F_CURRENT_AID);
-    ms = 1000 / sub_437990(obj, art_id, speed);
+    ms = 1000 / anim_get_animation_fps(obj, art_id, speed);
     if (ms < 30) {
         ms = 30;
     } else if (ms > 800) {
@@ -11665,7 +11667,7 @@ bool AGupdateAnimMove(AnimRunInfo* run_info)
                 (long long)LOCATION_GET_X(run_info->path.field_E8),
                 (long long)LOCATION_GET_Y(run_info->path.field_E8));
 
-            sub_437C50(run_info, run_info->path.curr, &x, &y);
+            anim_path_location_after_steps(run_info, run_info->path.curr, &x, &y);
             tig_debug_printf("                  interrupting your animation at %lld, %lld\n", (long long)x, (long long)y);
 
             art_id = obj_field_int32_get(obj, OBJ_F_CURRENT_AID);
@@ -13132,7 +13134,7 @@ bool AGupdateAnimAttack(AnimRunInfo* run_info)
         if ((weapon_type == TIG_ART_WEAPON_TYPE_PISTOL
                 || weapon_type == TIG_ART_WEAPON_TYPE_RIFLE)
             && frame == art_anim_data.action_frame + 2
-            && sub_432CF0(obj)
+            && anim_weapon_has_ammo(obj)
             && (obj_type == OBJ_TYPE_PC
                 || (obj_field_int32_get(obj, OBJ_F_NPC_FLAGS) & ONF_BACKING_OFF) == 0)
             && anim_can_reach_target(obj, target_obj)) {
@@ -13142,7 +13144,7 @@ bool AGupdateAnimAttack(AnimRunInfo* run_info)
             run_info->flags &= ~0x0C;
         } else if (weapon_type == TIG_ART_WEAPON_TYPE_BOW
             && frame == art_anim_data.action_frame
-            && sub_432CF0(obj)
+            && anim_weapon_has_ammo(obj)
             && (obj_type == OBJ_TYPE_PC
                 || (obj_field_int32_get(obj, OBJ_F_NPC_FLAGS) & ONF_BACKING_OFF) == 0)
             && anim_can_reach_target(obj, target_obj)) {
@@ -13183,7 +13185,9 @@ bool AGupdateAnimAttack(AnimRunInfo* run_info)
 }
 
 // 0x432CF0
-bool sub_432CF0(int64_t critter_obj)
+// Whether the critter's equipped weapon has enough ammo for another shot.
+// Unarmed/no-ammo weapons count as ready.
+bool anim_weapon_has_ammo(int64_t critter_obj)
 {
     int64_t weapon_obj;
     int ammo_type;
@@ -13595,7 +13599,7 @@ bool anim_goal_move_to_tile(int64_t obj, int64_t loc)
         return true;
     }
 
-    if (!sub_4339A0(obj)) {
+    if (!anim_can_start_move_goal(obj)) {
         return false;
     }
 
@@ -13638,7 +13642,7 @@ bool anim_goal_move_to_tile(int64_t obj, int64_t loc)
             sub_44D0C0(run_info);
         }
 
-        sub_437460(&(pkt.modify_data));
+        anim_modify_data_init(&(pkt.modify_data));
 
         pkt.type = 8;
         pkt.modify_data.id = anim_scratch_goal_id;
@@ -13667,7 +13671,9 @@ bool anim_goal_move_to_tile(int64_t obj, int64_t loc)
 }
 
 // 0x4339A0
-bool sub_4339A0(int64_t obj)
+// Common gate for the move/run-to-tile starters: active, current turn in
+// TB combat, and not an NPC reacting to the local PC.
+bool anim_can_start_move_goal(int64_t obj)
 {
     return obj != OBJ_HANDLE_NULL
         && critter_is_active(obj)
@@ -13676,7 +13682,9 @@ bool sub_4339A0(int64_t obj)
 }
 
 // 0x433A00
-bool sub_433A00(int64_t obj, int64_t loc, bool a3)
+// Move-to-tile starter that appends a waypoint subgoal when a move goal is
+// already running. Used for multi-waypoint town-map travel.
+bool anim_goal_move_to_tile_append(int64_t obj, int64_t loc, bool a3)
 {
     AnimID anim_id;
     AnimGoalData goal_data;
@@ -13702,13 +13710,13 @@ bool sub_433A00(int64_t obj, int64_t loc, bool a3)
         return true;
     }
 
-    if (!sub_4339A0(obj)) {
+    if (!anim_can_start_move_goal(obj)) {
         return false;
     }
 
     if (obj_field_int32_get(obj, OBJ_F_TYPE) == OBJ_TYPE_PC
         && get_always_run(obj)) {
-        return sub_434030(obj, loc);
+        return anim_goal_run_to_tile_append(obj, loc);
     }
 
     if (anim_is_current_goal_type(obj, AG_MOVE_TO_TILE, &anim_scratch_goal_id) || a3) {
@@ -13768,7 +13776,7 @@ bool anim_goal_run_to_tile(int64_t obj, int64_t loc)
         return true;
     }
 
-    if (!sub_4339A0(obj)) {
+    if (!anim_can_start_move_goal(obj)) {
         return false;
     }
 
@@ -13832,7 +13840,7 @@ bool anim_goal_run_to_tile(int64_t obj, int64_t loc)
             sub_44D0C0(run_info);
         }
 
-        sub_437460(&(pkt.modify_data));
+        anim_modify_data_init(&(pkt.modify_data));
         pkt.type = 8;
         pkt.modify_data.id = anim_scratch_goal_id;
         pkt.modify_data.flags = run_info->flags;
@@ -13867,12 +13875,14 @@ bool anim_goal_run_to_tile(int64_t obj, int64_t loc)
 }
 
 // 0x434030
-bool sub_434030(int64_t obj, int64_t loc)
+// Run-to-tile twin of anim_goal_move_to_tile_append: starts or appends an
+// AG_RUN_TO_TILE subgoal and sets the running flag.
+bool anim_goal_run_to_tile_append(int64_t obj, int64_t loc)
 {
     AnimRunInfo* run_info;
     AnimGoalData goal_data;
 
-    if (!sub_4339A0(obj)) {
+    if (!anim_can_start_move_goal(obj)) {
         return false;
     }
 
@@ -13911,7 +13921,7 @@ bool anim_goal_move_near_tile(int64_t source_obj, int64_t target_loc, int range)
     AnimRunInfo* run_info;
     AnimGoalData goal_data;
 
-    if (!sub_4339A0(source_obj)) {
+    if (!anim_can_start_move_goal(source_obj)) {
         return false;
     }
 
@@ -13946,7 +13956,7 @@ bool anim_goal_move_near_tile(int64_t source_obj, int64_t target_loc, int range)
             sub_44D0C0(run_info);
         }
 
-        sub_437460(&(pkt.modify_data));
+        anim_modify_data_init(&(pkt.modify_data));
         pkt.modify_data.id = anim_scratch_goal_id;
         pkt.modify_data.flags = run_info->flags;
         pkt.modify_data.path_flags = run_info->path.flags;
@@ -13982,7 +13992,7 @@ bool anim_goal_run_near_tile(int64_t source_obj, int64_t target_loc, int range)
     AnimRunInfo* run_info;
     AnimGoalData goal_data;
 
-    if (!sub_4339A0(source_obj)) {
+    if (!anim_can_start_move_goal(source_obj)) {
         return false;
     }
 
@@ -14025,7 +14035,7 @@ bool anim_goal_run_near_tile(int64_t source_obj, int64_t target_loc, int range)
             sub_44D0C0(run_info);
         }
 
-        sub_437460(&(pkt.modify_data));
+        anim_modify_data_init(&(pkt.modify_data));
         pkt.modify_data.id = anim_scratch_goal_id;
         pkt.modify_data.flags = run_info->flags;
         pkt.modify_data.path_flags = run_info->path.flags;
@@ -14435,7 +14445,7 @@ bool anim_goal_use_skill_on(int64_t obj, int64_t target_obj, int64_t item_obj, i
     AnimGoalData goal_data;
 
     if (skill == SKILL_PICK_LOCKS) {
-        return sub_436220(obj, target_obj, item_obj);
+        return anim_goal_pick_lock(obj, target_obj, item_obj);
     }
 
     if (!anim_can_start_goal(obj, 4)) {
@@ -14712,7 +14722,9 @@ bool anim_goal_projectile(int64_t source_obj, int64_t missile_obj, tig_art_id_t 
 }
 
 // 0x435A00
-bool sub_435A00(int64_t proj_obj, int64_t a2, int64_t a3)
+// Retargets a live AG_PROJECTILE goal (boomerang return path): new target
+// tile and scratch object, path reset for the return trip.
+bool anim_goal_projectile_retarget(int64_t proj_obj, int64_t a2, int64_t a3)
 {
     AnimID anim_id;
     AnimRunInfo* run_info;
@@ -14989,7 +15001,9 @@ bool anim_goal_wander_seek_darkness(int64_t obj, int64_t tether_loc, int radius)
 }
 
 // 0x436220
-bool sub_436220(int64_t obj, int64_t target_obj, int64_t item_obj)
+// AG_USE_SKILL_ON special case for lockpicks. The goal duration is derived
+// from the pick-pocket animation frame count and halved for apprentices.
+bool anim_goal_pick_lock(int64_t obj, int64_t target_obj, int64_t item_obj)
 {
     AnimGoalData goal_data;
     TigArtAnimData art_anim_data;
@@ -15335,7 +15349,7 @@ void turn_on_running(AnimID anim_id)
                 sub_44D0C0(run_info);
             }
 
-            sub_437460(&(pkt.modify_data));
+            anim_modify_data_init(&(pkt.modify_data));
             pkt.modify_data.id = anim_id;
             pkt.type = 8;
             pkt.modify_data.flags = run_info->flags;
@@ -15425,7 +15439,7 @@ void turn_on_flags(AnimID anim_id, unsigned int flags1, unsigned int flags2)
             sub_44D0C0(run_info);
         }
 
-        sub_437460(&(pkt.modify_data));
+        anim_modify_data_init(&(pkt.modify_data));
         pkt.modify_data.id = anim_id;
         pkt.type = 8;
         pkt.modify_data.flags = run_info->flags;
@@ -15485,7 +15499,9 @@ void anim_speed_recalc(int64_t obj)
 }
 
 // 0x4372B0
-bool sub_4372B0(int64_t a1, int64_t a2)
+// Rewrites AGDATA_PARENT_OBJ to `a2` in every active goal slot for `a1`.
+// Used when a summoned object is attached to its summoner.
+bool anim_goal_parent_obj_set_all(int64_t a1, int64_t a2)
 {
     int index;
     AnimRunInfo* run_info;
@@ -15546,7 +15562,8 @@ bool is_anim_forever(AnimID* anim_id)
 }
 
 // 0x437460
-void sub_437460(AGModifyData* modify_data)
+// Initializes a network AGModifyData packet body to its defaults.
+void anim_modify_data_init(AGModifyData* modify_data)
 {
     ASSERT(modify_data != NULL); // pAGModifyData != NULL
 
@@ -15634,7 +15651,9 @@ void sub_437980(void)
 }
 
 // 0x437990
-int sub_437990(int64_t obj, tig_art_id_t art_id, int speed)
+// Frames per second for the critter's current art at the given speed, with
+// per-anim/weapon/body-type ramps. Non-critters use the art's own fps.
+int anim_get_animation_fps(int64_t obj, tig_art_id_t art_id, int speed)
 {
     TigArtAnimData art_anim_data;
     int fps;
@@ -15794,7 +15813,9 @@ int sub_437990(int64_t obj, tig_art_id_t art_id, int speed)
 }
 
 // 0x437C50
-bool sub_437C50(AnimRunInfo* run_info, int end, int64_t* x, int64_t* y)
+// Location reached after following the first `end` rotations from the path's
+// starting tile. Debug/desync reporting helper.
+bool anim_path_location_after_steps(AnimRunInfo* run_info, int end, int64_t* x, int64_t* y)
 {
     int64_t loc;
     int idx;

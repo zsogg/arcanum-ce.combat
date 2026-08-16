@@ -523,7 +523,7 @@ void sub_4B2690(int64_t proj_obj, int64_t a2, int64_t a3, CombatContext* combat,
         if (a5 && (proj_flags & 0x2000) == 0) {
             proj_flags |= 0x2000;
             obj_field_int32_set(proj_obj, OBJ_F_PROJECTILE_FLAGS_COMBAT, proj_flags);
-            if (!sub_435A00(proj_obj, obj_field_int64_get(a2, OBJ_F_LOCATION), a3)) {
+            if (!anim_goal_projectile_retarget(proj_obj, obj_field_int64_get(a2, OBJ_F_LOCATION), a3)) {
                 sub_4B2690(proj_obj, a2, a3, combat, true);
                 return;
             }
@@ -3283,7 +3283,7 @@ bool sub_4B7580(ObjectNode* object_node)
     }
 
     if (!critter_is_active(object_node->obj)) {
-        sub_427000(object_node->obj);
+        anim_advance_stun_goal(object_node->obj);
         return true;
     }
 
