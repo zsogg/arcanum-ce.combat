@@ -45,7 +45,7 @@ typedef enum SchematicUiReadiness {
     SCHEMATIC_UI_READINESS_COUNT,
 } SchematicUiReadiness;
 
-static void sub_56D0D0(void);
+static void schematic_ui_state_reset(void);
 static void schematic_ui_create(void);
 static void schematic_ui_destroy(void);
 static bool schematic_ui_message_filter(TigMessage* msg);
@@ -433,7 +433,7 @@ bool schematic_ui_init(GameInitInfo* init_info)
     schematic_ui_initialized = true;
     schematic_ui_primary_obj = OBJ_HANDLE_NULL;
     schematic_ui_secondary_obj = OBJ_HANDLE_NULL;
-    sub_56D0D0();
+    schematic_ui_state_reset();
 
     return true;
 }
@@ -469,11 +469,11 @@ void schematic_ui_reset(void)
 {
     schematic_ui_primary_obj = OBJ_HANDLE_NULL;
     schematic_ui_secondary_obj = OBJ_HANDLE_NULL;
-    sub_56D0D0();
+    schematic_ui_state_reset();
 }
 
 // 0x56D0D0
-void sub_56D0D0(void)
+void schematic_ui_state_reset(void)
 {
     schematic_ui_readiness = SCHEMATIC_UI_READINESS_NO_ITEMS;
 
@@ -529,7 +529,7 @@ void schematic_ui_toggle(int64_t primary_obj, int64_t secondary_obj)
 
     // Reset state for NPCs.
     if (obj_field_int32_get(primary_obj, OBJ_F_TYPE) == OBJ_TYPE_NPC) {
-        sub_56D0D0();
+        schematic_ui_state_reset();
     }
 
     // Initialize number of known schematics. The number of found schematics is

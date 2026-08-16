@@ -253,7 +253,7 @@ void tb_ui_talk_to(int64_t a1, int64_t a2)
         if (ai_surrendered(a2, &danger_source_obj) && critter_party_same(danger_source_obj, a1)) {
             ai_flee(a2, a1);
         } else {
-            sub_5681C0(a1, a2);
+            dialog_ui_say_npc_greeting(a1, a2);
         }
     }
 }

@@ -38,8 +38,8 @@ typedef struct DialogUiEntry {
     /* 185F */ char field_185F;
 } DialogUiEntry;
 
-static DialogUiEntry* sub_567420(int64_t obj);
-static void sub_5679C0(DialogUiEntry* entry);
+static DialogUiEntry* dialog_ui_entry_get(int64_t obj);
+static void dialog_ui_entry_end(DialogUiEntry* entry);
 static bool dialog_ui_process_option(DialogUiEntry* entry, int option);
 static bool dialog_ui_message_filter(TigMessage* msg);
 static void dialog_ui_execute_script(DialogUiEntry* entry, int line);
@@ -96,7 +96,7 @@ void dialog_ui_reset(void)
 
     for (index = 0; index < MAX_ENTRIES; index++) {
         if (stru_66DAB8[index].field_1850) {
-            sub_5679C0(&(stru_66DAB8[index]));
+            dialog_ui_entry_end(&(stru_66DAB8[index]));
         }
     }
 }
@@ -104,15 +104,18 @@ void dialog_ui_reset(void)
 // 0x567400
 bool dialog_ui_is_in_dialog(int64_t obj)
 {
-    return sub_567420(obj)->field_1850;
+    return dialog_ui_entry_get(obj)->field_1850;
 }
 
 // 0x567420
-DialogUiEntry* sub_567420(int64_t obj)
+// NOTE: The original indexes by obj through a multiplayer lookup (0x4A2B10)
+// when the net is active; CE keeps only the single-player path (index 0),
+// consistent with multiplayer being out of scope.
+DialogUiEntry* dialog_ui_entry_get(int64_t obj)
 {
-    int index = 0;
+    (void)obj;
 
-    return &(stru_66DAB8[index]);
+    return &(stru_66DAB8[0]);
 }
 
 // 0x567460
@@ -145,7 +148,7 @@ void dialog_ui_start_dialog(int64_t pc_obj, int64_t npc_obj, int script_num, int
         combat_critter_deactivate_combat_mode(pc_obj);
     }
 
-    entry = sub_567420(pc_obj);
+    entry = dialog_ui_entry_get(pc_obj);
 
     if (script_num != 0 && script_name_build_dlg_name(script_num, path, sizeof(path))) {
         if (!dialog_load(path, &(entry->dlg))) {
@@ -207,7 +210,7 @@ void dialog_ui_start_dialog(int64_t pc_obj, int64_t npc_obj, int script_num, int
 
         dialog_ui_display(entry);
     } else {
-        sub_5681C0(pc_obj, npc_obj);
+        dialog_ui_say_npc_greeting(pc_obj, npc_obj);
     }
 }
 
@@ -218,7 +221,7 @@ void dialog_ui_end_dialog(int64_t obj, int a2)
 
     (void)a2;
 
-    entry = sub_567420(obj);
+    entry = dialog_ui_entry_get(obj);
     if (!entry->field_1850) {
         return;
     }
@@ -238,7 +241,7 @@ void dialog_ui_end_dialog(int64_t obj, int a2)
 }
 
 // 0x5679C0
-void sub_5679C0(DialogUiEntry* entry)
+void dialog_ui_entry_end(DialogUiEntry* entry)
 {
     if (!entry->field_1850) {
         return;
@@ -260,7 +263,7 @@ bool dialog_ui_is_local_pc_in_dialog(void)
 // 0x567A20
 void dialog_ui_notify_dialog_ended(int64_t obj)
 {
-    sub_567420(obj)->field_1850 = false;
+    dialog_ui_entry_get(obj)->field_1850 = false;
     if (player_is_local_pc_obj(obj)) {
         intgame_dialog_end();
         dialog_ui_local_pc_dialog_active = false;
@@ -270,7 +273,7 @@ void dialog_ui_notify_dialog_ended(int64_t obj)
 // 0x567A60
 void dialog_ui_notify_dialog_started(int64_t obj)
 {
-    sub_567420(obj)->field_1850 = true;
+    dialog_ui_entry_get(obj)->field_1850 = true;
     if (player_is_local_pc_obj(obj)) {
         if (intgame_dialog_begin(dialog_ui_message_filter)) {
             dialog_ui_local_pc_dialog_active = true;
@@ -371,7 +374,7 @@ bool dialog_ui_message_filter(TigMessage* msg)
     int option;
     int player;
 
-    entry = sub_567420(player_get_local_pc_obj());
+    entry = dialog_ui_entry_get(player_get_local_pc_obj());
 
     option = intgame_dialog_get_option(msg);
     if (option == -1) {
@@ -387,7 +390,7 @@ bool dialog_ui_message_filter(TigMessage* msg)
 }
 
 // 0x5681C0
-void sub_5681C0(int64_t pc_obj, int64_t npc_obj)
+void dialog_ui_say_npc_greeting(int64_t pc_obj, int64_t npc_obj)
 {
     char text[1000];
 

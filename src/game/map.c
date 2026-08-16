@@ -872,7 +872,10 @@ void map_precache_sectors(int64_t loc)
 }
 
 // 0x40FED0
-void sub_40FED0(void)
+// NOTE: Empty hook, bare `ret` in the original too. Called from the main
+// menu's outside-game branch right before gamelib_draw, and when the local PC
+// enters turn-based combat right before combat_turn_based_start.
+void map_draw_hook(void)
 {
 }
 

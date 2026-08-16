@@ -1953,7 +1953,7 @@ void mainmenu_ui_dismiss_ex(bool exiting)
                 wmap_rnd_schedule();
             } else {
                 if (mainmenu_ui_outside_game) {
-                    sub_40FED0();
+                    map_draw_hook();
                 }
                 gamelib_draw();
             }

@@ -1182,7 +1182,7 @@ int critter_num_followers(int64_t obj, bool exclude_forced_followers)
  *
  * 0x45E460
  */
-int sub_45E460(int64_t critter_obj, bool exclude_forced_followers)
+int critter_num_followers_recursive(int64_t critter_obj, bool exclude_forced_followers)
 {
     int cnt;
     int all_followers_cnt;
@@ -1200,7 +1200,7 @@ int sub_45E460(int64_t critter_obj, bool exclude_forced_followers)
             && (obj_field_int32_get(follower_obj, OBJ_F_NPC_FLAGS) & ONF_FORCED_FOLLOWER) != 0) {
             cnt--;
         } else {
-            cnt += sub_45E460(follower_obj, exclude_forced_followers);
+            cnt += critter_num_followers_recursive(follower_obj, exclude_forced_followers);
         }
     }
 

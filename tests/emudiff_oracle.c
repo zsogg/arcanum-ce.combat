@@ -320,7 +320,7 @@ static void o_sub_4B93F0(const int64_t* a, int64_t* out)
     int v1 = (int)a[2];
     int v2 = (int)a[3];
 
-    sub_4B93F0((int)a[0], (int)a[1], &v1, &v2);
+    location_offset_to_screen((int)a[0], (int)a[1], &v1, &v2);
     out[0] = (int64_t)(uint32_t)v1;
     out[1] = (int64_t)(uint32_t)v2;
 }

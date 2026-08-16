@@ -17,7 +17,7 @@
 #include "ui/inven_ui.h"
 #include "ui/spell_ui.h"
 
-static void sub_5719F0(int64_t item_obj, uint64_t** tgt_ptr);
+static void item_ui_target_flags_get(int64_t item_obj, uint64_t** tgt_ptr);
 
 // 0x5CAC40
 static uint64_t qword_5CAC40 = TGT_OBJECT;
@@ -45,7 +45,7 @@ void item_ui_exit(void)
 }
 
 // 0x5719F0
-void sub_5719F0(int64_t item_obj, uint64_t** tgt_ptr)
+void item_ui_target_flags_get(int64_t item_obj, uint64_t** tgt_ptr)
 {
     int mana_store;
     unsigned int flags;
@@ -91,7 +91,7 @@ void item_ui_activate(int64_t owner_obj, int64_t item_obj)
 
     qword_6810D8 = item_obj;
 
-    sub_5719F0(item_obj, &tgt_ptr);
+    item_ui_target_flags_get(item_obj, &tgt_ptr);
 
     if ((*tgt_ptr & TGT_OBJ_INVEN) == 0) {
         inven_ui_destroy();

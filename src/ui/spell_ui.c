@@ -22,7 +22,7 @@ typedef struct S5CB3A8 {
     int field_4;
 } S5CB3A8;
 
-static void sub_57C470(void);
+static void spell_ui_maintain_reset(void);
 
 // 0x5CB3A0
 static int dword_5CB3A0 = 10000;
@@ -59,7 +59,7 @@ bool spell_ui_init(GameInitInfo* init_info)
 // 0x57BB40
 void spell_ui_reset(void)
 {
-    sub_57C470();
+    spell_ui_maintain_reset();
 }
 
 // 0x57BB50
@@ -245,7 +245,7 @@ void spell_ui_cancel(void)
 }
 
 // 0x57C040
-void sub_57C040(int64_t obj, int index)
+void spell_ui_item_spell_activate(int64_t obj, int index)
 {
     int spl;
 
@@ -256,7 +256,7 @@ void sub_57C040(int64_t obj, int index)
 }
 
 // 0x57C080
-void sub_57C080(int64_t obj, int spl)
+void spell_ui_item_spell_activate_by_spl(int64_t obj, int spl)
 {
     if (!magictech_has_item_triggers(spl) && spl != -1) {
         spell_ui_activate(obj, spl);
@@ -439,7 +439,7 @@ void spell_ui_maintain_hover(int slot)
 }
 
 // 0x57C470
-void sub_57C470(void)
+void spell_ui_maintain_reset(void)
 {
     int index;
 

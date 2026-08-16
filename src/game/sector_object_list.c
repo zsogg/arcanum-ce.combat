@@ -495,14 +495,16 @@ bool objlist_validate(SectorObjectList* list, int64_t sector_id)
 
             loc = obj_field_int64_get(node->obj, OBJ_F_LOCATION);
             if (sector_id_from_loc(loc) != sector_id) {
-                tig_debug_printf("Error! Sector %I64x thinks it has an object that thinks it is in sector %I64x.",
-                    sector_id, sector_id_from_loc(loc));
+                // The original strings use %I64x; CE prints %lld like the
+                // rest of the tree.
+                tig_debug_printf("Error! Sector %lld thinks it has an object that thinks it is in sector %lld.",
+                    (long long)sector_id, (long long)sector_id_from_loc(loc));
                 return false;
             }
 
             if (tile_id_from_loc(loc) != tile) {
-                tig_debug_printf("Error! Sector %I64x thinks it has an object in tile %x,\nbut the object thinks it is in tile %x.",
-                    sector_id, tile, tile_id_from_loc(loc));
+                tig_debug_printf("Error! Sector %lld thinks it has an object in tile %x,\nbut the object thinks it is in tile %x.",
+                    (long long)sector_id, tile, tile_id_from_loc(loc));
                 return false;
             }
 
@@ -679,7 +681,7 @@ void objlist_draw_position_get(int64_t obj, int* x_ptr, int* y_ptr)
         offset_y = obj_field_int32_get(obj, OBJ_F_OFFSET_Y);
     }
 
-    sub_4B93F0(offset_x, offset_y, x_ptr, y_ptr);
+    location_offset_to_screen(offset_x, offset_y, x_ptr, y_ptr);
 }
 
 // 0x4F22B0

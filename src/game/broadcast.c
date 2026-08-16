@@ -36,7 +36,7 @@ typedef struct BroadcastCommand {
 
 static int broadcast_match_str_to_base_type(const char* str);
 static int broadcast_match_str_to_cmd_type(const char* str);
-static void sub_4C3B90(void);
+static void broadcast_messages_load(void);
 
 // 0x5FDC4C
 static char* broadcast_cmd_type_lookup[BROADCAST_CMD_TYPE_COUNT];
@@ -120,7 +120,7 @@ bool broadcast_init(GameInitInfo* init_info)
         tig_debug_printf("broadcast_init: ERROR: couldn't unload message file: bcRuleMessID!\n");
     }
 
-    sub_4C3B90();
+    broadcast_messages_load();
 
     if (!text_filter_init()) {
         return false;
@@ -486,7 +486,7 @@ int broadcast_match_str_to_cmd_type(const char* str)
 }
 
 // 0x4C3B90
-void sub_4C3B90(void)
+void broadcast_messages_load(void)
 {
     int index;
     MesFileEntry mes_file_entry;

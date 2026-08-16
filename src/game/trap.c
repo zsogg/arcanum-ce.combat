@@ -47,7 +47,7 @@ static void trap_timeevent_schedule(int spl, int64_t loc, int delay, int64_t ite
 static bool get_disarm_item_name(int64_t obj, int* name_ptr);
 void trigger_trap(int64_t obj, ScriptInvocation* invocation);
 static int64_t find_trap_source(int64_t obj, uint8_t id);
-static int64_t sub_4BD950(int64_t obj);
+static int64_t trap_credit_obj_get(int64_t obj);
 
 // 0x5B5F60
 static int trap_name_mes_nums[8] = {
@@ -695,7 +695,7 @@ void trigger_trap(int64_t obj, ScriptInvocation* invocation)
         return;
     case TRAP_SCRIPT_MECHANICAL:
         combat_context_init(invocation->attachee_obj, obj, &combat);
-        combat.field_30 = sub_4BD950(invocation->attachee_obj);
+        combat.field_30 = trap_credit_obj_get(invocation->attachee_obj);
         combat.flags |= CF_TRAP;
         combat.flags |= 0x300;
         combat.dam[DAMAGE_TYPE_NORMAL] = random_between(invocation->script->hdr.counters & 0xFF, (invocation->script->hdr.counters >> 8) & 0xFF);
@@ -705,7 +705,7 @@ void trigger_trap(int64_t obj, ScriptInvocation* invocation)
         trap_source_obj = find_trap_source(invocation->attachee_obj, (invocation->script->hdr.counters >> 16) & 0xFF);
         if (trap_source_obj != OBJ_HANDLE_NULL) {
             combat_context_init(trap_source_obj, obj, &combat);
-            combat.field_30 = sub_4BD950(invocation->attachee_obj);
+            combat.field_30 = trap_credit_obj_get(invocation->attachee_obj);
             combat.flags |= 0x300;
             combat.weapon_obj = OBJ_HANDLE_NULL;
             combat.dam[DAMAGE_TYPE_NORMAL] = random_between(invocation->script->hdr.counters & 0xFF, (invocation->script->hdr.counters >> 8) & 0xFF);
@@ -714,7 +714,7 @@ void trigger_trap(int64_t obj, ScriptInvocation* invocation)
         break;
     case TRAP_SCRIPT_BULLET:
         combat_context_init(invocation->attachee_obj, obj, &combat);
-        combat.field_30 = sub_4BD950(invocation->attachee_obj);
+        combat.field_30 = trap_credit_obj_get(invocation->attachee_obj);
         combat.flags |= CF_TRAP;
         combat.flags |= 0x300;
         combat.dam[DAMAGE_TYPE_NORMAL] = random_between(invocation->script->hdr.counters & 0xFF, (invocation->script->hdr.counters >> 8) & 0xFF);
@@ -722,7 +722,7 @@ void trigger_trap(int64_t obj, ScriptInvocation* invocation)
         break;
     case TRAP_SCRIPT_FIRE:
         combat_context_init(invocation->attachee_obj, obj, &combat);
-        combat.field_30 = sub_4BD950(invocation->attachee_obj);
+        combat.field_30 = trap_credit_obj_get(invocation->attachee_obj);
         combat.flags |= CF_TRAP;
         combat.flags |= 0x300;
         combat.dam[DAMAGE_TYPE_FIRE] = random_between(invocation->script->hdr.counters & 0xFF, (invocation->script->hdr.counters >> 8) & 0xFF);
@@ -730,7 +730,7 @@ void trigger_trap(int64_t obj, ScriptInvocation* invocation)
         break;
     case TRAP_SCRIPT_ELECTRICAL:
         combat_context_init(invocation->attachee_obj, obj, &combat);
-        combat.field_30 = sub_4BD950(invocation->attachee_obj);
+        combat.field_30 = trap_credit_obj_get(invocation->attachee_obj);
         combat.flags |= CF_TRAP;
         combat.flags |= 0x300;
         combat.dam[DAMAGE_TYPE_ELECTRICAL] = random_between(invocation->script->hdr.counters & 0xFF, (invocation->script->hdr.counters >> 8) & 0xFF);
@@ -738,7 +738,7 @@ void trigger_trap(int64_t obj, ScriptInvocation* invocation)
         break;
     case TRAP_SCRIPT_POISON:
         combat_context_init(invocation->attachee_obj, obj, &combat);
-        combat.field_30 = sub_4BD950(invocation->attachee_obj);
+        combat.field_30 = trap_credit_obj_get(invocation->attachee_obj);
         combat.flags |= CF_TRAP;
         combat.flags |= 0x300;
         combat.dam[DAMAGE_TYPE_POISON] = random_between(invocation->script->hdr.counters & 0xFF, (invocation->script->hdr.counters >> 8) & 0xFF);
@@ -781,7 +781,9 @@ int64_t find_trap_source(int64_t obj, uint8_t id)
 }
 
 // 0x4BD950
-int64_t sub_4BD950(int64_t obj)
+// The object credited with the trap's damage: the local PC for traps
+// flagged OF_TRAP_PC, otherwise nobody.
+int64_t trap_credit_obj_get(int64_t obj)
 {
     if (obj != OBJ_HANDLE_NULL
         && (obj_field_int32_get(obj, OBJ_F_FLAGS) & OF_TRAP_PC) != 0) {

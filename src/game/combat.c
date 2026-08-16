@@ -1344,7 +1344,7 @@ void combat_critter_toggle_combat_mode(int64_t obj)
         art_id = tig_art_critter_id_weapon_set(art_id, TIG_ART_WEAPON_TYPE_UNARMED);
 
         if (is_pc && is_tb) {
-            sub_40FED0();
+            map_draw_hook();
 
             if (!combat_turn_based_start()) {
                 return;

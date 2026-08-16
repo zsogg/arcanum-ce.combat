@@ -2273,7 +2273,7 @@ bool intgame_process_message(TigMessage* msg)
                 for (index = 0; index < 5; index++) {
                     if (intgame_mt_spell_buttons[index].art_num != -1
                         && msg->data.button.button_handle == intgame_mt_spell_buttons[index].button_handle) {
-                        sub_57C040(intgame_magictech_item, index);
+                        spell_ui_item_spell_activate(intgame_magictech_item, index);
                         return true;
                     }
                 }
@@ -3974,10 +3974,10 @@ void intgame_hotkey_activate(Hotkey* hotkey)
         weapon_obj = item_wield_get(pc_obj, ITEM_INV_LOC_WEAPON);
         if (obj_field_handle_get(hotkey->item_obj.obj, OBJ_F_ITEM_PARENT) == pc_obj) {
             if (weapon_obj == hotkey->item_obj.obj) {
-                sub_57C080(hotkey->item_obj.obj, hotkey->data);
+                spell_ui_item_spell_activate_by_spl(hotkey->item_obj.obj, hotkey->data);
             } else if (weapon_obj == OBJ_HANDLE_NULL || item_unequip(weapon_obj)) {
                 if (item_wield_set(hotkey->item_obj.obj, ITEM_INV_LOC_WEAPON)) {
-                    sub_57C080(hotkey->item_obj.obj, hotkey->data);
+                    spell_ui_item_spell_activate_by_spl(hotkey->item_obj.obj, hotkey->data);
                 }
             }
         }

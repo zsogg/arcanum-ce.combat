@@ -958,9 +958,14 @@ int basic_skill_min_stat_level_required(int skill_level)
 }
 
 /**
+ * The percentage of the weapon damage range applied on a melee hit.
+ *
+ * NOTE: Constant 100 in both binaries (`mov eax, 0x64; ret` in the original),
+ * so the melee range scaling in item_weapon_damage is dead by construction.
+ *
  * 0x4C6510
  */
-int sub_4C6510(int64_t obj)
+int skill_melee_damage_percent_get(int64_t obj)
 {
     (void)obj;
 

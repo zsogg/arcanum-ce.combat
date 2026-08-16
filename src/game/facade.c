@@ -3,9 +3,9 @@
 #include "game/tile.h"
 #include "game/walkmask.h"
 
-static void sub_4CA0F0(int a1, int a2, int a3);
-static void sub_4CA240(void);
-static void sub_4CA7C0(TigRect* rect);
+static void facade_load(int map, int x, int y);
+static void facade_buffers_destroy(void);
+static void facade_screen_rect_get(TigRect* rect);
 
 // 0x5FF570
 static int dword_5FF570;
@@ -55,7 +55,7 @@ bool facade_init(GameInitInfo* init_info)
 // 0x4C9DE0
 void facade_exit(void)
 {
-    sub_4CA240();
+    facade_buffers_destroy();
     facade_initialized = false;
 }
 
@@ -69,9 +69,9 @@ void facade_resize(GameResizeInfo* resize_info)
 void facade_update_view(ViewOptions* view_options)
 {
     if (dword_5FF5A0 != NULL) {
-        sub_4CA240();
+        facade_buffers_destroy();
         facade_view_options = *view_options;
-        sub_4CA0F0(dword_5FF588, LOCATION_GET_X(qword_5FF578), LOCATION_GET_Y(qword_5FF578));
+        facade_load(dword_5FF588, LOCATION_GET_X(qword_5FF578), LOCATION_GET_Y(qword_5FF578));
         facade_iso_invalidate_rect(NULL);
     } else {
         facade_view_options = *view_options;
@@ -100,7 +100,7 @@ void facade_draw(GameDrawInfo* draw_info)
     }
 
     loc_rect = *draw_info->loc_rect;
-    if (!sub_4CA6B0(&loc_rect, &start_x, &start_y)) {
+    if (!facade_loc_rect_clip(&loc_rect, &start_x, &start_y)) {
         return;
     }
 
@@ -162,17 +162,17 @@ void facade_draw(GameDrawInfo* draw_info)
 }
 
 // 0x4CA0F0
-void sub_4CA0F0(int a1, int a2, int a3)
+void facade_load(int map, int x, int y)
 {
     TigRect rect;
     TigVideoBufferCreateInfo vb_create_info;
     int index;
 
-    sub_4CA240();
+    facade_buffers_destroy();
 
-    if (walkmask_load(a1, &dword_5FF5A0, &dword_5FF574, &dword_5FF570)) {
-        dword_5FF588 = a1;
-        qword_5FF578 = location_make(a2 - dword_5FF574 / 2, a3 - dword_5FF570 / 2);
+    if (walkmask_load(map, &dword_5FF5A0, &dword_5FF574, &dword_5FF570)) {
+        dword_5FF588 = map;
+        qword_5FF578 = location_make(x - dword_5FF574 / 2, y - dword_5FF570 / 2);
 
         if (facade_view_options.type == VIEW_TYPE_TOP_DOWN) {
             dword_5FF5A4 = (TigVideoBuffer**)MALLOC(sizeof(*dword_5FF5A4) * dword_5FF570 * dword_5FF574);
@@ -192,13 +192,13 @@ void sub_4CA0F0(int a1, int a2, int a3)
             }
         }
 
-        sub_4CA7C0(&rect);
+        facade_screen_rect_get(&rect);
         facade_iso_invalidate_rect(&rect);
     }
 }
 
 // 0x4CA240
-void sub_4CA240(void)
+void facade_buffers_destroy(void)
 {
     int index;
 
@@ -219,13 +219,24 @@ void sub_4CA240(void)
 }
 
 // 0x4CA2C0
-void sub_4CA2C0(void)
+// Moves the facade so its loaded tiles are centered on (x, y), then
+// invalidates the union of the old and new screen rects.
+void facade_origin_set(int x, int y)
 {
-    // TODO: Incomplete.
+    TigRect old_rect;
+    TigRect new_rect;
+
+    if (dword_5FF5A0 != NULL) {
+        facade_screen_rect_get(&old_rect);
+        qword_5FF578 = location_make(x - dword_5FF574 / 2, y - dword_5FF570 / 2);
+        facade_screen_rect_get(&new_rect);
+        tig_rect_union(&old_rect, &new_rect, &old_rect);
+        facade_iso_invalidate_rect(&old_rect);
+    }
 }
 
 // 0x4CA6B0
-bool sub_4CA6B0(LocRect* loc_rect, int* a2, int* a3)
+bool facade_loc_rect_clip(LocRect* loc_rect, int* x_ptr, int* y_ptr)
 {
     int64_t min_x;
     int64_t min_y;
@@ -265,14 +276,14 @@ bool sub_4CA6B0(LocRect* loc_rect, int* a2, int* a3)
         return false;
     }
 
-    *a2 = (int)(loc_rect->x1 - min_x);
-    *a3 = (int)(loc_rect->y1 - min_y);
+    *x_ptr = (int)(loc_rect->x1 - min_x);
+    *y_ptr = (int)(loc_rect->y1 - min_y);
 
     return true;
 }
 
 // 0x4CA7C0
-void sub_4CA7C0(TigRect* rect)
+void facade_screen_rect_get(TigRect* rect)
 {
     int64_t tmp;
     int64_t min_x;

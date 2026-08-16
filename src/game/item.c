@@ -3426,7 +3426,7 @@ void item_weapon_damage(int64_t weapon_obj, int64_t critter_obj, int damage_type
 
     if (skill == SKILL_MELEE) {
         bonus_dam = stat_level_get(critter_obj, STAT_DAMAGE_BONUS);
-        v1 = sub_4C6510(critter_obj);
+        v1 = skill_melee_damage_percent_get(critter_obj);
     }
 
     if (weapon_obj != OBJ_HANDLE_NULL) {

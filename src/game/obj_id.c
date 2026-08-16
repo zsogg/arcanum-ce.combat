@@ -7,7 +7,7 @@
 #include "game/map.h"
 #include "game/object.h"
 
-static bool sub_4E67A0(TigGuid* guid, const char* str);
+static bool objid_g_from_str(TigGuid* guid, const char* str);
 static bool sub_4E6970(ObjectID_P* p, const char* str);
 static bool objid_a_from_str(int* value_ptr, const char* str);
 static bool objid_parse_hex(int* value_ptr, const char* str, size_t length);
@@ -166,7 +166,7 @@ bool objid_id_from_str(ObjectID* oid, const char* str)
         break;
     case 'G':
         temp_oid.type = OID_TYPE_GUID;
-        if (!sub_4E67A0(&(temp_oid.d.g), str)) {
+        if (!objid_g_from_str(&(temp_oid.d.g), str)) {
             return false;
         }
         break;
@@ -192,7 +192,7 @@ bool objid_id_from_str(ObjectID* oid, const char* str)
 }
 
 // 0x4E67A0
-bool sub_4E67A0(TigGuid* guid, const char* str)
+bool objid_g_from_str(TigGuid* guid, const char* str)
 {
     int value;
 

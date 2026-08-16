@@ -17,7 +17,7 @@
 #include "ui/slide_ui.h"
 #include "ui/wmap_ui.h"
 
-static bool sub_57D3B0(TimeEvent* timeevent);
+static bool anim_ui_event_match(TimeEvent* timeevent);
 static bool anim_ui_bkg_process_callback(TimeEvent* timeevent);
 static bool ambient_lighting_is_enabled(void);
 static bool ambient_lighting_process_callback(TimeEvent* timeevent);
@@ -117,7 +117,7 @@ void anim_ui_event_add_delay(int type, int param, int milliseconds)
 }
 
 // 0x57D3B0
-bool sub_57D3B0(TimeEvent* timeevent)
+bool anim_ui_event_match(TimeEvent* timeevent)
 {
     return timeevent->params[0].integer_value == dword_5CB40C
         && timeevent->params[1].integer_value == dword_5CB410;
@@ -129,7 +129,7 @@ void anim_ui_event_remove(int type, int param)
     dword_5CB40C = type;
     dword_5CB410 = param;
     // FIX: Original code uses `type` as timeevent type which is obviously wrong.
-    timeevent_clear_one_ex(TIMEEVENT_TYPE_BKG_ANIM, sub_57D3B0);
+    timeevent_clear_one_ex(TIMEEVENT_TYPE_BKG_ANIM, anim_ui_event_match);
     dword_5CB40C = -1;
     dword_5CB410 = -1;
 }

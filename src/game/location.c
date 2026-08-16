@@ -499,15 +499,15 @@ bool location_screen_rect_to_loc_rect(TigRect* rect, LocRect* loc_rect)
 }
 
 // 0x4B93F0
-void sub_4B93F0(int a1, int a2, int* a3, int* a4)
+void location_offset_to_screen(int offset_x, int offset_y, int* x_ptr, int* y_ptr)
 {
     int v1;
     int v2;
 
-    v1 = (a1 - 40) / 2;
-    v2 = 2 * (a2 / 2);
-    *a3 = v2 - v1;
-    *a4 = v1 + v2;
+    v1 = (offset_x - 40) / 2;
+    v2 = 2 * (offset_y / 2);
+    *x_ptr = v2 - v1;
+    *y_ptr = v1 + v2;
 }
 
 // 0x4B9420
