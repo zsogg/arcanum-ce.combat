@@ -28,8 +28,15 @@
 // Run it with the game folder as the working directory; repository paths are
 // relative to it, as they are for the game.
 //
-// Read-only by construction: it opens with "rb" and never calls
-// `tig_file_extract*`, which is the API that would write a cache copy.
+// Reads with "rb" and never calls `tig_file_extract*`, the API that would write
+// a cache copy - but it is not quite side-effect free, and the exception is
+// worth knowing before pointing it at a real install. **Mounting a directory
+// repository deletes that directory's `TIGCache`**: `tig_file_repository_add`
+// (file.c:630) runs `tig_file_rmdir_recursively_native(<repo>/TIGCache)` on
+// every directory it adds. That is the game's own startup behaviour, not
+// something this adds - launching the game clears `data/TIGCache` the same way -
+// so what is lost is a cache the next run would rebuild. Nothing else is
+// written.
 
 #include <stdio.h>
 #include <stdlib.h>
