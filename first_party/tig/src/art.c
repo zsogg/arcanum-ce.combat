@@ -1778,7 +1778,12 @@ tig_art_id_t tig_art_id_damaged_set(tig_art_id_t art_id, int value)
 {
     switch (tig_art_type(art_id)) {
     case TIG_ART_TYPE_WALL:
-        return (art_id & ~0x480) | value;
+        // FIX (porting bug #15): the original masks `value` to the 0x480 bits
+        // here (`xor`-fold at 0x503BC9-0x503BD0: (art ^ value) & 0x480 folded
+        // back), so out-of-field bits of the argument never leak into the id.
+        // The portal and item branches below OR the value unmasked in the
+        // original too - only the wall branch masks. Found by emudiff.
+        return (art_id & ~0x480) | (value & 0x480);
     case TIG_ART_TYPE_PORTAL:
         return (art_id & ~0x200) | value;
     case TIG_ART_TYPE_ITEM:
@@ -1949,10 +1954,11 @@ int tig_art_critter_id_size_get(tig_art_id_t art_id)
 
     switch (tig_art_type(art_id)) {
     case TIG_ART_TYPE_CRITTER:
-        // FIXME: This is wrong, art number for critters is always 0, probably
-        // should call `tig_art_critter_id_body_type_get` to obtain correct
-        // index into `critter_body_type_to_size_tbl` lookup table. Need some
-        // tests to be sure combat animation won't break.
+        // NOTE: Settled by emudiff (2026-08-16). The original 0x503F60 calls
+        // 0x502710 (`tig_art_num_get`, which returns 0 for critter ids) and
+        // indexes `critter_body_type_to_size_tbl` with it, so every critter
+        // reads slot 0 - Troika's own quirk, faithfully transcribed. The old
+        // FIXME suspected body_type here; it would diverge from the original.
         idx = tig_art_num_get(art_id);
         return critter_body_type_to_size_tbl[idx];
     case TIG_ART_TYPE_MONSTER:

@@ -23,8 +23,8 @@
 #define FIRST_TECH_SKILL_DESC_ID (FIRST_BASIC_SKILL_DESC_ID + BASIC_SKILL_COUNT)
 
 static int basic_skill_vs(int64_t obj, int skill, int64_t other_obj);
-static int max_skill_for_stat_level(int stat_level);
-static int skill_gambling_random_roll(void);
+int max_skill_for_stat_level(int stat_level);
+int skill_gambling_random_roll(void);
 static bool skill_invocation_check_crit_hit(int roll, int effectiveness, SkillInvocation* skill_invocation);
 static bool skill_invocation_check_crit_miss(int roll, int effectiveness, SkillInvocation* skill_invocation);
 static bool is_controlled_by_local_pc(int64_t obj);

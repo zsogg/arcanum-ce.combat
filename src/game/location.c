@@ -576,6 +576,14 @@ int64_t location_dist(int64_t a, int64_t b)
 }
 
 // 0x4B9760
+// NOTE: A structural simplification, recorded 2026-08-16 by emudiff. The
+// original's 0x4B9760 also zeroes a *limits rect* (0x5FC2E0..0x5FC2EC) that
+// the original's `location_at` gates tiles on; the scalars here are what the
+// original stores at 0x5FC2F0/0x5FC288. The rect has no CE equivalent - CE
+// gates on the scalars directly - and the original only fills the rect in a
+// separate pass, so the two models agree in the game but a bare
+// location_limits_set leaves the original rejecting every tile. That is why
+// location_at/location_normalize have no emudiff cases.
 bool location_limits_set(int64_t x, int64_t y)
 {
     if (x > 0x100000000 || y > 0x100000000) {

@@ -10,15 +10,26 @@
 //     > stat_cost 7              -> "12"
 //     > <unknown or bad arity>   -> "!<reason>"
 //
-// Arguments and results are signed 64-bit decimal. A wrapper narrows to
-// whatever the real signature takes, so the protocol stays uniform while the
-// function under test is called exactly as the game calls it.
+// Arguments are signed 64-bit decimal. A wrapper narrows to whatever the
+// real signature takes, so the protocol stays uniform while the function
+// under test is called exactly as the game calls it. A wrapper answers by
+// writing its `out` array; the main loop prints the first `outputs`
+// entries space-separated, so a function with several pointer outputs
+// (e.g. location_xy) returns one value per pointer, in declaration order.
+//
+// By-pointer arguments travel as the packed integer the struct (or the
+// scratch slot) holds: the wrapper unpacks, calls, and repacks the same
+// way. A by-pointer output must be seeded from its drawn argument before
+// the call, so an early-return path leaves the same value on both sides.
 //
 // Only add functions here that are *pure with respect to reachable state*:
-// no object handles, no loaded data files, no allocation. The emulator has no
-// Windows under it and no game state in it, so anything else diverges for
-// reasons that say nothing about the port. Seeded generator state is fine
-// when both sides expose the same setter (see `random_seed`).
+// no object handles, no loaded data files, no allocation, no art-database
+// access (tig_art_id_frame_set needs tig_art_anim_data, so it is out even
+// though it looks like a bit twiddler). The emulator has no Windows under it
+// and no game state in it, so anything else diverges for reasons that say
+// nothing about the port. Seeded generator state and zero-initialised
+// globals are fine when both sides expose the same value - see random_seed
+// and the location_* cases.
 
 #include <inttypes.h>
 #include <stdint.h>
@@ -30,68 +41,71 @@
 #include "game/skill.h"
 #include "game/stat.h"
 #include "game/timeevent.h"
+#include "tig/tig.h"
 
-#define MAX_ARGS 8
+#define MAX_ARGS 16
+#define MAX_OUT 3
 #define MAX_LINE 512
 
-typedef int64_t (*OracleFunc)(const int64_t* args);
+typedef void (*OracleFunc)(const int64_t* args, int64_t* out);
 
 typedef struct {
     const char* name;
     int arity;
+    int outputs;
     OracleFunc func;
 } OracleEntry;
 
-static int64_t o_random_seed(const int64_t* a)
+static void o_random_seed(const int64_t* a, int64_t* out)
 {
     random_seed((unsigned int)a[0]);
-    return 0;
+    out[0] = 0;
 }
 
-static int64_t o_random_rand(const int64_t* a)
+static void o_random_rand(const int64_t* a, int64_t* out)
 {
     (void)a;
-    return random_rand();
+    out[0] = random_rand();
 }
 
-static int64_t o_random_between(const int64_t* a)
+static void o_random_between(const int64_t* a, int64_t* out)
 {
-    return random_between((int)a[0], (int)a[1]);
+    out[0] = random_between((int)a[0], (int)a[1]);
 }
 
-static int64_t o_stat_cost(const int64_t* a)
+static void o_stat_cost(const int64_t* a, int64_t* out)
 {
-    return stat_cost((int)a[0]);
+    out[0] = stat_cost((int)a[0]);
 }
 
-static int64_t o_basic_skill_money(const int64_t* a)
+static void o_basic_skill_money(const int64_t* a, int64_t* out)
 {
-    return basic_skill_money((int)a[0], (int)a[1], (int)a[2]);
+    out[0] = basic_skill_money((int)a[0], (int)a[1], (int)a[2]);
 }
 
-static int64_t o_basic_skill_min_stat_level_required(const int64_t* a)
+static void o_basic_skill_min_stat_level_required(const int64_t* a, int64_t* out)
 {
-    return basic_skill_min_stat_level_required((int)a[0]);
+    out[0] = basic_skill_min_stat_level_required((int)a[0]);
 }
 
-static int64_t o_basic_skill_stat(const int64_t* a)
+static void o_basic_skill_stat(const int64_t* a, int64_t* out)
 {
-    return basic_skill_stat((int)a[0]);
+    out[0] = basic_skill_stat((int)a[0]);
 }
 
-static int64_t o_tech_skill_stat(const int64_t* a)
+static void o_tech_skill_stat(const int64_t* a, int64_t* out)
 {
-    return tech_skill_stat((int)a[0]);
+    out[0] = tech_skill_stat((int)a[0]);
 }
 
-static int64_t o_location_rot(const int64_t* a)
+static void o_location_rot(const int64_t* a, int64_t* out)
 {
-    return location_rot(a[0], a[1]);
+    out[0] = location_rot(a[0], a[1]);
 }
 
-static int64_t o_location_dist(const int64_t* a)
+static void o_location_dist(const int64_t* a, int64_t* out)
 {
-    return location_dist(a[0], a[1]);
+    out[0] = location_dist(a[0], a[1]);
 }
 
 // A function whose answer is written through a pointer rather than returned.
@@ -101,39 +115,594 @@ static int64_t o_location_dist(const int64_t* a)
 // the packed value comes back out. On the emulator's side the driver allocates
 // the eight bytes, writes them, passes the address and reads them back - see
 // `DateTimeArg` in `cases.py`.
-static int64_t o_datetime_sub_milliseconds(const int64_t* a)
+
+static void o_datetime_sub_milliseconds(const int64_t* a, int64_t* out)
 {
     DateTime datetime;
 
     datetime.value = (uint64_t)a[0];
     datetime_sub_milliseconds(&datetime, (unsigned int)a[1]);
 
-    return (int64_t)datetime.value;
+    out[0] = (int64_t)datetime.value;
 }
 
-static int64_t o_datetime_add_milliseconds(const int64_t* a)
+static void o_datetime_add_milliseconds(const int64_t* a, int64_t* out)
 {
     DateTime datetime;
 
     datetime.value = (uint64_t)a[0];
     datetime_add_milliseconds(&datetime, (unsigned int)a[1]);
 
-    return (int64_t)datetime.value;
+    out[0] = (int64_t)datetime.value;
+}
+
+static void o_datetime_seconds_since_reference_date(const int64_t* a, int64_t* out)
+{
+    DateTime datetime;
+
+    datetime.value = (uint64_t)a[0];
+    out[0] = datetime_seconds_since_reference_date(&datetime);
+}
+
+static void o_datetime_get_hour(const int64_t* a, int64_t* out)
+{
+    DateTime datetime;
+
+    datetime.value = (uint64_t)a[0];
+    out[0] = datetime_get_hour(&datetime);
+}
+
+static void o_datetime_get_hour_since_reference_date(const int64_t* a, int64_t* out)
+{
+    DateTime datetime;
+
+    datetime.value = (uint64_t)a[0];
+    out[0] = datetime_get_hour_since_reference_date(&datetime);
+}
+
+static void o_datetime_get_minute(const int64_t* a, int64_t* out)
+{
+    DateTime datetime;
+
+    datetime.value = (uint64_t)a[0];
+    out[0] = datetime_get_minute(&datetime);
+}
+
+static void o_datetime_get_day(const int64_t* a, int64_t* out)
+{
+    DateTime datetime;
+
+    datetime.value = (uint64_t)a[0];
+    out[0] = datetime_get_day(&datetime);
+}
+
+static void o_datetime_get_month(const int64_t* a, int64_t* out)
+{
+    DateTime datetime;
+
+    datetime.value = (uint64_t)a[0];
+    out[0] = datetime_get_month(&datetime);
+}
+
+static void o_datetime_get_year(const int64_t* a, int64_t* out)
+{
+    DateTime datetime;
+
+    datetime.value = (uint64_t)a[0];
+    out[0] = datetime_get_year(&datetime);
+}
+
+static void o_datetime_from_milliseconds(const int64_t* a, int64_t* out)
+{
+    DateTime datetime;
+
+    datetime.value = (uint64_t)a[0];
+    datetime_from_milliseconds(&datetime, (unsigned int)a[1]);
+
+    out[0] = (int64_t)datetime.value;
+}
+
+static void o_datetime_compare(const int64_t* a, int64_t* out)
+{
+    DateTime datetime1;
+    DateTime datetime2;
+
+    datetime1.value = (uint64_t)a[0];
+    datetime2.value = (uint64_t)a[1];
+    out[0] = datetime_compare(&datetime1, &datetime2);
+}
+
+static void o_datetime_is_at_least_milliseconds(const int64_t* a, int64_t* out)
+{
+    DateTime datetime;
+
+    datetime.value = (uint64_t)a[0];
+    out[0] = datetime_is_at_least_milliseconds(&datetime, (unsigned int)a[1]);
+}
+
+static void o_datetime_add_datetime(const int64_t* a, int64_t* out)
+{
+    DateTime datetime;
+    DateTime other;
+
+    datetime.value = (uint64_t)a[0];
+    other.value = (uint64_t)a[1];
+    datetime_add_datetime(&datetime, &other);
+
+    // Both pointers are printed: the driver compares every by-pointer
+    // argument, and the second (read-only) one must agree that it is
+    // untouched.
+    out[0] = (int64_t)datetime.value;
+    out[1] = (int64_t)other.value;
+}
+
+// -- location: coordinates and pointer outputs --------------------------
+//
+// The location family reads `location_view_options` (type and zoom) and the
+// origin/limit globals. CE zero-initialises them, and the original's copies
+// are zero in the emulator's image, so the default isometric state matches
+// without setup. The limit-dependent cases seed both sides with
+// `location_limits_set` first.
+
+static void o_location_limits_set(const int64_t* a, int64_t* out)
+{
+    location_limits_set(a[0], a[1]);
+    out[0] = 0;
+}
+
+static void o_location_in_dir(const int64_t* a, int64_t* out)
+{
+    int64_t new_loc = a[2];
+
+    (void)location_in_dir(a[0], (int)a[1], &new_loc);
+    // The driver reads the scratch bytes back as unsigned, so the wrapper
+    // prints the same zero-extended value.
+    out[0] = (int64_t)(uint64_t)new_loc;
+}
+
+static void o_location_in_range(const int64_t* a, int64_t* out)
+{
+    int64_t new_loc = a[3];
+
+    (void)location_in_range(a[0], (int)a[1], (int)a[2], &new_loc);
+    out[0] = (int64_t)(uint64_t)new_loc;
+}
+
+static void o_location_xy(const int64_t* a, int64_t* out)
+{
+    int64_t sx = a[1];
+    int64_t sy = a[2];
+
+    location_xy(a[0], &sx, &sy);
+    out[0] = (int64_t)(uint64_t)sx;
+    out[1] = (int64_t)(uint64_t)sy;
+}
+
+static void o_location_at(const int64_t* a, int64_t* out)
+{
+    int64_t loc = a[2];
+
+    (void)location_at(a[0], a[1], &loc);
+    out[0] = (int64_t)(uint64_t)loc;
+}
+
+static void o_location_normalize(const int64_t* a, int64_t* out)
+{
+    int64_t loc = a[0];
+    int offset_x = (int)a[1];
+    int offset_y = (int)a[2];
+
+    (void)location_normalize(&loc, &offset_x, &offset_y);
+    out[0] = (int64_t)(uint64_t)loc;
+    out[1] = (int64_t)(uint32_t)offset_x;
+    out[2] = (int64_t)(uint32_t)offset_y;
+}
+
+static void o_location_limits_get(const int64_t* a, int64_t* out)
+{
+    int64_t x = a[0];
+    int64_t y = a[1];
+
+    location_limits_get(&x, &y);
+    out[0] = (int64_t)(uint64_t)x;
+    out[1] = (int64_t)(uint64_t)y;
+}
+
+static void o_location_center_get(const int64_t* a, int64_t* out)
+{
+    (void)a;
+    out[0] = location_center_get();
+}
+
+// 0x4B93F0: screen-space to world-tile linear transform.
+static void o_sub_4B93F0(const int64_t* a, int64_t* out)
+{
+    int v1 = (int)a[2];
+    int v2 = (int)a[3];
+
+    sub_4B93F0((int)a[0], (int)a[1], &v1, &v2);
+    out[0] = (int64_t)(uint32_t)v1;
+    out[1] = (int64_t)(uint32_t)v2;
+}
+
+// -- skill tail ---------------------------------------------------------
+
+static void o_max_skill_for_stat_level(const int64_t* a, int64_t* out)
+{
+    out[0] = max_skill_for_stat_level((int)a[0]);
+}
+
+static void o_training_min_skill_level_required(const int64_t* a, int64_t* out)
+{
+    out[0] = training_min_skill_level_required((int)a[0]);
+}
+
+static void o_tech_skill_money(const int64_t* a, int64_t* out)
+{
+    out[0] = tech_skill_money((int)a[0], (int)a[1], (int)a[2]);
+}
+
+static void o_tech_skill_min_stat_level_required(const int64_t* a, int64_t* out)
+{
+    out[0] = tech_skill_min_stat_level_required((int)a[0]);
+}
+
+// Reads and advances `skill_gambling_next_roll` (zero in both binaries at
+// start), so the two sides must stay in lockstep like the random cases.
+static void o_skill_gambling_random_roll(const int64_t* a, int64_t* out)
+{
+    (void)a;
+    out[0] = skill_gambling_random_roll();
+}
+
+// -- tig art id packing ------------------------------------------------
+//
+// Pure bit manipulation over the packed 32-bit art id. The setters with a
+// range check print and clamp past it, which in the emulator would run the
+// original's console code - the cases keep the value argument inside range.
+
+static void o_tig_art_type(const int64_t* a, int64_t* out)
+{
+    out[0] = tig_art_type((tig_art_id_t)a[0]);
+}
+
+static void o_tig_art_num_get(const int64_t* a, int64_t* out)
+{
+    out[0] = tig_art_num_get((tig_art_id_t)a[0]);
+}
+
+static void o_tig_art_num_set(const int64_t* a, int64_t* out)
+{
+    out[0] = tig_art_num_set((tig_art_id_t)a[0], (unsigned int)a[1]);
+}
+
+static void o_tig_art_id_rotation_get(const int64_t* a, int64_t* out)
+{
+    out[0] = tig_art_id_rotation_get((tig_art_id_t)a[0]);
+}
+
+static void o_tig_art_id_rotation_inc(const int64_t* a, int64_t* out)
+{
+    out[0] = tig_art_id_rotation_inc((tig_art_id_t)a[0]);
+}
+
+static void o_tig_art_id_rotation_set(const int64_t* a, int64_t* out)
+{
+    out[0] = tig_art_id_rotation_set((tig_art_id_t)a[0], (int)a[1]);
+}
+
+static void o_tig_art_id_frame_get(const int64_t* a, int64_t* out)
+{
+    out[0] = tig_art_id_frame_get((tig_art_id_t)a[0]);
+}
+
+static void o_tig_art_id_palette_get(const int64_t* a, int64_t* out)
+{
+    out[0] = tig_art_id_palette_get((tig_art_id_t)a[0]);
+}
+
+static void o_tig_art_id_palette_set(const int64_t* a, int64_t* out)
+{
+    out[0] = tig_art_id_palette_set((tig_art_id_t)a[0], (int)a[1]);
+}
+
+static void o_tig_art_id_flags_set(const int64_t* a, int64_t* out)
+{
+    out[0] = tig_art_id_flags_set((tig_art_id_t)a[0], (int)a[1]);
+}
+
+static void o_tig_art_id_anim_get(const int64_t* a, int64_t* out)
+{
+    out[0] = tig_art_id_anim_get((tig_art_id_t)a[0]);
+}
+
+static void o_tig_art_id_anim_set(const int64_t* a, int64_t* out)
+{
+    out[0] = tig_art_id_anim_set((tig_art_id_t)a[0], (int)a[1]);
+}
+
+static void o_tig_art_critter_id_body_type_get(const int64_t* a, int64_t* out)
+{
+    out[0] = tig_art_critter_id_body_type_get((tig_art_id_t)a[0]);
+}
+
+static void o_tig_art_critter_id_body_type_set(const int64_t* a, int64_t* out)
+{
+    out[0] = tig_art_critter_id_body_type_set((tig_art_id_t)a[0], (int)a[1]);
+}
+
+static void o_tig_art_monster_id_specie_get(const int64_t* a, int64_t* out)
+{
+    out[0] = tig_art_monster_id_specie_get((tig_art_id_t)a[0]);
+}
+
+static void o_tig_art_critter_id_size_get(const int64_t* a, int64_t* out)
+{
+    out[0] = tig_art_critter_id_size_get((tig_art_id_t)a[0]);
+}
+
+static void o_tig_art_critter_id_gender_get(const int64_t* a, int64_t* out)
+{
+    out[0] = tig_art_critter_id_gender_get((tig_art_id_t)a[0]);
+}
+
+static void o_tig_art_critter_id_gender_set(const int64_t* a, int64_t* out)
+{
+    out[0] = tig_art_critter_id_gender_set((tig_art_id_t)a[0], (int)a[1]);
+}
+
+static void o_tig_art_critter_id_armor_get(const int64_t* a, int64_t* out)
+{
+    out[0] = tig_art_critter_id_armor_get((tig_art_id_t)a[0]);
+}
+
+static void o_tig_art_critter_id_armor_set(const int64_t* a, int64_t* out)
+{
+    out[0] = tig_art_critter_id_armor_set((tig_art_id_t)a[0], (int)a[1]);
+}
+
+static void o_tig_art_critter_id_weapon_get(const int64_t* a, int64_t* out)
+{
+    out[0] = tig_art_critter_id_weapon_get((tig_art_id_t)a[0]);
+}
+
+static void o_tig_art_critter_id_weapon_set(const int64_t* a, int64_t* out)
+{
+    out[0] = tig_art_critter_id_weapon_set((tig_art_id_t)a[0], (int)a[1]);
+}
+
+static void o_tig_art_critter_id_shield_get(const int64_t* a, int64_t* out)
+{
+    out[0] = tig_art_critter_id_shield_get((tig_art_id_t)a[0]);
+}
+
+static void o_tig_art_critter_id_shield_set(const int64_t* a, int64_t* out)
+{
+    out[0] = tig_art_critter_id_shield_set((tig_art_id_t)a[0], (int)a[1]);
+}
+
+static void o_tig_art_tile_id_type_get(const int64_t* a, int64_t* out)
+{
+    out[0] = tig_art_tile_id_type_get((tig_art_id_t)a[0]);
+}
+
+static void o_tig_art_tile_id_flippable_get(const int64_t* a, int64_t* out)
+{
+    out[0] = tig_art_tile_id_flippable_get((tig_art_id_t)a[0]);
+}
+
+static void o_tig_art_tile_id_flippable1_get(const int64_t* a, int64_t* out)
+{
+    out[0] = tig_art_tile_id_flippable1_get((tig_art_id_t)a[0]);
+}
+
+static void o_tig_art_tile_id_flippable2_get(const int64_t* a, int64_t* out)
+{
+    out[0] = tig_art_tile_id_flippable2_get((tig_art_id_t)a[0]);
+}
+
+static void o_tig_art_wall_id_p_piece_get(const int64_t* a, int64_t* out)
+{
+    out[0] = tig_art_wall_id_p_piece_get((tig_art_id_t)a[0]);
+}
+
+static void o_tig_art_wall_id_p_piece_set(const int64_t* a, int64_t* out)
+{
+    out[0] = tig_art_wall_id_p_piece_set((tig_art_id_t)a[0], (int)a[1]);
+}
+
+static void o_tig_art_wall_id_num_get(const int64_t* a, int64_t* out)
+{
+    out[0] = tig_art_wall_id_num_get((tig_art_id_t)a[0]);
+}
+
+static void o_tig_art_wall_id_variation_get(const int64_t* a, int64_t* out)
+{
+    out[0] = tig_art_wall_id_variation_get((tig_art_id_t)a[0]);
+}
+
+static void o_tig_art_wall_id_variation_set(const int64_t* a, int64_t* out)
+{
+    out[0] = tig_art_wall_id_variation_set((tig_art_id_t)a[0], (int)a[1]);
+}
+
+static void o_tig_art_id_damaged_get(const int64_t* a, int64_t* out)
+{
+    out[0] = tig_art_id_damaged_get((tig_art_id_t)a[0]);
+}
+
+static void o_tig_art_id_damaged_set(const int64_t* a, int64_t* out)
+{
+    out[0] = tig_art_id_damaged_set((tig_art_id_t)a[0], (int)a[1]);
+}
+
+static void o_tig_art_portal_id_type_get(const int64_t* a, int64_t* out)
+{
+    out[0] = tig_art_portal_id_type_get((tig_art_id_t)a[0]);
+}
+
+// The id constructors: range checks plus bit packing, answering through the
+// pointer. The drawn value seeds the output first so an invalid-parameter
+// path (which leaves the pointer untouched on both sides) still compares
+// equal, and the comparison then catches any side that wrongly writes.
+
+static void o_tig_art_wall_id_create(const int64_t* a, int64_t* out)
+{
+    tig_art_id_t art_id = (tig_art_id_t)a[6];
+
+    (void)tig_art_wall_id_create((unsigned int)a[0], (int)a[1], (int)a[2],
+        (int)a[3], (unsigned int)a[4], (int)a[5], &art_id);
+    out[0] = art_id;
+}
+
+static void o_tig_art_tile_id_create(const int64_t* a, int64_t* out)
+{
+    tig_art_id_t art_id = (tig_art_id_t)a[9];
+
+    (void)tig_art_tile_id_create((unsigned int)a[0], (unsigned int)a[1],
+        (unsigned int)a[2], (unsigned int)a[3], (unsigned int)a[4],
+        (unsigned int)a[5], (unsigned int)a[6], (unsigned int)a[7], &art_id);
+    out[0] = art_id;
+}
+
+static void o_tig_art_critter_id_create(const int64_t* a, int64_t* out)
+{
+    tig_art_id_t art_id = (tig_art_id_t)a[9];
+
+    (void)tig_art_critter_id_create((unsigned int)a[0], (int)a[1], (int)a[2],
+        (unsigned int)a[3], (unsigned int)a[4], (int)a[5], (int)a[6],
+        (int)a[7], (unsigned int)a[8], &art_id);
+    out[0] = art_id;
+}
+
+static void o_tig_art_monster_id_create(const int64_t* a, int64_t* out)
+{
+    tig_art_id_t art_id = (tig_art_id_t)a[8];
+
+    (void)tig_art_monster_id_create((int)a[0], (int)a[1], (unsigned int)a[2],
+        (unsigned int)a[3], (int)a[4], (int)a[5], (int)a[6],
+        (unsigned int)a[7], &art_id);
+    out[0] = art_id;
+}
+
+static void o_tig_art_unique_npc_id_create(const int64_t* a, int64_t* out)
+{
+    tig_art_id_t art_id = (tig_art_id_t)a[8];
+
+    (void)tig_art_unique_npc_id_create((int)a[0], (unsigned int)a[1],
+        (unsigned int)a[2], (int)a[3], (int)a[4], (int)a[5],
+        (unsigned int)a[6], &art_id);
+    out[0] = art_id;
+}
+
+static void o_tig_art_portal_id_create(const int64_t* a, int64_t* out)
+{
+    tig_art_id_t art_id = (tig_art_id_t)a[6];
+
+    (void)tig_art_portal_id_create((unsigned int)a[0], (int)a[1], (int)a[2],
+        (unsigned int)a[3], (int)a[4], (unsigned int)a[5], &art_id);
+    out[0] = art_id;
+}
+
+static void o_tig_art_scenery_id_create(const int64_t* a, int64_t* out)
+{
+    tig_art_id_t art_id = (tig_art_id_t)a[5];
+
+    (void)tig_art_scenery_id_create((unsigned int)a[0], (int)a[1],
+        (unsigned int)a[2], (int)a[3], (unsigned int)a[4], &art_id);
+    out[0] = art_id;
+}
+
+static void o_tig_art_misc_id_create(const int64_t* a, int64_t* out)
+{
+    tig_art_id_t art_id = (tig_art_id_t)a[2];
+
+    (void)tig_art_misc_id_create((unsigned int)a[0], (unsigned int)a[1], &art_id);
+    out[0] = art_id;
 }
 
 static const OracleEntry oracle_entries[] = {
-    { "random_seed", 1, o_random_seed },
-    { "random_rand", 0, o_random_rand },
-    { "random_between", 2, o_random_between },
-    { "stat_cost", 1, o_stat_cost },
-    { "basic_skill_money", 3, o_basic_skill_money },
-    { "basic_skill_min_stat_level_required", 1, o_basic_skill_min_stat_level_required },
-    { "basic_skill_stat", 1, o_basic_skill_stat },
-    { "tech_skill_stat", 1, o_tech_skill_stat },
-    { "location_rot", 2, o_location_rot },
-    { "location_dist", 2, o_location_dist },
-    { "datetime_sub_milliseconds", 2, o_datetime_sub_milliseconds },
-    { "datetime_add_milliseconds", 2, o_datetime_add_milliseconds },
+    { "random_seed", 1, 1, o_random_seed },
+    { "random_rand", 0, 1, o_random_rand },
+    { "random_between", 2, 1, o_random_between },
+    { "stat_cost", 1, 1, o_stat_cost },
+    { "basic_skill_money", 3, 1, o_basic_skill_money },
+    { "basic_skill_min_stat_level_required", 1, 1, o_basic_skill_min_stat_level_required },
+    { "basic_skill_stat", 1, 1, o_basic_skill_stat },
+    { "tech_skill_stat", 1, 1, o_tech_skill_stat },
+    { "location_rot", 2, 1, o_location_rot },
+    { "location_dist", 2, 1, o_location_dist },
+    { "datetime_sub_milliseconds", 2, 1, o_datetime_sub_milliseconds },
+    { "datetime_add_milliseconds", 2, 1, o_datetime_add_milliseconds },
+    { "datetime_seconds_since_reference_date", 1, 1, o_datetime_seconds_since_reference_date },
+    { "datetime_get_hour", 1, 1, o_datetime_get_hour },
+    { "datetime_get_hour_since_reference_date", 1, 1, o_datetime_get_hour_since_reference_date },
+    { "datetime_get_minute", 1, 1, o_datetime_get_minute },
+    { "datetime_get_day", 1, 1, o_datetime_get_day },
+    { "datetime_get_month", 1, 1, o_datetime_get_month },
+    { "datetime_get_year", 1, 1, o_datetime_get_year },
+    { "datetime_from_milliseconds", 2, 1, o_datetime_from_milliseconds },
+    { "datetime_compare", 2, 1, o_datetime_compare },
+    { "datetime_is_at_least_milliseconds", 2, 1, o_datetime_is_at_least_milliseconds },
+    { "datetime_add_datetime", 2, 2, o_datetime_add_datetime },
+    { "location_limits_set", 2, 1, o_location_limits_set },
+    { "location_in_dir", 3, 1, o_location_in_dir },
+    { "location_in_range", 4, 1, o_location_in_range },
+    { "location_xy", 3, 2, o_location_xy },
+    { "location_at", 3, 1, o_location_at },
+    { "location_normalize", 3, 3, o_location_normalize },
+    { "location_limits_get", 2, 2, o_location_limits_get },
+    { "location_center_get", 0, 1, o_location_center_get },
+    { "sub_4B93F0", 4, 2, o_sub_4B93F0 },
+    { "max_skill_for_stat_level", 1, 1, o_max_skill_for_stat_level },
+    { "training_min_skill_level_required", 1, 1, o_training_min_skill_level_required },
+    { "tech_skill_money", 3, 1, o_tech_skill_money },
+    { "tech_skill_min_stat_level_required", 1, 1, o_tech_skill_min_stat_level_required },
+    { "skill_gambling_random_roll", 0, 1, o_skill_gambling_random_roll },
+    { "tig_art_type", 1, 1, o_tig_art_type },
+    { "tig_art_num_get", 1, 1, o_tig_art_num_get },
+    { "tig_art_num_set", 2, 1, o_tig_art_num_set },
+    { "tig_art_id_rotation_get", 1, 1, o_tig_art_id_rotation_get },
+    { "tig_art_id_rotation_inc", 1, 1, o_tig_art_id_rotation_inc },
+    { "tig_art_id_rotation_set", 2, 1, o_tig_art_id_rotation_set },
+    { "tig_art_id_frame_get", 1, 1, o_tig_art_id_frame_get },
+    { "tig_art_id_palette_get", 1, 1, o_tig_art_id_palette_get },
+    { "tig_art_id_palette_set", 2, 1, o_tig_art_id_palette_set },
+    { "tig_art_id_flags_set", 2, 1, o_tig_art_id_flags_set },
+    { "tig_art_id_anim_get", 1, 1, o_tig_art_id_anim_get },
+    { "tig_art_id_anim_set", 2, 1, o_tig_art_id_anim_set },
+    { "tig_art_critter_id_body_type_get", 1, 1, o_tig_art_critter_id_body_type_get },
+    { "tig_art_critter_id_body_type_set", 2, 1, o_tig_art_critter_id_body_type_set },
+    { "tig_art_monster_id_specie_get", 1, 1, o_tig_art_monster_id_specie_get },
+    { "tig_art_critter_id_size_get", 1, 1, o_tig_art_critter_id_size_get },
+    { "tig_art_critter_id_gender_get", 1, 1, o_tig_art_critter_id_gender_get },
+    { "tig_art_critter_id_gender_set", 2, 1, o_tig_art_critter_id_gender_set },
+    { "tig_art_critter_id_armor_get", 1, 1, o_tig_art_critter_id_armor_get },
+    { "tig_art_critter_id_armor_set", 2, 1, o_tig_art_critter_id_armor_set },
+    { "tig_art_critter_id_weapon_get", 1, 1, o_tig_art_critter_id_weapon_get },
+    { "tig_art_critter_id_weapon_set", 2, 1, o_tig_art_critter_id_weapon_set },
+    { "tig_art_critter_id_shield_get", 1, 1, o_tig_art_critter_id_shield_get },
+    { "tig_art_critter_id_shield_set", 2, 1, o_tig_art_critter_id_shield_set },
+    { "tig_art_tile_id_type_get", 1, 1, o_tig_art_tile_id_type_get },
+    { "tig_art_tile_id_flippable_get", 1, 1, o_tig_art_tile_id_flippable_get },
+    { "tig_art_tile_id_flippable1_get", 1, 1, o_tig_art_tile_id_flippable1_get },
+    { "tig_art_tile_id_flippable2_get", 1, 1, o_tig_art_tile_id_flippable2_get },
+    { "tig_art_wall_id_p_piece_get", 1, 1, o_tig_art_wall_id_p_piece_get },
+    { "tig_art_wall_id_p_piece_set", 2, 1, o_tig_art_wall_id_p_piece_set },
+    { "tig_art_wall_id_num_get", 1, 1, o_tig_art_wall_id_num_get },
+    { "tig_art_wall_id_variation_get", 1, 1, o_tig_art_wall_id_variation_get },
+    { "tig_art_wall_id_variation_set", 2, 1, o_tig_art_wall_id_variation_set },
+    { "tig_art_id_damaged_get", 1, 1, o_tig_art_id_damaged_get },
+    { "tig_art_id_damaged_set", 2, 1, o_tig_art_id_damaged_set },
+    { "tig_art_portal_id_type_get", 1, 1, o_tig_art_portal_id_type_get },
+    { "tig_art_wall_id_create", 7, 1, o_tig_art_wall_id_create },
+    { "tig_art_tile_id_create", 10, 1, o_tig_art_tile_id_create },
+    { "tig_art_critter_id_create", 10, 1, o_tig_art_critter_id_create },
+    { "tig_art_monster_id_create", 9, 1, o_tig_art_monster_id_create },
+    { "tig_art_unique_npc_id_create", 8, 1, o_tig_art_unique_npc_id_create },
+    { "tig_art_portal_id_create", 7, 1, o_tig_art_portal_id_create },
+    { "tig_art_scenery_id_create", 6, 1, o_tig_art_scenery_id_create },
+    { "tig_art_misc_id_create", 3, 1, o_tig_art_misc_id_create },
 };
 
 #define ORACLE_ENTRY_COUNT ((int)(sizeof(oracle_entries) / sizeof(oracle_entries[0])))
@@ -162,9 +731,11 @@ int main(void)
     while (fgets(line, sizeof(line), stdin) != NULL) {
         const OracleEntry* entry;
         int64_t args[MAX_ARGS];
+        int64_t out[MAX_OUT];
         char* token;
         char* save;
         int argc = 0;
+        int index;
 
         token = strtok_r(line, " \t\r\n", &save);
         if (token == NULL) {
@@ -172,8 +743,6 @@ int main(void)
         }
 
         if (strcmp(token, "list") == 0) {
-            int index;
-
             for (index = 0; index < ORACLE_ENTRY_COUNT; index++) {
                 printf("%s %d\n", oracle_entries[index].name, oracle_entries[index].arity);
             }
@@ -206,7 +775,10 @@ int main(void)
             continue;
         }
 
-        printf("%" PRId64 "\n", entry->func(args));
+        entry->func(args, out);
+        for (index = 0; index < entry->outputs; index++) {
+            printf("%" PRId64 "%s", out[index], index + 1 < entry->outputs ? " " : "\n");
+        }
     }
 
     return 0;
