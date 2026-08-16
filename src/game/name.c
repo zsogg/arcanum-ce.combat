@@ -392,7 +392,7 @@ bool name_init(GameInitInfo* init_info)
 
     name_initialized = true;
 
-    sub_4EBC40();
+    a_name_tile_variants_init();
     name_missing_art_init();
 
     return true;

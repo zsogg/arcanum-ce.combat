@@ -286,7 +286,7 @@ tig_art_id_t sub_4D7480(tig_art_id_t art_id, int num2, bool flippable2, int a4)
         v1 = 0;
     }
 
-    cnt = sub_4EBEF0(num1, num2, v1, type, flippable1, flippable2);
+    cnt = a_name_tile_variant_get(num1, num2, v1, type, flippable1, flippable2);
     v2 = random_between(0, cnt - 1);
 
     if (flippable1
