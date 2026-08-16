@@ -36,7 +36,7 @@ bool sector_object_list_reset(SectorObjectList* list)
         node = list->heads[index];
         while (node != NULL) {
             list->heads[index] = node->next;
-            sub_4D9A90(node->obj);
+            light_destroy_for_obj(node->obj);
 
             if (object_is_static(node->obj)) {
                 object_delete(node->obj);

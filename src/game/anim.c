@@ -5076,7 +5076,7 @@ bool anim_create_wander_dark_path(AnimRunInfo* run_info)
     y += random_between(-range, range);
     target_loc = location_make(x, y);
 
-    if (sub_4D9240(target_loc, 0, 0) > sub_4D9240(loc, 0, 0)) {
+    if (light_level_at(target_loc, 0, 0) > light_level_at(loc, 0, 0)) {
         return false;
     }
 

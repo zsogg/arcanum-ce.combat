@@ -2411,13 +2411,13 @@ int skill_invocation_difficulty(SkillInvocation* skill_invocation)
             int lum;
             if ((skill_invocation->flags & SKILL_INVOCATION_CHECK_SEEING) != 0) {
                 // Take light level of the source object.
-                lum = sub_4DCE10(source_obj) & 0xFF;
+                lum = light_obj_grayscale_get(source_obj) & 0xFF;
             } else if (target_obj != OBJ_HANDLE_NULL) {
                 // Take light level of the target object.
-                lum = sub_4DCE10(target_obj) & 0xFF;
+                lum = light_obj_grayscale_get(target_obj) & 0xFF;
             } else {
                 // Take luminance of a target location.
-                lum = sub_4D9240(skill_invocation->target_loc, 0, 0) & 0xFF;
+                lum = light_level_at(skill_invocation->target_loc, 0, 0) & 0xFF;
             }
 
             // Calculate lighting penalty based on darkness (where 255 being

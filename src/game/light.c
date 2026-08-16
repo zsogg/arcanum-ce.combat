@@ -45,36 +45,36 @@ typedef struct LightSerializedData {
 // Serializeable.
 static_assert(sizeof(LightSerializedData) == 0x30, "wrong size");
 
-static bool sub_4D89E0(int64_t loc, int a2, int a3, int a4, tig_color_t* color_ptr);
-static void sub_4D9310(LightCreateInfo* create_info, Light** light_ptr);
-static void sub_4D93B0(Light* light);
-static void sub_4D9510(Light* light);
-static void sub_4DD320(Light* light, int64_t loc, int offset_x, int offset_y);
-static void sub_4DD500(Light* light, int offset_x, int offset_y);
+static bool light_sample_at(int64_t loc, int a2, int a3, int ambient, tig_color_t* color_ptr);
+static void light_create_and_add(LightCreateInfo* create_info, Light** light_ptr);
+static void light_destroy(Light* light);
+static void light_sector_list_remove(Light* light);
+static void light_move(Light* light, int64_t loc, int offset_x, int offset_y);
+static void light_offset_update_ex(Light* light, int offset_x, int offset_y);
 static void light_set_aid(Light* light, tig_art_id_t art_id);
 static tig_art_id_t light_get_aid(Light* light);
 static void light_set_custom_color(Light* light, uint8_t r, uint8_t g, uint8_t b);
-static bool sub_4DDD90(Sector* sector);
+static bool light_sector_day_night_update(Sector* sector);
 static void shadows_changed(void);
 static bool light_buffers_init(void);
 static void light_buffers_exit(void);
-static bool sub_4DE0B0(tig_art_id_t art_id, TigPaletteModifyInfo* modify_info);
+static bool light_ambient_tint_get(tig_art_id_t art_id, TigPaletteModifyInfo* modify_info);
 static void light_ambient_palettes_init(void);
 static void light_ambient_palettes_exit(void);
 static void light_get_rect_internal(Light* light, TigRect* rect);
-static void sub_4DE390(Light* light);
-static void sub_4DE4D0(Light* light);
-static void sub_4DE4F0(Light* light, int offset_x, int offset_y);
+static void light_palette_update(Light* light);
+static void light_palette_destroy(Light* light);
+static void light_offset_update(Light* light, int offset_x, int offset_y);
 static bool shadow_init(void);
 static void shadow_exit(void);
 static Shadow* shadow_node_allocate(void);
 static void shadow_node_deallocate(Shadow* node);
 static void shadow_node_reserve(void);
 static void shadow_node_clear(void);
-static bool sub_4DE820(TimeEvent* timeevent);
-static void sub_4DE870(LightCreateInfo* create_info, Light** light_ptr);
+static bool light_timeevent_matches(TimeEvent* timeevent);
+static void light_create(LightCreateInfo* create_info, Light** light_ptr);
 static void light_render_internal(GameDrawInfo* draw_info);
-static void sub_4DF1D0(TigRect* rect);
+static void light_rect_expand_to_tiles(TigRect* rect);
 
 // 0x5B9044
 static int light_sample_offsets_x[] = {
@@ -246,7 +246,7 @@ bool light_init(GameInitInfo* init_info)
     light_indoor_color = tig_color_make(255, 255, 255);
 
     light_ambient_palettes_init();
-    sub_5022B0(sub_4DE0B0);
+    sub_5022B0(light_ambient_tint_get);
     sub_5022D0();
 
     return true;
@@ -291,7 +291,7 @@ void light_toggle(void)
         sub_5022D0();
     }
 
-    sector_enumerate(sub_4DDD90);
+    sector_enumerate(light_sector_day_night_update);
     light_invalidate_rect(NULL, false);
 }
 
@@ -386,7 +386,7 @@ void light_set_colors(tig_color_t indoor_color, tig_color_t outdoor_color)
             sub_5022D0();
         }
 
-        sector_enumerate(sub_4DDD90);
+        sector_enumerate(light_sector_day_night_update);
         light_invalidate_rect(NULL, false);
     }
 }
@@ -420,7 +420,7 @@ void light_stop_animating(Light* light)
 {
     if ((light_get_flags(light) & LF_ANIMATING) != 0) {
         light_timeevent_match_light = light;
-        timeevent_clear_all_ex(TIMEEVENT_TYPE_LIGHT, sub_4DE820);
+        timeevent_clear_all_ex(TIMEEVENT_TYPE_LIGHT, light_timeevent_matches);
         light_unset_flags_internal(light, LF_ANIMATING);
     }
 }
@@ -441,7 +441,7 @@ bool light_timeevent_process(TimeEvent* timeevent)
 }
 
 // 0x4D89E0
-bool sub_4D89E0(int64_t loc, int offset_x, int offset_y, int a4, tig_color_t* color_ptr)
+bool light_sample_at(int64_t loc, int offset_x, int offset_y, int ambient, tig_color_t* color_ptr)
 {
     int lx;
     int ly;
@@ -488,7 +488,7 @@ bool sub_4D89E0(int64_t loc, int offset_x, int offset_y, int a4, tig_color_t* co
     indoor_color = light_get_indoor_color();
     outdoor_color = light_get_outdoor_color();
 
-    if (a4) {
+    if (ambient) {
         if (tig_art_tile_id_type_get(tile_art_id_at(loc))) {
             *color_ptr = outdoor_color;
         } else {
@@ -518,7 +518,7 @@ bool sub_4D89E0(int64_t loc, int offset_x, int offset_y, int a4, tig_color_t* co
                                 && light->tint_color != indoor_color)
                             || ((light->flags & LF_OUTDOOR) != 0
                                 && light->tint_color != outdoor_color)) {
-                            sub_4DE390(light);
+                            light_palette_update(light);
                             light_invalidate_rect(&tmp_rect, true);
                         }
 
@@ -546,26 +546,29 @@ bool sub_4D89E0(int64_t loc, int offset_x, int offset_y, int a4, tig_color_t* co
 }
 
 // 0x4D9240
-tig_color_t sub_4D9240(int64_t loc, int offset_x, int offset_y)
+uint8_t light_level_at(int64_t loc, int offset_x, int offset_y)
 {
     tig_color_t color;
 
-    if (!sub_4D89E0(loc, offset_x, offset_y, true, &color)) {
+    if (!light_sample_at(loc, offset_x, offset_y, true, &color)) {
         color = tig_color_make(255, 255, 255);
     }
 
-    // TODO: Probably wrong, might return uint8_t, check.
-    return tig_color_rgb_to_grayscale(color);
+    // NOTE: The original computes the gray value inline from TIG's color
+    // tables and returns it as a byte in AL (0x4D9240, no call). CE is fixed
+    // to XRGB8888, where the packed grayscale's low byte is the gray value,
+    // so truncating tig_color_rgb_to_grayscale reproduces that byte exactly.
+    return (uint8_t)tig_color_rgb_to_grayscale(color);
 }
 
 // 0x4D9310
-void sub_4D9310(LightCreateInfo* create_info, Light** light_ptr)
+void light_create_and_add(LightCreateInfo* create_info, Light** light_ptr)
 {
     int64_t sector_id;
     Sector* sector;
     TigRect rect;
 
-    sub_4DE870(create_info, light_ptr);
+    light_create(create_info, light_ptr);
     if (*light_ptr != NULL) {
         sector_id = sector_id_from_loc(create_info->loc);
         if (light_is_unattached(*light_ptr) || sector_loaded(sector_id)) {
@@ -580,7 +583,7 @@ void sub_4D9310(LightCreateInfo* create_info, Light** light_ptr)
 }
 
 // 0x4D93B0
-void sub_4D93B0(Light* light)
+void light_destroy(Light* light)
 {
     TigRect rect;
     int index;
@@ -593,22 +596,22 @@ void sub_4D93B0(Light* light)
     if (light->obj != OBJ_HANDLE_NULL) {
         if ((Light*)obj_field_ptr_get(light->obj, OBJ_F_LIGHT_HANDLE) == light) {
             obj_field_ptr_set(light->obj, OBJ_F_LIGHT_HANDLE, 0);
-            sub_4D9510(light);
-            sub_4D9570(light);
+            light_sector_list_remove(light);
+            light_deallocate(light);
         } else {
             for (index = 0; index < 4; index++) {
                 if ((Light*)obj_arrayfield_ptr_get(light->obj, OBJ_F_OVERLAY_LIGHT_HANDLES, index) == light) {
                     obj_arrayfield_ptr_set(light->obj, OBJ_F_OVERLAY_LIGHT_HANDLES, index, NULL);
-                    sub_4D9510(light);
-                    sub_4D9570(light);
+                    light_sector_list_remove(light);
+                    light_deallocate(light);
                     break;
                 }
             }
         }
     } else {
         if (light_editor) {
-            sub_4D9510(light);
-            sub_4D9570(light);
+            light_sector_list_remove(light);
+            light_deallocate(light);
         } else {
             light_set_flags_internal(light, 0x100);
         }
@@ -640,7 +643,7 @@ bool light_write_dif(TigFile* stream, Light* light)
 }
 
 // 0x4D9510
-void sub_4D9510(Light* light)
+void light_sector_list_remove(Light* light)
 {
     int64_t sector_id;
     Sector* sector;
@@ -654,10 +657,10 @@ void sub_4D9510(Light* light)
 }
 
 // 0x4D9570
-void sub_4D9570(Light* light)
+void light_deallocate(Light* light)
 {
     light_stop_animating(light);
-    sub_4DE4D0(light);
+    light_palette_destroy(light);
     FREE(light);
 }
 
@@ -688,7 +691,7 @@ void light_create_for_obj(int64_t obj, bool a2)
         return;
     }
 
-    create_func = a2 ? sub_4D9310 : sub_4DE870;
+    create_func = a2 ? light_create_and_add : light_create;
 
     art_id = obj_field_int32_get(obj, OBJ_F_LIGHT_AID);
     light = (Light*)obj_field_ptr_get(obj, OBJ_F_LIGHT_HANDLE);
@@ -718,7 +721,7 @@ void light_create_for_obj(int64_t obj, bool a2)
         }
     } else {
         if (light != NULL) {
-            sub_4D93B0(light);
+            light_destroy(light);
         }
     }
 
@@ -751,7 +754,7 @@ void light_create_for_obj(int64_t obj, bool a2)
             }
         } else {
             if (light != NULL) {
-                sub_4D93B0(light);
+                light_destroy(light);
             }
         }
     }
@@ -760,7 +763,7 @@ void light_create_for_obj(int64_t obj, bool a2)
 }
 
 // 0x4D9990
-void sub_4D9990(int64_t obj)
+void light_obj_fields_sync(int64_t obj)
 {
     Light* light;
     unsigned int color;
@@ -790,7 +793,7 @@ void sub_4D9990(int64_t obj)
 }
 
 // 0x4D9A90
-void sub_4D9A90(int64_t obj)
+void light_destroy_for_obj(int64_t obj)
 {
     unsigned int render_flags;
     Light* light;
@@ -800,13 +803,13 @@ void sub_4D9A90(int64_t obj)
     if ((render_flags & ORF_80000000) != 0) {
         light = (Light*)obj_field_ptr_get(obj, OBJ_F_LIGHT_HANDLE);
         if (light != NULL) {
-            sub_4D93B0(light);
+            light_destroy(light);
         }
 
         for (index = 0; index < 4; index++) {
             light = (Light*)obj_arrayfield_ptr_get(obj, OBJ_F_OVERLAY_LIGHT_HANDLES, index);
             if (light != NULL) {
-                sub_4D93B0(light);
+                light_destroy(light);
             }
         }
 
@@ -1017,7 +1020,7 @@ void shadow_clear(int64_t obj)
 }
 
 // 0x4DA360
-bool sub_4DA360(int x, int y, tig_color_t color, tig_color_t* colors)
+bool light_buffer_grid_get(int x, int y, tig_color_t color, tig_color_t* colors)
 {
     int dx;
     int dy;
@@ -1075,7 +1078,7 @@ bool sub_4DA360(int x, int y, tig_color_t color, tig_color_t* colors)
 }
 
 // 0x4DC210
-void sub_4DC210(int64_t obj, int* colors, int* cnt_ptr)
+void light_colors_for_obj(int64_t obj, int* colors, int* cnt_ptr)
 {
     int64_t loc;
     int obj_type;
@@ -1132,7 +1135,8 @@ void sub_4DC210(int64_t obj, int* colors, int* cnt_ptr)
             assert(0);
         }
 
-        // FIXME: Useless.
+        // NOTE: Faithful to the original - 0x4DC3B4 makes the same call with
+        // its result discarded.
         tig_art_wall_id_p_piece_get(art_id);
 
         TigRect obj_rect;
@@ -1198,7 +1202,7 @@ void sub_4DC210(int64_t obj, int* colors, int* cnt_ptr)
                                                     && light->tint_color != indoor_color)
                                                 || ((light->flags & LF_OUTDOOR) != 0
                                                     && light->tint_color != outdoor_color)) {
-                                                sub_4DE390(light);
+                                                light_palette_update(light);
                                                 light_invalidate_rect(&obj_rect, 1);
                                             }
 
@@ -1288,7 +1292,7 @@ void sub_4DC210(int64_t obj, int* colors, int* cnt_ptr)
             offset_y = obj_field_int32_get(obj, OBJ_F_OFFSET_Y);
         }
 
-        if (sub_4D89E0(loc, offset_x, offset_y, true, &color)) {
+        if (light_sample_at(loc, offset_x, offset_y, true, &color)) {
             if (color != light_get_outdoor_color()) {
                 *cnt_ptr = 1;
             } else {
@@ -1302,7 +1306,7 @@ void sub_4DC210(int64_t obj, int* colors, int* cnt_ptr)
 }
 
 // 0x4DCE10
-uint8_t sub_4DCE10(int64_t obj)
+uint8_t light_obj_grayscale_get(int64_t obj)
 {
     tig_color_t color;
 
@@ -1312,7 +1316,10 @@ uint8_t sub_4DCE10(int64_t obj)
 
     color = obj_field_int32_get(obj, OBJ_F_COLOR);
 
-    // TODO: Check, probably inlining.
+    // NOTE: The original inlines the grayscale lookup-table math here and
+    // returns the byte in AL (0x4DCE10, no call). With CE fixed to XRGB8888
+    // the packed color's low byte is the gray value, so the uint8_t
+    // truncation reproduces it exactly.
     return tig_color_rgb_to_grayscale(color);
 }
 
@@ -1381,39 +1388,39 @@ void light_unset_flags(int64_t obj, unsigned int flags)
 }
 
 // 0x4DD020
-void sub_4DD020(int64_t obj, int64_t loc, int offset_x, int offset_y)
+void light_move_for_obj(int64_t obj, int64_t loc, int offset_x, int offset_y)
 {
     Light* light;
     int idx;
 
     light = (Light*)obj_field_ptr_get(obj, OBJ_F_LIGHT_HANDLE);
     if (light != NULL) {
-        sub_4DD320(light, loc, offset_x, offset_y);
+        light_move(light, loc, offset_x, offset_y);
     }
 
     for (idx = 0; idx < 4; idx++) {
         light = (Light*)obj_arrayfield_ptr_get(obj, OBJ_F_OVERLAY_LIGHT_HANDLES, idx);
         if (light != NULL) {
-            sub_4DD320(light, loc, offset_x, offset_y);
+            light_move(light, loc, offset_x, offset_y);
         }
     }
 }
 
 // 0x4DD0A0
-void sub_4DD0A0(int64_t obj, int offset_x, int offset_y)
+void light_offset_for_obj(int64_t obj, int offset_x, int offset_y)
 {
     Light* light;
     int idx;
 
     light = (Light*)obj_field_ptr_get(obj, OBJ_F_LIGHT_HANDLE);
     if (light != NULL) {
-        sub_4DD500(light, offset_x, offset_y);
+        light_offset_update_ex(light, offset_x, offset_y);
     }
 
     for (idx = 0; idx < 4; idx++) {
         light = (Light*)obj_arrayfield_ptr_get(obj, OBJ_F_OVERLAY_LIGHT_HANDLES, idx);
         if (light != NULL) {
-            sub_4DD500(light, offset_x, offset_y);
+            light_offset_update_ex(light, offset_x, offset_y);
         }
     }
 }
@@ -1476,7 +1483,7 @@ void light_set_flags_internal(Light* light, unsigned int flags)
     }
 
     if (v1) {
-        sub_4DE390(light);
+        light_palette_update(light);
     }
 
     light_get_rect_internal(light, &rect);
@@ -1527,7 +1534,7 @@ void light_unset_flags_internal(Light* light, unsigned int flags)
     }
 
     if (v1) {
-        sub_4DE390(light);
+        light_palette_update(light);
     }
 
     light_get_rect_internal(light, &rect);
@@ -1541,7 +1548,7 @@ unsigned int light_get_flags(Light* light)
 }
 
 // 0x4DD320
-void sub_4DD320(Light* light, int64_t loc, int offset_x, int offset_y)
+void light_move(Light* light, int64_t loc, int offset_x, int offset_y)
 {
     TigRect dirty_rect;
     TigRect updated_rect;
@@ -1551,7 +1558,7 @@ void sub_4DD320(Light* light, int64_t loc, int offset_x, int offset_y)
     bool v1;
 
     if (light->loc == loc) {
-        sub_4DE4F0(light, offset_x, offset_y);
+        light_offset_update(light, offset_x, offset_y);
         return;
     }
 
@@ -1595,9 +1602,12 @@ void sub_4DD320(Light* light, int64_t loc, int offset_x, int offset_y)
 }
 
 // 0x4DD500
-void sub_4DD500(Light* light, int offset_x, int offset_y)
+void light_offset_update_ex(Light* light, int offset_x, int offset_y)
 {
-    sub_4DE4F0(light, offset_x, offset_y);
+    // NOTE: The original exposes the offset update under two entry points;
+    // 0x4DD500 is a same-argument forwarder to 0x4DE4F0. Kept as its own
+    // function for address fidelity.
+    light_offset_update(light, offset_x, offset_y);
 }
 
 // 0x4DD720
@@ -1847,7 +1857,7 @@ void light_set_custom_color(Light* light, uint8_t r, uint8_t g, uint8_t b)
     light->r = r;
     light->g = g;
     light->b = b;
-    sub_4DE390(light);
+    light_palette_update(light);
 }
 
 // 0x4DDD20
@@ -1874,7 +1884,7 @@ bool light_read(TigFile* stream, Light** light_ptr)
     light->tint_color = serialized.tint_color;
     light->palette = NULL;
 
-    sub_4DE390(light);
+    light_palette_update(light);
 
     *light_ptr = light;
 
@@ -1902,7 +1912,7 @@ bool light_write(TigFile* stream, Light* light)
 }
 
 // 0x4DDD90
-bool sub_4DDD90(Sector* sector)
+bool light_sector_day_night_update(Sector* sector)
 {
     int hour;
     bool is_day;
@@ -2033,7 +2043,7 @@ void light_buffers_exit(void)
 }
 
 // 0x4DE0B0
-bool sub_4DE0B0(tig_art_id_t art_id, TigPaletteModifyInfo* modify_info)
+bool light_ambient_tint_get(tig_art_id_t art_id, TigPaletteModifyInfo* modify_info)
 {
     if (!light_enabled) {
         return false;
@@ -2151,7 +2161,7 @@ void light_get_rect_internal(Light* light, TigRect* rect)
 }
 
 // 0x4DE390
-void sub_4DE390(Light* light)
+void light_palette_update(Light* light)
 {
     tig_color_t color;
     bool have_color;
@@ -2176,7 +2186,7 @@ void sub_4DE390(Light* light)
 
     light->tint_color = tig_color_make(light->r, light->g, light->b);
     if (light->tint_color == tig_color_make(255, 255, 255)) {
-        sub_4DE4D0(light);
+        light_palette_destroy(light);
     } else {
         if (light->palette == NULL) {
             light->palette = tig_palette_create();
@@ -2192,7 +2202,7 @@ void sub_4DE390(Light* light)
 }
 
 // 0x4DE4D0
-void sub_4DE4D0(Light* light)
+void light_palette_destroy(Light* light)
 {
     if (light->palette != NULL) {
         tig_palette_destroy(light->palette);
@@ -2201,7 +2211,7 @@ void sub_4DE4D0(Light* light)
 }
 
 // 0x4DE4F0
-void sub_4DE4F0(Light* light, int offset_x, int offset_y)
+void light_offset_update(Light* light, int offset_x, int offset_y)
 {
     TigRect dirty_rect;
     TigRect updated_rect;
@@ -2342,13 +2352,13 @@ void shadow_node_clear(void)
 }
 
 // 0x4DE820
-bool sub_4DE820(TimeEvent* timeevent)
+bool light_timeevent_matches(TimeEvent* timeevent)
 {
     return (Light*)timeevent->params[0].pointer_value == light_timeevent_match_light;
 }
 
 // 0x4DE870
-void sub_4DE870(LightCreateInfo* create_info, Light** light_ptr)
+void light_create(LightCreateInfo* create_info, Light** light_ptr)
 {
     Light* light;
 
@@ -2364,7 +2374,7 @@ void sub_4DE870(LightCreateInfo* create_info, Light** light_ptr)
         light->g = create_info->g;
         light->b = create_info->b;
         light->palette = NULL;
-        sub_4DE390(light);
+        light_palette_update(light);
         *light_ptr = light;
     } else {
         *light_ptr = NULL;
@@ -2400,7 +2410,7 @@ void light_render_internal(GameDrawInfo* draw_info)
     rect_node = *draw_info->rects;
     while (rect_node != NULL) {
         tmp_rect = rect_node->rect;
-        sub_4DF1D0(&tmp_rect);
+        light_rect_expand_to_tiles(&tmp_rect);
         if (head != NULL) {
             tig_rect_list_add_disjoint(&head, &tmp_rect);
         } else {
@@ -2466,7 +2476,7 @@ void light_render_internal(GameDrawInfo* draw_info)
                                                             && light->tint_color != indoor_color)
                                                         || ((light->flags & LF_OUTDOOR) != 0
                                                             && light->tint_color != outdoor_color)) {
-                                                        sub_4DE390(light);
+                                                        light_palette_update(light);
                                                         light_invalidate_rect(&tmp_rect, true);
                                                     }
 
@@ -2513,7 +2523,7 @@ void light_render_internal(GameDrawInfo* draw_info)
 }
 
 // 0x4DF1D0
-void sub_4DF1D0(TigRect* rect)
+void light_rect_expand_to_tiles(TigRect* rect)
 {
     int64_t x1;
     int64_t y1;

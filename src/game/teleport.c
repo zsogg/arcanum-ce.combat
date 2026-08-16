@@ -497,8 +497,8 @@ void sub_4D3D60(int64_t obj)
         }
     }
 
-    sub_4D9990(obj);
-    sub_4D9A90(obj);
+    light_obj_fields_sync(obj);
+    light_destroy_for_obj(obj);
 }
 
 // 0x4D3E20

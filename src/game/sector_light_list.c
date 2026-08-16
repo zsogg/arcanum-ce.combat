@@ -30,7 +30,7 @@ bool sector_light_list_reset(SectorLightList* list)
         next = node->next;
 
         if (light_is_unattached(node->data)) {
-            sub_4D9570(node->data);
+            light_deallocate(node->data);
         } else {
             light_stop_animating(node->data);
         }

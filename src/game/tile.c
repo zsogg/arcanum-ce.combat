@@ -716,7 +716,7 @@ void tile_draw_iso(GameDrawInfo* draw_info)
 
                                         color = !tile_type ? indoor_color : outdoor_color;
 
-                                        if (sub_4DA360(center_x, center_y, color, v51)) {
+                                        if (light_buffer_grid_get(center_x, center_y, color, v51)) {
                                             art_blit_info.flags = TIG_ART_BLT_BLEND_COLOR_LERP;
                                             if (!tile_hardware_accelerated) {
                                                 art_blit_info.flags |= TIG_ART_BLT_PALETTE_ORIGINAL;

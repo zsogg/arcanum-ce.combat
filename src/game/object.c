@@ -2301,7 +2301,7 @@ void object_get_rect(int64_t obj, unsigned int flags, TigRect* rect)
  * movement updates and multiplayer position resets. Handles the sector
  * object-list bookkeeping (move within, or remove/insert across sector
  * boundaries), text/floater follow, and screen rect invalidation, then
- * moves the object's lights (`sub_4DD020`) and runs the arrival bookkeeping
+ * moves the object's lights (`light_move_for_obj`) and runs the arrival bookkeeping
  * in `object_location_changed` (wading, tile scripts, and - for the local PC - town map,
  * roof, wall check, scroll centering and jump points). Same-location calls
  * reduce to `object_set_offset_internal`.
@@ -2372,7 +2372,7 @@ void object_move_to(int64_t obj, int64_t loc, int offset_x, int offset_y)
         }
     }
 
-    sub_4DD020(obj, loc, offset_x, offset_y);
+    light_move_for_obj(obj, loc, offset_x, offset_y);
 
     if (cur_sector_id == sector_id) {
         object_location_changed(obj, 1);
@@ -3959,8 +3959,8 @@ void object_pickup(int64_t item_obj, int64_t parent_obj)
         return;
     }
 
-    sub_4D9990(item_obj);
-    sub_4D9A90(item_obj);
+    light_obj_fields_sync(item_obj);
+    light_destroy_for_obj(item_obj);
     object_get_rect(item_obj, 0x07, &rect);
     loc = obj_field_int64_get(item_obj, OBJ_F_LOCATION);
     sec = sector_id_from_loc(loc);
@@ -4480,7 +4480,7 @@ void object_set_offset_internal(int64_t obj, int offset_x, int offset_y)
     }
 
     object_location_changed(obj, 0);
-    sub_4DD0A0(obj, offset_x, offset_y);
+    light_offset_for_obj(obj, offset_x, offset_y);
 }
 
 // Recomputes an object's render flags from its blit flags and lighting, and
@@ -4568,7 +4568,7 @@ void object_render_flags_update(int64_t obj)
             | TIG_ART_BLT_BLEND_COLOR_CONST
             | TIG_ART_BLT_PALETTE_OVERRIDE
             | TIG_ART_BLT_PALETTE_ORIGINAL);
-        sub_4DC210(obj, colors.colors, &cnt);
+        light_colors_for_obj(obj, colors.colors, &cnt);
 
         if (cnt == 1) {
             color = colors.colors[0];
@@ -5036,7 +5036,7 @@ void object_calc_art_rect(unsigned int flags, int scale, int x, int y, tig_art_i
 // 0x443770
 void object_render_clear(int64_t obj)
 {
-    sub_4D9A90(obj);
+    light_destroy_for_obj(obj);
     object_shadow_clear(obj);
     object_render_palette_clear(obj);
     object_render_colors_clear(obj);

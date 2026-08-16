@@ -440,7 +440,7 @@ int stat_level_get(int64_t obj, int stat)
             // - Strength +2
             //
             // NOTE: Perception bonus is applied via effects.
-            if (sub_4DCE10(obj) < 128) {
+            if (light_obj_grayscale_get(obj) < 128) {
                 if (stat == STAT_STRENGTH) {
                     value += 2;
                 } else {

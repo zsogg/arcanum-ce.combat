@@ -482,8 +482,8 @@ int sub_41F9F0(PathCreateInfo* path_create_info)
 
             // Evade differently lit areas.
             if ((path_create_info->flags & PATH_FLAG_0x0200) != 0) {
-                uint8_t src_lum = sub_4D9240(loc, 0, 0);
-                uint8_t dst_lum = sub_4D9240(adjacent_loc, 0, 0);
+                uint8_t src_lum = light_level_at(loc, 0, 0);
+                uint8_t dst_lum = light_level_at(adjacent_loc, 0, 0);
                 if (dst_lum > src_lum) {
                     if (dst_lum - src_lum > 20) {
                         cost += 40;
