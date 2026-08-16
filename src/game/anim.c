@@ -214,9 +214,9 @@ static bool anim_save_current_aid(AnimRunInfo* run_info);
 static bool AGbeginAnimAnimReverse(AnimRunInfo* run_info);
 static bool AGupdateAnimAnimReverse(AnimRunInfo* run_info);
 static bool AGbeginAnimMove(AnimRunInfo* run_info);
-static void sub_42EDC0(AnimRunInfo* run_info, int64_t obj, tig_art_id_t* art_id_ptr, bool a4, int* a5);
-static void sub_42EE90(int64_t obj, DateTime* pause_time);
-static bool sub_42EF60(int a1, int a2, int a3);
+static void anim_move_art_id_get(AnimRunInfo* run_info, int64_t obj, tig_art_id_t* art_id_ptr, bool allow_run, int* run_out);
+static void anim_move_pause_time_get(int64_t obj, DateTime* pause_time);
+static bool anim_move_tile_reached(int direction, int offset_x, int offset_y);
 static bool anim_vault_to_next_tile(AnimRunInfo* run_info);
 static bool anim_advance_vault_step(AnimRunInfo* run_info);
 static bool AGbeginAnimMoveStraight(AnimRunInfo* run_info);
@@ -224,7 +224,7 @@ static bool AGupdateAnimMoveStraight(AnimRunInfo* run_info);
 static bool anim_begin_projectile_move(AnimRunInfo* run_info);
 static bool AGupdateAnimProjectileMoveStraight(AnimRunInfo* run_info);
 static bool AGupdateAnimMoveStraightKnockback(AnimRunInfo* run_info);
-static bool sub_42FD70(AnimRunInfo* run_info, int64_t obj, AnimPath* path, int64_t from, int64_t to);
+static bool anim_knockback_path_blocked(AnimRunInfo* run_info, int64_t obj, AnimPath* path, int64_t from, int64_t to);
 static bool sub_42FEA0(AnimRunInfo* run_info);
 static bool sub_42FEB0(AnimRunInfo* run_info);
 static bool sub_42FEC0(AnimRunInfo* run_info);
@@ -10596,7 +10596,7 @@ bool AGbeginAnimMove(AnimRunInfo* run_info)
     }
 
     v2 = 2;
-    sub_42EDC0(run_info, obj, &art_id, (run_info->flags & 0x40) != 0, &v2);
+    anim_move_art_id_get(run_info, obj, &art_id, (run_info->flags & 0x40) != 0, &v2);
 
     if (!combat_check_action_points(obj, v2)) {
         anim_interrupt(&(run_info->id), PRIORITY_HIGHEST);
@@ -10670,7 +10670,7 @@ bool AGbeginAnimMove(AnimRunInfo* run_info)
         run_info->pause_time.milliseconds = 100;
     }
 
-    sub_42EE90(obj, &(run_info->pause_time));
+    anim_move_pause_time_get(obj, &(run_info->pause_time));
 
     if ((spell_flags & OSF_SHRUNK) != 0) {
         run_info->pause_time.milliseconds *= 2;
@@ -10684,7 +10684,11 @@ bool AGbeginAnimMove(AnimRunInfo* run_info)
 }
 
 // 0x42EDC0
-void sub_42EDC0(AnimRunInfo* run_info, int64_t obj, tig_art_id_t* art_id_ptr, bool a4, int* a5)
+// Chooses the movement art id for `obj`: stealth-walk while concealed below
+// expert prowling, otherwise walk, promoted to run when the caller permits it
+// and the critter still has fatigue. Callers are AGbeginAnimMove and
+// AGupdateAnimMove; `run_out` reports whether run was selected.
+void anim_move_art_id_get(AnimRunInfo* run_info, int64_t obj, tig_art_id_t* art_id_ptr, bool allow_run, int* run_out)
 {
     tig_art_id_t art_id;
     bool concealed;
@@ -10699,7 +10703,7 @@ void sub_42EDC0(AnimRunInfo* run_info, int64_t obj, tig_art_id_t* art_id_ptr, bo
 
     art_id = tig_art_id_anim_set(art_id, TIG_ART_ANIM_WALK);
     if (run_info->current_goal <= 0
-        || !a4
+        || !allow_run
         || (concealed
             && basic_skill_training_get(obj, BASIC_SKILL_PROWLING) < TRAINING_MASTER)) {
         *art_id_ptr = art_id;
@@ -10713,14 +10717,16 @@ void sub_42EDC0(AnimRunInfo* run_info, int64_t obj, tig_art_id_t* art_id_ptr, bo
     }
 
     art_id = tig_art_id_anim_set(art_id, TIG_ART_ANIM_RUN);
-    if (a5 != NULL) {
-        *a5 = 1;
+    if (run_out != NULL) {
+        *run_out = 1;
     }
     *art_id_ptr = art_id;
 }
 
 // 0x42EE90
-void sub_42EE90(int64_t obj, DateTime* pause_time)
+// Milliseconds per animation frame for the critter's current art and speed,
+// clamped to 30..800. Shared by the move and attack animation updates.
+void anim_move_pause_time_get(int64_t obj, DateTime* pause_time)
 {
     int speed;
     tig_art_id_t art_id;
@@ -10741,36 +10747,39 @@ void sub_42EE90(int64_t obj, DateTime* pause_time)
 }
 
 // 0x42EF60
-bool sub_42EF60(int a1, int a2, int a3)
+// Whether the signed pixel offsets have reached the boundary for movement
+// direction 0..7. The switch is the 8-direction version of the path
+// step-completion test used by AGupdateAnimMove.
+bool anim_move_tile_reached(int direction, int offset_x, int offset_y)
 {
-    switch (a1) {
+    switch (direction) {
     case 0:
-        return a3 > 0 ? false : true;
+        return offset_y > 0 ? false : true;
     case 1:
-        if (a3 > 0) {
+        if (offset_y > 0) {
             return false;
         } else {
-            return a2 < 0 ? false : true;
+            return offset_x < 0 ? false : true;
         }
     case 2:
-        return a2 < 0 ? false : true;
+        return offset_x < 0 ? false : true;
     case 3:
-        return a3 < 0 || a2 < 0 ? false : true;
+        return offset_y < 0 || offset_x < 0 ? false : true;
     case 4:
-        return a3 < 0 ? false : true;
+        return offset_y < 0 ? false : true;
     case 5:
-        if (a3 < 0) {
+        if (offset_y < 0) {
             return false;
         } else {
-            return a2 > 0 ? false : true;
+            return offset_x > 0 ? false : true;
         }
     case 6:
-        return a2 > 0 ? false : true;
+        return offset_x > 0 ? false : true;
     case 7:
-        if (a3 > 0) {
+        if (offset_y > 0) {
             return false;
         } else {
-            return a2 > 0 ? false : true;
+            return offset_x > 0 ? false : true;
         }
     }
 
@@ -11171,7 +11180,7 @@ bool AGupdateAnimMoveStraightKnockback(AnimRunInfo* run_info)
         }
 
         if (new_loc != loc) {
-            if (sub_42FD70(run_info, obj, &(run_info->path), loc, new_loc)) {
+            if (anim_knockback_path_blocked(run_info, obj, &(run_info->path), loc, new_loc)) {
                 object_move_to(obj, loc, 0, 0);
                 combat_context_init(OBJ_HANDLE_NULL, obj, &combat);
                 combat.dam[DAMAGE_TYPE_NORMAL] = random_between(1, (run_info->path.max - run_info->path.curr) / 2);
@@ -11204,7 +11213,10 @@ bool AGupdateAnimMoveStraightKnockback(AnimRunInfo* run_info)
 }
 
 // 0x42FD70
-bool sub_42FD70(AnimRunInfo* run_info, int64_t obj, AnimPath* path, int64_t from, int64_t to)
+// Whether a knockback move cannot enter the next tile: the tile is blocking,
+// traversal is blocked, or a live critter already occupies the destination.
+// Used by AGupdateAnimMoveStraightKnockback to end the knockback early.
+bool anim_knockback_path_blocked(AnimRunInfo* run_info, int64_t obj, AnimPath* path, int64_t from, int64_t to)
 {
     ObjectList objects;
     ObjectNode* node;
@@ -11648,7 +11660,7 @@ bool AGupdateAnimMove(AnimRunInfo* run_info)
 
     if (v1) {
         if (tig_art_id_anim_get(art_id) != TIG_ART_ANIM_RUN) {
-            sub_42EDC0(run_info, obj, &art_id, true, NULL);
+            anim_move_art_id_get(run_info, obj, &art_id, true, NULL);
         }
     }
 
@@ -11683,7 +11695,7 @@ bool AGupdateAnimMove(AnimRunInfo* run_info)
     }
 
     if ((run_info->path.flags & 0x02) != 0) {
-        if (sub_42EF60(rot, offset_x, offset_y)) {
+        if (anim_move_tile_reached(rot, offset_x, offset_y)) {
             if (run_info->extra_target_tile == 0 || run_info->extra_target_tile == new_loc) {
                 run_info->path.flags &= ~0x02;
                 run_info->path.curr++;
@@ -11820,7 +11832,7 @@ bool AGupdateAnimMove(AnimRunInfo* run_info)
         }
 
         if (obj_type_is_critter(obj_field_int32_get(obj, OBJ_F_TYPE))) {
-            sub_42EE90(obj, &(run_info->pause_time));
+            anim_move_pause_time_get(obj, &(run_info->pause_time));
         }
 
         if ((spell_flags & OSF_SHRUNK) != 0) {
@@ -12996,7 +13008,7 @@ bool AGbeginAnimAttack(AnimRunInfo* run_info)
         run_info->pause_time.milliseconds = 100;
     }
 
-    sub_42EE90(source_obj, &(run_info->pause_time));
+    anim_move_pause_time_get(source_obj, &(run_info->pause_time));
 
     weapon_obj = item_wield_get(source_obj, ITEM_INV_LOC_WEAPON);
 
@@ -13122,7 +13134,7 @@ bool AGupdateAnimAttack(AnimRunInfo* run_info)
             run_info->pause_time.milliseconds = 100;
         }
 
-        sub_42EE90(obj, &(run_info->pause_time));
+        anim_move_pause_time_get(obj, &(run_info->pause_time));
 
         weapon_obj = item_wield_get(obj, ITEM_INV_LOC_WEAPON);
         delay = run_info->pause_time.milliseconds - 10 * (item_weapon_magic_speed(weapon_obj, obj) - 10);
