@@ -101,7 +101,8 @@ TigDatabase* tig_database_open(const char* path)
         //
         // But the writer disagrees with the reader. A DAT1 footer is, measured
         // against Troika's own `mod-info/dbmaker.exe` and confirmed on every
-        // shipped archive (the entry table ends at exactly EOF-28 in all 17):
+        // archive on this machine, the module layer included (the entry table
+        // ends at exactly EOF-28 in all 36):
         //
         //     [-28, -12)  16-byte guid
         //     [-12,  -8)  fourcc "1TAD"
@@ -872,8 +873,11 @@ int tig_database_find_entry_by_path(const void* a1, const void* a2)
 // of a sibling entry's is affected - the character that follows only has to
 // sort between '/' and '\', which every digit and capital letter does.
 //
-// None of the 17 shipped archives contain the pattern, so nothing in the base
-// game exercises it, but a mod built with the tool Troika shipped can. See
+// No archive on this machine contains the pattern - 36 of them, 196,000
+// entries, counting the module layer and three third-party modules - so
+// nothing anyone ships exercises it. A mod built with the tool Troika shipped
+// still can: it needs only a directory whose name is a prefix of a sibling's.
+// See
 // `tests/test_database.c`,
 // `finds_an_entry_when_a_sibling_directory_shares_its_prefix`.
 //
@@ -1040,9 +1044,10 @@ bool tig_database_fread_internal(void* buffer, size_t size, TigDatabaseFileHandl
         // `ReadFile` succeeds when asked for zero bytes, so the original leaves
         // the stream clean.
         //
-        // Reached two ways, both from data alone: a zero-length entry (there
-        // are none in the 21,613 shipped ones, but nothing stops a mod from
-        // having one), and `tig_database_fread` called at the end of an entry,
+        // Reached two ways, both from data alone: a zero-length entry (not one
+        // of the 221,681 entries in the 36 archives here is empty, but nothing
+        // stops a mod from having one), and a `tig_database_fread` at the end
+        // of an entry,
         // where the clamp above leaves nothing to read.
         //
         // The compressed branch below already handles this correctly - zlib is

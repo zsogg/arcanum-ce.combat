@@ -16,7 +16,8 @@
 // records the exact dbmaker commands.
 //
 // What the fixtures cover, chosen because the shipped corpus does not exercise
-// it: a zero-length entry (there are none in the 21,613 shipped entries), a
+// it: a zero-length entry (not one of the 221,681 file entries across the 36
+// archives here is empty), a
 // stored-uncompressed entry next to a compressed one in the same archive, a
 // payload larger than the 16 KB decompression buffer so the inflate loop turns
 // over, and the separator-ordering hazard described at
@@ -81,7 +82,7 @@ static unsigned char big_byte(int index)
 
 // `bin/noise.bin` is 256 bytes of xorshift32 from seed 0x1234567. It is
 // incompressible, which is why dbmaker stored it plain rather than deflated -
-// the same reason 65 of the shipped entries are plain.
+// the same reason 3,097 of the 221,681 shipped entries are plain.
 static void fill_noise(unsigned char* buffer, int count)
 {
     unsigned int state = 0x1234567;
@@ -259,8 +260,8 @@ TEST(clamps_a_read_at_the_end_of_an_entry)
     close_and_remove(database, MIXED_PATH);
 }
 
-// A zero-length entry. None ship - all 21,613 shipped entries have a payload -
-// so this path had never been exercised by anything.
+// A zero-length entry. None exist in any archive here - all 221,681 file
+// entries have a payload - so this path had never been exercised by anything.
 TEST(reads_a_zero_length_entry)
 {
     TigDatabase* database = open_mixed();
