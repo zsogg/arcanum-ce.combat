@@ -30,11 +30,34 @@
 #include "test_harness.h"
 
 #define BASE_PATH "./arcanum_test_repo_base.dat"
+#define BASE_IGNORE_PATH "./arcanum_test_repo_base.dat.ignore"
 #define MOD_PATH "./arcanum_test_repo_mod.dat"
 #define MOD_IGNORE_PATH "./arcanum_test_repo_mod.dat.ignore"
 #define DIR_PATH "./arcanum_test_repo_dir"
 #define DIR_RULES DIR_PATH "/rules"
 #define DIR_HELLO DIR_RULES "/hello.txt"
+
+// Everything any test here creates, files before the directories holding them.
+// Explicit rather than a recursive delete through `tig_file_empty_directory`,
+// which is built on the function half this suite is testing - cleanup that
+// depends on the code under test fails quietly and takes the next test with it.
+static const char* const FIXTURE_PATHS[] = {
+    BASE_PATH,
+    BASE_IGNORE_PATH,
+    MOD_PATH,
+    MOD_IGNORE_PATH,
+    DIR_RULES "/hello.txt",
+    DIR_RULES "/dir-only.txt",
+    DIR_RULES "/apple.txt",
+    DIR_RULES "/Mango.txt",
+    DIR_RULES "/Zebra.txt",
+    DIR_PATH "/arcanum1.dat",
+    DIR_PATH "/Arcanum4.dat",
+    DIR_PATH "/ArcanumXbar.dat",
+    DIR_PATH "/ArcanumZfoo.dat",
+    DIR_RULES,
+    DIR_PATH,
+};
 
 #include "test_file_fixtures.inc"
 
@@ -86,15 +109,52 @@ static void remove_fixtures(void)
     // Named rather than `tig_file_repository_remove_all`, which would also
     // unmount whatever another suite had mounted - the repository list is
     // process-wide state.
+    size_t index;
+
     tig_file_repository_remove(DIR_PATH);
     tig_file_repository_remove(MOD_PATH);
     tig_file_repository_remove(BASE_PATH);
-    remove(BASE_PATH);
-    remove(MOD_PATH);
-    remove(MOD_IGNORE_PATH);
-    remove(DIR_HELLO);
-    remove(DIR_RULES);
-    remove(DIR_PATH);
+
+    for (index = 0; index < sizeof(FIXTURE_PATHS) / sizeof(FIXTURE_PATHS[0]); index++) {
+        remove(FIXTURE_PATHS[index]);
+    }
+}
+
+// The listing's names, in order, comma-separated - so an assertion about
+// ordering reads as one string and a failure prints the whole list rather than
+// the first index that differs.
+static char* list_names(const TigFileList* list, char* buffer, size_t size)
+{
+    unsigned int index;
+
+    buffer[0] = '\0';
+    for (index = 0; index < list->count; index++) {
+        if (index != 0) {
+            strncat(buffer, ",", size - strlen(buffer) - 1);
+        }
+        strncat(buffer, list->entries[index].path, size - strlen(buffer) - 1);
+    }
+
+    return buffer;
+}
+
+static const TigFileInfo* list_find(const TigFileList* list, const char* name)
+{
+    unsigned int index;
+
+    for (index = 0; index < list->count; index++) {
+        if (strcmp(list->entries[index].path, name) == 0) {
+            return &(list->entries[index]);
+        }
+    }
+
+    return NULL;
+}
+
+static void make_dir_repo(void)
+{
+    tig_file_mkdir(DIR_PATH);
+    tig_file_mkdir(DIR_RULES);
 }
 
 // Mounting prepends, so the archive added last is searched first. This is the
@@ -289,6 +349,182 @@ TEST(exists_agrees_with_fopen)
     remove_fixtures();
 }
 
+// A directory listing is the union of every repository's, not the winner's
+// alone: a mod that adds one map does not hide the base game's. Names are
+// basenames on both sides - `tig_file_list_create_native` splits an archive
+// entry's path down to fname+ext, and the directory side returns what the glob
+// found - which is what makes the two mergeable at all.
+TEST(a_listing_merges_every_repository)
+{
+    TigFileList list;
+    char buffer[256];
+
+    write_fixtures();
+    make_dir_repo();
+    CHECK(write_text(DIR_RULES "/dir-only.txt", "only in the directory"));
+
+    CHECK(tig_file_repository_add(BASE_PATH));
+    CHECK(tig_file_repository_add(MOD_PATH));
+    CHECK(tig_file_repository_add(DIR_PATH));
+
+    tig_file_list_create(&list, "rules\\*.*");
+    CHECK_INT(list.count, 4);
+    CHECK_STR(list_names(&list, buffer, sizeof(buffer)),
+        "base-only.txt,dir-only.txt,hello.txt,mod-only.txt");
+    tig_file_list_destroy(&list);
+
+    remove_fixtures();
+}
+
+// A name held by two repositories appears once, and the entry kept is the
+// winner's - `tig_file_list_add` returns on an exact match, and the walk runs
+// highest priority first, so the first one added is the one a read would get.
+// The two archives' `hello.txt` differ in length, which is what makes this
+// observable.
+TEST(a_shared_name_appears_once_and_describes_the_copy_that_wins)
+{
+    TigFileList list;
+    const TigFileInfo* info;
+
+    write_fixtures();
+    CHECK(tig_file_repository_add(BASE_PATH));
+    CHECK(tig_file_repository_add(MOD_PATH));
+
+    tig_file_list_create(&list, "rules\\*.*");
+    CHECK_INT(list.count, 3);
+    info = list_find(&list, "hello.txt");
+    CHECK(info != NULL);
+    if (info != NULL) {
+        CHECK_INT(info->size, strlen("from the mod archive"));
+    }
+    tig_file_list_destroy(&list);
+
+    tig_file_repository_remove(MOD_PATH);
+    tig_file_repository_remove(BASE_PATH);
+    CHECK(tig_file_repository_add(MOD_PATH));
+    CHECK(tig_file_repository_add(BASE_PATH));
+
+    tig_file_list_create(&list, "rules\\*.*");
+    CHECK_INT(list.count, 3);
+    info = list_find(&list, "hello.txt");
+    CHECK(info != NULL);
+    if (info != NULL) {
+        CHECK_INT(info->size, strlen("from the base archive"));
+    }
+    tig_file_list_destroy(&list);
+
+    remove_fixtures();
+}
+
+// Sorted case-insensitively, which is not the same as sorted: 'Z' (0x5A) sorts
+// before 'a' (0x61) by byte and after it here.
+//
+// Faithful, and worth attesting because so much rests on it: the original's
+// `tig_file_list_add` at 0x530FD0 calls 0x58ADB0 for the comparison, and that
+// routine folds case inline (`sub al, 0x41 / cmp al, 0x1a / sbb cl, cl /
+// and cl, 0x20`), so it is `stricmp` and not `strcmp`. A case-*sensitive* sort
+// would put every `Arcanum*.dat` ahead of `arcanum1.dat`, which would invert
+// the load order and make the base archives outrank the community add-ons.
+TEST(a_listing_is_sorted_case_insensitively)
+{
+    TigFileList list;
+    char buffer[256];
+
+    make_dir_repo();
+    CHECK(write_text(DIR_RULES "/Zebra.txt", "z"));
+    CHECK(write_text(DIR_RULES "/apple.txt", "a"));
+    CHECK(write_text(DIR_RULES "/Mango.txt", "m"));
+
+    CHECK(tig_file_repository_add(DIR_PATH));
+
+    tig_file_list_create(&list, "rules\\*.*");
+    CHECK_STR(list_names(&list, buffer, sizeof(buffer)),
+        "apple.txt,Mango.txt,Zebra.txt");
+    tig_file_list_destroy(&list);
+
+    remove_fixtures();
+}
+
+// Why that ordering matters, and the reason this function is worth testing at
+// all: `gamelib_load_data` mounts `arcanum*.dat` in exactly this order, and
+// mounting prepends, so **the last name in the listing ends up highest
+// priority**. That is the whole mechanism behind naming community add-ons
+// `ArcanumX…` and `ArcanumZ…` - the sort here is what makes the name the
+// priority.
+TEST(the_glob_that_decides_the_mount_order)
+{
+    TigFileList list;
+    char buffer[256];
+
+    make_dir_repo();
+    CHECK(write_text(DIR_PATH "/ArcanumZfoo.dat", ""));
+    CHECK(write_text(DIR_PATH "/arcanum1.dat", ""));
+    CHECK(write_text(DIR_PATH "/ArcanumXbar.dat", ""));
+    CHECK(write_text(DIR_PATH "/Arcanum4.dat", ""));
+
+    CHECK(tig_file_repository_add(DIR_PATH));
+
+    tig_file_list_create(&list, "arcanum*.dat");
+    CHECK_STR(list_names(&list, buffer, sizeof(buffer)),
+        "arcanum1.dat,Arcanum4.dat,ArcanumXbar.dat,ArcanumZfoo.dat");
+    tig_file_list_destroy(&list);
+
+    remove_fixtures();
+}
+
+// One level, and directories come back flagged. On the archive side that is
+// `tig_database_find_next_entry` requiring the entry's path to have as many
+// separators as the pattern, so `*.*` at the top yields the `rules` directory
+// entry and none of what is inside it.
+//
+// A pattern ending in `*.*` is rewritten to `*` first (0x52F760 compares the
+// last three bytes against the literal at 0x5C22A0 and stores a terminator at
+// len-2, which CE matches). Without that, a directory entry - which has no
+// extension - would not match the pattern that is supposed to list it.
+TEST(a_listing_covers_one_level_and_marks_directories)
+{
+    TigFileList list;
+    const TigFileInfo* info;
+
+    write_fixtures();
+    CHECK(tig_file_repository_add(BASE_PATH));
+
+    tig_file_list_create(&list, "*.*");
+    CHECK_INT(list.count, 1);
+    info = list_find(&list, "rules");
+    CHECK(info != NULL);
+    if (info != NULL) {
+        CHECK_INT(info->attributes & TIG_FILE_ATTRIBUTE_SUBDIR, TIG_FILE_ATTRIBUTE_SUBDIR);
+    }
+    CHECK(list_find(&list, "hello.txt") == NULL);
+    tig_file_list_destroy(&list);
+
+    remove_fixtures();
+}
+
+// An entry hidden by an `.ignore` sidecar is left out of the listing too, not
+// just out of `fopen` - otherwise a mod could hide a file from being read and
+// still have the game enumerate it.
+TEST(an_ignored_entry_is_left_out_of_the_listing)
+{
+    TigFileList list;
+    char buffer[256];
+
+    write_fixtures();
+    CHECK(write_text(BASE_IGNORE_PATH, "rules\\hello.txt\n"));
+    CHECK(write_text(MOD_IGNORE_PATH, "rules\\hello.txt\n"));
+
+    CHECK(tig_file_repository_add(BASE_PATH));
+    CHECK(tig_file_repository_add(MOD_PATH));
+
+    tig_file_list_create(&list, "rules\\*.*");
+    CHECK_STR(list_names(&list, buffer, sizeof(buffer)),
+        "base-only.txt,mod-only.txt");
+    tig_file_list_destroy(&list);
+
+    remove_fixtures();
+}
+
 void test_file_suite(void)
 {
     RUN(the_archive_mounted_last_wins);
@@ -298,4 +534,10 @@ void test_file_suite(void)
     RUN(an_ignore_sidecar_falls_through_to_the_next_repository);
     RUN(an_entry_already_read_from_an_archive_ignores_a_later_override);
     RUN(exists_agrees_with_fopen);
+    RUN(a_listing_merges_every_repository);
+    RUN(a_shared_name_appears_once_and_describes_the_copy_that_wins);
+    RUN(a_listing_is_sorted_case_insensitively);
+    RUN(the_glob_that_decides_the_mount_order);
+    RUN(a_listing_covers_one_level_and_marks_directories);
+    RUN(an_ignored_entry_is_left_out_of_the_listing);
 }
