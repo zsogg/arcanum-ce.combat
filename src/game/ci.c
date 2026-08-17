@@ -33,7 +33,11 @@ bool ci_init(GameInitInfo* init_info)
         return false;
     }
 
-    // FIXME: Does the same thing as above.
+    // NOTE: Verified against 0x4BB734/0x4BB76F - the original really calls
+    // tig_art_interface_id_create(601, ...) twice (idempotent), once before
+    // each frame_data check; an earlier transcription dropped the second.
+    tig_art_interface_id_create(601, 0, 0, 0, &ci_indicator_art_id);
+
     if (tig_art_frame_data(ci_indicator_art_id, &art_frame_data) != TIG_OK) {
         return false;
     }

@@ -477,13 +477,16 @@ bool map_load(GameLoadInfo* load_info)
 
             if (tig_file_fread(&sentinel, sizeof(sentinel), 1, load_info->stream) != 1) {
                 tig_debug_printf("map_load: ERROR: Load Sentinel Failed to Load!\n");
-                // FIXME: Missing map_close?
+                // NOTE: Verified against 0x40F2E9/0x40F2F5 - the original
+                // also returns false without map_close (0x4106D0); original
+                // leak, not a transcription omission.
                 return false;
             }
 
             if (sentinel != SENTINEL) {
                 tig_debug_printf("map_load: ERROR: Load Sentinel Failed to Match!\n");
-                // FIXME: Missing map_close?
+                // NOTE: Verified against 0x40F2F0/0x40F2F5 - original returns
+                // false without map_close (0x4106D0).
                 return false;
             }
 
@@ -640,14 +643,16 @@ bool map_open(const char* base_path, const char* save_path, bool a3)
         }
 
         if (tig_file_fgets(tmp, 80, stream) == NULL) {
-            // FIXME: Leaking stream.
+            // NOTE: Verified against 0x40F6D9 - original returns false
+            // without fclose; original leak.
             tig_debug_printf("Error reading map start location (x) file %s\n", path);
             return false;
         }
         x = SDL_strtoll(tmp, NULL, 10);
 
         if (tig_file_fgets(tmp, 80, stream) == NULL) {
-            // FIXME: Leaking stream.
+            // NOTE: Verified against 0x40F71F - original returns false
+            // without fclose; original leak.
             tig_debug_printf("Error reading map start location (y) file %s\n", path);
             return false;
         }
@@ -700,7 +705,7 @@ bool map_open(const char* base_path, const char* save_path, bool a3)
     tig_timer_now(&timestamp);
     if (!terrain_open(map_base_path, map_save_path)) {
         new_map_info.base_path = map_base_path;
-        new_map_info.save_path = map_base_path; // FIXME: Using base path as save path.
+        new_map_info.save_path = map_base_path; // NOTE: Verified against 0x40F941/0x40F945 - the original really stores map_base_path (0x5D11F8) into save_path here, unlike the jumppoint branch (0x40FA26 uses 0x5D11F4).
         new_map_info.base_terrain_type = map_properties.base_terrain_type;
         new_map_info.width = map_properties.width >> 6;
         new_map_info.height = map_properties.height >> 6;
@@ -811,7 +816,8 @@ bool map_open_in_game(int map, bool a2, bool a3)
     if (!obj_validate_system(1)) {
         tig_debug_println("Object system validate failed pre-load in map_open_in_game.");
         tig_message_post_quit(0);
-        // FIXME: Execution continues after quit.
+        // NOTE: Verified against 0x40FCE5-0x40FCF9 - the original posts quit
+        // and falls through into the rest of the load; faithfully transcribed.
     }
 
     snprintf(base_path, sizeof(base_path),
@@ -1084,7 +1090,8 @@ bool map_preprocess_mobile(const char* name)
         }
 
         if (tig_file_fread(&file_guid, sizeof(file_guid), 1, stream) != 1) {
-            // FIXME: Leaking `stream`.
+            // NOTE: Verified against 0x40F3DC - original returns false without
+            // fclose; original leak.
             tig_debug_printf("Error reading GUID from file %s\n", path);
             return false;
         }
@@ -1105,7 +1112,8 @@ bool map_preprocess_mobile(const char* name)
     }
 
     if (tig_file_fwrite(&guid, sizeof(guid), 1, stream) != 1) {
-        // FIXME: Leaking `stream`.
+        // NOTE: Verified against 0x40F4FB - original returns false without
+        // fclose; original leak.
         tig_debug_printf("Error writing mod GUID to file %s\n", path);
         return false;
     }
@@ -1122,14 +1130,16 @@ bool map_preprocess_mobile(const char* name)
     for (index = 0; index < file_list.count; index++) {
         strcpy(pch, file_list.entries[index].path);
         if (!objf_solitary_read(&obj, path)) {
-            // FIXME: Leaking `stream`.
+            // NOTE: Verified against 0x410678 - original destroys the file
+            // list but returns false without fclose; original leak.
             tig_file_list_destroy(&file_list);
             tig_debug_printf("Error reading object %s\n", path);
             return false;
         }
 
         if (!obj_write(stream, obj)) {
-            // FIXME: Leaking `stream`.
+            // NOTE: Verified against 0x4106A1 - original destroys the file
+            // list but returns false without fclose; original leak.
             tig_file_list_destroy(&file_list);
             tig_debug_printf("Error writing object to mobile objects file.\n");
             return false;

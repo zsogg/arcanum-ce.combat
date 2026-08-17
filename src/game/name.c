@@ -1186,7 +1186,8 @@ tig_art_id_t name_art_id_next(tig_art_id_t art_id)
                 break;
             }
 
-            // TODO: Check.
+            // NOTE: Verified against 0x41E200: every roll path zeroes num,
+            // and the type==0/flippable path only clears flippable.
             if (type == 0) {
                 if (flippable) {
                     flippable = 0;
@@ -1216,9 +1217,15 @@ tig_art_id_t name_art_id_next(tig_art_id_t art_id)
             int palette = tig_art_id_palette_get(art_id);
             int damaged = tig_art_id_damaged_get(art_id);
 
-            // TODO: Probably wrong, check.
+            // NOTE: Verified against 0x41E200. The damaged==0 path tries
+            // 1024 then 128 before the ladder (0x41E314 jmp 0x41E31D); an
+            // earlier transcription skipped the 128 attempt on that path.
             if (damaged == 0) {
                 if (tig_art_wall_id_create(num, p_piece, variation, 0, palette, 1024, &art_id) == TIG_OK) {
+                    break;
+                }
+
+                if (tig_art_wall_id_create(num, p_piece, variation, 0, palette, 128, &art_id) == TIG_OK) {
                     break;
                 }
             } else if (damaged == 1024) {

@@ -3104,7 +3104,7 @@ void dialog_load_generated(int gd)
         snprintf(path, sizeof(path), "mes\\%s.mes", dialog_gd_mes_file_names[gd]);
         if (!mes_load(path, &(dialog_mes_files[gd]))) {
             tig_debug_printf("Cannot open generated dialog file %s\n", path);
-            exit(EXIT_SUCCESS); // FIXME: Should be EXIT_FAILURE.
+            exit(EXIT_SUCCESS); // NOTE: Verified against the original - it exits with status 0 on this path.
         }
     }
 }
@@ -3677,7 +3677,19 @@ void dialog_build_greeting(DialogState* a1, const char* str)
                 break;
             }
 
-            // TODO: Refactor.
+            // NOTE: Verified against 0x4192F1-0x419301: the original skips
+            // the spaces after the separator before the 'f' test. Porting
+            // bug #22: an earlier transcription omitted this skip, so *str
+            // was always ' ' and the "N fl M" float override was never
+            // parsed (it fell into the numeric branch as a skip).
+            while (*str == ' ') {
+                str++;
+            }
+
+            if (*str == '\0') {
+                break;
+            }
+
             if (*str != 'f') {
                 value = atoi(str);
                 flags[index] = value != 0 ? 0x4 : 0x2;

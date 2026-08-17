@@ -1196,7 +1196,8 @@ bool timeevent_add_delay_base_at(TimeEvent* timeevent, DateTime* delay, DateTime
             time = timeevent_game_time;
             break;
         default:
-            // FIXME: Use `TIME_TYPE_ANIMATIONS` explicitly.
+            // NOTE: The original's else-branch (time type 2) is the
+            // animations clock; verified against 0x45BA30.
             time = timeevent_anim_time;
             break;
         }
@@ -1681,8 +1682,9 @@ void timeevent_save_nodes_to_map(const char* name)
                     tig_debug_printf("TimeEvent: timeevent_save_nodes_to_map: ERROR: Failed to save out nodes!\n");
                     tig_file_fclose(stream);
 
-                    // FIXME: Other error-handling code does not remove this
-                    // file.
+                    // NOTE: The original does remove the file on this
+                    // path (and not on others) - verified against
+                    // 0x45C2F0/0x45C7B0. Faithful.
                     tig_file_remove(path);
 
                     return;
@@ -1910,8 +1912,9 @@ void timeevent_break_nodes_to_map(const char* name)
                     tig_debug_printf("TimeEvent: timeevent_break_nodes_to_map: ERROR: Failed to save out nodes!\n");
                     tig_file_fclose(stream);
 
-                    // FIXME: Other error-handling code does not remove this
-                    // file.
+                    // NOTE: The original does remove the file on this
+                    // path (and not on others) - verified against
+                    // 0x45C2F0/0x45C7B0. Faithful.
                     tig_file_remove(path);
 
                     return;

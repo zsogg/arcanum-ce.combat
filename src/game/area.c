@@ -245,7 +245,9 @@ bool area_mod_load(void)
                             // 0.
                             area_radiuses[AREA_UNKNOWN] = 0;
                         } else {
-                            // FIXME: Unreachable, `index` is never negative.
+                            // NOTE: Verified at 0x4CAC50-0x4CAC6D - the
+                            // original also has the unreachable
+                            // index<0 -> -1 store.
                             area_radiuses[index] = -1;
                         }
                     }
@@ -384,7 +386,8 @@ int64_t area_get_location(int area)
  */
 void area_get_wm_offset(int area, int* x, int* y)
 {
-    // FIXME: No bound checking guard seen in previous functions.
+    // NOTE: Verified at 0x4CAF0A/0x4CAF1D - the original performs the same
+    // unguarded indexed reads with no bounds check.
     *x = area_wm_x_offsets[area];
     *y = area_wm_y_offsets[area];
 }

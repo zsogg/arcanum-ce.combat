@@ -1197,7 +1197,8 @@ bool a_name_portal_init(void)
     mes_get_msg(portal_mes_file, &mes_file_entry);
     do {
         pch = strchr(mes_file_entry.str, ' ');
-        // FIXME: Unsafe dereference.
+        // NOTE: Verified at 0x4EC5E0-0x4EC5E5 - the original also dereferences
+        // the strchr result without a null check.
         *pch = '\0';
     } while (mes_find_next(portal_mes_file, &mes_file_entry));
 

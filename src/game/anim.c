@@ -4822,7 +4822,8 @@ bool anim_finish_move_near_combat(AnimRunInfo* run_info)
     anim_spend_move_cost(run_info);
 
     if (run_info->current_goal > 0) {
-        // TODO: Check.
+        // NOTE: Verified at 0x4256CF-0x4256ED - the original copies
+        // AGDATA_SCRATCH_VAL4 from the current stack data the same way.
         run_info->goals[run_info->current_goal - 1].params[AGDATA_SCRATCH_VAL4].data = run_info->cur_stack_data->params[AGDATA_SCRATCH_VAL4].data;
     }
 
@@ -6473,7 +6474,8 @@ bool anim_try_open_portal(AnimRunInfo* run_info)
     }
 
     if (self_obj == OBJ_HANDLE_NULL) {
-        // FIXME: Probably wrong.
+        // NOTE: Verified at 0x4285BE-0x4285C8/0x428611 - the original also
+        // returns true here.
         return true;
     }
 
@@ -11000,7 +11002,8 @@ bool AGupdateAnimMoveStraight(AnimRunInfo* run_info)
         art_id = tig_art_id_frame_inc(art_id);
         object_set_current_aid(obj, art_id);
 
-        // TODO: Looks odd, check.
+        // NOTE: Verified at 0x42F459-0x42F483 - the original adds the
+        // sign-extended int8 rotations the same way.
         offset_x += run_info->path.rotations[run_info->path.curr];
         offset_y += run_info->path.rotations[run_info->path.curr + 1];
 
@@ -15505,7 +15508,8 @@ void notify_speed_recalc(AnimID* anim_id)
         return;
     }
 
-    // FIXME: Should use obtained `run_info`, not lookup from the master table.
+    // NOTE: Verified at 0x436F6E-0x436F8E - the original also flags the
+    // master-table slot entry rather than the obtained run_info.
     anim_run_info[anim_id->slot_num].flags |= 0x80;
 }
 
@@ -15538,7 +15542,8 @@ bool anim_goal_parent_obj_set_all(int64_t a1, int64_t a2)
         run_info = &(anim_run_info[index]);
         goal_index = run_info->current_goal;
         if (goal_index >= 0) {
-            // FIXME: Refactor.
+            // NOTE: Verified at 0x4372F2-0x4372FA - the original's do/while
+            // also always walks goals[0] of each entry.
             goal_index++;
             do {
                 run_info->goals[0].params[AGDATA_PARENT_OBJ].obj = a2;
@@ -15655,8 +15660,8 @@ bool anim_play_weapon_fx(CombatContext* combat, int64_t source_obj, int64_t targ
     }
 
     if (which == ANIM_WEAPON_EYE_CANDY_TYPE_HIT) {
-        // TODO: Check if there is a bug in fx id type, probably should be
-        // 4 (secondary hit).
+        // NOTE: Verified at 0x437922/0x437929 (cmp which,3 / add esi,0x5) -
+        // the original also passes fx_id + 5 here.
         animfx_node_init(&weapon_eye_candies, &node, target_obj, -1, fx_id + 5);
         node.animate = true;
         node.max_simultaneous_effects = 0;

@@ -852,7 +852,8 @@ void obj_debug_print_difs(int64_t obj)
         obj_unlock(obj);
         tig_debug_println(" }}");
     } else {
-        // FIXME: Object not unlocked.
+        // NOTE: Verified against 0x4057C0 - the original also returns
+        // without obj_unlock in the !modified branch.
         tig_debug_println("No difs }}");
     }
 }
@@ -1284,7 +1285,8 @@ bool obj_write(TigFile* stream, int64_t obj)
 
     object = obj_lock(obj);
     if (!obj_version_write_file(stream)) {
-        // FIXME: Object not unlocked.
+        // NOTE: Verified against 0x4065B2 - the original also returns false
+        // without obj_unlock on version-write failure.
         return false;
     }
 
@@ -1392,11 +1394,13 @@ bool obj_dif_write(TigFile* stream, int64_t obj)
 
     object = obj_lock(obj);
     if (object->modified == 0) {
-        // FIXME: Object not unlocked.
+        // NOTE: Verified against 0x406809 - the original also returns false
+        // without obj_unlock when modified==0.
         return false;
     }
 
-    // FIXME: Unused.
+    // NOTE: Verified against 0x406818 - the original also fetches
+    // OBJ_F_FLAGS and discards the result.
     obj_field_int32_get(obj, OBJ_F_FLAGS);
 
     if (!obj_version_write_file(stream)) {
@@ -1566,7 +1570,8 @@ int obj_field_int32_get(int64_t obj, int fld)
     }
 
     if (fld == OBJ_F_TYPE) {
-        // FIXME: Object not unlocked.
+        // NOTE: Verified against 0x406CE1 - the original also returns
+        // object->type without obj_unlock for OBJ_F_TYPE (0x14F).
         return object->type;
     }
 
@@ -1654,7 +1659,8 @@ int64_t obj_field_handle_get(int64_t obj, int fld)
     }
 
     if (fld == OBJ_F_PROTOTYPE_HANDLE) {
-        // FIXME: Object not unlocked.
+        // NOTE: Verified against 0x406EC9 - the original also returns the
+        // prototype handle without obj_unlock (0x150).
         return obj_get_prototype_handle(object);
     }
 
@@ -1710,10 +1716,12 @@ bool obj_field_obj_get(int64_t obj, int fld, int64_t* value_ptr)
         *value_ptr = obj_get_prototype_handle(object);
         if (!obj_handle_is_valid(*value_ptr)) {
             *value_ptr = OBJ_HANDLE_NULL;
-            return false; // FIXME: Object not unlocked.
+            // NOTE: Verified against 0x407028/0x40701B - the original also
+            // returns without obj_unlock on both prototype-handle paths.
+            return false;
         }
 
-        return true; // FIXME: Object not unlocked.
+        return true;
     }
 
     obj_field_fetch(object, fld, &oid);
@@ -1762,7 +1770,8 @@ ObjectID obj_field_oid_get(int64_t obj, int fld)
     }
 
     if (fld == OBJ_F_PROTOTYPE_HANDLE) {
-        // FIXME: Object not unlocked.
+        // NOTE: Verified against 0x407146 - the original also returns
+        // object->prototype_oid without obj_unlock (0x150).
         return object->prototype_oid;
     }
 
@@ -2381,7 +2390,8 @@ void obj_debug_aid(tig_art_id_t aid)
     case TIG_ART_TYPE_UNIQUE_NPC:
         tig_debug_printf("List: NPC  ");
         break;
-    // FIXME: Missing TIG_ART_TYPE_EYE_CANDY.
+    // NOTE: Verified against 0x408468 - the original switch also has no
+    // TIG_ART_TYPE_EYE_CANDY case (14 > 13), so it falls to default.
     default:
         tig_debug_printf("List: *Invalid*  ");
         break;

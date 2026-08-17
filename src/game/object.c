@@ -1440,7 +1440,8 @@ void object_remove_from_sector(int64_t obj)
         sector_lock(sector_id, &sector);
         objlist_remove(&(sector->objects), obj);
 
-        // FIXME: Unused.
+        // NOTE: Verified against 0x43CFD1 - the original also fetches
+        // OBJ_F_FLAGS and discards the result.
         obj_field_int32_get(obj, OBJ_F_FLAGS);
 
         sector_unlock(sector_id);
@@ -1486,7 +1487,8 @@ void object_flags_set(int64_t obj, unsigned int flags)
 
     cur_flags = obj_field_int32_get(obj, OBJ_F_FLAGS);
 
-    // FIXME: Unused.
+    // NOTE: Verified against 0x43D12F - the original also fetches
+    // OBJ_F_RENDER_FLAGS and discards the result.
     cur_render_flags = obj_field_int32_get(obj, OBJ_F_RENDER_FLAGS);
 
     if ((flags & OF_OFF) != 0) {
@@ -1562,7 +1564,8 @@ void object_flags_unset(int64_t obj, unsigned int flags)
 
     cur_flags = obj_field_int32_get(obj, OBJ_F_FLAGS);
 
-    // FIXME: Unused.
+    // NOTE: Verified against 0x43D2D6 - the original also fetches
+    // OBJ_F_RENDER_FLAGS and discards the result.
     cur_render_flags = obj_field_int32_get(obj, OBJ_F_RENDER_FLAGS);
 
     if ((flags & OF_OFF) != 0) {
@@ -5306,8 +5309,12 @@ bool object_locator_validate(int64_t* obj_ptr, ObjectLocator* locator)
     int64_t obj;
 
     if (obj_ptr == NULL || locator == NULL) {
-        // FIXME: Crash!
-        *obj_ptr = OBJ_HANDLE_NULL;
+        // NOTE: The original writes through the null obj_ptr on this path
+        // (0x44402B -> 0x44407B); CE guards the store. Deliberately not
+        // numbered: callers never pass NULL.
+        if (obj_ptr != NULL) {
+            *obj_ptr = OBJ_HANDLE_NULL;
+        }
         return false;
     }
 

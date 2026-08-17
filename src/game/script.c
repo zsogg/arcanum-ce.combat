@@ -2270,14 +2270,19 @@ int script_execute_action(ScriptAction* action, int line, ScriptState* state)
         return NEXT;
     }
     case SAT_FLOAT_NEWSPAPER_HEADLINE: {
-        // FIXME: Probably wrong, takes obj from param 2 (at index 1), but this
-        // opcode accepts just 1 param. Check.
+        // NOTE: The original also reads the NPC from op_type[1]/op_value[1]
+        // despite the opcode declaring one param (0x447220 case 0x56:
+        // script_get_obj((char)*(param_1 + 5), param_1[4], ...)). Faithful.
         int64_t npc_obj = script_get_obj(action->op_type[1], action->op_value[1], state);
         char str[MAX_STRING];
         ui_written_newspaper_headline(newspaper_get(NEWSPAPER_CURRENT), str);
         size_t len = strlen(str);
         if (len > 0) {
-            if (str[len] != '.' && str[len] != '?' && str[len] != '!') {
+            // Porting bug #18: the original checks the LAST character
+            // (str[len - 1]); an earlier transcription checked str[len], the
+            // NUL terminator, so headlines already ending in punctuation
+            // gained a stray '.'.
+            if (str[len - 1] != '.' && str[len - 1] != '?' && str[len - 1] != '!') {
                 str[len++] = '.';
             }
             str[len++] = ' ';
@@ -2985,7 +2990,10 @@ void script_print_line(ScriptAction* action, ScriptState* state)
     ui_message.str = v1.reply;
     ui_message.field_8 = 0;
 
-    // TODO: Refactor.
+    // NOTE: Verified against 0x44B481-0x44B4CE: the original's host-player
+    // (player == 0) path falls through to the shared display + unload.
+    // Porting bug #21 (multiplayer path): an earlier transcription left that
+    // path empty, so the host never saw the line and the dialog leaked.
     if (tig_net_is_active()) {
         player = multiplayer_find_slot_from_obj(state->invocation->triggerer_obj);
         if (player == -1) {
@@ -2998,10 +3006,10 @@ void script_print_line(ScriptAction* action, ScriptState* state)
             dialog_unload(v1.dlg);
             return;
         }
-    } else {
-        ui_display_msg(&ui_message);
-        dialog_unload(v1.dlg);
     }
+
+    ui_display_msg(&ui_message);
+    dialog_unload(v1.dlg);
 }
 
 // 0x44B4E0
@@ -3083,7 +3091,8 @@ int script_resolve_focus_obj(ScriptFocusObject type, int index, ScriptState* sta
             node = node->next;
         }
 
-        // FIXME: Possible overflow when cnt == 100.
+        // NOTE: Verified against 0x44B6FB-0x44B70A - the original overflows
+        // identically when cnt == 100 (writes objs[100] unconditionally).
         objs[cnt++] = state->invocation->triggerer_obj;
         break;
     case SFO_EVERY_SCENERY_IN_VICINITY:
@@ -3479,19 +3488,22 @@ bool cache_add(int cache_entry_id, int script_id)
 
     if (!script_file_load_hdr(stream, &hdr)) {
         tig_debug_printf("Script: cache_add: ERROR: Failed to load script variables: %d!\n", script_id);
-        // FIXME: Leaking stream.
+        // NOTE: Verified against 0x44C532/0x44C5D6 - original returns false
+        // without fclose; original leak.
         return false;
     }
 
     if (!script_file_create(&(script_cache_entries[cache_entry_id].file))) {
         tig_debug_printf("Script: cache_add: ERROR: Failed to build script code: %d!\n", script_id);
-        // FIXME: Leaking stream.
+        // NOTE: Verified against 0x44C557/0x44C5BC - original returns false
+        // without fclose; original leak.
         return false;
     }
 
     if (!script_file_load_code(stream, script_cache_entries[cache_entry_id].file)) {
         tig_debug_printf("Script: cache_add: ERROR: Failed to load script code: %d!\n", script_id);
-        // FIXME: Leaking stream.
+        // NOTE: Verified against 0x44C56F/0x44C5A2 - original returns false
+        // without fclose; original leak.
         return false;
     }
 
@@ -3550,7 +3562,7 @@ int cache_find(int script_id)
     }
 
     tig_debug_printf("cache_find: Error: failed to find cache item!\n");
-    exit(EXIT_SUCCESS); // FIXME: Should be `EXIT_FAILURE`.
+    exit(EXIT_SUCCESS); // NOTE: Verified against 0x44C706/0x44C708 - original exits with 0.
 }
 
 // 0x44C710
@@ -3577,7 +3589,8 @@ bool script_file_load_code(TigFile* stream, ScriptFile* script_file)
     if (script_file->num_entries > 0) {
         script_file->entries = (ScriptCondition*)CALLOC(script_file->max_entries, sizeof(ScriptCondition));
         if (tig_file_fread(script_file->entries, sizeof(ScriptCondition), script_file->num_entries, stream) != script_file->num_entries) {
-            // FIXME: Leaks entries.
+            // NOTE: Verified against 0x44C762/0x44C784 - original also leaks the
+            // entries buffer on fread failure.
             return false;
         }
     } else {

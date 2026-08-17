@@ -496,6 +496,12 @@ bool sector_cache_init(unsigned int capacity)
 {
     unsigned int index;
     Sector* sector;
+    // NOTE: The original fills each new sector's tile list with
+    // TIG_ART_ID_INVALID via sector_tile_list_init (0x4CF8xx, local_4 =
+    // 0xFFFFFFFF); an earlier transcription omitted the tile-list init
+    // entirely and left the memset zeroes (art id 0) in place. Restored
+    // below, including the re-init failure paths and the shrink-path exit.
+    tig_art_id_t art_id = TIG_ART_ID_INVALID;
 
     if (sector_refcount > 0) {
         return false;
@@ -519,6 +525,7 @@ bool sector_cache_init(unsigned int capacity)
             sector_script_list_exit(&(sector->sector_scripts));
             tile_script_list_exit(&(sector->tile_scripts));
             sector_roof_list_exit(&(sector->roofs));
+            sector_tile_list_exit(&(sector->tiles));
             sector_light_list_exit(&(sector->lights));
         }
 
@@ -533,52 +540,66 @@ bool sector_cache_init(unsigned int capacity)
             sector_cache_indexes[index] = 0;
 
             sector = &(sector_cache_entries[index].sector);
+            // NOTE: Verified against 0x4CFB45-0x4CFC29: on each teardown
+            // step the original re-INITS the earlier lists instead of
+            // exiting them (an original bug, transcribed faithfully).
             if (!sector_light_list_init(&(sector->lights))) {
                 return false;
             }
 
+            if (!sector_tile_list_init(&(sector->tiles), &art_id)) {
+                sector_light_list_init(&(sector->lights));
+                return false;
+            }
+
             if (!sector_roof_list_init(&(sector->roofs))) {
-                sector_light_list_init(&(sector->lights)); // FIXME: Should be sector_light_list_exit.
+                sector_tile_list_init(&(sector->tiles), &art_id);
+                sector_light_list_init(&(sector->lights));
                 return false;
             }
 
             if (!tile_script_list_init(&(sector->tile_scripts))) {
-                sector_roof_list_init(&(sector->roofs)); // FIXME: Should be sector_roof_list_exit.
-                sector_light_list_init(&(sector->lights)); // FIXME: Should be sector_light_list_exit.
+                sector_roof_list_init(&(sector->roofs));
+                sector_tile_list_init(&(sector->tiles), &art_id);
+                sector_light_list_init(&(sector->lights));
                 return false;
             }
 
             if (!sector_script_list_init(&(sector->sector_scripts))) {
-                tile_script_list_init(&(sector->tile_scripts)); // FIXME: Should be tile_script_list_exit.
-                sector_roof_list_init(&(sector->roofs)); // FIXME: Should be sector_roof_list_exit.
-                sector_light_list_init(&(sector->lights)); // FIXME: Should be sector_light_list_exit.
+                tile_script_list_init(&(sector->tile_scripts));
+                sector_roof_list_init(&(sector->roofs));
+                sector_tile_list_init(&(sector->tiles), &art_id);
+                sector_light_list_init(&(sector->lights));
                 return false;
             }
 
             if (!sector_sound_list_init(&(sector->sounds))) {
-                sector_script_list_init(&(sector->sector_scripts)); // FIXME: Should be sector_script_list_exit.
-                tile_script_list_init(&(sector->tile_scripts)); // FIXME: Should be tile_script_list_exit.
-                sector_roof_list_init(&(sector->roofs)); // FIXME: Should be sector_roof_list_exit.
-                sector_light_list_init(&(sector->lights)); // FIXME: Should be sector_light_list_exit.
+                sector_script_list_init(&(sector->sector_scripts));
+                tile_script_list_init(&(sector->tile_scripts));
+                sector_roof_list_init(&(sector->roofs));
+                sector_tile_list_init(&(sector->tiles), &art_id);
+                sector_light_list_init(&(sector->lights));
                 return false;
             }
 
             if (!sector_block_list_init(&(sector->blocks))) {
                 sector_sound_list_exit(&(sector->sounds));
-                sector_script_list_init(&(sector->sector_scripts)); // FIXME: Should be sector_script_list_exit.
-                tile_script_list_init(&(sector->tile_scripts)); // FIXME: Should be tile_script_list_exit.
-                sector_roof_list_init(&(sector->roofs)); // FIXME: Should be sector_roof_list_exit.
-                sector_light_list_init(&(sector->lights)); // FIXME: Should be sector_light_list_exit.
+                sector_script_list_init(&(sector->sector_scripts));
+                tile_script_list_init(&(sector->tile_scripts));
+                sector_roof_list_init(&(sector->roofs));
+                sector_tile_list_init(&(sector->tiles), &art_id);
+                sector_light_list_init(&(sector->lights));
                 return false;
             }
 
             if (!sector_object_list_init(&(sector->objects))) {
                 sector_block_list_exit(&(sector->blocks));
                 sector_sound_list_exit(&(sector->sounds));
-                sector_script_list_init(&(sector->sector_scripts)); // FIXME: Should be sector_script_list_exit.
-                tile_script_list_init(&(sector->tile_scripts)); // FIXME: Should be tile_script_list_exit.
-                sector_roof_list_init(&(sector->roofs)); // FIXME: Should be sector_roof_list_exit.
-                sector_light_list_init(&(sector->lights)); // FIXME: Should be sector_light_list_exit.
+                sector_script_list_init(&(sector->sector_scripts));
+                tile_script_list_init(&(sector->tile_scripts));
+                sector_roof_list_init(&(sector->roofs));
+                sector_tile_list_init(&(sector->tiles), &art_id);
+                sector_light_list_init(&(sector->lights));
                 return false;
             }
 
@@ -1453,7 +1474,8 @@ bool sector_load_editor(int64_t id, Sector* sector)
     return true;
 }
 
-// FIXME: There are many cleanup errors (mosty leaking `dif_stream`).
+// NOTE: Verified against 0x4D221F-0x4D222A - on the error paths the
+// original closes only sec_stream and leaks dif_stream.
 //
 // 0x4D1A30
 bool sector_load_game(int64_t id, Sector* sector)
@@ -1627,7 +1649,9 @@ bool sector_load_game(int64_t id, Sector* sector)
                 }
                 if ((dif_flags & DIF_HAVE_TOWNMAP) != 0) {
                     if (tig_file_fread(&(sector->townmap_info), sizeof(sector->townmap_info), 1, dif_stream) != 1) {
-                        // FIXME: Wrong message.
+                        // NOTE: Verified against 0x4D2026/0x5B83F4 - the
+                        // original prints the "sound list" message for the
+                        // townmap dif-read failure too.
                         tig_debug_printf("Error loading sound list from differences file %s\n", dif_path);
                         tig_file_fclose(sec_stream);
                         return false;
@@ -1819,7 +1843,7 @@ bool sector_save_editor_internal(Sector* sector, const char* base_path)
     stream = tig_file_fopen(path, "wb");
     if (stream == NULL) {
         tig_debug_printf("Error creating sector data file %s\n", path);
-        tig_file_fclose(stream); // FIXME: Crash! (dereferencing NULL).
+        tig_file_fclose(stream); // NOTE: Verified against 0x4D2523/0x4D2524 - original calls tig_file_fclose(NULL) on this path.
         return false;
     }
 
@@ -1987,7 +2011,7 @@ bool sector_save_game(Sector* sector)
     stream = tig_file_fopen(path, "wb");
     if (stream == NULL) {
         tig_debug_printf("Error creating differences file %s\n", path);
-        tig_file_fclose(stream); // FIXME: Crash!
+        tig_file_fclose(stream); // NOTE: Verified against 0x4D2968/0x4D2969 - original calls tig_file_fclose(NULL) on this path.
         return false;
     }
 

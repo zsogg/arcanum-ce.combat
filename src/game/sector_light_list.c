@@ -112,8 +112,8 @@ bool sector_light_list_load(SectorLightList* list, TigFile* stream, int64_t sect
 {
     int cnt;
     int idx;
-    int x;
-    int y;
+    int64_t x;
+    int64_t y;
     Light* light;
     int64_t sec;
     int64_t loc;
@@ -123,9 +123,12 @@ bool sector_light_list_load(SectorLightList* list, TigFile* stream, int64_t sect
     }
 
     if (sector_id != -1) {
-        // TODO: Check.
-        x = (int)SECTOR_X(sector_id);
-        y = (int)SECTOR_Y(sector_id);
+        // NOTE: Verified against 0x4F72FD-0x4F7328. Porting bug #23: an
+        // earlier transcription dropped the <<6 tile-to-world scale, so
+        // lights were placed at sector-index coordinates instead of world
+        // coordinates.
+        x = SECTOR_X(sector_id) << 6;
+        y = SECTOR_Y(sector_id) << 6;
     }
 
     for (idx = 0; idx < cnt; idx++) {
@@ -135,8 +138,10 @@ bool sector_light_list_load(SectorLightList* list, TigFile* stream, int64_t sect
 
         if (sector_id != -1) {
             sec = tile_id_from_loc(light_get_location(light));
-            // TODO: Check.
-            loc = LOCATION_MAKE(SECTOR_X(sec) + x, SECTOR_Y(sec) + y);
+            // NOTE: Verified against 0x4F738A/0x4F73A9 - the original adds
+            // TILE_X/TILE_Y to the world base, not SECTOR_X/SECTOR_Y of the
+            // tile id.
+            loc = LOCATION_MAKE(TILE_X(sec) + x, TILE_Y(sec) + y);
             light_set_location(light, loc);
         }
 
@@ -171,8 +176,11 @@ bool sector_light_list_load_with_dif(SectorLightList* list, TigFile* sec_stream,
     }
 
     if (sector_id != -1) {
-        x = SECTOR_X(sector_id);
-        y = SECTOR_Y(sector_id);
+        // NOTE: Verified against 0x4F7479-0x4F74A8 - same <<6 scale as
+        // sector_light_list_load; an earlier transcription omitted it here
+        // too.
+        x = SECTOR_X(sector_id) << 6;
+        y = SECTOR_Y(sector_id) << 6;
     }
 
     dif = false;
@@ -195,7 +203,7 @@ bool sector_light_list_load_with_dif(SectorLightList* list, TigFile* sec_stream,
         if (sector_id != -1) {
             loc = light_get_location(light);
             tile = tile_id_from_loc(loc);
-            light_set_location(light, LOCATION_MAKE(x + (tile & 0x3F), y + ((tile >> 6) & 0x3F)));
+            light_set_location(light, LOCATION_MAKE(x + TILE_X(tile), y + TILE_Y(tile)));
             light_clear_modified(light);
         }
 

@@ -101,13 +101,16 @@ void item_ui_activate(int64_t owner_obj, int64_t item_obj)
         }
     }
 
-    // TODO: Check, probably wrong.
+    // NOTE: Verified against 0x571C4C-0x571C66: the condition matches the
+    // original, and the loc path calls 0x571CB0 (item_ui_apply). Porting bug
+    // #19: an earlier transcription called spell_ui_apply here, so self-only
+    // items were applied through the spell path.
     if (*tgt_ptr == TGT_NONE
         || ((*tgt_ptr & TGT_SELF) != 0
             && (*tgt_ptr & TGT_TILE) == 0)
         || *tgt_ptr == TGT_OBJ_RADIUS) {
         target_descriptor_set_loc(&td, obj_field_int64_get(owner_obj, OBJ_F_LOCATION));
-        spell_ui_apply(&td);
+        item_ui_apply(&td);
         return;
     }
 

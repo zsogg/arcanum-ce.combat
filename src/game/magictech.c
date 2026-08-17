@@ -181,7 +181,7 @@ static uint64_t magictech_target_flags[] = {
     TGT_OBJ_NO_SELF | TGT_OBJECT,
     TGT_OBJ_NO_T_PC | TGT_OBJECT,
     TGT_OBJ_NO_ST_CRITTER_ANIMAL | TGT_OBJ_T_CRITTER | TGT_OBJECT,
-    TGT_OBJ_NO_ST_CRITTER_DEAD | TGT_OBJECT, // FIXME: Does not include `TGT_OBJ_T_CRITTER`.
+    TGT_OBJ_NO_ST_CRITTER_DEAD | TGT_OBJECT, // NOTE: Verified against the original table (0x596240 = 0x80000004): entry 32 really lacks TGT_OBJ_T_CRITTER, unlike its neighbours.
     TGT_OBJ_NO_ST_CRITTER_UNDEAD | TGT_OBJ_T_CRITTER | TGT_OBJECT,
     TGT_OBJ_NO_ST_CRITTER_DEMON | TGT_OBJ_T_CRITTER | TGT_OBJECT,
     TGT_OBJ_NO_ST_CRITTER_MECHANICAL | TGT_OBJ_T_CRITTER | TGT_OBJECT,
@@ -1132,7 +1132,8 @@ void magictech_break_nodes_to_map(const char* map)
     }
 
     if (stream == NULL) {
-        // FIXME: Message is misleading, informs about TimeEvent, not magictech.
+        // NOTE: Verified against 0x5B1574 - the original string also says
+        // "TimeEvent data file".
         tig_debug_printf("MagicTech: magictech_save_nodes_to_map: ERROR: Couldn't create TimeEvent data file for map!\n");
         return;
     }
@@ -1256,7 +1257,8 @@ void magictech_save_nodes_to_map(const char* map)
     }
 
     if (stream == NULL) {
-        // FIXME: Message is misleading, informs about TimeEvent, not magictech.
+        // NOTE: Verified against 0x5B1574 - the original string also says
+        // "TimeEvent data file".
         tig_debug_printf("MagicTech: magictech_save_nodes_to_map: ERROR: Couldn't create TimeEvent data file for map!\n");
         return;
     }
@@ -1332,7 +1334,8 @@ void magictech_load_nodes_from_map(const char* map)
 
     stream = tig_file_fopen(path, "rb");
     if (stream == NULL) {
-        // FIXME: Message is misleading, informs about TimeEvent, not magictech.
+        // NOTE: Verified against 0x5B1694 - the original string also says
+        // "TimeEvent data file".
         tig_debug_printf("MagicTech: magictech_load_nodes_from_map: ERROR: Couldn't open TimeEvent data file for map!\n");
         return;
     }
@@ -4267,7 +4270,8 @@ void magictech_component_obj_flag(int64_t obj, int64_t a2, int fld, int a4, int 
                     combat.dam_flags |= CDF_FULL;
                     combat_dmg(&combat);
 
-                    // FIXME: Meaningless.
+                    // NOTE: Verified at 0x454EAE-0x454EB2 - the original
+                    // also discards this getter's result.
                     obj_field_int32_get(combat.target_obj, OBJ_F_FLAGS);
                 }
             } else if ((a4 & OSF_STONED) != 0) {
@@ -5197,12 +5201,17 @@ bool magictech_item_spell_user_check(int64_t a1, int64_t a2, int64_t a3)
 
     aptitude = stat_level_get(a1, STAT_MAGICK_TECH_APTITUDE);
 
-    // FIXME: Useless.
+    // NOTE: Verified at 0x456A56-0x456A5F: the original also discards the
+    // a2 aptitude lookup here.
     if (a2 != OBJ_HANDLE_NULL) {
         stat_level_get(a2, STAT_MAGICK_TECH_APTITUDE);
     }
 
-    if (aptitude > 0) {
+    // NOTE: Verified against 0x456A62-0x456A65: the original tests the a1
+    // aptitude with a signed jge (>= 0). Porting bug #20: an earlier
+    // transcription used > 0, so aptitude-0 users fell through to the
+    // effective-power check.
+    if (aptitude >= 0) {
         return true;
     }
 
