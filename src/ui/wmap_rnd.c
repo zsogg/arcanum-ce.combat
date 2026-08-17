@@ -342,6 +342,10 @@ bool wmap_rnd_init(GameInitInfo* init_info)
 {
     (void)init_info;
 
+    // UAP (0x5581B6): the changed bytes are the skill-message icon cave planted
+    // in the padding behind this function, not this body (`mov eax, 1; ret` in
+    // both binaries). The cave is ported as `intgame_uap_skill_icon` in
+    // intgame.c.
     return true;
 }
 

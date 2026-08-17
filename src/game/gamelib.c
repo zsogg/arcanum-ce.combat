@@ -770,6 +770,11 @@ bool gamelib_in_reset(void)
 // 0x402CB0
 int gamelib_cheat_level_get(void)
 {
+    // UAP (0x402CB0, 0x402CC6): the release build stubbed this getter to
+    // `xor eax, eax` and the setter to store a hardcoded 0. UAP restores the
+    // global read and makes the setter store 3. CE already implements the
+    // unstubbed pair, so there is nothing to port; see main.c's `-cheatmode`
+    // note.
     return gamelib_cheat_level;
 }
 

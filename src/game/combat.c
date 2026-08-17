@@ -3132,6 +3132,9 @@ bool combat_tb_timeevent_process(TimeEvent* timeevent)
             combat_consume_action_points(combat_whos_turn_node->obj, combat_action_points);
         }
 
+        // UAP (0x4B71BE): the call below targets 0x4B7774 in the patched
+        // binary instead of 0x4B7780 because UAP relocated the getter to make
+        // room for its drag override. Same function, no behaviour change.
         if (combat_action_points_get() <= 0) {
             combat_turn_based_next_subturn();
         }
@@ -3361,6 +3364,11 @@ void combat_turn_based_end_turn(void)
 {
     DateTime datetime;
 
+    // UAP (0x4B7774): the changed bytes sit in the NOP padding behind this
+    // function's `ret`, not in the body. UAP puts a duplicate of
+    // `combat_action_points_get` there and reuses the old getter's address for
+    // the drag-override prologue; the override itself is ported in
+    // `combat_check_action_points` below.
     combat_debug(OBJ_HANDLE_NULL, "TB End Turn");
     datetime_from_milliseconds(&datetime, 1000);
     timeevent_inc_datetime(&datetime);
@@ -3370,6 +3378,9 @@ void combat_turn_based_end_turn(void)
 // 0x4B7780
 int combat_action_points_get(void)
 {
+    // UAP relocates this two-instruction getter from 0x4B7780 to 0x4B7774 and
+    // repoints its callers; the function's meaning is unchanged, so CE keeps it
+    // at its logical source address.
     return combat_action_points;
 }
 

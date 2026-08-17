@@ -110,6 +110,9 @@ void tech_ui_dec_degree(int64_t obj, int tech)
  */
 void tech_ui_adjust_degree(int64_t obj, int tech, int action)
 {
+    // UAP (0x596004): the diff run attributed to this symbol is past the end
+    // of `.text` - an `IMAGE_DEBUG_DIRECTORY` UAP's patcher fills in. It is a
+    // nearest-preceding-symbol artifact, not a code change; nothing to port.
     switch (action) {
     case 1:
         tech_ui_inc_degree(obj, tech);

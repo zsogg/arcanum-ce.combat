@@ -3893,6 +3893,9 @@ bool anim_timeevent_process(TimeEvent* timeevent)
             combat_turn_based_npc_turn(anim_obj);
         }
 
+        // UAP (0x423B96): call retargeted to UAP's relocated
+        // `combat_action_points_get` at 0x4B7774; same getter, no behaviour
+        // change.
         if (combat_action_points_get() > 0) {
             combat_critter_fidget_restart(anim_obj);
         }
@@ -10640,6 +10643,9 @@ bool AGbeginAnimMove(AnimRunInfo* run_info)
 
     if (combat_turn_based_critter_can_fastforward(obj)) {
         loc = obj_field_int64_get(obj, OBJ_F_LOCATION);
+        // UAP (0x42EB4E, 0x42EBBE): both fast-forward reads of
+        // `combat_action_points_get` are retargeted from 0x4B7780 to the
+        // relocated copy at 0x4B7774. Same getter, no behaviour change.
         while (combat_action_points_get() > 0) {
             if (!anim_spend_move_cost(run_info)) {
                 break;
@@ -14204,6 +14210,8 @@ bool anim_can_start_goal(int64_t obj, int action_points)
         return true;
     }
 
+    // UAP (0x434935): call retargeted to UAP's relocated
+    // `combat_action_points_get` at 0x4B7774; same getter, no behaviour change.
     if (action_points <= combat_action_points_get()) {
         return true;
     }

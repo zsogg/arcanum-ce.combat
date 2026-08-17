@@ -2753,6 +2753,11 @@ bool iso_interface_message_filter(TigMessage* msg)
 {
     // NOTE: Strange case - this function is huge but it's binary identical to
     // 0x54B5D0.
+    //
+    // UAP (0x54C913): this delegate's call is retargeted to the dialog-guard
+    // cave at 0x57DC57 just before `hotkey_ui_process_event`. That guard is
+    // ported inside `hotkey_ui_process_event`, so CE needs no address-level
+    // retarget.
     return intgame_process_message(msg);
 }
 

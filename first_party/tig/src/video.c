@@ -1222,6 +1222,10 @@ bool tig_video_window_create(TigInitInfo* init_info)
         ? init_info->window_name
         : "TIG";
 
+    // UAP (0x524119): the original DirectDraw test looked at flag 0x20 and UAP
+    // changes it to 0x8 to match its repurposed `-patchlvl` handler. This SDL3
+    // replacement uses `TIG_INITIALIZE_WINDOWED` (0x20), and main.c keeps both
+    // `-window` and `-patchlvl`, so the original test has no counterpart here.
     SDL_WindowFlags flags = SDL_WINDOW_HIGH_PIXEL_DENSITY;
     if ((init_info->flags & TIG_INITIALIZE_WINDOWED) == 0) {
         flags |= SDL_WINDOW_FULLSCREEN;
@@ -1324,6 +1328,11 @@ bool tig_video_window_create(TigInitInfo* init_info)
 // 0x5242F0
 void tig_video_window_destroy(void)
 {
+    // UAP (0x52439A): the diff row attributed to this symbol is actually the
+    // next DirectDraw routine at 0x524300, whose windowed-mode test UAP changes
+    // from flag 0x20 to 0x8. This function is the original one-instruction
+    // pointer clear and is unchanged; the changed routine is replaced by this
+    // SDL3 teardown, so nothing to port.
     if (tig_video_state.surface != NULL) {
         SDL_DestroySurface(tig_video_state.surface);
         tig_video_state.surface = NULL;

@@ -460,6 +460,8 @@ bool follower_ui_init(GameInitInfo* init_info)
     }
 
     // Determine the drop-down menu dimensions from the background art.
+    // UAP (0x56A4DB): art 826 becomes 850 when the ninth "Schematics" command
+    // is enabled; `follower_ui_drop_down_menu_art()` implements that switch.
     tig_art_interface_id_create(follower_ui_drop_down_menu_art(), 0, 0, 0, &art_id);
     tig_art_frame_data(art_id, &art_frame_data);
 
@@ -955,6 +957,10 @@ void follower_ui_drop_down_menu_create(int index)
     button_data.height = follower_ui_drop_down_menu_entry_rect.height;
     button_data.window_handle = follower_ui_drop_down_menu_window;
 
+    // UAP (0x56B0BB, 0x56B0D8): the patched binary relocates the button
+    // array to 0x59ED26 and walks it as nine entries. CE's array is already
+    // sized for the ninth command and `follower_ui_command_count()` supplies
+    // the UAP-aware bound, so no address-level relocation is needed.
     for (cmd = 0; cmd < follower_ui_command_count(); cmd++) {
         tig_button_create(&button_data, &(follower_ui_drop_menu_item_buttons[cmd]));
         button_data.y += FOLLOWER_UI_DROP_DOWN_MENU_ENTRY_HEIGHT;
@@ -1381,6 +1387,9 @@ void follower_ui_drop_down_menu_refresh(int highlighted_cmd)
     MesFileEntry mes_file_entry;
     bool enabled;
 
+    // UAP (0x56B982, 0x56BA7E): art 826 becomes 850 and the command loop
+    // bound widens from eight to nine when "Schematics" is enabled. The two
+    // helpers used here implement both sides of that switch.
     follower_ui_draw(follower_ui_drop_down_menu_window, follower_ui_drop_down_menu_art(), 0, 0, 100, 100);
 
     rect = follower_ui_drop_down_menu_entry_rect;

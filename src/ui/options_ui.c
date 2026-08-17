@@ -653,6 +653,9 @@ void options_ui_floats_set(int value)
  */
 void options_ui_float_speed_get(int* value_ptr, bool* enabled_ptr)
 {
+    // UAP (0x5898E0): this address is reused for the Shadows getter, and the
+    // float-speed getter is relocated to 0x589919. Pure code-layout
+    // consequence with no behaviour; see `options_ui_uap_shadows_meta` above.
     *value_ptr = settings_get_value(&settings, FLOAT_SPEED_KEY);
     *enabled_ptr = true;
 }
