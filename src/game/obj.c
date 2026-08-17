@@ -16,6 +16,11 @@
 
 #define OBJ_FILE_VERSION 119
 
+// Number of entries in `object_fields_count_per_type`. The table covers the
+// serialized object types `OBJ_TYPE_WALL` (0) through `OBJ_TYPE_TRAP` (17);
+// `OBJ_TYPE_MONSTER` and `OBJ_TYPE_UNIQUE_NPC` have no field-count entries.
+#define OBJECT_FIELDS_COUNT_PER_TYPE_COUNT 18
+
 // CE: The type of `data` and `transient_properties` is changed to `intptr_t` to
 // handle complex fields (virtually everything besides plain integers is stored
 // as pointers).
@@ -109,6 +114,7 @@ static bool convert_handle_to_id(void* entry, int index);
 static bool convert_id_to_handle(void* entry, int index);
 static int obj_type_change_array_len(ObjectType object_type);
 static bool object_field_valid(int type, int fld);
+static bool obj_file_type_has_field_count(int type);
 static bool object_proto_field_count(Object* object, int fld);
 static void obj_inst_bitmaps_alloc(Object* object);
 static void obj_inst_bitmaps_free(Object* object);
@@ -603,7 +609,7 @@ bool obj_init(GameInitInfo* init_info)
     object_fields = (ObjectFieldInfo*)CALLOC(OBJ_F_MAX, sizeof(ObjectFieldInfo));
     object_change_array_base = (int*)CALLOC(21, sizeof(int));
     object_simple_array_count = (int*)CALLOC(21, sizeof(int));
-    object_fields_count_per_type = (int16_t*)CALLOC(18, sizeof(int16_t));
+    object_fields_count_per_type = (int16_t*)CALLOC(OBJECT_FIELDS_COUNT_PER_TYPE_COUNT, sizeof(int16_t));
     obj_editor = init_info->editor;
     bitset_pool_init();
     obj_pool_init(sizeof(Object), obj_editor);
@@ -613,7 +619,7 @@ bool obj_init(GameInitInfo* init_info)
     obj_handle_field_lists_init();
 
     object.prototype_oid.type = OID_TYPE_BLOCKED;
-    for (index = 0; index < 18; index++) {
+    for (index = 0; index < OBJECT_FIELDS_COUNT_PER_TYPE_COUNT; index++) {
         object.type = index;
         object_field_count = 0;
         object_data_index = 0;
@@ -3091,6 +3097,16 @@ bool obj_proto_read_file(TigFile* stream, int64_t* obj_ptr, ObjectID oid)
         return false;
     }
 
+    // NOTE: Deliberate CE hardening. The original indexes
+    // `object_fields_count_per_type` with the stream-supplied type unchecked;
+    // a malformed .pro can read out of bounds here.
+    if (!obj_file_type_has_field_count(object->type)) {
+        tig_debug_printf("Obj: invalid object type %d in prototype file.\n", object->type);
+        obj_unlock(obj);
+        obj_pool_deallocate(obj);
+        return false;
+    }
+
     size = 4 * obj_type_change_array_len(object->type);
     object->dif = MALLOC(size);
     if (!objf_read(object->dif, size, stream)) {
@@ -3190,7 +3206,28 @@ bool obj_inst_read_file(TigFile* stream, int64_t* obj_ptr, ObjectID oid)
         return false;
     }
 
+    // NOTE: Deliberate CE hardening. The original indexes
+    // `object_fields_count_per_type` with the stream-supplied type unchecked;
+    // a malformed .mob can read out of bounds here.
+    if (!obj_file_type_has_field_count(object->type)) {
+        tig_debug_printf("Obj: invalid object type %d in instance file.\n", object->type);
+        obj_unlock(obj);
+        obj_pool_deallocate(obj);
+        return false;
+    }
+
     if (!objf_read(&(object->num_fields), sizeof(object->num_fields), stream)) {
+        obj_unlock(obj);
+        obj_pool_deallocate(obj);
+        return false;
+    }
+
+    // NOTE: Deliberate CE hardening. The original CALLOCs with the
+    // stream-supplied field count unchecked; a malformed .mob can request a
+    // negative or oversized allocation.
+    if (object->num_fields < 0
+        || object->num_fields > object_fields_count_per_type[object->type]) {
+        tig_debug_printf("Obj: invalid field count %d for object type %d.\n", object->num_fields, object->type);
         obj_unlock(obj);
         obj_pool_deallocate(obj);
         return false;
@@ -3262,6 +3299,14 @@ bool obj_proto_read_mem(uint8_t* data, int64_t* obj_ptr)
     mem_read_advance(&(object->oid), sizeof(object->oid), &data);
     mem_read_advance(&(object->type), sizeof(object->type), &data);
 
+    // NOTE: Deliberate CE hardening, matching obj_proto_read_file.
+    if (!obj_file_type_has_field_count(object->type)) {
+        tig_debug_printf("Obj: invalid object type %d in prototype memory buffer.\n", object->type);
+        obj_unlock(obj);
+        obj_pool_deallocate(obj);
+        return false;
+    }
+
     size = sizeof(*object->dif) * obj_type_change_array_len(object->type);
     object->dif = MALLOC(size);
     mem_read_advance(object->dif, size, &data);
@@ -3321,7 +3366,25 @@ bool obj_inst_read_mem(uint8_t* data, int64_t* obj_ptr)
     object->prototype_obj = OBJ_HANDLE_NULL;
     mem_read_advance(&(object->oid), sizeof(object->oid), &data);
     mem_read_advance(&(object->type), sizeof(object->type), &data);
+
+    // NOTE: Deliberate CE hardening, matching obj_inst_read_file.
+    if (!obj_file_type_has_field_count(object->type)) {
+        tig_debug_printf("Obj: invalid object type %d in instance memory buffer.\n", object->type);
+        obj_unlock(obj);
+        obj_pool_deallocate(obj);
+        return false;
+    }
+
     mem_read_advance(&(object->num_fields), sizeof(object->num_fields), &data);
+
+    // NOTE: Deliberate CE hardening, matching obj_inst_read_file.
+    if (object->num_fields < 0
+        || object->num_fields > object_fields_count_per_type[object->type]) {
+        tig_debug_printf("Obj: invalid field count %d for object type %d.\n", object->num_fields, object->type);
+        obj_unlock(obj);
+        obj_pool_deallocate(obj);
+        return false;
+    }
 
     object->field_40 = 0;
     object->modified = false;
@@ -4348,6 +4411,11 @@ bool convert_id_to_handle(void* entry, int index)
  *
  * 0x40C030
  */
+bool obj_file_type_has_field_count(int type)
+{
+    return type >= 0 && type < OBJECT_FIELDS_COUNT_PER_TYPE_COUNT;
+}
+
 int obj_type_change_array_len(ObjectType object_type)
 {
     int v1;

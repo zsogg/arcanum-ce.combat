@@ -28,6 +28,7 @@ add_executable(arcanum-tests
     "test_skill.c"
     "test_location.c"
     "test_obj_harness.c"
+    "test_obj_file.c"
     "obj_harness.c"
     "obj_harness.h"
     "tests_main.c"
