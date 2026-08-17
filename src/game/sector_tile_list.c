@@ -37,7 +37,7 @@ bool sector_tile_list_init(SectorTileList* list, tig_art_id_t* art_id_ptr)
  */
 bool sector_tile_list_reset(SectorTileList* list)
 {
-    // FIXME: Why 32?
+    // NOTE: Verified against 0x4F7BE5-0x4F7BF2 - original zeroes only 32 bytes of difmask (8 dwords) in reset; transcription faithful.
     memset(list->difmask, 0, 32);
     list->dif = false;
 

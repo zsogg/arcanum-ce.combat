@@ -382,7 +382,7 @@ void tile_script_exec(int64_t loc, int64_t triggerer_obj)
     if (tile_script.scr.num != scr.num
         || tile_script.scr.hdr.flags != scr.hdr.flags
         || tile_script.scr.hdr.counters != scr.hdr.counters) {
-        // TODO: Looks odd. Test how "remove this script" opcode works in this
+        // NOTE: Verified against 0x4C09FA-0x4C0A26 - original compares num/flags/counters and re-sets on change; transcription faithful.
         // case using script 3071 (teleport to Kerghan room).
         tile_script_set(&tile_script);
     }

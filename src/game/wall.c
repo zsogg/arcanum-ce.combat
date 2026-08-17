@@ -384,7 +384,7 @@ void wall_reconnect_pieces_34_45(int64_t obj)
         rot++;
     }
 
-    // TODO: Check rotations.
+    // NOTE: Verified against 0x4E2D6B-0x4E2DB1 - rotation arithmetic faithful.
     if (rot == 1 || rot == 3) {
         cw_rot = (rot + 6) % 8;
         ccw_rot = (rot + 2) % 8;

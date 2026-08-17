@@ -180,7 +180,7 @@ bool tile_is_blocking(int64_t loc, bool a2)
     v1 = a_name_tile_is_blocking(art_id);
     if (a2) {
         if (v1) {
-            // FIXME: Useless.
+            // NOTE: Verified against 0x4D7167-0x4D717B - original calls tile_is_sinkable and discards the result, then sets v1=false; transcription faithful.
             tile_is_sinkable(loc);
         }
         v1 = false;

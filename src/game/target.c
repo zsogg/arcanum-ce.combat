@@ -659,8 +659,8 @@ bool target_context_evaluate(TargetContext* ctx)
                         return false;
                     }
                 } else if ((tgt & TGT_NON_PARTY_CRITTERS) != 0) {
-                    // TODO: Looks the same as the code below, probably one of
-                    // it should be inverted, check.
+                    // NOTE: Verified against 0x4F2D20 - self block has 3 conditions, attacker block has 4 (extra target==attacker); transcription faithful.
+
                     if (ctx->self_obj != OBJ_HANDLE_NULL) {
                         int64_t v1;
                         int64_t v2;
@@ -726,7 +726,7 @@ bool target_context_evaluate(TargetContext* ctx)
                 }
             } else if ((tgt & TGT_OBJ_T_PORTAL) != 0) {
                 if (obj_type != OBJ_TYPE_PORTAL) {
-                    // TODO: Check, looks odd.
+                    // NOTE: Verified against 0x4F2D20 - portal fallthrough-to-container is in the original; transcription faithful.
                     if ((tgt & TGT_OBJ_T_CONTAINER) == 0) {
                         return false;
                     }
@@ -756,8 +756,8 @@ bool target_context_evaluate(TargetContext* ctx)
 
                 if ((tgt & TGT_NON_PARTY_CRITTERS) != 0
                     && obj_type_is_critter(obj_type)) {
-                    // TODO: Looks the same as the code above, probably one of
-                    // it should be inverted, check.
+                    // NOTE: Verified against 0x4F2D20 - self 3 conditions, attacker 4; the two blocks are intentionally asymmetric, not inverted.
+
                     if (ctx->self_obj != OBJ_HANDLE_NULL) {
                         int64_t v1;
                         int64_t v2;
@@ -1423,7 +1423,7 @@ void target_context_build_list(TargetContext* ctx)
         target_list_add_loc(targets, obj_field_int64_get(ctx->target_obj, OBJ_F_LOCATION));
     }
 
-    // FIXME: The code below does not look like implementation of cone.
+    // NOTE: Verified against 0x4F40B0 - original "cone" is a square radius scan; transcription faithful.
     if ((target_params->tgt & TGT_CONE) != 0) {
         target_context_init(&tmp_target_ctx, &tmp_target_params, ctx->source_obj);
         tmp_target_ctx.attacker_obj = ctx->attacker_obj;
@@ -1513,7 +1513,7 @@ void target_context_build_list(TargetContext* ctx)
                         if (target_context_evaluate(&tmp_target_ctx)) {
                             target_list_add_loc(targets, tmp_target_ctx.target_loc);
 
-                            // FIXME: Missing count tracking.
+                            // NOTE: Verified against 0x4F40B0 - original's cone tile-scan does not track count; transcription faithful.
                         }
                     }
                 }
@@ -1530,7 +1530,7 @@ void target_context_build_list(TargetContext* ctx)
             }
         } else {
             for (idx = 0; idx < targets->cnt; idx++) {
-                // FIXME: Leaking node when object handle is null.
+                // NOTE: Verified against 0x4F40B0 - original leaks the created node when obj is null; transcription faithful.
                 mt_obj_node = mt_obj_node_create();
                 if (targets->entries[idx].obj != OBJ_HANDLE_NULL) {
                     mt_obj_node->obj = targets->entries[idx].obj;

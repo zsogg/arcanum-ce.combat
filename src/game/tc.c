@@ -461,7 +461,7 @@ void tc_set_option(int index, const char* str)
     // Check of the mouse is over the option's rect and pick an appropriate
     // font.
     //
-    // TODO: Probably missing horizontal rect constraints.
+    // NOTE: Verified against 0x4C98DF-0x4C9934 - original constrains X only to the content rect, Y to both content and option rect; transcription faithful.
     if (tig_mouse_get_state(&mouse_state) == TIG_OK
         && mouse_state.x - tc_iso_window_rect.x >= tc_content_rect.x
         && mouse_state.y - tc_iso_window_rect.y >= tc_content_rect.y

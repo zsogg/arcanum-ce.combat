@@ -430,7 +430,7 @@ void tf_ping(tig_timestamp_t timestamp)
         } else {
             // The list is empty, remove it and update links.
             if (prev_list != NULL) {
-                // TODO: Check if `OF_TEXT_FLOATER` should be cleared here as well.
+                // NOTE: Verified against 0x4D52AB-0x4D52E4 - original clears OF_TEXT_FLOATER only in the head-list branch; transcription faithful.
                 prev_list->next = list->next;
                 tf_list_destroy(list);
                 list = prev_list->next;

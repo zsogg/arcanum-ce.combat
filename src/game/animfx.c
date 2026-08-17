@@ -300,10 +300,8 @@ bool animfx_has(AnimFxNode* node)
 
     if (entry->light_art_id != TIG_ART_ID_INVALID) {
         for (index = 0; index < 4; index++) {
-            // FIXME: Original code looks odd. Apparently it does not assign
-            // light art id to a variable and the check below refer to the
-            // `art_id` from earlier loops. In some circumstances that value
-            // is set to `num`, which is obviously wrong.
+            // NOTE: Deliberate CE fix. Original returns false on an invalid light id (0x4CCF3A) and pushes the stale EDI art id (0x4CCF40); CE uses the fetched id and continues.
+
             art_id = obj_arrayfield_uint32_get(node->obj, OBJ_F_OVERLAY_LIGHT_AID, index);
             if (art_id == TIG_ART_ID_INVALID) {
                 continue;
@@ -488,9 +486,8 @@ bool animfx_add(AnimFxNode* node)
 
             eye_candy_art_id = base_eye_candy_art_id;
             if (tig_art_exists(eye_candy_art_id) == TIG_OK) {
-                // FIXME: Setting eye candy type after checking existence of
-                // base aid. Foreground overlay and underlay perform existence
-                // check after type is set.
+                // NOTE: Verified against 0x4CD277-0x4CD290 - original checks tig_art_exists on the base aid before type_set(1); transcription faithful.
+
                 eye_candy_art_id = tig_art_eye_candy_id_type_set(eye_candy_art_id, 1);
                 if (node->scale == 4) {
                     if ((entry->flags & ANIMFX_LIST_ENTRY_CAN_AUTOSCALE) != 0) {
@@ -921,10 +918,8 @@ bool animfx_overlay_remove(AnimFxListEntry* entry, int64_t obj)
 
     if (entry->light_art_id != TIG_ART_ID_INVALID) {
         for (index = 0; index < 4; index++) {
-            // FIXME: Original code looks odd. Apparently it does not assign
-            // light art id to a variable and the check below refer to the
-            // `art_id` from earlier loops. In some circumstances that value
-            // is set to memory address of `entry`, which is obviously wrong.
+            // NOTE: Deliberate CE fix. Original returns false on an invalid light id (0x4CDAFD) and pushes the stale ESI art id (0x4CDAFF); CE uses the fetched id and continues.
+
             art_id = obj_arrayfield_uint32_get(obj, OBJ_F_OVERLAY_LIGHT_AID, index);
             if (art_id == TIG_ART_ID_INVALID) {
                 continue;
@@ -968,7 +963,7 @@ bool animfx_list_load(AnimFxList* list)
 
     if (dword_60173C >= ANIMFX_LIST_CAPACITY) {
         tig_debug_printf("AnimFX: animfx_list_load: ERROR: Attempt to load too many FX lists!\n");
-        // FIXME: Should be `EXIT_FAILURE`.
+        // NOTE: Verified against 0x4CDC23-0x4CDC25 - original calls exit(0); transcription faithful (EXIT_SUCCESS == 0).
         exit(EXIT_SUCCESS);
     }
 

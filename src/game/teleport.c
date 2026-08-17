@@ -426,7 +426,7 @@ bool teleport_run(TeleportData* teleport_data)
             }
 
             if (!obj_write(stream, node->obj)) {
-                // FIXME: Leaking file.
+                // NOTE: Verified against 0x4CD3F5-0x4CD3F7 - original returns false on obj_write failure without fclose; transcription faithful.
                 return false;
             }
 

@@ -345,7 +345,7 @@ bool terrain_editor_dump_bmp(void)
     }
 
     vb_create_info.flags = TIG_VIDEO_BUFFER_CREATE_SYSTEM_MEMORY;
-    vb_create_info.width = (int)terrain_header.width; // TODO: Check casts.
+    vb_create_info.width = (int)terrain_header.width; // NOTE: Verified against 0x4E7FBE-0x4E7FD1 - original loads the low 32 bits of the 64-bit width/height; (int) cast is faithful.
     vb_create_info.height = (int)terrain_header.height;
     vb_create_info.background_color = 0;
     if (tig_video_buffer_create(&vb_create_info, &vb) != TIG_OK) {
@@ -354,7 +354,7 @@ bool terrain_editor_dump_bmp(void)
 
     rect.x = 0;
     rect.y = 0;
-    rect.width = (int)terrain_header.width; // TODO: Check casts.
+    rect.width = (int)terrain_header.width; // NOTE: Verified against 0x4E7FCD/0x4E7FD5 - same int64->int32 truncation as above.
     rect.height = (int)terrain_header.height;
     terrain_editor_render(0, 0, vb, &rect);
 
@@ -384,7 +384,7 @@ bool terrain_editor_dump_bmp(void)
     compat_makepath(vb_to_bmp_info.path, drive, NULL, dir, "bmp");
     vb_to_bmp_info.rect = NULL;
     if (tig_video_buffer_save_to_bmp(&vb_to_bmp_info) != TIG_OK) {
-        // FIXME: Leaking `vb`.
+        // NOTE: Verified against 0x4E8096-0x4E809E - original leaks vb on save failure; transcription faithful.
         return false;
     }
 
@@ -489,12 +489,12 @@ bool terrain_flush(void)
         hdr = terrain_header;
         hdr.flags = terrain_header.flags | 0x1;
         if (tig_file_fwrite(&hdr, sizeof(hdr), 1, stream) != 1) {
-            // FIXME: Leaks `stream`.
+            // NOTE: Verified against 0x4E87AA-0x4E87B7 - original leaks the stream on fwrite failure; transcription faithful.
             return false;
         }
 
         if (!terrain_save(stream)) {
-            // FIXME: Leaks `stream`.
+            // NOTE: Verified against 0x4E87C1-0x4E87C9 - original leaks the stream when terrain_save fails; transcription faithful.
             return false;
         }
 
@@ -854,7 +854,7 @@ bool terrain_parse_transition(char* str, int* from_terrain_type, int* to_terrain
 
     from = terrain_match_base_name(str);
     if (from == -1) {
-        // FIXME: `str` not restored to previous state.
+        // NOTE: Verified against 0x4E925E/0x4E9270 - original returns false from the from==-1 path without restoring *pch; transcription faithful.
         return false;
     }
 
