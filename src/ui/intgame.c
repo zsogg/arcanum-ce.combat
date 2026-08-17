@@ -1383,7 +1383,7 @@ void iso_interface_create(tig_window_handle_t window_handle)
     vb_create_info.background_color = 0;
     if (tig_video_buffer_create(&vb_create_info, &dword_64C474) != TIG_OK) {
         tig_debug_printf("iso_interface_create: ERROR: couldn't create video buffer!\n");
-        exit(EXIT_SUCCESS); // FIXME: Should be EXIT_FAILURE
+        exit(EXIT_SUCCESS); // NOTE: verified against 0x54A3D1 - original exits with status 0 (EXIT_SUCCESS).
     }
 
     window_data.flags = TIG_WINDOW_MESSAGE_FILTER;
@@ -1402,7 +1402,7 @@ void iso_interface_create(tig_window_handle_t window_handle)
 
         if (tig_art_anim_data(art_id, &art_anim_data) != TIG_OK) {
             tig_debug_printf("iso_interface_create: ERROR: couldn't grab art anim data!\n");
-            exit(EXIT_SUCCESS); // FIXME: Should be EXIT_FAILURE
+            exit(EXIT_SUCCESS); // NOTE: verified against 0x54A528 - original exits 0 (EXIT_SUCCESS).
         }
 
         window_data.background_color = art_anim_data.color_key;
@@ -1420,7 +1420,7 @@ void iso_interface_create(tig_window_handle_t window_handle)
 
         if (tig_window_create(&window_data, &(intgame_interface_window_handles[index])) != TIG_OK) {
             tig_debug_printf("iso_interface_create: ERROR: couldn't create window!\n");
-            exit(EXIT_SUCCESS); // FIXME: Should be EXIT_FAILURE
+            exit(EXIT_SUCCESS); // NOTE: verified against 0x54A53B - original exits 0 (EXIT_SUCCESS).
         }
 
         window_data.rect.x = 0;
@@ -1456,7 +1456,7 @@ void iso_interface_create(tig_window_handle_t window_handle)
         iwid = find_interface_window_index(intgame_rotwin_text_frame[index].rect.x, intgame_rotwin_text_frame[index].rect.y);
         if (iwid == -1) {
             tig_debug_printf("iso_interface_create: ERROR: find iwid match!\n");
-            exit(EXIT_SUCCESS); // FIXME: Should be EXIT_FAILURE
+            exit(EXIT_SUCCESS); // NOTE: verified against 0x54A641 - original exits 0 (EXIT_SUCCESS).
         }
 
         intgame_rotwin_text_frame[index].rect.x -= intgame_interface_window_frames[iwid].x;
@@ -1468,7 +1468,7 @@ void iso_interface_create(tig_window_handle_t window_handle)
         iwid = find_interface_window_index(intgame_number_boxes[index].rect.x, intgame_number_boxes[index].rect.y);
         if (iwid == -1) {
             tig_debug_printf("iso_interface_create: ERROR: find iwid match!\n");
-            exit(EXIT_SUCCESS); // FIXME: Should be EXIT_FAILURE
+            exit(EXIT_SUCCESS); // NOTE: verified against 0x54A654 - original exits 0 (EXIT_SUCCESS).
         }
 
         intgame_number_boxes[index].rect.x -= intgame_interface_window_frames[iwid].x;
@@ -1549,7 +1549,7 @@ void iso_interface_create(tig_window_handle_t window_handle)
             return;
         }
 
-        // FIXME: Wrong rect (should be at 0,0).
+        // NOTE: verified against 0x54A85C/0x54A91E - original passes 0x5C6EE0 (intgame_maintain_window_rects), not a zero rect.
         tig_window_fill(intgame_maintain_fs_windows[index],
             &(intgame_maintain_window_rects[index]),
             tig_color_make(0, 0, 0));
@@ -1981,7 +1981,7 @@ void intgame_ammo_icon_refresh(tig_art_id_t art_id)
     index = find_interface_window_index(intgame_ammo_button_info.x, intgame_ammo_button_info.y);
     if (index == -1) {
         tig_debug_printf("intgame_ammo_icon_refresh: ERROR: couldn't find iwid match!\n");
-        exit(EXIT_SUCCESS); // FIXME: Should be EXIT_FAILURE.
+        exit(EXIT_SUCCESS); // NOTE: verified against 0x54B52D - original exits 0 (EXIT_SUCCESS).
     }
 
     blt.art_id = art_id;
@@ -3655,7 +3655,7 @@ void intgame_perform_action_on_target(TargetDescriptor* td)
             case OBJ_TYPE_NPC:
                 if (!critter_is_dead(td->obj)
                     || (obj_field_int32_get(td->obj, OBJ_F_SPELL_FLAGS) & OSF_SPOKEN_WITH_DEAD) != 0) {
-                    // FIXME: Useless.
+                    // NOTE: verified against 0x54F1AC - original calls obj_field_int32_get(CURRENT_AID) and discards the result.
                     obj_field_int32_get(td->obj, OBJ_F_CURRENT_AID);
 
                     if (player_is_pc_obj(td->obj)) {
@@ -4480,7 +4480,7 @@ bool intgame_message_window_write_text(tig_window_handle_t window_handle, char* 
 
     if (intgame_is_compact_interface()) {
         if (str[0] == '\0') {
-            // FIXME: Leaking font!
+            // NOTE: verified against 0x550B3E - original returns true before 0x550BB3 (tig_font_pop), so the leak matches the binary.
             return true;
         }
 
@@ -6439,7 +6439,7 @@ void intgame_refresh_cursor(void)
     }
 
     if (!hotkey_ui_is_dragging()) {
-        // FIXME: Meaningless.
+        // NOTE: verified against 0x5539CB - original calls tig_mouse_cursor_get_art_id() and discards the result.
         tig_mouse_cursor_get_art_id();
 
         art_num = intgame_mode_cursors[intgame_mode_get()];

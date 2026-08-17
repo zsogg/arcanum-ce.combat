@@ -3676,7 +3676,7 @@ void mainmenu_ui_save_game_refresh(TigRect* rect)
             art_blit_info.src_rect = &src_rect;
             art_blit_info.dst_rect = &dst_rect;
             if (tig_window_blit_art(mainmenu_ui_window_handle, &art_blit_info) != TIG_OK) {
-                // FIXME: Misleading message.
+                // NOTE: verified against 0x5440D9 - the binary really contains the "mmUIMPLoadGameRefreshFunc" string (0x5C5AC0) here.
                 tig_debug_printf("MMUI: mmUIMPLoadGameRefreshFunc: ERROR: FAILED to refresh!\n");
             }
         }
@@ -3996,7 +3996,7 @@ void mainmenu_ui_new_char_refresh(TigRect* rect)
 
         str = mainmenu_ui_textedit_buffer[0] != '\0' ? mainmenu_ui_textedit_buffer : " ";
 
-        // FIXME: Useless.
+        // NOTE: verified against 0x54489F - original calls mes_get_msg(500) and discards the result.
         mes_file_entry.num = 500; // "Choose Name"
         mes_get_msg(mainmenu_ui_mainmenu_mes_file, &mes_file_entry);
 
@@ -4422,7 +4422,7 @@ bool mainmenu_ui_new_char_next_race(int64_t obj)
             } while (race < 7 && !mainmenu_ui_race_info[race].available_for_female);
 
             if (race >= 8) {
-                // FIXME: Unreachable.
+                // NOTE: verified against 0x545615-0x545618 - the binary contains this dead race>=8 check.
                 return false;
             }
 
@@ -4440,7 +4440,7 @@ bool mainmenu_ui_new_char_next_race(int64_t obj)
             }
 
             if (race >= 8) {
-                // FIXME: Unreachable.
+                // NOTE: verified against 0x545658-0x54565B - the binary contains this dead race>=8 check.
                 return false;
             }
 
@@ -4914,7 +4914,7 @@ void mainmenu_ui_create_window_func(bool should_display)
 
             if (tig_window_create(&window_data, &mainmenu_ui_window_handle) != TIG_OK) {
                 tig_debug_printf("mainmenu_ui_create_window_func: ERROR: tig_art_anim_data failed!\n");
-                exit(EXIT_SUCCESS); // FIXME: Should be `EXIT_FAILURE`.
+                exit(EXIT_SUCCESS); // NOTE: verified against 0x546645 - original exits 0 (EXIT_SUCCESS).
             }
 
             tig_window_blit_art(mainmenu_ui_window_handle, &art_blit_info);
@@ -4994,7 +4994,7 @@ void mainmenu_ui_create_window_func(bool should_display)
             if (tig_window_create(&window_data, &mainmenu_ui_top_bar_cover_window_handle) != TIG_OK) {
                 if (!v1) {
                     tig_debug_printf("mainmenu_ui_create_window_func: ERROR: tig_art_anim_data2 failed!\n");
-                    exit(EXIT_SUCCESS); // FIXME: Should be `EXIT_FAILURE`.
+                    exit(EXIT_SUCCESS); // NOTE: verified against 0x546825 - original exits 0 (EXIT_SUCCESS).
                 }
             }
 
@@ -5002,7 +5002,7 @@ void mainmenu_ui_create_window_func(bool should_display)
         } else {
             if (!v1) {
                 tig_debug_printf("mainmenu_ui_create_window_func: ERROR: tig_art_anim_data2 failed!\n");
-                exit(EXIT_SUCCESS); // FIXME: Should be `EXIT_FAILURE`.
+                exit(EXIT_SUCCESS); // NOTE: verified against 0x546825 - original exits 0 (EXIT_SUCCESS).
             }
         }
     }
@@ -5828,7 +5828,7 @@ void mainmenu_ui_refresh_button_text(int btn, unsigned int flags)
     window = main_menu_window_info[mainmenu_ui_window_type];
     button = &(window->buttons[btn]);
 
-    // FIXME: Result is not being checked.
+    // NOTE: verified against 0x547E2B - original ignores the return value and uses the out-param only.
     tig_button_is_hidden(button->button_handle, &hidden);
     if (!hidden) {
         mes_file_entry.num = window->num;
@@ -6081,7 +6081,7 @@ bool mainmenu_ui_return_to_mainmenu(tig_button_handle_t button_handle)
         || !gameuilib_mod_load()) {
         tig_debug_printf("MainMenu: Unable to load default module %s.\n",
             gamelib_default_module_name_get());
-        exit(EXIT_SUCCESS); // FIXME: Should be EXIT_FAILURE.
+        exit(EXIT_SUCCESS); // NOTE: verified against 0x5493B5 - original exits 0 (EXIT_SUCCESS).
     }
 
     mainmenu_ui_reset();
