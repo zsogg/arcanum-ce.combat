@@ -778,7 +778,8 @@ void skill_ui_dec_skill(int64_t obj, int skill)
     if (IS_TECH_SKILL(skill)) {
         skill = GET_TECH_SKILL(skill);
         base = tech_skill_points_get(obj, skill);
-        level = tech_skill_level(obj, skill); // FIXME: Unused.
+        // NOTE: Verified against 0x57AFBF-0x57AFC7 - original calls tech_skill_level and discards the result.
+        tech_skill_level(obj, skill);
         cost = tech_skill_cost_dec(obj, skill);
         points = stat_level_get(obj, STAT_UNSPENT_POINTS);
 
@@ -811,10 +812,10 @@ void skill_ui_dec_skill(int64_t obj, int skill)
         while (level == basic_skill_level(obj, skill)) {
             if (basic_skill_points_set(obj, skill, base - cost) != base - cost) {
                 if (basic_skill_points_get(obj, skill) != 0) {
-                    // FIXME: No check for pc/charedit.
+                    // NOTE: Verified against 0x57AF98-0x57AFA8 - original calls charedit_error_skill_at_min/zero unconditionally on the basic-skill failure path; transcription faithful.
                     charedit_error_skill_at_min();
                 } else {
-                    // FIXME: No check for pc/charedit.
+                    // NOTE: Same original path at 0x57AF9A/0x57B069 and 0x57AFA0; the is_pc/charedit checks are intentionally absent.
                     charedit_error_skill_is_zero();
                 }
                 return;

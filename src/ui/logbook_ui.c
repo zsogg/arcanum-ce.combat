@@ -611,7 +611,8 @@ void logbook_ui_create(void)
 
     if (!intgame_big_window_lock(logbook_ui_message_filter, &logbook_ui_window)) {
         tig_debug_printf("logbk_ui_create: ERROR: intgame_big_window_lock failed!\n");
-        exit(EXIT_SUCCESS); // FIXME: Should be EXIT_FAILURE.
+        // NOTE: Verified against 0x53F116-0x53F117 - original pushes the zeroed EBX and calls exit(0); transcription faithful.
+        exit(EXIT_SUCCESS);
     }
 
     // Hidden easter egg: holding Left Ctrl + Left Alt while opening logbook

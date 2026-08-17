@@ -191,7 +191,7 @@ SpellUiActivate spell_ui_activate(int64_t obj, int spl)
         }
     }
 
-    // TODO: Check, probably wrong.
+    // NOTE: Verified against 0x57BE68-0x57BFA2 - the self/no-tile and TGT_OBJ_RADIUS immediate-apply path is original; transcription faithful.
     if (*tgt_ptr == TGT_NONE
         || ((*tgt_ptr & TGT_SELF) != 0
             && (*tgt_ptr & TGT_TILE) == 0)
@@ -410,7 +410,7 @@ void spell_ui_maintain_hover(int slot)
     MagicTechRunInfo* run_info;
     int64_t obj;
 
-    // FIXME: Unused.
+    // NOTE: Verified against 0x57C3F3 - original calls player_get_local_pc_obj and discards the result; transcription faithful.
     player_get_local_pc_obj();
 
     if (spell_ui_maintain_slots[slot].field_4 != 1) {

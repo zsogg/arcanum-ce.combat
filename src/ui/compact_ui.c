@@ -132,7 +132,7 @@ bool compact_ui_create(void)
     TigWindowData window_data;
 
     if (!compact_ui_initialized) {
-        // FIXME: Should be false?
+        // NOTE: Verified against 0x568A40 - original returns true when compact_ui_initialized is false; transcription faithful.
         return true;
     }
 

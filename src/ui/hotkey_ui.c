@@ -960,7 +960,8 @@ bool hotkey_ui_drop(TigMessageMouseEvent mouse_event)
             break;
         case HOTKEY_ITEM:
             inven_ui_drag_clear();
-            item_inventory_location_get(hotkey_ui_dragged.item_obj.obj); // FIXME: Useless.
+            // NOTE: Verified against 0x57EBAD-0x57EBB2 - original calls item_inventory_location_get and discards the result; transcription faithful.
+            item_inventory_location_get(hotkey_ui_dragged.item_obj.obj);
             flags = obj_field_int32_get(hotkey_ui_dragged.item_obj.obj, OBJ_F_ITEM_FLAGS);
             flags &= ~OIF_NO_DISPLAY;
             obj_field_int32_set(hotkey_ui_dragged.item_obj.obj, OBJ_F_ITEM_FLAGS, flags);
@@ -1150,8 +1151,8 @@ void hotkey_ui_add_recent_action(int type, int data, int64_t item_obj)
             && hotkey_ui_recent_actions[0].item_obj.obj == item_obj) {
             return;
         }
-        // FIXME: `new_art_id` is never set in this code path.
-        new_art_id = TIG_ART_ID_INVALID;
+        // NOTE: Porting bug #27 - original reuses the `type` argument (1) as the art id on this path at 0x57F107/0x57F130; CE previously substituted TIG_ART_ID_INVALID.
+        new_art_id = (tig_art_id_t)type;
         break;
     case HOTKEY_SKILL:
         if (hotkey_ui_recent_actions[0].type == HOTKEY_SKILL
@@ -1191,7 +1192,8 @@ void hotkey_ui_add_recent_action(int type, int data, int64_t item_obj)
 
     hotkey_ui_recent_actions[0].type = type;
     hotkey_ui_recent_actions[0].data = data;
-    object_ref_init(item_obj, &hotkey_ui_recent_actions[1].item_obj); // FIXME: Probably wrong, should be [0].
+    // NOTE: Verified against 0x57F0EF-0x57F102 - original writes the new item ref to recent_actions[1], not [0]; transcription faithful (original bug kept).
+    object_ref_init(item_obj, &hotkey_ui_recent_actions[1].item_obj);
     intgame_recent_action_button_get(0)->art_num = tig_art_num_get(new_art_id);
     button_handle = intgame_recent_action_button_get(0)->button_handle;
     if (button_handle != TIG_BUTTON_HANDLE_INVALID) {

@@ -262,9 +262,7 @@ bool cyclic_ui_control_create(CyclicUiControlInfo* info, int* id_ptr)
         return false;
     }
 
-    // FIXME: This should likely be moved to `CYCLIC_UI_CONTROL_NUMERIC_BAR`, as
-    // the maximum value for text controls is derived from the message file or
-    // text array size.
+    // NOTE: Verified against 0x57F750 - original applies info.max_value after every type-specific default, not only for numeric bars; transcription faithful.
     if (ctrl->info.max_value != 0) {
         ctrl->max_value = ctrl->info.max_value;
     }

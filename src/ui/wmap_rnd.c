@@ -505,8 +505,8 @@ bool wmap_rnd_mod_load(void)
             }
 
             // Maximum player level required for this entry to be eligible.
-            // TODO: Check, probably should be "MaxLevel:".
-            if (tig_str_parse_named_value(&str, "MinLevel:", &value)) {
+            // NOTE: Porting bug #24 - original parses "MaxLevel:" at 0x558497; CE parsed "MinLevel:" twice.
+            if (tig_str_parse_named_value(&str, "MaxLevel:", &value)) {
                 if (value < 0 || value > 32000) {
                     tig_debug_printf("WmapRnd: Init: ERROR: MaxLevel Value Wrong: Line: %d.\n", mes_file_entry.num);
                     tig_debug_println("Disabling random encounters because of bad message file.");
@@ -1287,11 +1287,11 @@ void wmap_rnd_encounter_spawn(WmapRndEncounterTableEntry* entry)
 
     // Randomly choose whether monsters approach from the left or from above.
     if (random_between(1, 100) < 51) {
-        // TODO: Check.
+        // NOTE: Verified against 0x55927C-0x5592AE - original rolls < 51, makes origin (loc_x - 6, loc_y), and sets direction 6.
         origin = LOCATION_MAKE(wmap_rnd_loc_x - 6, wmap_rnd_loc_y);
         wmap_rnd_spawn_direction = 6;
     } else {
-        // TODO: Check.
+        // NOTE: Verified against 0x5592B0-0x5592D8 - original makes origin (loc_x, loc_y - 6) and sets direction 2.
         origin = LOCATION_MAKE(wmap_rnd_loc_x, wmap_rnd_loc_y - 6);
         wmap_rnd_spawn_direction = 2;
     }
@@ -1303,7 +1303,7 @@ void wmap_rnd_encounter_spawn(WmapRndEncounterTableEntry* entry)
 
         for (k = 0; k < wmap_rnd_critter_spawn_counts[index]; k++) {
             // Calculate the spawn position for this individual monster.
-            // TODO: Check.
+            // NOTE: Verified against 0x559311-0x559334 - original loads the origin components into dx/dy and calls wmap_rnd_spawn_position_offset.
             dx = LOCATION_GET_X(origin);
             dy = LOCATION_GET_Y(origin);
             wmap_rnd_spawn_position_offset(k, &dx, &dy);
@@ -1353,22 +1353,20 @@ void wmap_rnd_encounter_spawn(WmapRndEncounterTableEntry* entry)
  * advancing `*dx_ptr` and `*dy_ptr` to spread monsters across adjacent tiles
  * rather than stacking them all on the same tile.
  *
- * TODO: Check.
+ * NOTE: Porting bug #25 - original (0x5594E0-0x559543) adds
+ * `(index - 1) / 3 + 1` to `*dx_ptr`, `index % 3` to `*dy_ptr`, and
+ * `*dy_ptr += 1` for index 0; CE's old LOCATION_MAKE form moved both
+ * components on every path.
  *
  * 0x5594E0
  */
 void wmap_rnd_spawn_position_offset(int index, int64_t* dx_ptr, int64_t* dy_ptr)
 {
-    int v1;
-
     if (index != 0) {
-        v1 = (index - 1) / 3 + 1;
-        *dx_ptr = LOCATION_MAKE(LOCATION_GET_X(*dx_ptr) + 1, LOCATION_GET_Y(*dx_ptr) + 1);
-
-        v1 = index / 3;
-        *dy_ptr = LOCATION_MAKE(LOCATION_GET_X(*dy_ptr) + v1, LOCATION_GET_Y(*dy_ptr) + v1);
+        *dx_ptr += (index - 1) / 3 + 1;
+        *dy_ptr += index % 3;
     } else {
-        *dy_ptr = LOCATION_MAKE(LOCATION_GET_X(*dy_ptr) + 1, LOCATION_GET_Y(*dy_ptr) + 1);
+        *dy_ptr += 1;
     }
 }
 

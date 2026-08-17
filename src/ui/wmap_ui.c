@@ -892,7 +892,7 @@ void wmap_ui_town_notes_save(void)
                 }
             }
         } else {
-            // FIXME: Should set error?
+            // NOTE: Verified against 0x5600F4-0x560128 - original skips the success=false path when the second fwrite fails; transcription faithful.
         }
     } else {
         success = false;
@@ -1337,7 +1337,7 @@ bool wmap_load_worldmap_info(void)
             wmap_ui_mode_info[WMAP_UI_MODE_WORLD].num_tiles = wmap_ui_mode_info[WMAP_UI_MODE_WORLD].num_hor_tiles * wmap_ui_mode_info[WMAP_UI_MODE_WORLD].num_vert_tiles;
             wmap_ui_mode_info[WMAP_UI_MODE_WORLD].tiles = (WmapTile*)CALLOC(wmap_ui_mode_info[WMAP_UI_MODE_WORLD].num_tiles, sizeof(WmapTile));
 
-            // FIXME: Meaningless, calloc already zeroes it out.
+            // NOTE: Verified against 0x560C1B-0x560C55 - original CALLOCs the tile array and then zeroes each flags field again; transcription faithful.
             for (idx = 0; idx < wmap_ui_mode_info[WMAP_UI_MODE_WORLD].num_tiles; idx++) {
                 wmap_ui_mode_info[WMAP_UI_MODE_WORLD].tiles[idx].flags = 0;
             }
@@ -1563,7 +1563,8 @@ bool wmap_ui_create(void)
 
     if (tig_art_anim_data(art_id, &art_anim_data) != TIG_OK) {
         tig_debug_printf("wmap_ui_create: ERROR: tig_art_anim_data failed!\n");
-        exit(EXIT_SUCCESS); // FIXME: Should be EXIT_FAILURE.
+        // NOTE: Verified against 0x561339-0x561342 - original falls through to this shared error path and calls exit(0); transcription faithful (EXIT_SUCCESS == 0).
+        exit(EXIT_SUCCESS);
     }
 
     src_rect.x = wmap_ui_window_frame.x;
@@ -1582,9 +1583,9 @@ bool wmap_ui_create(void)
     art_blit_info.dst_rect = &dst_rect;
 
     if (!intgame_big_window_lock(wmap_ui_message_filter, &wmap_ui_window)) {
-        // FIXME: Message is misleading.
+        // NOTE: Verified against 0x561339-0x561342 - original also prints the tig_art_anim_data message on window-lock failure, then calls exit(0); transcription faithful.
         tig_debug_printf("wmap_ui_create: ERROR: tig_art_anim_data failed!\n");
-        exit(EXIT_SUCCESS); // FIXME: Should be EXIT_FAILURE.
+        exit(EXIT_SUCCESS);
     }
 
     tig_window_blit_art(wmap_ui_window, &art_blit_info);
@@ -1621,7 +1622,8 @@ bool wmap_ui_create(void)
 
     if (tig_video_buffer_create(&vb_create_info, &wmap_ui_video_buffer) != TIG_OK) {
         tig_debug_printf("wmap_ui_create: ERROR: tig_video_buffer_create failed!\n");
-        exit(EXIT_SUCCESS); // FIXME: Should be `EXIT_FAILURE`.
+        // NOTE: Verified against 0x561321-0x56132F - original calls exit(0) here too; transcription faithful.
+        exit(EXIT_SUCCESS);
     }
 
     wmap_ui_pc_lens.window_handle = wmap_ui_window;
@@ -4578,7 +4580,8 @@ void wmap_note_vbid_lock(WmapNote* note)
         vb_create_info.color_key = wmap_ui_color_key;
         if (tig_video_buffer_create(&vb_create_info, &(note->video_buffer)) != TIG_OK) {
             tig_debug_printf("wmap_note_vbid_lock: ERROR: tig_video_buffer_create failed!\n");
-            exit(EXIT_SUCCESS); // FIXME: Should be EXIT_FAILURE.
+            // NOTE: Verified against 0x565EA3-0x565EA5 - original calls exit(0); transcription faithful.
+            exit(EXIT_SUCCESS);
         }
 
         note->flags |= 0x4;

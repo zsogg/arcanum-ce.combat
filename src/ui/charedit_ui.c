@@ -1909,7 +1909,7 @@ int charedit_stat_map_to_critter_stat(int stat)
     case CHAREDIT_STAT_CHARISMA_LEVEL:
         return STAT_CHARISMA;
     default:
-        // FIXME: Ideally should return something else to denote error.
+        // NOTE: Verified against 0x55B410 - original initializes the return to 0 and falls through; transcription faithful.
         return 0;
     }
 }
@@ -2188,7 +2188,7 @@ bool charedit_create_skills_win(void)
         button_data.width = charedit_skills_hover_areas[index].width;
         button_data.height = charedit_skills_hover_areas[index].height;
         tig_button_create(&button_data, &(charedit_skills_hover_areas[index].button_handle));
-        // FIXME: No error checking as seen above.
+        // NOTE: Verified against 0x55BCC3-0x55BD01 - original ignores tig_button_create for the hover areas; transcription faithful.
     }
 
     return true;
@@ -2769,7 +2769,7 @@ void charedit_refresh_spells_win(void)
 
     cnt = spell_college_level_get(charedit_obj, charedit_college);
 
-    // TODO: Refactor v1.
+    // NOTE: Verified against 0x55CBC0 - original does `v1 = cnt; if (v1 < 5) v1++;`; transcription faithful.
     v1 = cnt;
     if (v1 < 5) {
         v1++;
