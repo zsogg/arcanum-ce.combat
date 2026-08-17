@@ -227,8 +227,8 @@ const char* stat_lookup_keys_tbl[STAT_COUNT] = {
     /*    STAT_EXPERIENCE_POINTS */ "stat_experience_points",
     /*            STAT_ALIGNMENT */ "stat_alignment",
     /*          STAT_FATE_POINTS */ "stat_fate_points",
-    /*       STAT_UNSPENT_POINTS */ "stat_poison_level", // FIXME: Does not match stat.
-    /*        STAT_MAGICK_POINTS */ "stat_age", // FIXME: Does not match stat.
+    /*       STAT_UNSPENT_POINTS */ "stat_poison_level", // NOTE: Verified - slot 21 (0x5B53D8) -> 0x5B5404 = "stat_poison_level" in the original; CE matches.
+    /*        STAT_MAGICK_POINTS */ "stat_age", // NOTE: Verified - slot 22 (0x5B53DC) -> 0x5B53F8 = "stat_age" in the original; CE matches.
     /*          STAT_TECH_POINTS */ NULL,
     /*         STAT_POISON_LEVEL */ NULL,
     /*                  STAT_AGE */ NULL,

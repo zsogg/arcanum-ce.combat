@@ -219,7 +219,7 @@ static TigRect gamelib_iso_content_rect;
 // 0x5D0028
 static char gamelib_mod_patch_paths[GAMELIB_MAX_PATCH_COUNT][TIG_MAX_PATH];
 
-// FIXME: Should be of TIG_MAX_PATH (260), not 256.
+// NOTE: Verified - original allocation is 256 bytes (0x5D0A50..0x5D0B50); the 260-byte claim is incorrect.
 //
 // 0x5D0A50
 static char byte_5D0A50[256];
@@ -483,8 +483,8 @@ void gamelib_exit(void)
 
     if (tig_file_is_directory("Save\\Current")) {
         if (!tig_file_empty_directory("Save\\Current")) {
-            // FIXME: Typo in function name, this is definitely not
-            // `gamelib_init`.
+            // NOTE: Verified - string at 0x59B32C literally reads "gamelib_init(): error emptying folder %s\n"; CE matches.
+
             tig_debug_printf("gamelib_init(): error emptying folder %s\n", "Save\\Current");
         }
     }

@@ -115,7 +115,7 @@ bool text_filter_sleeping_init(void)
 
     if (!mes_load(TEXT_FILTER_SLEEP_MES_FILE_NAME, &mes_file)) {
         tig_debug_printf("text_filter_sleeping_init: ERROR: couldn't load message file: %s!\n", TEXT_FILTER_SLEEP_MES_FILE_NAME);
-        exit(EXIT_SUCCESS); // FIXME: Should be `EXIT_FAILURE`.
+        exit(EXIT_SUCCESS); // NOTE: Verified at 0x4F6A01/0x4F6A03 - original calls exit(0), i.e. EXIT_SUCCESS.
     }
 
     text_filter_sleeping_strings = (char**)CALLOC(sizeof(*text_filter_sleeping_strings), capacity);

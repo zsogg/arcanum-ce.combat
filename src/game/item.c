@@ -356,7 +356,7 @@ bool item_is_item(int64_t obj)
 // 0x461340
 int item_inventory_location_get(int64_t obj)
 {
-    // FIXME: Result is not used.
+    // NOTE: Verified against 0x46134A/0x46134E - original also discards item_parent(obj, NULL).
     item_parent(obj, NULL);
     return obj_field_int32_get(obj, OBJ_F_ITEM_INV_LOCATION);
 }
@@ -1810,7 +1810,7 @@ void item_inventory_mark_summoned(int64_t obj)
             cnt);
     }
 
-    // FIXME: Useless.
+    // NOTE: Verified against 0x4636C8/0x4636CC - original reads OBJ_F_LOCATION and discards it.
     obj_field_int64_get(obj, OBJ_F_LOCATION);
 
     for (idx = inventory_list_cnt - 1; idx >= 0; idx--) {

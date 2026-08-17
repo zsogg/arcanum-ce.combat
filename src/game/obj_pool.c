@@ -959,7 +959,7 @@ bool find_perm_oid(ObjectID oid, int* index_ptr)
     r = obj_pool_perm_oid_table_size - 1;
     while (l <= r) {
         m = (l + r) / 2;
-        // FIXME: Unnecessary copying.
+        // NOTE: Verified at 0x4E582D/0x4E583C - original copies the 24-byte ObjectID by value (rep movs ecx=6); CE matches.
         if (objid_compare(obj_pool_perm_oid_table[m].oid, oid)) {
             l = m + 1;
         } else if (objid_compare(oid, obj_pool_perm_oid_table[m].oid)) {

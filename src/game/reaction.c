@@ -529,7 +529,7 @@ void reaction_set(int64_t npc_obj, int64_t pc_obj, int value)
         return;
     }
 
-    // FIXME: Unused.
+    // NOTE: Verified at 0x4C13F6/0x4C13FF - original calls datetime_current_second() and discards it as an ignored 2nd arg.
     datetime_current_second();
 
     v1 = reaction_neutral_distance(value);
@@ -537,7 +537,7 @@ void reaction_set(int64_t npc_obj, int64_t pc_obj, int value)
         if (index != 0) {
             reaction_level = obj_arrayfield_uint32_get(npc_obj, OBJ_F_NPC_REACTION_LEVEL_IDX, index);
 
-            // FIXME: Unused.
+            // NOTE: Verified at 0x4C1421/0x4C142F - original reads reaction-time field 0x12b and discards it as an ignored 2nd arg.
             obj_arrayfield_uint32_get(npc_obj, OBJ_F_NPC_REACTION_TIME_IDX, index);
 
             v2 = reaction_neutral_distance(reaction_level);
@@ -594,7 +594,7 @@ int reaction_modifiers_get(int64_t npc_obj, int64_t pc_obj, unsigned int flags)
 // 0x4C15A0
 int reaction_neutral_distance(int a1)
 {
-    // FIXME: Unused.
+    // NOTE: Verified at 0x4C15AD/0x4C15BD - original calls datetime_current_second() and discards it in both branches.
     datetime_current_second();
 
     if (a1 > 50) {

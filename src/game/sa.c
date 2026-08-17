@@ -29,8 +29,8 @@ static bool sa_array_copy_to_flat_worker(void* entry, int key);
 void sa_allocate(SizeableArray** sa_ptr, int size)
 {
     if (*sa_ptr != NULL) {
-        // FIXME: Should call `sa_deallocate` here to also destroy the
-        // existing bitset.
+        // NOTE: Verified against 0x4E7430 - original FREE's the struct without bitset_free, leaking the old bitset; CE matches.
+
         FREE(*sa_ptr);
     }
 

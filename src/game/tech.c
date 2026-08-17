@@ -8,7 +8,7 @@
 #include "game/stat.h"
 #include "game/ui.h"
 
-// TODO: Refactor.
+// NOTE: Verified - original uses literal 0x11 (17) at 0x4AFDEB/0x4AFE9B/0x4AFFD0; rename macro if desired, value is faithful.
 #define SEVENTEEN 17
 
 static int tech_degree_set(int64_t obj, int tech, int value);

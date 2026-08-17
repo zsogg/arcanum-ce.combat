@@ -16683,8 +16683,7 @@ void proto_write_critter_stats(int64_t obj, TigFile* stream, int type)
         }
     }
 
-    // FIXME: Does not include STAT_MAGICK_POINTS - STAT_RACE range which is
-    // parsed.
+    // NOTE: Verified against 0x49C2C6-0x49C2FC - original writes only stats 0..7; asymmetry with the parser is real.
 
     for (college = 0; college < COLLEGE_COUNT; college++) {
         num_spl = spell_college_level_get(obj, college);

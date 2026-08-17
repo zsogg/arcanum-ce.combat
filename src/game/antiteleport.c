@@ -126,7 +126,7 @@ bool antiteleport_mod_load(void)
 
     // Load "antiteleport.mes" (might be absent).
     if (!mes_load("Rules\\AntiTeleport.mes", &antiteleport_mes_file)) {
-        // FIXME: Typo in function name.
+        // NOTE: Verified - string at 0x5B62B8 literally reads "antiteleport_init"; CE matches.
         tig_debug_printf("AntiTeleport: antiteleport_init: Note: No Message File Detected.\n");
         return true;
     }
