@@ -596,12 +596,12 @@ bool ui_wmap_rnd_timeevent_process(TimeEvent* timeevent)
     }
 }
 
-// 0x460B50
 // Opens the schematic UI (SAT_START_SCHEMATIC_UI): the PC passes itself as
 // both objects, an NPC passes itself and its leader. Dispatches to the
 // UiCallbacks slot 0x110, which is unwired in BOTH binaries - the original
 // never stores it in tb_ui_init either, so the dispatch fires through stack
 // garbage. Faithful, deliberately not fixed.
+// 0x460B50
 void ui_open_schematic(int64_t primary_obj, int64_t secondary_obj)
 {
     if (ui_callbacks.field_110 != NULL) {
