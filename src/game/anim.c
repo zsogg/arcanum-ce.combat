@@ -7416,7 +7416,7 @@ bool anim_spell_target_is_valid(AnimRunInfo* run_info)
             return false;
         }
 
-        // FIXME: Unused.
+        // NOTE: Verified against 0x429C22 - original calls obj_field_int64_get(target_obj, OBJ_F_LOCATION) and discards the result; transcription faithful.
         obj_field_int64_get(target_obj, OBJ_F_LOCATION);
     }
 
@@ -8725,7 +8725,7 @@ bool anim_begin_attack(AnimRunInfo* run_info)
     art_id = tig_art_id_anim_set(art_id, new_anim);
     art_id = tig_art_id_frame_set(art_id, 0);
     if (tig_art_exists(art_id) != TIG_OK) {
-        // FIXME: Unused.
+        // NOTE: Verified against 0x42BBAC - original repeats tig_art_exists on the missing-art path and discards the result; transcription faithful.
         tig_art_exists(art_id);
 
         tig_debug_printf("Anim: ERROR: Missing art: %u, List: %d,",
@@ -8766,7 +8766,7 @@ bool AGsetObjArtDeathAnim(AnimRunInfo* run_info)
 
     anim = run_info->cur_stack_data->params[AGDATA_SCRATCH_VAL1].data;
 
-    // FIXME: Meaningless.
+    // NOTE: Verified against 0x42BC68-0x42BC74 - original fetches the local PC and reads OBJ_F_PC_FLAGS without using the result; transcription faithful.
     pc_obj = player_get_local_pc_obj();
     obj_field_int32_get(pc_obj, OBJ_F_PC_FLAGS);
 
@@ -9429,7 +9429,7 @@ bool anim_advance_frame(AnimRunInfo* run_info)
 
     frame = tig_art_id_frame_get(art_id);
     if (frame == art_anim_data.num_frames - 1) {
-        // FIXME: Useless.
+        // NOTE: Verified against 0x42CDA0 - original calls tig_art_type and discards the result at the final-frame exit; transcription faithful.
         tig_art_type(art_id);
 
         run_info->flags &= ~0x10;
@@ -9535,7 +9535,7 @@ bool anim_advance_fidget_frame(AnimRunInfo* run_info)
     }
 
     if (frame == art_anim_data.num_frames - 1) {
-        // FIXME: Useless.
+        // NOTE: Verified against 0x42D032 - original calls tig_art_type and discards the result at the final-frame exit; transcription faithful.
         tig_art_type(art_id);
 
         run_info->flags &= ~0x10;
@@ -9748,7 +9748,7 @@ bool AGupdateAnimPickLock(AnimRunInfo* run_info)
     }
 
     if (frame == art_anim_data.num_frames - 1) {
-        // FIXME: Useless.
+        // NOTE: Verified against 0x42D520 - original calls tig_art_type and discards the result at the final-frame exit; transcription faithful.
         tig_art_type(art_id);
 
         run_info->flags &= ~0x10;
@@ -9850,7 +9850,7 @@ bool AGupdateAnimDying(AnimRunInfo* run_info)
 
     frame = tig_art_id_frame_get(art_id);
     if (frame == art_anim_data.num_frames - 1) {
-        // FIXME: Useless.
+        // NOTE: Verified against 0x42D787 - original calls tig_art_type and discards the result at the final-frame exit; transcription faithful.
         tig_art_type(art_id);
 
         run_info->flags &= ~0x10;
@@ -9938,7 +9938,7 @@ bool AGupdateAnimJump(AnimRunInfo* run_info)
         return false;
     }
 
-    // FIXME: Useless.
+    // NOTE: Verified against 0x42D967 - original calls player_is_local_pc_obj(obj) and discards the result; transcription faithful.
     player_is_local_pc_obj(obj);
 
     if ((obj_field_int32_get(obj, OBJ_F_SPELL_FLAGS) & OSF_STONED) != 0) {
@@ -9962,7 +9962,7 @@ bool AGupdateAnimJump(AnimRunInfo* run_info)
 
     frame = tig_art_id_frame_get(art_id);
     if (frame == art_anim_data.num_frames - 1) {
-        // FIXME: Useless.
+        // NOTE: Verified against 0x42DA09 - original calls tig_art_type and discards the result at the final-frame exit; transcription faithful.
         tig_art_type(art_id);
 
         run_info->flags &= ~0x10;
@@ -10104,7 +10104,6 @@ bool anim_loop_is_near_pc(AnimRunInfo* run_info)
 bool AGupdateAnimLoopAnim(AnimRunInfo* run_info)
 {
     int64_t obj;
-    int obj_type;
     tig_art_id_t art_id;
     TigArtAnimData art_anim_data;
     int frame;
@@ -10118,8 +10117,8 @@ bool AGupdateAnimLoopAnim(AnimRunInfo* run_info)
         return false;
     }
 
-    // FIXME: Unused.
-    obj_type = obj_field_int32_get(obj, OBJ_F_TYPE);
+    // NOTE: Verified against 0x42DE4D - original calls obj_field_int32_get(obj, OBJ_F_TYPE) and discards the result; transcription faithful.
+    obj_field_int32_get(obj, OBJ_F_TYPE);
 
     object_inc_current_aid(obj);
 
@@ -10187,7 +10186,7 @@ bool AGbeginStunAnim(AnimRunInfo* run_info)
         }
     }
 
-    // FIXME: Set one more time?
+    // NOTE: Verified against 0x42DFA6 and 0x42E004 - original sets current aid twice; transcription faithful.
     object_set_current_aid(obj, art_id);
 
     if (tig_art_anim_data(art_id, &art_anim_data) != TIG_OK) {
@@ -10255,7 +10254,8 @@ bool AGupdateStunAnim(AnimRunInfo* run_info)
 
     frame = tig_art_id_frame_get(art_id);
     if (frame == art_anim_data.num_frames - 1) {
-        // FIXME: Useless.
+        // NOTE: Verified against 0x42E169 - original calls tig_art_type and discards the result; CE previously omitted the call.
+        tig_art_type(art_id);
 
         run_info->flags &= ~0x10;
         return false;
@@ -10565,7 +10565,7 @@ bool AGupdateAnimAnimReverse(AnimRunInfo* run_info)
 
     frame = tig_art_id_frame_get(art_id);
     if (frame == 0) {
-        // FIXME: Useless.
+        // NOTE: Verified against 0x42E962 - original calls tig_art_type and discards the result at the final-frame exit; transcription faithful.
         tig_art_type(art_id);
 
         run_info->flags &= ~0x10;
@@ -10856,7 +10856,7 @@ bool anim_vault_to_next_tile(AnimRunInfo* run_info)
 
     ASSERT(obj != OBJ_HANDLE_NULL); // 11248, "obj != OBJ_HANDLE_NULL";
 
-    // FIXME: Useless.
+    // NOTE: Verified against 0x42F0A0 - original calls obj_field_int32_get(obj, OBJ_F_CURRENT_AID) and discards the result; transcription faithful.
     obj_field_int32_get(obj, OBJ_F_CURRENT_AID);
 
     loc = obj_field_int64_get(obj, OBJ_F_LOCATION);
@@ -11279,7 +11279,7 @@ bool anim_knockback_path_blocked(AnimRunInfo* run_info, int64_t obj, AnimPath* p
             }
         }
 
-        // FIXME: Useless.
+        // NOTE: Verified against 0x42FE20 - original calls obj_field_int32_get(obj, OBJ_F_SPELL_FLAGS) and discards the result; transcription faithful.
         obj_field_int32_get(obj, OBJ_F_SPELL_FLAGS);
 
         if (!tile_is_blocking(to, false)
@@ -11645,7 +11645,7 @@ bool AGupdateAnimMove(AnimRunInfo* run_info)
         return false;
     }
 
-    // FIXME: Useless.
+    // NOTE: Verified against 0x430627 - original calls player_is_local_pc_obj(obj) and discards the result; transcription faithful.
     player_is_local_pc_obj(obj);
 
     v1 = (run_info->flags & 0x40) != 0;
@@ -11903,7 +11903,7 @@ bool anim_cleanup_move_path(AnimRunInfo* run_info)
         return false;
     }
 
-    // FIXME: Useless.
+    // NOTE: Verified against 0x430F75-0x430F85 - the original computes the stand art id, and discards the tig_art_id_frame_set result at 0x430F85; transcription faithful.
     art_id = obj_field_int32_get(obj, OBJ_F_CURRENT_AID);
     art_id = tig_art_id_anim_set(art_id, TIG_ART_ANIM_STAND);
     tig_art_id_frame_set(art_id, 0);
@@ -13131,7 +13131,7 @@ bool AGupdateAnimAttack(AnimRunInfo* run_info)
 
     frame = tig_art_id_frame_get(art_id);
     if (frame == art_anim_data.num_frames - 1) {
-        // FIXME: Useless.
+        // NOTE: Verified against 0x432A75 - original calls tig_art_type and discards the result at the final-frame exit; transcription faithful.
         tig_art_type(art_id);
 
         run_info->flags &= ~0x10;
@@ -13261,7 +13261,7 @@ void anim_create_blood_splat(int64_t obj)
 
     pc_obj = player_get_local_pc_obj();
 
-    // FIXME: Useless.
+    // NOTE: Verified against 0x432DBE - original calls obj_field_int32_get(pc_obj, OBJ_F_PC_FLAGS) and discards the result; transcription faithful.
     obj_field_int32_get(pc_obj, OBJ_F_PC_FLAGS);
 
     if (violence_filter != 0) {
@@ -13292,7 +13292,7 @@ void anim_create_blood_splat(int64_t obj)
     object_create(proto_get_by_description(BP_POOL_OF_BLOOD), loc, &blood_obj);
     blood_art_id = obj_field_int32_get(blood_obj, OBJ_F_CURRENT_AID);
 
-    // FIXME: Useless.
+    // NOTE: Verified against 0x432EB5-0x432EBB - original calls tig_art_critter_id_size_get on the object's current aid and discards the result; transcription faithful.
     tig_art_critter_id_size_get(obj_field_int32_get(obj, OBJ_F_CURRENT_AID));
 
     if (anim_editor) {
@@ -13364,7 +13364,7 @@ void anim_play_blood_splotch_fx(int64_t obj, int blood_splotch_type, int damage_
 
     fx_id = blood_splotch_type - 1;
     if (fx_id == ANIM_EYE_CANDY_NORMAL_BLOOD_SPLOTCH) {
-        // FIXME: Useless.
+        // NOTE: Verified against 0x4330A7-0x4330B3 - original fetches the local PC, reads OBJ_F_PC_FLAGS, and discards the result; transcription faithful.
         obj_field_int32_get(player_get_local_pc_obj(), OBJ_F_PC_FLAGS);
 
         critter_flags = obj_field_int32_get(obj, OBJ_F_CRITTER_FLAGS);
@@ -14710,7 +14710,7 @@ bool anim_goal_projectile(int64_t source_obj, int64_t missile_obj, tig_art_id_t 
     rotation = combat_projectile_rot(loc, target_loc);
     sub_4EDCE0(missile_obj, combat_projectile_art_id_rotation_set(missile_art_id, rotation));
 
-    // FIXME: Useless.
+    // NOTE: Verified against 0x435924-0x43592A - original reads the source's current aid and passes it to tig_art_id_rotation_get, discarding the result; transcription faithful.
     tig_art_id_rotation_get(obj_field_int32_get(source_obj, OBJ_F_CURRENT_AID));
 
     goal_data.params[AGDATA_TARGET_OBJ].obj = target_obj;
@@ -15312,7 +15312,7 @@ bool anim_goal_attempt_spread_out(int64_t obj, int64_t target_obj)
     if (anim_is_current_goal_ex(obj, &goal_data, &anim_id)) {
         run_info = &(anim_run_info[anim_id.slot_num]);
 
-        // FIXME: Unused.
+        // NOTE: Verified against 0x4369F8 - original calls obj_field_int32_get(obj, OBJ_F_NPC_FLAGS) and discards the result; transcription faithful.
         obj_field_int32_get(obj, OBJ_F_NPC_FLAGS);
 
         if (run_info->cur_stack_data->type == AG_RUN_NEAR_OBJ) {
