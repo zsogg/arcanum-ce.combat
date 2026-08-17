@@ -4,11 +4,11 @@
 #include "game/obj_private.h"
 #include "game/object.h"
 
-static void sub_4E1C00(GameDrawInfo* draw_info);
-static void sub_4E1EB0(GameDrawInfo* draw_info);
-static void sub_4E20A0(int64_t obj);
-static void sub_4E25B0(int64_t obj);
-static void sub_4E2C50(int64_t obj);
+static void wall_draw_lines(GameDrawInfo* draw_info);
+static void wall_draw_grid(GameDrawInfo* draw_info);
+static void wall_reconnect_pieces_9_20(int64_t obj);
+static void wall_reconnect_pieces_21_33(int64_t obj);
+static void wall_reconnect_pieces_34_45(int64_t obj);
 
 // 0x603420
 static TigRect wall_iso_content_rect;
@@ -94,13 +94,20 @@ void wall_draw(GameDrawInfo* draw_info)
         return;
     }
 
-    sub_4E1C00(draw_info);
-    sub_4E1EB0(draw_info);
+    wall_draw_lines(draw_info);
+    wall_draw_grid(draw_info);
 }
 
 // 0x4E1490
-void sub_4E1490(int64_t a1, int64_t a2)
+// The wall branch of object_bust: the editor-only body repairs the busted
+// wall's art (a_name_wall_aid_damage_set, rotation renumber, neighbour walk)
+// in the original at 0x4E1490; untranscribed because it cannot execute when
+// editor is off.
+void wall_bust(int64_t obj, int64_t triggerer_obj)
 {
+    (void)obj;
+    (void)triggerer_obj;
+
     if (!wall_editor) {
         return;
     }
@@ -118,11 +125,11 @@ void wall_delete(int64_t obj, bool a2)
     p_piece = tig_art_wall_id_p_piece_get(art_id);
 
     if (p_piece >= 9 && p_piece <= 20) {
-        sub_4E20A0(obj);
+        wall_reconnect_pieces_9_20(obj);
     } else if (p_piece >= 21 && p_piece <= 33) {
-        sub_4E25B0(obj);
+        wall_reconnect_pieces_21_33(obj);
     } else if (p_piece >= 34 && p_piece <= 45) {
-        sub_4E2C50(obj);
+        wall_reconnect_pieces_34_45(obj);
     }
 
     if (a2) {
@@ -134,7 +141,7 @@ void wall_delete(int64_t obj, bool a2)
 }
 
 // 0x4E1C00
-void sub_4E1C00(GameDrawInfo* draw_info)
+void wall_draw_lines(GameDrawInfo* draw_info)
 {
     LocRect* loc_rect;
     int64_t x;
@@ -203,7 +210,7 @@ void sub_4E1C00(GameDrawInfo* draw_info)
 }
 
 // 0x4E1EB0
-void sub_4E1EB0(GameDrawInfo* draw_info)
+void wall_draw_grid(GameDrawInfo* draw_info)
 {
     LocRect loc_rect;
     TigRect rect;
@@ -263,19 +270,29 @@ void sub_4E1EB0(GameDrawInfo* draw_info)
 }
 
 // 0x4E20A0
-void sub_4E20A0(int64_t obj)
+// Renumbers the wall segments that connected through a removed piece of
+// class 9-20 so the run reconnects. Same family as
+// wall_reconnect_pieces_34_45; the original at 0x4E20A0 is untranscribed.
+void wall_reconnect_pieces_9_20(int64_t obj)
 {
+    (void)obj;
+
     // TODO: Incomplete.
 }
 
 // 0x4E25B0
-void sub_4E25B0(int64_t obj)
+// Renumbers the wall segments that connected through a removed piece of
+// class 21-33 so the run reconnects. Same family as
+// wall_reconnect_pieces_34_45; the original at 0x4E25B0 is untranscribed.
+void wall_reconnect_pieces_21_33(int64_t obj)
 {
+    (void)obj;
+
     // TODO: Incomplete.
 }
 
 // 0x4E2C50
-void sub_4E2C50(int64_t obj)
+void wall_reconnect_pieces_34_45(int64_t obj)
 {
     tig_art_id_t art_id;
     int p_piece;

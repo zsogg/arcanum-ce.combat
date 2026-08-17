@@ -2707,11 +2707,11 @@ int script_execute_action(ScriptAction* action, int line, ScriptState* state)
         int64_t obj = script_get_obj(action->op_type[0], action->op_value[0], state);
         if (obj != OBJ_HANDLE_NULL) {
             if (obj_field_int32_get(obj, OBJ_F_TYPE) == OBJ_TYPE_PC) {
-                sub_460B50(obj, obj);
+                ui_open_schematic(obj, obj);
             } else {
                 int64_t leader_obj = critter_pc_leader_get(obj);
                 if (leader_obj != OBJ_HANDLE_NULL) {
-                    sub_460B50(obj, leader_obj);
+                    ui_open_schematic(obj, leader_obj);
                 }
             }
         }

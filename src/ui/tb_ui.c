@@ -122,6 +122,15 @@ bool tb_ui_init(GameInitInfo* init_info)
     callbacks.gameuilib_reset = gameuilib_reset;
     callbacks.start_dialog = dialog_ui_start_dialog;
     callbacks.end_dialog = dialog_ui_end_dialog;
+    // NOTE: The original wires field_F8 to the gameuilib event dispatcher
+    // 0x569C70 and the seven chat slots 0x144-0x15C to gameuilib chat
+    // functions (0x582510 "entered", 0x5825B0 "left", 0x582650/0x582670/
+    // 0x582690 chat lines of types 0/1/6, the bare-ret 0x5826B0, and the
+    // window reset 0x5826C0). None of those gameuilib functions are
+    // transcribed in CE, so the slots stay NULL here. The original's
+    // UiCallbacks also has three more multiplayer slot callbacks (0x164,
+    // 0x168, 0x16C: 0x55F360, 0x55F450, 0x55F5F0) that CE's struct omits
+    // with multiplayer.
     callbacks.field_F8 = NULL;
     callbacks.return_to_mainmenu = mainmenu_ui_return_to_mainmenu;
     callbacks.refresh_cursor = intgame_refresh_cursor;

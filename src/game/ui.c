@@ -319,7 +319,11 @@ void ui_display_msg(UiMessage* ui_message)
 }
 
 // 0x460650
-void sub_460650(UiMessage* ui_message, unsigned int milliseconds)
+// NOTE: The original calls this from broadcast_msg_client's network branch
+// (the local player gets the message queued for display after 1000 ms); that
+// branch is untranscribed in CE, consistent with multiplayer being out of
+// scope.
+void ui_display_msg_delayed(UiMessage* ui_message, unsigned int milliseconds)
 {
     int id;
 
@@ -537,10 +541,14 @@ void ui_end_dialog(int64_t pc_obj, int a3)
 }
 
 // 0x460AB0
-void sub_460AB0(int a1, int a2, void* a3)
+// Dispatches a UI event to the UiCallbacks slot 0xF8. The original wires
+// that slot to the gameuilib event dispatcher at 0x569C70 (untranscribed in
+// CE, so tb_ui_init NULLs it). Known events: 115 (party roster changed, from
+// party_add/party_remove) and 116 (from the multiplayer event handler).
+void ui_event_notify(int event, int a2, void* data)
 {
     if (ui_callbacks.field_F8 != NULL) {
-        ui_callbacks.field_F8(a1, a2, a3);
+        ui_callbacks.field_F8(event, a2, data);
     }
 }
 
@@ -589,10 +597,15 @@ bool ui_wmap_rnd_timeevent_process(TimeEvent* timeevent)
 }
 
 // 0x460B50
-void sub_460B50(int64_t a1, int64_t a2)
+// Opens the schematic UI (SAT_START_SCHEMATIC_UI): the PC passes itself as
+// both objects, an NPC passes itself and its leader. Dispatches to the
+// UiCallbacks slot 0x110, which is unwired in BOTH binaries - the original
+// never stores it in tb_ui_init either, so the dispatch fires through stack
+// garbage. Faithful, deliberately not fixed.
+void ui_open_schematic(int64_t primary_obj, int64_t secondary_obj)
 {
     if (ui_callbacks.field_110 != NULL) {
-        ui_callbacks.field_110(a1, a2);
+        ui_callbacks.field_110(primary_obj, secondary_obj);
     }
 }
 
@@ -714,23 +727,32 @@ bool ui_inven_create(int64_t pc_obj, int64_t target_obj, int mode)
 }
 
 // 0x460D10
-void sub_460D10(const char* a1)
+// NOTE: Slot 0x144. The original wires it to the gameuilib chat function
+// 0x582510 (formats mes 10054, "%s has entered the room."); untranscribed in
+// CE, so tb_ui_init NULLs the slot. Never called in either binary.
+void ui_chat_player_entered(const char* name)
 {
     if (ui_callbacks.field_144 != NULL) {
-        ui_callbacks.field_144(a1);
+        ui_callbacks.field_144(name);
     }
 }
 
 // 0x460D30
-void sub_460D30(const char* a1)
+// NOTE: Slot 0x148. The original wires it to the gameuilib chat function
+// 0x5825B0 (formats mes 10055, "%s has left."); untranscribed in CE, so
+// tb_ui_init NULLs the slot. Never called in either binary.
+void ui_chat_player_left(const char* name)
 {
     if (ui_callbacks.field_148 != NULL) {
-        ui_callbacks.field_148(a1);
+        ui_callbacks.field_148(name);
     }
 }
 
 // 0x460D50
-void sub_460D50(const char* a1, const char* a2)
+// NOTE: Slot 0x14C. The original wires it to the gameuilib chat function
+// 0x582650 (appends a type-0 chat line to the history ring); untranscribed
+// in CE, so tb_ui_init NULLs the slot. Never called in either binary.
+void ui_chat_line_type_0(const char* a1, const char* a2)
 {
     if (ui_callbacks.field_14C != NULL) {
         ui_callbacks.field_14C(a1, a2);
@@ -738,7 +760,10 @@ void sub_460D50(const char* a1, const char* a2)
 }
 
 // 0x460D70
-void sub_460D70(const char* a1, const char* a2)
+// NOTE: Slot 0x150. The original wires it to the gameuilib chat function
+// 0x582670 (type-1 chat line); untranscribed in CE, so tb_ui_init NULLs the
+// slot. Never called in either binary.
+void ui_chat_line_type_1(const char* a1, const char* a2)
 {
     if (ui_callbacks.field_150 != NULL) {
         ui_callbacks.field_150(a1, a2);
@@ -746,7 +771,10 @@ void sub_460D70(const char* a1, const char* a2)
 }
 
 // 0x460D90
-void sub_460D90(int a1, int a2)
+// NOTE: Slot 0x154. The original wires it to 0x5826B0, which is a bare
+// `ret` even there - a dead chat callback in both binaries. Never called in
+// either.
+void ui_chat_field_154_hook(int a1, int a2)
 {
     if (ui_callbacks.field_154 != NULL) {
         ui_callbacks.field_154(a1, a2);
@@ -754,7 +782,10 @@ void sub_460D90(int a1, int a2)
 }
 
 // 0x460DB0
-void sub_460DB0(const char* a1, const char* a2)
+// NOTE: Slot 0x158. The original wires it to the gameuilib chat function
+// 0x582690 (type-6 chat line); untranscribed in CE, so tb_ui_init NULLs the
+// slot. Never called in either binary.
+void ui_chat_line_type_6(const char* a1, const char* a2)
 {
     if (ui_callbacks.field_158 != NULL) {
         ui_callbacks.field_158(a1, a2);
@@ -762,7 +793,11 @@ void sub_460DB0(const char* a1, const char* a2)
 }
 
 // 0x460DD0
-void sub_460DD0(void)
+// NOTE: Slot 0x15C. The original wires it to the gameuilib window reset
+// 0x5826C0 (jmp 0x5830F0, which destroys and recreates the chat window);
+// untranscribed in CE, so tb_ui_init NULLs the slot. Never called in either
+// binary.
+void ui_chat_window_reset(void)
 {
     if (ui_callbacks.field_15C != NULL) {
         ui_callbacks.field_15C();

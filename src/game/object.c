@@ -2652,7 +2652,7 @@ void object_bust(int64_t obj, int64_t triggerer_obj)
 
     switch (obj_field_int32_get(obj, OBJ_F_TYPE)) {
     case OBJ_TYPE_WALL:
-        sub_4E1490(obj, triggerer_obj);
+        wall_bust(obj, triggerer_obj);
         break;
     case OBJ_TYPE_PORTAL:
         portal_bust(obj, triggerer_obj);

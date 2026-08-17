@@ -86,15 +86,24 @@ bool text_filter_process(int64_t obj, const char* src, char** dst)
 }
 
 // 0x4F6920
-void sub_4F6920(void)
+// NOTE: Unreferenced in both binaries. Presumably the state init of a second
+// text filter that never shipped - the text_filters table only ever held
+// "sleeping". Zeroes the filter's string-list pointers.
+void text_filter_state_clear(int** state)
 {
-    // TODO: Incomplete.
+    state[0] = NULL;
+    state[1] = NULL;
 }
 
 // 0x4F69B0
-void sub_4F69B0(void)
+// NOTE: Unreferenced in both binaries; the exit counterpart of
+// text_filter_state_clear for the unshipped second filter. Frees the first
+// pointer if set.
+void text_filter_state_release(int** state)
 {
-    // TODO: Incomplete.
+    if (state[0] != NULL) {
+        FREE(state[0]);
+    }
 }
 
 // 0x4F69D0
