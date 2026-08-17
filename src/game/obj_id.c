@@ -281,16 +281,19 @@ bool objid_p_from_str(ObjectID_P* p, const char* str)
 
     str += 8;
     if (str[0] != '_') return false;
+    str++;
     if (!objid_parse_hex(&y, str, 8)) return false;
     p->location = location_make(x, y);
 
     str += 8;
     if (str[0] != '_') return false;
+    str++;
     if (!objid_parse_hex(&temp_id, str, 8)) return false;
     p->temp_id = temp_id;
 
     str += 8;
     if (str[0] != '_') return false;
+    str++;
     if (!objid_parse_hex(&map, str, 8)) return false;
     p->map = map;
 

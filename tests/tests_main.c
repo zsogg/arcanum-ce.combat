@@ -27,6 +27,11 @@ void test_skill_suite(void);
 void test_location_suite(void);
 void test_obj_harness_suite(void);
 void test_obj_file_suite(void);
+void test_highres_config_suite(void);
+void test_settings_suite(void);
+void test_obj_id_suite(void);
+void test_reaction_suite(void);
+void test_compat_suite(void);
 
 int main(void)
 {
@@ -43,6 +48,11 @@ int main(void)
     test_location_suite();
     test_obj_harness_suite();
     test_obj_file_suite();
+    test_highres_config_suite();
+    test_settings_suite();
+    test_obj_id_suite();
+    test_reaction_suite();
+    test_compat_suite();
 
     return test_report();
 }
