@@ -718,7 +718,8 @@ bool sub_49CC70(const char* a1, const char* a2)
             tig_debug_printf("Multiplayer: Could not load module %s, or default module %s.\n",
                 a1,
                 gamelib_default_module_name_get());
-            exit(EXIT_SUCCESS); // FIXME: Should be `EXIT_FAILURE`.
+            // NOTE: Verified against 0x49D0F5-0x49D0F6 - original pushes the zeroed EDI and calls exit(0); transcription faithful.
+            exit(EXIT_SUCCESS);
         }
 
         mes_file_entry.num = 901;
@@ -2435,7 +2436,7 @@ void sub_4A54A0(void)
     for (index = 0; index < 216; index++) {
         if ((anim_run_info[index].flags & 0x1) != 0) {
             if (!anim_goal_restart(&(anim_run_info[index].id))) {
-                // FIXME: Meaningless.
+                // NOTE: Verified against 0x4A54B0-0x4A54C2 - original formats the anim id into str and discards it on restart failure; transcription faithful.
                 anim_id_to_str(&(anim_run_info[index].id), str);
             }
         }

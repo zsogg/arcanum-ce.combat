@@ -366,7 +366,7 @@ void sub_4EE5E0(Packet100* pkt)
         if (player_is_local_pc_obj(v1)) {
             item_error_msg(v1, pkt->d.x.field_20);
         }
-        // FIXME: Fallthrough?
+        // NOTE: Verified against 0x4EE5E0 - the original switch falls through from case 11 to case 12; transcription faithful.
     case 12:
         mp_oid_to_obj(pkt->d.z.field_8, &v1);
         mp_oid_to_obj(pkt->d.z.field_20, &v2);

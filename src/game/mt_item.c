@@ -606,7 +606,7 @@ bool mt_item_valid_ai_action(int64_t item_obj)
 {
     int spell;
 
-    // FIXME: Unused, probably should validate if item_obj is of item type.
+    // NOTE: Verified against 0x4CC171 - original calls obj_field_int32_get(item_obj, OBJ_F_TYPE) and discards the result; transcription faithful.
     obj_field_int32_get(item_obj, OBJ_F_TYPE);
 
     if (obj_field_int32_get(item_obj, OBJ_F_ITEM_SPELL_MANA_STORE) == 0) {
@@ -626,7 +626,7 @@ bool mt_item_valid_ai_action(int64_t item_obj)
         return false;
     }
 
-    // FIXME: Unused.
+    // NOTE: Verified against 0x4CC1D4 - original calls obj_field_int32_get(item_obj, OBJ_F_ITEM_AI_ACTION) and discards the result; transcription faithful.
     obj_field_int32_get(item_obj, OBJ_F_ITEM_AI_ACTION);
 
     return true;

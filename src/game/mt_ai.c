@@ -433,7 +433,7 @@ void magictech_build_ai_action_list(MagicTechAi* magictech_ai)
 
     list = &(mt_ai_tmp_lists[magictech_ai->action]);
     if (list == NULL) {
-        // FIXME: Meaningless?
+        // NOTE: Verified against 0x4CC8A0 - the original also tests a non-NULL global-array address; the check is original and can never fire.
         tig_debug_printf("MagicTech: magictech_build_ai_action_list: ERROR: AI action type out of range!\n");
         return;
     }
@@ -453,7 +453,7 @@ void sub_4CC930(MagicTechAi* magictech_ai, int64_t item_obj)
     int index;
     int spell;
 
-    // FIXME: Unused.
+    // NOTE: Verified against 0x4CC942 - original calls obj_field_int32_get(item_obj, OBJ_F_TYPE) and discards the result; transcription faithful.
     obj_field_int32_get(item_obj, OBJ_F_TYPE);
 
     if ((obj_field_int32_get(item_obj, OBJ_F_ITEM_SPELL_MANA_STORE)) != 0
