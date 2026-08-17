@@ -1084,7 +1084,6 @@ void combat_process_ranged_attack(CombatContext* combat)
     int64_t loc;
     int range;
     int64_t max_range;
-    int rotation;
     int num_arrows;
     int arrow;
 
@@ -1124,8 +1123,8 @@ void combat_process_ranged_attack(CombatContext* combat)
         combat->flags |= 0x20;
     }
 
-    // FIXME: Unused.
-    rotation = tig_art_id_rotation_get(obj_field_int32_get(combat->attacker_obj, OBJ_F_CURRENT_AID));
+    // NOTE: Verified against 0x4B39B0 - original calls tig_art_id_rotation_get and discards the result.
+    tig_art_id_rotation_get(obj_field_int32_get(combat->attacker_obj, OBJ_F_CURRENT_AID));
 
     num_arrows = 1;
     if (combat->skill == BASIC_SKILL_BOW
@@ -2771,7 +2770,7 @@ int combat_play_hit_fx(CombatContext* combat)
 
             blood_splotch_type = max_damage_type + 1;
 
-            // FIXME: Unreachable.
+            // NOTE: Verified against 0x4B6930 - original checks blood_splotch_type == 0 (max_damage_type == -1) after initializing it to 0; unreachable but transcription faithful.
             if (max_damage_type == -1) {
                 return blood_splotch_type;
             }
@@ -2844,7 +2843,7 @@ void combat_process_taunts(CombatContext* combat)
 {
     int64_t pc_obj;
 
-    // FIXME: Unused.
+    // NOTE: Verified against 0x4B6B93-0x4B6B9A - original calls player_get_local_pc_obj and passes the handle to combat_taunts_get, whose implementation ignores it; CE keeps the lookup and calls the no-arg CE signature.
     pc_obj = player_get_local_pc_obj();
 
     if (!combat_taunts_get()) {

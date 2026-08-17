@@ -424,7 +424,7 @@ int critter_fatigue_adj_get(int64_t obj)
     return obj_field_int32_get(obj, OBJ_F_CRITTER_FATIGUE_ADJ);
 }
 
-// FIXME: Wrong name, sets `OBJ_F_CRITTER_FATIGUE_PTS`, not `OBJ_F_CRITTER_FATIGUE_ADJ`.
+// NOTE: Original name is misleading: 0x45D4F0 writes OBJ_F_CRITTER_FATIGUE_PTS (0xE0), not OBJ_F_CRITTER_FATIGUE_ADJ; transcription faithful.
 //
 // 0x45D4F0
 int critter_fatigue_adj_set(int64_t obj, int value)
@@ -791,7 +791,7 @@ void critter_alignment_adjust(int64_t source_obj, int64_t target_obj, bool full_
             v1 /= 2;
         }
 
-        // TODO: Check.
+        // NOTE: Verified against 0x45DC90 - the nested adj/v1 clamp branches are equivalent to the original's short-circuit form; transcription faithful.
         if (v1 < 0) {
             alignment = stat_base_get(source_obj, STAT_ALIGNMENT);
             if (adj >= 0) {

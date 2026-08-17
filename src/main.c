@@ -231,7 +231,8 @@ int main(int argc, char** argv)
     init_info.window_name = "Arcanum: Of Steamworks & Magick Obscura - Community Edition";
 
     if (tig_init(&init_info) != TIG_OK) {
-        return EXIT_SUCCESS; // FIXME: Should be `EXIT_FAILURE`.
+        // NOTE: Verified against original main 0x401000 - the original falls through to its final `return 0`; transcription faithful.
+        return EXIT_SUCCESS;
     }
 
     screenshotter.key = SDL_SCANCODE_F12;
@@ -242,7 +243,8 @@ int main(int argc, char** argv)
     intgame_set_iso_window_height(init_info.height);
     if (!intgame_create_iso_window(&(game_init_info.iso_window_handle))) {
         tig_exit();
-        return EXIT_SUCCESS; // FIXME: Should be `EXIT_FAILURE`.
+        // NOTE: Verified against original main 0x401000 - original calls tig_exit and returns 0; transcription faithful.
+        return EXIT_SUCCESS;
     }
 
     tig_mouse_hide();
@@ -254,7 +256,8 @@ int main(int argc, char** argv)
     if (!gamelib_init(&game_init_info)) {
         tig_window_destroy(game_init_info.iso_window_handle);
         tig_exit();
-        return EXIT_SUCCESS; // FIXME: Should be `EXIT_FAILURE`.
+        // NOTE: Verified against original main 0x401000 - original destroys the window, calls tig_exit, and returns 0; transcription faithful.
+        return EXIT_SUCCESS;
     }
 
     if (strstr(lpCmdLine, "-dialogcheck") != NULL) {
@@ -297,20 +300,21 @@ int main(int argc, char** argv)
         gameuilib_exit();
         tig_window_destroy(game_init_info.iso_window_handle);
         tig_exit();
-        return EXIT_SUCCESS; // FIXME: Should be `EXIT_FAILURE`.
+        // NOTE: Verified against original main 0x401000 - original runs this same three-call cleanup and returns 0; transcription faithful.
+        return EXIT_SUCCESS;
     }
 
     if (!gamelib_mod_load(gamelib_default_module_name_get())) {
         tig_debug_printf("Error loading default module %s\n",
             gamelib_default_module_name_get());
-        // FIXME: Missing graceful shutdown sequence.
-        return EXIT_SUCCESS; // FIXME: Should be `EXIT_FAILURE`.
+        // NOTE: Verified against original main 0x401000 - original prints this error and returns 0 without any further shutdown; transcription faithful.
+        return EXIT_SUCCESS;
     }
 
     if (!gameuilib_mod_load()) {
         tig_debug_printf("Error loading UI module data\n");
-        // FIXME: Missing graceful shutdown sequence.
-        return EXIT_SUCCESS; // FIXME: Should be `EXIT_FAILURE`.
+        // NOTE: Verified against original main 0x401000 - original prints this error and returns 0 without any further shutdown; transcription faithful.
+        return EXIT_SUCCESS;
     }
 
     if (highres_config->intro) {
@@ -322,7 +326,8 @@ int main(int argc, char** argv)
         gamelib_exit();
         tig_exit();
         tig_memory_print_stats(TIG_MEMORY_STATS_PRINT_ALL_BLOCKS);
-        return EXIT_SUCCESS; // FIXME: Should be `EXIT_FAILURE`.
+        // NOTE: Verified against original main 0x401000 - original runs this same cleanup and returns 0; transcription faithful.
+        return EXIT_SUCCESS;
     }
 
     if (strstr(lpCmdLine, "-logcheck") != NULL) {

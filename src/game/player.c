@@ -236,7 +236,7 @@ bool player_obj_create_player(PlayerCreateInfo* player_create_info)
     if ((player_create_info->flags & PLAYER_CREATE_INFO_LOC) != 0) {
         loc = player_create_info->loc;
     } else {
-        // TODO: Looks the same as above, check.
+        // NOTE: Verified against 0x40DB70 - original has identical loc assignments in both flag branches; transcription faithful.
         loc = player_create_info->loc;
     }
 
@@ -270,7 +270,7 @@ bool player_obj_create_player(PlayerCreateInfo* player_create_info)
 
     if ((player_create_info->flags & PLAYER_CREATE_INFO_OBJ) != 0) {
         if (old_handle != player_create_info->obj) {
-            // FIXME: Using println with newline character.
+            // NOTE: Verified against 0x40DD38-0x40DD42 - original calls tig_debug_println with this same newline-terminated string; transcription faithful.
             tig_debug_println("ERROR: : object_create created new handle instead of using current one!\n");
         }
     }
