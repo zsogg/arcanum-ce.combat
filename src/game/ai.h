@@ -8,6 +8,52 @@
 typedef void (*AiFloatLineFunc)(int64_t npc_obj, int64_t pc_obj, const char* str, int speech_id);
 typedef void (*Func5F848C)(int64_t, int);
 
+/**
+ * Optional fatigue policy for combat AI spell casting.
+ *
+ * Stock behaviour is reproduced exactly when `rules/ai_fatigue.mes` is absent
+ * or when every entry carries the stock value. The file is parsed once at
+ * `ai_init`; loose `data/rules/ai_fatigue.mes` therefore overrides base
+ * archives through the normal repository precedence.
+ */
+typedef struct AiFatigueConfig {
+    /* Below this fatigue percentage a leaderless NPC refuses memorized
+       spells. Stock 20. */
+    int min_cast_pct_leaderless;
+
+    /* Below this fatigue percentage an NPC with a leader refuses memorized
+       spells. Stock 0, i.e. followers may cast until the cost gate stops
+       them. */
+    int min_cast_pct_follower;
+
+    /* Minimum fatigue that must remain after a memorized cast, expressed
+       as `cost + reserve > current_fatigue`. Stock 1. */
+    int reserve_after_cast;
+
+    /* At or below this fatigue percentage in combat mode, inventory item
+       spells are considered before memorized spells. Stock 50. */
+    int item_first_pct;
+
+    /* Below this fatigue percentage an AI in danger tries its
+       AI_FatigueRecover spell list. Stock 20. */
+    int recover_below_pct;
+
+    /* At or above this fatigue percentage, white-necromancy item spells
+       skip the failure-chance gate. Stock 80. */
+    int white_necro_item_skip_pct;
+
+    /* When true, `ai_check_use_spell` uses the engine's real charging
+       check (`magictech_can_charge_spell_fatigue`) instead of the old
+       `spell_cast_cost` estimate. Stock false. */
+    bool use_real_charge_cost;
+} AiFatigueConfig;
+
+const AiFatigueConfig* ai_fatigue_config_get(void);
+
+// (Re)loads `rules/ai_fatigue.mes` into the AI fatigue config. Called by
+// `ai_init`; exposed for the unit suite.
+void ai_fatigue_config_load(void);
+
 typedef enum AiDangerSourceType {
     AI_DANGER_SOURCE_TYPE_NONE,
     AI_DANGER_SOURCE_TYPE_COMBAT_FOCUS,

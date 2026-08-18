@@ -1843,6 +1843,20 @@ bool magictech_can_charge_spell_fatigue(int64_t obj, int magictech)
 
     cost = magictech_spells[magictech].cost;
 
+    // FIX: The original 0x4508A0 omits the college-mastery discount that the
+    // committing path applies in `magictech_charge_spell_fatigue`. A mastered
+    // caster could therefore be shown "Not enough Energy." for a spell the
+    // engine would actually cast. Apply the same discount/rounding here so the
+    // affordability check agrees with the real charge.
+    if (magictech >= 0
+        && magictech < MT_80
+        && spell_mastery_get(obj) == COLLEGE_FROM_SPELL(magictech)) {
+        cost /= 2;
+        if ((cost & 1) != 0) {
+            cost++;
+        }
+    }
+
     if (magictech_cheat_mode) {
         cost = 1;
     }

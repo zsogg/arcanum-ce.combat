@@ -34,6 +34,7 @@ void test_reaction_suite(void);
 void test_compat_suite(void);
 void test_magitech_suite(void);
 void test_proto_suite(void);
+void test_fatigue_suite(void);
 
 int main(void)
 {
@@ -57,6 +58,7 @@ int main(void)
     test_compat_suite();
     test_magitech_suite();
     test_proto_suite();
+    test_fatigue_suite();
 
     return test_report();
 }

@@ -323,7 +323,7 @@ void mt_ai_populate(MagicTechAi* magictech_ai)
     mt_ai_current_action = tmp->action;
 
     if (combat_critter_is_combat_mode_active(tmp->obj)
-        && ai_critter_fatigue_ratio(tmp->obj) <= 50) {
+        && ai_critter_fatigue_ratio(tmp->obj) <= ai_fatigue_config_get()->item_first_pct) {
         mt_ai_inventory_spells_add(tmp);
         if (mt_ai_entries_cnt == 0) {
             magictech_build_ai_action_list(tmp);

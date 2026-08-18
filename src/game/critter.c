@@ -424,7 +424,9 @@ int critter_fatigue_adj_get(int64_t obj)
     return obj_field_int32_get(obj, OBJ_F_CRITTER_FATIGUE_ADJ);
 }
 
-// NOTE: Original name is misleading: 0x45D4F0 writes OBJ_F_CRITTER_FATIGUE_PTS (0xE0), not OBJ_F_CRITTER_FATIGUE_ADJ; transcription faithful.
+// FIX: The original 0x45D4F0 writes OBJ_F_CRITTER_FATIGUE_PTS (0xE0), not
+// OBJ_F_CRITTER_FATIGUE_ADJ, so the setter could not actually set the value
+// its caller asked for. CE writes the adjustment field as named.
 //
 // 0x45D4F0
 int critter_fatigue_adj_set(int64_t obj, int value)
@@ -434,7 +436,7 @@ int critter_fatigue_adj_set(int64_t obj, int value)
         return 0;
     }
 
-    obj_field_int32_set(obj, OBJ_F_CRITTER_FATIGUE_PTS, value);
+    obj_field_int32_set(obj, OBJ_F_CRITTER_FATIGUE_ADJ, value);
     ui_refresh_fatigue_bar(obj);
 
     return value;

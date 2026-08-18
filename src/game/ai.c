@@ -10,6 +10,7 @@
 #include "game/item.h"
 #include "game/magictech.h"
 #include "game/map.h"
+#include "game/mes.h"
 #include "game/monstergen.h"
 #include "game/mt_ai.h"
 #include "game/mt_item.h"
@@ -31,6 +32,8 @@
 #include "game/tile.h"
 #include "game/timeevent.h"
 #include "game/ui.h"
+
+#include <tig/str_parse.h>
 
 #define CLOCKWORK_DECOY 6719
 
@@ -189,6 +192,90 @@ static int64_t ai_npc_wait_here_test_obj;
 // 0x5F84A0
 static int64_t ai_test_obj;
 
+// 0x5F84A8
+static AiFatigueConfig ai_fatigue_config = {
+    /* min_cast_pct_leaderless   */ 20,
+    /* min_cast_pct_follower     */ 0,
+    /* reserve_after_cast        */ 1,
+    /* item_first_pct            */ 50,
+    /* recover_below_pct         */ 20,
+    /* white_necro_item_skip_pct */ 80,
+    /* use_real_charge_cost      */ false,
+};
+
+// Optional `rules/ai_fatigue.mes` support. Every entry is
+// `{N}{Key: value}`; an absent file, an absent key, or a malformed value
+// leaves the stock default in place. Percentages are clamped to 0..100 and
+// the reserve to 0..1000, so a bad mod cannot make the AI cast from a
+// negative reserve or divide by zero.
+static void ai_fatigue_pct_set(int* dst, int value)
+{
+    if (value < 0) {
+        value = 0;
+    } else if (value > 100) {
+        value = 100;
+    }
+    *dst = value;
+}
+
+static bool ai_fatigue_parse_value(char* str, const char* key, int* value)
+{
+    return tig_str_parse_named_value(&str, key, value);
+}
+
+void ai_fatigue_config_load(void)
+{
+    mes_file_handle_t mes_file;
+    MesFileEntry entry;
+    int value;
+
+    ai_fatigue_config.min_cast_pct_leaderless = 20;
+    ai_fatigue_config.min_cast_pct_follower = 0;
+    ai_fatigue_config.reserve_after_cast = 1;
+    ai_fatigue_config.item_first_pct = 50;
+    ai_fatigue_config.recover_below_pct = 20;
+    ai_fatigue_config.white_necro_item_skip_pct = 80;
+    ai_fatigue_config.use_real_charge_cost = false;
+
+    if (!mes_load("rules\\ai_fatigue.mes", &mes_file)) {
+        return;
+    }
+
+    if (mes_find_first(mes_file, &entry)) {
+        do {
+            if (ai_fatigue_parse_value(entry.str, "MinCastPctLeaderless:", &value)) {
+                ai_fatigue_pct_set(&ai_fatigue_config.min_cast_pct_leaderless, value);
+            } else if (ai_fatigue_parse_value(entry.str, "MinCastPctFollower:", &value)) {
+                ai_fatigue_pct_set(&ai_fatigue_config.min_cast_pct_follower, value);
+            } else if (ai_fatigue_parse_value(entry.str, "ReserveAfterCast:", &value)) {
+                if (value < 0) {
+                    value = 0;
+                } else if (value > 1000) {
+                    value = 1000;
+                }
+                ai_fatigue_config.reserve_after_cast = value;
+            } else if (ai_fatigue_parse_value(entry.str, "ItemFirstPct:", &value)) {
+                ai_fatigue_pct_set(&ai_fatigue_config.item_first_pct, value);
+            } else if (ai_fatigue_parse_value(entry.str, "RecoverBelowPct:", &value)) {
+                ai_fatigue_pct_set(&ai_fatigue_config.recover_below_pct, value);
+            } else if (ai_fatigue_parse_value(entry.str, "WhiteNecroItemSkipPct:", &value)) {
+                ai_fatigue_pct_set(&ai_fatigue_config.white_necro_item_skip_pct, value);
+            } else if (ai_fatigue_parse_value(entry.str, "UseRealChargeCost:", &value)) {
+                ai_fatigue_config.use_real_charge_cost = value != 0;
+            } else if (entry.str[0] != '\0' && entry.str[0] != ';' && entry.str[0] != '/') {
+                tig_debug_printf("AiFatigue: unknown entry: %s\n", entry.str);
+            }
+        } while (mes_find_next(mes_file, &entry));
+    }
+
+    mes_unload(mes_file);
+}
+
+const AiFatigueConfig* ai_fatigue_config_get(void)
+{
+    return &ai_fatigue_config;
+}
+
 // 0x4A8320
 bool ai_init(GameInitInfo* init_info)
 {
@@ -228,6 +315,8 @@ bool ai_init(GameInitInfo* init_info)
     }
 
     mes_unload(mes_file);
+
+    ai_fatigue_config_load();
 
     return true;
 }
@@ -562,7 +651,7 @@ bool ai_heal_func(Ai* ai, int64_t obj, bool a3)
     }
 
     if (ai->danger_type != AI_DANGER_SOURCE_TYPE_NONE) {
-        if (ai_critter_fatigue_ratio(ai->obj) < 20) {
+        if (ai_critter_fatigue_ratio(ai->obj) < ai_fatigue_config_get()->recover_below_pct) {
             mt_ai_create(&magictech_ai, ai->obj, MAGICTECH_AI_ACTION_FATIGUE_RECOVER);
             v1.flags = 0x8;
             v1.entries = magictech_ai.actions[MAGICTECH_AI_ACTION_FATIGUE_RECOVER].entries;
@@ -3847,6 +3936,7 @@ int ai_check_use_skill(int64_t source_obj, int64_t target_obj, int64_t item_obj,
 // 0x4AE720
 int ai_check_use_spell(int64_t attacker_obj, int64_t item_obj, int64_t target_obj, int spell)
 {
+    const AiFatigueConfig* fatigue_cfg = ai_fatigue_config_get();
     int attacker_obj_type = obj_field_int32_get(attacker_obj, OBJ_F_TYPE);
 
     if (item_obj != OBJ_HANDLE_NULL) {
@@ -3863,7 +3953,7 @@ int ai_check_use_spell(int64_t attacker_obj, int64_t item_obj, int64_t target_ob
         if (target_obj != OBJ_HANDLE_NULL
             && (COLLEGE_FROM_SPELL(spell) != COLLEGE_NECROMANTIC_WHITE
                 || (ai_object_hp_ratio(target_obj) > 30
-                    && ai_critter_fatigue_ratio(attacker_obj) < 80))
+                    && ai_critter_fatigue_ratio(attacker_obj) < fatigue_cfg->white_necro_item_skip_pct))
             && magictech_use_item_fail_chance(attacker_obj, item_obj, target_obj) >= 38) {
             return 8;
         }
@@ -3873,8 +3963,13 @@ int ai_check_use_spell(int64_t attacker_obj, int64_t item_obj, int64_t target_ob
         }
 
         if (attacker_obj_type == OBJ_TYPE_NPC) {
-            if (critter_pc_leader_get(attacker_obj) == OBJ_HANDLE_NULL
-                && ai_critter_fatigue_ratio(attacker_obj) < 20) {
+            int fatigue_ratio = ai_critter_fatigue_ratio(attacker_obj);
+
+            if (critter_pc_leader_get(attacker_obj) == OBJ_HANDLE_NULL) {
+                if (fatigue_ratio < fatigue_cfg->min_cast_pct_leaderless) {
+                    return 2;
+                }
+            } else if (fatigue_ratio < fatigue_cfg->min_cast_pct_follower) {
                 return 2;
             }
 
@@ -3883,7 +3978,11 @@ int ai_check_use_spell(int64_t attacker_obj, int64_t item_obj, int64_t target_ob
             }
         }
 
-        if (spell_cast_cost(spell, attacker_obj) >= critter_fatigue_current(attacker_obj)) {
+        if (fatigue_cfg->use_real_charge_cost) {
+            if (!magictech_can_charge_spell_fatigue(attacker_obj, spell)) {
+                return 2;
+            }
+        } else if (spell_cast_cost(spell, attacker_obj) + fatigue_cfg->reserve_after_cast > critter_fatigue_current(attacker_obj)) {
             return 2;
         }
 
