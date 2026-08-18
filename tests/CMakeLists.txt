@@ -34,6 +34,7 @@ add_executable(arcanum-tests
     "test_obj_id.c"
     "test_reaction.c"
     "test_compat.c"
+    "test_magitech.c"
     "obj_harness.c"
     "obj_harness.h"
     "tests_main.c"
