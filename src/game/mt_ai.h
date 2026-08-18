@@ -42,7 +42,7 @@ typedef struct MagicTechAi {
 bool mt_ai_init(GameInitInfo* init_info);
 void mt_ai_reset(void);
 void mt_ai_exit(void);
-int sub_4CC2A0(int spl);
+int mt_ai_spell_defensive_targets_enemy(int spl);
 void mt_ai_create(MagicTechAi* magictech_ai, int64_t obj, int action);
 void mt_ai_destroy(MagicTechAi* magictech_ai);
 void mt_ai_notify_inventory_changed(int64_t obj);

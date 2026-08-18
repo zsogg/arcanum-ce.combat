@@ -2466,7 +2466,7 @@ bool ai_choose_action_from_list(Ai* ai, S4ABF10* a2)
     for (idx = 0; idx < a2->cnt; idx++) {
         entry = &(a2->entries[(base + idx) % a2->cnt]);
         if ((a2->flags & 0x4) != 0) {
-            if (sub_4CC2A0(entry->spell)) {
+            if (mt_ai_spell_defensive_targets_enemy(entry->spell)) {
                 obj = ai->danger_source;
             } else {
                 obj = ai->obj;
