@@ -33,6 +33,7 @@ void test_obj_id_suite(void);
 void test_reaction_suite(void);
 void test_compat_suite(void);
 void test_magitech_suite(void);
+void test_proto_suite(void);
 
 int main(void)
 {
@@ -55,6 +56,7 @@ int main(void)
     test_reaction_suite();
     test_compat_suite();
     test_magitech_suite();
+    test_proto_suite();
 
     return test_report();
 }
