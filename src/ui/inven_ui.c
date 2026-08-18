@@ -1173,7 +1173,7 @@ void inven_ui_destroy(void)
             }
         }
         item_decay_process_enable();
-        sub_4ED6C0(inven_ui_target_inventory_obj);
+        mp_item_junk_pile_collapse(inven_ui_target_inventory_obj);
     }
 
     intgame_pc_lens_do(PC_LENS_MODE_NONE, NULL);
@@ -4213,7 +4213,7 @@ bool inven_ui_process_transfer_packet(Packet81* pkt)
                     int64_t gold_obj = item_gold_create(qty, loc);
                     if (v6 != OBJ_HANDLE_NULL) {
                         int sound_id = sfx_item_sound(gold_obj, v1, OBJ_HANDLE_NULL, ITEM_SOUND_DROP);
-                        sub_4EED00(v6, sound_id);
+                        mp_gsound_play_sfx_for_obj(v6, sound_id);
                     }
                     if ((flags & 0x04) != 0) {
                         object_pickup(gold_obj, v1);
@@ -4243,7 +4243,7 @@ bool inven_ui_process_transfer_packet(Packet81* pkt)
                     int64_t ammo_obj = item_ammo_create(qty, ammo_type, loc);
                     if (v6 != OBJ_HANDLE_NULL) {
                         int sound_id = sfx_item_sound(ammo_obj, v1, OBJ_HANDLE_NULL, ITEM_SOUND_PICKUP);
-                        sub_4EED00(v6, sound_id);
+                        mp_gsound_play_sfx_for_obj(v6, sound_id);
                     }
                     if ((flags & 0x04) != 0) {
                         object_pickup(ammo_obj, v1);
@@ -4290,7 +4290,7 @@ bool inven_ui_process_transfer_packet(Packet81* pkt)
 
                     if (v6 != OBJ_HANDLE_NULL) {
                         int sound_id = sfx_item_sound(v2, v3, OBJ_HANDLE_NULL, ITEM_SOUND_DROP);
-                        sub_4EED00(v6, sound_id);
+                        mp_gsound_play_sfx_for_obj(v6, sound_id);
                     }
                 }
             } else if ((flags & 0x02) != 0) {
@@ -4299,7 +4299,7 @@ bool inven_ui_process_transfer_packet(Packet81* pkt)
                 }
                 if (v6 != OBJ_HANDLE_NULL) {
                     int sound_id = sfx_item_sound(v2, v3, OBJ_HANDLE_NULL, ITEM_SOUND_DROP);
-                    sub_4EED00(v6, sound_id);
+                    mp_gsound_play_sfx_for_obj(v6, sound_id);
                 }
             }
         }

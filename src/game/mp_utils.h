@@ -672,24 +672,71 @@ typedef struct Packet128 {
 // Serializeable.
 static_assert(sizeof(Packet128) == 0x38, "wrong size");
 
-bool sub_4ED6C0(int64_t obj);
+typedef struct PacketObjectFlush {
+    /* 0000 */ int type;
+    /* 0004 */ int padding_4;
+    /* 0008 */ ObjectID oid;
+} PacketObjectFlush;
+
+// Serializeable.
+static_assert(sizeof(PacketObjectFlush) == 0x20, "wrong size");
+
+typedef struct PacketSectorChange {
+    /* 0000 */ int type;
+    /* 0004 */ int padding_4;
+    /* 0008 */ int64_t sector_id;
+    /* 0010 */ ObjectID oid;
+} PacketSectorChange;
+
+// Serializeable.
+static_assert(sizeof(PacketSectorChange) == 0x28, "wrong size");
+
+typedef struct PacketLocationUpdate {
+    /* 0000 */ int type;
+    /* 0004 */ int subtype;
+    /* 0008 */ int64_t location;
+    /* 0010 */ ObjectID oid;
+} PacketLocationUpdate;
+
+// Serializeable.
+static_assert(sizeof(PacketLocationUpdate) == 0x28, "wrong size");
+
+typedef struct PacketArrayFieldLengthSet {
+    /* 0000 */ int type;
+    /* 0004 */ int subtype;
+    /* 0008 */ ObjectID oid;
+    /* 0020 */ int field;
+    /* 0024 */ int value;
+} PacketArrayFieldLengthSet;
+
+// Serializeable.
+static_assert(sizeof(PacketArrayFieldLengthSet) == 0x28, "wrong size");
+
+bool mp_item_junk_pile_collapse(int64_t obj);
 bool mp_object_create(int name, int64_t loc, int64_t* obj_ptr);
 void mp_send_ui_message(UiMessage* ui_message, int player, int a3);
-void sub_4EDCE0(int64_t obj, tig_art_id_t art_id);
+void mp_object_set_current_aid(int64_t obj, tig_art_id_t art_id);
 void mp_ui_update_inven(int64_t obj);
-void sub_4EDF20(int64_t obj, int64_t location, int dx, int dy, bool a7);
+void mp_object_move_to(int64_t obj, int64_t location, int dx, int dy, bool a7);
 void mp_item_activate(int64_t owner_obj, int64_t item_obj);
 void mp_ui_written_start_type(int64_t obj, WrittenType written_type, int num);
 void mp_ui_show_inven_loot(int64_t obj, int64_t a2);
-void sub_4EE3A0(int64_t obj, int64_t a2);
+void mp_ui_examine_object(int64_t obj, int64_t a2);
 void mp_ui_show_inven_identify(int64_t pc_obj, int64_t target_obj);
-void sub_4EE4C0(int64_t obj, int64_t a2);
-void sub_4EF830(int64_t a1, int64_t a2);
-void sub_4EFAE0(int64_t obj, int a2);
-void sub_4EFBA0(int64_t obj);
-void sub_4EFC30(int64_t pc_obj, const char* name, const char* rule);
+void mp_ui_open_charedit_passive(int64_t obj, int64_t a2);
+void mp_object_pull_to_actor(int64_t a1, int64_t a2);
+void mp_item_inventory_destroy_all(int64_t obj, int a2);
+void mp_request_item_inventory_restock(int64_t obj);
+void mp_level_scheme_set_send(int64_t pc_obj, const char* name, const char* rule);
+void mp_handle_object_flush(PacketObjectFlush* pkt);
+void mp_handle_sector_changed(PacketSectorChange* pkt);
+void mp_handle_location_update(PacketLocationUpdate* pkt);
+void mp_handle_object_pull_to_actor(Packet118* pkt);
+void mp_handle_item_inventory_destroy_all(Packet121* pkt);
+void mp_handle_item_inventory_restock(Packet122* pkt);
+void mp_handle_arrayfield_length_set(PacketArrayFieldLengthSet* pkt);
 void mp_gsound_play_sfx(int sound_id);
-void sub_4EED00(int64_t obj, int sound_id);
+void mp_gsound_play_sfx_for_obj(int64_t obj, int sound_id);
 void mp_gsound_play_sfx_on_obj(int sound_id, int loops, int64_t obj);
 void mp_gsound_play_scheme(int music_scheme_idx, int ambient_scheme_idx);
 void mp_obj_to_oid(int64_t obj, ObjectID* oid_ptr);

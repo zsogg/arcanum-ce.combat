@@ -840,7 +840,7 @@ void multiplayer_start_play(PlayerCreateInfo* player_create_info)
 
     sub_4A6010(player_create_info->obj);
     sub_4A5670(player_create_info->obj);
-    sub_4EDF20(player_create_info->obj, loc, 0, 0, false);
+    mp_object_move_to(player_create_info->obj, loc, 0, 0, false);
 
     datetime.days = 0;
     datetime.milliseconds = 0;
@@ -2034,7 +2034,7 @@ bool multiplayer_notify_level_scheme_changed(int64_t obj)
         }
 
         FREE(data);
-        sub_4EFC30(obj, name, rule);
+        mp_level_scheme_set_send(obj, name, rule);
     }
 
     return true;

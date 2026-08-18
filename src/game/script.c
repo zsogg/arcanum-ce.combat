@@ -1837,7 +1837,7 @@ int script_execute_action(ScriptAction* action, int line, ScriptState* state)
 
             art_id = obj_field_int32_get(new_obj, OBJ_F_CURRENT_AID);
             art_id = tig_art_id_rotation_set(art_id, rotation);
-            sub_4EDCE0(new_obj, art_id);
+            mp_object_set_current_aid(new_obj, art_id);
 
             obj_type = obj_field_int32_get(new_obj, OBJ_F_TYPE);
             if (obj_type_is_critter(obj_type)) {
@@ -2744,7 +2744,7 @@ int script_execute_action(ScriptAction* action, int line, ScriptState* state)
         int rotation = script_get_value(action->op_type[1], action->op_value[1], state);
         tig_art_id_t art_id = obj_field_int32_get(obj, OBJ_F_CURRENT_AID);
         art_id = tig_art_id_rotation_set(art_id, rotation);
-        sub_4EDCE0(obj, art_id);
+        mp_object_set_current_aid(obj, art_id);
         return NEXT;
     }
     case SAT_SET_FACTION: {

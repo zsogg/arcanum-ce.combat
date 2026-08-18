@@ -9,13 +9,16 @@
 #include "game/material.h"
 #include "game/multiplayer.h"
 #include "game/obj.h"
+#include "game/obj_pool.h"
 #include "game/obj_private.h"
 #include "game/object.h"
 #include "game/player.h"
 #include "game/portal.h"
 #include "game/proto.h"
 #include "game/random.h"
+#include "game/roof.h"
 #include "game/sector.h"
+#include "game/sector_object_list.h"
 #include "game/spell.h"
 #include "game/tb.h"
 #include "game/tf.h"
@@ -23,9 +26,10 @@
 #include "game/townmap.h"
 #include "game/ui.h"
 #include "game/wall.h"
+#include "game/wallcheck.h"
 
 // 0x4ED6C0
-bool sub_4ED6C0(int64_t obj)
+bool mp_item_junk_pile_collapse(int64_t obj)
 {
     Packet29 pkt;
 
@@ -84,7 +88,7 @@ void mp_send_ui_message(UiMessage* ui_message, int player, int a3)
 }
 
 // 0x4EDCE0
-void sub_4EDCE0(int64_t obj, tig_art_id_t art_id)
+void mp_object_set_current_aid(int64_t obj, tig_art_id_t art_id)
 {
     Packet92 pkt;
 
@@ -128,7 +132,7 @@ void mp_handle_ui_update_inven(PacketUpdateInven* pkt)
 }
 
 // 0x4EDF20
-void sub_4EDF20(int64_t obj, int64_t location, int dx, int dy, bool a7)
+void mp_object_move_to(int64_t obj, int64_t location, int dx, int dy, bool a7)
 {
     Packet99 pkt;
 
@@ -153,12 +157,12 @@ void sub_4EDF20(int64_t obj, int64_t location, int dx, int dy, bool a7)
 }
 
 // 0x4EDFF0
-void sub_4EDFF0(Packet99* pkt)
+void mp_handle_object_move(Packet99* pkt)
 {
     int64_t obj;
 
     // FIXED: The host test was inverted. Packet 99 is only ever sent by the
-    // host (`sub_4EDF20` broadcasts it under `tig_net_is_host()`), so the
+    // host (`mp_object_move_to` broadcasts it under `tig_net_is_host()`), so the
     // recipient is always a client and the update must be applied when *not*
     // hosting. The original bails out when the host bit is set:
     // `mov al, ds:0x62ac6c; test al, 0x2; jne <ret>` at 0x4EDFF0, where bit
@@ -235,7 +239,7 @@ void mp_ui_show_inven_loot(int64_t pc_obj, int64_t target_obj)
 }
 
 // 0x4EE3A0
-void sub_4EE3A0(int64_t obj, int64_t a2)
+void mp_ui_examine_object(int64_t obj, int64_t a2)
 {
     Packet100 pkt;
 
@@ -275,7 +279,7 @@ void mp_ui_show_inven_identify(int64_t pc_obj, int64_t target_obj)
 }
 
 // 0x4EE4C0
-void sub_4EE4C0(int64_t obj, int64_t a2)
+void mp_ui_open_charedit_passive(int64_t obj, int64_t a2)
 {
     Packet100 pkt;
 
@@ -295,7 +299,7 @@ void sub_4EE4C0(int64_t obj, int64_t a2)
 }
 
 // 0x4EE5E0
-void sub_4EE5E0(Packet100* pkt)
+void mp_handle_ui_packet(Packet100* pkt)
 {
     int64_t v1;
     int64_t v2;
@@ -424,7 +428,7 @@ void mp_gsound_play_sfx(int sound_id)
 }
 
 // 0x4EED00
-void sub_4EED00(int64_t obj, int sound_id)
+void mp_gsound_play_sfx_for_obj(int64_t obj, int sound_id)
 {
     if (obj == OBJ_HANDLE_NULL) {
         return;
@@ -498,25 +502,48 @@ void mp_handle_gsound_play_scheme(PacketPlaySound* pkt)
 }
 
 // 0x4EF320
-void sub_4EF320(void)
+void mp_handle_object_flush(PacketObjectFlush* pkt)
 {
-    // TODO: Incomplete.
+    int64_t obj;
+
+    obj = obj_pool_perm_lookup(pkt->oid);
+    if (player_is_local_pc_obj(obj)) {
+        object_flush();
+    }
 }
 
 // 0x4EF3D0
-void sub_4EF3D0(void)
+void mp_handle_sector_changed(PacketSectorChange* pkt)
 {
-    // TODO: Incomplete.
+    int64_t obj;
+
+    obj = obj_pool_perm_lookup(pkt->oid);
+    objlist_notify_sector_changed(pkt->sector_id, obj);
 }
 
 // 0x4EF540
-void sub_4EF540(void)
+void mp_handle_location_update(PacketLocationUpdate* pkt)
 {
-    // TODO: Incomplete.
+    int64_t obj;
+
+    switch (pkt->subtype) {
+    case 0:
+        roof_recalc(pkt->location);
+        break;
+    case 1:
+        wallcheck_recalc(pkt->location);
+        break;
+    case 2:
+        obj = obj_pool_perm_lookup(pkt->oid);
+        if (player_is_local_pc_obj(obj)) {
+            scroll_set_center(pkt->location);
+        }
+        break;
+    }
 }
 
 // 0x4EF830
-void sub_4EF830(int64_t a1, int64_t a2)
+void mp_object_pull_to_actor(int64_t a1, int64_t a2)
 {
     Packet118 pkt;
 
@@ -533,7 +560,7 @@ void sub_4EF830(int64_t a1, int64_t a2)
 }
 
 // 0x4EF8B0
-void sub_4EF8B0(Packet118* pkt)
+void mp_handle_object_pull_to_actor(Packet118* pkt)
 {
     int64_t v1;
     int64_t v2;
@@ -546,7 +573,7 @@ void sub_4EF8B0(Packet118* pkt)
 }
 
 // 0x4EFAE0
-void sub_4EFAE0(int64_t obj, int a2)
+void mp_item_inventory_destroy_all(int64_t obj, int a2)
 {
     Packet121 pkt;
 
@@ -567,7 +594,7 @@ void sub_4EFAE0(int64_t obj, int a2)
 }
 
 // 0x4EFB50
-void sub_4EFB50(Packet121* pkt)
+void mp_handle_item_inventory_destroy_all(Packet121* pkt)
 {
     int64_t obj;
 
@@ -578,7 +605,7 @@ void sub_4EFB50(Packet121* pkt)
 }
 
 // 0x4EFBA0
-void sub_4EFBA0(int64_t obj)
+void mp_request_item_inventory_restock(int64_t obj)
 {
     Packet122 pkt;
 
@@ -591,13 +618,18 @@ void sub_4EFBA0(int64_t obj)
 }
 
 // 0x4EFBE0
-void sub_4EFBE0(void)
+void mp_handle_item_inventory_restock(Packet122* pkt)
 {
-    // TODO: Incomplete.
+    int64_t obj;
+
+    if (tig_net_is_host()) {
+        mp_oid_to_obj(pkt->oid, &obj);
+        item_inventory_restock_contents(obj);
+    }
 }
 
 // 0x4EFC30
-void sub_4EFC30(int64_t pc_obj, const char* name, const char* rule)
+void mp_level_scheme_set_send(int64_t pc_obj, const char* name, const char* rule)
 {
     int size;
     Packet123* pkt;
@@ -617,9 +649,14 @@ void sub_4EFC30(int64_t pc_obj, const char* name, const char* rule)
 }
 
 // 0x4F05F0
-void sub_4F05F0(void)
+void mp_handle_arrayfield_length_set(PacketArrayFieldLengthSet* pkt)
 {
-    // TODO: Incomplete.
+    int64_t obj;
+
+    obj = obj_pool_perm_lookup(pkt->oid);
+    if (pkt->subtype == 1) {
+        obj_arrayfield_length_set(obj, pkt->field, pkt->value);
+    }
 }
 
 /**

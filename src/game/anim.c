@@ -11699,7 +11699,7 @@ bool AGupdateAnimMove(AnimRunInfo* run_info)
             }
             object_set_current_aid(obj, art_id);
 
-            sub_4EDF20(obj, loc, 0, 0, false);
+            mp_object_move_to(obj, loc, 0, 0, false);
             anim_interrupt_all_goals_of_obj(obj, 2, false, false);
 
             return false;
@@ -14716,7 +14716,7 @@ bool anim_goal_projectile(int64_t source_obj, int64_t missile_obj, tig_art_id_t 
 
     loc = obj_field_int64_get(source_obj, OBJ_F_LOCATION);
     rotation = combat_projectile_rot(loc, target_loc);
-    sub_4EDCE0(missile_obj, combat_projectile_art_id_rotation_set(missile_art_id, rotation));
+    mp_object_set_current_aid(missile_obj, combat_projectile_art_id_rotation_set(missile_art_id, rotation));
 
     // NOTE: Verified against 0x435924-0x43592A - original reads the source's current aid and passes it to tig_art_id_rotation_get, discarding the result; transcription faithful.
     tig_art_id_rotation_get(obj_field_int32_get(source_obj, OBJ_F_CURRENT_AID));

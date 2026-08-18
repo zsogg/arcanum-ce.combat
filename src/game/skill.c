@@ -2628,7 +2628,7 @@ void skill_perform_repair_service(int64_t item_obj, int64_t npc_obj, int64_t pc_
     item_gold_transfer(pc_obj, npc_obj, cost, OBJ_HANDLE_NULL);
 
     // Update examine item UI.
-    sub_4EE3A0(pc_obj, item_obj);
+    mp_ui_examine_object(pc_obj, item_obj);
 }
 
 /**

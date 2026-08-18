@@ -2087,7 +2087,7 @@ void item_inventory_restock_contents(int64_t obj)
 
     if (tig_net_is_active()
         && !tig_net_is_host()) {
-        sub_4EFBA0(obj);
+        mp_request_item_inventory_restock(obj);
         return;
     }
 
@@ -2109,7 +2109,7 @@ void item_inventory_restock_contents(int64_t obj)
 
     source_id = obj_field_int32_get(obj, inventory_source_fld);
 
-    sub_4EFAE0(obj, 1);
+    mp_item_inventory_destroy_all(obj, 1);
 
     if (source_id != 0) {
         loc = obj_field_int64_get(obj, OBJ_F_LOCATION);
@@ -4141,7 +4141,7 @@ void item_perform_identify_service(int64_t item_obj, int64_t npc_obj, int64_t pc
 
     item_gold_transfer(pc_obj, npc_obj, cost, OBJ_HANDLE_NULL);
 
-    sub_4EE3A0(pc_obj, item_obj);
+    mp_ui_examine_object(pc_obj, item_obj);
 }
 
 // 0x467520

@@ -2703,11 +2703,11 @@ void MTComponentIdentify_ProcFunc(void)
 {
     if (magictech_cur_target_ctx.target_obj != OBJ_HANDLE_NULL) {
         if (obj_type_is_critter(magictech_cur_target_obj_type)) {
-            sub_4EE4C0(magictech_cur_run_info->parent_obj.obj, magictech_cur_target_ctx.target_obj);
+            mp_ui_open_charedit_passive(magictech_cur_run_info->parent_obj.obj, magictech_cur_target_ctx.target_obj);
         } else if (magictech_cur_target_obj_type == OBJ_TYPE_CONTAINER) {
             mp_ui_show_inven_identify(magictech_cur_run_info->parent_obj.obj, magictech_cur_target_ctx.target_obj);
         } else {
-            sub_4EE3A0(magictech_cur_run_info->parent_obj.obj, magictech_cur_target_ctx.target_obj);
+            mp_ui_examine_object(magictech_cur_run_info->parent_obj.obj, magictech_cur_target_ctx.target_obj);
         }
     }
 }
