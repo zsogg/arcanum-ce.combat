@@ -1872,10 +1872,14 @@ bool magictech_charge_run_fatigue(int mt_id)
         return true;
     }
 
+    // FIX: The original reads the spell id from `run_info->spell` (0x450979
+    // loads +0x04 and 0x450984 builds the table offset from it), not from the
+    // run-info slot id. Item-spell runs usually land in slot 0, so the old
+    // transcription charged spell 0's cost to the item and aborted the run.
     if (run_info->action == MAGICTECH_ACTION_BEGIN) {
-        cost = magictech_spells[mt_id].cost;
+        cost = magictech_spells[run_info->spell].cost;
     } else {
-        cost = magictech_get_maintenance(mt_id)->cost;
+        cost = magictech_get_maintenance(run_info->spell)->cost;
     }
 
     if (magictech_cheat_mode) {
