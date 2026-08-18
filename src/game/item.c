@@ -1762,7 +1762,7 @@ bool item_junk_pile_collapse(int64_t container_obj)
     }
 
     if (tig_net_is_active()
-        && sub_4A5460(container_obj)) {
+        && multiplayer_substitute_inventory_count(container_obj)) {
         return false;
     }
 

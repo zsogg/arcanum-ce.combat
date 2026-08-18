@@ -13,7 +13,7 @@
 
 static bool anim_allocate_this_run_index(AnimID* anim_id);
 static bool anim_goal_restart_run_index(int index);
-static bool anim_goal_add_func(AnimGoalData* goal_data, AnimID* anim_id, bool a3, unsigned int flags);
+bool anim_goal_add_func(AnimGoalData* goal_data, AnimID* anim_id, bool a3, unsigned int flags);
 static bool anim_subgoal_add_func(AnimID anim_id, AnimGoalData* goal_data);
 static bool anim_interrupt_timeevent_match(TimeEvent* timeevent);
 static void anim_path_debug(AnimPath* path);

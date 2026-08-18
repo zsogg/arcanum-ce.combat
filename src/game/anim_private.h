@@ -419,6 +419,8 @@ bool anim_goal_data_init(AnimGoalData* goal_data, int64_t obj, int goal_type);
 bool anim_goal_data_init_no_interrupt(AnimGoalData* goal_data, int64_t obj, int goal_type);
 bool anim_goal_add(AnimGoalData* goal_data, AnimID* anim_id);
 bool anim_goal_add_ex(AnimGoalData* goal_data, AnimID* anim_id, unsigned int flags);
+bool anim_goal_add_func(AnimGoalData* goal_data, AnimID* anim_id, bool a3, unsigned int flags);
+bool anim_goal_type_is_concurrent(int index);
 bool anim_subgoal_add(AnimID anim_id, AnimGoalData* goal_data, const char* file, int line);
 bool anim_recover_handles(AnimRunInfo* run_info, AnimGoalSubNode* goal_subnode);
 void anim_interrupt_attack_on_obj_or_follower(int64_t a1, int64_t a2);

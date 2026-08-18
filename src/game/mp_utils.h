@@ -45,12 +45,12 @@ typedef struct Packet5 {
     /* 0000 */ int type;
     /* 0004 */ int padding_4;
     /* 0008 */ DateTime field_8;
-    /* 0010 */ AnimGoalData field_10;
+    /* 0010 */ AnimGoalData goal_data;
     /* 0188 */ int64_t loc;
     /* 0190 */ int offset_x;
     /* 0194 */ int offset_y;
-    /* 0198 */ AnimID field_198;
-    /* 01A4 */ int field_1A4;
+    /* 0198 */ AnimID anim_id;
+    /* 01A4 */ int flags;
 } Packet5;
 
 // Serializeable.

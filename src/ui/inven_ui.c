@@ -1078,14 +1078,14 @@ bool inven_ui_create(int64_t pc_obj, int64_t target_obj, int mode)
     inven_ui_target_inventory_scroll_value = 0;
     inven_ui_examined_obj = OBJ_HANDLE_NULL;
 
-    sub_4A53B0(inven_ui_pc_obj, inven_ui_target_inventory_obj);
+    multiplayer_substitute_inventory_set(inven_ui_pc_obj, inven_ui_target_inventory_obj);
     redraw_inven_fix_bad_inven_obj(inven_ui_pc_obj);
     redraw_inven_fix_bad_inven_obj(inven_ui_target_inventory_obj);
 
     if (!inven_ui_target_is_follower
         && inven_ui_target_inventory_obj != OBJ_HANDLE_NULL
         && obj_field_int32_get(inven_ui_target_inventory_obj, OBJ_F_TYPE) != OBJ_TYPE_PC
-        && sub_4A5460(inven_ui_target_inventory_obj) <= 1) {
+        && multiplayer_substitute_inventory_count(inven_ui_target_inventory_obj) <= 1) {
         item_arrange_inventory(inven_ui_target_inventory_obj, false);
         item_inventory_slots_get(inven_ui_target_inventory_obj, inven_ui_target_inventory_slots);
     }
@@ -1157,7 +1157,7 @@ void inven_ui_destroy(void)
     }
 
     inven_ui_created = false;
-    sub_4A53B0(inven_ui_pc_obj, 0);
+    multiplayer_substitute_inventory_set(inven_ui_pc_obj, 0);
 
     if ((inven_ui_mode == INVEN_UI_MODE_LOOT
             || inven_ui_mode == INVEN_UI_MODE_IDENTIFY)
@@ -2443,7 +2443,7 @@ void inven_ui_item_pickup_request(int x, int y)
 
     inven_ui_drag_item_obj = OBJ_HANDLE_NULL;
 
-    sub_4A3230(obj_get_id(entry->field_8), inven_ui_item_pickup_complete, entry, inven_ui_item_pickup_fail, entry);
+    multiplayer_item_pickup_request(obj_get_id(entry->field_8), inven_ui_item_pickup_complete, entry, inven_ui_item_pickup_fail, entry);
 }
 
 // 0x575580
@@ -2465,7 +2465,7 @@ bool inven_ui_item_pickup_complete(void* userinfo)
     TigArtFrameData art_frame_data;
 
     inven_ui_drag_item_obj = entry->field_8;
-    sub_4A50D0(player_get_local_pc_obj(), entry->field_8);
+    multiplayer_item_pickup_complete(player_get_local_pc_obj(), entry->field_8);
     art_id = obj_field_int32_get(entry->field_8, OBJ_F_ITEM_INV_AID);
 
     if ((entry->x == -1 && entry->y == -1)

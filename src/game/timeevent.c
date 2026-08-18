@@ -874,7 +874,7 @@ void timeevent_ping(tig_timestamp_t timestamp)
     if (tig_net_is_active()
         && !tig_net_is_host()) {
         if (!timeevent_is_paused()) {
-            if (timeevent_unsynced_game_time_ms < 1000 * (sub_4A38A0() + 16)) {
+            if (timeevent_unsynced_game_time_ms < 1000 * (multiplayer_xfer_extra_seconds_get() + 16)) {
                 datetime_add_milliseconds(&timeevent_game_time, 8 * delta);
                 datetime_add_milliseconds(&timeevent_anim_time, 8 * delta);
                 timeevent_unsynced_game_time_ms += 8 * delta;
