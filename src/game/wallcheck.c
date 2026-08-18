@@ -639,9 +639,12 @@ static int64_t wallcheck_pending_loc;
 // 0x5E0A10
 // Roofs currently faded out, kept sorted by `field_0` (the roof object) so
 // `wallcheck_faded_roof_find` can binary-search it. `field_8` is a reference count, not a
-// flag: `wallcheck_roof_fade_add` calls `roof_fade_on` only on the transition to 1, because
-// several critters can stand under the same roof and it must stay faded until
-// the last of them leaves.
+// flag: `wallcheck_roof_fade_add` calls `roof_fade_on` only on the transition to 1, and
+// `wallcheck_roof_faded_clear` calls `roof_fade_off` only on the transition to 0. Several
+// tracked wall pieces can normalize to the same roof tile, and the multiplayer remote-PC
+// movement handler at 0x4EF540 can add references for another player under the same roof,
+// so the count keeps the tile faded until the last reference clears. Single-player NPC
+// followers do not add references: only the local PC's wallcheck path does.
 static WallcheckFadedRoof wallcheck_faded_roofs[64];
 
 // 0x5E0E10
