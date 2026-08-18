@@ -11967,9 +11967,12 @@ int anim_spend_move_cost(AnimRunInfo* run_info)
                 if (run_info->cur_stack_data->params[AGDATA_SCRATCH_VAL4].data >= v1) {
                     run_info->cur_stack_data->params[AGDATA_SCRATCH_VAL4].data = 0;
 
+                    // Porting bug #30: the original stores damage + 1
+                    // (0x43010BA get, 0x43010BF INC EAX, 0x43010C3 set),
+                    // so each combat running interval drains one fatigue.
                     fatigue_dam = critter_fatigue_damage_get(obj);
 
-                    if (critter_fatigue_damage_set(obj, fatigue_dam) == 0) {
+                    if (critter_fatigue_damage_set(obj, fatigue_dam + 1) == 0) {
                         return false;
                     }
                 }
