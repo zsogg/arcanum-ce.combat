@@ -146,13 +146,26 @@ static int proto_description_end[OBJ_TYPE_COUNT] = {
  * original bound excludes, so a clean run logs "Invalid prototype in
  * [Rules\InvenSource.mes] ... basic prototype 15213" twice and empties the two
  * sets that mention it. Turning the switch on clears those errors.
+ *
+ * CE: Arcanum CE reserves 15214-16064 (GENERIC) and 8293-9054 (ARMOR) as the
+ * mod-item range, gated behind the same switch so stock validation is
+ * unchanged. The slots classify as GENERIC/ARMOR because they sit below the
+ * next type's begin (16066 PC / 9056 GOLD); proto_recreate_missing
+ * materializes a default .pro for each slot on the first run with the
+ * switch on. See mods/ID-BUDGETS.md, "reserved range".
  */
 static int proto_description_end_get(int object_type)
 {
     if (uap_fixes_enabled()) {
         switch (object_type) {
+        // CE: Arcanum CE reserves GENERIC 15214-16064 and ARMOR 8293-9054
+        // as the mod-item range, gated behind the same switch as the UAP
+        // widenings so stock validation is unchanged. See
+        // mods/ID-BUDGETS.md, "reserved range".
         case OBJ_TYPE_GENERIC:
-            return 15214;
+            return 16065;
+        case OBJ_TYPE_ARMOR:
+            return 9055;
         case OBJ_TYPE_MONSTER:
             return 27397;
         default:

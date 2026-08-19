@@ -6,8 +6,10 @@
 // prototype inherits SAP_WIELD_ON/OFF scripts. Two properties are cheap to
 // pin here:
 //
-//   * `proto_is_valid` accepts exactly the per-type ranges, including the two
-//     UAP widenings (GENERIC and MONSTER);
+//   * `proto_is_valid` accepts exactly the per-type ranges, including the
+//     UAP widenings (GENERIC and MONSTER) and the Arcanum CE reserved
+//     mod-item range (GENERIC 15214-16064, ARMOR 8293-9054), all gated
+//     behind the same switch so stock validation is unchanged;
 //   * `obj_write_mem`/`obj_read_mem` round-trip script arrays, including the
 //     two attachment points that caused the charm-necklace donor bug.
 
@@ -55,31 +57,44 @@ TEST(proto_description_ranges_are_half_open)
     CHECK(!proto_is_valid(27394));
     CHECK(proto_is_valid(28310));
     CHECK(!proto_is_valid(28472));
+
+    // The Arcanum CE reserved mod-item range is invalid in stock mode; the
+    // widening is gated behind the same switch as the UAP widenings.
+    CHECK(!proto_is_valid(15214));
+    CHECK(!proto_is_valid(16064));
+    CHECK(!proto_is_valid(8293));
+    CHECK(!proto_is_valid(9054));
 }
 
-TEST(uap_widens_generic_and_monster_ranges_only)
+TEST(uap_widens_generic_armor_and_monster_ranges)
 {
     // `uap_init` registers the "uap fixes" setting and reads its default.
     uap_init();
 
     settings_set_value(&settings, UAP_FIXES_KEY, 1);
 
+    // UAP's own widenings, unchanged.
     CHECK(proto_is_valid(15213));
-    CHECK(!proto_is_valid(15214));
-
     CHECK(proto_is_valid(27396));
     CHECK(!proto_is_valid(27397));
 
-    // UAP does not widen armor, which is why a truly new armor item needs a
-    // reserved description or an engine range extension.
-    CHECK(proto_is_valid(8292));
-    CHECK(!proto_is_valid(8293));
+    // Arcanum CE reserved mod-item range, GENERIC 15214-16064.
+    CHECK(proto_is_valid(15214));
+    CHECK(proto_is_valid(16064));
+    CHECK(!proto_is_valid(16065)); // OBJ_TYPE_PC begins at 16066
+
+    // Arcanum CE reserved mod-item range, ARMOR 8293-9054.
+    CHECK(proto_is_valid(8293));
+    CHECK(proto_is_valid(9054));
+    CHECK(!proto_is_valid(9055)); // OBJ_TYPE_GOLD begins at 9056
 
     settings_set_value(&settings, UAP_FIXES_KEY, 0);
 
     // Back to stock: the widened slots are invalid again.
     CHECK(!proto_is_valid(15213));
     CHECK(!proto_is_valid(27396));
+    CHECK(!proto_is_valid(15214));
+    CHECK(!proto_is_valid(8293));
 }
 
 TEST(script_array_round_trips_through_proto_serialization)
@@ -146,7 +161,7 @@ TEST(script_array_round_trips_through_proto_serialization)
 void test_proto_suite(void)
 {
     RUN(proto_description_ranges_are_half_open);
-    RUN(uap_widens_generic_and_monster_ranges_only);
+    RUN(uap_widens_generic_armor_and_monster_ranges);
     RUN(script_array_round_trips_through_proto_serialization);
 
     obj_harness_exit();
