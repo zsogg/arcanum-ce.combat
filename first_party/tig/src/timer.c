@@ -11,6 +11,48 @@
 
 #include <limits.h>
 
+// CE: the virtual clock. See the comment in tig/timer.h.
+static bool tig_timer_virtual;
+static unsigned int tig_timer_virtual_step = 16;
+static unsigned int tig_timer_virtual_ticks;
+
+static unsigned int tig_timer_ticks(void)
+{
+    return tig_timer_virtual
+        ? tig_timer_virtual_ticks
+        : (unsigned int)(SDL_GetTicks() & UINT_MAX);
+}
+
+// CE: not in the original - see tig/timer.h.
+void tig_timer_virtual_set(bool enabled, unsigned int step_ms)
+{
+    tig_timer_virtual = enabled;
+
+    // A zero step would freeze the clock, and a frozen clock is not
+    // determinism - every "has N ms passed" test would answer no forever and
+    // the game would never advance. Refuse it rather than hang.
+    tig_timer_virtual_step = step_ms != 0 ? step_ms : 16;
+
+    // Start from a non-zero value. Timestamp zero is indistinguishable from
+    // "never set" in several callers that keep a `tig_timestamp_t` field and
+    // treat 0 as unset.
+    tig_timer_virtual_ticks = tig_timer_virtual_step;
+}
+
+// CE: not in the original - see tig/timer.h.
+bool tig_timer_virtual_enabled(void)
+{
+    return tig_timer_virtual;
+}
+
+// CE: not in the original - see tig/timer.h.
+void tig_timer_virtual_advance(void)
+{
+    if (tig_timer_virtual) {
+        tig_timer_virtual_ticks += tig_timer_virtual_step;
+    }
+}
+
 // 0x52DF80
 int tig_timer_init(TigInitInfo* init_info)
 {
@@ -27,14 +69,14 @@ void tig_timer_exit(void)
 // 0x52DFA0
 int tig_timer_now(tig_timestamp_t* timestamp_ptr)
 {
-    *timestamp_ptr = SDL_GetTicks() & UINT_MAX;
+    *timestamp_ptr = tig_timer_ticks();
     return TIG_OK;
 }
 
 // 0x52DFB0
 tig_duration_t tig_timer_elapsed(tig_timestamp_t start)
 {
-    return (SDL_GetTicks() & UINT_MAX) - start;
+    return tig_timer_ticks() - start;
 }
 
 // 0x52DFC0

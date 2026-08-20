@@ -1,6 +1,8 @@
 #ifndef TIG_TIMER_H_
 #define TIG_TIMER_H_
 
+#include <stdbool.h>
+
 #include "tig/types.h"
 
 #ifdef __cplusplus
@@ -25,6 +27,33 @@ typedef unsigned int tig_timestamp_t;
 // `tig_timer_between` caps duration at 0x7FFFFFFF (that is max 32 bit signed
 // int).
 typedef int tig_duration_t;
+
+// Virtual clock, for reproducible runs.
+//
+// TIMER normally reads `SDL_GetTicks()`, so every timestamp depends on how
+// fast the machine ran the frame. The game advances its own clock from these
+// values, which means two runs of the same save diverge purely because one
+// took longer - the save-state matrix recorded exactly that twice
+// (`Slot0003 turnbased-mid`, `Slot0006 random encounter`), where the only
+// finding was that combat progressed and an encounter fired "during the
+// window".
+//
+// With the virtual clock on, `tig_timer_now` and `tig_timer_elapsed` read a
+// counter that advances by a fixed step once per `tig_ping` instead of by
+// however many milliseconds really passed. A run then depends on how many
+// frames were executed, not on how long they took.
+//
+// Off by default. The game turns it on through `determinism_init` when the
+// `determinism` setting is set; nothing else should call it.
+void tig_timer_virtual_set(bool enabled, unsigned int step_ms);
+
+// Whether the virtual clock is running.
+bool tig_timer_virtual_enabled(void);
+
+// Advances the virtual clock by one step. No-op when it is off.
+//
+// Called from `tig_ping`, which is the engine's per-frame heartbeat.
+void tig_timer_virtual_advance(void);
 
 // Initializes TIMER subsystem.
 int tig_timer_init(TigInitInfo* init_info);

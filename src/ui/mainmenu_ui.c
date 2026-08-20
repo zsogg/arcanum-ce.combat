@@ -1978,6 +1978,15 @@ void mainmenu_ui_dismiss_ex(bool exiting)
     intgame_show();
 }
 
+// CE: reproducible-run harness flag. Not in the original.
+static bool mainmenu_ui_autoload;
+
+// CE: not in the original - see mainmenu_ui.h.
+void mainmenu_ui_autoload_set(bool enabled)
+{
+    mainmenu_ui_autoload = enabled;
+}
+
 // 0x541590
 bool mainmenu_ui_handle(void)
 {
@@ -2000,6 +2009,39 @@ bool mainmenu_ui_handle(void)
     }
 
     broadcast_ui_close();
+
+    // CE: the reproducible-run harness. Loads the newest save as if the
+    // player had picked it from the load screen, so a scripted run reaches
+    // in-game state with no input at all. See mainmenu_ui.h.
+    if (mainmenu_ui_autoload) {
+        const char* autoload_path = gamelib_last_save_name();
+
+        mainmenu_ui_autoload = false;
+        tig_debug_printf("Harness: autoload newest save '%s'\n", autoload_path);
+
+        if (autoload_path[0] != '\0'
+            && gamelib_saveinfo_load(autoload_path, &mainmenu_ui_gsi)) {
+            char autoload_name[256];
+
+            mainmenu_ui_gsi_loaded = true;
+            strncpy(autoload_name, autoload_path, 8);
+            autoload_name[8] = '\0';
+
+            if (mainmenu_ui_load_game_by_name(autoload_name)) {
+                tig_debug_printf("Harness: autoload ok\n");
+            } else {
+                tig_debug_printf("Harness: autoload FAILED to load '%s'\n",
+                    autoload_name);
+            }
+
+            if (mainmenu_ui_gsi_loaded) {
+                gamelib_saveinfo_exit(&mainmenu_ui_gsi);
+                mainmenu_ui_gsi_loaded = false;
+            }
+        } else {
+            tig_debug_printf("Harness: autoload FAILED to read save info\n");
+        }
+    }
 
     while (mainmenu_ui_active) {
         tig_ping();

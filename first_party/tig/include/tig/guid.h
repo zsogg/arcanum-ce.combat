@@ -14,6 +14,16 @@ typedef struct TigGuid {
 // Serializeable.
 static_assert(sizeof(TigGuid) == 16, "wrong size");
 
+// Reseeds the GUID generator, for reproducible runs.
+//
+// `tig_guid_init` seeds from `time(NULL)`, so every run produces different
+// GUIDs. A GUID reaches disk - `tig_database_create` writes one into a .dat
+// header, and the module layer keeps them - so a time-seeded generator is one
+// of the things that stops two runs of the same save being comparable.
+//
+// Off the deterministic path nothing calls this and behaviour is unchanged.
+void tig_guid_seed_set(unsigned int seed);
+
 int tig_guid_init(TigInitInfo* init_info);
 void tig_guid_exit(void);
 void tig_guid_create(TigGuid* guid);

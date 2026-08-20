@@ -12,6 +12,12 @@ int tig_guid_init(TigInitInfo* init_info)
     return TIG_OK;
 }
 
+// CE: not in the original - see tig/guid.h.
+void tig_guid_seed_set(unsigned int seed)
+{
+    srand(seed);
+}
+
 void tig_guid_exit(void)
 {
 }

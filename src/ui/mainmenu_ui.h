@@ -89,6 +89,20 @@ void mainmenu_ui_close(bool back);
 MainMenuWindowType mainmenu_ui_pop_window_stack(void);
 void mainmenu_ui_push_window_stack(MainMenuWindowType window_type);
 bool mainmenu_ui_quick_load(void);
+
+/**
+ * CE: arms the reproducible-run harness's autoload.
+ *
+ * `mainmenu_ui_quick_load` cannot be used for this: it refuses while the menu
+ * is active, and the menu is active for the whole of `mainmenu_ui_handle`.
+ * The load has to happen from inside that function, after the menu is set up
+ * and before its message loop starts - which is where
+ * `harness/huddbg-capture.patch` has been patching it in by hand. This makes
+ * the same hook a permanent, buildable one.
+ *
+ * Set by `main` from `-autoload`. Off by default; the menu behaves normally.
+ */
+void mainmenu_ui_autoload_set(bool enabled);
 void mainmenu_ui_create_window(void);
 void mainmenu_ui_create_window_func(bool should_display);
 bool mainmenu_ui_process_callback(TimeEvent* timeevent);

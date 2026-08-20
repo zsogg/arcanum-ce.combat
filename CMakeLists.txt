@@ -60,6 +60,8 @@ set(SRCS
     "src/game/description.c"
     "src/game/description.h"
     "src/game/descriptions.h"
+    "src/game/determinism.c"
+    "src/game/determinism.h"
     "src/game/dialog.c"
     "src/game/dialog.h"
     "src/game/effect.c"

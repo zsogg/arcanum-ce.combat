@@ -1,4 +1,6 @@
 #include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 
 #include <SDL3/SDL_main.h>
 
@@ -15,6 +17,7 @@
 #include "game/combat.h"
 #include "game/critter.h"
 #include "game/descriptions.h"
+#include "game/determinism.h"
 #include "game/dialog.h"
 #include "game/gamelib.h"
 #include "game/gmovie.h"
@@ -62,6 +65,21 @@ static float gamma = 1.0f;
 
 // 0x5CFF00
 static int dword_5CFF00;
+
+// CE: the reproducible-run harness. Not in the original.
+//
+// `-autoload` quick-loads the newest save instead of showing the menu, and
+// `-runframes=N` quick-saves and quits after N frames of `main_loop`. With
+// `-deterministic` that is a complete scripted run: same save in, same number
+// of frames, same save out - which is what makes two CE builds comparable
+// byte for byte without Wine, a patched binary, or synthetic input.
+//
+// Slot selection is by mtime, the same contract `mainmenu_ui_quick_load`
+// already has and the same one `harness/make-save-pair.sh` already drives by
+// touching the save it wants. Nothing new is exported for this.
+static bool harness_autoload;
+static int harness_run_frames;
+static int harness_frames_run;
 
 // 0x401000
 int main(int argc, char** argv)
@@ -153,6 +171,31 @@ int main(int argc, char** argv)
 
     if (strstr(lpCmdLine, "-norandom") != NULL) {
         wmap_rnd_disable();
+    }
+
+    // CE: `-deterministic` / `-deterministic=SEED` pins the RNG, the GUID
+    // source and the frame clock for this run, so two runs of the same save
+    // can be compared byte for byte. See game/determinism.h. A harness wants
+    // this per run rather than written into the player's arcanum.cfg, which
+    // is why it is a switch as well as a setting.
+    pch = strstr(lpCmdLine, "-deterministic");
+    if (pch != NULL) {
+        unsigned int seed = 0;
+
+        if (pch[strlen("-deterministic")] == '=') {
+            seed = (unsigned int)strtoul(pch + strlen("-deterministic") + 1, NULL, 10);
+        }
+
+        determinism_request(seed);
+    }
+
+    if (strstr(lpCmdLine, "-autoload") != NULL) {
+        harness_autoload = true;
+    }
+
+    pch = strstr(lpCmdLine, "-runframes=");
+    if (pch != NULL) {
+        harness_run_frames = (int)strtol(pch + strlen("-runframes="), NULL, 10);
     }
 
     mainmenu_ui_female_chars_missing_clear();
@@ -321,6 +364,10 @@ int main(int argc, char** argv)
         gmovie_play(8, GAME_MOVIE_NO_FINAL_FLIP, 0);
     }
 
+    // CE: `-autoload` makes the menu load the newest save immediately instead
+    // of waiting for a click. The faithful path is unchanged when it is off.
+    mainmenu_ui_autoload_set(harness_autoload);
+
     if (!mainmenu_ui_handle()) {
         gameuilib_exit();
         gamelib_exit();
@@ -415,6 +462,18 @@ void main_loop(void)
         gamelib_ping();
         iso_redraw();
         tig_window_display();
+
+        // CE: `-runframes=N`. Counted after the frame so N means "N frames
+        // ran", and the save is taken from the same point every time.
+        if (harness_run_frames > 0) {
+            if (++harness_frames_run >= harness_run_frames) {
+                tig_debug_printf("Harness: %d frames run, quick-saving\n",
+                    harness_frames_run);
+                gamelib_save("SlotAuto", "Auto-Save");
+                tig_debug_printf("Harness: saved, exiting\n");
+                return;
+            }
+        }
 
         pc_obj = player_get_local_pc_obj();
 

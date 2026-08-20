@@ -16,6 +16,7 @@
 #include "game/critter.h"
 #include "game/curse.h"
 #include "game/description.h"
+#include "game/determinism.h"
 #include "game/dialog.h"
 #include "game/facade.h"
 #include "game/gameinit.h"
@@ -396,6 +397,12 @@ bool gamelib_init(GameInitInfo* init_info)
             }
         }
     }
+
+    // CE: after the module loop, deliberately. `random_init` seeds the RNG
+    // from `time(NULL)`, so pinning the seed has to happen once every module
+    // that touches the clock has had its turn. No-op unless the run asked for
+    // reproducible mode.
+    determinism_init();
 
     return true;
 }

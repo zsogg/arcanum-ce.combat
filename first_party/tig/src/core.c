@@ -141,6 +141,10 @@ void tig_exit(void)
 // 0x51F220
 void tig_ping(void)
 {
+    // CE: one virtual-clock step per frame, before anything reads the time.
+    // No-op unless the virtual clock is running.
+    tig_timer_virtual_advance();
+
     tig_timer_now(&tig_ping_timestamp);
 
     tig_mouse_ping();

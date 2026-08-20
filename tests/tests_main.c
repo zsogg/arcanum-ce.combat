@@ -33,6 +33,7 @@ void test_obj_id_suite(void);
 void test_reaction_suite(void);
 void test_compat_suite(void);
 void test_magitech_suite(void);
+void test_determinism_suite(void);
 void test_proto_suite(void);
 void test_fatigue_suite(void);
 
@@ -57,6 +58,7 @@ int main(void)
     test_reaction_suite();
     test_compat_suite();
     test_magitech_suite();
+    test_determinism_suite();
     test_proto_suite();
     test_fatigue_suite();
 

@@ -31,6 +31,11 @@
 
 #define UAP_FIXES_KEY "uap fixes"
 
+// CE: reproducible runs. See game/determinism.h.
+#define DETERMINISM_KEY "determinism"
+#define DETERMINISM_SEED_KEY "determinism seed"
+#define DETERMINISM_STEP_KEY "determinism step"
+
 typedef bool (*GameExtraSaveFunc)(void);
 typedef bool (*GameExtraLoadFunc)(void);
 
