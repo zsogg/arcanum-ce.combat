@@ -192,7 +192,10 @@ static int64_t ai_npc_wait_here_test_obj;
 // 0x5F84A0
 static int64_t ai_test_obj;
 
-// 0x5F84A8
+// CE-only: this configuration has no counterpart in the original binary, so
+// it carries no `// 0x...` annotation. (It briefly carried 0x5F84A8, which is
+// `tech_degree_names` - two symbols claiming one address is how a fabricated
+// annotation gets pushed into Ghidra over a real one.)
 static AiFatigueConfig ai_fatigue_config = {
     /* min_cast_pct_leaderless   */ 20,
     /* min_cast_pct_follower     */ 0,
