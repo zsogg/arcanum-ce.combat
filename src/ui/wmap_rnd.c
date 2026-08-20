@@ -601,12 +601,30 @@ bool wmap_rnd_save(TigFile* stream)
         if (num_entries != 0) {
             save_info = (WmapRndSaveInfo*)MALLOC(sizeof(*save_info) * num_entries);
             save_info_idx = 0;
+            // FIX: `save_info_idx` was never advanced, so every entry wrote
+            // into `save_info[0]` and records 1..n-1 went to disk as raw
+            // MALLOC memory - about 1.7 KB of uninitialized heap in every
+            // save file. Three consequences: encounter trigger counts were
+            // not actually persisted (the load below matches on
+            // `message_num`, and garbage never matches), the heap leaked into
+            // a file the player keeps, and no two saves of one state were
+            // ever byte-identical.
+            //
+            // The original advances the destination pointer inside the inner
+            // loop - `add edx, 0x8` at 0x5587BE, between the two stores at
+            // 0x5587C9 (`message_num`) and 0x5587D3 (`trigger_cnt`) - so this
+            // is CE's transcription, not Troika's.
+            //
+            // Found by the determinism gate
+            // (`arcanum-work/harness/determinism-check.sh`): two runs of one
+            // save differed in exactly this module and nowhere else.
             for (table_idx = 0; table_idx < wmap_rnd_num_encounter_tables; table_idx++) {
                 table = &(wmap_rnd_encounter_tables[table_idx]);
                 for (entry_idx = 0; entry_idx < table->num_entries; entry_idx++) {
                     entry = &(table->entries[entry_idx]);
                     save_info[save_info_idx].trigger_cnt = entry->trigger_cnt;
                     save_info[save_info_idx].message_num = entry->message_num;
+                    save_info_idx++;
                 }
             }
         }
