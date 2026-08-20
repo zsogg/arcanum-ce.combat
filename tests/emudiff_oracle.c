@@ -36,6 +36,9 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "game/combat.h"
+#include "game/critter.h"
+#include "game/item.h"
 #include "game/location.h"
 #include "game/random.h"
 #include "game/skill.h"
@@ -621,6 +624,39 @@ static void o_tig_art_misc_id_create(const int64_t* a, int64_t* out)
     out[0] = art_id;
 }
 
+// --- game-layer additions, 2026-08-20 (roadmap B2) -----------------------
+//
+// Emudiff's first 79 cases were 44 tig plus the arithmetic leaves; the game
+// itself had almost none. These are the game-layer functions that qualify
+// under the purity rule at the top of this file: no object handles, no
+// loaded data files, no allocation.
+//
+// `ai_perception_distance` and `calculate_bonus_character_points` were
+// candidates and are deliberately absent: both are `static`, and exporting a
+// function so a test can reach it changes the port's surface for the test's
+// convenience. They stay unreachable until something else needs them.
+//
+// Several are bare table indexers with no bounds check of their own, so
+// their case domains stop at the table's last element. Feeding them an index
+// past the end would compare the original's adjacent .data against CE's,
+// which says nothing about the port - the emulator would be reading two
+// different programs' memory maps and reporting the difference as a defect.
+
+static void o_combat_hit_loc_penalty(const int64_t* a, int64_t* out)
+{
+    out[0] = combat_hit_loc_penalty((int)a[0]);
+}
+
+static void o_critter_encumbrance_level_ratio(const int64_t* a, int64_t* out)
+{
+    out[0] = critter_encumbrance_level_ratio((int)a[0]);
+}
+
+static void o_item_armor_size(const int64_t* a, int64_t* out)
+{
+    out[0] = (int64_t)item_armor_size((int)a[0]);
+}
+
 static const OracleEntry oracle_entries[] = {
     { "random_seed", 1, 1, o_random_seed },
     { "random_rand", 0, 1, o_random_rand },
@@ -630,6 +666,13 @@ static const OracleEntry oracle_entries[] = {
     { "basic_skill_min_stat_level_required", 1, 1, o_basic_skill_min_stat_level_required },
     { "basic_skill_stat", 1, 1, o_basic_skill_stat },
     { "tech_skill_stat", 1, 1, o_tech_skill_stat },
+    { "combat_hit_loc_penalty", 1, 1, o_combat_hit_loc_penalty },
+    { "critter_encumbrance_level_ratio", 1, 1, o_critter_encumbrance_level_ratio },
+    { "item_armor_size", 1, 1, o_item_armor_size },
+    { "max_skill_for_stat_level", 1, 1, o_max_skill_for_stat_level },
+    { "training_min_skill_level_required", 1, 1, o_training_min_skill_level_required },
+    { "tech_skill_money", 3, 1, o_tech_skill_money },
+    { "tech_skill_min_stat_level_required", 1, 1, o_tech_skill_min_stat_level_required },
     { "location_rot", 2, 1, o_location_rot },
     { "location_dist", 2, 1, o_location_dist },
     { "datetime_sub_milliseconds", 2, 1, o_datetime_sub_milliseconds },
@@ -654,10 +697,6 @@ static const OracleEntry oracle_entries[] = {
     { "location_limits_get", 2, 2, o_location_limits_get },
     { "location_center_get", 0, 1, o_location_center_get },
     { "sub_4B93F0", 4, 2, o_sub_4B93F0 },
-    { "max_skill_for_stat_level", 1, 1, o_max_skill_for_stat_level },
-    { "training_min_skill_level_required", 1, 1, o_training_min_skill_level_required },
-    { "tech_skill_money", 3, 1, o_tech_skill_money },
-    { "tech_skill_min_stat_level_required", 1, 1, o_tech_skill_min_stat_level_required },
     { "skill_gambling_random_roll", 0, 1, o_skill_gambling_random_roll },
     { "tig_art_type", 1, 1, o_tig_art_type },
     { "tig_art_num_get", 1, 1, o_tig_art_num_get },
