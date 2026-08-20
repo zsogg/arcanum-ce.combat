@@ -258,6 +258,28 @@ void combat_reset(void)
     in_combat_reset = false;
 }
 
+// NOTE: `oid` is deliberately left uninitialized, and the null branch below
+// sets only its `type` before all 24 bytes are written. That leaks
+// uninitialized stack into every turn-based save - and it is faithful. The
+// original does the same at 0x4B1F58:
+//
+//     4b1f29: mov  eax,ds:0x5fc238          ; qword_5FC238
+//     4b1f38: je   0x4b1f58                 ; ... is null
+//     4b1f58: mov  WORD PTR [esp+0xc],0x0   ; type = OID_TYPE_NULL, and only
+//     4b1f66: push 0x18                     ; ... yet 24 bytes are written
+//
+// Consequence for the original-vs-CE differential: a save taken while
+// turn-based combat is active can never compare byte-identical in the Combat
+// module, in either direction, because both engines write whatever their
+// stack happened to hold. This is the explanation for the "Combat 17B"
+// difference recorded against `Slot0003 turnbased-mid` in SAVE-MATRIX.md,
+// which was previously filed as live-combat state diverging.
+//
+// Not fixed: zeroing it would be a behaviour change to the save format for
+// no player-visible gain, and CE's rule is to mirror 1.0.7.4 unless a
+// divergence is justified. `combat_load` reads the same 24 bytes and uses
+// only `type`, so the padding is never interpreted.
+//
 // 0x4B1EA0
 bool combat_save(TigFile* stream)
 {

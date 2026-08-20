@@ -95,6 +95,23 @@ bool objid_is_equal(ObjectID a, ObjectID b)
  * flavor used for prototypes (description + 20, see
  * `proto_description_to_oid`) and other statically numbered objects.
  *
+ * NOTE: Only `type` and `d.a` are set; the rest of the 24-byte union keeps
+ * whatever the stack held. That reaches disk - `proto_save` writes the whole
+ * ObjectID into every `.pro` - so two engine-written prototypes of the same
+ * description differ in ~10 bytes of padding. Faithful: the original builds
+ * the same 24-byte stack slot, sets only the type word and the id dword, and
+ * copies all six dwords out.
+ *
+ *     4e6540: sub  esp,0x18                  ; 24-byte ObjectID, uninitialized
+ *     4e6548: mov  DWORD PTR [esp+0xc],eax   ; d.a = num
+ *     4e655c: mov  WORD PTR [esp+0x8],0x1    ; type = OID_TYPE_A
+ *     4e6563: rep movs                        ; ... all 24 bytes copied out
+ *
+ * Consequence for modding: **a `.pro` cannot be pinned by hash** if it was
+ * cloned from an engine-written donor, because the donor's padding changes
+ * whenever `proto_recreate_missing` rebuilds it. Compare the decoded fields
+ * instead - `modkit doctor` does. See MODDING-NOTES.md.
+ *
  * 0x4E6540
  */
 ObjectID objid_create_a(int num)
