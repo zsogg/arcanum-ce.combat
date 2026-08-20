@@ -12,6 +12,14 @@
 //
 // Design notes, each of which is load-bearing:
 //
+//   - **Two modes.** The census wants "which functions ran"; the trace gate
+//     (`arcanum-work/harness/trace-gate.sh`) wants "how many times", because
+//     a reachable *set* turned out to be too coarse to notice a change - a
+//     run with a different RNG seed produced the identical set. Setting
+//     `ARCANUM_COVERAGE_COUNTS` switches to counting and dumps
+//     `address count` at exit. That needs a clean exit, which the engine now
+//     has: `-runframes=N` returns from `main_loop` instead of waiting to be
+//     killed. Unset, behaviour is exactly what it was.
 //   - **Dedupe in process, append on first sight.** The smoke and capture runs
 //     end in SIGKILL at a timeout, so `atexit` never runs and a dump-at-exit
 //     design would lose everything. Writing each address the first time it is
@@ -50,8 +58,13 @@ void __cyg_profile_func_enter(void* this_fn, void* call_site) NOINSTR;
 void __cyg_profile_func_exit(void* this_fn, void* call_site) NOINSTR;
 
 static void* _Atomic coverage_seen[SEEN_CAP];
+static _Atomic unsigned long coverage_calls[SEEN_CAP];
 static atomic_bool coverage_failed;
 static atomic_flag coverage_log_lock = ATOMIC_FLAG_INIT;
+
+// Counting mode: resolved once, on the first hook call, because getenv is not
+// safe to keep calling from here and the value cannot change mid-run.
+static atomic_int coverage_counting; // 0 unknown, 1 counting, 2 logging
 
 // Everything below is guarded by coverage_log_lock; none of it is read or
 // written outside the critical section.
@@ -85,15 +98,64 @@ static void coverage_open_log(void)
     }
 }
 
+static void coverage_dump_counts(void) NOINSTR;
+static void coverage_dump_counts(void)
+{
+    const char* path = getenv("ARCANUM_COVERAGE_COUNTS");
+    FILE* out;
+    unsigned index;
+
+    if (path == NULL) {
+        return;
+    }
+
+    out = fopen(path, "w");
+    if (out == NULL) {
+        return;
+    }
+
+    for (index = 0; index < SEEN_CAP; index++) {
+        void* fn = atomic_load_explicit(&coverage_seen[index], memory_order_relaxed);
+        if (fn != NULL) {
+            fprintf(out, "%p %lu\n", fn,
+                atomic_load_explicit(&coverage_calls[index], memory_order_relaxed));
+        }
+    }
+
+    fclose(out);
+}
+
+static int coverage_mode(void) NOINSTR;
+static int coverage_mode(void)
+{
+    int mode = atomic_load_explicit(&coverage_counting, memory_order_relaxed);
+
+    if (mode == 0) {
+        mode = getenv("ARCANUM_COVERAGE_COUNTS") != NULL ? 1 : 2;
+        if (mode == 1) {
+            // A clean exit is what makes counting viable; `-runframes=N`
+            // provides one. Under SIGKILL this simply produces no file,
+            // which the consumer reports rather than silently accepting.
+            atexit(coverage_dump_counts);
+        }
+        atomic_store_explicit(&coverage_counting, mode, memory_order_relaxed);
+    }
+
+    return mode;
+}
+
 void __cyg_profile_func_enter(void* this_fn, void* call_site)
 {
     unsigned h;
+    int mode;
 
     (void)call_site;
 
     if (atomic_load_explicit(&coverage_failed, memory_order_relaxed)) {
         return;
     }
+
+    mode = coverage_mode();
 
     // Lock-free insert into the open-addressed table. The table has no
     // deletions and far more slots than the build has functions, so the probe
@@ -107,6 +169,10 @@ void __cyg_profile_func_enter(void* this_fn, void* call_site)
                 break;
             }
             if (slot == this_fn) {
+                if (mode == 1) {
+                    atomic_fetch_add_explicit(&coverage_calls[h], 1UL,
+                        memory_order_relaxed);
+                }
                 return;
             }
             h = (h + 1) & (SEEN_CAP - 1);
@@ -115,8 +181,16 @@ void __cyg_profile_func_enter(void* this_fn, void* call_site)
         void* expected = NULL;
         if (atomic_compare_exchange_strong_explicit(&coverage_seen[h], &expected,
                 this_fn, memory_order_relaxed, memory_order_relaxed)) {
+            atomic_fetch_add_explicit(&coverage_calls[h], 1UL,
+                memory_order_relaxed);
             break;
         }
+    }
+
+    // Counting mode never touches stdio in the hook - the whole table is
+    // written once, at exit.
+    if (mode == 1) {
+        return;
     }
 
     // Serialize every stdio access. The open, the write and the periodic flush
