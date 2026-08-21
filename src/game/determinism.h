@@ -26,10 +26,22 @@
  *   - the GUID generator is seeded from the same value;
  *   - TIG's timer switches to a virtual clock that advances a fixed step per
  *     frame, so a run depends on how many frames ran rather than how long
- *     they took.
+ *     they took;
+ *   - the mouse pointer is snapped to the centre of the window and stops
+ *     tracking, so where it physically sits no longer changes the run.
  *
- * **What this does not pin.** Audio mixing, SDL event delivery and anything
- * driven by real input remain what they are; a run driven by a human is not
+ * The pointer was added on 2026-08-21, after the trace gate reported 7
+ * function-membership changes and 311 changed call counts from a run whose
+ * only difference was where the pointer had been left. A pointer near the
+ * window edge scrolls the map, which draws more terrain and shifts the count
+ * of everything on the drawing path. It is *ambient* state rather than input
+ * - it is always somewhere, whether or not anybody touches it - which is why
+ * seeding the RNG never covered it, and why two runs could agree byte for
+ * byte with each other and still disagree with a fixture.
+ *
+ * **What this does not pin.** Audio mixing, SDL event delivery, and mouse
+ * buttons and the wheel, which fire only when somebody presses them and so
+ * cannot leak into an unattended run. A run driven by a human is not
  * reproducible no matter what this does. The target is the harness case -
  * autoload a save, run N frames, save again - where the only inputs are
  * scripted. Within that, two runs should agree byte for byte.

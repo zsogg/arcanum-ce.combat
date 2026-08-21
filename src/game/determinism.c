@@ -2,6 +2,7 @@
 
 #include <tig/debug.h>
 #include <tig/guid.h>
+#include <tig/mouse.h>
 #include <tig/timer.h>
 
 #include "game/gamelib.h"
@@ -69,9 +70,20 @@ void determinism_init(void)
     tig_guid_seed_set(seed);
     tig_timer_virtual_set(true, (unsigned int)step);
 
+    // The pointer is ambient state, not input: it is always somewhere, and
+    // the engine reads it every frame. Resting near the window edge it
+    // scrolls the map, which draws more terrain and moves the call count of
+    // everything on the drawing path; over an object it runs target picking.
+    // Measured 2026-08-21 against the trace fixture: 7 function-membership
+    // changes and 311 changed counts from the pointer alone, reproducible
+    // enough that two runs agreed byte for byte and it read as a real
+    // regression.
+    tig_mouse_freeze();
+
     // Print it. A reproducible run is only reproducible if the log says what
     // to reproduce it with.
-    tig_debug_printf("Determinism: on, seed %u, virtual frame step %d ms\n",
+    tig_debug_printf("Determinism: on, seed %u, virtual frame step %d ms, "
+                     "pointer pinned\n",
         seed,
         step);
 }

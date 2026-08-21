@@ -93,6 +93,29 @@ int tig_mouse_cursor_overlay(tig_art_id_t art_id, int x, int y);
 
 void tig_mouse_wheel(int dx, int dy);
 
+// CE: not in the original.
+//
+// Pins the pointer for a reproducible run: snaps it to the centre of the
+// screen bounds and makes `tig_mouse_set_position` a no-op, so the position
+// no longer depends on where the pointer physically sits.
+//
+// This is not about blocking input. The pointer is *ambient* state - it is
+// always somewhere, whether or not anybody touches it - and the engine reads
+// it every frame. A pointer resting near the window edge scrolls the map,
+// which draws more terrain and shifts the call count of everything on the
+// drawing path; a pointer over an object runs the target-picking cluster.
+// Neither needs a human present, so neither is pinned by seeding the RNG.
+//
+// The centre is chosen because it is the furthest point from every scroll
+// edge, and because it is already what `tig_mouse_init` sets.
+//
+// Buttons and the wheel are deliberately left alone: they only fire when
+// somebody presses them, so they cannot leak into an unattended run.
+void tig_mouse_freeze(void);
+
+// CE: not in the original. Whether `tig_mouse_freeze` is in force.
+bool tig_mouse_frozen(void);
+
 #ifdef __cplusplus
 }
 #endif

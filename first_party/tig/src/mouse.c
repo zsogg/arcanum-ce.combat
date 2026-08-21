@@ -122,6 +122,11 @@ static bool tig_mouse_initialized;
 
 static TigRect tig_mouse_screen_bounds;
 
+// CE: not in the original. Set by `tig_mouse_freeze`; see tig/mouse.h.
+// Deliberately not reset by `tig_mouse_init` - the pin outlives a device
+// reinit, which is the point of it.
+static bool tig_mouse_position_frozen;
+
 // 0x4FF020
 int tig_mouse_init(TigInitInfo* init_info)
 {
@@ -253,10 +258,37 @@ void tig_mouse_ping(void)
     }
 }
 
+// CE: not in the original - see tig/mouse.h.
+void tig_mouse_freeze(void)
+{
+    tig_mouse_position_frozen = true;
+
+    // Snap to the centre rather than freezing wherever the pointer happens to
+    // be. `tig_init` runs before the game asks for this, so by now the
+    // pointer may already have been moved by a real event.
+    tig_mouse_state.x = tig_mouse_screen_bounds.width / 2;
+    tig_mouse_state.y = tig_mouse_screen_bounds.height / 2;
+    tig_mouse_state.frame.x = tig_mouse_state.x - tig_mouse_state.offset_x;
+    tig_mouse_state.frame.y = tig_mouse_state.y - tig_mouse_state.offset_y;
+}
+
+// CE: not in the original - see tig/mouse.h.
+bool tig_mouse_frozen(void)
+{
+    return tig_mouse_position_frozen;
+}
+
 // 0x4FF3B0
 void tig_mouse_set_position(int x, int y)
 {
     TigMessage message;
+
+    // CE: a pinned pointer ignores movement. Dropping it here rather than at
+    // the event source keeps every caller - WNDPROC, SDL, the software cursor
+    // path - covered by one test.
+    if (tig_mouse_position_frozen) {
+        return;
+    }
 
     // Reset "idle" event.
     tig_mouse_idle_emitted = false;
