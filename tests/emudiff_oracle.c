@@ -38,11 +38,19 @@
 
 #include "game/combat.h"
 #include "game/critter.h"
+#include "game/dialog.h"
 #include "game/item.h"
+#include "game/light.h"
 #include "game/location.h"
+#include "game/magictech.h"
+#include "game/mt_item.h"
 #include "game/random.h"
+#include "game/reaction.h"
 #include "game/skill.h"
+#include "game/spell.h"
 #include "game/stat.h"
+#include "game/tech.h"
+#include "game/terrain.h"
 #include "game/timeevent.h"
 #include "tig/tig.h"
 
@@ -657,6 +665,140 @@ static void o_item_armor_size(const int64_t* a, int64_t* out)
     out[0] = (int64_t)item_armor_size((int)a[0]);
 }
 
+// --- game-layer additions, 2026-08-21 (roadmap B2, second batch) ---------
+//
+// B2 reached combat, critter and item. This batch reaches the other half of
+// the game layer that qualifies under the purity rule: the hand-transcribed
+// static tables (spell icons, college icons, the tech degree costs, the
+// default willpower table) and the packed-id decoders in terrain, dialog and
+// light.
+//
+// A table copied out of a disassembly by hand is precisely the defect class
+// this harness exists to find, and nothing else in the tree checks one. Every
+// table indexer below is called only over the indices its table holds -- see
+// the domain notes in cases.py, which say for each case what the bound is and
+// why crossing it would compare two programs' memory layouts rather than
+// their behaviour.
+
+static void o_terrain_tid_base(const int64_t* a, int64_t* out)
+{
+    out[0] = terrain_tid_base((uint16_t)a[0]);
+}
+
+static void o_terrain_tid_from(const int64_t* a, int64_t* out)
+{
+    out[0] = terrain_tid_from((uint16_t)a[0]);
+}
+
+static void o_terrain_tid_transition(const int64_t* a, int64_t* out)
+{
+    out[0] = terrain_tid_transition((uint16_t)a[0]);
+}
+
+static void o_terrain_tid_tile(const int64_t* a, int64_t* out)
+{
+    out[0] = terrain_tid_tile((uint16_t)a[0]);
+}
+
+static void o_reaction_translate(const int64_t* a, int64_t* out)
+{
+    out[0] = reaction_translate((int)a[0]);
+}
+
+static void o_spell_icon(const int64_t* a, int64_t* out)
+{
+    out[0] = spell_icon((int)a[0]);
+}
+
+static void o_spell_college_small_icon(const int64_t* a, int64_t* out)
+{
+    out[0] = spell_college_small_icon((int)a[0]);
+}
+
+static void o_spell_college_large_icon(const int64_t* a, int64_t* out)
+{
+    out[0] = spell_college_large_icon((int)a[0]);
+}
+
+static void o_spell_min_level(const int64_t* a, int64_t* out)
+{
+    out[0] = spell_min_level((int)a[0]);
+}
+
+static void o_tech_degree_cost_get(const int64_t* a, int64_t* out)
+{
+    out[0] = tech_degree_cost_get((int)a[0]);
+}
+
+static void o_tech_degree_min_intelligence_get(const int64_t* a, int64_t* out)
+{
+    out[0] = tech_degree_min_intelligence_get((int)a[0]);
+}
+
+static void o_tech_schematic_get(const int64_t* a, int64_t* out)
+{
+    out[0] = tech_schematic_get((int)a[0], (int)a[1]);
+}
+
+static void o_mt_item_spell_to_magictech_spell(const int64_t* a, int64_t* out)
+{
+    out[0] = mt_item_spell_to_magictech_spell((int)a[0]);
+}
+
+// The two magictech accessors whose uninitialised path does not touch
+// `magictech_spells`, which is a MALLOC'd pointer and therefore NULL in both
+// binaries until magictech_init runs. Every other accessor in that family
+// either dereferences it unguarded (magictech_is_magic and friends) or falls
+// back to a bare constant, so these two are the whole of what is reachable
+// here: min_intelligence is the constant itself, and min_willpower carries
+// the default table and the MT_80 bound.
+static void o_magictech_min_intelligence(const int64_t* a, int64_t* out)
+{
+    out[0] = magictech_min_intelligence((int)a[0]);
+}
+
+static void o_magictech_min_willpower(const int64_t* a, int64_t* out)
+{
+    out[0] = magictech_min_willpower((int)a[0]);
+}
+
+static void o_dialog_speech_id_unpack(const int64_t* a, int64_t* out)
+{
+    int script_num = (int)a[1];
+    int line = (int)a[2];
+
+    dialog_speech_id_unpack((int)a[0], &script_num, &line);
+    out[0] = (int64_t)(uint32_t)script_num;
+    out[1] = (int64_t)(uint32_t)line;
+}
+
+static void o_light_build_color(const int64_t* a, int64_t* out)
+{
+    unsigned int color = (unsigned int)a[3];
+
+    light_build_color((uint8_t)a[0], (uint8_t)a[1], (uint8_t)a[2], &color);
+    out[0] = color;
+}
+
+// The original writes a whole dword through each of the three pointers
+// (`mov DWORD PTR [ecx],eax` at 0x4D84DC/0x4D84ED/0x4D84F3); CE narrowed the
+// out-params to uint8_t*. Every CE caller passes uint8_t locals, so the two
+// are internally consistent and the values agree -- but the widths do not,
+// and this differential cannot see that, because it compares the value each
+// side reports rather than the bytes around it. Recorded here so the next
+// reader does not have to rediscover it from the disassembly.
+static void o_light_get_color_components(const int64_t* a, int64_t* out)
+{
+    uint8_t red = (uint8_t)a[1];
+    uint8_t green = (uint8_t)a[2];
+    uint8_t blue = (uint8_t)a[3];
+
+    light_get_color_components((unsigned int)a[0], &red, &green, &blue);
+    out[0] = red;
+    out[1] = green;
+    out[2] = blue;
+}
+
 static const OracleEntry oracle_entries[] = {
     { "random_seed", 1, 1, o_random_seed },
     { "random_rand", 0, 1, o_random_rand },
@@ -742,6 +884,24 @@ static const OracleEntry oracle_entries[] = {
     { "tig_art_portal_id_create", 7, 1, o_tig_art_portal_id_create },
     { "tig_art_scenery_id_create", 6, 1, o_tig_art_scenery_id_create },
     { "tig_art_misc_id_create", 3, 1, o_tig_art_misc_id_create },
+    { "terrain_tid_base", 1, 1, o_terrain_tid_base },
+    { "terrain_tid_from", 1, 1, o_terrain_tid_from },
+    { "terrain_tid_transition", 1, 1, o_terrain_tid_transition },
+    { "terrain_tid_tile", 1, 1, o_terrain_tid_tile },
+    { "reaction_translate", 1, 1, o_reaction_translate },
+    { "spell_icon", 1, 1, o_spell_icon },
+    { "spell_college_small_icon", 1, 1, o_spell_college_small_icon },
+    { "spell_college_large_icon", 1, 1, o_spell_college_large_icon },
+    { "spell_min_level", 1, 1, o_spell_min_level },
+    { "tech_degree_cost_get", 1, 1, o_tech_degree_cost_get },
+    { "tech_degree_min_intelligence_get", 1, 1, o_tech_degree_min_intelligence_get },
+    { "tech_schematic_get", 2, 1, o_tech_schematic_get },
+    { "mt_item_spell_to_magictech_spell", 1, 1, o_mt_item_spell_to_magictech_spell },
+    { "magictech_min_intelligence", 1, 1, o_magictech_min_intelligence },
+    { "magictech_min_willpower", 1, 1, o_magictech_min_willpower },
+    { "dialog_speech_id_unpack", 3, 2, o_dialog_speech_id_unpack },
+    { "light_build_color", 4, 1, o_light_build_color },
+    { "light_get_color_components", 4, 3, o_light_get_color_components },
 };
 
 #define ORACLE_ENTRY_COUNT ((int)(sizeof(oracle_entries) / sizeof(oracle_entries[0])))
