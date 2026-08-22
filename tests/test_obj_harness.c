@@ -25,6 +25,8 @@
 #include "game/skill.h"
 #include "game/stat.h"
 
+#include "tig/art.h"
+
 #include "obj_harness.h"
 #include "test_harness.h"
 
@@ -101,8 +103,14 @@ TEST(objects_of_different_types_can_be_made)
     // Each `OBJ_TYPE_*` has its own field count, so this exercises the
     // per-type field layout rather than just one shape.
     static const int types[] = {
-        OBJ_TYPE_NPC, OBJ_TYPE_PC, OBJ_TYPE_WEAPON, OBJ_TYPE_ARMOR,
-        OBJ_TYPE_KEY, OBJ_TYPE_KEY_RING, OBJ_TYPE_CONTAINER, OBJ_TYPE_SCENERY,
+        OBJ_TYPE_NPC,
+        OBJ_TYPE_PC,
+        OBJ_TYPE_WEAPON,
+        OBJ_TYPE_ARMOR,
+        OBJ_TYPE_KEY,
+        OBJ_TYPE_KEY_RING,
+        OBJ_TYPE_CONTAINER,
+        OBJ_TYPE_SCENERY,
     };
     int64_t obj;
     int i;
@@ -308,6 +316,54 @@ TEST(item_is_item_distinguishes_items_from_critters)
     obj_harness_destroy(npc);
 }
 
+// --- porting bug #32, on the path that actually reaches it -----------------
+//
+// tests/test_art_id.c pins what tig_art_portal_id_create returns. These pin
+// that the value reaches a prototype, which is the half that makes the bug a
+// defect rather than a curiosity.
+//
+// The live chain is
+//     proto_init -> proto_recreate_missing -> proto_recreate
+//                -> obj_create_proto -> obj_set_defaults
+// and obj_harness_create_proto enters it at obj_create_proto, so these run the
+// real obj_set_defaults switch rather than a copy of it.
+//
+// Worth knowing before reading a failure here: in a stock install this branch
+// never fires, because proto_recreate only runs for a *missing* prototype and
+// all fifteen portal descriptions (2008..2022) ship with a .pro file. It fires
+// for a modder who adds portal descriptions, or if the reserved range is ever
+// widened to portals. That is why it is pinned here and not left to a
+// playtest - nothing a player does reaches it.
+
+TEST(a_portal_prototype_gets_the_original_default_art_id)
+{
+    // obj_set_defaults calls tig_art_portal_id_create(0, 1, 0, 0, 6, 0).
+    // Rotation 6 is one of the two cardinal directions (6 / 2 == 3) for which
+    // the original's rotation_set sets flags and palette to 1. Measured
+    // against Arcanum.exe at 0x5041D0: 0x30003411. CE produced 0x30003400
+    // before porting bug #32 was fixed.
+    int64_t obj = obj_harness_create_proto(OBJ_TYPE_PORTAL);
+
+    CHECK(obj != OBJ_HANDLE_NULL);
+    CHECK_INT(obj_field_int32_get(obj, OBJ_F_AID), 0x30003411);
+    CHECK_INT(obj_field_int32_get(obj, OBJ_F_CURRENT_AID), 0x30003411);
+    obj_harness_destroy(obj);
+}
+
+TEST(a_wall_prototype_default_is_unaffected_by_the_portal_fix)
+{
+    // The control. CE's wall constructor already made the rotation_set call,
+    // so the wall default must be exactly what it was - a fix to the portal
+    // branch that moved this would mean the change leaked.
+    int64_t obj = obj_harness_create_proto(OBJ_TYPE_WALL);
+    int aid;
+
+    CHECK(obj != OBJ_HANDLE_NULL);
+    aid = obj_field_int32_get(obj, OBJ_F_AID);
+    CHECK_INT(tig_art_type(aid), TIG_ART_TYPE_WALL);
+    obj_harness_destroy(obj);
+}
+
 void test_obj_harness_suite(void)
 {
     RUN(the_harness_creates_a_usable_object);
@@ -325,6 +381,9 @@ void test_obj_harness_suite(void)
     RUN(raising_a_skill_is_governed_by_its_own_stat_not_a_shared_one);
 
     RUN(item_is_item_distinguishes_items_from_critters);
+
+    RUN(a_portal_prototype_gets_the_original_default_art_id);
+    RUN(a_wall_prototype_default_is_unaffected_by_the_portal_fix);
 
     obj_harness_exit();
 }
