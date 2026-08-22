@@ -6,6 +6,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include <errno.h>
 #include <fpattern/fpattern.h>
 
 #include "tig/compat.h"
@@ -2316,7 +2317,11 @@ TigFile* tig_file_fopen(const char* path, const char* mode)
     compat_windows_path_to_native(native_path);
     compat_resolve_path(native_path);
 
-    return tig_file_fopen_native(native_path, mode);
+    TigFile* rt = tig_file_fopen_native(native_path, mode);
+    if (rt == NULL && getenv("RTDEBUG_FOPEN") != NULL) {
+        fprintf(stderr, "RTDBG: fopen('%s') -> '%s' failed: %s\n", path, native_path, strerror(errno));
+    }
+    return rt;
 }
 
 TigFile* tig_file_reopen(const char* path, const char* mode, TigFile* stream)

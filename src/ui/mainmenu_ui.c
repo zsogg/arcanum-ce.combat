@@ -1,4 +1,6 @@
 #include "ui/mainmenu_ui.h"
+#include <errno.h>
+#include <unistd.h>
 
 #include <stdio.h>
 
@@ -1531,6 +1533,17 @@ static MainMenuWindowType mainmenu_ui_window_type;
 // 0x64C418
 static bool mainmenu_ui_start_new_game;
 
+// 2026-08-21: headless savegame round-trip driver, fed by
+// `-roundtrip:SLOT[=OUTSLOT]` (see arcanum-work SAVE-ROUNDTRIP.md). With
+// OUTSLOT the run loads SLOT then immediately saves OUTSLOT; without it the
+// run stops after loading so the harness can snapshot the restored
+// Save\Current\data.sav. A verification seam, not a game feature - it is
+// deliberately unreachable from any menu. No original address: these
+// statics are new, they exist only in CE.
+static bool mainmenu_ui_roundtrip_requested;
+static char mainmenu_ui_roundtrip_slot[TIG_MAX_PATH];
+static char mainmenu_ui_roundtrip_out[TIG_MAX_PATH];
+
 // 0x64C41C
 int64_t* mainmenu_ui_mp_chars;
 
@@ -1619,6 +1632,82 @@ static void mainmenu_ui_apply_compact_options(void)
     for (index = 0; index < (int)SDL_arraysize(mainmenu_ui_options_buttons); index++) {
         mainmenu_ui_options_buttons[index].y -= MAINMENU_UI_OPTIONS_COMPACT_SHIFT;
     }
+}
+
+// 2026-08-21: see the statics above. `spec` is `SLOT[=OUTSLOT]`. Never
+// returns: exits 0 on success; 20 bad spec or unreadable saveinfo;
+// 21 unsupported save version; 22 load failure; 23 save failure. No original
+// address: new function.
+void mainmenu_ui_roundtrip_set(const char* spec)
+{
+    const char* eq;
+    size_t n;
+
+    eq = strchr(spec, '=');
+    n = eq != NULL ? (size_t)(eq - spec) : strlen(spec);
+    if (n == 0 || n >= sizeof(mainmenu_ui_roundtrip_slot)) {
+        tig_debug_printf("ROUNDTRIP FAIL: bad spec '%s'\n", spec);
+        exit(20);
+    }
+
+    memcpy(mainmenu_ui_roundtrip_slot, spec, n);
+    mainmenu_ui_roundtrip_slot[n] = '\0';
+
+    if (eq != NULL) {
+        snprintf(mainmenu_ui_roundtrip_out,
+            sizeof(mainmenu_ui_roundtrip_out),
+            "%s",
+            eq + 1);
+    }
+
+    mainmenu_ui_roundtrip_requested = true;
+}
+
+// 2026-08-21: runs the round-trip when (and only when) `-roundtrip:` was
+// given; main() calls this right before entering the loop, so every system a
+// real Continue would use is up. The load sequence mirrors the Continue
+// button's sub_5432B0 minus the parts that only exist to talk to the player.
+// No original address: new function.
+void mainmenu_ui_roundtrip_run(void)
+{
+    // The savelist names slots by their .gsi fname, which embeds the
+    // description ("Slot0002test3"), but the archive pair on disk is named
+    // from the first eight characters only - the same truncation
+    // sub_5432B0 does with strncpy before calling gamelib_load. Mirror it,
+    // or the loader looks for a tfaf that does not exist.
+    char slot_short[9];
+    char out_short[9];
+
+    if (!mainmenu_ui_roundtrip_requested) {
+        return;
+    }
+    mainmenu_ui_roundtrip_requested = false;
+
+    snprintf(slot_short, sizeof(slot_short), "%.8s", mainmenu_ui_roundtrip_slot);
+    snprintf(out_short, sizeof(out_short), "%.8s", mainmenu_ui_roundtrip_out);
+
+    mainmenu_ui_reset();
+    sub_40DAB0();
+
+    if (!gamelib_load(slot_short)) {
+        tig_debug_printf("ROUNDTRIP FAIL: gamelib_load failed\n");
+        exit(22);
+    }
+
+    if (mainmenu_ui_roundtrip_out[0] == '\0') {
+        tig_debug_printf("ROUNDTRIP EXTRACT OK slot=%s\n", mainmenu_ui_roundtrip_slot);
+        exit(0);
+    }
+
+    if (!gamelib_save(out_short, "roundtrip")) {
+        tig_debug_printf("ROUNDTRIP FAIL: gamelib_save failed\n");
+        exit(23);
+    }
+
+    tig_debug_printf("ROUNDTRIP OK slot=%s out=%s\n",
+        mainmenu_ui_roundtrip_slot,
+        mainmenu_ui_roundtrip_out);
+    exit(0);
 }
 
 bool mainmenu_ui_init(GameInitInfo* init_info)
@@ -1721,6 +1810,13 @@ bool mainmenu_ui_init(GameInitInfo* init_info)
 
     mainmenu_ui_initialized = true;
     mainmenu_ui_window_type = MM_WINDOW_0;
+
+    // NOTE: the round-trip driver does NOT run here. At this point
+    // gamelib_mod_load() has not executed yet - main() calls it after
+    // gameuilib_init() returns - so the module repository (and with it every
+    // save\... path) does not exist. main() invokes
+    // mainmenu_ui_roundtrip_run() between gameuilib_mod_load() and
+    // mainmenu_ui_handle(), which is the true Continue-click state.
 
     mainmenu_ui_suppress_display = true;
     mainmenu_ui_start(MM_TYPE_DEFAULT);

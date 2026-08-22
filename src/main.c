@@ -336,6 +336,22 @@ int main(int argc, char** argv)
         gamelib_default_module_name_set(pch + 5);
     }
 
+    pch = strstr(lpCmdLine, "-roundtrip:");
+    if (pch != NULL) {
+        // 2026-08-21: headless savegame round-trip, handled by
+        // mainmenu_ui_roundtrip_run() just before main_loop(); spec is
+        // `SLOT[=OUTSLOT]`. See arcanum-work SAVE-ROUNDTRIP.md.
+        char roundtrip_spec[TIG_MAX_PATH];
+        size_t roundtrip_len = strcspn(pch + 11, " \t");
+
+        if (roundtrip_len >= sizeof(roundtrip_spec)) {
+            roundtrip_len = sizeof(roundtrip_spec) - 1;
+        }
+        memcpy(roundtrip_spec, pch + 11, roundtrip_len);
+        roundtrip_spec[roundtrip_len] = '\0';
+        mainmenu_ui_roundtrip_set(roundtrip_spec);
+    }
+
     tig_art_interface_id_create(0, 0, 0, 0, &cursor_art_id);
     tig_mouse_cursor_set_art_id(cursor_art_id);
 
@@ -367,6 +383,12 @@ int main(int argc, char** argv)
     // CE: `-autoload` makes the menu load the newest save immediately instead
     // of waiting for a click. The faithful path is unchanged when it is off.
     mainmenu_ui_autoload_set(harness_autoload);
+
+    // 2026-08-21: headless savegame round-trip (SAVE-ROUNDTRIP.md in
+    // arcanum-work). No-op unless `-roundtrip:` was given. Runs at the exact
+    // Continue-click state - module data mounted, UI modules initialized,
+    // modal menu not yet entered - and never returns on a round-trip run.
+    mainmenu_ui_roundtrip_run();
 
     if (!mainmenu_ui_handle()) {
         gameuilib_exit();

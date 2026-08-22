@@ -84,6 +84,16 @@ bool mainmenu_ui_handle(void);
 bool mainmenu_ui_is_active(void);
 TigWindowModalDialogChoice mainmenu_ui_confirm_quit(void);
 void mainmenu_ui_reset(void);
+
+// 2026-08-21: headless savegame round-trip driver (documented in
+// arcanum-work SAVE-ROUNDTRIP.md). `spec` is `SLOT[=OUTSLOT]`: with OUTSLOT
+// the process loads SLOT then saves OUTSLOT and exits 0; without it the
+// process loads SLOT and exits, leaving the restored Save\Current in place
+// for the harness to snapshot. Exits 20-23 on failure. A verification seam,
+// deliberately unreachable from any menu.
+void mainmenu_ui_roundtrip_set(const char* spec);
+void mainmenu_ui_roundtrip_run(void);
+
 void mainmenu_ui_open(void);
 void mainmenu_ui_close(bool back);
 MainMenuWindowType mainmenu_ui_pop_window_stack(void);

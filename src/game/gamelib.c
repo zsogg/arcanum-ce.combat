@@ -1597,11 +1597,12 @@ bool gamelib_saveinfo_load(const char* name, GameSaveInfo* save_info)
 
     do {
         if (tig_video_buffer_load_from_bmp(byte_5D0A50, &save_info->thumbnail_video_buffer, 0x1) != TIG_OK) break;
-
         if (tig_file_fread(&(save_info->version), sizeof(save_info->version), 1, stream) != 1) break;
 
         if (tig_file_fread(&size, sizeof(size), 1, stream) != 1) break;
+        if (size < 0 || (size_t)size >= sizeof(save_info->module_name)) break;
         if (tig_file_fread(save_info->module_name, size, 1, stream) != 1) break;
+        save_info->module_name[size] = '\0';
 
         if (tig_file_fread(&size, sizeof(size), 1, stream) != 1) break;
         if (tig_file_fread(save_info->pc_name, size, 1, stream) != 1) break;
