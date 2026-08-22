@@ -2611,7 +2611,16 @@ int tig_art_eye_candy_id_create(unsigned int num, unsigned int frame, int rotati
         || frame >= EYE_CANDY_ID_MAX_FRAME
         || rotation >= MAX_ROTATIONS
         || translucency >= 2
-        || type >= 4 // FIXME: Wrong, should be TIG_ART_EYE_CANDY_TYPE_COUNT(3).
+        // NOTE: Settled by emudiff (2026-08-21). The original bounds at 4 as
+        // well (`cmp esi,0x4; jge` at 0x504B15), so type 3 is accepted by
+        // both and packs identically - Troika's own quirk, faithfully
+        // transcribed. The old FIXME read as a porting slip; tightening this
+        // to TIG_ART_EYE_CANDY_TYPE_COUNT would diverge from the original.
+        //
+        // The compare is signed, so a negative type is accepted too, and the
+        // 2-bit mask below folds it onto type 3. Also faithful, and also
+        // measured.
+        || type >= 4
         || palette >= MAX_PALETTES
         || scale < 0
         || scale > 7) {

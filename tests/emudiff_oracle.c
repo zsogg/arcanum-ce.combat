@@ -799,6 +799,72 @@ static void o_light_get_color_components(const int64_t* a, int64_t* out)
     out[2] = blue;
 }
 
+// --- tig leftovers, 2026-08-21 (later) ------------------------------------
+//
+// The 2026-08-16 art batch took eight of the twelve id constructors and the
+// game-layer sweeps that followed only looked at src/game, so these four sat
+// uncovered: container, light, facade and eye candy. They are the same shape
+// as the eight already here - range checks then bit packing, answering
+// through an out-param - and they carry four more field layouts and one live
+// FIXME.
+//
+// Same seeding rule as the other constructors: the out-param starts from the
+// drawn value, so an invalid-parameter path (which writes nothing on either
+// side) still compares equal, and a side that wrongly writes is caught.
+
+static void o_tig_art_container_id_create(const int64_t* a, int64_t* out)
+{
+    tig_art_id_t art_id = (tig_art_id_t)a[5];
+
+    (void)tig_art_container_id_create((unsigned int)a[0], (int)a[1],
+        (unsigned int)a[2], (int)a[3], (unsigned int)a[4], &art_id);
+    out[0] = art_id;
+}
+
+static void o_tig_art_light_id_create(const int64_t* a, int64_t* out)
+{
+    tig_art_id_t art_id = (tig_art_id_t)a[4];
+
+    (void)tig_art_light_id_create((unsigned int)a[0], (unsigned int)a[1],
+        (unsigned int)a[2], (int)a[3], &art_id);
+    out[0] = art_id;
+}
+
+static void o_tig_art_facade_id_create(const int64_t* a, int64_t* out)
+{
+    tig_art_id_t art_id = (tig_art_id_t)a[6];
+
+    (void)tig_art_facade_id_create((unsigned int)a[0], (unsigned int)a[1],
+        (unsigned int)a[2], (unsigned int)a[3], (unsigned int)a[4],
+        (unsigned int)a[5], &art_id);
+    out[0] = art_id;
+}
+
+static void o_tig_art_eye_candy_id_create(const int64_t* a, int64_t* out)
+{
+    tig_art_id_t art_id = (tig_art_id_t)a[7];
+
+    (void)tig_art_eye_candy_id_create((unsigned int)a[0], (unsigned int)a[1],
+        (int)a[2], (int)a[3], (int)a[4], (unsigned int)a[5], (int)a[6],
+        &art_id);
+    out[0] = art_id;
+}
+
+// dword_5BE900[32], statically initialised in both binaries. No bounds check,
+// so the domain is the table.
+static void o_sub_503F50(const int64_t* a, int64_t* out)
+{
+    out[0] = sub_503F50((int)a[0]);
+}
+
+// Pure timestamp arithmetic: the unsigned difference, clamped to INT_MAX.
+// tig_timer_now and tig_timer_elapsed read the clock and are deliberately
+// absent - there is nothing for a differential to compare in a clock.
+static void o_tig_timer_between(const int64_t* a, int64_t* out)
+{
+    out[0] = tig_timer_between((tig_timestamp_t)a[0], (tig_timestamp_t)a[1]);
+}
+
 static const OracleEntry oracle_entries[] = {
     { "random_seed", 1, 1, o_random_seed },
     { "random_rand", 0, 1, o_random_rand },
@@ -902,6 +968,12 @@ static const OracleEntry oracle_entries[] = {
     { "dialog_speech_id_unpack", 3, 2, o_dialog_speech_id_unpack },
     { "light_build_color", 4, 1, o_light_build_color },
     { "light_get_color_components", 4, 3, o_light_get_color_components },
+    { "tig_art_container_id_create", 6, 1, o_tig_art_container_id_create },
+    { "tig_art_light_id_create", 5, 1, o_tig_art_light_id_create },
+    { "tig_art_facade_id_create", 7, 1, o_tig_art_facade_id_create },
+    { "tig_art_eye_candy_id_create", 8, 1, o_tig_art_eye_candy_id_create },
+    { "sub_503F50", 1, 1, o_sub_503F50 },
+    { "tig_timer_between", 2, 1, o_tig_timer_between },
 };
 
 #define ORACLE_ENTRY_COUNT ((int)(sizeof(oracle_entries) / sizeof(oracle_entries[0])))
