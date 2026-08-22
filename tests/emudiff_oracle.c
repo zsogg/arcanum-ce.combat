@@ -568,7 +568,7 @@ static void o_tig_art_wall_id_create(const int64_t* a, int64_t* out)
 
 static void o_tig_art_tile_id_create(const int64_t* a, int64_t* out)
 {
-    tig_art_id_t art_id = (tig_art_id_t)a[9];
+    tig_art_id_t art_id = (tig_art_id_t)a[8];
 
     (void)tig_art_tile_id_create((unsigned int)a[0], (unsigned int)a[1],
         (unsigned int)a[2], (unsigned int)a[3], (unsigned int)a[4],
@@ -598,7 +598,7 @@ static void o_tig_art_monster_id_create(const int64_t* a, int64_t* out)
 
 static void o_tig_art_unique_npc_id_create(const int64_t* a, int64_t* out)
 {
-    tig_art_id_t art_id = (tig_art_id_t)a[8];
+    tig_art_id_t art_id = (tig_art_id_t)a[7];
 
     (void)tig_art_unique_npc_id_create((int)a[0], (unsigned int)a[1],
         (unsigned int)a[2], (int)a[3], (int)a[4], (int)a[5],
@@ -943,7 +943,7 @@ static const OracleEntry oracle_entries[] = {
     { "tig_art_id_damaged_set", 2, 1, o_tig_art_id_damaged_set },
     { "tig_art_portal_id_type_get", 1, 1, o_tig_art_portal_id_type_get },
     { "tig_art_wall_id_create", 7, 1, o_tig_art_wall_id_create },
-    { "tig_art_tile_id_create", 10, 1, o_tig_art_tile_id_create },
+    { "tig_art_tile_id_create", 9, 1, o_tig_art_tile_id_create },
     { "tig_art_critter_id_create", 10, 1, o_tig_art_critter_id_create },
     { "tig_art_monster_id_create", 9, 1, o_tig_art_monster_id_create },
     { "tig_art_unique_npc_id_create", 8, 1, o_tig_art_unique_npc_id_create },
@@ -1001,8 +1001,15 @@ int main(void)
 
     while (fgets(line, sizeof(line), stdin) != NULL) {
         const OracleEntry* entry;
-        int64_t args[MAX_ARGS];
-        int64_t out[MAX_OUT];
+        // Zeroed deliberately. A wrapper that reads past its own arity used to
+        // pick up whatever the previous request left on this stack slot, which
+        // made tig_art_unique_npc_id_create's seed depend on call order and
+        // hid the mistake for months (found 2026-08-21). Zeroing does not make
+        // such a wrapper correct - `scripts/tests/test_playtest_tools.py`
+        // checks that every wrapper reads exactly a[0..arity-1] - but it makes
+        // the symptom reproducible instead of order-dependent.
+        int64_t args[MAX_ARGS] = { 0 };
+        int64_t out[MAX_OUT] = { 0 };
         char* token;
         char* save;
         int argc = 0;

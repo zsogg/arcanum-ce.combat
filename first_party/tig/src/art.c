@@ -2125,6 +2125,28 @@ int tig_art_portal_id_create(unsigned int num, int type, int a3, unsigned int fr
         | ((palette & (MAX_PALETTES - 1)) << ART_ID_PALETTE_SHIFT)
         | a3;
 
+    // FIX (porting bug #32): the original ends here with
+    // `tig_art_id_rotation_set(packed, rotation)` (`push ecx; push eax;
+    // call 0x502930` at 0x504219-0x50423C), and that call is not a no-op for
+    // a portal. Its TIG_ART_TYPE_PORTAL branch *overwrites* the flags bit and
+    // the palette field from the rotation's cardinal direction: rotation/2 of
+    // 1 or 3 sets both to 1, anything else clears both to 0. So the original
+    // discards the `palette` argument here, and CE was honouring it.
+    //
+    // Measured, holding every other field valid:
+    //     rotation 0, palette 3 -> CE 0x30000030, original 0x30000000
+    //     rotation 7, palette 0 -> CE 0x30003800, original 0x30003811
+    //
+    // Three of the twelve constructors make this call in the original - wall,
+    // portal and light. CE's wall already did. Light agrees without it over
+    // 2,061 accepted inputs, so whatever the call would do there, CE's
+    // packing already produces. Portal was the only mismatch.
+    //
+    // Found by emudiff 2026-08-21, the first time that case ever reached the
+    // packing path - its domain had rejected all 4,000 inputs since it was
+    // written, and "both sides write nothing" compares equal.
+    *art_id_ptr = tig_art_id_rotation_set(*art_id_ptr, rotation);
+
     return TIG_OK;
 }
 
