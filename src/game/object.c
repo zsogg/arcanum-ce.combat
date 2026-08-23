@@ -5532,11 +5532,11 @@ void object_pull_to_actor(int64_t actor_obj, int64_t obj)
     int64_t loc;
 
     type = obj_field_int32_get(obj, OBJ_F_TYPE);
-    // FIXED: Was reading `OBJ_F_TYPE` and masking it with `OF_INVENTORY`
-    // (0x1000), which no object type can ever have, so the "skip items held
-    // in an inventory" guard was always true. The original reads field 0x13
-    // (`OBJ_F_FLAGS`) here - see `push 0x13; call 0x406ca0; test ah, 0x10` at
-    // 0x4445DB.
+    // FIX (porting bug #37): Was reading `OBJ_F_TYPE` and masking it with
+    // `OF_INVENTORY` (0x1000), which no object type can ever have, so the
+    // "skip items held in an inventory" guard was always true. The original
+    // reads field 0x13 (`OBJ_F_FLAGS`) here - see `push 0x13; call 0x406ca0;
+    // test ah, 0x10` at 0x4445DB.
     if (obj_type_is_critter(type)
         || (obj_type_is_item(type) && (obj_field_int32_get(obj, OBJ_F_FLAGS) & OF_INVENTORY) == 0)) {
         if (object_dist(actor_obj, obj) > 1) {

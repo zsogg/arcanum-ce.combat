@@ -4515,7 +4515,7 @@ int obj_type_change_array_len(ObjectType object_type)
     default:
         // NOTE: Original code returns `object_type`.
         //
-        // FIXED: `assert` compiles out under `NDEBUG`, which left `v1`
+        // FIX: `assert` compiles out under `NDEBUG`, which left `v1`
         // uninitialized in release builds. The value sizes `MALLOC`/`memcpy`
         // calls fed by a type read straight out of a save file or a network
         // packet, so falling back to the generic object bitmap length keeps

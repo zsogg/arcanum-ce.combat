@@ -7,6 +7,7 @@
 #include "game/location.h"
 #include "game/obj.h"
 #include "game/obj_find.h"
+#include "game/obj_pool.h"
 #include "game/object.h"
 #include "game/sector.h"
 #include "game/sector_script.h"

@@ -341,6 +341,14 @@ target_sources(arcanum-game PRIVATE
     ${SRCS}
 )
 
+# Strict mode for the game library, PRIVATE like tig's - consumers of the
+# archive should not inherit our flags.
+if(MSVC)
+    target_compile_options(arcanum-game PRIVATE /W4)
+else()
+    target_compile_options(arcanum-game PRIVATE -Wall -Wextra)
+endif()
+
 target_include_directories(arcanum-game PUBLIC
     "${CMAKE_CURRENT_SOURCE_DIR}/src"
 )
