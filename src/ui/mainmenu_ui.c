@@ -1666,15 +1666,17 @@ void mainmenu_ui_roundtrip_set(const char* spec)
 // 2026-08-21: runs the round-trip when (and only when) `-roundtrip:` was
 // given; main() calls this right before entering the loop, so every system a
 // real Continue would use is up. The load sequence mirrors the Continue
-// button's sub_5432B0 minus the parts that only exist to talk to the player.
+// button's mainmenu_ui_load_game_by_name (0x5432B0) minus the parts that
+// only exist to talk to the player.
 // No original address: new function.
 void mainmenu_ui_roundtrip_run(void)
 {
     // The savelist names slots by their .gsi fname, which embeds the
     // description ("Slot0002test3"), but the archive pair on disk is named
     // from the first eight characters only - the same truncation
-    // sub_5432B0 does with strncpy before calling gamelib_load. Mirror it,
-    // or the loader looks for a tfaf that does not exist.
+    // mainmenu_ui_load_game_by_name does with strncpy before calling
+    // gamelib_load. Mirror it, or the loader looks for a tfaf that does
+    // not exist.
     char slot_short[9];
     char out_short[9];
 
@@ -1687,7 +1689,7 @@ void mainmenu_ui_roundtrip_run(void)
     snprintf(out_short, sizeof(out_short), "%.8s", mainmenu_ui_roundtrip_out);
 
     mainmenu_ui_reset();
-    sub_40DAB0();
+    player_destroy();
 
     if (!gamelib_load(slot_short)) {
         tig_debug_printf("ROUNDTRIP FAIL: gamelib_load failed\n");
