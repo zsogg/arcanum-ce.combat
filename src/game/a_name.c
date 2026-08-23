@@ -1862,8 +1862,8 @@ bool a_name_light_aid_to_fname(tig_art_id_t aid, char* fname, size_t maxlen)
         return false;
     }
 
-    if (sub_504790(aid)) {
-        snprintf(fname, maxlen, "art\\light\\%s_s%d.art", mes_file_entry.str, sub_504700(aid) / 8);
+    if (tig_art_light_id_rotation_extended_get(aid)) {
+        snprintf(fname, maxlen, "art\\light\\%s_s%d.art", mes_file_entry.str, tig_art_light_id_rotation_get(aid) / 8);
     } else {
         snprintf(fname, maxlen, "art\\light\\%s.art", mes_file_entry.str);
     }

@@ -2595,7 +2595,7 @@ void object_cycle_palette(int64_t obj)
     if ((obj_field_int32_get(obj, OBJ_F_FLAGS) & OF_DESTROYED) == 0) {
         aid = obj_field_int32_get(obj, OBJ_F_CURRENT_AID);
         aid = tig_art_id_palette_set(aid, tig_art_id_palette_get(aid) + 1);
-        if (sub_502E00(aid) == TIG_OK) {
+        if (tig_art_palette_check(aid) == TIG_OK) {
             aid = tig_art_id_palette_set(aid, 0);
         }
         obj_field_int32_set(obj, OBJ_F_CURRENT_AID, aid);
@@ -2624,7 +2624,7 @@ void object_set_palette(int64_t obj, int palette)
         // porting slip. It is not: 0x43F130 does `test eax, eax; je` past the
         // whole block, and TIG_OK is 0, so the original applies on non-zero
         // exactly as this does. Troika's oddity, transcribed faithfully.
-        if (sub_502E00(aid) != TIG_OK) {
+        if (tig_art_palette_check(aid) != TIG_OK) {
             obj_field_int32_set(obj, OBJ_F_CURRENT_AID, aid);
             object_get_rect(obj, 0, &rect);
             object_iso_invalidate_rect(&rect);

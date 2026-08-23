@@ -8,8 +8,8 @@
 
 #define FONT_STACK_SIZE 20
 
-static int sub_535850(TigVideoBuffer* video_buffer, const char* str, int length, TigArtBlitInfo* blit_info, bool shadow);
-static int sub_535C40(tig_art_id_t font_art_id, const char* str, int max_width, int* width_ptr);
+static int tig_font_draw_str(TigVideoBuffer* video_buffer, const char* str, int length, TigArtBlitInfo* blit_info, bool shadow);
+static int tig_font_line_break_find(tig_art_id_t font_art_id, const char* str, int max_width, int* width_ptr);
 static bool tig_font_glyph_data(tig_art_id_t font_art_id, int ch, int* width_ptr, int* height_ptr, int* dx_ptr, int* dy_ptr);
 
 // 0x630CFC
@@ -139,7 +139,7 @@ void tig_font_measure(TigFont* font)
 
             pos = 0;
             for (;;) {
-                line_length = sub_535C40(tig_font_stack[tig_font_stack_index]->art_id, &(str[pos]), font->width, &line_width);
+                line_length = tig_font_line_break_find(tig_font_stack[tig_font_stack_index]->art_id, &(str[pos]), font->width, &line_width);
                 if (line_length == -1) {
                     font->height = 0;
                     return;
@@ -278,7 +278,7 @@ int tig_font_write(TigVideoBuffer* video_buffer, const char* str, const TigRect*
             int rc;
 
             while (1) {
-                line_length = sub_535C40(tig_font_stack[tig_font_stack_index]->art_id, remainder, rect->width, &line_width);
+                line_length = tig_font_line_break_find(tig_font_stack[tig_font_stack_index]->art_id, remainder, rect->width, &line_width);
                 if (line_length == -1) {
                     break;
                 }
@@ -303,7 +303,7 @@ int tig_font_write(TigVideoBuffer* video_buffer, const char* str, const TigRect*
                     dst_rect.x = dst_rect_x + dx;
                 }
 
-                rc = sub_535850(video_buffer, remainder, line_length + 1, &blit_info, shadow);
+                rc = tig_font_draw_str(video_buffer, remainder, line_length + 1, &blit_info, shadow);
                 if (rc != TIG_OK) {
                     return rc;
                 }
@@ -343,7 +343,7 @@ int tig_font_write(TigVideoBuffer* video_buffer, const char* str, const TigRect*
 }
 
 // 0x535850
-int sub_535850(TigVideoBuffer* video_buffer, const char* str, int length, TigArtBlitInfo* blit_info, bool shadow)
+int tig_font_draw_str(TigVideoBuffer* video_buffer, const char* str, int length, TigArtBlitInfo* blit_info, bool shadow)
 {
     tig_art_id_t glyph_art_id;
     int blt_dst_rect_x;
@@ -473,7 +473,7 @@ int sub_535850(TigVideoBuffer* video_buffer, const char* str, int length, TigArt
 }
 
 // 0x535C40
-int sub_535C40(tig_art_id_t font_art_id, const char* str, int max_width, int* width_ptr)
+int tig_font_line_break_find(tig_art_id_t font_art_id, const char* str, int max_width, int* width_ptr)
 {
     int glyph_width;
     int glyph_height;

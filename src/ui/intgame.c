@@ -8559,7 +8559,7 @@ bool intgame_big_window_lock(TigWindowMessageFilterFunc func, tig_window_handle_
     intgame_big_window_locked = true;
     tig_window_message_filter_set(intgame_big_window_handle, func);
     tig_window_show(intgame_big_window_handle);
-    sub_51E850(intgame_big_window_handle);
+    tig_window_raise(intgame_big_window_handle);
     *window_handle_ptr = intgame_big_window_handle;
 
     return true;

@@ -755,9 +755,9 @@ tig_art_id_t name_normalize_aid(tig_art_id_t aid)
         break;
     case TIG_ART_TYPE_LIGHT:
         aid = tig_art_id_frame_set(aid, 0);
-        if (sub_504790(aid)) {
-            int v1 = sub_504700(aid);
-            aid = sub_504730(aid, v1 - v1 % 8);
+        if (tig_art_light_id_rotation_extended_get(aid)) {
+            int v1 = tig_art_light_id_rotation_get(aid);
+            aid = tig_art_light_id_rotation_set(aid, v1 - v1 % 8);
         } else {
             aid = tig_art_id_rotation_set(aid, 0);
         }
@@ -1160,7 +1160,7 @@ tig_art_id_t name_art_id_first(int type, int* extra)
     }
 
     if (aid != TIG_ART_ID_INVALID) {
-        if (tig_art_exists(aid) != TIG_OK || sub_502E00(aid) != TIG_OK) {
+        if (tig_art_exists(aid) != TIG_OK || tig_art_palette_check(aid) != TIG_OK) {
             aid = name_art_id_next(aid);
         }
     }
@@ -1441,7 +1441,7 @@ tig_art_id_t name_art_id_next(tig_art_id_t art_id)
         }
 
         if (tig_art_exists(art_id) == TIG_OK
-            && sub_502E00(art_id) == TIG_OK) {
+            && tig_art_palette_check(art_id) == TIG_OK) {
             return art_id;
         }
 
@@ -1700,7 +1700,7 @@ tig_art_id_t name_art_id_prev(tig_art_id_t art_id)
         }
 
         if (tig_art_exists(art_id) == TIG_OK
-            && sub_502E00(art_id) == TIG_OK) {
+            && tig_art_palette_check(art_id) == TIG_OK) {
             return art_id;
         }
 

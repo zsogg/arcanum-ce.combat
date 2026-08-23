@@ -840,7 +840,7 @@ void logbook_ui_draw_panel(int border_art_num, bool preserve_page)
 
     // Reveal all tab buttons (they were hidden at creation time) and determine
     // which one is currently selected so we can restore it after the redraw.
-    selected_button_handle = sub_538730(logbook_ui_tab_buttons[0].button_handle);
+    selected_button_handle = tig_button_group_selected_get(logbook_ui_tab_buttons[0].button_handle);
     selected_button_index = 0;
 
     for (index = 0; index < LOGBOOK_UI_TAB_COUNT; index++) {

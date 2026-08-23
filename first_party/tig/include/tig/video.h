@@ -132,7 +132,7 @@ int tig_video_buffer_unlock(TigVideoBuffer* video_buffer);
 int tig_video_buffer_outline(TigVideoBuffer* video_buffer, TigRect* rect, tig_color_t color);
 int tig_video_buffer_fill(TigVideoBuffer* video_buffer, TigRect* rect, tig_color_t color);
 int tig_video_buffer_line(TigVideoBuffer* video_buffer, TigLine* line, TigRect* a3, tig_color_t color);
-int sub_520FB0(TigVideoBuffer* video_buffer, unsigned int flags);
+int tig_video_buffer_render_target_check(TigVideoBuffer* video_buffer, unsigned int flags);
 int tig_video_buffer_blit(TigVideoBufferBlitInfo* blit_info);
 int tig_video_buffer_get_pixel_color(TigVideoBuffer* video_buffer, int x, int y, unsigned int* color);
 int tig_video_buffer_tint(TigVideoBuffer* video_buffer, TigRect* rect, tig_color_t tint_color, TigVideoBufferTintMode mode);

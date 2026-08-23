@@ -54,7 +54,7 @@ int tig_button_state_get(tig_button_handle_t button_handle, TigButtonState* stat
 tig_button_handle_t tig_button_get_at_position(int x, int y);
 bool tig_button_process_mouse_msg(TigMouseMessageData* mouse);
 int tig_button_radio_group_create(int count, tig_button_handle_t* button_handles, int selected);
-tig_button_handle_t sub_538730(tig_button_handle_t button_handle);
+tig_button_handle_t tig_button_group_selected_get(tig_button_handle_t button_handle);
 int tig_button_show(tig_button_handle_t button_handle);
 int tig_button_hide(tig_button_handle_t button_handle);
 int tig_button_is_hidden(tig_button_handle_t button_handle, bool* hidden);

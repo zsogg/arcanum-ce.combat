@@ -1114,7 +1114,7 @@ bool charedit_open(int64_t obj, ChareditMode mode)
     tig_window_show(charedit_spells_win);
     tig_window_show(charedit_tech_win);
     tig_window_show(charedit_scheme_win);
-    sub_51E850(charedit_skills_win);
+    tig_window_raise(charedit_skills_win);
 
     if (charedit_mode == CHAREDIT_MODE_PASSIVE) {
         for (index = 0; index < 15; index++) {
@@ -1594,7 +1594,7 @@ bool charedit_window_message_filter(TigMessage* msg)
                 if (charedit_tab == 3) {
                     charedit_scheme_scrollbar_release();
                 }
-                sub_51E850(charedit_skills_win);
+                tig_window_raise(charedit_skills_win);
                 charedit_tab = 0;
                 charedit_refresh_internal();
                 return true;
@@ -1604,7 +1604,7 @@ bool charedit_window_message_filter(TigMessage* msg)
                 if (charedit_tab == 3) {
                     charedit_scheme_scrollbar_release();
                 }
-                sub_51E850(charedit_tech_win);
+                tig_window_raise(charedit_tech_win);
                 charedit_tab = 1;
                 charedit_refresh_internal();
                 return true;
@@ -1614,14 +1614,14 @@ bool charedit_window_message_filter(TigMessage* msg)
                 if (charedit_tab == 3) {
                     charedit_scheme_scrollbar_release();
                 }
-                sub_51E850(charedit_spells_win);
+                tig_window_raise(charedit_spells_win);
                 charedit_tab = 2;
                 charedit_refresh_internal();
                 return true;
             }
 
             if (msg->data.button.button_handle == charedit_scheme_tab_btn) {
-                sub_51E850(charedit_scheme_win);
+                tig_window_raise(charedit_scheme_win);
                 if (charedit_tab != 3) {
                     charedit_scheme_scrollbar_ensure();
                 }
