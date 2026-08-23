@@ -607,8 +607,9 @@ bool parse_field(TigFile* stream, char* buffer)
 
         // Store character in buffer if there's space.
         //
-        // FIX (porting bug #11): The bound was `pos < MAX_STRING`, which let `pos` reach
-        // MAX_STRING and made the `buffer[pos] = '\0'` below write one byte
+        // FIX (porting bug #11): The bound was `pos < MAX_STRING`, which let
+        // `pos` reach MAX_STRING and made the `buffer[pos] = '\0'` below
+        // write one byte
         // past the end of the caller's `char buffer[MAX_STRING]` - and then
         // `parse_entry` `strcpy`'d MAX_STRING + 1 bytes into another array of
         // the same size. The original reserves the terminator's slot:

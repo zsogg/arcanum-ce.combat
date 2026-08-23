@@ -4120,9 +4120,10 @@ bool intgame_interface_controls_create(void)
     intgame_spells_init();
     intgame_mt_spells_init();
 
-    // FIX: Both expressions below read `rect.y` where the original reads
-    // `rect.height`, and the y was missing its per-row term - every button got
-    // the same one. The original walks the rows with an accumulator:
+    // FIX (porting bug #9): Both expressions below read `rect.y` where the
+    // original reads `rect.height`, and the y was missing its per-row term -
+    // every button got the same one. The original walks the rows with an
+    // accumulator:
     //
     //     iVar8 = DAT_005c6dd0 / 5;        // rect.height / 5
     //     iVar3 = 0;
@@ -4140,9 +4141,6 @@ bool intgame_interface_controls_create(void)
     // false for all five. Every handle stayed TIG_BUTTON_HANDLE_INVALID, and
     // the show/hide loops below have been passing that ever since. Correct is
     // 507, 523, 539, 555, 571 - five 383x16 rows filling the panel.
-    // FIX (porting bug #9): the loop read `rect.y` where the original reads
-    // `rect.height`, and its y had no per-row term, so all five buttons got
-    // the same off-window position.
     for (index = 0; index < DIALOG_ROW_COUNT; index++) {
         intgame_dialog_row_buttons[index].x = intgame_rotwin_text_frame[ROTWIN_TYPE_DIALOGUE].rect.x;
         intgame_dialog_row_buttons[index].y = intgame_rotwin_text_frame[ROTWIN_TYPE_DIALOGUE].rect.y
