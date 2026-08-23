@@ -354,11 +354,6 @@ static bool logbook_ui_initialized;
 static bool logbook_ui_created;
 
 /**
- * Called when the game is initialized.
- *
- * 0x53EB10
- */
-/**
  * Switch the logbook to the patch's larger text.
  *
  * `LogbookFont = 1` swaps interface art 229 for 230 and widens the page rects
@@ -382,6 +377,11 @@ static void logbook_ui_apply_font_size(void)
     logbook_ui_page_footer_rects[1].height = 16;
 }
 
+/**
+ * Called when the game is initialized.
+ *
+ * 0x53EB10
+ */
 bool logbook_ui_init(GameInitInfo* init_info)
 {
     TigFont font_info;

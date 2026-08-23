@@ -1607,7 +1607,6 @@ static int64_t mainmenu_ui_pregen_char_obj;
 // 0x64C468
 static int mainmenu_ui_key_shortcuts_disable_count;
 
-// 0x540930
 /**
  * Switch the options screen to the patch's compact layout.
  *
@@ -1757,6 +1756,7 @@ void mainmenu_ui_roundtrip_run(void)
     exit(0);
 }
 
+// 0x540930
 bool mainmenu_ui_init(GameInitInfo* init_info)
 {
     int index;
