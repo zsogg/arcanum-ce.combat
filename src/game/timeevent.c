@@ -809,7 +809,8 @@ bool timeevent_is_paused(void)
     }
 }
 
-// CE: The pause flag at 0x5DE6E0 is one global in the original, written here
+// CE (porting bug #7): the pause flag at 0x5DE6E0 is one global in the
+// original, written here
 // (via the setters at 0x4300B0/0x4300C0) and read by
 // `anim_fidget_timeevent_process`. It was ported as a separate file-static
 // `bool` in both timeevent.c and anim.c, so anim.c's copy was never written and

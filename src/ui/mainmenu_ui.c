@@ -2337,8 +2337,8 @@ void mainmenu_ui_expand_tabs(char* dst, const char* src)
 {
     while (*src != '\0') {
         if (src[0] == '\\' && src[1] == 't') {
-            // FIX: Was `strcpy(dst, "    ")` - four spaces plus the terminator
-            // strcpy appends - followed by `dst += 5`. That left a NUL at
+            // FIX (porting bug #8): Was `strcpy(dst, "    ")` - four spaces plus
+            // the terminator strcpy appends - followed by `dst += 5`. That left a NUL at
             // `dst[4]` that nothing overwrote, so every string containing a tab
             // was truncated at the tab. The original writes five spaces and no
             // terminator: `mov edx, 0x20202020` / `mov [esi], edx` /

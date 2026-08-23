@@ -280,6 +280,11 @@ bool objid_g_from_str(TigGuid* guid, const char* str)
 }
 
 // 0x4E6970
+//
+// FIX (porting bug #28): an earlier transcription skipped the `_` separators
+// when parsing `P_...` ids - it advanced 8 hex digits per field without
+// checking or consuming the `_` between them, so every field after the first
+// read its neighbour's digits and the id never resolved.
 bool objid_p_from_str(ObjectID_P* p, const char* str)
 {
     int x;

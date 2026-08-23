@@ -962,9 +962,9 @@ void anim_interrupt_attack_on_obj_or_follower(int64_t a1, int64_t a2)
 
     if (anim_is_busy(a1, &anim_id)) {
         run_info = &(anim_run_info[anim_id.slot_num]);
-        // FIX: The original compares goals[0].type against both AG_ATTACK
-        // (0x12) and AG_ATTEMPT_ATTACK (0x13) at 0x44E070-0x44E095; CE read
-        // goals[1] for the second comparison.
+        // FIX (porting bug #16): The original compares goals[0].type against
+        // both AG_ATTACK (0x12) and AG_ATTEMPT_ATTACK (0x13) at
+        // 0x44E070-0x44E095; CE read goals[1] for the second comparison.
         if (run_info->goals[0].type == AG_ATTACK
             || run_info->goals[0].type == AG_ATTEMPT_ATTACK) {
             if (run_info->goals[0].params[AGDATA_TARGET_OBJ].obj == a2
@@ -985,8 +985,8 @@ void anim_interrupt_attack_on_obj(int64_t a1, int64_t a2)
 
     if (anim_is_busy(a1, &anim_id)) {
         run_info = &(anim_run_info[anim_id.slot_num]);
-        // FIX: Same goals[1] transcription error as the twin above; the
-        // original reads goals[0].type for both comparisons.
+        // FIX (porting bug #16): Same goals[1] transcription error as the
+        // twin above; the original reads goals[0].type for both comparisons.
         if (run_info->goals[0].type == AG_ATTACK
             || run_info->goals[0].type == AG_ATTEMPT_ATTACK) {
             if (run_info->goals[0].params[AGDATA_TARGET_OBJ].obj == a2) {

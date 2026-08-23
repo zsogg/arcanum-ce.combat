@@ -1823,9 +1823,9 @@ int tig_window_move(tig_window_handle_t window_handle, int x, int y)
 
     tig_window_invalidate_rect(&(win->frame));
 
-    // CE: Carry the window's buttons with it. Their rects are cached in screen
-    // space by `tig_button_create`, so without this they keep the origin the
-    // window had when they were created - which draws them at the wrong offset
+    // CE (porting bug #10): carry the window's buttons with it. Their rects
+    // are cached in screen space by `tig_button_create`, so without this they
+    // keep the origin the window had when they were created - which draws them at the wrong offset
     // inside the moved window and leaves that misdraw baked into its video
     // buffer. `intgame_hide`/`intgame_show` move the bottom bar between the
     // menu and in-game positions, so at any screen height other than 600 the

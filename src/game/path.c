@@ -787,9 +787,9 @@ int path_make_straight_flag_0x0080(int64_t from, int64_t to, int8_t* rotations)
     state.cnt = 0;
     state.last_x = 0;
     state.last_y = 0;
-    // FIX: The original stores the rotations argument here (0x420714-0x420720);
-    // CE set NULL, so PATH_FLAG_0x0080 paths wrote through a null pointer as
-    // soon as the sampler reached its tenth point.
+    // FIX (porting bug #17): The original stores the rotations argument here
+    // (0x420714-0x420720); CE set NULL, so PATH_FLAG_0x0080 paths wrote through
+    // a null pointer as soon as the sampler reached its tenth point.
     state.rotations = rotations;
 
     location_xy(from, &from_x, &from_y);

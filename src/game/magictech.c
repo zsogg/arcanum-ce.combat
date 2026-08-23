@@ -1886,7 +1886,8 @@ bool magictech_charge_run_fatigue(int mt_id)
         return true;
     }
 
-    // FIX: The original reads the spell id from `run_info->spell` (0x450979
+    // FIX (porting bug #29): The original reads the spell id from
+    // `run_info->spell` (0x450979
     // loads +0x04 and 0x450984 builds the table offset from it), not from the
     // run-info slot id. Item-spell runs usually land in slot 0, so the old
     // transcription charged spell 0's cost to the item and aborted the run.

@@ -167,7 +167,8 @@ void invensource_exit(void)
 void invensource_get_id_list(int id, InvenSourceSet* set)
 {
     if (invensource_initialized) {
-        // FIX: Was `id < invensource_num_sets`, which drops the last set.
+        // FIX (porting bug #12): Was `id < invensource_num_sets`, which
+        // drops the last set.
         //
         // Ids are 1-based and `invensource_num_sets` is the entry count
         // (`mes_entries_count`), so the valid range is 1..count inclusive. The

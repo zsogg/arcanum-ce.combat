@@ -601,7 +601,8 @@ bool wmap_rnd_save(TigFile* stream)
         if (num_entries != 0) {
             save_info = (WmapRndSaveInfo*)MALLOC(sizeof(*save_info) * num_entries);
             save_info_idx = 0;
-            // FIX: `save_info_idx` was never advanced, so every entry wrote
+            // FIX (porting bug #31): `save_info_idx` was never advanced, so
+            // every entry wrote
             // into `save_info[0]` and records 1..n-1 went to disk as raw
             // MALLOC memory - about 1.7 KB of uninitialized heap in every
             // save file. Three consequences: encounter trigger counts were
