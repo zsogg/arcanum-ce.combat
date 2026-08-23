@@ -322,7 +322,7 @@ void tig_database_find_prepare(TigDatabaseFindFileData* ffd)
     // name).
     while (l <= r) {
         m = (l + r) / 2;
-        // FIX: Same separator ordering as `tig_database_find_entry_by_path` -
+        // FIX (porting bug #34): Same separator ordering as `tig_database_find_entry_by_path` -
         // this search reads the same array and has to agree with how it is
         // sorted.
         cmp = tig_database_path_compare(ffd->database->entries[m].path, ffd->pattern);
@@ -538,7 +538,8 @@ char* tig_database_fgets(char* buffer, int max_count, TigDatabaseFileHandle* str
                 return NULL;
             }
 
-            // FIX: Stop at end of file instead of storing the -1 and going
+            // FIX (porting bug #35): Stop at end of file instead of storing
+            // the -1 and going
             // round again. Storing it wrote 0xFF into the buffer and kept
             // looping, so a final line with no newline came back as the line
             // followed by `max_count - 1` bytes of 0xFF.
@@ -855,7 +856,7 @@ int tig_database_find_entry_by_path(const void* a1, const void* a2)
     return tig_database_path_compare(path, entry->path);
 }
 
-// FIX: Compare entry paths in the order the entry table is actually sorted in,
+// FIX (porting bug #34): Compare entry paths in the order the entry table is actually sorted in,
 // which is by the path as the archiver wrote it - with backslash separators.
 //
 // The original gets this for free: it is Windows-only, keeps the separators it
@@ -1032,7 +1033,8 @@ bool tig_database_fread_internal(void* buffer, size_t size, TigDatabaseFileHandl
     int rc;
 
     if ((stream->entry->flags & TIG_DATABASE_ENTRY_PLAIN) != 0) {
-        // FIX: A zero-byte read is not a failure. `fread` with an element size
+        // FIX (porting bug #36): A zero-byte read is not a failure. `fread`
+        // with an element size
         // of 0 returns 0, which this then read as an error and latched into the
         // stream - and a latched error makes every later `tig_database_fseek`
         // fail (its first test), so the handle cannot be rewound.

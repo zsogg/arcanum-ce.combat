@@ -12209,17 +12209,25 @@ bool AGupdateAnimEyeCandy(AnimRunInfo* run_info)
 }
 
 // 0x431550
-// Restarts the eye-candy animation sound when the previous animation id is
-// still valid. The four AGupdateAnimEyeCandy* variants all funnel here.
+// Restarts the eye-candy animation sound when there is no live handle and the
+// previous animation id is still valid. The four AGupdateAnimEyeCandy* variants
+// all funnel here.
 void anim_eye_candy_sound_restart(AnimRunInfo* run_info, int64_t obj)
 {
     AnimGoalData* goal_data;
     tig_sound_handle_t sound_handle;
 
     goal_data = run_info->cur_stack_data;
-    if (goal_data->params[AGDATA_SOUND_HANDLE].data != TIG_SOUND_HANDLE_INVALID
+    // FIX (porting bug #33): two defects on one condition. The handle test was
+    // inverted - the original at 0x43155B is `cmp [eax+0xA8], -1` / `jne`, so
+    // it proceeds only when there is *no* handle yet, which is what makes this
+    // the function that restarts a stopped loop. And the mask was 0x80000000,
+    // which nothing ever sets; the original tests `test BYTE PTR [eax+0x70],
+    // 0x80` at 0x43156C (bytes `f6 40 70 80` - a *byte* test, so bit 7 of the
+    // low byte, not bit 31). See the note on anim_eye_candy_sound_begin.
+    if (goal_data->params[AGDATA_SOUND_HANDLE].data == TIG_SOUND_HANDLE_INVALID
         && goal_data->params[AGDATA_ANIM_ID_PREVIOUS].data != -1
-        && (goal_data->params[AGDATA_FLAGS_DATA].data & 0x80000000) != 0) {
+        && (goal_data->params[AGDATA_FLAGS_DATA].data & 0x80) != 0) {
         sound_handle = gsound_play_sfx_on_obj(goal_data->params[AGDATA_ANIM_ID_PREVIOUS].data, 0, obj);
         if (sound_handle != TIG_SOUND_HANDLE_INVALID) {
             goal_data->params[AGDATA_SOUND_HANDLE].data = sound_handle;
@@ -12358,10 +12366,40 @@ bool AGbeginAnimEyeCandy(AnimRunInfo* run_info)
     return true;
 }
 
+// Porting bug #33: the whole sound side of eye candy was dead.
+//
+// These three functions are it. anim_eye_candy_sound_begin runs at the end of
+// every AGbeginAnimEyeCandy*, anim_eye_candy_sound_restart at the end of every
+// AGupdateAnimEyeCandy*, and anim_eye_candy_sound_move keeps a playing sound on
+// top of its object. All three gated on `AGDATA_FLAGS_DATA & 0x80000000`, and
+// **nothing sets bit 31**: the only writers of that field are anim_private.c
+// (0) and animfx.c (0x80 from the eye-candy .mes `anim_forever` flag, plus
+// 0x800), so the field can only ever hold 0, 0x80, 0x800 or 0x880. CE tests the
+// bit correctly everywhere else in this file (AGbeginAnimEyeCandy,
+// AGendAnimEyeCandy).
+//
+// Two slots carry the state and the original's own offsets identify them:
+// AGDATA_ANIM_ID_PREVIOUS (+0x50) holds the *sound id* from the .mes, and
+// AGDATA_SOUND_HANDLE (+0xA8) the handle once it is playing. This function
+// wrote the handle into the id slot and cleared the handle slot on failure -
+// the two swapped - so even with the flag fixed there would be no handle left
+// to move or stop.
+//
+// What a player heard: with the loop bit dead, `loops` stayed 1, so the sound
+// played **once** where the effect began, did not follow the target, and was
+// never restarted. Six shipped effects have both `anim_forever` and a `Sound:`,
+// and they are exactly the long-running ones - Vitality of Air, Strength of
+// Earth, Agility of Fire, Purity of Water, Tempus Fugit, and the secondary
+// destination of Tech: Explode (Fire).
+//
+// (gsound_play_sfx_on_obj's `loops` reaches AIL_quick_play, where 0 means
+// forever and 1 means once - so the flag turning `loops` to 0 is what makes the
+// sound loop.)
+//
 // 0x431960
-// Starts the eye-candy sound when the animation begins: looping when the high
-// flag bit is clear, otherwise a one-shot tracked in AGDATA_ANIM_ID_PREVIOUS.
-// An already-live sound is moved instead (anim_eye_candy_sound_move).
+// Starts the eye-candy sound when the animation begins: looping when the
+// anim_forever bit is set, otherwise a one-shot. An already-live sound is moved
+// instead (anim_eye_candy_sound_move).
 void anim_eye_candy_sound_begin(AnimRunInfo* run_info, int64_t obj)
 {
     AnimGoalData* goal_data;
@@ -12371,7 +12409,9 @@ void anim_eye_candy_sound_begin(AnimRunInfo* run_info, int64_t obj)
     goal_data = run_info->cur_stack_data;
     if (goal_data->params[AGDATA_SOUND_HANDLE].data == TIG_SOUND_HANDLE_INVALID) {
         if (goal_data->params[AGDATA_ANIM_ID_PREVIOUS].data != -1) {
-            if ((goal_data->params[AGDATA_FLAGS_DATA].data & 0x80000000) != 0) {
+            // FIX (porting bug #33): was 0x80000000. The original tests
+            // `test BYTE PTR [eax+0x70], 0x80` at 0x431982 (`f6 40 70 80`).
+            if ((goal_data->params[AGDATA_FLAGS_DATA].data & 0x80) != 0) {
                 loops = 0;
             }
 
@@ -12380,10 +12420,19 @@ void anim_eye_candy_sound_begin(AnimRunInfo* run_info, int64_t obj)
                 if (loops != 0) {
                     run_info->flags |= 0x20000;
                 } else {
-                    goal_data->params[AGDATA_ANIM_ID_PREVIOUS].data = sound_handle;
+                    // FIX (porting bug #33): the two result slots were swapped.
+                    // The original stores the handle to +0xA8 at 0x4319AF
+                    // (`89 81 a8 00 00 00` = `mov [ecx+0xA8], eax`) - that is
+                    // AGDATA_SOUND_HANDLE - and it has to, or nothing can ever
+                    // stop, move or notice this sound again.
+                    goal_data->params[AGDATA_SOUND_HANDLE].data = sound_handle;
                 }
             } else {
-                goal_data->params[AGDATA_SOUND_HANDLE].data = TIG_SOUND_HANDLE_INVALID;
+                // FIX (porting bug #33): the other half of that swap. The
+                // original clears the *sound id* at 0x4319CC
+                // (`c7 42 50 ff ff ff ff` = `mov [edx+0x50], -1`), which is
+                // what stops it retrying a sound that would not start.
+                goal_data->params[AGDATA_ANIM_ID_PREVIOUS].data = -1;
             }
         }
     } else {
@@ -12398,9 +12447,11 @@ void anim_eye_candy_sound_move(AnimRunInfo* run_info, int64_t obj)
     AnimGoalData* goal_data;
 
     goal_data = run_info->cur_stack_data;
+    // FIX (porting bug #33): the same mask. `test BYTE PTR [eax+0x70], 0x80` at
+    // 0x431A0F (`f6 40 70 80`).
     if (goal_data->params[AGDATA_SOUND_HANDLE].data != TIG_SOUND_HANDLE_INVALID
         && (run_info->flags & 0x20000) == 0
-        && (goal_data->params[AGDATA_FLAGS_DATA].data & 0x80000000) != 0) {
+        && (goal_data->params[AGDATA_FLAGS_DATA].data & 0x80) != 0) {
         gsound_move(goal_data->params[AGDATA_SOUND_HANDLE].data, obj_field_int64_get(obj, OBJ_F_LOCATION));
     }
 }

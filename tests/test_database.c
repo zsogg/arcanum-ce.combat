@@ -609,7 +609,11 @@ TEST(reads_the_older_dat_form_with_no_guid)
     close_and_remove(database, ORDER_PATH);
 }
 
-// Porting bug #13, and the reason this fixture exists.
+// Porting bug #34, and the reason this fixture exists.
+//
+// (Numbered #13 on the line this came from, which numbered its own bugs
+// while diverged; #13 here is magictech.c's inverted projectile-impact
+// null test. Renumbered on merge, 2026-08-22.)
 //
 // dbmaker sorts the entry table by the path as *it* writes it, with backslash
 // separators, and both searches over that table - the `bsearch` in
