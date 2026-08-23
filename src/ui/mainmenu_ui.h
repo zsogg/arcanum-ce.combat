@@ -92,6 +92,7 @@ void mainmenu_ui_reset(void);
 // for the harness to snapshot. Exits 20-23 on failure. A verification seam,
 // deliberately unreachable from any menu.
 void mainmenu_ui_roundtrip_set(const char* spec);
+void mainmenu_ui_roundtrip_frames_set(int frames);
 void mainmenu_ui_roundtrip_run(void);
 
 void mainmenu_ui_open(void);

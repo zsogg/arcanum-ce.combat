@@ -1541,6 +1541,9 @@ static bool mainmenu_ui_start_new_game;
 // deliberately unreachable from any menu. No original address: these
 // statics are new, they exist only in CE.
 static bool mainmenu_ui_roundtrip_requested;
+
+// CE: ping frames to run between the round-trip load and save (`@N`).
+static int mainmenu_ui_roundtrip_frames;
 static char mainmenu_ui_roundtrip_slot[TIG_MAX_PATH];
 static char mainmenu_ui_roundtrip_out[TIG_MAX_PATH];
 
@@ -1641,10 +1644,21 @@ static void mainmenu_ui_apply_compact_options(void)
 void mainmenu_ui_roundtrip_set(const char* spec)
 {
     const char* eq;
+    const char* at;
     size_t n;
 
+    // `@N` is a CE-only suffix: N ping frames between load and save.
+    at = strchr(spec, '@');
+    if (at != NULL) {
+        mainmenu_ui_roundtrip_frames = (int)strtol(at + 1, NULL, 10);
+    }
+
     eq = strchr(spec, '=');
-    n = eq != NULL ? (size_t)(eq - spec) : strlen(spec);
+    if (eq != NULL && at != NULL && at < eq) {
+        eq = NULL;
+    }
+    n = eq != NULL ? (size_t)(eq - spec)
+                   : (at != NULL ? (size_t)(at - spec) : strlen(spec));
     if (n == 0 || n >= sizeof(mainmenu_ui_roundtrip_slot)) {
         tig_debug_printf("ROUNDTRIP FAIL: bad spec '%s'\n", spec);
         exit(20);
@@ -1654,13 +1668,30 @@ void mainmenu_ui_roundtrip_set(const char* spec)
     mainmenu_ui_roundtrip_slot[n] = '\0';
 
     if (eq != NULL) {
-        snprintf(mainmenu_ui_roundtrip_out,
-            sizeof(mainmenu_ui_roundtrip_out),
-            "%s",
-            eq + 1);
+        size_t out_n = at != NULL && at > eq
+            ? (size_t)(at - eq - 1)
+            : strlen(eq + 1);
+        if (out_n >= sizeof(mainmenu_ui_roundtrip_out)) {
+            out_n = sizeof(mainmenu_ui_roundtrip_out) - 1;
+        }
+        memcpy(mainmenu_ui_roundtrip_out, eq + 1, out_n);
+        mainmenu_ui_roundtrip_out[out_n] = '\0';
     }
 
     mainmenu_ui_roundtrip_requested = true;
+}
+
+// 2026-08-22: `@N` on the spec runs N ping frames between the load and the
+// save. It exists to answer one question - the round-trip gains a stale
+// TIMEEVENT_TYPE_CLOCK node because `timeevent_load` appends onto a
+// non-empty list, and that node is in the past, so a single
+// `timeevent_ping` should fire it and `intgame_clock_process_callback`
+// should collapse the pair back to one. Loading and saving back to back
+// never gives it that frame, so the harness may be measuring a moment the
+// game never sits at. See SAVE-ROUNDTRIP.md section 4c.
+void mainmenu_ui_roundtrip_frames_set(int frames)
+{
+    mainmenu_ui_roundtrip_frames = frames;
 }
 
 // 2026-08-21: runs the round-trip when (and only when) `-roundtrip:` was
@@ -1699,6 +1730,20 @@ void mainmenu_ui_roundtrip_run(void)
     if (mainmenu_ui_roundtrip_out[0] == '\0') {
         tig_debug_printf("ROUNDTRIP EXTRACT OK slot=%s\n", mainmenu_ui_roundtrip_slot);
         exit(0);
+    }
+
+    // Give the restored state N frames before saving, if asked. tig_ping()
+    // and gamelib_ping() are the two calls main_loop() makes that advance
+    // state; the drawing calls beside them are deliberately skipped.
+    if (mainmenu_ui_roundtrip_frames > 0) {
+        int frame;
+
+        tig_debug_printf("ROUNDTRIP: running %d ping frame(s) before save\n",
+            mainmenu_ui_roundtrip_frames);
+        for (frame = 0; frame < mainmenu_ui_roundtrip_frames; frame++) {
+            tig_ping();
+            gamelib_ping();
+        }
     }
 
     if (!gamelib_save(out_short, "roundtrip")) {
