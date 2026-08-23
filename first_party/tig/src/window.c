@@ -1025,13 +1025,12 @@ int tig_window_copy_from_vbuffer(tig_window_handle_t dst_window_handle, TigRect*
     return TIG_OK;
 }
 
-// NOTE: The purpose of this alias is unclear. Not used.
+// NOTE: An exact forwarder to `tig_window_copy_from_vbuffer`, with no caller
+// in CE. Left unnamed 2026-08-23: the original exported both symbols, so they
+// meant something different to Troika, and inventing a distinguishing name
+// would assert a difference no evidence supports.
 //
 // 0x51DF60
-// NOTE: Not named 2026-08-23. An exact forwarder to
-// `tig_window_copy_from_vbuffer`. The original exported both, so they meant
-// something different to Troika; inventing a distinguishing name here would
-// assert a difference no evidence supports.
 int sub_51DF60(tig_window_handle_t dst_window_handle, TigRect* dst_rect, TigVideoBuffer* src_video_buffer, TigRect* src_rect)
 {
     return tig_window_copy_from_vbuffer(dst_window_handle, dst_rect, src_video_buffer, src_rect);

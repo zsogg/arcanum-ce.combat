@@ -620,7 +620,7 @@ int tig_art_blit(TigArtBlitInfo* blit_info)
             vb_blit_info.lerp_colors[1] = mut_art_blit_info.field_14[1];
             vb_blit_info.lerp_colors[2] = mut_art_blit_info.field_14[2];
             vb_blit_info.lerp_colors[3] = mut_art_blit_info.field_14[3];
-            vb_blit_info.lerp_rect = mut_art_blit_info.field_18;
+            vb_blit_info.lerp_rect = mut_art_blit_info.lerp_rect;
         } else if ((mut_art_blit_info.flags & TIG_ART_BLT_BLEND_COLOR_ARRAY) != 0) {
             vb_blit_info.lerp_colors[0] = mut_art_blit_info.field_14[0];
             vb_blit_info.lerp_colors[1] = mut_art_blit_info.field_14[1];
@@ -5121,31 +5121,31 @@ int art_blit(int cache_entry_index, TigArtBlitInfo* blit_info)
             int bl_g = tig_color_get_green(blit_info->field_14[3]);
             int bl_b = tig_color_get_blue(blit_info->field_14[3]);
 
-            float vert_start_step_r = (float)(bl_r - tl_r) / blit_info->field_18->height;
-            float vert_start_r = vert_start_step_r * (src_rect.y - blit_info->field_18->y) + tl_r;
-            float vert_end_step_r = (float)(br_r - tr_r) / blit_info->field_18->height;
-            float vert_end_r = vert_end_step_r * (src_rect.y - blit_info->field_18->y) + tr_r;
+            float vert_start_step_r = (float)(bl_r - tl_r) / blit_info->lerp_rect->height;
+            float vert_start_r = vert_start_step_r * (src_rect.y - blit_info->lerp_rect->y) + tl_r;
+            float vert_end_step_r = (float)(br_r - tr_r) / blit_info->lerp_rect->height;
+            float vert_end_r = vert_end_step_r * (src_rect.y - blit_info->lerp_rect->y) + tr_r;
 
-            float vert_start_step_g = (float)(bl_g - tl_g) / blit_info->field_18->height;
-            float vert_start_g = vert_start_step_g * (src_rect.y - blit_info->field_18->y) + tl_g;
-            float vert_end_step_g = (float)(br_g - tr_g) / blit_info->field_18->height;
-            float vert_end_g = vert_end_step_g * (src_rect.y - blit_info->field_18->y) + tr_g;
+            float vert_start_step_g = (float)(bl_g - tl_g) / blit_info->lerp_rect->height;
+            float vert_start_g = vert_start_step_g * (src_rect.y - blit_info->lerp_rect->y) + tl_g;
+            float vert_end_step_g = (float)(br_g - tr_g) / blit_info->lerp_rect->height;
+            float vert_end_g = vert_end_step_g * (src_rect.y - blit_info->lerp_rect->y) + tr_g;
 
-            float vert_start_step_b = (float)(bl_b - tl_b) / blit_info->field_18->height;
-            float vert_start_b = vert_start_step_b * (src_rect.y - blit_info->field_18->y) + tl_b;
-            float vert_end_step_b = (float)(br_b - tr_b) / blit_info->field_18->height;
-            float vert_end_b = vert_end_step_b * (src_rect.y - blit_info->field_18->y) + tr_b;
+            float vert_start_step_b = (float)(bl_b - tl_b) / blit_info->lerp_rect->height;
+            float vert_start_b = vert_start_step_b * (src_rect.y - blit_info->lerp_rect->y) + tl_b;
+            float vert_end_step_b = (float)(br_b - tr_b) / blit_info->lerp_rect->height;
+            float vert_end_b = vert_end_step_b * (src_rect.y - blit_info->lerp_rect->y) + tr_b;
 
             switch (tig_art_bits_per_pixel) {
             case 32:
                 for (y = 0; y < dst_rect.height; y++) {
-                    float hor_step_r = (vert_end_r - vert_start_r) / blit_info->field_18->width;
-                    float hor_step_g = (vert_end_g - vert_start_g) / blit_info->field_18->width;
-                    float hor_step_b = (vert_end_b - vert_start_b) / blit_info->field_18->width;
+                    float hor_step_r = (vert_end_r - vert_start_r) / blit_info->lerp_rect->width;
+                    float hor_step_g = (vert_end_g - vert_start_g) / blit_info->lerp_rect->width;
+                    float hor_step_b = (vert_end_b - vert_start_b) / blit_info->lerp_rect->width;
 
-                    float r = vert_start_r + hor_step_r * (src_rect.x - blit_info->field_18->x);
-                    float g = vert_start_g + hor_step_g * (src_rect.x - blit_info->field_18->x);
-                    float b = vert_start_b + hor_step_b * (src_rect.x - blit_info->field_18->x);
+                    float r = vert_start_r + hor_step_r * (src_rect.x - blit_info->lerp_rect->x);
+                    float g = vert_start_g + hor_step_g * (src_rect.x - blit_info->lerp_rect->x);
+                    float b = vert_start_b + hor_step_b * (src_rect.x - blit_info->lerp_rect->x);
 
                     for (x = 0; x < dst_rect.width; x++) {
                         if (*src_pixels != 0) {

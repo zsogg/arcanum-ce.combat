@@ -405,8 +405,15 @@ typedef struct TigArtBlitInfo {
     /* 0008 */ TigRect* src_rect;
     /* 000C */ TigPalette* palette;
     /* 0010 */ tig_color_t color;
+    // NOTE: Dual-purpose, which is why it is a `uint32_t*` and not a
+    // `tig_color_t[4]`. Under the lerp flags it is a four-entry colour array
+    // copied straight into `TigVideoBufferBlitInfo.lerp_colors` (art.c:619);
+    // under the mask path it is indexed per column as
+    // `&field_14[src_rect.x]` (art.c:3795). Naming it for either role would
+    // misdescribe the other, so it keeps its offset. Named 2026-08-23 only as
+    // far as the evidence goes.
     /* 0014 */ uint32_t* field_14;
-    /* 0018 */ TigRect* field_18;
+    /* 0018 */ TigRect* lerp_rect;
     /* 001C */ uint8_t alpha[4];
     /* 0020 */ TigVideoBuffer* dst_video_buffer;
     /* 0024 */ TigRect* dst_rect;

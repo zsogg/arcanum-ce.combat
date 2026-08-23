@@ -753,7 +753,7 @@ void tile_draw_iso(GameDrawInfo* draw_info)
                                     }
 
                                     if ((art_blit_info.flags & TIG_ART_BLT_BLEND_COLOR_LERP) != 0) {
-                                        art_blit_info.field_18 = &tile_subrect;
+                                        art_blit_info.lerp_rect = &tile_subrect;
 
                                         tile_subrect.x = tile_rect.x;
                                         tile_subrect.y = tile_rect.y;
