@@ -865,6 +865,191 @@ static void o_tig_timer_between(const int64_t* a, int64_t* out)
     out[0] = tig_timer_between((tig_timestamp_t)a[0], (tig_timestamp_t)a[1]);
 }
 
+static void o_sub_502830(const int64_t* a, int64_t* out)
+{
+    out[0] = (uint32_t)sub_502830((tig_art_id_t)a[0]);
+}
+
+static void o_tig_art_tile_id_num1_get(const int64_t* a, int64_t* out)
+{
+    out[0] = (uint32_t)tig_art_tile_id_num1_get((tig_art_id_t)a[0]);
+}
+
+static void o_tig_art_tile_id_num2_get(const int64_t* a, int64_t* out)
+{
+    out[0] = (uint32_t)tig_art_tile_id_num2_get((tig_art_id_t)a[0]);
+}
+
+static void o_sub_503700(const int64_t* a, int64_t* out)
+{
+    out[0] = (uint32_t)sub_503700((tig_art_id_t)a[0]);
+}
+
+static void o_sub_503740(const int64_t* a, int64_t* out)
+{
+    out[0] = (uint32_t)sub_503740((tig_art_id_t)a[0], (int)a[1]);
+}
+
+static void o_sub_5037B0(const int64_t* a, int64_t* out)
+{
+    out[0] = (uint32_t)sub_5037B0((tig_art_id_t)a[0]);
+}
+
+static void o_sub_503800(const int64_t* a, int64_t* out)
+{
+    out[0] = (uint32_t)sub_503800((tig_art_id_t)a[0], (int)a[1]);
+}
+
+static void o_tig_art_scenery_id_type_get(const int64_t* a, int64_t* out)
+{
+    out[0] = (uint32_t)tig_art_scenery_id_type_get((tig_art_id_t)a[0]);
+}
+
+static void o_sub_504390(const int64_t* a, int64_t* out)
+{
+    out[0] = (uint32_t)sub_504390((tig_art_id_t)a[0]);
+}
+
+static void o_tig_art_item_id_disposition_get(const int64_t* a, int64_t* out)
+{
+    out[0] = (uint32_t)tig_art_item_id_disposition_get((tig_art_id_t)a[0]);
+}
+
+static void o_tig_art_item_id_disposition_set(const int64_t* a, int64_t* out)
+{
+    out[0] = (uint32_t)tig_art_item_id_disposition_set((tig_art_id_t)a[0], (int)a[1]);
+}
+
+static void o_tig_art_item_id_subtype_get(const int64_t* a, int64_t* out)
+{
+    out[0] = (uint32_t)tig_art_item_id_subtype_get((tig_art_id_t)a[0]);
+}
+
+static void o_tig_art_item_id_subtype_set(const int64_t* a, int64_t* out)
+{
+    out[0] = (uint32_t)tig_art_item_id_subtype_set((tig_art_id_t)a[0], (int)a[1]);
+}
+
+static void o_tig_art_item_id_type_get(const int64_t* a, int64_t* out)
+{
+    out[0] = (uint32_t)tig_art_item_id_type_get((tig_art_id_t)a[0]);
+}
+
+static void o_tig_art_item_id_armor_coverage_get(const int64_t* a, int64_t* out)
+{
+    out[0] = (uint32_t)tig_art_item_id_armor_coverage_get((tig_art_id_t)a[0]);
+}
+
+static void o_tig_art_item_id_destroyed_get(const int64_t* a, int64_t* out)
+{
+    out[0] = (uint32_t)tig_art_item_id_destroyed_get((tig_art_id_t)a[0]);
+}
+
+static void o_tig_art_item_id_destroyed_set(const int64_t* a, int64_t* out)
+{
+    out[0] = (uint32_t)tig_art_item_id_destroyed_set((tig_art_id_t)a[0], (int)a[1]);
+}
+
+static void o_tig_art_container_id_type_get(const int64_t* a, int64_t* out)
+{
+    out[0] = (uint32_t)tig_art_container_id_type_get((tig_art_id_t)a[0]);
+}
+
+static void o_tig_art_light_id_rotation_get(const int64_t* a, int64_t* out)
+{
+    out[0] = (uint32_t)tig_art_light_id_rotation_get((tig_art_id_t)a[0]);
+}
+
+static void o_tig_art_light_id_rotation_set(const int64_t* a, int64_t* out)
+{
+    out[0] = (uint32_t)tig_art_light_id_rotation_set((tig_art_id_t)a[0], (int)a[1]);
+}
+
+static void o_tig_art_light_id_rotation_extended_get(const int64_t* a, int64_t* out)
+{
+    out[0] = (uint32_t)tig_art_light_id_rotation_extended_get((tig_art_id_t)a[0]);
+}
+
+static void o_tig_art_roof_id_piece_get(const int64_t* a, int64_t* out)
+{
+    out[0] = (uint32_t)tig_art_roof_id_piece_get((tig_art_id_t)a[0]);
+}
+
+static void o_tig_art_roof_id_piece_set(const int64_t* a, int64_t* out)
+{
+    out[0] = (uint32_t)tig_art_roof_id_piece_set((tig_art_id_t)a[0], (int)a[1]);
+}
+
+static void o_tig_art_roof_id_fill_get(const int64_t* a, int64_t* out)
+{
+    out[0] = (uint32_t)tig_art_roof_id_fill_get((tig_art_id_t)a[0]);
+}
+
+static void o_tig_art_roof_id_fill_set(const int64_t* a, int64_t* out)
+{
+    out[0] = (uint32_t)tig_art_roof_id_fill_set((tig_art_id_t)a[0], (int)a[1]);
+}
+
+static void o_tig_art_roof_id_fade_get(const int64_t* a, int64_t* out)
+{
+    out[0] = (uint32_t)tig_art_roof_id_fade_get((tig_art_id_t)a[0]);
+}
+
+static void o_tig_art_roof_id_fade_set(const int64_t* a, int64_t* out)
+{
+    out[0] = (uint32_t)tig_art_roof_id_fade_set((tig_art_id_t)a[0], (int)a[1]);
+}
+
+static void o_tig_art_facade_id_num_get(const int64_t* a, int64_t* out)
+{
+    out[0] = (uint32_t)tig_art_facade_id_num_get((tig_art_id_t)a[0]);
+}
+
+static void o_tig_art_facade_id_frame_get(const int64_t* a, int64_t* out)
+{
+    out[0] = (uint32_t)tig_art_facade_id_frame_get((tig_art_id_t)a[0]);
+}
+
+static void o_tig_art_facade_id_walkable_get(const int64_t* a, int64_t* out)
+{
+    out[0] = (uint32_t)tig_art_facade_id_walkable_get((tig_art_id_t)a[0]);
+}
+
+static void o_tig_art_eye_candy_id_type_get(const int64_t* a, int64_t* out)
+{
+    out[0] = (uint32_t)tig_art_eye_candy_id_type_get((tig_art_id_t)a[0]);
+}
+
+static void o_tig_art_eye_candy_id_type_set(const int64_t* a, int64_t* out)
+{
+    out[0] = (uint32_t)tig_art_eye_candy_id_type_set((tig_art_id_t)a[0], (int)a[1]);
+}
+
+static void o_tig_art_eye_candy_id_translucency_get(const int64_t* a, int64_t* out)
+{
+    out[0] = (uint32_t)tig_art_eye_candy_id_translucency_get((tig_art_id_t)a[0]);
+}
+
+static void o_tig_art_eye_candy_id_translucency_set(const int64_t* a, int64_t* out)
+{
+    out[0] = (uint32_t)tig_art_eye_candy_id_translucency_set((tig_art_id_t)a[0], (int)a[1]);
+}
+
+static void o_tig_art_eye_candy_id_scale_get(const int64_t* a, int64_t* out)
+{
+    out[0] = (uint32_t)tig_art_eye_candy_id_scale_get((tig_art_id_t)a[0]);
+}
+
+static void o_tig_art_eye_candy_id_scale_set(const int64_t* a, int64_t* out)
+{
+    out[0] = (uint32_t)tig_art_eye_candy_id_scale_set((tig_art_id_t)a[0], (int)a[1]);
+}
+
+static void o_tig_art_id_flags_get(const int64_t* a, int64_t* out)
+{
+    out[0] = (uint32_t)tig_art_id_flags_get((tig_art_id_t)a[0]);
+}
+
 static const OracleEntry oracle_entries[] = {
     { "random_seed", 1, 1, o_random_seed },
     { "random_rand", 0, 1, o_random_rand },
@@ -906,6 +1091,43 @@ static const OracleEntry oracle_entries[] = {
     { "location_center_get", 0, 1, o_location_center_get },
     { "sub_4B93F0", 4, 2, o_sub_4B93F0 },
     { "skill_gambling_random_roll", 0, 1, o_skill_gambling_random_roll },
+    { "sub_502830", 1, 1, o_sub_502830 },
+    { "tig_art_tile_id_num1_get", 1, 1, o_tig_art_tile_id_num1_get },
+    { "tig_art_tile_id_num2_get", 1, 1, o_tig_art_tile_id_num2_get },
+    { "sub_503700", 1, 1, o_sub_503700 },
+    { "sub_503740", 2, 1, o_sub_503740 },
+    { "sub_5037B0", 1, 1, o_sub_5037B0 },
+    { "sub_503800", 2, 1, o_sub_503800 },
+    { "tig_art_scenery_id_type_get", 1, 1, o_tig_art_scenery_id_type_get },
+    { "sub_504390", 1, 1, o_sub_504390 },
+    { "tig_art_item_id_disposition_get", 1, 1, o_tig_art_item_id_disposition_get },
+    { "tig_art_item_id_disposition_set", 2, 1, o_tig_art_item_id_disposition_set },
+    { "tig_art_item_id_subtype_get", 1, 1, o_tig_art_item_id_subtype_get },
+    { "tig_art_item_id_subtype_set", 2, 1, o_tig_art_item_id_subtype_set },
+    { "tig_art_item_id_type_get", 1, 1, o_tig_art_item_id_type_get },
+    { "tig_art_item_id_armor_coverage_get", 1, 1, o_tig_art_item_id_armor_coverage_get },
+    { "tig_art_item_id_destroyed_get", 1, 1, o_tig_art_item_id_destroyed_get },
+    { "tig_art_item_id_destroyed_set", 2, 1, o_tig_art_item_id_destroyed_set },
+    { "tig_art_container_id_type_get", 1, 1, o_tig_art_container_id_type_get },
+    { "tig_art_light_id_rotation_get", 1, 1, o_tig_art_light_id_rotation_get },
+    { "tig_art_light_id_rotation_set", 2, 1, o_tig_art_light_id_rotation_set },
+    { "tig_art_light_id_rotation_extended_get", 1, 1, o_tig_art_light_id_rotation_extended_get },
+    { "tig_art_roof_id_piece_get", 1, 1, o_tig_art_roof_id_piece_get },
+    { "tig_art_roof_id_piece_set", 2, 1, o_tig_art_roof_id_piece_set },
+    { "tig_art_roof_id_fill_get", 1, 1, o_tig_art_roof_id_fill_get },
+    { "tig_art_roof_id_fill_set", 2, 1, o_tig_art_roof_id_fill_set },
+    { "tig_art_roof_id_fade_get", 1, 1, o_tig_art_roof_id_fade_get },
+    { "tig_art_roof_id_fade_set", 2, 1, o_tig_art_roof_id_fade_set },
+    { "tig_art_facade_id_num_get", 1, 1, o_tig_art_facade_id_num_get },
+    { "tig_art_facade_id_frame_get", 1, 1, o_tig_art_facade_id_frame_get },
+    { "tig_art_facade_id_walkable_get", 1, 1, o_tig_art_facade_id_walkable_get },
+    { "tig_art_eye_candy_id_type_get", 1, 1, o_tig_art_eye_candy_id_type_get },
+    { "tig_art_eye_candy_id_type_set", 2, 1, o_tig_art_eye_candy_id_type_set },
+    { "tig_art_eye_candy_id_translucency_get", 1, 1, o_tig_art_eye_candy_id_translucency_get },
+    { "tig_art_eye_candy_id_translucency_set", 2, 1, o_tig_art_eye_candy_id_translucency_set },
+    { "tig_art_eye_candy_id_scale_get", 1, 1, o_tig_art_eye_candy_id_scale_get },
+    { "tig_art_eye_candy_id_scale_set", 2, 1, o_tig_art_eye_candy_id_scale_set },
+    { "tig_art_id_flags_get", 1, 1, o_tig_art_id_flags_get },
     { "tig_art_type", 1, 1, o_tig_art_type },
     { "tig_art_num_get", 1, 1, o_tig_art_num_get },
     { "tig_art_num_set", 2, 1, o_tig_art_num_set },

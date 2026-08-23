@@ -1559,6 +1559,20 @@ int tig_art_tile_id_num2_get(tig_art_id_t art_id)
 }
 
 // 0x503700
+// NOTE: A negative `value` reaches `dword_5BE880[value]` in the setters below
+// (0x503740 and 0x503800) because the clamp is `value >= 16` here and a
+// *signed* `jl` at 0x503753 in the original - so both admit negatives. On
+// 32-bit that is harmless: the original's `[esi*4 + 0x5BE880]` wraps, and for
+// INT_MIN `4 * 2**31 mod 2**32` is 0, landing back on the table itself. CE
+// indexes with a sign-extended 64-bit value and **segfaults**. Faithful in
+// shape, divergent in effect - the same class as the ObjectID padding leaks.
+//
+// Not reachable today: the only caller outside this file is `tile.c:239`,
+// which passes `sub_5037B0(art_id) + 1`. Recorded rather than guarded because
+// adding a bound CE's original does not have is a behaviour change, and
+// because the emudiff domain for these two is bounded at 0 for the same
+// reason (see `cases.py`). Found by the P5.1 differential, 2026-08-23.
+//
 // NOTE: Not named 2026-08-23. This quartet - 0x503700/0x503740 get/set and
 // 0x5037B0/0x503800 get/set - are TILE id field accessors, but *not* num1 or
 // num2: those are at shifts 22 and 16 (`TILE_ID_NUM1_SHIFT`,
@@ -2310,8 +2324,14 @@ int tig_art_item_id_disposition_get(tig_art_id_t art_id)
 // 0x5044C0
 tig_art_id_t tig_art_item_id_disposition_set(tig_art_id_t art_id, int value)
 {
+    // FIX (porting bug #40): this returned 0 on the type-mismatch path, so a
+    // non-ITEM id came back as art id 0 - a valid TILE id - instead of
+    // unchanged. The original returns `art_id`: at 0x5044CF the non-ITEM
+    // branch is `8b c6` (`mov eax, esi`, esi holding art_id), not a zero.
+    // It was the only one of the eight `tig_art_*_id_*_set` functions that
+    // returned 0 here; the other seven already returned `art_id`.
     if (tig_art_type(art_id) != TIG_ART_TYPE_ITEM) {
-        return 0;
+        return art_id;
     }
 
     if (value >= ITEM_ID_MAX_DISPOSITION) {
