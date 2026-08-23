@@ -2278,7 +2278,7 @@ int script_execute_action(ScriptAction* action, int line, ScriptState* state)
         ui_written_newspaper_headline(newspaper_get(NEWSPAPER_CURRENT), str);
         size_t len = strlen(str);
         if (len > 0) {
-            // Porting bug #18: the original checks the LAST character
+            // FIX (porting bug #18): the original checks the LAST character
             // (str[len - 1]); an earlier transcription checked str[len], the
             // NUL terminator, so headlines already ending in punctuation
             // gained a stray '.'.
@@ -2992,8 +2992,10 @@ void script_print_line(ScriptAction* action, ScriptState* state)
 
     // NOTE: Verified against 0x44B481-0x44B4CE: the original's host-player
     // (player == 0) path falls through to the shared display + unload.
-    // Porting bug #21 (multiplayer path): an earlier transcription left that
-    // path empty, so the host never saw the line and the dialog leaked.
+    //
+    // FIX (porting bug #21): on the multiplayer path an earlier
+    // transcription left that path empty, so the host never saw the line
+    // and the dialog leaked.
     if (tig_net_is_active()) {
         player = multiplayer_find_slot_from_obj(state->invocation->triggerer_obj);
         if (player == -1) {

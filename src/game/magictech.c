@@ -5227,9 +5227,10 @@ bool magictech_item_spell_user_check(int64_t a1, int64_t a2, int64_t a3)
     }
 
     // NOTE: Verified against 0x456A62-0x456A65: the original tests the a1
-    // aptitude with a signed jge (>= 0). Porting bug #20: an earlier
-    // transcription used > 0, so aptitude-0 users fell through to the
-    // effective-power check.
+    // aptitude with a signed jge (>= 0).
+    //
+    // FIX (porting bug #20): an earlier transcription used > 0, so
+    // aptitude-0 users fell through to the effective-power check.
     if (aptitude >= 0) {
         return true;
     }
@@ -6363,8 +6364,8 @@ void magictech_projectile_impact_fx(int mt_id, int64_t obj)
     MagicTechRunInfo* run_info;
     AnimFxListEntry* fx_info;
 
-    // Porting bug #13: the port inverted the original's null test. The
-    // original bails when no run id or object is present (0x458C0E: `or
+    // FIX (porting bug #13): the port inverted the original's null test.
+    // The original bails when no run id or object is present (0x458C0E: `or
     // eax, edi; je` over mt_id and the handle's high word), so the impact
     // light and sound run only for a real object; CE ran them only when
     // `obj` was null - never, since the sole caller `anim_projectile_create`

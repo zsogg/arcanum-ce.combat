@@ -123,10 +123,11 @@ bool sector_light_list_load(SectorLightList* list, TigFile* stream, int64_t sect
     }
 
     if (sector_id != -1) {
-        // NOTE: Verified against 0x4F72FD-0x4F7328. Porting bug #23: an
-        // earlier transcription dropped the <<6 tile-to-world scale, so
-        // lights were placed at sector-index coordinates instead of world
-        // coordinates.
+        // NOTE: Verified against 0x4F72FD-0x4F7328.
+        //
+        // FIX (porting bug #23): an earlier transcription dropped the <<6
+        // tile-to-world scale, so lights were placed at sector-index
+        // coordinates instead of world coordinates.
         x = SECTOR_X(sector_id) << 6;
         y = SECTOR_Y(sector_id) << 6;
     }

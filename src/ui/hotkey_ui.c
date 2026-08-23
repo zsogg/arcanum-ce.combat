@@ -1151,7 +1151,9 @@ void hotkey_ui_add_recent_action(int type, int data, int64_t item_obj)
             && hotkey_ui_recent_actions[0].item_obj.obj == item_obj) {
             return;
         }
-        // NOTE: Porting bug #27 - original reuses the `type` argument (1) as the art id on this path at 0x57F107/0x57F130; CE previously substituted TIG_ART_ID_INVALID.
+        // FIX (porting bug #27): the original reuses the `type` argument (1)
+        // as the art id on this path at 0x57F107/0x57F130; CE previously
+        // substituted TIG_ART_ID_INVALID.
         new_art_id = (tig_art_id_t)type;
         break;
     case HOTKEY_SKILL:

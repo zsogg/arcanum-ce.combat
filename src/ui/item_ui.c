@@ -103,8 +103,9 @@ void item_ui_activate(int64_t owner_obj, int64_t item_obj)
 
     // NOTE: Verified against 0x571C4C-0x571C66: the condition matches the
     // original, and the loc path calls 0x571CB0 (item_ui_apply).
-    // Porting bug #19: an earlier transcription called spell_ui_apply here,
-    // so self-only items were applied through the spell path.
+    //
+    // FIX (porting bug #19): an earlier transcription called spell_ui_apply
+    // here, so self-only items were applied through the spell path.
     if (*tgt_ptr == TGT_NONE
         || ((*tgt_ptr & TGT_SELF) != 0
             && (*tgt_ptr & TGT_TILE) == 0)

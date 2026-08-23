@@ -509,7 +509,8 @@ bool wmap_rnd_mod_load(void)
             }
 
             // Maximum player level required for this entry to be eligible.
-            // NOTE: Porting bug #24 - original parses "MaxLevel:" at 0x558497; CE parsed "MinLevel:" twice.
+            // FIX (porting bug #24): the original parses "MaxLevel:" at
+            // 0x558497; CE parsed "MinLevel:" twice.
             if (tig_str_parse_named_value(&str, "MaxLevel:", &value)) {
                 if (value < 0 || value > 32000) {
                     tig_debug_printf("WmapRnd: Init: ERROR: MaxLevel Value Wrong: Line: %d.\n", mes_file_entry.num);
@@ -1376,15 +1377,14 @@ void wmap_rnd_encounter_spawn(WmapRndEncounterTableEntry* entry)
  * advancing `*dx_ptr` and `*dy_ptr` to spread monsters across adjacent tiles
  * rather than stacking them all on the same tile.
  *
- * NOTE: Porting bug #25 - original (0x5594E0-0x559543) adds
- * `(index - 1) / 3 + 1` to `*dx_ptr`, `index % 3` to `*dy_ptr`, and
- * `*dy_ptr += 1` for index 0; CE's old LOCATION_MAKE form moved both
- * components on every path.
- *
  * 0x5594E0
  */
 void wmap_rnd_spawn_position_offset(int index, int64_t* dx_ptr, int64_t* dy_ptr)
 {
+    // FIX (porting bug #25): the original (0x5594E0-0x559543) adds
+    // `(index - 1) / 3 + 1` to `*dx_ptr`, `index % 3` to `*dy_ptr`, and
+    // `*dy_ptr += 1` for index 0; CE's old LOCATION_MAKE form moved both
+    // components on every path.
     if (index != 0) {
         *dx_ptr += (index - 1) / 3 + 1;
         *dy_ptr += index % 3;

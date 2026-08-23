@@ -4519,7 +4519,9 @@ void inven_ui_gamble_item(int64_t obj)
         skill_invocation.skill = SKILL_GAMBLING;
         skill_invocation.modifier = 0;
         if (skill_invocation_run(&skill_invocation)) {
-            // NOTE: Porting bug #26 - original (0x579BF8-0x579C10) passes 0x9 on success and 0x11 on failure; CE previously passed 0x12 on success.
+            // FIX (porting bug #26): the original (0x579BF8-0x579C10) passes
+            // 0x9 on success and 0x11 on failure; CE previously passed 0x12
+            // on success.
             inven_ui_transfer_item(obj, inven_ui_pc_obj, 0, (skill_invocation.flags & SKILL_INVOCATION_SUCCESS) != 0 ? 0x9 : 0x11);
             inven_ui_item_cost = -1;
         }

@@ -3678,10 +3678,11 @@ void dialog_build_greeting(DialogState* a1, const char* str)
             }
 
             // NOTE: Verified against 0x4192F1-0x419301: the original skips
-            // the spaces after the separator before the 'f' test. Porting
-            // bug #22: an earlier transcription omitted this skip, so *str
-            // was always ' ' and the "N fl M" float override was never
-            // parsed (it fell into the numeric branch as a skip).
+            // the spaces after the separator before the 'f' test.
+            //
+            // FIX (porting bug #22): an earlier transcription omitted this
+            // skip, so *str was always ' ' and the "N fl M" float override
+            // was never parsed (it fell into the numeric branch as a skip).
             while (*str == ' ') {
                 str++;
             }
