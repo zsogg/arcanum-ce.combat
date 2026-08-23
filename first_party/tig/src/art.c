@@ -185,6 +185,29 @@ static void tig_art_load_cleanup(TigFile* stream, TigArtHeader* hdr, TigPalette*
 static void tig_art_header_pixels_free(TigArtHeader* hdr);
 static bool art_read_header(TigArtHeader* hdr, TigFile* stream);
 
+// NOTE: These two 16-entry tables (0x5BE880 and 0x5BE8C0) are the
+// flip-canonicalisation maps for the 4-bit TILE id field at bits 12-15, and
+// their structure was established mechanically on 2026-08-23. Three
+// properties, each verified over all 16 entries:
+//
+//   1. `{dword_5BE880[i], dword_5BE8C0[i]}` is always the pair
+//      `{i, swap_bit1_bit3(i)}` - that is, the two tables hold the two
+//      representatives of `i` under exchanging bit 1 (0x2) with bit 3 (0x8).
+//   2. The tables AGREE exactly when `i` is symmetric under that swap.
+//      This is what `0x5037B0` tests with `if (5BE8C0[v2] == 5BE880[v2])`:
+//      it is asking "is this value unchanged by the flip?".
+//   3. Both are constant across a pair, so each is a canonical map.
+//
+//   flip pairs      {2,8} {3,9} {6,12} {7,13}
+//   flip-symmetric  0 1 4 5 10 11 14 15
+//
+// So the field behaves as a 4-bit mask in which one bit-1/bit-3 pair swaps
+// when the tile is mirrored - consistent with an edge/corner transition mask,
+// which is the territory porting bug #14 (`tig_art_tile_id_flippable1_get`)
+// lives in. What the four bits *mean* individually is still unestablished,
+// and that is the remaining blocker on naming 0x503700/0x503740/0x5037B0/
+// 0x503800.
+//
 // 0x5BE880
 static int dword_5BE880[16] = {
     0,
