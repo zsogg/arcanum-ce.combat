@@ -868,6 +868,26 @@ static void o_tig_timer_between(const int64_t* a, int64_t* out)
 /* Declared `static` in art.c and reached via the globalized object built in
  * tests/CMakeLists.txt - see the comment there. Prototypes here rather than a
  * header, because art.c deliberately does not export them. */
+/* `TigArtHeader` is private to art.c, so this file cannot name the type.
+ * Declaring the parameter as `void*` is ABI-identical for a pointer and
+ * avoids re-declaring a layout here that would silently drift from the real
+ * one. The buffer's first four bytes are `flags`, which is not an assumption:
+ * `scripts/art_decode.py` derived flags-at-offset-0 independently from 15,638
+ * shipped `.art` files before this case existed. */
+int tig_art_header_num_rotations(void* hdr);
+
+static void o_tig_art_header_num_rotations(const int64_t* a, int64_t* out)
+{
+    unsigned char hdr[0x84];
+
+    memset(hdr, 0, sizeof(hdr));
+    {
+        unsigned int flags = (unsigned int)a[0];
+        memcpy(hdr, &flags, sizeof(flags));
+    }
+    out[0] = (uint32_t)tig_art_header_num_rotations(hdr);
+}
+
 int tig_art_blt_flags_convert(unsigned int art_blt_flags, unsigned int* vb_blt_flags_ptr);
 int tig_art_build_path(unsigned int art_id, char* path, size_t maxlen);
 
@@ -1134,6 +1154,7 @@ static const OracleEntry oracle_entries[] = {
     { "location_center_get", 0, 1, o_location_center_get },
     { "sub_4B93F0", 4, 2, o_sub_4B93F0 },
     { "skill_gambling_random_roll", 0, 1, o_skill_gambling_random_roll },
+    { "tig_art_header_num_rotations", 1, 1, o_tig_art_header_num_rotations },
     { "tig_art_blt_flags_convert", 2, 2, o_tig_art_blt_flags_convert },
     { "tig_art_build_path", 2, 2, o_tig_art_build_path },
     { "sub_502830", 1, 1, o_sub_502830 },
