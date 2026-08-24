@@ -170,8 +170,8 @@ bool quest_mod_load(void)
                 // description was silently the normal one and
                 // `gamequestlogdumb.mes` was loaded and never read. The
                 // original's two loops differ exactly here: the normal loop
-                // does `mov edx, ds:0x5B6E34` at 0x4C4715 and the dumb loop
-                // does `mov eax, ds:0x5B6E38` at 0x4C476D - the dumb handle.
+                // does `mov edx, ds:0x5B6E34` at 0x4C4713 and the dumb loop
+                // does `mov eax, ds:0x5B6E38` at 0x4C476C - the dumb handle.
                 if (mes_search(quest_log_dumb_mes_file, &mes_file_entry)) {
                     quests[quest_num_to_idx(num)].dumb_description = mes_file_entry.str;
                 }
