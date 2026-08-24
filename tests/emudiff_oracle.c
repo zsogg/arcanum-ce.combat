@@ -884,7 +884,12 @@ static void o_tig_art_build_path(const int64_t* a, int64_t* out)
     char path[260];
     int rc;
 
-    memset(path, 0, sizeof(path));
+    /* a[1] is the harness's scratch buffer, which it fills with the drawn
+     * value before the call. Mirror that here rather than assuming zero, so
+     * both sides start from the same buffer state - otherwise a function that
+     * writes nothing would be compared as "CE's zeros vs the emulator's
+     * fill". The case draws 0, so in practice this is a memset to 0. */
+    memset(path, (int)(a[1] & 0xFF), sizeof(path));
     rc = tig_art_build_path((unsigned int)a[0], path, sizeof(path));
     out[0] = (uint32_t)rc;
 
@@ -1130,7 +1135,7 @@ static const OracleEntry oracle_entries[] = {
     { "sub_4B93F0", 4, 2, o_sub_4B93F0 },
     { "skill_gambling_random_roll", 0, 1, o_skill_gambling_random_roll },
     { "tig_art_blt_flags_convert", 2, 2, o_tig_art_blt_flags_convert },
-    { "tig_art_build_path", 1, 2, o_tig_art_build_path },
+    { "tig_art_build_path", 2, 2, o_tig_art_build_path },
     { "sub_502830", 1, 1, o_sub_502830 },
     { "tig_art_tile_id_num1_get", 1, 1, o_tig_art_tile_id_num1_get },
     { "tig_art_tile_id_num2_get", 1, 1, o_tig_art_tile_id_num2_get },
