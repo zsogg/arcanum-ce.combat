@@ -1596,6 +1596,11 @@ int sub_503700(tig_art_id_t art_id)
 }
 
 // 0x503740
+// NOTE: Not named, for the reason recorded on `sub_503700` above - this is
+// the setter half of that pair, and the quartet note there covers all four.
+// Repeated here only as a pointer: a reader landing on this function had no
+// way to know the explanation was 40 lines up. The negative-`value`
+// divergence described there reaches `dword_5BE880` through *this* function.
 tig_art_id_t sub_503740(tig_art_id_t art_id, int value)
 {
     if (tig_art_type(art_id) != TIG_ART_TYPE_TILE) {
@@ -1620,6 +1625,10 @@ tig_art_id_t sub_503740(tig_art_id_t art_id, int value)
 }
 
 // 0x5037B0
+// NOTE: Not named - second getter of the quartet documented on `sub_503700`
+// above. Reads bits 9-11 rather than 12-15, and adds 8 when the tile is
+// flip-symmetric (`dword_5BE8C0[v2] == dword_5BE880[v2]`) and the flip flag
+// is set. Naming it needs the same transition-tile field map (roadmap P5.2).
 int sub_5037B0(tig_art_id_t art_id)
 {
     if (tig_art_type(art_id) != TIG_ART_TYPE_TILE) {
@@ -1637,6 +1646,9 @@ int sub_5037B0(tig_art_id_t art_id)
 }
 
 // 0x503800
+// NOTE: Not named - setter half of the `sub_5037B0` pair; the quartet note on
+// `sub_503700` above covers it. Blocked on the same transition-tile field map
+// (roadmap P5.2), which is what P5.2 unlocks these four names by building.
 tig_art_id_t sub_503800(tig_art_id_t art_id, int value)
 {
     int v1;
