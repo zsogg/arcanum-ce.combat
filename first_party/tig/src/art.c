@@ -6135,6 +6135,26 @@ bool art_read_header(TigArtHeader* hdr, TigFile* stream)
     if (tig_file_fread(&(hdr->bpp), sizeof(hdr->bpp), 1, stream) != 1) return false;
 
     // Read palette table, non-zero value indicates presence of palette entries.
+    //
+    // NOTE: What is on disk here is Troika's *leftover in-memory pointers* -
+    // the art tool serialised an uninitialised `TigPalette*[4]`. Measured
+    // 2026-08-23 over 1,200 shipped `.art` files from `arcanum1.dat`: the
+    // field takes only **six distinct values**, and every one is
+    // address-shaped - `0x12fb74` (943 files) and `0x12f9f8` are Win32
+    // main-thread stack, `0x76393c`/`0x765e80` and `0xc959d4`/`0xc947c4` are
+    // heap. They cluster by which run of the tool produced the file. This is
+    // the fifth instance of the "reserved N, wrote M, serialised N" class,
+    // and the first found in Troika's shipped *assets* rather than in a save.
+    //
+    // Treating them as booleans is therefore correct and is what the original
+    // does. The hazard is that they are also *stored* as `TigPalette*`, and
+    // `tig_art_load_cleanup` frees any non-NULL entry. That is safe only
+    // because `tig_art_file_read` moves them into `saved_palette_tbl` and
+    // NULLs `hdr->palette_tbl` before any cleanup path can run, and because
+    // the two early returns between here and there return directly rather
+    // than through cleanup. **Both are load-bearing.** Routing either of
+    // those early returns through `tig_art_load_cleanup` - which looks like
+    // tidying - would free a 2001-era Windows address.
     for (idx = 0; idx < MAX_PALETTES; idx++) {
         if (tig_file_fread(&(value), sizeof(value), 1, stream) != 1) return false;
         hdr->palette_tbl[idx] = (TigPalette*)(intptr_t)value;
