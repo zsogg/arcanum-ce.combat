@@ -865,6 +865,44 @@ static void o_tig_timer_between(const int64_t* a, int64_t* out)
     out[0] = tig_timer_between((tig_timestamp_t)a[0], (tig_timestamp_t)a[1]);
 }
 
+/* Declared `static` in art.c and reached via the globalized object built in
+ * tests/CMakeLists.txt - see the comment there. Prototypes here rather than a
+ * header, because art.c deliberately does not export them. */
+int tig_art_blt_flags_convert(unsigned int art_blt_flags, unsigned int* vb_blt_flags_ptr);
+int tig_art_build_path(unsigned int art_id, char* path, size_t maxlen);
+
+static void o_tig_art_blt_flags_convert(const int64_t* a, int64_t* out)
+{
+    unsigned int vb_flags = (unsigned int)a[1];
+
+    out[0] = (uint32_t)tig_art_blt_flags_convert((unsigned int)a[0], &vb_flags);
+    out[1] = (int64_t)(uint64_t)vb_flags;
+}
+
+static void o_tig_art_build_path(const int64_t* a, int64_t* out)
+{
+    char path[260];
+    int rc;
+
+    memset(path, 0, sizeof(path));
+    rc = tig_art_build_path((unsigned int)a[0], path, sizeof(path));
+    out[0] = (uint32_t)rc;
+
+    /* The path itself as a checksum: the emulator side cannot hand back a
+     * string, and a 32-bit digest distinguishes every path this can build.
+     * FNV-1a, chosen because the emulator half can compute it identically
+     * over the bytes it reads out of guest memory. */
+    {
+        uint32_t h = 2166136261u;
+        size_t i;
+        for (i = 0; i < sizeof(path) && path[i] != '\0'; i++) {
+            h ^= (unsigned char)path[i];
+            h *= 16777619u;
+        }
+        out[1] = (int64_t)(uint64_t)h;
+    }
+}
+
 static void o_sub_502830(const int64_t* a, int64_t* out)
 {
     out[0] = (uint32_t)sub_502830((tig_art_id_t)a[0]);
@@ -1091,6 +1129,8 @@ static const OracleEntry oracle_entries[] = {
     { "location_center_get", 0, 1, o_location_center_get },
     { "sub_4B93F0", 4, 2, o_sub_4B93F0 },
     { "skill_gambling_random_roll", 0, 1, o_skill_gambling_random_roll },
+    { "tig_art_blt_flags_convert", 2, 2, o_tig_art_blt_flags_convert },
+    { "tig_art_build_path", 1, 2, o_tig_art_build_path },
     { "sub_502830", 1, 1, o_sub_502830 },
     { "tig_art_tile_id_num1_get", 1, 1, o_tig_art_tile_id_num1_get },
     { "tig_art_tile_id_num2_get", 1, 1, o_tig_art_tile_id_num2_get },

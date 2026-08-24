@@ -67,11 +67,73 @@ add_executable(arcanum-emudiff-oracle
     "emudiff_oracle.c"
 )
 
+# `static` hides several of `art.c`'s most testable functions from the oracle -
+# `tig_art_blt_flags_convert`, `tig_art_build_path`,
+# `tig_art_header_num_rotations` are pure, are in the blit path, and would not
+# link. That was written up as needing "test seams in the engine source" and
+# carried as an open decision; it does not.
+#
+# `static` restricts symbol *binding*, and binding is editable after
+# compilation. This takes the object file the real build already produced,
+# globalizes exactly the symbols named below, and swaps it into a private copy
+# of the archive. **`first_party/tig/src/art.c` is not modified**, and the
+# shipped `tig` target is untouched - only this test-only archive differs.
+#
+# Two things to know before adding a symbol here:
+#
+#  * `static` also licenses inlining. Under an optimising preset a globalized
+#    symbol can exist while the real call sites use an inlined copy, so the
+#    oracle would test a function nobody calls. The `VERIFY` step below fails
+#    the build if a requested symbol is absent, but it cannot detect that
+#    case - prefer the debug preset, and treat a case here as evidence about
+#    *this* object file.
+#  * Order matters at link time. The globalized object is listed *before*
+#    `tig`, so the linker satisfies `art.c`'s symbols from it and never pulls
+#    the archive member, which would otherwise duplicate every non-static
+#    definition in the file.
+set(EMUDIFF_ART_STATICS
+    tig_art_blt_flags_convert
+    tig_art_build_path
+    tig_art_header_num_rotations
+)
+set(EMUDIFF_ART_OBJ "${CMAKE_CURRENT_BINARY_DIR}/art_globalized.o")
+set(_globalize_args "")
+foreach(sym ${EMUDIFF_ART_STATICS})
+    list(APPEND _globalize_args "--globalize-symbol=${sym}")
+endforeach()
+
+# Created at configure time: WORKING_DIRECTORY below applies to the *first*
+# command too, so it cannot be created by one of them.
+file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/artobj")
+
+add_custom_command(
+    OUTPUT "${EMUDIFF_ART_OBJ}"
+    COMMAND "${CMAKE_AR}" x "$<TARGET_FILE:tig>" art.c.o
+    COMMAND "${CMAKE_OBJCOPY}" ${_globalize_args} art.c.o "${EMUDIFF_ART_OBJ}"
+    COMMAND "${CMAKE_COMMAND}" -E rm -f art.c.o
+    # VERIFY: every requested symbol must actually be global in the result.
+    # Without this, a typo or a renamed function silently produces an object
+    # that links but omits the case, and the oracle would report "not
+    # registered" - which reads like a missing wrapper, not a missing symbol.
+    COMMAND "${CMAKE_COMMAND}"
+        "-DOBJ=${EMUDIFF_ART_OBJ}"
+        "-DSYMS=${EMUDIFF_ART_STATICS}"
+        "-DNM=${CMAKE_NM}"
+        -P "${CMAKE_CURRENT_SOURCE_DIR}/verify_globalized.cmake"
+    WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/artobj"
+    DEPENDS tig
+    COMMENT "emudiff: globalizing art.c statics (no source change)"
+    VERBATIM
+)
+add_custom_target(arcanum-emudiff-art-obj DEPENDS "${EMUDIFF_ART_OBJ}")
+
 target_link_libraries(arcanum-emudiff-oracle PRIVATE
+    "${EMUDIFF_ART_OBJ}"
     arcanum-game
     tig
     SDL3::SDL3
 )
+add_dependencies(arcanum-emudiff-oracle arcanum-emudiff-art-obj)
 
 
 # The CE half of the archive differential. `arcanum-work/scripts/dbmaker_diff.py`
