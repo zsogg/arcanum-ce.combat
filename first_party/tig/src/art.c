@@ -6137,14 +6137,19 @@ bool art_read_header(TigArtHeader* hdr, TigFile* stream)
     // Read palette table, non-zero value indicates presence of palette entries.
     //
     // NOTE: What is on disk here is Troika's *leftover in-memory pointers* -
-    // the art tool serialised an uninitialised `TigPalette*[4]`. Measured
-    // 2026-08-23 over 1,200 shipped `.art` files from `arcanum1.dat`: the
-    // field takes only **six distinct values**, and every one is
-    // address-shaped - `0x12fb74` (943 files) and `0x12f9f8` are Win32
-    // main-thread stack, `0x76393c`/`0x765e80` and `0xc959d4`/`0xc947c4` are
-    // heap. They cluster by which run of the tool produced the file. This is
-    // the fifth instance of the "reserved N, wrote M, serialised N" class,
-    // and the first found in Troika's shipped *assets* rather than in a save.
+    // the art tool serialised uninitialised pointer tables. It is not just
+    // this one: `palette_tbl` (+0x0C, 4), `frames_tbl` (+0x24, 8) and
+    // `pixels_tbl` (+0x64, 8) are all written out, twenty dwords per file.
+    //
+    // Measured 2026-08-23 over 1,200 shipped `.art` files from
+    // `arcanum1.dat`, and the spread of each is what shows they are
+    // allocations rather than data: `palette_tbl` takes 17 distinct non-zero
+    // values (`0x12fb74`, Win32 main-thread stack, in 3,772 slots),
+    // `frames_tbl` 236, and `pixels_tbl` **2,570** - palettes came from a
+    // small reused pool, pixel buffers were allocated per file. This is the
+    // fifth instance of the "reserved N, wrote M, serialised N" class, and
+    // the first found in Troika's shipped *assets* rather than in a save.
+    // `MODDING-NOTES.md` quirk 22 has what it means for a tool.
     //
     // Treating them as booleans is therefore correct and is what the original
     // does. The hazard is that they are also *stored* as `TigPalette*`, and
