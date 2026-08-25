@@ -344,10 +344,12 @@ int tig_sound_acquire_handle(TigSoundType type)
     // argument list. The original passes the requested type.
     tig_debug_printf("No sound handle available for sound type %d! Current sounds are:\n", (int)type);
     for (index = 0; index < SOUND_HANDLE_MAX; index++) {
-        // FIXME: This approach does not respect lower and upper bounds for the
-        // requested sound type. Let's say we're out of music handles, it will
-        // dump voice and sound handles, which (1) cannot store music handles,
-        // and (2) can be empty or obsolete value (no check for `active`).
+        // NOTE: the dump ignores the requested type's bounds and does not
+        // check `active`, so it prints all 60 paths including stale ones.
+        // FAITHFUL: the original's loop at 0x5331DF walks `esi` from
+        // 0x62B348 (entry 0's `path`) to 0x630208 in steps of 0x150 - that is
+        // all 60 entries, with no type range and no `active` test. It is a
+        // diagnostic printed on exhaustion only. Settled 2026-08-25 (P5.4).
         tig_debug_printf("%s\n", tig_sounds[index].path);
     }
 
@@ -400,7 +402,14 @@ int tig_sound_play(tig_sound_handle_t sound_handle, const char* path, int id)
         return TIG_OK;
     }
 
-    // FIXME: No `SOUND_HANDLE_MAX` guard.
+    // NOTE: the handle is checked for `>= 0` and nothing else, so a handle
+    // at or past `SOUND_HANDLE_MAX` indexes past `tig_sounds` and the `strcpy`
+    // below writes there. FAITHFUL: the original at 0x5333B1 is `test eax,eax`
+    // / `jl` with no upper comparison, where every accessor in this file uses
+    // `cmp ecx,0x3c` / `jge`. It is bounded by its producer -
+    // `tig_sound_acquire_handle` only ever returns an in-range handle or
+    // `TIG_SOUND_HANDLE_INVALID` - so reaching it needs a fabricated handle.
+    // Settled 2026-08-25 (P5.4).
     if (!(sound_handle >= 0)) {
         return TIG_OK;
     }
@@ -474,15 +483,23 @@ int tig_sound_play_streamed(tig_sound_handle_t sound_handle, const char* name, i
 
     AIL_set_stream_loop_count(snd->audio_stream, loops);
 
-    // FIXME: Fade duration checked twice.
-    // FIXME: Prev sound handle should be validated with `sound_handle_is_valid`.
+    // NOTE: `fade_duration` really is tested twice, and `prev_sound_handle`
+    // really is only checked for `>= 0`. Both FAITHFUL, instruction for
+    // instruction - the original at 0x5335DF is `test eax,eax` / `je`, then
+    // `test ecx,ecx` / `jl`, then `test eax,eax` / `jle`, falling through to
+    // `or al,0x8` (TIG_SOUND_WAIT) and otherwise `or al,0x10`
+    // (TIG_SOUND_FADE_IN). Settled 2026-08-25 (P5.4).
     if (fade_duration != 0 && prev_sound_handle >= 0 && fade_duration > 0) {
         snd->flags |= TIG_SOUND_WAIT;
     } else {
         snd->flags |= TIG_SOUND_FADE_IN;
     }
 
-    // FIXME: Prev sound handle should be validated with `sound_handle_is_valid`.
+    // NOTE: `>= 0` again with no upper bound, so a fabricated handle writes
+    // past `tig_sounds`. FAITHFUL: 0x533606 is `test ecx,ecx` / `jl`, and the
+    // flag work that follows matches too - clear 0x10, clear 0x08, set 0x04,
+    // then fade_duration, fade_step and next_sound_handle at +0x08, +0x0C and
+    // +0x1C. Settled 2026-08-25 (P5.4).
     if (prev_sound_handle >= 0) {
         prev_snd = &(tig_sounds[prev_sound_handle]);
         if ((prev_snd->flags & TIG_SOUND_FADE_IN) != 0) {
@@ -514,8 +531,12 @@ int tig_sound_play_streamed_once(tig_sound_handle_t sound_handle, const char* na
     return tig_sound_play_streamed(sound_handle, name, 1, fade_duration, prev_sound_handle);
 }
 
-// FIXME: Should return by reference, otherwise there is no way to communicate
-// error.
+// NOTE: there is no way for this to report an error - a sentinel is
+// indistinguishable from a real value. FAITHFUL: the original has the same
+// signature and the same sentinels. tig_sound_get_loops answers 1 with the subsystem down (0x5336C9 `mov eax,1`) but 0 for an
+// out-of-range handle (0x5336F2 `xor eax,eax`) - two different exits.
+// The asymmetry across this family is the original's, so it is pinned by
+// `tests/test_sound.c` rather than tidied. Settled 2026-08-25 (P5.4).
 //
 // 0x5336C0
 int tig_sound_get_loops(tig_sound_handle_t sound_handle)
@@ -546,8 +567,12 @@ void tig_sound_set_loops(tig_sound_handle_t sound_handle, int loops)
     tig_sounds[sound_handle].loops = loops;
 }
 
-// FIXME: Should return by reference, otherwise there is no way to communicate
-// error.
+// NOTE: there is no way for this to report an error - a sentinel is
+// indistinguishable from a real value. FAITHFUL: the original has the same
+// signature and the same sentinels. tig_sound_get_volume answers 0 to both failures, which share one exit at 0x53375C
+// (`xor eax,eax`).
+// The asymmetry across this family is the original's, so it is pinned by
+// `tests/test_sound.c` rather than tidied. Settled 2026-08-25 (P5.4).
 //
 // 0x533730
 int tig_sound_get_volume(tig_sound_handle_t sound_handle)
@@ -612,8 +637,11 @@ void tig_sound_set_volume_by_type(TigSoundType type, int volume)
     }
 }
 
-// FIXME: Should return by reference, otherwise there is no way to communicate
-// error.
+// NOTE: there is no way for this to report an error - a sentinel is
+// indistinguishable from a real value. FAITHFUL: the original has the same
+// signature and the same sentinels. tig_sound_get_type answers 0 to both failures, sharing the exit at 0x533875.
+// The asymmetry across this family is the original's, so it is pinned by
+// `tests/test_sound.c` rather than tidied. Settled 2026-08-25 (P5.4).
 //
 // 0x533830
 TigSoundType tig_sound_get_type(tig_sound_handle_t sound_handle)
@@ -683,8 +711,12 @@ void tig_sound_set_positional_size(tig_sound_handle_t sound_handle, TigSoundPosi
     tig_sounds[sound_handle].positional_size = size;
 }
 
-// FIXME: Should return by reference, otherwise there is no way to communicate
-// error.
+// NOTE: there is no way for this to report an error - a sentinel is
+// indistinguishable from a real value. FAITHFUL: the original has the same
+// signature and the same sentinels. tig_sound_get_extra_volume answers **64** to both failures, sharing the exit at 0x53396C
+// (`mov eax,0x40`).
+// The asymmetry across this family is the original's, so it is pinned by
+// `tests/test_sound.c` rather than tidied. Settled 2026-08-25 (P5.4).
 //
 // 0x533940
 int tig_sound_get_extra_volume(tig_sound_handle_t sound_handle)
@@ -749,7 +781,12 @@ bool tig_sound_is_playing(tig_sound_handle_t sound_handle)
 {
     TigSound* snd;
 
-    // FIXME: No `tig_sound_initialized` guard.
+    // NOTE: no `tig_sound_initialized` guard, and that is FAITHFUL. Across
+    // 0x533A20-0x533C22 the only function that reads the flag (0x6301EC) is
+    // `tig_sound_cache_flush` at 0x533AC0, which CE guards; these five never
+    // touch it. Harmless because `tig_sounds` is static storage, so before
+    // init every entry reads `active == 0` and each of these returns its
+    // not-playing answer. Settled 2026-08-25 (P5.4).
 
     if (!sound_handle_is_valid(sound_handle)) {
         return false;
@@ -776,7 +813,12 @@ bool tig_sound_is_playing(tig_sound_handle_t sound_handle)
 // 0x533A90
 bool tig_sound_is_active(tig_sound_handle_t sound_handle)
 {
-    // FIXME: No `tig_sound_initialized` guard.
+    // NOTE: no `tig_sound_initialized` guard, and that is FAITHFUL. Across
+    // 0x533A20-0x533C22 the only function that reads the flag (0x6301EC) is
+    // `tig_sound_cache_flush` at 0x533AC0, which CE guards; these five never
+    // touch it. Harmless because `tig_sounds` is static storage, so before
+    // init every entry reads `active == 0` and each of these returns its
+    // not-playing answer. Settled 2026-08-25 (P5.4).
 
     if (!sound_handle_is_valid(sound_handle)) {
         return false;
@@ -811,7 +853,12 @@ void tig_sound_set_position(tig_sound_handle_t sound_handle, int64_t x, int64_t 
 {
     TigSound* snd;
 
-    // FIXME: No `tig_sound_initialized` guard.
+    // NOTE: no `tig_sound_initialized` guard, and that is FAITHFUL. Across
+    // 0x533A20-0x533C22 the only function that reads the flag (0x6301EC) is
+    // `tig_sound_cache_flush` at 0x533AC0, which CE guards; these five never
+    // touch it. Harmless because `tig_sounds` is static storage, so before
+    // init every entry reads `active == 0` and each of these returns its
+    // not-playing answer. Settled 2026-08-25 (P5.4).
 
     if (!sound_handle_is_valid(sound_handle)) {
         return;
@@ -828,7 +875,12 @@ void tig_sound_get_position(tig_sound_handle_t sound_handle, int64_t* x, int64_t
 {
     TigSound* snd;
 
-    // FIXME: No `tig_sound_initialized` guard.
+    // NOTE: no `tig_sound_initialized` guard, and that is FAITHFUL. Across
+    // 0x533A20-0x533C22 the only function that reads the flag (0x6301EC) is
+    // `tig_sound_cache_flush` at 0x533AC0, which CE guards; these five never
+    // touch it. Harmless because `tig_sounds` is static storage, so before
+    // init every entry reads `active == 0` and each of these returns its
+    // not-playing answer. Settled 2026-08-25 (P5.4).
 
     if (!sound_handle_is_valid(sound_handle)) {
         return;
@@ -846,7 +898,12 @@ bool tig_sound_is_positional(tig_sound_handle_t sound_handle)
 {
     TigSound* snd;
 
-    // FIXME: No `tig_sound_initialized` guard.
+    // NOTE: no `tig_sound_initialized` guard, and that is FAITHFUL. Across
+    // 0x533A20-0x533C22 the only function that reads the flag (0x6301EC) is
+    // `tig_sound_cache_flush` at 0x533AC0, which CE guards; these five never
+    // touch it. Harmless because `tig_sounds` is static storage, so before
+    // init every entry reads `active == 0` and each of these returns its
+    // not-playing answer. Settled 2026-08-25 (P5.4).
 
     if (!sound_handle_is_valid(sound_handle)) {
         return false;
