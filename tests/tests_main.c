@@ -25,6 +25,7 @@ void test_mes_suite(void);
 void test_database_suite(void);
 void test_file_suite(void);
 void test_sound_suite(void);
+void test_find_file_suite(void);
 void test_random_suite(void);
 void test_stat_suite(void);
 void test_skill_suite(void);
@@ -52,6 +53,14 @@ int main(void)
     test_palette_suite();
     test_mes_suite();
     test_database_suite();
+    // `find_file` before `file`, deliberately. `tig_file_list_create_native`
+    // walks the iterator with an unbounded `do/while` (file.c:1013), so an
+    // iterator whose cursor stops advancing hangs that loop instead of
+    // failing a check - measured 2026-08-25 while mutation-testing this
+    // module. Running the direct, bounded checks first turns that hang into
+    // a named failure. The engine would hang the same way; that is a
+    // property of the caller, not something these tests can fix.
+    test_find_file_suite();
     test_file_suite();
     test_sound_suite();
     test_random_suite();
