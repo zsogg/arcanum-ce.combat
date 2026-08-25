@@ -1140,24 +1140,24 @@ static void o_tig_art_tile_id_num2_get(const int64_t* a, int64_t* out)
     out[0] = (uint32_t)tig_art_tile_id_num2_get((tig_art_id_t)a[0]);
 }
 
-static void o_sub_503700(const int64_t* a, int64_t* out)
+static void o_tig_art_tile_id_corners_get(const int64_t* a, int64_t* out)
 {
-    out[0] = (uint32_t)sub_503700((tig_art_id_t)a[0]);
+    out[0] = (uint32_t)tig_art_tile_id_corners_get((tig_art_id_t)a[0]);
 }
 
-static void o_sub_503740(const int64_t* a, int64_t* out)
+static void o_tig_art_tile_id_corners_set(const int64_t* a, int64_t* out)
 {
-    out[0] = (uint32_t)sub_503740((tig_art_id_t)a[0], (int)a[1]);
+    out[0] = (uint32_t)tig_art_tile_id_corners_set((tig_art_id_t)a[0], (int)a[1]);
 }
 
-static void o_sub_5037B0(const int64_t* a, int64_t* out)
+static void o_tig_art_tile_id_variant_get(const int64_t* a, int64_t* out)
 {
-    out[0] = (uint32_t)sub_5037B0((tig_art_id_t)a[0]);
+    out[0] = (uint32_t)tig_art_tile_id_variant_get((tig_art_id_t)a[0]);
 }
 
-static void o_sub_503800(const int64_t* a, int64_t* out)
+static void o_tig_art_tile_id_variant_set(const int64_t* a, int64_t* out)
 {
-    out[0] = (uint32_t)sub_503800((tig_art_id_t)a[0], (int)a[1]);
+    out[0] = (uint32_t)tig_art_tile_id_variant_set((tig_art_id_t)a[0], (int)a[1]);
 }
 
 static void o_tig_art_scenery_id_type_get(const int64_t* a, int64_t* out)
@@ -1358,10 +1358,10 @@ static const OracleEntry oracle_entries[] = {
     { "sub_502830", 1, 1, o_sub_502830 },
     { "tig_art_tile_id_num1_get", 1, 1, o_tig_art_tile_id_num1_get },
     { "tig_art_tile_id_num2_get", 1, 1, o_tig_art_tile_id_num2_get },
-    { "sub_503700", 1, 1, o_sub_503700 },
-    { "sub_503740", 2, 1, o_sub_503740 },
-    { "sub_5037B0", 1, 1, o_sub_5037B0 },
-    { "sub_503800", 2, 1, o_sub_503800 },
+    { "tig_art_tile_id_corners_get", 1, 1, o_tig_art_tile_id_corners_get },
+    { "tig_art_tile_id_corners_set", 2, 1, o_tig_art_tile_id_corners_set },
+    { "tig_art_tile_id_variant_get", 1, 1, o_tig_art_tile_id_variant_get },
+    { "tig_art_tile_id_variant_set", 2, 1, o_tig_art_tile_id_variant_set },
     { "tig_art_scenery_id_type_get", 1, 1, o_tig_art_scenery_id_type_get },
     { "sub_504390", 1, 1, o_sub_504390 },
     { "tig_art_item_id_disposition_get", 1, 1, o_tig_art_item_id_disposition_get },

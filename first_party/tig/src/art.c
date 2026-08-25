@@ -224,31 +224,59 @@ static void tig_art_load_cleanup(TigFile* stream, TigArtHeader* hdr, TigPalette*
 static void tig_art_header_pixels_free(TigArtHeader* hdr);
 static bool art_read_header(TigArtHeader* hdr, TigFile* stream);
 
-// NOTE: These two 16-entry tables (0x5BE880 and 0x5BE8C0) are the
-// flip-canonicalisation maps for the 4-bit TILE id field at bits 12-15, and
-// their structure was established mechanically on 2026-08-23. Three
-// properties, each verified over all 16 entries:
+// The two flip-canonicalisation maps for the TILE **corner mask** at bits
+// 12-15. Structure established mechanically 2026-08-23; what the bits MEAN
+// established 2026-08-25 from the shipped art (roadmap P5.2).
 //
-//   1. `{dword_5BE880[i], dword_5BE8C0[i]}` is always the pair
-//      `{i, swap_bit1_bit3(i)}` - that is, the two tables hold the two
-//      representatives of `i` under exchanging bit 1 (0x2) with bit 3 (0x8).
+// A tile is a square in world space drawn as a diamond, and the corner mask
+// says which of its four corners take `num1` rather than `num2`:
+//
+//   bit 0 (0x1) -> BOTTOM vertex      bit 2 (0x4) -> TOP vertex
+//   bit 1 (0x2) -> LEFT vertex        bit 3 (0x8) -> RIGHT vertex
+//
+// so mask 15 is all `num1` and mask 0 is all `num2` - which is exactly what
+// `build_tile_file_name` (`a_name.c`) does with it, falling back to the
+// single-tile `%sbse0%c.art` name at both ends and using `tile_corners_file_code[15 - a3]`
+// - the complement - when it swaps the two names round.
+//
+// **How the bit-to-corner map was established.** A single-bit mask isolates
+// one corner, so the corner that looks like `num1` names the bit. Scoring the
+// four vertex regions of every shipped single-bit transition tile against its
+// own two pure endpoints, over every tile pair with enough contrast to tell
+// them apart:
+//
+//   mask 1 (bit 0) -> BOTTOM  9/9   mask 4 (bit 2) -> TOP    12/13
+//   mask 2 (bit 1) -> LEFT    1/1   mask 8 (bit 3) -> RIGHT  15/17
+//
+// A bijection, and it agrees with a completely independent constraint: the
+// flip is a horizontal mirror (`tig_art_cache_entry_blit` reverses each source
+// row), which must swap two corners and fix two. The tables below swap bits 1
+// and 3 and fix 0 and 2 - left with right, top and bottom fixed. Two
+// unrelated lines of evidence, same answer.
+//
+// Three properties of the tables themselves, each verified over all 16 entries:
+//
+//   1. `{tile_corners_unflipped[i], tile_corners_flipped[i]}` is always the pair
+//      `{i, swap_bit1_bit3(i)}` - the two representatives of `i` under
+//      exchanging bit 1 (0x2) with bit 3 (0x8).
 //   2. The tables AGREE exactly when `i` is symmetric under that swap.
-//      This is what `0x5037B0` tests with `if (5BE8C0[v2] == 5BE880[v2])`:
-//      it is asking "is this value unchanged by the flip?".
+//      This is what `tig_art_tile_id_variant_get` tests: it is asking "is this
+//      corner mask unchanged by mirroring?", because only then is the +8
+//      mirrored variant a distinct picture.
 //   3. Both are constant across a pair, so each is a canonical map.
 //
 //   flip pairs      {2,8} {3,9} {6,12} {7,13}
 //   flip-symmetric  0 1 4 5 10 11 14 15
 //
-// So the field behaves as a 4-bit mask in which one bit-1/bit-3 pair swaps
-// when the tile is mirrored - consistent with an edge/corner transition mask,
-// which is the territory porting bug #14 (`tig_art_tile_id_flippable1_get`)
-// lives in. What the four bits *mean* individually is still unestablished,
-// and that is the remaining blocker on naming 0x503700/0x503740/0x5037B0/
-// 0x503800.
+// **Only one representative of each pair ships as art**, and it is the one
+// `tile_corners_unflipped` selects - {8,3,6,7}. Verified against the corpus:
+// for `rck`/`snw`, exactly `rcksnw{b,e,d,c}*.art` - masks 2, 9, 12 and 13 -
+// are absent, and they are precisely the four `tile_corners_flipped` side.
+// That is the whole mechanism: store the mask that has a file, set the flip
+// flag, and mirror it at blit time.
 //
 // 0x5BE880
-static int dword_5BE880[16] = {
+static int tile_corners_unflipped[16] = {
     0,
     1,
     8,
@@ -268,7 +296,7 @@ static int dword_5BE880[16] = {
 };
 
 // 0x5BE8C0
-static int dword_5BE8C0[16] = {
+static int tile_corners_flipped[16] = {
     0,
     1,
     2,
@@ -1547,16 +1575,16 @@ int tig_art_size(tig_art_id_t art_id, int* width_ptr, int* height_ptr)
 }
 
 // 0x503600
-int tig_art_tile_id_create(unsigned int num1, unsigned int num2, unsigned int a3, unsigned int a4, unsigned int type, unsigned int flippable1, unsigned int flippable2, unsigned int a8, tig_art_id_t* art_id_ptr)
+int tig_art_tile_id_create(unsigned int num1, unsigned int num2, unsigned int corners, unsigned int variant, unsigned int type, unsigned int flippable1, unsigned int flippable2, unsigned int palette, tig_art_id_t* art_id_ptr)
 {
     if (num1 >= TILE_ID_MAX_NUM
         || num2 >= TILE_ID_MAX_NUM
-        || a3 >= 0x10
-        || a4 >= 0x10
+        || corners >= 0x10
+        || variant >= 0x10
         || type >= TILE_ID_MAX_TYPE
         || flippable1 >= 2
         || flippable2 >= 2
-        || a8 >= 4) {
+        || palette >= 4) {
         return TIG_ERR_INVALID_PARAM;
     }
 
@@ -1566,10 +1594,10 @@ int tig_art_tile_id_create(unsigned int num1, unsigned int num2, unsigned int a3
         | ((type & (TILE_ID_MAX_TYPE - 1)) << TILE_ID_TYPE_SHIFT)
         | ((flippable1 & 1) << TILE_ID_FLIPPABLE1_SHIFT)
         | ((flippable2 & 1) << TILE_ID_FLIPPABLE2_SHIFT)
-        | ((a8 & 3) << 4);
+        | ((palette & 3) << 4);
 
-    *art_id_ptr = sub_503740(*art_id_ptr, a3);
-    *art_id_ptr = sub_503800(*art_id_ptr, a4);
+    *art_id_ptr = tig_art_tile_id_corners_set(*art_id_ptr, corners);
+    *art_id_ptr = tig_art_tile_id_variant_set(*art_id_ptr, variant);
 
     return TIG_OK;
 }
@@ -1598,7 +1626,7 @@ int tig_art_tile_id_num2_get(tig_art_id_t art_id)
 }
 
 // 0x503700
-// NOTE: A negative `value` reaches `dword_5BE880[value]` in the setters below
+// NOTE: A negative `value` reaches `tile_corners_unflipped[value]` in the setters below
 // (0x503740 and 0x503800) because the clamp is `value >= 16` here and a
 // *signed* `jl` at 0x503753 in the original - so both admit negatives. On
 // 32-bit that is harmless: the original's `[esi*4 + 0x5BE880]` wraps, and for
@@ -1607,21 +1635,17 @@ int tig_art_tile_id_num2_get(tig_art_id_t art_id)
 // shape, divergent in effect - the same class as the ObjectID padding leaks.
 //
 // Not reachable today: the only caller outside this file is `tile.c:239`,
-// which passes `sub_5037B0(art_id) + 1`. Recorded rather than guarded because
+// which passes `tig_art_tile_id_variant_get(art_id) + 1`. Recorded rather than guarded because
 // adding a bound CE's original does not have is a behaviour change, and
 // because the emudiff domain for these two is bounded at 0 for the same
 // reason (see `cases.py`). Found by the P5.1 differential, 2026-08-23.
 //
-// NOTE: Not named 2026-08-23. This quartet - 0x503700/0x503740 get/set and
-// 0x5037B0/0x503800 get/set - are TILE id field accessors, but *not* num1 or
-// num2: those are at shifts 22 and 16 (`TILE_ID_NUM1_SHIFT`,
-// `TILE_ID_NUM2_SHIFT`). These read bits 12-15 and bits 9-11, and both remap
-// through `dword_5BE880`/`dword_5BE8C0` when `tig_art_id_flags_get() & 1` is
-// set - the flippable-transition machinery that porting bug #14 lives in.
-// Naming them needs that transition-tile field map, which does not exist
-// yet; naming them from the bit ranges alone would be the confident-and-
-// wrong move this project refuses.
-int sub_503700(tig_art_id_t art_id)
+// Named 2026-08-25 (roadmap P5.2). Returns the 4-bit corner mask at bits
+// 12-15: which of the tile's four corners take `num1` rather than `num2`,
+// one bit per diamond vertex - see the table NOTE above for the bit map and
+// how it was established. When the tile is drawn mirrored the stored mask is
+// the one that has art, so it is converted back to the logical mask here.
+int tig_art_tile_id_corners_get(tig_art_id_t art_id)
 {
     if (tig_art_type(art_id) != TIG_ART_TYPE_TILE) {
         return 0;
@@ -1629,18 +1653,18 @@ int sub_503700(tig_art_id_t art_id)
 
     int v1 = (art_id >> 12) & 0xF;
     if ((tig_art_id_flags_get(art_id) & 1) != 0) {
-        v1 = dword_5BE8C0[v1];
+        v1 = tile_corners_flipped[v1];
     }
     return v1;
 }
 
 // 0x503740
-// NOTE: Not named, for the reason recorded on `sub_503700` above - this is
-// the setter half of that pair, and the quartet note there covers all four.
-// Repeated here only as a pointer: a reader landing on this function had no
-// way to know the explanation was 40 lines up. The negative-`value`
-// divergence described there reaches `dword_5BE880` through *this* function.
-tig_art_id_t sub_503740(tig_art_id_t art_id, int value)
+// Sets the corner mask. When the requested mask is the half of a mirror pair
+// that has no art file, and the tile is flippable, this stores the half that
+// does and sets the flip flag - so `tig_art_tile_id_corners_get` above has to
+// undo it. The negative-`value` divergence recorded on that function reaches
+// `tile_corners_unflipped` through *this* one.
+tig_art_id_t tig_art_tile_id_corners_set(tig_art_id_t art_id, int value)
 {
     if (tig_art_type(art_id) != TIG_ART_TYPE_TILE) {
         return art_id;
@@ -1651,10 +1675,10 @@ tig_art_id_t sub_503740(tig_art_id_t art_id, int value)
         value = 0;
     }
 
-    if (value != dword_5BE880[value]) {
+    if (value != tile_corners_unflipped[value]) {
         if (tig_art_tile_id_flippable_get(art_id)) {
             art_id = tig_art_id_flags_set(art_id, tig_art_id_flags_get(art_id) | 1);
-            value = dword_5BE880[value];
+            value = tile_corners_unflipped[value];
         }
     }
 
@@ -1664,19 +1688,27 @@ tig_art_id_t sub_503740(tig_art_id_t art_id, int value)
 }
 
 // 0x5037B0
-// NOTE: Not named - second getter of the quartet documented on `sub_503700`
-// above. Reads bits 9-11 rather than 12-15, and adds 8 when the tile is
-// flip-symmetric (`dword_5BE8C0[v2] == dword_5BE880[v2]`) and the flip flag
-// is set. Naming it needs the same transition-tile field map (roadmap P5.2).
-int sub_5037B0(tig_art_id_t art_id)
+// Named 2026-08-25 (roadmap P5.2). Returns which of the interchangeable
+// artworks for this corner mask to use - the trailing `a`..`h` of the file
+// name (`build_tile_file_name` does `a4 + 'a'`), picked at random by
+// `tile_variant_art_id_get` from the count `a_name_tile_variant_get` reports.
+//
+// Bits 9-11 give 0-7, and 8 is added when the tile is drawn mirrored AND its
+// corner mask is symmetric under mirroring. That condition is the point: when
+// the mask is symmetric the mirrored picture is a *different* image of the
+// same shape, so it is worth having as an extra variant; when it is not, the
+// mirroring is already carrying the mask to its other representative and
+// there is nothing left over. `tile_art_id_advance_end` walks this field to
+// find the end of a variant run.
+int tig_art_tile_id_variant_get(tig_art_id_t art_id)
 {
     if (tig_art_type(art_id) != TIG_ART_TYPE_TILE) {
         return 0;
     }
 
     int v1 = (art_id >> 9) & 7;
-    int v2 = sub_503700(art_id);
-    if (dword_5BE8C0[v2] == dword_5BE880[v2]) {
+    int v2 = tig_art_tile_id_corners_get(art_id);
+    if (tile_corners_flipped[v2] == tile_corners_unflipped[v2]) {
         if ((tig_art_id_flags_get(art_id) & 1) != 0) {
             v1 += 8;
         }
@@ -1685,10 +1717,9 @@ int sub_5037B0(tig_art_id_t art_id)
 }
 
 // 0x503800
-// NOTE: Not named - setter half of the `sub_5037B0` pair; the quartet note on
-// `sub_503700` above covers it. Blocked on the same transition-tile field map
-// (roadmap P5.2), which is what P5.2 unlocks these four names by building.
-tig_art_id_t sub_503800(tig_art_id_t art_id, int value)
+// Sets the variant. Setter half of the `tig_art_tile_id_variant_get` pair;
+// the note there covers the +8 mirrored-variant rule.
+tig_art_id_t tig_art_tile_id_variant_set(tig_art_id_t art_id, int value)
 {
     int v1;
 
@@ -1701,14 +1732,14 @@ tig_art_id_t sub_503800(tig_art_id_t art_id, int value)
         value = 0;
     }
 
-    v1 = sub_503700(art_id);
+    v1 = tig_art_tile_id_corners_get(art_id);
     if (value < 8) {
-        if (dword_5BE8C0[v1] == dword_5BE880[v1]) {
+        if (tile_corners_flipped[v1] == tile_corners_unflipped[v1]) {
             art_id = tig_art_id_flags_set(art_id, tig_art_id_flags_get(art_id) & ~1);
         }
         art_id = (art_id & ~0xE00) | (value << 9);
     } else {
-        if (dword_5BE8C0[v1] == dword_5BE880[v1]) {
+        if (tile_corners_flipped[v1] == tile_corners_unflipped[v1]) {
             if (tig_art_tile_id_flippable_get(art_id)) {
                 art_id = tig_art_id_flags_set(art_id, tig_art_id_flags_get(art_id) | 1);
             }

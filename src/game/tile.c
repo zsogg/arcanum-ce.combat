@@ -236,7 +236,7 @@ void tile_art_id_advance_end(int64_t loc)
     art_id = tile_art_id_at(loc);
     do {
         if (art_id != TIG_ART_ID_INVALID) {
-            art_id = sub_503800(art_id, sub_5037B0(art_id) + 1);
+            art_id = tig_art_tile_id_variant_set(art_id, tig_art_tile_id_variant_get(art_id) + 1);
         }
     } while (tig_art_exists(art_id) != TIG_OK);
 

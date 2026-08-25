@@ -273,8 +273,8 @@ bool a_name_tile_aid_to_fname(tig_art_id_t aid, char* fname, size_t maxlen)
 
     num1 = tig_art_tile_id_num1_get(aid);
     num2 = tig_art_tile_id_num2_get(aid);
-    v1 = sub_503700(aid);
-    v2 = sub_5037B0(aid);
+    v1 = tig_art_tile_id_corners_get(aid);
+    v2 = tig_art_tile_id_variant_get(aid);
     type = tig_art_tile_id_type_get(aid);
     flippable1 = tig_art_tile_id_flippable1_get(aid);
     flippable2 = tig_art_tile_id_flippable2_get(aid);
@@ -290,8 +290,20 @@ bool a_name_tile_aid_to_fname(tig_art_id_t aid, char* fname, size_t maxlen)
 // 0x4EAF70
 bool build_tile_file_name(const char* name1, const char* name2, int a3, int a4, char* fname, size_t maxlen)
 {
+    // The corner mask, as one character of the art file's name. Named
+    // 2026-08-25 (roadmap P5.2), once the mask's bits were established - see
+    // the flip-table NOTE in `tig/art.c`.
+    //
+    // `a3` is the 4-bit corner mask: which of the tile's four corners take
+    // `name1` rather than `name2` (bit 0 bottom, 1 left, 2 top, 3 right). So
+    // 15 is all `name1` and 0 is all `name2`, and both take the uniform
+    // `%sbse0%c.art` form below rather than a transition file - which is why
+    // this table maps *two* inputs to '0' and is not a bijection. The other
+    // fourteen are distinct, and swapping which tile is drawn first means
+    // complementing the mask, hence the `[15 - a3]` lookups.
+    //
     // 0x5BB4E4
-    static const char off_5BB4E4[] = "06b489237ea5dc10";
+    static const char tile_corners_file_code[] = "06b489237ea5dc10";
 
     int v1;
     int v2;
@@ -304,7 +316,7 @@ bool build_tile_file_name(const char* name1, const char* name2, int a3, int a4, 
         snprintf(fname, maxlen,
             "art\\tile\\%sbse%c%c.art",
             name1,
-            off_5BB4E4[a3],
+            tile_corners_file_code[a3],
             a4 + 'a');
         return true;
     }
@@ -313,7 +325,7 @@ bool build_tile_file_name(const char* name1, const char* name2, int a3, int a4, 
         snprintf(fname, maxlen,
             "art\\tile\\%sbse%c%c.art",
             name2,
-            off_5BB4E4[0],
+            tile_corners_file_code[0],
             a4 + 'a');
         return true;
     }
@@ -322,7 +334,7 @@ bool build_tile_file_name(const char* name1, const char* name2, int a3, int a4, 
         snprintf(fname, maxlen,
             "art\\tile\\%sbse%c%c.art",
             name1,
-            off_5BB4E4[a3],
+            tile_corners_file_code[a3],
             a4 + 'a');
         return true;
     }
@@ -331,7 +343,7 @@ bool build_tile_file_name(const char* name1, const char* name2, int a3, int a4, 
         snprintf(fname, maxlen,
             "art\\tile\\%sbse%c%c.art",
             name2,
-            off_5BB4E4[15 - a3],
+            tile_corners_file_code[15 - a3],
             a4 + 'a');
         return true;
     }
@@ -341,14 +353,14 @@ bool build_tile_file_name(const char* name1, const char* name2, int a3, int a4, 
             "art\\tile\\%s%s%c%c.art",
             name1,
             name2,
-            off_5BB4E4[a3],
+            tile_corners_file_code[a3],
             a4 + 'a');
     } else {
         snprintf(fname, maxlen,
             "art\\tile\\%s%s%c%c.art",
             name2,
             name1,
-            off_5BB4E4[15 - a3],
+            tile_corners_file_code[15 - a3],
             a4 + 'a');
     }
     return true;
