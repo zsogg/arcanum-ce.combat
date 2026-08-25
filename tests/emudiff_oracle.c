@@ -928,6 +928,203 @@ static void o_tig_art_build_path(const int64_t* a, int64_t* out)
     }
 }
 
+/* --- the art blit worker (roadmap P5.1 step 2) --------------------------
+ *
+ * `tig_art_cache_entry_blit` is the first case here that is NOT pure: it
+ * reads `tig_art_cache_entries` and writes into a locked video buffer. The
+ * emulator half reaches it by stubbing the three `tig_video_buffer_*` calls
+ * (`peemu.stub`); this half builds the same fixture in CE's own types.
+ *
+ * WHY THE STRUCTS ARE REPLICATED HERE. They live in `art.c` and `video.c`
+ * with no header, and moving them would be a source change to ported code.
+ * Copying them is safe *in this direction* for a reason worth stating: the
+ * emulator side takes its offsets from `Arcanum.exe` (0x505A6E, 0x505A75,
+ * 0x505AA3), so the two derivations are independent. If this copy were wrong
+ * the two blits would DISAGREE - a false positive that gets investigated -
+ * rather than agreeing on a shared misunderstanding, which is the failure
+ * mode the project has a rule about. The offsets cannot be shared anyway: CE
+ * is 64-bit, so its cache entry is 0x378 bytes where the original's is 0x26C.
+ *
+ * WHAT IS COMPARED, AND WHAT IS NOT. The original branches on
+ * `tig_art_bits_per_pixel` (0x60474C) into 8-, 16-, 24- and 32-bpp loops; CE
+ * implements only the 32-bpp one, because its surfaces are always 32-bit. The
+ * emulator side sets that global to 32 so the comparable path runs. The other
+ * three paths have no CE counterpart and are NOT covered by this case.
+ *
+ * The original's 32-bpp loop also runs each palette entry through
+ * `tig_color`'s per-channel conversion tables, where CE writes
+ * `plt->colors[i]` straight. Those tables are built by the ORIGINAL's own
+ * init (0x52C070 / 0x52C160) under emulation rather than synthesised, and for
+ * an 8/8/8 format the original computes them as the identity map - which is
+ * why the two agree. The constant it ORs in (0x739EE0) is the alpha mask
+ * passed to 0x52C160.
+ */
+#define ART_MAX_PALETTES 4
+#define ART_MAX_ROTATIONS 8
+#define ART_MAX_FRAMES 32
+#define ART_TIG_MAX_PATH 260
+#define BLIT_MAX_DIM 16
+#define BLIT_MAX_PAD 8
+
+typedef struct OracleArtFrameData {
+    int width;
+    int height;
+    int data_size;
+    int hot_x;
+    int hot_y;
+    int offset_x;
+    int offset_y;
+} OracleArtFrameData;
+
+typedef struct OracleArtHeader {
+    unsigned int flags;
+    int fps;
+    int bpp;
+    TigPalette* palette_tbl[ART_MAX_PALETTES];
+    int action_frame;
+    int num_frames;
+    OracleArtFrameData* frames_tbl[ART_MAX_ROTATIONS];
+    int data_size[ART_MAX_ROTATIONS];
+    uint8_t* pixels_tbl[ART_MAX_ROTATIONS];
+} OracleArtHeader;
+
+typedef struct OracleArtCacheEntry {
+    unsigned int flags;
+    char path[ART_TIG_MAX_PATH];
+    tig_timestamp_t time;
+    unsigned int art_id;
+    OracleArtHeader hdr;
+    uint8_t dirty[ART_MAX_PALETTES][ART_MAX_ROTATIONS];
+    TigVideoBuffer** video_buffers[ART_MAX_PALETTES][ART_MAX_ROTATIONS];
+    uint8_t** pixels_tbl[ART_MAX_ROTATIONS];
+    TigPalette* palette_tbl[ART_MAX_PALETTES];
+    int system_memory_usage;
+    int video_memory_usage;
+} OracleArtCacheEntry;
+
+/* Replicated from video.c for the same reason, and only as far as the blit
+ * path reaches: lock() touches surface and lock_count, data() reads
+ * frame.width/height, flags, surface->pitch and surface->pixels. */
+typedef struct OracleVideoBuffer {
+    unsigned int flags;
+    TigRect frame;
+    int texture_width;
+    int texture_height;
+    unsigned int background_color;
+    unsigned int color_key;
+    SDL_Surface* surface;
+    int lock_count;
+} OracleVideoBuffer;
+
+/* Globalized out of art.c by tests/CMakeLists.txt - no source change. */
+extern int tig_art_cache_entry_blit(int cache_entry_index, TigArtBlitInfo* blit_info);
+extern void* tig_art_cache_entries;
+
+/* The fixture content. Deliberately closed-form rather than a PRNG: the
+ * emulator half must reproduce these exactly in Python, and a one-line
+ * formula is far harder to get subtly out of step than a generator. Index 0
+ * recurs on purpose - it is the transparent case. */
+static unsigned char blit_pixel_at(int seed, int rot, int frame, int i)
+{
+    return (unsigned char)((seed + rot * 37 + frame * 11 + i * 7) % 256);
+}
+
+static uint32_t blit_palette_at(int p, int i)
+{
+    return (uint32_t)((((i * 3 + p) & 0xFF) << 16)
+        | (((i * 5 + p) & 0xFF) << 8)
+        | ((i * 7 + p) & 0xFF));
+}
+
+static void o_tig_art_cache_entry_blit(const int64_t* a, int64_t* out)
+{
+    static OracleArtCacheEntry entry;
+    static OracleArtFrameData frames[ART_MAX_ROTATIONS][ART_MAX_FRAMES];
+    static uint8_t* pixel_ptrs[ART_MAX_ROTATIONS][ART_MAX_FRAMES];
+    static uint8_t pixels[ART_MAX_ROTATIONS][ART_MAX_FRAMES][BLIT_MAX_DIM * BLIT_MAX_DIM];
+    static TigPalette palettes[ART_MAX_PALETTES];
+    static uint8_t dst[(BLIT_MAX_DIM + BLIT_MAX_PAD) * BLIT_MAX_DIM * 4];
+
+    tig_art_id_t art_id = (tig_art_id_t)a[0];
+    int width = (int)a[1];
+    int height = (int)a[2];
+    int pitch = (int)(a[1] + a[3]) * 4;
+    int seed = (int)a[4];
+    size_t dst_size = (size_t)pitch * (size_t)height;
+
+    TigArtBlitInfo blit_info;
+    OracleVideoBuffer video_buffer;
+    SDL_Surface* surface;
+    uint32_t h;
+    size_t i;
+    int rot;
+    int frame;
+    int p;
+    int n;
+
+    memset(&entry, 0, sizeof(entry));
+    for (rot = 0; rot < ART_MAX_ROTATIONS; rot++) {
+        for (frame = 0; frame < ART_MAX_FRAMES; frame++) {
+            frames[rot][frame].width = width;
+            frames[rot][frame].height = height;
+            frames[rot][frame].data_size = width * height;
+            for (n = 0; n < width * height; n++) {
+                pixels[rot][frame][n] = blit_pixel_at(seed, rot, frame, n);
+            }
+            pixel_ptrs[rot][frame] = pixels[rot][frame];
+        }
+        entry.hdr.frames_tbl[rot] = frames[rot];
+        entry.pixels_tbl[rot] = pixel_ptrs[rot];
+    }
+    for (p = 0; p < ART_MAX_PALETTES; p++) {
+        for (n = 0; n < 256; n++) {
+            palettes[p].colors[n] = blit_palette_at(p, n);
+        }
+        /* Slot 0 is always present; the rest follow the seed, so the
+         * NULL-falls-back-to-palette-0 branch is exercised on both sides. */
+        entry.hdr.palette_tbl[p] = (p == 0 || ((seed >> p) & 1)) ? &palettes[p] : NULL;
+    }
+    tig_art_cache_entries = &entry;
+
+    /* SDL_CreateSurfaceFrom needs no video subsystem, and it lets the pitch be
+     * chosen here - which is the point, since the loop's row stepping is
+     * `pitch / 4 - width` and a pitch SDL picked for itself would not vary.
+     * 0xA5 fill so that a blit writing outside its rows is caught by the hash
+     * rather than landing on zeros that look intentional. */
+    memset(dst, 0xA5, sizeof(dst));
+    surface = SDL_CreateSurfaceFrom(width, height, SDL_PIXELFORMAT_XRGB8888, dst, pitch);
+    if (surface == NULL) {
+        out[0] = -1;
+        out[1] = 0;
+        return;
+    }
+
+    memset(&video_buffer, 0, sizeof(video_buffer));
+    video_buffer.frame.width = width;
+    video_buffer.frame.height = height;
+    video_buffer.surface = surface;
+
+    memset(&blit_info, 0, sizeof(blit_info));
+    blit_info.art_id = art_id;
+    blit_info.dst_video_buffer = (TigVideoBuffer*)&video_buffer;
+
+    out[0] = (uint32_t)tig_art_cache_entry_blit(0, &blit_info);
+
+    /* FNV-1a over the destination, same as tig_art_build_path's digest and for
+     * the same reason: the emulator half cannot hand back a buffer, and it can
+     * compute this identically over the bytes it reads out of guest memory.
+     * The whole buffer is hashed, not just the blitted rows, so an overrun
+     * shows up too. */
+    h = 2166136261u;
+    for (i = 0; i < dst_size; i++) {
+        h ^= dst[i];
+        h *= 16777619u;
+    }
+    out[1] = (int64_t)(uint64_t)h;
+
+    SDL_DestroySurface(surface);
+}
+
 static void o_sub_502830(const int64_t* a, int64_t* out)
 {
     out[0] = (uint32_t)sub_502830((tig_art_id_t)a[0]);
@@ -1157,6 +1354,7 @@ static const OracleEntry oracle_entries[] = {
     { "tig_art_header_num_rotations", 1, 1, o_tig_art_header_num_rotations },
     { "tig_art_blt_flags_convert", 2, 2, o_tig_art_blt_flags_convert },
     { "tig_art_build_path", 2, 2, o_tig_art_build_path },
+    { "tig_art_cache_entry_blit", 5, 2, o_tig_art_cache_entry_blit },
     { "sub_502830", 1, 1, o_sub_502830 },
     { "tig_art_tile_id_num1_get", 1, 1, o_tig_art_tile_id_num1_get },
     { "tig_art_tile_id_num2_get", 1, 1, o_tig_art_tile_id_num2_get },

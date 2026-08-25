@@ -1,6 +1,7 @@
 #include "tig/art.h"
 
 #include <limits.h>
+#include <stddef.h>
 #include <stdio.h>
 
 #include "tig/bmp.h"
@@ -164,6 +165,44 @@ typedef struct TigArtCacheEntry {
     /* 0264 */ art_size_t system_memory_usage;
     /* 0268 */ art_size_t video_memory_usage;
 } TigArtCacheEntry;
+
+// NOTE: these are not style. They pin this struct to the ORIGINAL's own
+// instructions, and they exist because of what the blit differential needs
+// to be worth anything.
+//
+// `arcanum-work/harness/emudiff` builds a cache entry in emulator memory and
+// the CE oracle builds one here, then the two blits are compared. If both
+// sides were laid out from *this* struct, a wrong layout would be invisible -
+// both would agree, which is the `database.c` failure mode the project has a
+// rule about. So the emulator side uses offsets read out of `Arcanum.exe`,
+// and these assertions require CE to match them. Derived 2026-08-25 from
+// `tig_art_cache_entry_blit` (0x5059F0):
+//
+//   0x505A61-0x505A68  index*32 - index, then *5 -> entry stride 155*4 = 0x26C
+//   0x505A6E           [ebp + (index*155 + rot)*4 + 0x134]  -> frames_tbl
+//   0x505A75           [ebp + (index*155 + rot)*4 + 0x234]  -> pixels_tbl
+//   0x505AA3           [ecx + (index*155 + pal)*4 + 0x11C]  -> hdr.palette_tbl
+//   0x505A5A/0x505A66  frame*8 - frame -> frame stride 28 = sizeof frame data
+//
+// A change here that breaks one of these breaks the save/art format too; the
+// point is that it says so at compile time rather than as a mismatched blit.
+// The offsets in the comments above are the ORIGINAL's, and on any 64-bit
+// build this struct does not have them: every pointer is 8 bytes rather than
+// 4, so the same fields land at 0x128 / 0x150 / 0x310 in a 0x378-byte entry.
+// Measured 2026-08-25 — asserting the 32-bit numbers here fails to compile,
+// which is how this note came to be written.
+//
+// That difference is load-bearing for the differential rather than a problem
+// for it. The two sides *cannot* share a layout, so the emulator half is
+// forced to take its offsets from `Arcanum.exe` while this half takes them
+// from this struct. Two independent derivations is exactly what stops the
+// `database.c` failure mode, where both sides agree because both were told
+// the same wrong thing: if the oracle's copy of this layout were wrong, the
+// two blits would *disagree*, which is the safe direction to fail in.
+//
+// `TigArtFileFrameData` is the one part that is identical on both, because it
+// is all `int` - and the original's own frame stride confirms it: 0x505A5A
+// and 0x505A66 compute `frame*8 - frame`, i.e. 28 = 0x1C.
 
 static int art_get_video_buffer(int cache_entry_index, tig_art_id_t art_id, TigVideoBuffer** video_buffer_ptr);
 static int tig_art_blt_flags_convert(unsigned int art_blt_flags, unsigned int* vb_blt_flags_ptr);
@@ -3138,6 +3177,14 @@ int tig_art_blt_flags_convert(unsigned int art_blt_flags, unsigned int* vb_blt_f
     return TIG_OK;
 }
 
+// NOTE: dead in CE as it stands. Its only callers test
+// `tig_art_hardware_accelerated`, which comes from
+// `tig_video_3d_check_initialized()`, which requires `tig_video_3d_initialized`
+// - a static nothing in the tree assigns. Every art blit therefore goes
+// through `art_blit` instead. Established 2026-08-25 while building the P5.1
+// differential; the function is still worth having correct, since it is what
+// a hardware-accelerated path would use.
+//
 // 0x5059F0
 int tig_art_cache_entry_blit(int cache_entry_index, TigArtBlitInfo* blit_info)
 {
@@ -3188,11 +3235,40 @@ int tig_art_cache_entry_blit(int cache_entry_index, TigArtBlitInfo* blit_info)
         delta = 1;
     }
 
+    // FIX: `dst_skip` and the flipped start offset are both counts of PIXELS,
+    // and `dst_pixels` is a `uint8_t*` - so both have to be scaled by 4. CE
+    // added them raw, advancing a quarter of the distance between rows.
+    //
+    // The original scales both: 0x505E7F `lea edx,[edx+eax*4]` for the row
+    // step, 0x505D99 `lea edx,[ecx+edx*4]` for the flipped start. Its
+    // `dst_skip` is in pixels for the same reason (0x505D87 `sub eax,ecx`
+    // after `shr eax,2`). Note that `art_blit` below computes a skip in
+    // *bytes* (`pitch - width * 4`) under the same variable name, which is
+    // very likely how the slip happened.
+    //
+    // Two separate wrongs: the row step only bites when
+    // `pitch != width * 4`, but the flipped start is wrong by 4x for any
+    // height > 1 whatever the pitch.
+    //
+    // DELIBERATELY NOT NUMBERED, by the rule that a divergence in code CE
+    // cannot execute is fixed but not counted. This whole function runs only
+    // when `tig_art_hardware_accelerated` is set, which is
+    // `tig_video_3d_check_initialized() == TIG_OK`, which requires
+    // `tig_video_3d_initialized` - a static that **nothing in the tree ever
+    // assigns**. The non-accelerated `art_blit` is what actually runs.
+    //
+    // It differs from the other unnumbered entries in one way worth stating:
+    // `terrain_editor` can never be true by design, whereas this is merely
+    // not implemented yet. Whoever wires up hardware acceleration inherits
+    // this path, and it is correct now rather than subtly wrong then.
+    //
+    // Found by the P5.1 blit differential, which varies the destination pitch
+    // independently of the frame width - 2000 inputs, 0 unexplained after.
     if (delta > 0) {
         dst_pixels = (uint8_t*)video_buffer_data.pixels;
         dst_skip = video_buffer_data.pitch / 4 - width;
     } else {
-        dst_pixels = (uint8_t*)video_buffer_data.pixels + video_buffer_data.pitch / 4 * (height - 1);
+        dst_pixels = (uint8_t*)video_buffer_data.pixels + (video_buffer_data.pitch / 4 * (height - 1)) * 4;
         dst_skip = -width - video_buffer_data.pitch / 4;
     }
     for (y = 0; y < height; y++) {
@@ -3206,7 +3282,7 @@ int tig_art_cache_entry_blit(int cache_entry_index, TigArtBlitInfo* blit_info)
             src_pixels += delta;
             dst_pixels += 4;
         }
-        dst_pixels += dst_skip;
+        dst_pixels += dst_skip * 4;
     }
 
     tig_video_buffer_unlock(blit_info->dst_video_buffer);

@@ -95,10 +95,20 @@ set(EMUDIFF_ART_STATICS
     tig_art_blt_flags_convert
     tig_art_build_path
     tig_art_header_num_rotations
+    tig_art_cache_entry_blit
+)
+
+# Static *data* the oracle has to reach as well - `tig_art_cache_entry_blit`
+# reads the cache array rather than taking it as an argument, so the fixture
+# has nowhere else to go. Listed apart from the functions because the verify
+# step has to look for a different nm class: a function is `T`, a pointer in
+# .bss is `B`.
+set(EMUDIFF_ART_DATA
+    tig_art_cache_entries
 )
 set(EMUDIFF_ART_OBJ "${CMAKE_CURRENT_BINARY_DIR}/art_globalized.o")
 set(_globalize_args "")
-foreach(sym ${EMUDIFF_ART_STATICS})
+foreach(sym ${EMUDIFF_ART_STATICS} ${EMUDIFF_ART_DATA})
     list(APPEND _globalize_args "--globalize-symbol=${sym}")
 endforeach()
 
@@ -118,6 +128,7 @@ add_custom_command(
     COMMAND "${CMAKE_COMMAND}"
         "-DOBJ=${EMUDIFF_ART_OBJ}"
         "-DSYMS=${EMUDIFF_ART_STATICS}"
+        "-DDATA_SYMS=${EMUDIFF_ART_DATA}"
         "-DNM=${CMAKE_NM}"
         -P "${CMAKE_CURRENT_SOURCE_DIR}/verify_globalized.cmake"
     WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/artobj"

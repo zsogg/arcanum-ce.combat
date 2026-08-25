@@ -16,4 +16,17 @@ foreach(sym ${SYMS})
             "first, and prefer the debug preset where inlining is off.")
     endif()
 endforeach()
-message(STATUS "emudiff: globalized ${SYMS}")
+# Data symbols land in a different nm class than functions: a globalized
+# pointer in .bss is `B`, initialised data is `D`. Checking them against `T`
+# would fail a correct build, and dropping them from the check would let a
+# renamed global through silently - which is the exact hole this file exists
+# to close.
+foreach(sym ${DATA_SYMS})
+    if(NOT out MATCHES "[ \t][BDGRS][ \t]+${sym}\n")
+        message(FATAL_ERROR
+            "emudiff: data symbol '${sym}' is not global in ${OBJ}.\n"
+            "  Either it does not exist in art.c under that name, or it is "
+            "not a data symbol. Check the name first; do NOT edit art.c.")
+    endif()
+endforeach()
+message(STATUS "emudiff: globalized ${SYMS} ${DATA_SYMS}")
