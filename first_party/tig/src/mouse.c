@@ -409,6 +409,15 @@ void tig_mouse_display(void)
     // mouse cursor frame is negative (due to hotspot offset or dragging
     // inventory item near window border or outside of the window), both src and
     // dst rects need appropriate adjustments.
+    //
+    // NOTE: the cause was not local to this caller. `tig_video_blit` does the
+    // src-rect adjustment itself in the original (0x51F65C-0x51F6A4), for all
+    // six of its callers; CE had dropped it, and this workaround was added at
+    // the one call site where the artifact was noticed. That is porting bug
+    // #41, fixed in `video.c` 2026-08-25. This block is now redundant but
+    // harmless and is kept: it clamps against `tig_mouse_screen_bounds`, which
+    // is the same rect as `stru_610388`, so the engine's clamp finds nothing
+    // left to take off and all four deltas come out zero.
     dst_rect = tig_mouse_state.frame;
     if (tig_rect_intersection(&dst_rect, &tig_mouse_screen_bounds, &dst_rect) != TIG_OK) {
         return;

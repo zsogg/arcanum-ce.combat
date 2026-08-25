@@ -122,6 +122,26 @@ void tig_file_cache_destroy(TigFileCache* cache)
     FREE(cache);
 }
 
+// NOTE: neither `tig_file_filelength`'s result nor `tig_file_fread`'s is
+// checked, and both are FAITHFUL. Disassembled 2026-08-25 (roadmap P5.3);
+// the original at 0x538BC0 is this and nothing else:
+//
+//   call 0x52fb40      ; tig_file_filelength
+//   mov  [edi], eax    ; *size = it, unchecked
+//   push eax
+//   call 0x58a716      ; malloc, result unchecked
+//   mov  [ecx], eax    ; *data = it
+//   ... push stream, 1, *size, *data
+//   call 0x530640      ; tig_file_fread, result discarded
+//   call 0x530330      ; fclose
+//   mov  eax, 1        ; always true past the fopen
+//
+// The only failure the original reports is `fopen` returning NULL. So a
+// zero-length or unreadable entry yields `MALLOC(0)` or `MALLOC(-1)` and a
+// `true` return in both engines. Recorded rather than guarded: a caller that
+// currently gets garbage would start getting `false`, which is a behaviour
+// change, not a repair.
+//
 // 0x538BC0
 bool tig_file_cache_read_contents_into(const char* path, void** data, int* size)
 {

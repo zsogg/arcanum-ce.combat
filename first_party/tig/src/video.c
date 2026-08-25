@@ -187,20 +187,51 @@ int tig_video_blit(TigVideoBuffer* src_video_buffer, TigRect* src_rect, TigRect*
         return rc;
     }
 
-    native_src_rect.x = src_rect->x;
-    native_src_rect.y = src_rect->y;
-    native_src_rect.w = src_rect->width;
-    native_src_rect.h = src_rect->height;
+    // FIX (porting bug #41): the source rect must move and shrink by exactly
+    // as much as clamping took off the destination. CE copied `src_rect`
+    // verbatim, so a destination clipped at the LEFT or TOP edge drew the
+    // wrong region of the source - shifted instead of cut off.
+    //
+    // The original does this inside the blit, for every caller, at
+    // 0x51F65C-0x51F6A4: it builds the source RECT as
+    // `{src.x + (clamped.x - dst.x), src.y + (clamped.y - dst.y)}` with
+    // `right`/`bottom` from widths adjusted the same way.
+    //
+    // Right/bottom clipping was harmless here because SDL clips at the
+    // surface edge anyway; left/top clipping is what diverged. When the
+    // destination is fully on screen all four deltas are zero, so this is a
+    // no-op for the common case - and idempotent for a caller that already
+    // clamped, since `tig_mouse_screen_bounds` and `stru_610388` are the
+    // same rect.
+    native_src_rect.x = src_rect->x + (clamped_dst_rect.x - dst_rect->x);
+    native_src_rect.y = src_rect->y + (clamped_dst_rect.y - dst_rect->y);
+    native_src_rect.w = src_rect->width + (clamped_dst_rect.width - dst_rect->width);
+    native_src_rect.h = src_rect->height + (clamped_dst_rect.height - dst_rect->height);
 
     native_dst_rect.x = clamped_dst_rect.x;
     native_dst_rect.y = clamped_dst_rect.y;
     native_dst_rect.w = clamped_dst_rect.width;
     native_dst_rect.h = clamped_dst_rect.height;
 
-    SDL_BlitSurface(src_video_buffer->surface,
-        &native_src_rect,
-        tig_video_state.surface,
-        &native_dst_rect);
+    // FIX: the original checks the blit's result - it logs
+    // "DirectX error %d in tig_video_blit()" (the format string is at
+    // 0x5BF3E4, and is what names this function) and returns
+    // `TIG_ERR_BLIT` (11) at 0x51F794-0x51F7B0. CE dropped the result and
+    // returned TIG_OK unconditionally.
+    //
+    // Deliberately NOT numbered: no CE caller checks this function's result,
+    // so restoring it changes no behaviour today. It stops the next error
+    // being silent.
+    //
+    // The original's DDERR_SURFACELOST retry (compare against 0x887601C2,
+    // then IDirectDrawSurface::Restore at vtable +0x6C, then blit again) has
+    // no SDL analogue and is correctly absent - SDL surfaces are not lost.
+    if (!SDL_BlitSurface(src_video_buffer->surface,
+            &native_src_rect,
+            tig_video_state.surface,
+            &native_dst_rect)) {
+        return TIG_ERR_BLIT;
+    }
 
     return TIG_OK;
 }
@@ -553,6 +584,22 @@ int tig_video_buffer_lock(TigVideoBuffer* video_buffer)
     return TIG_OK;
 }
 
+// NOTE: there is no `lock_count <= 0` guard, and that is FAITHFUL. The
+// original at 0x520500 is instruction-for-instruction this shape:
+//
+//   cmp DWORD PTR [esi+0xac], 1     ; lock_count == 1?
+//   jne  ...                        ; skip the unlock if not
+//   ...  SDL_UnlockSurface equivalent, clear the LOCKED flag
+//   mov eax, DWORD PTR [esi+0xac]
+//   dec eax                         ; unconditional, no floor
+//   mov DWORD PTR [esi+0xac], eax
+//   xor eax, eax                    ; always TIG_OK
+//
+// So an unbalanced unlock drives `lock_count` negative in the original too,
+// after which the next `tig_video_buffer_lock` sees a non-zero count and
+// never actually locks the surface. Troika's bug, not a porting slip; adding
+// a guard here would diverge. Checked 2026-08-25 (roadmap P5.3).
+//
 // 0x520500
 int tig_video_buffer_unlock(TigVideoBuffer* video_buffer)
 {

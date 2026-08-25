@@ -303,7 +303,10 @@ bool tig_file_unarchive_native(const char* src, const char* dst)
     SDL_snprintf(path1, sizeof(path1), "%s.tfaf", src);
     data_stream = tig_file_fopen_native(path1, "rb");
     if (data_stream == NULL) {
-        // FIXME: Leaks `stream1`.
+        // FIXME: Leaks `index_stream` - the leaked handle is the index stream
+        // opened above, not a `stream1`, which no longer exists under that
+        // name. Name corrected 2026-08-25 (roadmap P5.3); the leak itself is
+        // unchanged and still real.
         return false;
     }
 
@@ -1603,6 +1606,29 @@ bool tig_file_lock(const char* filename, const void* owner, size_t size)
         SDL_snprintf(path, sizeof(path), "%s\\%s", repo->path, filename);
     }
 
+    // NOTE: `"wbx"` is CE's rendering of an exclusive create. The original
+    // does not use stdio here at all - at 0x530975 it calls the CRT's `_open`
+    // directly:
+    //
+    //   push 0x80          ; _S_IWRITE
+    //   push 0x501         ; _O_WRONLY | _O_CREAT | _O_EXCL
+    //   push path
+    //   call 0x58ce27      ; _open  -> -1 on failure
+    //   ... _write at 0x58cc7a, _close at 0x58cbc7
+    //
+    // The `x` is therefore faithful in intent, and this is the right call.
+    // Two differences are worth knowing rather than changing, both checked
+    // 2026-08-25 (roadmap P5.3):
+    //
+    //   - no `_O_BINARY` (0x8000) in the original's oflag, so it inherits
+    //     the CRT's `_fmode` - text mode by default on Win32. The lock file
+    //     holds an opaque owner blob, so any LF that got translated would be
+    //     written back the same way and the comparison still matches;
+    //   - `_S_IWRITE` alone creates a file with no read permission for the
+    //     owner, where glibc's `fopen` uses 0666 & ~umask.
+    //
+    // `"x"` is C11 and is supported by glibc and by MSVCRT since VC2005, so
+    // it is portable across everything CE targets.
     stream = fopen(path, "wbx");
     if (stream == NULL) {
         return false;
