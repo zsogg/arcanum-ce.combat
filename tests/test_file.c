@@ -525,6 +525,357 @@ TEST(an_ignored_entry_is_left_out_of_the_listing)
     remove_fixtures();
 }
 
+// ---------------------------------------------------------------------------
+// The archive container - `tig_file_archive` / `tig_file_unarchive`.
+//
+// Everything above is the repository layer: which copy of a path wins. This is
+// the other thing `file.c` does, and it is the outermost layer of the save
+// format - `gamelib.c` archives `Save\Current` into a `.tfai`/`.tfaf` pair on
+// save and unarchives it back on load. Nothing had ever executed it.
+//
+// The format cases parse the index with plain stdio rather than calling back
+// into tig, so what checks the writer is an independent reader of the bytes and
+// not the writer agreeing with itself. The round-trip case is the weaker of the
+// two on its own: a writer and reader that share a misunderstanding round-trip
+// perfectly, which is why the record stream is asserted directly as well.
+
+#define ARC_SRC "./arcanum_test_archive_src"
+#define ARC_SUB ARC_SRC "/sub"
+#define ARC_DEEP ARC_SUB "/deeper"
+#define ARC_DST "./arcanum_test_archive_dst"
+#define ARC_OUT "./arcanum_test_archive_out"
+#define ARC_INDEX ARC_OUT ".tfai"
+#define ARC_DATA ARC_OUT ".tfaf"
+#define ARC_EMPTY "./arcanum_test_archive_empty"
+
+// `inner.bin` carries an embedded NUL and a 0xFF so a copy that goes through a
+// string function, or a stream opened in text mode, cannot pass.
+static const unsigned char ARC_INNER[] = { 0x00, 0x01, 0xFF, 0x7F, 0x00, 0x41 };
+
+// Files before the directories holding them, both trees, deepest first.
+static const char* const ARCHIVE_PATHS[] = {
+    ARC_INDEX,
+    ARC_DATA,
+    ARC_DEEP "/leaf.txt",
+    ARC_SUB "/inner.bin",
+    ARC_SRC "/top.txt",
+    ARC_DEEP,
+    ARC_SUB,
+    ARC_SRC,
+    ARC_DST "/sub/deeper/leaf.txt",
+    ARC_DST "/sub/inner.bin",
+    ARC_DST "/top.txt",
+    ARC_DST "/sub/deeper",
+    ARC_DST "/sub",
+    ARC_DST,
+    ARC_EMPTY,
+};
+
+static void archive_fixture_remove(void)
+{
+    size_t index;
+
+    for (index = 0; index < sizeof(ARCHIVE_PATHS) / sizeof(ARCHIVE_PATHS[0]); index++) {
+        remove(ARCHIVE_PATHS[index]);
+    }
+}
+
+// `tig_file_mkdir` is setup, not the code under test - the cases here are about
+// `tig_file_archive`/`_unarchive`, and the existing repository cases already
+// build their fixtures the same way.
+static void archive_fixture_write(void)
+{
+    archive_fixture_remove();
+
+    tig_file_mkdir(ARC_SRC);
+    tig_file_mkdir(ARC_SUB);
+    tig_file_mkdir(ARC_DEEP);
+
+    write_text(ARC_SRC "/top.txt", "top level");
+    write_bytes(ARC_SUB "/inner.bin", ARC_INNER, sizeof(ARC_INNER));
+    write_text(ARC_DEEP "/leaf.txt", "leaf");
+}
+
+static int archive_entry_compare(const void* lhs, const void* rhs)
+{
+    return strcmp(*(const char* const*)lhs, *(const char* const*)rhs);
+}
+
+// Walk the pair as the format defines it and rebuild "path=contents" for every
+// file record, sorted so the answer does not depend on readdir order. Returns
+// the number of file records, or -1 if the stream is malformed or did not end
+// with the tag-3 record.
+static int archive_read_back(char* out, size_t size)
+{
+    FILE* index_stream;
+    FILE* data_stream;
+    char dir[512];
+    char name[512];
+    char entries[8][1024];
+    char* sorted[8];
+    unsigned char payload[512];
+    int tag;
+    int length;
+    int count = 0;
+    int ended = 0;
+    int result;
+    int i;
+
+    out[0] = '\0';
+    dir[0] = '\0';
+
+    index_stream = fopen(ARC_INDEX, "rb");
+    if (index_stream == NULL) {
+        return -1;
+    }
+
+    data_stream = fopen(ARC_DATA, "rb");
+    if (data_stream == NULL) {
+        fclose(index_stream);
+        return -1;
+    }
+
+    while (fread(&tag, sizeof(tag), 1, index_stream) == 1) {
+        if (tag == 3) {
+            ended = 1;
+            break;
+        }
+
+        if (tag == 2) {
+            char* pch = strrchr(dir, '/');
+            if (pch == NULL) {
+                dir[0] = '\0';
+            } else {
+                *pch = '\0';
+            }
+            continue;
+        }
+
+        if (tag != 0 && tag != 1) {
+            count = -1;
+            break;
+        }
+
+        if (fread(&length, sizeof(length), 1, index_stream) != 1
+            || length < 0
+            || (size_t)length >= sizeof(name)
+            || fread(name, (size_t)length, 1, index_stream) != 1) {
+            count = -1;
+            break;
+        }
+        name[length] = '\0';
+
+        if (tag == 1) {
+            if (dir[0] != '\0') {
+                strncat(dir, "/", sizeof(dir) - strlen(dir) - 1);
+            }
+            strncat(dir, name, sizeof(dir) - strlen(dir) - 1);
+            continue;
+        }
+
+        if (fread(&length, sizeof(length), 1, index_stream) != 1
+            || length < 0
+            || (size_t)length > sizeof(payload)
+            || count >= (int)(sizeof(entries) / sizeof(entries[0]))) {
+            count = -1;
+            break;
+        }
+
+        if (length != 0 && fread(payload, (size_t)length, 1, data_stream) != 1) {
+            count = -1;
+            break;
+        }
+
+        snprintf(entries[count], sizeof(entries[count]), "%s%s%s=",
+            dir, dir[0] != '\0' ? "/" : "", name);
+        for (i = 0; i < length; i++) {
+            char byte[8];
+            snprintf(byte, sizeof(byte), "%02X", payload[i]);
+            strncat(entries[count], byte,
+                sizeof(entries[count]) - strlen(entries[count]) - 1);
+        }
+        count++;
+    }
+
+    fclose(data_stream);
+    fclose(index_stream);
+
+    if (count < 0 || !ended) {
+        return -1;
+    }
+
+    for (i = 0; i < count; i++) {
+        sorted[i] = entries[i];
+    }
+    qsort(sorted, (size_t)count, sizeof(sorted[0]), archive_entry_compare);
+
+    for (i = 0; i < count; i++) {
+        if (i != 0) {
+            strncat(out, ",", size - strlen(out) - 1);
+        }
+        strncat(out, sorted[i], size - strlen(out) - 1);
+    }
+
+    result = count;
+    return result;
+}
+
+static long archive_file_size(const char* path)
+{
+    FILE* stream = fopen(path, "rb");
+    long size;
+
+    if (stream == NULL) {
+        return -1;
+    }
+
+    fseek(stream, 0, SEEK_END);
+    size = ftell(stream);
+    fclose(stream);
+
+    return size;
+}
+
+// The property the save path actually depends on: what went in comes back out,
+// nested directories and all, byte for byte.
+TEST(an_archived_tree_comes_back_byte_for_byte)
+{
+    char buffer[64];
+    unsigned char raw[16];
+    FILE* stream;
+
+    archive_fixture_write();
+
+    CHECK(tig_file_archive(ARC_OUT, ARC_SRC));
+    CHECK(tig_file_unarchive(ARC_OUT, ARC_DST));
+
+    CHECK_STR(read_path(ARC_DST "/top.txt", buffer, sizeof(buffer)), "top level");
+    CHECK_STR(read_path(ARC_DST "/sub/deeper/leaf.txt", buffer, sizeof(buffer)), "leaf");
+
+    // The binary one by hand - `read_path` stops at the embedded NUL.
+    stream = fopen(ARC_DST "/sub/inner.bin", "rb");
+    CHECK(stream != NULL);
+    if (stream != NULL) {
+        size_t got = fread(raw, 1, sizeof(raw), stream);
+        fclose(stream);
+        CHECK_INT(got, sizeof(ARC_INNER));
+        CHECK_INT(memcmp(raw, ARC_INNER, sizeof(ARC_INNER)), 0);
+    }
+
+    archive_fixture_remove();
+}
+
+// The index is a record stream of int32 tags: 0 file, 1 push dir, 2 pop dir,
+// 3 end. Names are stored with a length and no terminator; payloads are
+// concatenated into `.tfaf` in index order and carry no lengths of their own.
+TEST(the_index_is_the_record_stream_the_format_says)
+{
+    char names[1024];
+    int count;
+
+    archive_fixture_write();
+    CHECK(tig_file_archive(ARC_OUT, ARC_SRC));
+
+    count = archive_read_back(names, sizeof(names));
+    CHECK_INT(count, 3);
+    CHECK_STR(names,
+        "sub/deeper/leaf.txt=6C656166,"
+        "sub/inner.bin=0001FF7F0041,"
+        "top.txt=746F70206C6576656C");
+
+    // `.tfaf` is exactly the payloads and nothing else: 9 + 6 + 4.
+    CHECK_INT(archive_file_size(ARC_DATA), 19);
+
+    archive_fixture_remove();
+}
+
+// An empty tree still produces a well-formed archive: the end record alone, and
+// a data file with nothing in it.
+TEST(an_empty_directory_archives_to_a_bare_end_record)
+{
+    int tag = -1;
+    FILE* stream;
+
+    archive_fixture_remove();
+    tig_file_mkdir(ARC_EMPTY);
+
+    CHECK(tig_file_archive(ARC_OUT, ARC_EMPTY));
+    CHECK_INT(archive_file_size(ARC_INDEX), 4);
+    CHECK_INT(archive_file_size(ARC_DATA), 0);
+
+    stream = fopen(ARC_INDEX, "rb");
+    CHECK(stream != NULL);
+    if (stream != NULL) {
+        CHECK_INT(fread(&tag, sizeof(tag), 1, stream), 1);
+        fclose(stream);
+    }
+    CHECK_INT(tag, 3);
+
+    archive_fixture_remove();
+}
+
+// `tig_file_is_directory` guards the entry, and it runs before either output
+// file is opened - a refused archive leaves nothing on disk to mistake for one.
+TEST(archiving_refuses_a_source_that_is_not_a_directory)
+{
+    archive_fixture_write();
+
+    CHECK(!tig_file_archive(ARC_OUT, ARC_SRC "/top.txt"));
+    CHECK_INT(archive_file_size(ARC_INDEX), -1);
+    CHECK_INT(archive_file_size(ARC_DATA), -1);
+
+    CHECK(!tig_file_archive(ARC_OUT, "./arcanum_test_archive_nothing_here"));
+    CHECK_INT(archive_file_size(ARC_INDEX), -1);
+
+    archive_fixture_remove();
+}
+
+// The reader fails closed on an index that stops before the end record, which
+// is what a truncated save looks like. It reports failure rather than silently
+// restoring a partial tree - though the files it already wrote do stay, which
+// is the original's behaviour too and is why `gamelib` treats a failed load as
+// fatal rather than resumable.
+TEST(an_index_truncated_before_the_end_record_fails)
+{
+    long full;
+    unsigned char bytes[512];
+    FILE* stream;
+    size_t got;
+
+    archive_fixture_write();
+    CHECK(tig_file_archive(ARC_OUT, ARC_SRC));
+
+    full = archive_file_size(ARC_INDEX);
+    CHECK(full > 4);
+
+    stream = fopen(ARC_INDEX, "rb");
+    CHECK(stream != NULL);
+    if (stream != NULL) {
+        got = fread(bytes, 1, sizeof(bytes), stream);
+        fclose(stream);
+
+        // Drop the trailing end record, leaving whole records before it.
+        CHECK(write_bytes(ARC_INDEX, bytes, got - 4));
+        CHECK(!tig_file_unarchive(ARC_OUT, ARC_DST));
+    }
+
+    archive_fixture_remove();
+}
+
+// A missing archive is a failure, not an empty success.
+TEST(unarchiving_an_absent_archive_fails)
+{
+    archive_fixture_remove();
+
+    CHECK(!tig_file_unarchive(ARC_OUT, ARC_DST));
+
+    // The index exists but the data file does not - the second open fails.
+    CHECK(write_text(ARC_INDEX, "xxxx"));
+    CHECK(!tig_file_unarchive(ARC_OUT, ARC_DST));
+
+    archive_fixture_remove();
+}
+
 void test_file_suite(void)
 {
     RUN(the_archive_mounted_last_wins);
@@ -540,4 +891,10 @@ void test_file_suite(void)
     RUN(the_glob_that_decides_the_mount_order);
     RUN(a_listing_covers_one_level_and_marks_directories);
     RUN(an_ignored_entry_is_left_out_of_the_listing);
+    RUN(an_archived_tree_comes_back_byte_for_byte);
+    RUN(the_index_is_the_record_stream_the_format_says);
+    RUN(an_empty_directory_archives_to_a_bare_end_record);
+    RUN(archiving_refuses_a_source_that_is_not_a_directory);
+    RUN(an_index_truncated_before_the_end_record_fails);
+    RUN(unarchiving_an_absent_archive_fails);
 }

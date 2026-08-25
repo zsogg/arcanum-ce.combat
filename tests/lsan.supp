@@ -13,3 +13,12 @@
 # The original does the same: 0x4D4317..0x4D4333 sets the handle to -1 and
 # returns 0 with no free call. See the NOTE in src/game/mes.c.
 leak:mes_load_internal
+
+# tig_file_unarchive_native: when the `.tfaf` payload file cannot be opened,
+# the `.tfai` index handle opened just above it is dropped. The original does
+# the same: at 0x52E5C7 the failed open falls into `pop edi/esi/ebp/ebx;
+# add esp,0x314; ret` with no `tig_file_fclose` (0x530330) in between, while
+# every later exit closes both streams. Reached deliberately by
+# `unarchiving_an_absent_archive_fails`. See the NOTE in
+# first_party/tig/src/file.c.
+leak:tig_file_unarchive_native

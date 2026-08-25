@@ -204,7 +204,13 @@ bool tig_file_copy_directory(const char* dst, const char* src)
 
     if (list.count != 0) {
         if (!tig_file_mkdir(dst)) {
-            // FIXME: Leaks `list`.
+            // NOTE: leaks `list`, and that is FAITHFUL - note that the two
+            // failure returns below do not. The original at 0x52E260 has the
+            // same asymmetry: `tig_file_mkdir` (0x52DFE0) fails at 0x52E2B3
+            // into an epilogue at 0x52E2B5 that pops and returns with nothing
+            // in between (eax is still mkdir's zero), while the recursion and
+            // copy failures at 0x52E3F7/0x52E411 both call
+            // `tig_file_list_destroy` (0x52FB20) first. Settled 2026-08-25.
             return false;
         }
 
@@ -233,6 +239,23 @@ bool tig_file_copy_directory(const char* dst, const char* src)
     return true;
 }
 
+// The `.tfai`/`.tfaf` pair is Troika's archive container, and it is what every
+// savegame is: `gamelib.c` archives `Save\\Current` on save and unarchives it
+// back on load, so this pair of functions is the outermost layer of the save
+// format.
+//
+// `.tfai` is the index - a flat record stream, each record an int32 tag:
+//
+//   0  file       int32 name length, that many name bytes (NOT terminated),
+//                 int32 payload size; the payload itself is appended to `.tfaf`
+//   1  push dir   int32 name length, that many name bytes; descend into it
+//   2  pop dir    ascend one level
+//   3  end        written by `tig_file_archive_native` after the worker returns
+//
+// `.tfaf` is the payloads, concatenated in index order and nothing else - it
+// carries no lengths of its own, so the index is the only thing that can parse
+// it. A reader that stops at tag 3 never looks at the trailing bytes, which is
+// what makes an index truncated mid-record fail closed.
 // 0x52E430
 bool tig_file_archive_native(const char* dst, const char* src)
 {
@@ -303,10 +326,13 @@ bool tig_file_unarchive_native(const char* src, const char* dst)
     SDL_snprintf(path1, sizeof(path1), "%s.tfaf", src);
     data_stream = tig_file_fopen_native(path1, "rb");
     if (data_stream == NULL) {
-        // FIXME: Leaks `index_stream` - the leaked handle is the index stream
-        // opened above, not a `stream1`, which no longer exists under that
-        // name. Name corrected 2026-08-25 (roadmap P5.3); the leak itself is
-        // unchanged and still real.
+        // NOTE: leaks `index_stream`, the handle opened above, and that is
+        // FAITHFUL. In the original at 0x52E550 the `.tfaf` open fails at
+        // 0x52E5C7 into `pop edi/esi/ebp/ebx; add esp,0x314; ret` - no
+        // `tig_file_fclose` (0x530330) on the way out, while every later exit
+        // closes both streams. (The name was corrected from a `stream1` that
+        // no longer exists on 2026-08-25 under P5.3; this settles the leak
+        // itself, 2026-08-25 under P5.4.)
         return false;
     }
 
@@ -322,6 +348,16 @@ bool tig_file_unarchive_native(const char* src, const char* dst)
                 break;
             }
 
+            // NOTE: `size` came out of the index and is bounded by nothing
+            // before it is used as both a read length into `path1` and the
+            // index of this terminator - a `.tfai` claiming a name longer than
+            // TIG_MAX_PATH overruns the stack. FAITHFUL: the original at
+            // 0x52E677 passes the same unchecked value to `tig_file_fread`
+            // (0x530640) and writes the terminator with
+            // `mov BYTE PTR [esp+ecx*1+0x28],0x0` at 0x52E695, ecx being that
+            // same field. It bounds the reader by the writer, which only ever
+            // emits `strlen` of a real path - so a hand-edited or truncated
+            // save is the only way to reach it. Settled 2026-08-25 (P5.4).
             path1[size] = '\0';
 
             if (tig_file_fread(&size, sizeof(size), 1, index_stream) != 1) {
@@ -442,6 +478,30 @@ bool copy_file_stream_size(TigFile* dst_stream, TigFile* src_stream, size_t size
     return true;
 }
 
+// NOTE: every failure return in this function leaks `list`, and the copy
+// failure also leaks `tmp_stream`. Both are FAITHFUL. The original at 0x52E9C0
+// has two epilogues, and only the success one cleans up:
+//
+//   52ec69: lea  edx,[esp+0x14]     ; &list
+//   52ec6e: call 0x52fb20           ; tig_file_list_destroy - success only
+//   52ec76: mov  eax,0x1
+//   52ec7b: pop edi/esi/ebp/ebx; add esp,0x118; ret
+//
+//   52ec86: pop  edi; pop esi; pop ebp
+//   52ec89: xor  eax,eax            ; return false
+//   52ec8b: pop  ebx; add esp,0x118; ret
+//
+// All eleven `jne`/`jl`/`je 0x52EC86` branches land on that second epilogue,
+// which calls nothing - one per `return false` here.
+// `tig_file_fclose` (0x530330) is likewise reached only from the success side
+// of `copy_file_stream` at 0x52EC45, so the stream opened at 0x52EC22 leaks on
+// a failed copy in the original too.
+//
+// What it costs: one `TigFileList` per directory level being unwound, plus at
+// most one `TigFile`, on a path that is already abandoning a save.
+// `tig_file_archive_native` deletes both output files afterwards, so no partial
+// archive survives - only the memory. Settled 2026-08-25 (roadmap P5.4);
+// evidence in `arcanum-work/audits/tig-file-20260825/archive-family.md`.
 // 0x52E9C0
 bool tig_file_archive_worker_native(const char* path, TigFile* index_stream, TigFile* data_stream)
 {
@@ -461,55 +521,46 @@ bool tig_file_archive_worker_native(const char* path, TigFile* index_stream, Tig
                 && strcmp(list.entries[index].path, "..") != 0) {
                 type = 1;
                 if (tig_file_fwrite(&type, sizeof(type), 1, index_stream) != 1) {
-                    // FIXME: Leaks `list`.
                     return false;
                 }
 
                 size = (int)strlen(list.entries[index].path);
                 if (tig_file_fwrite(&size, sizeof(size), 1, index_stream) != 1) {
-                    // FIXME: Leaks `list`.
                     return false;
                 }
 
                 if (tig_file_fputs(list.entries[index].path, index_stream) < 0) {
-                    // FIXME: Leaks `list`.
                     return false;
                 }
 
                 compat_join_path(pattern, sizeof(pattern), path, list.entries[index].path);
 
                 if (!tig_file_archive_worker_native(pattern, index_stream, data_stream)) {
-                    // FIXME: Leaks `list`.
                     return false;
                 }
 
                 type = 2;
                 if (tig_file_fwrite(&type, sizeof(type), 1, index_stream) != 1) {
-                    // FIXME: Leaks `list`.
                     return false;
                 }
             }
         } else {
             type = 0;
             if (tig_file_fwrite(&type, sizeof(type), 1, index_stream) != 1) {
-                // FIXME: Leaks `list`.
                 return false;
             }
 
             size = (int)strlen(list.entries[index].path);
             if (tig_file_fwrite(&size, sizeof(size), 1, index_stream) != 1) {
-                // FIXME: Leaks `list`.
                 return false;
             }
 
             if (tig_file_fputs(list.entries[index].path, index_stream) < 0) {
-                // FIXME: Leaks `list`.
                 return false;
             }
 
             size = (int)list.entries[index].size;
             if (tig_file_fwrite(&size, sizeof(size), 1, index_stream) != 1) {
-                // FIXME: Leaks `list`.
                 return false;
             }
 
@@ -517,13 +568,10 @@ bool tig_file_archive_worker_native(const char* path, TigFile* index_stream, Tig
 
             tmp_stream = tig_file_fopen(pattern, "rb");
             if (tmp_stream == NULL) {
-                // FIXME: Leaks `list`.
                 return false;
             }
 
             if (!copy_file_stream(data_stream, tmp_stream)) {
-                // FIXME: Leaks `tmp_stream`.
-                // FIXME: Leaks `list`.
                 return false;
             }
 

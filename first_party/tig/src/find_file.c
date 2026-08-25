@@ -47,6 +47,17 @@ bool tig_find_first_file(const char* pattern, TigFindFileData* find_file_data)
 
     entries = SDL_GlobDirectory(dir, fname, SDL_GLOB_CASEINSENSITIVE, &count);
     if (count == 0) {
+        // FIX: Memory leak. A glob that matches nothing still hands back an
+        // allocated array - one slot holding the NULL terminator - and SDL
+        // documents the result as the caller's to free. Dropping it leaked 8
+        // bytes on every miss, and the callers are `tig_file_exists_native`
+        // and `tig_file_list_create_native`, so misses are routine.
+        //
+        // CE-only, with nothing to be faithful to: the original reaches this
+        // through Win32 `FindFirstFile`, which reports failure with
+        // INVALID_HANDLE_VALUE and allocates nothing. Found 2026-08-25 by
+        // running the new archive suite under the ASan preset (roadmap P5.4).
+        SDL_free(entries);
         return false;
     }
 
