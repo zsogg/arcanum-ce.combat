@@ -240,6 +240,11 @@ int main(int argc, char** argv)
         gamelib_patch_lvl_set(pch + 9);
     }
 
+    // CE: where the geometry came from, tracked so it can be reported below.
+    const char* geometry_source = highres_config->loaded
+        ? "HighRes/config.ini"
+        : "built-in default";
+
     init_info.width = highres_config->width;
     init_info.height = highres_config->height;
     init_info.bpp = 32;
@@ -266,8 +271,32 @@ int main(int argc, char** argv)
         if (sscanf(pch + 10, "%dx%d", &width, &height) == 2) {
             init_info.width = width;
             init_info.height = height;
+            geometry_source = "-geometry";
         }
     }
+
+    // CE: say which of the three sources won, and what it produced.
+    //
+    // Geometry can arrive from the built-in default, from HighRes/config.ini
+    // parsed at startup, or from `-geometry` on the command line, and until
+    // this line existed the only way to learn which had won was to take a
+    // screenshot and read its header. That cost real time in the P5.5 frame
+    // differential, where CE rendered 1280x720 against the original's 800x600
+    // and neither engine said so.
+    //
+    // `-geometry` is the authority when present: it is applied last and
+    // overrides the file. The original has no equivalent - the High Resolution
+    // Patch bakes width and height into the exe with WeiDU at install time, so
+    // for the original `config.ini` is documentation rather than
+    // configuration, and editing it changes nothing until the patch is
+    // reinstalled. CE reading the same file at runtime is deliberately NOT
+    // bit-compatible with that model; matching it would mean importing an
+    // ambiguity CE does not have.
+    tig_debug_printf("Geometry: %dx%d %s (from %s)\n",
+        init_info.width,
+        init_info.height,
+        (init_info.flags & TIG_INITIALIZE_WINDOWED) != 0 ? "windowed" : "fullscreen",
+        geometry_source);
 
     // Specify window name.
     init_info.flags |= TIG_INITIALIZE_SET_WINDOW_NAME;
