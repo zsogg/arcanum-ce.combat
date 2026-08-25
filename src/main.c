@@ -69,6 +69,7 @@ static int dword_5CFF00;
 // CE: the reproducible-run harness. Not in the original.
 //
 // `-autoload` quick-loads the newest save instead of showing the menu, and
+// `-screenshot=N` writes a screenshot at frame N through the shipped F12 path.
 // `-runframes=N` quick-saves and quits after N frames of `main_loop`. With
 // `-deterministic` that is a complete scripted run: same save in, same number
 // of frames, same save out - which is what makes two CE builds comparable
@@ -80,6 +81,15 @@ static int dword_5CFF00;
 static bool harness_autoload;
 static int harness_run_frames;
 static int harness_frames_run;
+// CE: `-screenshot=N` fires the game's own F12 path at a fixed FRAME.
+// A wall-clock screenshot is not reproducible: the frame differential
+// (roadmap P5.5) measured two shots taken seconds apart in one in-game run
+// differing by 16,743 vs 16,740 distinct colours, because the world had
+// simulated in between. `-deterministic` does not help - it pins the RNG,
+// the GUID source, the frame clock and the pointer, none of which decides
+// *when* somebody presses a key. Pinning the frame number is what makes an
+// in-game frame comparable across runs.
+static int harness_shot_frame;
 
 // 0x401000
 int main(int argc, char** argv)
@@ -191,6 +201,11 @@ int main(int argc, char** argv)
 
     if (strstr(lpCmdLine, "-autoload") != NULL) {
         harness_autoload = true;
+    }
+
+    pch = strstr(lpCmdLine, "-screenshot=");
+    if (pch != NULL) {
+        harness_shot_frame = (int)strtol(pch + strlen("-screenshot="), NULL, 10);
     }
 
     pch = strstr(lpCmdLine, "-runframes=");
@@ -514,10 +529,27 @@ void main_loop(void)
         iso_redraw();
         tig_window_display();
 
-        // CE: `-runframes=N`. Counted after the frame so N means "N frames
-        // ran", and the save is taken from the same point every time.
+        // CE: counted after the frame is displayed, so N means "N frames ran"
+        // for both switches below, and `-screenshot=N -runframes=N` shoots the
+        // last frame of the run. The counter used to live inside the
+        // `-runframes` branch; it is unconditional now so `-screenshot` can
+        // share it. The comparison is unchanged, so `-runframes` behaves
+        // exactly as before.
+        harness_frames_run++;
+
+        // CE: `-screenshot=N`. Writes modules/<module>/screenNNNN.bmp through
+        // the shipped F12 path - the same `tig_video_screenshot_make` the key
+        // handler calls, so this captures what the engine actually presented
+        // rather than a second, harness-only rendering of it.
+        if (harness_shot_frame > 0 && harness_frames_run == harness_shot_frame) {
+            tig_debug_printf("Harness: screenshot at frame %d\n",
+                harness_frames_run);
+            tig_video_screenshot_make();
+        }
+
+        // CE: `-runframes=N`. The save is taken from the same point every time.
         if (harness_run_frames > 0) {
-            if (++harness_frames_run >= harness_run_frames) {
+            if (harness_frames_run >= harness_run_frames) {
                 tig_debug_printf("Harness: %d frames run, quick-saving\n",
                     harness_frames_run);
                 gamelib_save("SlotAuto", "Auto-Save");
