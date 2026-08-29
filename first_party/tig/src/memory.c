@@ -358,7 +358,15 @@ void tig_memory_print_stats(TigMemoryPrintStatsOptions opts)
             curr = curr->next;
         }
 
-        qsort(array, tig_memory_current_blocks, sizeof(blocks), tig_memory_sort_blocks);
+        // The element size is the size of an array element, which is a
+        // `TigMemoryBlock*`, not the size of the `blocks` counter that used to
+        // be named here. The two coincide on every target CE builds for -
+        // `size_t` and a pointer are both 4 bytes under ILP32 and both 8 under
+        // LP64/LLP64 - so this is a repair to the expression, not to any
+        // behaviour. The original passes the literal 4 alongside a
+        // `count * 4` allocation (`push 0x4` at 0x4FE8E9, `lea edx,[ecx*4]` at
+        // 0x4FE8B2), which is its pointer width.
+        qsort(array, tig_memory_current_blocks, sizeof(*array), tig_memory_sort_blocks);
 
         allocated = 0;
         blocks = 0;
@@ -456,8 +464,29 @@ void tig_memory_validate(TigMemoryBlock* block, const char* file, int line)
     int index;
 
     // NOTE: Validation code checks byte-by-byte, so it's alignment-safe.
+    //
+    // FIX: The guard pointer was never advanced, so both loops re-read byte 0
+    // of their guard once per iteration and never looked at bytes 1..N-1. The
+    // original walks the bytes - `inc edi` at 0x4FEAD4 and 0x4FEB03, closing
+    // loops that compare `cmp BYTE PTR [edi], 0xAA` / `0xBB` against a counter
+    // of 4 (its guards are 4 bytes wide; CE's are `sizeof(void*)`).
+    //
+    // The start guard was the damaging half. CE checked only `data[-8]`, the
+    // byte FURTHEST from the block, so the likeliest underrun of all - one byte
+    // written just before the block - went undetected, while the original
+    // checks all four of its guard bytes including the adjacent one. The end
+    // guard happened to catch the adjacent overrun, `data[size]` being byte 0,
+    // and missed the other seven.
+    //
+    // `index` is reported in the fatal message, so before this it also named
+    // the wrong byte on every iteration but the first.
+    //
+    // Unreachable in any current build - nothing defines `TIG_DEBUG_MEMORY`,
+    // so MALLOC/FREE go to the CRT and no block ever reaches this function -
+    // which is why it is not in the numbered ledger. Found 2026-08-29 while
+    // writing this module's first suite (roadmap P5.6).
     grd = (unsigned char*)block->data - START_GUARD_SIZE;
-    for (index = 0; index < START_GUARD_SIZE; index++) {
+    for (index = 0; index < START_GUARD_SIZE; index++, grd++) {
         if (*grd != START_GUARD_BYTE) {
             // NOTE: Format is slightly modified for VS Code to recognize file
             // path.
@@ -471,7 +500,7 @@ void tig_memory_validate(TigMemoryBlock* block, const char* file, int line)
     }
 
     grd = (unsigned char*)block->data + block->size;
-    for (index = 0; index < END_GUARD_SIZE; index++) {
+    for (index = 0; index < END_GUARD_SIZE; index++, grd++) {
         if (*grd != END_GUARD_BYTE) {
             // NOTE: Format is slightly modified for VS Code to recognize file
             // path.
