@@ -195,15 +195,38 @@ int tig_message_set_key_handler(TigMessageKeyboardCallback callback, int key)
     }
 
     if (callback == NULL) {
-        // Find handler to remove.
-        for (index = 0; index < MAX_KEY_HANDLERS; index++) {
+        // FIX: The search was bounded by MAX_KEY_HANDLERS rather than by the
+        // number of handlers actually registered. The original bounds it by
+        // the count and returns early when the table is empty - 0x52B940
+        // (`test edi,edi; jle`) and 0x52B951 (`cmp ecx,edi; jl`), where `edi`
+        // is `tig_message_key_handlers_count` at 0x62B298.
+        //
+        // It matters because removal does NOT clear the slot it removes: the
+        // shift only moves entries below the count, so the old last entry stays
+        // in the array as a stale copy. Searching past the count therefore
+        // finds handlers that are no longer registered - and, on an empty
+        // table, finds slot 0, whose `key` is 0 because the array is a
+        // zero-initialised static. Either way the count is decremented for a
+        // removal that did not happen, and from an empty table it goes to -1;
+        // the next add then writes `tig_message_key_handlers[-1]` and
+        // `tig_message_key_triggers[-1]`, out of bounds and into whichever
+        // static precedes them.
+        //
+        // Unreachable as shipped, which is why it is not in the numbered
+        // ledger: the only caller is `tig_video_screenshot_set_settings`
+        // (video.c:306), whose removal branch is guarded by
+        // `tig_video_screenshot_key != -1`, and `main.c:326` makes the single
+        // call with that still at its initial -1. Anyone adding a second key
+        // handler - a hotkey, a mod - inherits the hazard. Found 2026-08-29
+        // while writing this module's first suite (roadmap P5.6).
+        for (index = 0; index < tig_message_key_handlers_count; index++) {
             if (tig_message_key_handlers[index].key == key) {
                 break;
             }
         }
 
-        if (index >= MAX_KEY_HANDLERS) {
-            // Not found.
+        if (index >= tig_message_key_handlers_count) {
+            // Not found, or the table is empty.
             return TIG_ERR_INVALID_PARAM;
         }
 
