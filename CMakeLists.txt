@@ -360,13 +360,31 @@ target_link_libraries(arcanum-game PUBLIC
 # Function-entry census: which of the port's functions does play actually reach?
 # Off by default and touching nothing when off. See tests/coverage.c.
 #
-# Instruments `arcanum-game` only - the question is about the port's own naming
-# backlog, and instrumenting tig and SDL would bury it. PIE is turned off so a
-# logged runtime address is the link-time address `nm` reports.
+# Instruments `arcanum-game` by default - the original question was about the
+# port's own naming backlog, and instrumenting tig and SDL would bury it. PIE is
+# turned off so a logged runtime address is the link-time address `nm` reports.
+#
+# ARCANUM_COVERAGE_TIG extends it to `first_party/tig`, because that scoping
+# decision has outlived its rationale: roadmap P5 is entirely about tig, and
+# with the census blind to it there is no way to ask whether a tig path is
+# reached in real play. It is a separate option, and OFF by default, so the
+# trace gate's fixture - which is pinned against the game-only symbol set -
+# keeps meaning what it meant. Configure a SEPARATE build directory for it
+# rather than turning it on in `out/build/coverage`:
+#
+#   cmake --preset linux-x64-debug -B out/build/coverage-tig \
+#       -DARCANUM_COVERAGE=ON -DARCANUM_COVERAGE_TIG=ON
+#
+# SDL is still left alone: it is third-party, it is not what any of these
+# questions are about, and it really would bury the answer.
 option(ARCANUM_COVERAGE "Instrument the game library to record which functions run" OFF)
+option(ARCANUM_COVERAGE_TIG "Extend the census to first_party/tig" OFF)
 
 if(ARCANUM_COVERAGE)
     target_compile_options(arcanum-game PRIVATE -finstrument-functions -fno-pie)
+    if(ARCANUM_COVERAGE_TIG)
+        target_compile_options(${TIG_LIBRARY} PRIVATE -finstrument-functions -fno-pie)
+    endif()
 endif()
 
 if(ANDROID)

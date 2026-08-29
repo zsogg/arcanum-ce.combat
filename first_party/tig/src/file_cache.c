@@ -265,9 +265,11 @@ TigFileCacheItem* tig_file_cache_entry_acquire_random(TigFileCache* cache)
 // tests `items[0]` over and over and returns NULL unless item 0 itself is free.
 //
 // Established by RUNNING it, not by reading it, because a claim this odd
-// deserved better than one disassembly. Under `harness/emudiff/peemu`, with a
-// four-item cache built to the layout `tig_file_cache_entry_remove` (0x538AE0)
-// attests - item stride 0x18, `rep stos` of six dwords:
+// deserved better than one disassembly - and it is re-runnable:
+// `harness/emudiff/probe_file_cache_scan.py` asserts the table below and fails
+// loudly if it ever stops reproducing. With a four-item cache built to the
+// layout `tig_file_cache_entry_remove` (0x538AE0) attests - item stride 0x18,
+// `rep stos` of six dwords:
 //
 //   refcounts [1,0,1,1] -> NULL   (a real scan gives items[1])
 //   refcounts [1,1,1,0] -> NULL   (a real scan gives items[3])
@@ -278,12 +280,21 @@ TigFileCacheItem* tig_file_cache_entry_acquire_random(TigFileCache* cache)
 // (0x538D90) on the SAME fixture returns items[1] correctly, so the capacity
 // and items offsets are right and the fault is this loop's alone.
 //
-// Reachable, if rarely. `_acquire_random` falls through to here only after
-// 4 * capacity draws all land on held entries; with sound.c's capacity of 20
-// and exactly one free slot that is (19/20)^80, about 1.6% of the time
-// (computed, not measured). In the original the sound then fails to load and
-// `tig_file_cache_acquire` hands back the static null entry - which per quirk
-// 27 is silence with no error. Here it loads.
+// Reachable in principle, and NOT reached in practice. `_acquire_random` falls
+// through to here only after 4 * capacity draws all land on held entries; with
+// sound.c's capacity of 20 and exactly one free slot that is (19/20)^80, about
+// 1.6% (computed). But that is conditional on the cache being full, and it is
+// not: a 300-frame instrumented run of Slot0001 on 2026-08-29 acquired **one**
+// cache entry in total, and `_acquire_random`, `_acquire_scan` and
+// `tig_file_cache_shrink` were **never called** - all three are present as
+// symbols in that build, so absent from the census means not called rather than
+// inlined. See `harness/tig_census.py`.
+//
+// One run of one save is not proof of unreachability, and combat with many
+// simultaneous effects would use more of the cache. But nothing observed so far
+// gets near twenty held sounds. When it does happen, the original fails the
+// load and `tig_file_cache_acquire` hands back the static null entry - which per
+// quirk 27 is silence with no error. Here it loads.
 //
 // LEFT AS IS, deliberately, and it is a judgement call rather than an obvious
 // one: making CE bug-compatible would mean reintroducing a defect that drops
