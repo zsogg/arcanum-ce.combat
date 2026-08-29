@@ -296,11 +296,16 @@ TigFileCacheItem* tig_file_cache_entry_acquire_random(TigFileCache* cache)
 // load and `tig_file_cache_acquire` hands back the static null entry - which per
 // quirk 27 is silence with no error. Here it loads.
 //
-// LEFT AS IS, deliberately, and it is a judgement call rather than an obvious
-// one: making CE bug-compatible would mean reintroducing a defect that drops
-// sounds, to match a build whose author plainly meant this loop to scan. Same
-// treatment as the `object_hover_underlay/overlay_art_id` naming - documented,
-// not changed on our own inference, and worth raising upstream.
+// KEPT, and the divergence is deliberate. zsogg's call, 2026-08-29, on three
+// grounds: the body is unchanged from the pristine snapshot, so this is
+// upstream's divergence rather than one introduced here; matching the original
+// would mean reintroducing a defect that silently drops sounds, to match a build
+// whose author plainly meant this loop to scan; and the path is not reached in a
+// measured run, so bug-compatibility would buy no observable fidelity at all.
+//
+// Recorded rather than hidden - `DIVERGENCES.md`, and quirk 28 in
+// `MODDING-NOTES.md` for the modder-facing half. Still worth raising upstream,
+// which is a separate matter from what this port does.
 //
 // 0x538E00
 TigFileCacheItem* tig_file_cache_entry_acquire_scan(TigFileCache* cache)
