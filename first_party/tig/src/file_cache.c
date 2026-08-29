@@ -254,6 +254,43 @@ TigFileCacheItem* tig_file_cache_entry_acquire_random(TigFileCache* cache)
     return tig_file_cache_entry_acquire_scan(cache);
 }
 
+// FIX: This scans; the original's does not, and the difference is upstream's
+// rather than something introduced here - the body is unchanged from the
+// pristine snapshot, only the name was ours.
+//
+// The original at 0x538E00 loads `esi = cache->items` once and NEVER ADVANCES
+// IT. The loop head is at 0x538E14 and the only pointer that moves is `eax`,
+// which starts as the *cache* and gains 0x18 per iteration while the bound is
+// re-read from `[eax+0x1c]` - past the end of a 0x18-byte TigFileCache. So it
+// tests `items[0]` over and over and returns NULL unless item 0 itself is free.
+//
+// Established by RUNNING it, not by reading it, because a claim this odd
+// deserved better than one disassembly. Under `harness/emudiff/peemu`, with a
+// four-item cache built to the layout `tig_file_cache_entry_remove` (0x538AE0)
+// attests - item stride 0x18, `rep stos` of six dwords:
+//
+//   refcounts [1,0,1,1] -> NULL   (a real scan gives items[1])
+//   refcounts [1,1,1,0] -> NULL   (a real scan gives items[3])
+//   refcounts [0,1,1,1] -> items[0]
+//   refcounts [1,1,1,1] -> NULL
+//
+// The control that makes those readable: `tig_file_cache_entry_acquire_random`
+// (0x538D90) on the SAME fixture returns items[1] correctly, so the capacity
+// and items offsets are right and the fault is this loop's alone.
+//
+// Reachable, if rarely. `_acquire_random` falls through to here only after
+// 4 * capacity draws all land on held entries; with sound.c's capacity of 20
+// and exactly one free slot that is (19/20)^80, about 1.6% of the time
+// (computed, not measured). In the original the sound then fails to load and
+// `tig_file_cache_acquire` hands back the static null entry - which per quirk
+// 27 is silence with no error. Here it loads.
+//
+// LEFT AS IS, deliberately, and it is a judgement call rather than an obvious
+// one: making CE bug-compatible would mean reintroducing a defect that drops
+// sounds, to match a build whose author plainly meant this loop to scan. Same
+// treatment as the `object_hover_underlay/overlay_art_id` naming - documented,
+// not changed on our own inference, and worth raising upstream.
+//
 // 0x538E00
 TigFileCacheItem* tig_file_cache_entry_acquire_scan(TigFileCache* cache)
 {

@@ -29,6 +29,7 @@ add_executable(arcanum-tests
     "test_sound.c"
     "test_find_file.c"
     "test_memory.c"
+    "test_file_cache.c"
     "test_random.c"
     "test_stat.c"
     "test_skill.c"

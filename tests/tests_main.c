@@ -27,6 +27,7 @@ void test_file_suite(void);
 void test_sound_suite(void);
 void test_find_file_suite(void);
 void test_memory_suite(void);
+void test_file_cache_suite(void);
 void test_random_suite(void);
 void test_stat_suite(void);
 void test_skill_suite(void);
@@ -65,6 +66,7 @@ int main(void)
     test_file_suite();
     test_sound_suite();
     test_memory_suite();
+    test_file_cache_suite();
     test_random_suite();
     test_stat_suite();
     test_skill_suite();
