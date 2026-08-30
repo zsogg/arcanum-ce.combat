@@ -30,8 +30,34 @@
 
 #include "test_harness.h"
 
+#define CORE_DRAIN_LIMIT 256
+
+// `tig_ping` enqueues a PING every frame, so any case that pings owns a queue
+// and has to give it back. `tig_message_init` reassigns the heads without
+// freeing them (faithful - 0x52B6E1/0x52B6E7), so init must be paired with exit
+// or the nodes are simply orphaned; ASan reported 1,280 bytes from these cases
+// before this bracketing existed.
+static void core_begin(void)
+{
+    TigMessage drain;
+    int count = 0;
+
+    tig_message_init(NULL);
+    while (count < CORE_DRAIN_LIMIT && tig_message_dequeue(&drain) == TIG_OK) {
+        count++;
+    }
+}
+
 static void core_end(void)
 {
+    TigMessage drain;
+    int count = 0;
+
+    while (count < CORE_DRAIN_LIMIT && tig_message_dequeue(&drain) == TIG_OK) {
+        count++;
+    }
+    tig_message_exit();
+
     tig_timer_virtual_set(false, 0);
     // Leave the flag as every other suite expects to find it. `tig_mouse_ping`
     // does real work when active, and `tig_ping` calls it.
@@ -40,6 +66,8 @@ static void core_end(void)
 
 TEST(the_active_flag_round_trips)
 {
+    core_begin();
+
     // Nothing in the test binary has set it, and the static starts false.
     CHECK_INT(tig_get_active(), 0);
 
@@ -73,7 +101,7 @@ TEST(exit_without_init_is_a_no_op)
     // An earlier version of this case asserted only that the active flag still
     // round-tripped, which a full teardown does not disturb; the mutation that
     // deletes the guard passed it. Measured 2026-08-29.
-    tig_message_init(NULL);
+    core_begin();
     memset(&sent, 0, sizeof(sent));
     sent.type = TIG_MESSAGE_QUIT;
     sent.data.quit.exit_code = 1234;
@@ -99,6 +127,7 @@ TEST(ping_publishes_the_time_it_read)
 {
     tig_timestamp_t now;
 
+    core_begin();
     tig_timer_virtual_set(true, 16);
 
     tig_ping();
@@ -115,6 +144,7 @@ TEST(ping_advances_the_virtual_clock_exactly_once)
 {
     tig_timestamp_t start;
 
+    core_begin();
     tig_timer_virtual_set(true, 16);
     tig_timer_now(&start);
     CHECK_INT(start, 16);
@@ -138,6 +168,7 @@ TEST(ping_advances_the_virtual_clock_exactly_once)
 // proportionally different clock. This is what `-deterministic=<seed>` relies on.
 TEST(ping_advances_by_the_configured_step)
 {
+    core_begin();
     tig_timer_virtual_set(true, 25);
 
     tig_ping();
@@ -156,6 +187,7 @@ TEST(ping_does_not_advance_a_disabled_clock)
     tig_timestamp_t first;
     tig_timestamp_t second;
 
+    core_begin();
     tig_timer_virtual_set(false, 0);
 
     tig_ping();
@@ -176,6 +208,7 @@ TEST(ping_does_not_advance_a_disabled_clock)
 // makes the guard above safe for the rest of the suite run.
 TEST(ping_still_works_after_a_no_op_exit)
 {
+    core_begin();
     tig_timer_virtual_set(true, 16);
 
     tig_exit();
