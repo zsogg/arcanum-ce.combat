@@ -40,6 +40,7 @@ add_executable(arcanum-tests
     "test_guid.c"
     "test_dialog_shutdown.c"
     "test_dialog_options.c"
+    "test_eye_candy_sound.c"
     "test_random.c"
     "test_stat.c"
     "test_skill.c"
@@ -201,6 +202,57 @@ add_custom_command(
 add_custom_target(arcanum-dialog-test-obj DEPENDS "${DIALOG_TEST_OBJ}")
 target_link_libraries(arcanum-tests PRIVATE "${DIALOG_TEST_OBJ}")
 add_dependencies(arcanum-tests arcanum-dialog-test-obj)
+
+
+# The same objcopy trick again, for `anim.c` - porting bug #33.
+#
+# The bug is three defects across three `static` functions, and its entire
+# symptom is audible, so the ledger carried it from 2026-08-22 as "verified
+# against the original's bytes but not by ear" and `PLAYTEST-REMAINING.md`
+# asked a human to go and listen.
+#
+# It does not need ears. Every one of the three things a listener was told to
+# judge - does it loop, does it follow, does it restart - is a decision these
+# functions make, and each is observable from outside: which branch `begin`
+# takes, whether `tig_sound_set_position` is driven from the object, and
+# whether `restart` acts when there is no live handle.
+#
+# Globalizing costs no source change and no runtime behaviour, exactly as for
+# `art.c` and `dialog.c` above. `anim.c` is 15,000 lines and these three are
+# 90 of them; nothing else in the file is touched.
+set(ANIM_TEST_STATICS
+    anim_eye_candy_sound_begin
+    anim_eye_candy_sound_move
+    anim_eye_candy_sound_restart
+)
+set(ANIM_TEST_OBJ "${CMAKE_CURRENT_BINARY_DIR}/anim_globalized.o")
+set(_anim_globalize_args "")
+foreach(sym ${ANIM_TEST_STATICS})
+    list(APPEND _anim_globalize_args "--globalize-symbol=${sym}")
+endforeach()
+
+file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/animobj")
+
+add_custom_command(
+    OUTPUT "${ANIM_TEST_OBJ}"
+    COMMAND "${CMAKE_AR}" x "$<TARGET_FILE:arcanum-game>" anim.c.o
+    COMMAND "${CMAKE_OBJCOPY}" ${_anim_globalize_args} anim.c.o "${ANIM_TEST_OBJ}"
+    COMMAND "${CMAKE_COMMAND}" -E rm -f anim.c.o
+    COMMAND "${CMAKE_COMMAND}"
+        "-DOBJ=${ANIM_TEST_OBJ}"
+        "-DSYMS=${ANIM_TEST_STATICS}"
+        "-DDATA_SYMS="
+        "-DNM=${CMAKE_NM}"
+        -P "${CMAKE_CURRENT_SOURCE_DIR}/verify_globalized.cmake"
+    WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/animobj"
+    DEPENDS arcanum-game
+    COMMENT "tests: globalizing anim.c eye-candy sound statics (no source change)"
+    VERBATIM
+)
+
+add_custom_target(arcanum-anim-test-obj DEPENDS "${ANIM_TEST_OBJ}")
+target_link_libraries(arcanum-tests PRIVATE "${ANIM_TEST_OBJ}")
+add_dependencies(arcanum-tests arcanum-anim-test-obj)
 
 
 # The CE half of the archive differential. `arcanum-work/scripts/dbmaker_diff.py`
