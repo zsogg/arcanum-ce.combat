@@ -38,6 +38,7 @@ add_executable(arcanum-tests
     "test_draw.c"
     "test_kb.c"
     "test_guid.c"
+    "test_dialog_shutdown.c"
     "test_random.c"
     "test_stat.c"
     "test_skill.c"

@@ -446,9 +446,40 @@ bool dialog_load(const char* path, int* dlg_ptr)
     return true;
 }
 
+// FIX: refuse once the table is gone. `dialog_files` is freed and set to NULL
+// by `dialog_exit`, and the shutdown path reaches here afterwards: `gamelib_exit`
+// tears its module table down in reverse and "Dialog" (gamelib.c:157) sits after
+// "Map" (:150), so dialog is shut down first and then map teardown deletes every
+// object, announcing each through `ui_notify_object_destroyed`. If the destroyed
+// object is one you were talking to, `dialog_ui_end_dialog` arrives here and
+// decrements through a NULL - a segfault after the save is already written.
+//
+// **Both halves of that are faithful**, verified against the binary: the
+// original's `dialog_unload` is equally unguarded (0x412F40 loads the pointer at
+// 0x5D1A08, computes `+ dlg*288 + 0x104`, and `dec DWORD PTR [eax]`), and its
+// `dialog_exit` NULLs the same pointer (`mov DWORD PTR ds:0x5d1a08,0x0` at
+// 0x412E03). Whether the original's teardown *order* matches has not been
+// checked, so it is likely but not proven that it crashes identically.
+//
+// **Fixed rather than reproduced, on zsogg's call (2026-08-29)**, for the reason
+// the file_cache scan was kept: matching the original here buys no observable
+// fidelity - the crash is after `gamelib_save` completes, so a player loses
+// nothing and sees at most a shell message - while reproducing it costs every
+// automated run its `atexit` handlers. That is not hypothetical: it is how this
+// was found, as a coverage census that silently produced no file.
+//
+// The guard is deliberately NULL-only. A bounds check on `dlg` would be a
+// second, unrelated change, and there is no evidence of an out-of-range index.
+// Found by the driven tig census (`harness/tig-census-input.py`) on Slot0010;
+// quirk 30 in MODDING-NOTES.md carries the backtrace.
+//
 // 0x412F40
 void dialog_unload(int dlg)
 {
+    if (dialog_files == NULL) {
+        return;
+    }
+
     dialog_files[dlg].refcount--;
 }
 
