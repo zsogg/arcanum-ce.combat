@@ -39,6 +39,7 @@ add_executable(arcanum-tests
     "test_kb.c"
     "test_guid.c"
     "test_dialog_shutdown.c"
+    "test_dialog_options.c"
     "test_random.c"
     "test_stat.c"
     "test_skill.c"
@@ -158,6 +159,48 @@ target_link_libraries(arcanum-emudiff-oracle PRIVATE
     SDL3::SDL3
 )
 add_dependencies(arcanum-emudiff-oracle arcanum-emudiff-art-obj)
+
+
+# The same objcopy trick as above, for `dialog.c`, so the unit suite can reach
+# `dialog_collect_pc_options`.
+#
+# It is `static`, and it is the function the 2026-08-30 parent-link change
+# touches - the whole point of that change is a second collection pass, so
+# shipping it with the pass untested would be shipping the interesting half on
+# faith. Globalizing costs no source change and no runtime behaviour: the object
+# is swapped in ahead of `arcanum-game`, exactly as `art_globalized.o` is ahead
+# of the oracle's link.
+set(DIALOG_TEST_STATICS
+    dialog_collect_pc_options
+)
+set(DIALOG_TEST_OBJ "${CMAKE_CURRENT_BINARY_DIR}/dialog_globalized.o")
+set(_dialog_globalize_args "")
+foreach(sym ${DIALOG_TEST_STATICS})
+    list(APPEND _dialog_globalize_args "--globalize-symbol=${sym}")
+endforeach()
+
+file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/dialogobj")
+
+add_custom_command(
+    OUTPUT "${DIALOG_TEST_OBJ}"
+    COMMAND "${CMAKE_AR}" x "$<TARGET_FILE:arcanum-game>" dialog.c.o
+    COMMAND "${CMAKE_OBJCOPY}" ${_dialog_globalize_args} dialog.c.o "${DIALOG_TEST_OBJ}"
+    COMMAND "${CMAKE_COMMAND}" -E rm -f dialog.c.o
+    COMMAND "${CMAKE_COMMAND}"
+        "-DOBJ=${DIALOG_TEST_OBJ}"
+        "-DSYMS=${DIALOG_TEST_STATICS}"
+        "-DDATA_SYMS="
+        "-DNM=${CMAKE_NM}"
+        -P "${CMAKE_CURRENT_SOURCE_DIR}/verify_globalized.cmake"
+    WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/dialogobj"
+    DEPENDS arcanum-game
+    COMMENT "tests: globalizing dialog.c statics (no source change)"
+    VERBATIM
+)
+
+add_custom_target(arcanum-dialog-test-obj DEPENDS "${DIALOG_TEST_OBJ}")
+target_link_libraries(arcanum-tests PRIVATE "${DIALOG_TEST_OBJ}")
+add_dependencies(arcanum-tests arcanum-dialog-test-obj)
 
 
 # The CE half of the archive differential. `arcanum-work/scripts/dbmaker_diff.py`

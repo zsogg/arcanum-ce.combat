@@ -37,6 +37,7 @@ void test_draw_suite(void);
 void test_kb_suite(void);
 void test_guid_suite(void);
 void test_dialog_shutdown_suite(void);
+void test_dialog_options_suite(void);
 void test_random_suite(void);
 void test_stat_suite(void);
 void test_skill_suite(void);
@@ -85,6 +86,7 @@ int main(void)
     test_kb_suite();
     test_guid_suite();
     test_dialog_shutdown_suite();
+    test_dialog_options_suite();
     test_random_suite();
     test_stat_suite();
     test_skill_suite();

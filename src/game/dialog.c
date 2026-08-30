@@ -158,6 +158,20 @@ typedef struct DialogFileEntry {
     /* 0010 */ char* conditions;
     /* 0014 */ int response_val;
     /* 0018 */ char* actions;
+
+    // FIX: CE-only, appended after the original's 0x1C bytes so every offset
+    // above still matches `Arcanum.exe`. This struct is a load-time cache and is
+    // never serialised - `"Dialog"` and `"Dialog-UI"` both carry NULL save and
+    // load functions (gamelib.c:157, gameuilib.c:99) - so widening it cannot
+    // affect a savegame.
+    //
+    // The line number this entry is a player option for, or 0 for none. It
+    // exists so a mod can add an option to a node whose numbering has no room:
+    // the original finds options by NUMERIC ADJACENCY (see
+    // `dialog_collect_pc_options`), and 48% of the 15,444 shipped nodes have no
+    // free number before the next node. Set from an `@N` marker at the start of
+    // the conditions field; see `dialog_parse_entry`.
+    int parent;
 } DialogFileEntry;
 
 typedef struct DialogFile {
@@ -1384,6 +1398,36 @@ void dialog_build_exchange(DialogState* a1, bool randomize)
     }
 }
 
+// Does this entry qualify as a player option right now?
+//
+// Lifted verbatim out of `dialog_collect_pc_options`'s loop so the adjacency
+// pass and the parent-link pass cannot drift apart. That mattered enough to
+// factor: two copies of a gender/intelligence/condition test is exactly the
+// shape of thing that stays correct for a year and then does not.
+//
+// `iq == 0` marks an NPC line rather than an option, so it never qualifies. The
+// adjacency pass treats it as the end of the block; the parent pass simply
+// skips it, since an NPC line carrying a parent marker would be a mod's mistake
+// rather than something to honour.
+static bool dialog_option_qualifies(DialogState* a1, DialogFileEntry* entry,
+    int gender, int intelligence)
+{
+    if (entry->iq == 0) {
+        return false;
+    }
+
+    if (entry->data.gender != -1 && entry->data.gender != gender) {
+        return false;
+    }
+
+    if (!((entry->iq < 0 && intelligence <= -entry->iq)
+            || (entry->iq >= 0 && intelligence >= entry->iq))) {
+        return false;
+    }
+
+    return entry->conditions == NULL || dialog_check_conditions(a1, entry->conditions);
+}
+
 // 0x414F50
 int dialog_collect_pc_options(DialogState* a1, int* a2)
 {
@@ -1417,18 +1461,53 @@ int dialog_collect_pc_options(DialogState* a1, int* a2)
 
     cnt = 0;
 
+    // Pass one, the original's: options are the entries that follow this node
+    // numerically, up to the next NPC line. `entries` is sorted by `num`
+    // (`dialog_file_load` qsorts it), so "the next array slot" means "the next
+    // line number".
+    //
+    // NOTE: the original returns from inside this loop. It is a `break` now so
+    // that pass two can follow; the behaviour when there is no parent-linked
+    // option is identical, because pass two then adds nothing.
     for (idx = (int)(entry - dialog->entries) + 1; idx < dialog->entries_length && cnt < 5; idx++) {
         entry = &(dialog->entries[idx]);
         if (entry->iq == 0) {
-            return cnt;
+            break;
         }
 
-        if (entry->data.gender == -1 || entry->data.gender == gender) {
-            if ((entry->iq < 0 && intelligence <= -entry->iq)
-                || (entry->iq >= 0 && intelligence >= entry->iq)) {
-                if (entry->conditions == NULL || dialog_check_conditions(a1, entry->conditions)) {
-                    a2[cnt++] = entry->num;
-                }
+        if (dialog_option_qualifies(a1, entry, gender, intelligence)) {
+            a2[cnt++] = entry->num;
+        }
+    }
+
+    // FIX: CE-only. Pass two - options that name this node with an `@N` marker
+    // instead of being numbered next to it.
+    //
+    // Why this exists: adjacency is a real constraint, not a stylistic one, and
+    // 48% of the 15,444 shipped nodes have NO free number before the next node.
+    // Without this a mod simply cannot add a player option to half the game's
+    // dialogue, however it is authored.
+    //
+    // Ordering is deliberate. Adjacent options come first and keep the numbers
+    // Troika chose; parent-linked ones fill whatever is left of the five slots,
+    // in line-number order because `entries` is sorted. So installing a mod can
+    // ADD an option to a node that had spare slots, and cannot displace one that
+    // did not - the failure mode is a mod's option not appearing, never a
+    // Troika option disappearing.
+    //
+    // The scan is linear over the file's entries, once per option menu. Files
+    // run to a few hundred entries, so this is not measurable; it is written as
+    // a plain scan rather than an index because a second index would be state to
+    // keep correct across `dialog_file_free` for no gain anyone could observe.
+    if (cnt < 5) {
+        for (idx = 0; idx < dialog->entries_length && cnt < 5; idx++) {
+            entry = &(dialog->entries[idx]);
+            if (entry->parent != a1->status_num) {
+                continue;
+            }
+
+            if (dialog_option_qualifies(a1, entry, gender, intelligence)) {
+                a2[cnt++] = entry->num;
             }
         }
     }
@@ -2776,6 +2855,43 @@ bool dialog_parse_entry(TigFile* stream, DialogFileEntry* entry, int* line_ptr)
         tig_debug_printf("Missing test field on line: %d (dialog line %d)\n", *line_ptr, entry->num);
         return false;
     }
+
+    // FIX: CE-only. A leading `@N` in the conditions field names the NPC line
+    // this option belongs to, freeing it from having to be numbered adjacent to
+    // that line. Stripped here, so everything downstream sees the conditions it
+    // always saw.
+    //
+    // The conditions field is the carrier ON PURPOSE, and the alternative is a
+    // trap worth naming: an eighth field would desync `dialog_parse_entry`,
+    // whose `false` return ends `dialog_load_internal`'s read loop - so an
+    // engine without this change would not ignore the extension, it would
+    // SILENTLY DROP EVERY RECORD AFTER IT. A marker here degrades far better:
+    // `dialog_check_conditions` skips every character that is not alphabetic or
+    // `$` (see its scan loop) and falls through to `return true` for a string it
+    // never matches, so an unpatched engine parses the record normally and
+    // treats the marker as a condition that passes. Keep the marker numeric for
+    // exactly that reason - a letter in it would be read as a condition code.
+    //
+    // No shipped file uses `@` in a conditions field; checked across all 713.
+    // The character is reserved for this, and that is recorded in
+    // MODDING-NOTES.md so it is not spent twice.
+    entry->parent = 0;
+    if (str[0] == '@') {
+        char* pch = str + 1;
+        while (*pch >= '0' && *pch <= '9') {
+            entry->parent = entry->parent * 10 + (*pch - '0');
+            pch++;
+        }
+        // Only a well-formed `@<digits>` counts. Anything else is left alone
+        // and reaches the condition evaluator unchanged, which is what an
+        // engine without this change would do with it anyway.
+        if (pch == str + 1) {
+            entry->parent = 0;
+        } else {
+            memmove(str, pch, strlen(pch) + 1);
+        }
+    }
+
     strcpy(entry->conditions, str);
 
     if (!dialog_parse_field(stream, str, line_ptr)) {
