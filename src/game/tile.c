@@ -215,6 +215,18 @@ bool tile_is_slippery(int64_t loc)
 // inside itself). Externally unreferenced in both binaries, so it stays a
 // stub until someone ports it deliberately.
 //
+// PROVED, not assumed (2026-08-31). The whole .text section was scanned for
+// E8/E9 rel32 branches resolving to 0x4D71E0 and the whole file for the
+// 4-byte little-endian address: **2 direct references, both the self-recursion
+// above, and 0 absolute references anywhere** - so it is not reached through a
+// table or a function pointer either. The function is dead in Troika's own
+// binary, which is what makes this empty body safe: nothing can call it.
+//
+// The name is recoverable if anyone wants it - the behaviour above was read
+// off the original - but naming an empty body would assert a behaviour this
+// port does not have. `sub_` is the honest marker for "not transcribed"; see
+// the `// TODO: Incomplete.` below.
+//
 // 0x4D71E0
 void sub_4D71E0(int64_t loc)
 {

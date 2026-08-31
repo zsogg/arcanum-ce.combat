@@ -560,6 +560,18 @@ bool mp_deallocate_run_index(AnimID* anim_id)
 // empty in the release build. Naming it would invent a behaviour it does not
 // have.
 //
+// Call-site accounting, in case the counts ever look wrong (2026-08-31): the
+// original has **nine** direct call sites and CE transcribes **six**. The
+// three-way difference is fully explained and is not a gap.
+//   - 0x437074 and 0x4371D0 are inside 0x436FF0, a function with **zero
+//     callers and zero absolute references anywhere in the image** - dead in
+//     Troika's own binary, and correctly not transcribed here. (0x436FF0 is
+//     easy to mistake for the tail of `anim_speed_recalc` at 0x436FA0; it is
+//     not - that one ends at 0x436FE8 with `ret` followed by padding.)
+//   - 0x43766F is inside `mp_anim_modify` (0x4374C0), multiplayer, out of
+//     scope by finish condition 5.
+// Since the body is a bare `ret`, none of this is observable either way.
+//
 // 0x44D0C0
 void sub_44D0C0(AnimRunInfo* run_info)
 {

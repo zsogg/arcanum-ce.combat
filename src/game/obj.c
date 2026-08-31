@@ -5311,11 +5311,33 @@ bool obj_field_is_changed(Object* object, int fld)
     return (object->changed[object_fields[fld].change_array_idx] & object_fields[fld].mask) != 0;
 }
 
-// NOTE: Left unnamed. It is behaviourally identical to `obj_field_is_changed`,
-// which already returns a bool, and the two are used interchangeably in this
-// file - obj.c:2463 tests both in a row on the same field. There is nothing in
-// the body or the call sites to tell them apart, so a second name here would be
-// invented rather than recovered.
+// NOTE: Left unnamed - but NOT because the two are indistinguishable. An
+// earlier version of this note said "there is nothing in the body or the call
+// sites to tell them apart", and that is wrong; disassembling both settles it
+// (2026-08-31):
+//
+//   0x40D320  ... mov edx,[ecx+0xc] / and eax,edx / ret     <- RAW masked bits
+//   0x40D350  call 0x40D320 / neg eax / sbb eax,eax / neg eax / ret  <- 0 or 1
+//
+// So in the original they are genuinely different functions: `is_changed`
+// returns the mask itself (0x40, say) and this one canonicalises it to a
+// 0/1 bool with the usual MSVC neg/sbb/neg idiom.
+//
+// The distinction does not survive into CE, which is why there is still no
+// second name to give. CE declares `obj_field_is_changed` as returning `bool`,
+// so it already normalises, and this wrapper is a no-op rather than a
+// duplicate. Naming it here would describe a difference this port's types have
+// already erased.
+//
+// FAITHFUL, checked rather than assumed: all twelve CE call sites of
+// `obj_field_is_changed` use it in a boolean context (`if`, `!`, `&&`), so
+// nothing reads the raw mask as a number and the `bool` return changes no
+// behaviour. The original has exactly three call sites for 0x40D350
+// (0x408908, 0x408C33, 0x408EC8) and CE transcribes three.
+//
+// The nested test at obj.c:2564-2565 - `if (!sub_40D350(...))` wrapping
+// `if (!obj_field_is_changed(...))` on the same field - is Troika's own
+// redundancy, faithfully carried.
 //
 // 0x40D350
 bool sub_40D350(Object* object, int fld)
