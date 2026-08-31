@@ -34,8 +34,13 @@ static void tile_draw_iso(GameDrawInfo* draw_info);
 // 0x602AE0
 static TileCacheEntry stru_602AE0[TILE_CACHE_CAPACITY];
 
+// The 80x40 system-memory buffer one tile is composed into before it is
+// blitted. Named with `tile_render_buffer_created` below, which is written
+// in the same two places this is: `tig_video_buffer_create(..., &this)` is
+// immediately followed by setting that flag.
+//
 // 0x602DE0
-static TigVideoBuffer* dword_602DE0;
+static TigVideoBuffer* tile_render_video_buffer;
 
 // 0x602DE4
 static uint8_t* dword_602DE4;
@@ -61,8 +66,11 @@ static bool tile_hardware_accelerated;
 // 0x602E04
 static tig_window_handle_t tile_iso_window_handle;
 
+// Whether `tile_render_video_buffer` above has been created.
+// `tile_cache_zoom_update` creates it on demand when this is false.
+//
 // 0x602E08
-static bool dword_602E08;
+static bool tile_render_buffer_created;
 
 // 0x4D6840
 bool tile_init(GameInitInfo* init_info)
@@ -350,12 +358,12 @@ void tile_cache_fill(tig_art_id_t art_id, TigVideoBuffer* video_buffer)
         art_blit_spec.flags = TIG_ART_BLT_PALETTE_ORIGINAL;
         art_blit_spec.art_id = art_id;
         art_blit_spec.src_rect = &rect;
-        art_blit_spec.dst_video_buffer = dword_602DE0;
+        art_blit_spec.dst_video_buffer = tile_render_video_buffer;
         art_blit_spec.dst_rect = &rect;
         tig_art_blit(&art_blit_spec);
 
-        tig_video_buffer_lock(dword_602DE0);
-        tig_video_buffer_data(dword_602DE0, &src_video_buffer_data);
+        tig_video_buffer_lock(tile_render_video_buffer);
+        tig_video_buffer_data(tile_render_video_buffer, &src_video_buffer_data);
 
         tig_video_buffer_lock(video_buffer);
         tig_video_buffer_data(video_buffer, &dst_video_buffer_data);
@@ -370,7 +378,7 @@ void tile_cache_fill(tig_art_id_t art_id, TigVideoBuffer* video_buffer)
         }
 
         tig_video_buffer_unlock(video_buffer);
-        tig_video_buffer_unlock(dword_602DE0);
+        tig_video_buffer_unlock(tile_render_video_buffer);
     }
 }
 
@@ -412,15 +420,15 @@ void tile_art_id_set(int64_t loc, tig_art_id_t art_id)
 // 0x4D7980
 void tile_caches_destroy(void)
 {
-    if (dword_602DE0 != NULL) {
-        tig_video_buffer_destroy(dword_602DE0);
-        dword_602DE0 = NULL;
+    if (tile_render_video_buffer != NULL) {
+        tig_video_buffer_destroy(tile_render_video_buffer);
+        tile_render_video_buffer = NULL;
     }
 
     tile_cache_lookup_tables_destroy();
     tile_cache_destroy();
 
-    dword_602E08 = false;
+    tile_render_buffer_created = false;
 }
 
 // 0x4D79C0
@@ -428,7 +436,7 @@ void tile_cache_zoom_update(ViewOptions* view_options)
 {
     if (view_options->type == VIEW_TYPE_TOP_DOWN) {
         if (view_options->zoom != tile_view_options.zoom) {
-            if (!dword_602E08) {
+            if (!tile_render_buffer_created) {
                 tile_render_buffer_create();
             }
 
@@ -447,9 +455,9 @@ void tile_render_buffer_create(void)
     vb_create_info.width = 80;
     vb_create_info.height = 40;
     vb_create_info.background_color = 0;
-    tig_video_buffer_create(&vb_create_info, &dword_602DE0);
+    tig_video_buffer_create(&vb_create_info, &tile_render_video_buffer);
 
-    dword_602E08 = true;
+    tile_render_buffer_created = true;
 }
 
 // 0x4D7A40

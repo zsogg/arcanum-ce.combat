@@ -137,8 +137,11 @@ static char off_59F3DC[] = "*** Deleted Map ***";
 // 0x5D11E0
 static int64_t map_starting_loc;
 
+// A double-close latch, not an "is open" flag - note the sense. `map_close`
+// does its work only `if (!map_closed)` and sets it; `map_open` clears it.
+//
 // 0x5D11E8
-static bool dword_5D11E8;
+static bool map_closed;
 
 // 0x5D11EC
 static bool dword_5D11EC;
@@ -149,8 +152,11 @@ static bool map_gender_check_enabled;
 // 0x5D11D8
 static int dword_5D11D8;
 
+// Whether `map_init` has run. It early-returns true when already set, and
+// `map_save` refuses when it is not - so this gates saving, not just setup.
+//
 // 0x5D11F0
-static bool dword_5D11F0;
+static bool map_initialized;
 
 // 0x5D11F4
 static char* map_save_path;
@@ -173,8 +179,13 @@ static bool map_in_map_clear_objects;
 // 0x5D120C
 static int map_list_info_count;
 
+// The open map's index in `map_list_info`, **one-based**: `map_open` stores
+// `map_list_info_find(...) + 1`, so 0 means "not a listed map". Returned as-is
+// by `map_current_map`, and compared directly against `map_type_to_map_index`
+// entries, which are in the same one-based space.
+//
 // 0x5D1210
-static int dword_5D1210;
+static int map_current_map_index;
 
 // 0x5D1214
 static int map_type_to_map_index[MAP_TYPE_COUNT];
@@ -185,7 +196,7 @@ static int dword_5D1220;
 // 0x40EA90
 bool map_init(GameInitInfo* init_info)
 {
-    if (dword_5D11F0) {
+    if (map_initialized) {
         return true;
     }
 
@@ -216,7 +227,7 @@ bool map_init(GameInitInfo* init_info)
     }
 
     map_gender_check_enabled = 0;
-    dword_5D11F0 = true;
+    map_initialized = true;
     map_editor = init_info->editor;
     dword_5D11EC = false;
 
@@ -229,7 +240,7 @@ void map_reset(void)
     tig_timestamp_t reset_start;
     tig_timestamp_t start;
 
-    if (dword_5D11F0) {
+    if (map_initialized) {
         tig_debug_printf("\nmap_reset: Resetting...\n");
         tig_timer_now(&reset_start);
 
@@ -246,7 +257,7 @@ void map_reset(void)
         tig_debug_printf("map_reset: closing map...");
         tig_timer_now(&start);
         map_close();
-        dword_5D1210 = 0;
+        map_current_map_index = 0;
         tig_debug_printf("done. Time (ms): %d\n", tig_timer_elapsed(start));
 
         for (int index = 0; index < MAP_MODULE_COUNT; index++) {
@@ -317,7 +328,7 @@ void map_mod_unload(void)
 // 0x40EDC0
 void map_exit(void)
 {
-    if (dword_5D11F0) {
+    if (map_initialized) {
         map_close();
     }
 
@@ -331,7 +342,7 @@ void map_exit(void)
     FREE(map_save_path);
     FREE(map_list_info);
 
-    dword_5D11F0 = false;
+    map_initialized = false;
 }
 
 // 0x40EE20
@@ -355,7 +366,7 @@ bool map_save(TigFile* stream)
     tig_debug_printf("\nmap_save()\n");
     tig_timer_now(&save_start);
 
-    if (!dword_5D11F0) {
+    if (!map_initialized) {
         return false;
     }
 
@@ -433,7 +444,7 @@ bool map_load(GameLoadInfo* load_info)
     tig_debug_printf("\nmap_load\n");
     tig_timer_now(&load_start);
 
-    if (!dword_5D11F0) {
+    if (!map_initialized) {
         return false;
     }
 
@@ -513,7 +524,7 @@ bool map_load(GameLoadInfo* load_info)
 // 0x40F320
 void map_update_view(ViewOptions* view_options)
 {
-    if (dword_5D11F0) {
+    if (map_initialized) {
         for (int index = MAP_MODULE_COUNT - 1; index >= 0; index--) {
             if (map_modules[index].update_view_func != NULL) {
                 map_modules[index].update_view_func(view_options);
@@ -530,7 +541,7 @@ bool map_new(MapNewInfo* new_map_info)
     TigFile* stream;
     MapProperties map_properties;
 
-    if (!dword_5D11F0) {
+    if (!map_initialized) {
         return false;
     }
 
@@ -592,7 +603,7 @@ bool map_open(const char* base_path, const char* save_path, bool a3)
     int map;
     MapNewInfo new_map_info;
 
-    if (!dword_5D11F0) {
+    if (!map_initialized) {
         return false;
     }
 
@@ -753,11 +764,11 @@ bool map_open(const char* base_path, const char* save_path, bool a3)
     sector_limits_set(map_properties.width >> 6, map_properties.height >> 6);
     sector_map_name_set(base_path, save_path);
     location_origin_set(location_center_get());
-    dword_5D1210 = 0;
+    map_current_map_index = 0;
     pch = strrchr(base_path, '\\');
     map = map_list_info_find(pch != NULL ? pch + 1 : base_path);
     if (map != -1) {
-        dword_5D1210 = map + 1;
+        map_current_map_index = map + 1;
     }
     duration = tig_timer_elapsed(timestamp);
     tig_debug_printf("done.  Time (ms): %d\n", duration);
@@ -778,7 +789,7 @@ bool map_open(const char* base_path, const char* save_path, bool a3)
     tig_timer_now(&timestamp);
     map_gender_check();
     dword_5D11EC = false;
-    if (dword_5D1210 != 0 && map_type_to_map_index[MAP_TYPE_START_MAP] == dword_5D1210) {
+    if (map_current_map_index != 0 && map_type_to_map_index[MAP_TYPE_START_MAP] == map_current_map_index) {
         dword_5D11EC = true;
     }
     duration = tig_timer_elapsed(timestamp);
@@ -787,7 +798,7 @@ bool map_open(const char* base_path, const char* save_path, bool a3)
     duration = tig_timer_elapsed(start_timestamp);
     tig_debug_printf("map_open(): Done.  Total time: %d ms.\n", duration);
 
-    dword_5D11E8 = false;
+    map_closed = false;
     map_valid = true;
 
     return true;
@@ -800,7 +811,7 @@ bool map_open_in_game(int map, bool a2, bool a3)
     char base_path[TIG_MAX_PATH];
     char save_path[TIG_MAX_PATH];
 
-    if (!dword_5D11F0) {
+    if (!map_initialized) {
         return false;
     }
 
@@ -900,7 +911,7 @@ bool map_get_name(int map, char** name)
 // 0x40FF40
 int map_current_map(void)
 {
-    return dword_5D1210;
+    return map_current_map_index;
 }
 
 // 0x40FF50
@@ -1158,8 +1169,8 @@ void map_close(void)
 {
     int index;
 
-    if (!dword_5D11E8) {
-        dword_5D11E8 = true;
+    if (!map_closed) {
+        map_closed = true;
 
         wallcheck_flush();
         gsound_flush();

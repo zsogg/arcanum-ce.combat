@@ -63,8 +63,13 @@ static bool load_roof_data(void);
 // 0x603AE0
 static char** outdoor_non_flippable_tile_names;
 
+// Whether the seven `a_name_tile_variant_*` tables have been built. Set at the
+// end of the variants init, cleared by the exit path that FREEs them, and read
+// by `a_name_tile_variant_get`, which returns a variant count of **1** when it
+// is false rather than failing - so an uninitialised lookup degrades silently.
+//
 // 0x603AE4
-static bool dword_603AE4;
+static bool a_name_tile_variants_initialized;
 
 // 0x603AE8
 static uint8_t* outdoor_flippable_tile_flags;
@@ -241,14 +246,14 @@ void a_name_tile_exit(void)
     FREE(indoor_flippable_tile_sounds);
     FREE(indoor_non_flippable_tile_sounds);
 
-    if (dword_603AE4) {
+    if (a_name_tile_variants_initialized) {
         int index;
 
         for (index = 0; index < 7; index++) {
             FREE(dword_687660[index]);
         }
 
-        dword_603AE4 = false;
+        a_name_tile_variants_initialized = false;
     }
 }
 
@@ -901,7 +906,7 @@ void a_name_tile_variants_init(void)
         a_name_tile_variants_save();
     }
 
-    dword_603AE4 = true;
+    a_name_tile_variants_initialized = true;
 }
 
 // 0x4EBE90
@@ -923,7 +928,7 @@ int8_t a_name_tile_variant_count(int a1, int a2, int a3, int a4, int a5, int a6)
 // 0x4EBEF0
 int a_name_tile_variant_get(int a1, int a2, int a3, int a4, int a5, int a6)
 {
-    if (!dword_603AE4) {
+    if (!a_name_tile_variants_initialized) {
         return 1;
     }
 

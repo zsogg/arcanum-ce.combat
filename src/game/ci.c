@@ -11,8 +11,11 @@ static TigRect ci_indicator_frame;
 // 0x5FC3B0
 static TigArtBlitInfo ci_indicator_blit_info;
 
+// Lock depth, not a boolean: `ci_lock` increments and `ci_unlock` decrements
+// with no clamp at either end. `ci_lock_count` is the accessor.
+//
 // 0x5FC3DC
-static int dword_5FC3DC;
+static int ci_locks;
 
 // 0x5FC3E0
 static TigVideoBuffer* ci_indicator_vb;
@@ -87,19 +90,19 @@ void ci_exit(void)
 // 0x4BB8E0
 void ci_lock(void)
 {
-    dword_5FC3DC++;
+    ci_locks++;
 }
 
 // 0x4BB8F0
 void ci_unlock(void)
 {
-    dword_5FC3DC--;
+    ci_locks--;
 }
 
 // 0x4BB900
 int ci_lock_count(void)
 {
-    return dword_5FC3DC;
+    return ci_locks;
 }
 
 // 0x4BB910
