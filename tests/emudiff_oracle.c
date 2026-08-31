@@ -724,6 +724,39 @@ static int64_t o_obj_of_type(int type)
     return o_obj_by_type[type];
 }
 
+// A second prototype per type, for the functions that take two objects.
+//
+// Added 2026-08-31 with `critter_origin_same`, which compares one critter's
+// origin against another's. One object per type is not enough there: the two
+// arguments would be the same object, the two origins equal by construction,
+// and the only branch reachable would be the one that answers true. The
+// emulator side had the mirror-image problem -- a single field map -- and
+// learned to key on the handle at the same time.
+static int64_t o_obj_by_type_second[OBJ_TYPE_COUNT];
+static bool o_obj_by_type_second_ready;
+
+static int64_t o_obj_of_type_second(int type)
+{
+    int index;
+
+    if (type < 0 || type >= OBJ_TYPE_MONSTER) {
+        return OBJ_HANDLE_NULL;
+    }
+
+    if (!o_obj_by_type_second_ready) {
+        for (index = 0; index < OBJ_TYPE_COUNT; index++) {
+            o_obj_by_type_second[index] = OBJ_HANDLE_NULL;
+        }
+        o_obj_by_type_second_ready = true;
+    }
+
+    if (o_obj_by_type_second[type] == OBJ_HANDLE_NULL) {
+        o_obj_by_type_second[type] = obj_harness_create_proto(type);
+    }
+
+    return o_obj_by_type_second[type];
+}
+
 // `critter_is_monstrous` (0x45F730). Three inputs: the object's type, its
 // OBJ_F_CRITTER_FLAGS, and whether to pass OBJ_HANDLE_NULL instead of an
 // object at all -- the function's first branch, and one no object can
@@ -916,6 +949,360 @@ static void o_combat_turn_based_critter_is_dontdraw(const int64_t* a, int64_t* o
     }
 
     out[0] = combat_turn_based_critter_is_dontdraw(obj);
+}
+
+// --- critter.c through the object fixture (2026-08-31, card V1) ----------
+//
+// `critter.c` is the module with the highest object-handle ratio in the tree
+// -- 69 of its 81 definitions take one -- and it had two cases. These are the
+// candidates `scripts/obj_case_candidates.py --module critter` prints whose
+// closure reaches nothing but the field accessors and functions this suite
+// has already differentiated (`tig_art_type`, `tig_art_id_anim_get`,
+// `tig_art_monster_id_specie_get`, `light_build_color`,
+// `tig_art_light_id_create`).
+//
+// Every ordinal below was read off the literal the original pushes, not
+// inferred from CE's name for the field:
+//
+//     OBJ_F_CURRENT_AID              1 = 0x1     pushed at 0x45D763, 0x45F579
+//     OBJ_F_FLAGS                   19 = 0x13    pushed at 0x45D73A
+//     OBJ_F_CRITTER_FLAGS          218 = 0xDA    pushed at 0x45D8A8, 0x45FA78
+//     OBJ_F_CRITTER_FLAGS2         219 = 0xDB    pushed at 0x45FBD0
+//     OBJ_F_CRITTER_FATIGUE_PTS    224 = 0xE0    pushed at 0x45D3C7
+//     OBJ_F_CRITTER_FATIGUE_ADJ    225 = 0xE1    pushed at 0x45D4D7
+//     OBJ_F_CRITTER_FATIGUE_DAMAGE 226 = 0xE2    pushed at 0x45D587
+//     OBJ_F_PC_BACKGROUND          257 = 0x101   pushed at 0x4C26B4
+//     OBJ_F_NPC_ORIGIN             291 = 0x123   pushed at 0x45D2AE
+//     OBJ_F_NPC_FACTION            292 = 0x124   pushed at 0x45D09E
+//     OBJ_F_NPC_SOCIAL_CLASS       296 = 0x128   pushed at 0x45D018
+//
+// The type guard the original inlines everywhere here is `cmp eax,0xf` /
+// `cmp eax,0x10`, i.e. OBJ_TYPE_PC and OBJ_TYPE_NPC, which is exactly CE's
+// `obj_type_is_critter`.
+
+// `critter_social_class_get` (0x45D010). A bare field read with no guard of
+// any kind, so its domain is the one type that owns OBJ_F_NPC_SOCIAL_CLASS.
+// That leaves nothing to branch on, and the case is still worth its cost:
+// what it holds still is that `critter.c` reads *this* field and not a
+// neighbour, because the wrapper writes 0x128 by name and the emulator
+// answers 0x128 by number.
+static void o_critter_social_class_get(const int64_t* a, int64_t* out)
+{
+    int type = (int)a[0];
+    int64_t obj = o_obj_of_type(type);
+
+    if (obj == OBJ_HANDLE_NULL) {
+        out[0] = -1;
+        return;
+    }
+
+    if (type == OBJ_TYPE_NPC) {
+        obj_field_int32_set(obj, OBJ_F_NPC_SOCIAL_CLASS, (int)a[1]);
+    }
+
+    out[0] = critter_social_class_get(obj);
+}
+
+// `critter_faction_get` (0x45D080) and `critter_origin_get` (0x45D290), the
+// same shape: an `== OBJ_TYPE_NPC` guard in front of an NPC-block field, and
+// 0 for everything else. The type domain is unrestricted because the guard
+// is what keeps the field read away from an object that has no such field --
+// on both sides, by different routes. NULL is out of both domains: the
+// OBJ_F_TYPE read at 0x45D08A and 0x45D29A has nothing in front of it.
+static void o_critter_faction_get(const int64_t* a, int64_t* out)
+{
+    int type = (int)a[0];
+    int64_t obj = o_obj_of_type(type);
+
+    if (obj == OBJ_HANDLE_NULL) {
+        out[0] = -1;
+        return;
+    }
+
+    if (type == OBJ_TYPE_NPC) {
+        obj_field_int32_set(obj, OBJ_F_NPC_FACTION, (int)a[1]);
+    }
+
+    out[0] = critter_faction_get(obj);
+}
+
+static void o_critter_origin_get(const int64_t* a, int64_t* out)
+{
+    int type = (int)a[0];
+    int64_t obj = o_obj_of_type(type);
+
+    if (obj == OBJ_HANDLE_NULL) {
+        out[0] = -1;
+        return;
+    }
+
+    if (type == OBJ_TYPE_NPC) {
+        obj_field_int32_set(obj, OBJ_F_NPC_ORIGIN, (int)a[1]);
+    }
+
+    out[0] = critter_origin_get(obj);
+}
+
+// `critter_is_pc` (0x45D360). One field, one comparison, every buildable type
+// in the domain -- the cheapest possible check that CE and the original agree
+// on which number OBJ_TYPE_PC is. NULL is out: the read is unguarded.
+// `critter_origin_same` (0x45D320). Two objects, and the only case here that
+// needs them: `origin != 0 && origin == critter_origin_get(b)`, where both
+// origins come out of the NPC block of two different critters.
+//
+// NULL is out of both domains for the reason `critter_origin_get` gives -- its
+// OBJ_F_TYPE read at 0x45D29A has nothing in front of it.
+static void o_critter_origin_same(const int64_t* a, int64_t* out)
+{
+    int type_a = (int)a[0];
+    int type_b = (int)a[2];
+    int64_t obj_a = o_obj_of_type(type_a);
+    int64_t obj_b = o_obj_of_type_second(type_b);
+
+    if (obj_a == OBJ_HANDLE_NULL || obj_b == OBJ_HANDLE_NULL) {
+        out[0] = -1;
+        return;
+    }
+
+    if (type_a == OBJ_TYPE_NPC) {
+        obj_field_int32_set(obj_a, OBJ_F_NPC_ORIGIN, (int)a[1]);
+    }
+
+    if (type_b == OBJ_TYPE_NPC) {
+        obj_field_int32_set(obj_b, OBJ_F_NPC_ORIGIN, (int)a[3]);
+    }
+
+    out[0] = critter_origin_same(obj_a, obj_b);
+}
+
+static void o_critter_is_pc(const int64_t* a, int64_t* out)
+{
+    int64_t obj = o_obj_of_type((int)a[0]);
+
+    if (obj == OBJ_HANDLE_NULL) {
+        out[0] = -1;
+        return;
+    }
+
+    out[0] = critter_is_pc(obj);
+}
+
+// The three fatigue getters (0x45D390, 0x45D4A0, 0x45D550). Identical shape:
+// `obj_type_is_critter` in front, then one field of the critter block. What
+// separates them is only which ordinal they read, and that is what a case per
+// function checks -- CE's `critter_fatigue_adj_get` reading 0xE0 instead of
+// 0xE1 would be invisible to a single combined case and is exactly the slip
+// the original's own *setter* made (see the FIX note at 0x45D4F0).
+static void o_critter_fatigue_field_get(const int64_t* a,
+    int64_t* out,
+    int field,
+    int (*fn)(int64_t))
+{
+    int type = (int)a[0];
+    int64_t obj = o_obj_of_type(type);
+
+    if (obj == OBJ_HANDLE_NULL) {
+        out[0] = -1;
+        return;
+    }
+
+    if (obj_type_is_critter(type)) {
+        obj_field_int32_set(obj, field, (int)a[1]);
+    }
+
+    out[0] = fn(obj);
+}
+
+static void o_critter_fatigue_pts_get(const int64_t* a, int64_t* out)
+{
+    o_critter_fatigue_field_get(a, out, OBJ_F_CRITTER_FATIGUE_PTS,
+        critter_fatigue_pts_get);
+}
+
+static void o_critter_fatigue_adj_get(const int64_t* a, int64_t* out)
+{
+    o_critter_fatigue_field_get(a, out, OBJ_F_CRITTER_FATIGUE_ADJ,
+        critter_fatigue_adj_get);
+}
+
+static void o_critter_fatigue_damage_get(const int64_t* a, int64_t* out)
+{
+    o_critter_fatigue_field_get(a, out, OBJ_F_CRITTER_FATIGUE_DAMAGE,
+        critter_fatigue_damage_get);
+}
+
+// `critter_is_sleeping` (0x45D870) and `critter_is_concealed` (0x45EDE0).
+// Both guard NULL first (`or esi,edi` at 0x45D87C and 0x45EDEA), so NULL is
+// in the domain, and both end in a single-bit test of OBJ_F_CRITTER_FLAGS:
+// `shr eax,0xc; and eax,1` -- bit 12, OCF_SLEEPING -- and `movsx eax,al;
+// and eax,1` -- bit 0, OCF_IS_CONCEALED.
+static void o_critter_is_sleeping(const int64_t* a, int64_t* out)
+{
+    int type = (int)a[0];
+    int64_t obj;
+
+    if (a[2] != 0) {
+        out[0] = critter_is_sleeping(OBJ_HANDLE_NULL);
+        return;
+    }
+
+    obj = o_obj_of_type(type);
+    if (obj == OBJ_HANDLE_NULL) {
+        out[0] = -1;
+        return;
+    }
+
+    if (obj_type_is_critter(type)) {
+        obj_field_int32_set(obj, OBJ_F_CRITTER_FLAGS, (int)a[1]);
+    }
+
+    out[0] = critter_is_sleeping(obj);
+}
+
+static void o_critter_is_concealed(const int64_t* a, int64_t* out)
+{
+    int type = (int)a[0];
+    int64_t obj;
+
+    if (a[2] != 0) {
+        out[0] = critter_is_concealed(OBJ_HANDLE_NULL);
+        return;
+    }
+
+    obj = o_obj_of_type(type);
+    if (obj == OBJ_HANDLE_NULL) {
+        out[0] = -1;
+        return;
+    }
+
+    if (obj_type_is_critter(type)) {
+        obj_field_int32_set(obj, OBJ_F_CRITTER_FLAGS, (int)a[1]);
+    }
+
+    out[0] = critter_is_concealed(obj);
+}
+
+// `critter_has_dark_sight` (0x45FB90), the widest of these: a NULL guard, a
+// critter guard, an inlined-in-CE call to `background_get` (0x4C2690, which
+// carries its own NULL and `== OBJ_TYPE_PC` guards before reading
+// OBJ_F_PC_BACKGROUND), and finally bit 11 of OBJ_F_CRITTER_FLAGS2.
+//
+// Two fields belonging to two different blocks are in play, and the type
+// domain is still unrestricted, because each read sits behind the guard that
+// makes it legal: OBJ_F_PC_BACKGROUND is only reached when the type is PC and
+// OBJ_F_CRITTER_FLAGS2 only when it is a critter. The wrapper writes each one
+// under the same condition, which is why a chair never reaches either.
+//
+// The background constant is 78: `cmp eax,0x4e` at 0x45FBC3.
+static void o_critter_has_dark_sight(const int64_t* a, int64_t* out)
+{
+    int type = (int)a[0];
+    int64_t obj;
+
+    if (a[3] != 0) {
+        out[0] = critter_has_dark_sight(OBJ_HANDLE_NULL);
+        return;
+    }
+
+    obj = o_obj_of_type(type);
+    if (obj == OBJ_HANDLE_NULL) {
+        out[0] = -1;
+        return;
+    }
+
+    if (type == OBJ_TYPE_PC) {
+        obj_field_int32_set(obj, OBJ_F_PC_BACKGROUND, (int)a[1]);
+    }
+
+    if (obj_type_is_critter(type)) {
+        obj_field_int32_set(obj, OBJ_F_CRITTER_FLAGS2, (int)a[2]);
+    }
+
+    out[0] = critter_has_dark_sight(obj);
+}
+
+// `critter_is_prone` (0x45D730). Three fields and a call into tig art:
+// OBJ_F_FLAGS tested against OF_DESTROYED|OF_OFF (`test al,0x3` at 0x45D746),
+// the critter guard, then OBJ_F_CURRENT_AID through `tig_art_id_anim_get`
+// (0x503E20) compared against 7, TIG_ART_ANIM_FALL_DOWN.
+//
+// The art call is inside the differential's reach because
+// `tig_art_id_anim_get` is itself a case here and is pure bit extraction on
+// both sides -- the emulator runs the original's copy of it rather than a
+// stub, so this stays a symmetric boundary.
+//
+// NULL is out of the domain: 0x45D73A pushes OBJ_F_FLAGS with nothing in
+// front of it.
+static void o_critter_is_prone(const int64_t* a, int64_t* out)
+{
+    int type = (int)a[0];
+    int64_t obj = o_obj_of_type(type);
+
+    if (obj == OBJ_HANDLE_NULL) {
+        out[0] = -1;
+        return;
+    }
+
+    obj_field_int32_set(obj, OBJ_F_FLAGS, (int)a[1]);
+    obj_field_int32_set(obj, OBJ_F_CURRENT_AID, (int)a[2]);
+
+    out[0] = critter_is_prone(obj);
+}
+
+// `critter_can_jump_window` (0x45F570). No guard at all -- not on the handle
+// and not on the type -- so NULL is out and the type domain stays open only
+// because OBJ_F_CURRENT_AID is ordinal 1, inside the common block every
+// object owns. The whole function is a switch on `tig_art_type` of that
+// field: CRITTER answers true, MONSTER defers to
+// `tig_art_monster_id_specie_get == TIG_ART_MONSTER_SPECIE_ORC`, everything
+// else false. The original's `sub eax,2` / `sub eax,0xa` chain at 0x45F58D is
+// the same two type numbers, 2 and 12.
+static void o_critter_can_jump_window(const int64_t* a, int64_t* out)
+{
+    int64_t obj = o_obj_of_type((int)a[0]);
+
+    if (obj == OBJ_HANDLE_NULL) {
+        out[0] = -1;
+        return;
+    }
+
+    obj_field_int32_set(obj, OBJ_F_CURRENT_AID, (int)a[1]);
+
+    out[0] = critter_can_jump_window(obj);
+}
+
+// `critter_light_get` (0x45FA70), the first object-handle case with two
+// outputs: it returns an art id and writes a colour through its second
+// parameter. Both are compared.
+//
+// It reads OBJ_F_CRITTER_FLAGS with no guard of any kind (0x45FA78 pushes it
+// immediately), so the domain is restricted to the two critter types and NULL
+// is out. The four light bits and their four colours all come off the
+// original: `test eax,0x400000` / `0x200000` / `0x100000` / `0x80000` at
+// 0x45FA87, 0x45FAC1, 0x45FAFB and 0x45FB32, and the colour triples pushed at
+// 0x45FAAF (244,255,255), 0x45FADF (255,214,172) and 0x45FB1B (236,138,85).
+//
+// The priority order is the point: XLARGE beats LARGE beats MEDIUM beats
+// SMALL, so an input with several bits set has exactly one right answer and a
+// reordered chain in CE would show up here.
+static void o_critter_light_get(const int64_t* a, int64_t* out)
+{
+    int type = (int)a[0];
+    unsigned int color = 0;
+    int64_t obj = o_obj_of_type(type);
+
+    if (obj == OBJ_HANDLE_NULL) {
+        out[0] = -1;
+        out[1] = -1;
+        return;
+    }
+
+    if (obj_type_is_critter(type)) {
+        obj_field_int32_set(obj, OBJ_F_CRITTER_FLAGS, (int)a[1]);
+    }
+
+    out[0] = (uint32_t)critter_light_get(obj, &color);
+    out[1] = color;
 }
 
 static void o_combat_hit_loc_penalty(const int64_t* a, int64_t* out)
@@ -1593,6 +1980,20 @@ static const OracleEntry oracle_entries[] = {
     { "combat_turn_based_critter_is_dontdraw", 3, 1, o_combat_turn_based_critter_is_dontdraw },
     { "item_worth", 5, 1, o_item_worth },
     { "item_is_worthless", 2, 1, o_item_is_worthless },
+    { "critter_social_class_get", 2, 1, o_critter_social_class_get },
+    { "critter_faction_get", 2, 1, o_critter_faction_get },
+    { "critter_origin_get", 2, 1, o_critter_origin_get },
+    { "critter_is_pc", 1, 1, o_critter_is_pc },
+    { "critter_origin_same", 4, 1, o_critter_origin_same },
+    { "critter_fatigue_pts_get", 2, 1, o_critter_fatigue_pts_get },
+    { "critter_fatigue_adj_get", 2, 1, o_critter_fatigue_adj_get },
+    { "critter_fatigue_damage_get", 2, 1, o_critter_fatigue_damage_get },
+    { "critter_is_sleeping", 3, 1, o_critter_is_sleeping },
+    { "critter_is_concealed", 3, 1, o_critter_is_concealed },
+    { "critter_has_dark_sight", 4, 1, o_critter_has_dark_sight },
+    { "critter_is_prone", 3, 1, o_critter_is_prone },
+    { "critter_can_jump_window", 2, 1, o_critter_can_jump_window },
+    { "critter_light_get", 2, 2, o_critter_light_get },
     { "combat_hit_loc_penalty", 1, 1, o_combat_hit_loc_penalty },
     { "critter_encumbrance_level_ratio", 1, 1, o_critter_encumbrance_level_ratio },
     { "item_armor_size", 1, 1, o_item_armor_size },
