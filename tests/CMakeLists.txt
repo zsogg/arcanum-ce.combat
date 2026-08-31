@@ -160,13 +160,60 @@ add_custom_command(
 )
 add_custom_target(arcanum-emudiff-art-obj DEPENDS "${EMUDIFF_ART_OBJ}")
 
+# The same objcopy trick again, for `combat.c`, so the differential can reach
+# the two functions in it that an object-field fixture can drive.
+#
+# `combat.c` was the emptiest module in the suite -- one case for 89
+# definitions -- because 41 of those take an object handle and the differential
+# had no way to pass one. The 2026-08-31 object fixture removed that, and
+# `scripts/obj_case_candidates.py` then found exactly three combat functions
+# whose call closure reaches nothing but the field accessors. Two of the three
+# are `static`, so without this they stay unreachable however drivable they are.
+#
+# `combat.c` is not modified. This takes the object file the real build already
+# produced and globalizes three names in a private copy, exactly as for `art.c`,
+# `dialog.c` and `anim.c` above.
+set(EMUDIFF_COMBAT_STATICS
+    combat_weapon_loudness
+    combat_turn_based_critter_is_dontdraw
+)
+set(EMUDIFF_COMBAT_OBJ "${CMAKE_CURRENT_BINARY_DIR}/combat_globalized.o")
+set(_combat_globalize_args "")
+foreach(sym ${EMUDIFF_COMBAT_STATICS})
+    list(APPEND _combat_globalize_args "--globalize-symbol=${sym}")
+endforeach()
+
+file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/combatobj")
+
+add_custom_command(
+    OUTPUT "${EMUDIFF_COMBAT_OBJ}"
+    COMMAND "${CMAKE_AR}" x "$<TARGET_FILE:arcanum-game>" combat.c.o
+    COMMAND "${CMAKE_OBJCOPY}" ${_combat_globalize_args} combat.c.o "${EMUDIFF_COMBAT_OBJ}"
+    COMMAND "${CMAKE_COMMAND}" -E rm -f combat.c.o
+    COMMAND "${CMAKE_COMMAND}"
+        "-DOBJ=${EMUDIFF_COMBAT_OBJ}"
+        "-DSYMS=${EMUDIFF_COMBAT_STATICS}"
+        "-DDATA_SYMS="
+        "-DNM=${CMAKE_NM}"
+        -P "${CMAKE_CURRENT_SOURCE_DIR}/verify_globalized.cmake"
+    WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/combatobj"
+    DEPENDS arcanum-game
+    COMMENT "emudiff: globalizing combat.c statics (no source change)"
+    VERBATIM
+)
+add_custom_target(arcanum-emudiff-combat-obj DEPENDS "${EMUDIFF_COMBAT_OBJ}")
+
 target_link_libraries(arcanum-emudiff-oracle PRIVATE
     "${EMUDIFF_ART_OBJ}"
+    "${EMUDIFF_COMBAT_OBJ}"
     arcanum-game
     tig
     SDL3::SDL3
 )
-add_dependencies(arcanum-emudiff-oracle arcanum-emudiff-art-obj)
+add_dependencies(arcanum-emudiff-oracle
+    arcanum-emudiff-art-obj
+    arcanum-emudiff-combat-obj
+)
 
 
 # The same objcopy trick as above, for `dialog.c`, so the unit suite can reach

@@ -825,6 +825,99 @@ static void o_item_is_worthless(const int64_t* a, int64_t* out)
     out[0] = item_is_worthless(obj);
 }
 
+// The combat.c three, reached through the object fixture. `combat.c` had one
+// case for 89 definitions because 41 of them take an object handle; these are
+// every function in the file whose call closure reaches nothing but the field
+// accessors, per `scripts/obj_case_candidates.py`.
+//
+// Two are `static` and are linked through `combat_globalized.o` -- see
+// tests/CMakeLists.txt. Declared here rather than included, because they are
+// deliberately absent from `combat.h`: globalizing changes the binding, not
+// the header, and adding them to the header would be the engine source change
+// the whole trick exists to avoid.
+int combat_weapon_loudness(int64_t weapon_obj);
+bool combat_turn_based_critter_is_dontdraw(int64_t obj);
+
+// `combat_critter_is_combat_mode_active` (0x4B3D50). No NULL branch: the
+// function reads OBJ_F_TYPE with no guard in front of it, so OBJ_HANDLE_NULL
+// is outside what the fixture can represent and outside the case's domain.
+// The original agrees -- 0x4B3D5A pushes the field straight away.
+static void o_combat_critter_is_combat_mode_active(const int64_t* a, int64_t* out)
+{
+    int type = (int)a[0];
+    int64_t obj = o_obj_of_type(type);
+
+    if (obj == OBJ_HANDLE_NULL) {
+        out[0] = -1;
+        return;
+    }
+
+    if (obj_type_is_critter(type)) {
+        obj_field_int32_set(obj, OBJ_F_CRITTER_FLAGS, (int)a[1]);
+    }
+
+    out[0] = combat_critter_is_combat_mode_active(obj);
+}
+
+// `combat_weapon_loudness` (0x4B2810). This one *does* guard NULL -- 0x4B281D
+// ORs the handle halves -- so the NULL branch is in the domain, and it is the
+// LOUDNESS_NORMAL default rather than a separate answer.
+//
+// Worth knowing about the original: it tests the flags with `test %al,%bl`
+// and `test $0x2,%al`, i.e. on the low byte only. OWF_LOUD (0x1) and
+// OWF_SILENT (0x2) both live there, so CE's full-width `&` agrees; a flag
+// above bit 7 would not, and there is none.
+static void o_combat_weapon_loudness(const int64_t* a, int64_t* out)
+{
+    int type = (int)a[0];
+    int64_t obj;
+
+    if (a[2] != 0) {
+        out[0] = combat_weapon_loudness(OBJ_HANDLE_NULL);
+        return;
+    }
+
+    obj = o_obj_of_type(type);
+    if (obj == OBJ_HANDLE_NULL) {
+        out[0] = -1;
+        return;
+    }
+
+    if (type == OBJ_TYPE_WEAPON) {
+        obj_field_int32_set(obj, OBJ_F_WEAPON_FLAGS, (int)a[1]);
+    }
+
+    out[0] = combat_weapon_loudness(obj);
+}
+
+// `combat_turn_based_critter_is_dontdraw` (0x4B7DC0). Reads OBJ_F_FLAGS with
+// no guard of any kind, then defers to `critter_is_sleeping`, which has both.
+//
+// The type domain is unrestricted anyway, and that is a fact about the field
+// rather than luck: OBJ_F_FLAGS is ordinal 19, inside the common block that
+// precedes every per-type block in `ObjectField`, so every object owns it.
+// OBJ_F_CRITTER_FLAGS is not, hence the guard on writing it.
+//
+// NULL is excluded: the unguarded OBJ_F_FLAGS read is exactly the shape the
+// fixture cannot represent.
+static void o_combat_turn_based_critter_is_dontdraw(const int64_t* a, int64_t* out)
+{
+    int type = (int)a[0];
+    int64_t obj = o_obj_of_type(type);
+
+    if (obj == OBJ_HANDLE_NULL) {
+        out[0] = -1;
+        return;
+    }
+
+    obj_field_int32_set(obj, OBJ_F_FLAGS, (int)a[1]);
+    if (obj_type_is_critter(type)) {
+        obj_field_int32_set(obj, OBJ_F_CRITTER_FLAGS, (int)a[2]);
+    }
+
+    out[0] = combat_turn_based_critter_is_dontdraw(obj);
+}
+
 static void o_combat_hit_loc_penalty(const int64_t* a, int64_t* out)
 {
     out[0] = combat_hit_loc_penalty((int)a[0]);
@@ -1495,6 +1588,9 @@ static const OracleEntry oracle_entries[] = {
     { "basic_skill_stat", 1, 1, o_basic_skill_stat },
     { "tech_skill_stat", 1, 1, o_tech_skill_stat },
     { "critter_is_monstrous", 3, 1, o_critter_is_monstrous },
+    { "combat_critter_is_combat_mode_active", 2, 1, o_combat_critter_is_combat_mode_active },
+    { "combat_weapon_loudness", 3, 1, o_combat_weapon_loudness },
+    { "combat_turn_based_critter_is_dontdraw", 3, 1, o_combat_turn_based_critter_is_dontdraw },
     { "item_worth", 5, 1, o_item_worth },
     { "item_is_worthless", 2, 1, o_item_is_worthless },
     { "combat_hit_loc_penalty", 1, 1, o_combat_hit_loc_penalty },
