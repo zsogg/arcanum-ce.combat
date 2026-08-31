@@ -44,6 +44,7 @@
 #include "game/location.h"
 #include "game/magictech.h"
 #include "game/mt_item.h"
+#include "game/obj.h"
 #include "game/random.h"
 #include "game/reaction.h"
 #include "game/skill.h"
@@ -53,6 +54,8 @@
 #include "game/terrain.h"
 #include "game/timeevent.h"
 #include "tig/tig.h"
+
+#include "obj_harness.h"
 
 #define MAX_ARGS 16
 #define MAX_OUT 3
@@ -649,6 +652,178 @@ static void o_tig_art_misc_id_create(const int64_t* a, int64_t* out)
 // past the end would compare the original's adjacent .data against CE's,
 // which says nothing about the port - the emulator would be reading two
 // different programs' memory maps and reporting the difference as a defect.
+
+// --- object-handle cases -----------------------------------------------
+//
+// Most of `src/game` takes an `int64_t obj` -- 46% of `combat.c`, 85% of
+// `critter.c`, 89% of `item.c` -- and until now none of it was reachable
+// here, because a differential shaped as "pass these words, read EAX" has
+// nothing to pass. The scalar seam in those modules is spent; this is how
+// the rest opens.
+//
+// **The two sides are deliberately asymmetric, and that is the design.**
+// On the emulator side `obj_field_int32_get` (0x406CA0) is stubbed to answer
+// from the drawn values. On this side the object is *real*: `obj_harness`
+// builds a prototype through the engine's own `obj_create_proto`, and the
+// same `obj_field_int32_get` the game calls reads it.
+//
+// That is legal under the stub rule in `harness/emudiff/README.md` -- "a stub
+// must return something derived from the original's own bytes, never from
+// what the C says it should be" -- because this stub *asserts nothing*. It
+// does not model a layout; it supplies input, the way `Arg.draw` does. A
+// fixture that synthesised an `Object` in guest memory would be making a
+// claim about layout and would need sourcing; this one has no layout in it.
+//
+// **The one claim it does make** is that CE's `OBJ_F_*` ordinals are the same
+// numbers the original's code passes. That is checkable independently, and
+// was checked before the first case: the original pushes `0x14F` and `0xDA`
+// as literals at 0x45F740 and 0x45F768, and CE's enum puts `OBJ_F_TYPE` at
+// 335 and `OBJ_F_CRITTER_FLAGS` at 218. Any new field a case reads has to be
+// checked the same way, against the literal in the disassembly.
+//
+// **Why the type domain stops at 18.** The emulator's stub would happily
+// return 9999 for OBJ_F_TYPE, but this side cannot build an object of a type
+// the engine has no defaults for. `obj_create_proto` handles 0..17;
+// OBJ_TYPE_MONSTER (18) and OBJ_TYPE_UNIQUE_NPC (19) fall through
+// `obj_type_change_array_len`'s switch to its `default: assert(0)`. The
+// original agrees by its own route -- `object_field_valid` at 0x40C2BA
+// rejects any type above 0x11 before reaching its jump table -- so the two
+// really do have the same eighteen. This is the same rule as "never generate
+// past the end of an array": an input only one side can represent compares
+// two different things.
+
+// One prototype per object type, built on first use. Creating one per trial
+// would allocate thousands from the object pool over a run; a prototype's
+// fields are rewritten before each call anyway, so reuse changes nothing.
+static int64_t o_obj_by_type[OBJ_TYPE_COUNT];
+static bool o_obj_by_type_ready;
+
+static int64_t o_obj_of_type(int type)
+{
+    int index;
+
+    // Not OBJ_TYPE_COUNT: 18 and 19 abort in `obj_type_change_array_len`, and
+    // an abort here takes the whole emudiff run with it rather than failing
+    // the one case. Refusing them turns a crash into a `-1` the driver can
+    // report, which is how a domain mistake should surface.
+    if (type < 0 || type >= OBJ_TYPE_MONSTER) {
+        return OBJ_HANDLE_NULL;
+    }
+
+    if (!o_obj_by_type_ready) {
+        for (index = 0; index < OBJ_TYPE_COUNT; index++) {
+            o_obj_by_type[index] = OBJ_HANDLE_NULL;
+        }
+        o_obj_by_type_ready = true;
+    }
+
+    if (o_obj_by_type[type] == OBJ_HANDLE_NULL) {
+        o_obj_by_type[type] = obj_harness_create_proto(type);
+    }
+
+    return o_obj_by_type[type];
+}
+
+// `critter_is_monstrous` (0x45F730). Three inputs: the object's type, its
+// OBJ_F_CRITTER_FLAGS, and whether to pass OBJ_HANDLE_NULL instead of an
+// object at all -- the function's first branch, and one no object can
+// express.
+//
+// The flags are only written when the type is a critter, because
+// OBJ_F_CRITTER_FLAGS does not exist on a chair: `obj_field_int32_set` would
+// reject it through `object_field_not_exists`. The original agrees by a
+// different route -- it never reads the field unless the type check passed --
+// so the two still see the same thing on every input.
+static void o_critter_is_monstrous(const int64_t* a, int64_t* out)
+{
+    int type = (int)a[0];
+    unsigned int critter_flags = (unsigned int)a[1];
+    int64_t obj;
+
+    if (a[2] != 0) {
+        out[0] = critter_is_monstrous(OBJ_HANDLE_NULL);
+        return;
+    }
+
+    obj = o_obj_of_type(type);
+    if (obj == OBJ_HANDLE_NULL) {
+        // Not a silent zero: a type the harness cannot build must not look
+        // like a legitimate `false`, or the case would agree with the
+        // emulator for the wrong reason on every such input.
+        out[0] = -1;
+        return;
+    }
+
+    if (obj_type_is_critter(type)) {
+        obj_field_int32_set(obj, OBJ_F_CRITTER_FLAGS, (int)critter_flags);
+    }
+
+    out[0] = critter_is_monstrous(obj);
+}
+
+// `item_worth` (0x461F20) and `item_is_worthless` (0x461F60), which sit either
+// side of the rule the type domain has to obey.
+//
+// `item_worth` is safe over every buildable type: OBJ_F_ITEM_WORTH is only
+// read after `item_is_identified` has checked the type is 5..14, so a chair
+// returns 300 on both sides without either ever touching an item field.
+//
+// `item_is_worthless` is not. It reads OBJ_F_ITEM_WORTH with no guard of any
+// kind -- 0x461F60 is a field read and a `neg/sbb/inc` -- so on a chair the
+// emulator's stub hands back the drawn worth while CE's real object refuses a
+// field a chair does not have and answers 0. That is a difference about the
+// fixture, not about the port, and its domain is restricted to item types for
+// that reason. It was run unrestricted first, and it differs; see
+// `harness/emudiff/README.md`.
+static void o_item_worth(const int64_t* a, int64_t* out)
+{
+    int type = (int)a[0];
+    int64_t obj;
+
+    if (a[4] != 0) {
+        out[0] = item_worth(OBJ_HANDLE_NULL);
+        return;
+    }
+
+    obj = o_obj_of_type(type);
+    if (obj == OBJ_HANDLE_NULL) {
+        out[0] = -1;
+        return;
+    }
+
+    if (obj_type_is_item(type)) {
+        obj_field_int32_set(obj, OBJ_F_ITEM_FLAGS, (int)a[1]);
+        obj_field_int32_set(obj, OBJ_F_ITEM_MAGIC_TECH_COMPLEXITY, (int)a[2]);
+        obj_field_int32_set(obj, OBJ_F_ITEM_WORTH, (int)a[3]);
+    }
+
+    out[0] = item_worth(obj);
+}
+
+// No NULL branch, and the omission is the finding. `item_is_worthless` has no
+// NULL guard either, so on OBJ_HANDLE_NULL the emulator's stub answers with the
+// drawn worth while CE's field read on a null handle answers something else
+// entirely -- measured 2026-08-31 as 9 mismatches in 1200, every one of them
+// `worth == 0`. The NULL path of this function is outside what a field-read
+// fixture can express, and saying so is better than a case that quietly
+// excludes it.
+static void o_item_is_worthless(const int64_t* a, int64_t* out)
+{
+    int type = (int)a[0];
+    int64_t obj;
+
+    obj = o_obj_of_type(type);
+    if (obj == OBJ_HANDLE_NULL) {
+        out[0] = -1;
+        return;
+    }
+
+    if (obj_type_is_item(type)) {
+        obj_field_int32_set(obj, OBJ_F_ITEM_WORTH, (int)a[1]);
+    }
+
+    out[0] = item_is_worthless(obj);
+}
 
 static void o_combat_hit_loc_penalty(const int64_t* a, int64_t* out)
 {
@@ -1319,6 +1494,9 @@ static const OracleEntry oracle_entries[] = {
     { "basic_skill_min_stat_level_required", 1, 1, o_basic_skill_min_stat_level_required },
     { "basic_skill_stat", 1, 1, o_basic_skill_stat },
     { "tech_skill_stat", 1, 1, o_tech_skill_stat },
+    { "critter_is_monstrous", 3, 1, o_critter_is_monstrous },
+    { "item_worth", 5, 1, o_item_worth },
+    { "item_is_worthless", 2, 1, o_item_is_worthless },
     { "combat_hit_loc_penalty", 1, 1, o_combat_hit_loc_penalty },
     { "critter_encumbrance_level_ratio", 1, 1, o_critter_encumbrance_level_ratio },
     { "item_armor_size", 1, 1, o_item_armor_size },

@@ -80,6 +80,13 @@ add_test(NAME arcanum-tests COMMAND arcanum-tests)
 # repository.
 add_executable(arcanum-emudiff-oracle
     "emudiff_oracle.c"
+    # The object fixture. Most of `src/game` takes an `int64_t obj`, which put
+    # it outside a differential whose model was "pass these words, read EAX";
+    # `obj_harness` builds real prototype objects with no map, sector or art
+    # cache under them, so CE's side of such a case can be the engine's own
+    # object rather than a mock. See `o_critter_is_monstrous`.
+    "obj_harness.c"
+    "obj_harness.h"
 )
 
 # `static` hides several of `art.c`'s most testable functions from the oracle -
