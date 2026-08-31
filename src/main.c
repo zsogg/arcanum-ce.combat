@@ -385,13 +385,29 @@ int main(int argc, char** argv)
         // 2026-08-21: headless savegame round-trip, handled by
         // mainmenu_ui_roundtrip_run() just before main_loop(); spec is
         // `SLOT[=OUTSLOT]`. See arcanum-work SAVE-ROUNDTRIP.md.
+        //
+        // The spec may be QUOTED, and it has to be able to be: ten of this
+        // project's named saves have a space in them ("Slot0008maintain
+        // spell"), and stopping at whitespace truncated the name, dropped the
+        // `=OUTSLOT` half with it, and then ran the EXTRACT path instead -
+        // succeeding, with a different meaning, and no complaint. Found
+        // 2026-08-30 trying to round-trip the one save that exercises
+        // MagicTech-Post.
         char roundtrip_spec[TIG_MAX_PATH];
-        size_t roundtrip_len = strcspn(pch + 11, " \t");
+        const char* roundtrip_arg = pch + 11;
+        size_t roundtrip_len;
+
+        if (*roundtrip_arg == '"') {
+            roundtrip_arg++;
+            roundtrip_len = strcspn(roundtrip_arg, "\"");
+        } else {
+            roundtrip_len = strcspn(roundtrip_arg, " \t");
+        }
 
         if (roundtrip_len >= sizeof(roundtrip_spec)) {
             roundtrip_len = sizeof(roundtrip_spec) - 1;
         }
-        memcpy(roundtrip_spec, pch + 11, roundtrip_len);
+        memcpy(roundtrip_spec, roundtrip_arg, roundtrip_len);
         roundtrip_spec[roundtrip_len] = '\0';
         mainmenu_ui_roundtrip_set(roundtrip_spec);
     }
