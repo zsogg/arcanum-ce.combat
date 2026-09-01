@@ -1305,6 +1305,257 @@ static void o_critter_light_get(const int64_t* a, int64_t* out)
     out[1] = color;
 }
 
+// --- item.c through the object fixture (2026-08-31, card V2) ------------
+//
+// `item.c` has the highest object-handle *share* in the tree -- 121 of 135
+// definitions, 89% -- and had two cases, `item_worth` and `item_is_worthless`,
+// which are the pair the fixture was proved on above. Of the twelve candidates
+// `scripts/obj_case_candidates.py --module item` prints, eight are added here
+// and two are refused; the refusals are written up in
+// `harness/emudiff/README.md` rather than left as silence.
+//
+// Field ordinals, each read off the literal the original pushes:
+//
+//     OBJ_F_CONTAINER_INVENTORY_SOURCE  61 = 0x3D    pushed at 0x4641DF
+//     OBJ_F_ITEM_INV_AID                93 = 0x5D    pushed at 0x465C66
+//     OBJ_F_ITEM_MAGIC_TECH_COMPLEXITY  96 = 0x60    pushed at 0x461528
+//     OBJ_F_WEAPON_FLAGS               112 = 0x70    pushed at 0x465DB7
+//     OBJ_F_WEAPON_RANGE               121 = 0x79    pushed at 0x465DEF
+//     OBJ_F_WEAPON_AMMO_TYPE           125 = 0x7D    pushed at 0x465CD4
+//     OBJ_F_GENERIC_FLAGS              211 = 0xD3    pushed at 0x465664
+//     OBJ_F_CRITTER_INVENTORY_SOURCE   239 = 0xEF    pushed at 0x4641CC
+//
+// `obj_type_is_item` is inlined throughout as `cmp eax,5` / `cmp eax,0xe`,
+// which is OBJ_TYPE_WEAPON..OBJ_TYPE_GENERIC and matches CE's helper.
+
+// `item_is_item` (0x461310). A NULL guard and a range check on OBJ_F_TYPE,
+// nothing else -- so NULL is in the domain and the type domain is open.
+static void o_item_is_item(const int64_t* a, int64_t* out)
+{
+    int type = (int)a[0];
+    int64_t obj;
+
+    if (a[1] != 0) {
+        out[0] = item_is_item(OBJ_HANDLE_NULL);
+        return;
+    }
+
+    obj = o_obj_of_type(type);
+    if (obj == OBJ_HANDLE_NULL) {
+        out[0] = -1;
+        return;
+    }
+
+    out[0] = item_is_item(obj);
+}
+
+// `item_magic_tech_complexity` (0x461520). A bare field read: 0x461528 pushes
+// 0x60 with no guard of any kind in front of it. That puts it in the same
+// class as `item_is_worthless` above -- ITEM TYPES ONLY, and no NULL -- and
+// for the same reason, which is that the fixture cannot represent a field CE's
+// object does not have.
+static void o_item_magic_tech_complexity(const int64_t* a, int64_t* out)
+{
+    int type = (int)a[0];
+    int64_t obj = o_obj_of_type(type);
+
+    if (obj == OBJ_HANDLE_NULL) {
+        out[0] = -1;
+        return;
+    }
+
+    if (obj_type_is_item(type)) {
+        obj_field_int32_set(obj, OBJ_F_ITEM_MAGIC_TECH_COMPLEXITY, (int)a[1]);
+    }
+
+    out[0] = item_magic_tech_complexity(obj);
+}
+
+// `item_inventory_source` (0x4641A0). A NULL guard, then a two-arm switch on
+// OBJ_F_TYPE reading a *different* field on each arm -- the container's source
+// on OBJ_TYPE_CONTAINER, the critter's on OBJ_TYPE_NPC.
+//
+// The two arms are drawn separately rather than sharing one value, and that is
+// the point of the case: with one drawn value a CE that swapped the two arms
+// would answer correctly on every input.
+static void o_item_inventory_source(const int64_t* a, int64_t* out)
+{
+    int type = (int)a[0];
+    int64_t obj;
+
+    if (a[3] != 0) {
+        out[0] = item_inventory_source(OBJ_HANDLE_NULL);
+        return;
+    }
+
+    obj = o_obj_of_type(type);
+    if (obj == OBJ_HANDLE_NULL) {
+        out[0] = -1;
+        return;
+    }
+
+    if (type == OBJ_TYPE_CONTAINER) {
+        obj_field_int32_set(obj, OBJ_F_CONTAINER_INVENTORY_SOURCE, (int)a[1]);
+    }
+
+    if (obj_type_is_critter(type)) {
+        obj_field_int32_set(obj, OBJ_F_CRITTER_INVENTORY_SOURCE, (int)a[2]);
+    }
+
+    out[0] = item_inventory_source(obj);
+}
+
+// `item_is_identified` (0x464370). NULL guard, item-type guard, then two ways
+// to answer true: a complexity at or below zero, or bit 0 of OBJ_F_ITEM_FLAGS.
+// The short-circuit is the interesting part -- a negative complexity answers
+// true whatever the flag says.
+static void o_item_is_identified(const int64_t* a, int64_t* out)
+{
+    int type = (int)a[0];
+    int64_t obj;
+
+    if (a[3] != 0) {
+        out[0] = item_is_identified(OBJ_HANDLE_NULL);
+        return;
+    }
+
+    obj = o_obj_of_type(type);
+    if (obj == OBJ_HANDLE_NULL) {
+        out[0] = -1;
+        return;
+    }
+
+    if (obj_type_is_item(type)) {
+        obj_field_int32_set(obj, OBJ_F_ITEM_MAGIC_TECH_COMPLEXITY, (int)a[1]);
+        obj_field_int32_set(obj, OBJ_F_ITEM_FLAGS, (int)a[2]);
+    }
+
+    out[0] = item_is_identified(obj);
+}
+
+// `item_weapon_ammo_type` (0x465CA0). NULL guard, `== OBJ_TYPE_WEAPON`, then
+// the field. Both refusals answer 10000 (0x2710 at 0x465CB1 and 0x465CCD),
+// which is the sentinel `item_weapon_skill` below then compares against
+// nothing -- it falls through to the ARROW test, and 10000 is not ARROW.
+static void o_item_weapon_ammo_type(const int64_t* a, int64_t* out)
+{
+    int type = (int)a[0];
+    int64_t obj;
+
+    if (a[2] != 0) {
+        out[0] = item_weapon_ammo_type(OBJ_HANDLE_NULL);
+        return;
+    }
+
+    obj = o_obj_of_type(type);
+    if (obj == OBJ_HANDLE_NULL) {
+        out[0] = -1;
+        return;
+    }
+
+    if (type == OBJ_TYPE_WEAPON) {
+        obj_field_int32_set(obj, OBJ_F_WEAPON_AMMO_TYPE, (int)a[1]);
+    }
+
+    out[0] = item_weapon_ammo_type(obj);
+}
+
+// `item_armor_coverage` (0x465C30). Three guards -- NULL, `item_is_item`, and
+// `== OBJ_TYPE_ARMOR` -- and then OBJ_F_ITEM_INV_AID through
+// `tig_art_item_id_armor_coverage_get` (0x504570), which is itself a case here
+// and is pure bit arithmetic on both sides. The emulator runs the original's
+// own copy of it rather than a stub, so the boundary stays symmetric.
+static void o_item_armor_coverage(const int64_t* a, int64_t* out)
+{
+    int type = (int)a[0];
+    int64_t obj;
+
+    if (a[2] != 0) {
+        out[0] = item_armor_coverage(OBJ_HANDLE_NULL);
+        return;
+    }
+
+    obj = o_obj_of_type(type);
+    if (obj == OBJ_HANDLE_NULL) {
+        out[0] = -1;
+        return;
+    }
+
+    if (obj_type_is_item(type)) {
+        obj_field_int32_set(obj, OBJ_F_ITEM_INV_AID, (int)a[1]);
+    }
+
+    out[0] = item_armor_coverage(obj);
+}
+
+// `item_location_get` (0x4655D0). The widest of this batch: a seven-way switch
+// on the armour coverage, each arm answering a different ITEM_INV_LOC_*
+// constant, plus a WEAPON arm, a GENERIC-with-torch-flag arm and a -1 default.
+// Ten outcomes from three fields.
+//
+// NO NULL in the domain: 0x4655DA pushes OBJ_F_TYPE straight away. That the
+// *inner* `item_armor_coverage` guards NULL does not help -- the outer read
+// happens first.
+static void o_item_location_get(const int64_t* a, int64_t* out)
+{
+    int type = (int)a[0];
+    int64_t obj = o_obj_of_type(type);
+
+    if (obj == OBJ_HANDLE_NULL) {
+        out[0] = -1;
+        return;
+    }
+
+    if (obj_type_is_item(type)) {
+        obj_field_int32_set(obj, OBJ_F_ITEM_INV_AID, (int)a[1]);
+    }
+
+    if (type == OBJ_TYPE_GENERIC) {
+        obj_field_int32_set(obj, OBJ_F_GENERIC_FLAGS, (int)a[2]);
+    }
+
+    out[0] = item_location_get(obj);
+}
+
+// `item_weapon_skill` (0x465D80). Five fields, five outcomes, and the deepest
+// chain in `item.c` that stays inside the fixture: NULL answers SKILL_MELEE,
+// a non-weapon SKILL_THROWING, OWF_BOOMERANGS (bit 6, `test al,0x40`)
+// SKILL_THROWING again, then a three-way conjunction -- a *negated* complexity
+// above zero, a range of at least 3, and an ammo type in {BULLET, CHARGE,
+// FUEL} -- for SKILL_FIREARMS, and finally ARROW for SKILL_BOW or
+// SKILL_MELEE.
+//
+// Worth knowing about the original's tail: at 0x465E18 it computes the last
+// two answers as `neg eax; sbb eax,eax; and eax,2`, which is 0 when the ammo
+// type is 0 and 2 otherwise. That is SKILL_BOW = 0 and SKILL_MELEE = 2, and it
+// is why those two constants have to be what CE says they are for the case to
+// pass at all.
+static void o_item_weapon_skill(const int64_t* a, int64_t* out)
+{
+    int type = (int)a[0];
+    int64_t obj;
+
+    if (a[5] != 0) {
+        out[0] = item_weapon_skill(OBJ_HANDLE_NULL);
+        return;
+    }
+
+    obj = o_obj_of_type(type);
+    if (obj == OBJ_HANDLE_NULL) {
+        out[0] = -1;
+        return;
+    }
+
+    if (type == OBJ_TYPE_WEAPON) {
+        obj_field_int32_set(obj, OBJ_F_WEAPON_FLAGS, (int)a[1]);
+        obj_field_int32_set(obj, OBJ_F_ITEM_MAGIC_TECH_COMPLEXITY, (int)a[2]);
+        obj_field_int32_set(obj, OBJ_F_WEAPON_AMMO_TYPE, (int)a[3]);
+        obj_field_int32_set(obj, OBJ_F_WEAPON_RANGE, (int)a[4]);
+    }
+
+    out[0] = item_weapon_skill(obj);
+}
+
 static void o_combat_hit_loc_penalty(const int64_t* a, int64_t* out)
 {
     out[0] = combat_hit_loc_penalty((int)a[0]);
@@ -1980,6 +2231,14 @@ static const OracleEntry oracle_entries[] = {
     { "combat_turn_based_critter_is_dontdraw", 3, 1, o_combat_turn_based_critter_is_dontdraw },
     { "item_worth", 5, 1, o_item_worth },
     { "item_is_worthless", 2, 1, o_item_is_worthless },
+    { "item_is_item", 2, 1, o_item_is_item },
+    { "item_magic_tech_complexity", 2, 1, o_item_magic_tech_complexity },
+    { "item_inventory_source", 4, 1, o_item_inventory_source },
+    { "item_is_identified", 4, 1, o_item_is_identified },
+    { "item_weapon_ammo_type", 3, 1, o_item_weapon_ammo_type },
+    { "item_armor_coverage", 3, 1, o_item_armor_coverage },
+    { "item_location_get", 3, 1, o_item_location_get },
+    { "item_weapon_skill", 6, 1, o_item_weapon_skill },
     { "critter_social_class_get", 2, 1, o_critter_social_class_get },
     { "critter_faction_get", 2, 1, o_critter_faction_get },
     { "critter_origin_get", 2, 1, o_critter_origin_get },
