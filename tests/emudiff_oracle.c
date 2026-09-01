@@ -1793,9 +1793,9 @@ static void o_magictech_invocation_parent_get(const int64_t* a, int64_t* out)
 // this one *is* a claim about a layout, so it has to be sourced.
 //
 // **The target handle may be OBJ_HANDLE_NULL, and that input is why this
-// case exists.** Writing it is what turned up porting bug #42: the original
+// case exists.** Writing it is what turned up the missing guard: the original
 // guards the target -- `or eax,edi; je` at 0x45646F, answering true -- and CE
-// did not, so a spell cast at a location read its three fields off whatever
+// did not, so a call with a null target read its three fields off whatever
 // object `obj_lock(OBJ_HANDLE_NULL)` lands on, which is index 0 of the object
 // pool. It is in the domain now that CE has the guard.
 //
@@ -1803,11 +1803,13 @@ static void o_magictech_invocation_parent_get(const int64_t* a, int64_t* out)
 // looks like a regression test and is not one.** An unfixed CE reads pool
 // slot 0, whose fields in this oracle are all zero, so it would answer `true`
 // as well and agree by accident. Nothing here would catch the guard being
-// removed again. #42 stands on the disassembly and on the marker
-// `check_porting_bugs.py` requires, the way #13-#30 do; a test that could
-// fail on its removal would have to control which object lands at pool index
-// 0, and encoding the handle layout to do that is a worse claim than the one
-// it would be checking.
+// removed again.
+//
+// The divergence is real and the guard is right, but it changes no reachable
+// behaviour and is NOT numbered: on shipped data the three masks are non-zero
+// only for spells that require a critter target, so a null target never
+// arrives while one of them is set. See PORTING-BUGS.md, *Deliberately not
+// numbered*, for the intersection test that settled it.
 static void o_magictech_disallowed_flags_check(const int64_t* a, int64_t* out)
 {
     int type_a = (int)a[0];

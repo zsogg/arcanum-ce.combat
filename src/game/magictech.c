@@ -5049,12 +5049,24 @@ bool magictech_disallowed_flags_check(int64_t a1, int64_t a2, MagicTechInfo* mag
         return false;
     }
 
-    // FIX (porting bug #42): the original guards the TARGET handle here too -
-    // `or eax, edi; je` at 0x45646F, jumping to the `mov eax, 1` at 0x4564D4.
-    // Without it a spell cast at a location, where `target_obj.obj` is
-    // OBJ_HANDLE_NULL, reads the three fields below off whatever object
-    // `obj_lock(OBJ_HANDLE_NULL)` lands on - index 0 of the object pool - and
-    // can refuse the cast on the strength of an unrelated object's flags.
+    // FIX: the original guards the TARGET handle here too - `or eax, edi; je`
+    // at 0x45646F, jumping to the `mov eax, 1` at 0x4564D4. Without it a call
+    // with `a2 == OBJ_HANDLE_NULL` reads the three fields below off whatever
+    // object `obj_lock(OBJ_HANDLE_NULL)` lands on - index 0 of the object
+    // pool - instead of answering true.
+    //
+    // NOT NUMBERED, and the reason is a measurement rather than an argument.
+    // A null target does reach here, on every spell aimed at a tile. But the
+    // three masks it would be tested against are only ever non-zero for
+    // spells that require a critter target: `Rules\spelllist.mes` has 42
+    // spells whose targeting admits a tile and 21 carrying `Disallowed_TSF:`
+    // or `Disallowed_TCF:`, and **the two sets do not intersect**. So on
+    // shipped data every call that arrives here with a null target has all
+    // three masks zero, and the unguarded version ANDs an unrelated object's
+    // flags with 0 and answers true - the same answer. A mod that puts
+    // `Disallowed_TSF:` on a tile-targeted spell inherits the correct path;
+    // that is what this guard is for. See PORTING-BUGS.md, *Deliberately not
+    // numbered*.
     if (a2 == OBJ_HANDLE_NULL) {
         return true;
     }
