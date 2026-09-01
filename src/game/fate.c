@@ -45,6 +45,15 @@ static FateCallback fate_callback;
  *
  * 0x4F5090
  */
+// NOTE: The original does NOT normalise this to 0/1 - 0x4F50AB is
+// `and eax, [edx*4+0x5BC48C]` followed straight by `ret`, so it answers with
+// the masked value itself (0x400 for FATE_CRIT_SUCCESS_DISARM_TRAPS, and so
+// on). CE returns `bool`. The two agree on truthiness and disagree on the
+// number, which is the whole difference; the sole caller (`fate_ui.c:252`)
+// uses it as a condition, and CE's `bool` return type means no future caller
+// can read the number either. Recorded rather than changed: matching the
+// original would mean widening the return type to expose a value nothing
+// wants. The emudiff case compares truthiness for this reason.
 bool fate_is_activated(int64_t obj, int fate)
 {
     return (obj_field_int32_get(obj, OBJ_F_PC_FLAGS_FATE) & fate_flags[fate]) != 0;

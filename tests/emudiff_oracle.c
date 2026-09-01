@@ -36,23 +36,31 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "game/ai.h"
+#include "game/background.h"
 #include "game/combat.h"
 #include "game/critter.h"
 #include "game/dialog.h"
+#include "game/fate.h"
+#include "game/gsound.h"
 #include "game/item.h"
+#include "game/level.h"
 #include "game/light.h"
 #include "game/location.h"
 #include "game/magictech.h"
 #include "game/mt_item.h"
 #include "game/obj.h"
+#include "game/player.h"
 #include "game/random.h"
 #include "game/reaction.h"
+#include "game/sfx.h"
 #include "game/skill.h"
 #include "game/spell.h"
 #include "game/stat.h"
 #include "game/tech.h"
 #include "game/terrain.h"
 #include "game/timeevent.h"
+#include "game/trap.h"
 #include "tig/tig.h"
 
 #include "obj_harness.h"
@@ -1953,6 +1961,288 @@ static void o_magictech_invisibility_target_check(const int64_t* a, int64_t* out
     out[0] = magictech_invisibility_target_check(obj_a, obj_b);
 }
 
+// --- the candidate tail, batch 1 (card V4) -----------------------------------
+//
+// No cluster and no shared file: twelve one-sitting functions from eleven
+// modules, which is what the whole of V4 looks like. Every ordinal and every
+// mask below was read off the literal the original uses, as always:
+//
+//     OBJ_F_SOUND_EFFECT              33 = 0x21    0x4F0FF4, 0x4F1034
+//     OBJ_F_SCENERY_FLAGS             69 = 0x45    0x41B9A4
+//     OBJ_F_ITEM_FLAGS                87 = 0x57    0x4CC1BD
+//     OBJ_F_ITEM_SPELL_1             100 = 0x64    0x4CC186
+//     OBJ_F_ITEM_SPELL_MANA_STORE    105 = 0x69    0x4CC176
+//     OBJ_F_GENERIC_FLAGS            211 = 0xD3    0x4BCA84
+//     OBJ_F_CRITTER_AUTO_LEVEL_SCHEME 245 = 0xF5   0x4A6D69
+//     OBJ_F_PC_FLAGS_FATE            254 = 0xFE    0x4F5098
+//     OBJ_F_PC_BACKGROUND_TEXT       258 = 0x102   0x4C26D8
+//
+//     OGF_IS_TRAP_DEVICE      0x0004     `test al,0x4`   0x4BCA93
+//     OSCF_SOUND_SMALL        0x0040     `test al,0x40`  0x41B9B0
+//     OSCF_SOUND_MEDIUM       0x0080     `test al,0x80`  0x41B9BA
+//     OSCF_SOUND_EXTRA_LARGE  0x0100     `test ah,0x1`   0x41B9C7
+//
+// The type constants each function compares against were checked the same
+// way: SCENERY 3 at 0x41B99F, CONTAINER 2 at 0x4F0FEF, PORTAL 1 at 0x4F102F,
+// GENERIC 0xE at 0x4BCA7F, PC 0xF at 0x40DA3F and 0x4C26AF.
+
+static void o_player_is_pc_obj(const int64_t* a, int64_t* out)
+{
+    int type = (int)a[0];
+    int64_t obj;
+
+    if (a[1] != 0) {
+        out[0] = player_is_pc_obj(OBJ_HANDLE_NULL);
+        return;
+    }
+
+    obj = o_obj_of_type(type);
+    if (obj == OBJ_HANDLE_NULL) {
+        out[0] = -1;
+        return;
+    }
+
+    out[0] = player_is_pc_obj(obj);
+}
+
+// `ai_max_dialog_distance` (0x4AFBB0). Tier 2, and the thinnest delegation in
+// the tree: `player_is_pc_obj(obj) ? 5 : 10`. It is a case anyway, and for the
+// reason the `object_is_static` pair is two cases - the constants are the
+// whole function, and they are exactly what a transcription drops.
+static void o_ai_max_dialog_distance(const int64_t* a, int64_t* out)
+{
+    int type = (int)a[0];
+    int64_t obj;
+
+    if (a[1] != 0) {
+        out[0] = ai_max_dialog_distance(OBJ_HANDLE_NULL);
+        return;
+    }
+
+    obj = o_obj_of_type(type);
+    if (obj == OBJ_HANDLE_NULL) {
+        out[0] = -1;
+        return;
+    }
+
+    out[0] = ai_max_dialog_distance(obj);
+}
+
+static void o_trap_is_trap_device(const int64_t* a, int64_t* out)
+{
+    int type = (int)a[0];
+    int64_t obj;
+
+    if (a[2] != 0) {
+        out[0] = trap_is_trap_device(OBJ_HANDLE_NULL);
+        return;
+    }
+
+    obj = o_obj_of_type(type);
+    if (obj == OBJ_HANDLE_NULL) {
+        out[0] = -1;
+        return;
+    }
+
+    if (type == OBJ_TYPE_GENERIC) {
+        obj_field_int32_set(obj, OBJ_F_GENERIC_FLAGS, (int)a[1]);
+    }
+
+    out[0] = trap_is_trap_device(obj);
+}
+
+static void o_background_get(const int64_t* a, int64_t* out)
+{
+    int type = (int)a[0];
+    int64_t obj;
+
+    if (a[2] != 0) {
+        out[0] = background_get(OBJ_HANDLE_NULL);
+        return;
+    }
+
+    obj = o_obj_of_type(type);
+    if (obj == OBJ_HANDLE_NULL) {
+        out[0] = -1;
+        return;
+    }
+
+    if (type == OBJ_TYPE_PC) {
+        obj_field_int32_set(obj, OBJ_F_PC_BACKGROUND, (int)a[1]);
+    }
+
+    out[0] = background_get(obj);
+}
+
+// `background_text_get` (0x4C26D0) and `fate_is_activated` (0x4F5090) read a
+// PC-only field with NO guard of any kind in front of it -- 0x4C26D8 and
+// 0x4F5098 push it straight away. So the type domain is PC alone and NULL is
+// out of both, which is `item_is_worthless`'s rule met for the fourth time.
+static void o_background_text_get(const int64_t* a, int64_t* out)
+{
+    int64_t obj = o_obj_of_type(OBJ_TYPE_PC);
+
+    obj_field_int32_set(obj, OBJ_F_PC_BACKGROUND_TEXT, (int)a[0]);
+    out[0] = background_text_get(obj);
+}
+
+static void o_fate_is_activated(const int64_t* a, int64_t* out)
+{
+    int64_t obj = o_obj_of_type(OBJ_TYPE_PC);
+
+    obj_field_int32_set(obj, OBJ_F_PC_FLAGS_FATE, (int)a[0]);
+    // The fate index is bounded by the case's domain, not here: it indexes
+    // `fate_flags[FATE_COUNT]` (0x5BC48C in the original, `and eax,[edx*4+
+    // 0x5BC48C]` at 0x4F50AB) with no check, so anything past the end
+    // compares whatever sits beside a table in two different binaries.
+    out[0] = fate_is_activated(obj, (int)a[1]);
+}
+
+static void o_auto_level_scheme_get(const int64_t* a, int64_t* out)
+{
+    int type = (int)a[0];
+    int64_t obj;
+
+    if (a[2] != 0) {
+        out[0] = auto_level_scheme_get(OBJ_HANDLE_NULL);
+        return;
+    }
+
+    obj = o_obj_of_type(type);
+    if (obj == OBJ_HANDLE_NULL) {
+        out[0] = -1;
+        return;
+    }
+
+    if (obj_type_is_critter(type)) {
+        obj_field_int32_set(obj, OBJ_F_CRITTER_AUTO_LEVEL_SCHEME, (int)a[1]);
+    }
+
+    out[0] = auto_level_scheme_get(obj);
+}
+
+// `gsound_size` (0x41B980). Three flag tests in priority order behind a
+// SCENERY type check, answering a `TigSoundPositionalSize`. The order is the
+// point: SMALL wins over MEDIUM wins over EXTRA_LARGE, and everything else --
+// including a non-scenery -- is LARGE. A case that only ever set one bit at a
+// time could not see a reordering, so the domain sets combinations.
+//
+// NO NULL: 0x41B98B pushes OBJ_F_TYPE with nothing in front of it.
+static void o_gsound_size(const int64_t* a, int64_t* out)
+{
+    int type = (int)a[0];
+    int64_t obj = o_obj_of_type(type);
+
+    if (obj == OBJ_HANDLE_NULL) {
+        out[0] = -1;
+        return;
+    }
+
+    if (type == OBJ_TYPE_SCENERY) {
+        obj_field_int32_set(obj, OBJ_F_SCENERY_FLAGS, (int)a[1]);
+    }
+
+    out[0] = gsound_size(obj);
+}
+
+// `sfx_container_sound` (0x4F0FD0) and `sfx_portal_sound` (0x4F1010). The same
+// shape against a different type constant -- CONTAINER 2 and PORTAL 1 -- and
+// two cases for it, because a transcription that used the wrong one of the
+// two would still answer -1 for every refusal and the stored sum otherwise.
+// OBJ_F_SOUND_EFFECT is ordinal 33, below OBJ_F_END, so every type owns it and
+// the set below is unconditional.
+static void o_sfx_sound(const int64_t* a, int64_t* out, int (*fn)(int64_t, int))
+{
+    int type = (int)a[0];
+    int64_t obj;
+
+    if (a[3] != 0) {
+        out[0] = fn(OBJ_HANDLE_NULL, (int)a[2]);
+        return;
+    }
+
+    obj = o_obj_of_type(type);
+    if (obj == OBJ_HANDLE_NULL) {
+        out[0] = -1;
+        return;
+    }
+
+    obj_field_int32_set(obj, OBJ_F_SOUND_EFFECT, (int)a[1]);
+
+    out[0] = fn(obj, (int)a[2]);
+}
+
+static void o_sfx_container_sound(const int64_t* a, int64_t* out)
+{
+    o_sfx_sound(a, out, (int (*)(int64_t, int))sfx_container_sound);
+}
+
+static void o_sfx_portal_sound(const int64_t* a, int64_t* out)
+{
+    o_sfx_sound(a, out, (int (*)(int64_t, int))sfx_portal_sound);
+}
+
+// `mt_item_spell` (0x4CB7A0). Reads `OBJ_F_ITEM_SPELL_1 + slot`, so the slot
+// is an unchecked index into five consecutive fields (100..104, with
+// MANA_STORE at 105 immediately after). The domain stops at 4 for the reason
+// `basic_skill_stat`'s stops at 11: one past the end reads a different field,
+// which is noise rather than a comparison.
+static void o_mt_item_spell(const int64_t* a, int64_t* out)
+{
+    int type = (int)a[0];
+    int slot = (int)a[1];
+    int64_t obj;
+
+    if (a[3] != 0) {
+        out[0] = mt_item_spell(OBJ_HANDLE_NULL, slot);
+        return;
+    }
+
+    obj = o_obj_of_type(type);
+    if (obj == OBJ_HANDLE_NULL) {
+        out[0] = -1;
+        return;
+    }
+
+    if (obj_type_is_item(type)) {
+        obj_field_int32_set(obj, OBJ_F_ITEM_SPELL_1 + slot, (int)a[2]);
+    }
+
+    out[0] = mt_item_spell(obj, slot);
+}
+
+// `mt_item_valid_ai_action` (0x4CC160) is a PARTIAL case, and the domain says
+// so: its third branch reads `magictech_spells[spell].item_triggers`, and
+// `magictech_spells` is a malloc'd pointer that is NULL in both binaries until
+// `magictech_init` runs -- which nothing here does. So the spell field is
+// pinned to the 10000 sentinel, which is the value that answers `true` before
+// the dereference; what is covered is the mana-store refusal and the sentinel
+// arm, two distinguishable answers.
+//
+// Worth keeping: the original reads OBJ_F_TYPE at 0x4CC16A and throws the
+// result away. CE carries that as a NOTE and does the same, so the case
+// exercises a read whose only purpose is to be faithful.
+//
+// NO NULL: that discarded read is unguarded.
+static void o_mt_item_valid_ai_action(const int64_t* a, int64_t* out)
+{
+    int type = (int)a[0];
+    int64_t obj = o_obj_of_type(type);
+
+    if (obj == OBJ_HANDLE_NULL) {
+        out[0] = -1;
+        return;
+    }
+
+    if (obj_type_is_item(type)) {
+        obj_field_int32_set(obj, OBJ_F_ITEM_SPELL_MANA_STORE, (int)a[1]);
+        obj_field_int32_set(obj, OBJ_F_ITEM_SPELL_1, 10000);
+        obj_field_int32_set(obj, OBJ_F_ITEM_FLAGS, (int)a[2]);
+    }
+
+    out[0] = mt_item_valid_ai_action(obj);
+}
+
 static void o_combat_hit_loc_penalty(const int64_t* a, int64_t* out)
 {
     out[0] = combat_hit_loc_penalty((int)a[0]);
@@ -2646,6 +2936,18 @@ static const OracleEntry oracle_entries[] = {
     { "magictech_disallowed_flags_check", 10, 1, o_magictech_disallowed_flags_check },
     { "magictech_find_effect_run", 5, 2, o_magictech_find_effect_run },
     { "magictech_invisibility_target_check", 6, 1, o_magictech_invisibility_target_check },
+    { "player_is_pc_obj", 2, 1, o_player_is_pc_obj },
+    { "ai_max_dialog_distance", 2, 1, o_ai_max_dialog_distance },
+    { "trap_is_trap_device", 3, 1, o_trap_is_trap_device },
+    { "background_get", 3, 1, o_background_get },
+    { "background_text_get", 1, 1, o_background_text_get },
+    { "fate_is_activated", 2, 1, o_fate_is_activated },
+    { "auto_level_scheme_get", 3, 1, o_auto_level_scheme_get },
+    { "gsound_size", 2, 1, o_gsound_size },
+    { "sfx_container_sound", 4, 1, o_sfx_container_sound },
+    { "sfx_portal_sound", 4, 1, o_sfx_portal_sound },
+    { "mt_item_spell", 4, 1, o_mt_item_spell },
+    { "mt_item_valid_ai_action", 3, 1, o_mt_item_valid_ai_action },
     { "critter_social_class_get", 2, 1, o_critter_social_class_get },
     { "critter_faction_get", 2, 1, o_critter_faction_get },
     { "critter_origin_get", 2, 1, o_critter_origin_get },

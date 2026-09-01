@@ -268,6 +268,24 @@ add_custom_command(
 )
 add_custom_target(arcanum-emudiff-magictech-obj DEPENDS "${EMUDIFF_MAGICTECH_OBJ}")
 
+# An implicitly declared function defaults to returning `int`, and on x86-64 a
+# `bool` return only sets AL - the rest of EAX keeps whatever the callee last
+# computed. A wrapper that calls a bool-returning engine function without its
+# header therefore reads a plausible-looking number instead of 0 or 1, and the
+# differential reports it as a mismatch against the original.
+#
+# That is not hypothetical: on 2026-09-01 `fate_is_activated` came back as
+# 1025 where the original said 1024, which reads exactly like a real finding.
+# It was a missing `#include "game/fate.h"`, and seven other wrappers in the
+# same batch had the same defect without showing a symptom, because their
+# functions happen to return `int`.
+#
+# Promoted to an error here rather than left as a warning: a warning in a
+# 2,700-line file that builds clean otherwise is a warning nobody reads.
+target_compile_options(arcanum-emudiff-oracle PRIVATE
+    -Werror=implicit-function-declaration
+)
+
 target_link_libraries(arcanum-emudiff-oracle PRIVATE
     "${EMUDIFF_ART_OBJ}"
     "${EMUDIFF_COMBAT_OBJ}"
