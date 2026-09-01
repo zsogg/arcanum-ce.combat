@@ -203,9 +203,76 @@ add_custom_command(
 )
 add_custom_target(arcanum-emudiff-combat-obj DEPENDS "${EMUDIFF_COMBAT_OBJ}")
 
+# The same objcopy trick again, for `object.c` and `magictech.c` (card V3).
+#
+# One static function in each is a candidate the object-field fixture can
+# drive, and only one: `object_hp_from_pts` is the tier-2 half of the hit-point
+# trio, and `magictech_disallowed_flags_check` is the widest thing in
+# `magictech.c` that reaches nothing but the field accessors. Neither source
+# file is modified.
+set(EMUDIFF_OBJECT_STATICS
+    object_hp_from_pts
+)
+set(EMUDIFF_OBJECT_OBJ "${CMAKE_CURRENT_BINARY_DIR}/object_globalized.o")
+set(_object_globalize_args "")
+foreach(sym ${EMUDIFF_OBJECT_STATICS})
+    list(APPEND _object_globalize_args "--globalize-symbol=${sym}")
+endforeach()
+
+file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/objectobj")
+
+add_custom_command(
+    OUTPUT "${EMUDIFF_OBJECT_OBJ}"
+    COMMAND "${CMAKE_AR}" x "$<TARGET_FILE:arcanum-game>" object.c.o
+    COMMAND "${CMAKE_OBJCOPY}" ${_object_globalize_args} object.c.o "${EMUDIFF_OBJECT_OBJ}"
+    COMMAND "${CMAKE_COMMAND}" -E rm -f object.c.o
+    COMMAND "${CMAKE_COMMAND}"
+        "-DOBJ=${EMUDIFF_OBJECT_OBJ}"
+        "-DSYMS=${EMUDIFF_OBJECT_STATICS}"
+        "-DDATA_SYMS="
+        "-DNM=${CMAKE_NM}"
+        -P "${CMAKE_CURRENT_SOURCE_DIR}/verify_globalized.cmake"
+    WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/objectobj"
+    DEPENDS arcanum-game
+    COMMENT "emudiff: globalizing object.c statics (no source change)"
+    VERBATIM
+)
+add_custom_target(arcanum-emudiff-object-obj DEPENDS "${EMUDIFF_OBJECT_OBJ}")
+
+set(EMUDIFF_MAGICTECH_STATICS
+    magictech_disallowed_flags_check
+)
+set(EMUDIFF_MAGICTECH_OBJ "${CMAKE_CURRENT_BINARY_DIR}/magictech_globalized.o")
+set(_magictech_globalize_args "")
+foreach(sym ${EMUDIFF_MAGICTECH_STATICS})
+    list(APPEND _magictech_globalize_args "--globalize-symbol=${sym}")
+endforeach()
+
+file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/magictechobj")
+
+add_custom_command(
+    OUTPUT "${EMUDIFF_MAGICTECH_OBJ}"
+    COMMAND "${CMAKE_AR}" x "$<TARGET_FILE:arcanum-game>" magictech.c.o
+    COMMAND "${CMAKE_OBJCOPY}" ${_magictech_globalize_args} magictech.c.o "${EMUDIFF_MAGICTECH_OBJ}"
+    COMMAND "${CMAKE_COMMAND}" -E rm -f magictech.c.o
+    COMMAND "${CMAKE_COMMAND}"
+        "-DOBJ=${EMUDIFF_MAGICTECH_OBJ}"
+        "-DSYMS=${EMUDIFF_MAGICTECH_STATICS}"
+        "-DDATA_SYMS="
+        "-DNM=${CMAKE_NM}"
+        -P "${CMAKE_CURRENT_SOURCE_DIR}/verify_globalized.cmake"
+    WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/magictechobj"
+    DEPENDS arcanum-game
+    COMMENT "emudiff: globalizing magictech.c statics (no source change)"
+    VERBATIM
+)
+add_custom_target(arcanum-emudiff-magictech-obj DEPENDS "${EMUDIFF_MAGICTECH_OBJ}")
+
 target_link_libraries(arcanum-emudiff-oracle PRIVATE
     "${EMUDIFF_ART_OBJ}"
     "${EMUDIFF_COMBAT_OBJ}"
+    "${EMUDIFF_OBJECT_OBJ}"
+    "${EMUDIFF_MAGICTECH_OBJ}"
     arcanum-game
     tig
     SDL3::SDL3
@@ -213,6 +280,8 @@ target_link_libraries(arcanum-emudiff-oracle PRIVATE
 add_dependencies(arcanum-emudiff-oracle
     arcanum-emudiff-art-obj
     arcanum-emudiff-combat-obj
+    arcanum-emudiff-object-obj
+    arcanum-emudiff-magictech-obj
 )
 
 

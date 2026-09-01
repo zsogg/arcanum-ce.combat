@@ -5049,6 +5049,16 @@ bool magictech_disallowed_flags_check(int64_t a1, int64_t a2, MagicTechInfo* mag
         return false;
     }
 
+    // FIX (porting bug #42): the original guards the TARGET handle here too -
+    // `or eax, edi; je` at 0x45646F, jumping to the `mov eax, 1` at 0x4564D4.
+    // Without it a spell cast at a location, where `target_obj.obj` is
+    // OBJ_HANDLE_NULL, reads the three fields below off whatever object
+    // `obj_lock(OBJ_HANDLE_NULL)` lands on - index 0 of the object pool - and
+    // can refuse the cast on the strength of an unrelated object's flags.
+    if (a2 == OBJ_HANDLE_NULL) {
+        return true;
+    }
+
     if ((obj_field_int32_get(a2, OBJ_F_SPELL_FLAGS) & magictech->disallowed_tsf) != 0) {
         return false;
     }

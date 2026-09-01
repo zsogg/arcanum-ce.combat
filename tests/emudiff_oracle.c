@@ -1556,6 +1556,401 @@ static void o_item_weapon_skill(const int64_t* a, int64_t* out)
     out[0] = item_weapon_skill(obj);
 }
 
+// --- object.c through the object fixture (card V3) ---------------------------
+//
+// Six candidates, and the whole file's arithmetic that a field fixture can
+// reach. Every ordinal below is the literal the original pushes, read out of
+// `Arcanum.exe` with objdump:
+//
+//     OBJ_F_HP_PTS      27 = 0x1B    0x43D418
+//     OBJ_F_HP_ADJ      28 = 0x1C    0x43D4C8
+//     OBJ_F_HP_DAMAGE   29 = 0x1D    0x43D518
+//     OBJ_F_FLAGS       19 = 0x13    0x43D9CC
+//     OBJ_F_TYPE       335 = 0x14F   0x43D948, 0x43D99A, 0x43D69A
+//
+// and `OF_DYNAMIC` is bit 13, from `not eax; shr eax,0xd; and eax,1` at
+// 0x43D9D8 -- 0x2000, which is what CE's obj_flags.h says.
+//
+// **These five ordinals are all below OBJ_F_END (37), so they are in the
+// common block every object type owns.** That is what makes the type domain
+// unrestricted here for the first time in this fixture: `object_hp_pts_get`
+// reads 0x1B off a wall as legitimately as off a critter, and CE's
+// `object_field_valid` agrees for all eighteen buildable types. The case
+// *checks* that rather than assuming it -- a type the fixture could not
+// represent would show up as a mismatch on exactly those inputs.
+//
+// `object_hp_from_pts` is `static` in CE and comes in through
+// `object_globalized.o`; declared here rather than in object.h, for the reason
+// given above `combat_weapon_loudness`.
+int object_hp_from_pts(int64_t obj);
+
+// A getter shaped `obj_field_int32_get(obj, <ordinal>)` and nothing else --
+// no NULL guard, no type guard, no arithmetic. Three of them, and three cases
+// rather than one shared case, for the same reason the fatigue trio is three:
+// they differ only in the ordinal, and a neighbouring ordinal is the slip this
+// engine has already been caught making (0x45D4F0 writes 0xE0 where it means
+// 0xE1).
+static void o_object_hp_field_get(const int64_t* a, int64_t* out, int field,
+    int (*fn)(int64_t))
+{
+    int type = (int)a[0];
+    int64_t obj = o_obj_of_type(type);
+
+    if (obj == OBJ_HANDLE_NULL) {
+        out[0] = -1;
+        return;
+    }
+
+    // Unconditional, unlike every earlier case in this file: the field is in
+    // the common block, so there is no type for which the set would be
+    // refused. If one ever were, the emulator would answer the drawn value
+    // and this side a 0, and the case would say so.
+    obj_field_int32_set(obj, field, (int)a[1]);
+
+    out[0] = fn(obj);
+}
+
+static void o_object_hp_pts_get(const int64_t* a, int64_t* out)
+{
+    o_object_hp_field_get(a, out, OBJ_F_HP_PTS, object_hp_pts_get);
+}
+
+static void o_object_hp_adj_get(const int64_t* a, int64_t* out)
+{
+    o_object_hp_field_get(a, out, OBJ_F_HP_ADJ, object_hp_adj_get);
+}
+
+static void o_object_hp_damage_get(const int64_t* a, int64_t* out)
+{
+    o_object_hp_field_get(a, out, OBJ_F_HP_DAMAGE, object_hp_damage_get);
+}
+
+// `object_hp_from_pts` (0x43D690). Tier 2 over `object_hp_pts_get`: a critter
+// gets four hit points per stored point and everything else exactly one, so
+// the case is the multiply and the type test that selects it. The inner
+// getter is cased separately and first, deliberately -- a delegating function
+// hides its callee's branches from `variety.py`, and with the callee already
+// held still a difference here can only be about this function's own shape.
+//
+// NO NULL: 0x43D69A pushes OBJ_F_TYPE with nothing in front of it.
+static void o_object_hp_from_pts(const int64_t* a, int64_t* out)
+{
+    int type = (int)a[0];
+    int64_t obj = o_obj_of_type(type);
+
+    if (obj == OBJ_HANDLE_NULL) {
+        out[0] = -1;
+        return;
+    }
+
+    obj_field_int32_set(obj, OBJ_F_HP_PTS, (int)a[1]);
+
+    out[0] = object_hp_from_pts(obj);
+}
+
+// `object_is_static_type` (0x43D940) and `object_is_static` (0x43D990). They
+// share a five-way type test -- PROJECTILE, CONTAINER, critter, item -- and
+// differ only in the tail: the first answers true for everything else, the
+// second additionally clears OF_DYNAMIC. Two cases rather than one, for the
+// same reason as the trio above: a tail is exactly what a transcription drops.
+//
+// Neither guards NULL (both push OBJ_F_TYPE first), so NULL is out of both
+// domains.
+//
+// Worth knowing about the original's codegen: 0x43D975 reaches `xor eax,eax`
+// then `test eax,eax; sete dl`, which is a `!` applied to a constant -- the
+// static-type arm loads 1 and returns 0, the other loads 0 and returns 1. The
+// answer is the negation of what the register holds, and reading the register
+// rather than the tail would get both arms backwards.
+static void o_object_is_static_type(const int64_t* a, int64_t* out)
+{
+    int type = (int)a[0];
+    int64_t obj = o_obj_of_type(type);
+
+    if (obj == OBJ_HANDLE_NULL) {
+        out[0] = -1;
+        return;
+    }
+
+    out[0] = object_is_static_type(obj);
+}
+
+static void o_object_is_static(const int64_t* a, int64_t* out)
+{
+    int type = (int)a[0];
+    int64_t obj = o_obj_of_type(type);
+
+    if (obj == OBJ_HANDLE_NULL) {
+        out[0] = -1;
+        return;
+    }
+
+    obj_field_int32_set(obj, OBJ_F_FLAGS, (int)a[1]);
+
+    out[0] = object_is_static(obj);
+}
+
+// --- magictech.c through the object fixture (card V3) ------------------------
+//
+// Ordinals, from the literal the original pushes:
+//
+//     OBJ_F_SPELL_FLAGS   20 = 0x14    0x456445, 0x459062, 0x459192, 0x45A58A
+//     OBJ_F_FLAGS         19 = 0x13    0x450A8A, 0x45A5B3
+//     OBJ_F_ITEM_PARENT   88 = 0x58    0x450A9B
+//
+// and the flag masks, each read off the literal the original tests:
+//
+//     OF_INVENTORY             0x1000  `test ah,0x10`  0x450A96
+//     OSF_INVISIBLE            0x1     `test al,0x1`   0x45A596
+//     OSF_DETECTING_INVISIBLE  0x200   `test ah,0x2`   0x45A5AE
+//     OF_INVISIBLE             0x200   `test ah,0x2`   0x45A5BF
+//
+// `magictech_disallowed_flags_check` is `static` in CE and comes in through
+// `magictech_globalized.o`; `magictech_invocation_parent_get` is external but
+// absent from magictech.h. Both are declared here rather than in the header,
+// for the reason given above `combat_weapon_loudness`.
+bool magictech_disallowed_flags_check(int64_t a1, int64_t a2, MagicTechInfo* magictech);
+int64_t magictech_invocation_parent_get(int64_t obj);
+
+// A handle cannot be compared across the two sides -- CE's comes out of its
+// own object pool and the emulator's is the fixture's made-up constant -- so
+// every case here that answers with one reports *which* handle it answered
+// with instead. The emulator driver applies the same three-way mapping.
+#define O_HANDLE_TOKEN_NULL 0
+#define O_HANDLE_TOKEN_SELF 1
+#define O_HANDLE_TOKEN_PARENT 2
+#define O_HANDLE_TOKEN_OTHER 3
+
+static int64_t o_handle_token(int64_t result, int64_t self, int64_t parent)
+{
+    if (result == OBJ_HANDLE_NULL) {
+        return O_HANDLE_TOKEN_NULL;
+    }
+    if (result == self) {
+        return O_HANDLE_TOKEN_SELF;
+    }
+    if (result == parent) {
+        return O_HANDLE_TOKEN_PARENT;
+    }
+    return O_HANDLE_TOKEN_OTHER;
+}
+
+// `magictech_invocation_parent_get` (0x450A50). Answers "who is really casting
+// this" -- an item held in someone's inventory answers with its owner, and
+// everything else answers with itself. Four ways out: NULL for NULL, itself
+// for a critter, itself for an item that is not in an inventory, and the
+// OBJ_F_ITEM_PARENT handle for one that is.
+//
+// The second `obj_field_handle_get` (0x406E80) is stubbed on the emulator side
+// exactly as `obj_field_int32_get` is, and for the same reason: it is a door
+// into the object system, not a claim about it. Doing that rather than cutting
+// the domain short of the branch is what keeps the answer worth having -- the
+// inventory arm is the only interesting thing this function does.
+static void o_magictech_invocation_parent_get(const int64_t* a, int64_t* out)
+{
+    int type = (int)a[0];
+    int64_t obj;
+    int64_t parent;
+
+    if (a[3] != 0) {
+        out[0] = o_handle_token(magictech_invocation_parent_get(OBJ_HANDLE_NULL),
+            OBJ_HANDLE_NULL, OBJ_HANDLE_NULL);
+        return;
+    }
+
+    obj = o_obj_of_type(type);
+    if (obj == OBJ_HANDLE_NULL) {
+        out[0] = -1;
+        return;
+    }
+
+    // A second object, of a type that is neither the subject nor an item, so
+    // the three tokens can never collide.
+    parent = o_obj_of_type_second(OBJ_TYPE_CONTAINER);
+
+    obj_field_int32_set(obj, OBJ_F_FLAGS, (int)a[1]);
+
+    // OBJ_F_ITEM_PARENT (88) is above OBJ_F_END, so only an item owns it --
+    // and the original never reads it unless the type test already passed.
+    if (obj_type_is_item(type)) {
+        obj_field_handle_set(obj, OBJ_F_ITEM_PARENT,
+            a[2] != 0 ? OBJ_HANDLE_NULL : parent);
+    }
+
+    out[0] = o_handle_token(magictech_invocation_parent_get(obj), obj, parent);
+}
+
+// `magictech_disallowed_flags_check` (0x456430). Three masks off the spell's
+// own rules row, tested against two different objects: the caster's spell
+// flags, the target's spell flags, and -- only if the target is a critter --
+// the target's critter flags.
+//
+// The MagicTechInfo the third argument points at is built here from CE's
+// named fields, and on the emulator side from the three offsets the original
+// itself uses: `[ebx+0x11c]` at 0x456455, `[ebx+0x120]` at 0x45647A and
+// `[ebx+0x124]` at 0x4564C1. Two forced-independent derivations of the same
+// three numbers, which is the blit fixture's rule and not the object stub's --
+// this one *is* a claim about a layout, so it has to be sourced.
+//
+// **The target handle may be OBJ_HANDLE_NULL, and that input is why this
+// case exists.** Writing it is what turned up porting bug #42: the original
+// guards the target -- `or eax,edi; je` at 0x45646F, answering true -- and CE
+// did not, so a spell cast at a location read its three fields off whatever
+// object `obj_lock(OBJ_HANDLE_NULL)` lands on, which is index 0 of the object
+// pool. It is in the domain now that CE has the guard.
+//
+// **What that input can and cannot do is worth being exact about, because it
+// looks like a regression test and is not one.** An unfixed CE reads pool
+// slot 0, whose fields in this oracle are all zero, so it would answer `true`
+// as well and agree by accident. Nothing here would catch the guard being
+// removed again. #42 stands on the disassembly and on the marker
+// `check_porting_bugs.py` requires, the way #13-#30 do; a test that could
+// fail on its removal would have to control which object lands at pool index
+// 0, and encoding the handle layout to do that is a worse claim than the one
+// it would be checking.
+static void o_magictech_disallowed_flags_check(const int64_t* a, int64_t* out)
+{
+    int type_a = (int)a[0];
+    int type_b = (int)a[2];
+    int64_t obj_a;
+    int64_t obj_b;
+    MagicTechInfo info;
+
+    memset(&info, 0, sizeof(info));
+    info.disallowed_sf = (unsigned int)a[5];
+    info.disallowed_tsf = (unsigned int)a[6];
+    info.disallowed_tcf = (unsigned int)a[7];
+
+    if (a[9] != 0) {
+        obj_b = OBJ_HANDLE_NULL;
+    } else {
+        obj_b = o_obj_of_type_second(type_b);
+        if (obj_b == OBJ_HANDLE_NULL) {
+            out[0] = -1;
+            return;
+        }
+
+        // OBJ_F_SPELL_FLAGS is ordinal 20, below OBJ_F_END, so every type
+        // owns it.
+        obj_field_int32_set(obj_b, OBJ_F_SPELL_FLAGS, (int)a[3]);
+        if (obj_type_is_critter(type_b)) {
+            obj_field_int32_set(obj_b, OBJ_F_CRITTER_FLAGS, (int)a[4]);
+        }
+    }
+
+    if (a[8] != 0) {
+        out[0] = magictech_disallowed_flags_check(OBJ_HANDLE_NULL, obj_b, &info);
+        return;
+    }
+
+    obj_a = o_obj_of_type(type_a);
+    if (obj_a == OBJ_HANDLE_NULL) {
+        out[0] = -1;
+        return;
+    }
+
+    obj_field_int32_set(obj_a, OBJ_F_SPELL_FLAGS, (int)a[1]);
+
+    out[0] = magictech_disallowed_flags_check(obj_a, obj_b, &info);
+}
+
+// `magictech_find_effect_run` (0x459170). Asks whether an object is under a
+// magical effect of a given kind, answering with the run's index.
+//
+// **Its sibling `magictech_find_effect_caster` (0x459040) is NOT a case.** It
+// was written, it passed, and `variety.py` reported `distinct=1` - every
+// input it can legally be given answers `(false, 0)`. The difference between
+// the two is one branch target: `_run` may be handed a NULL out-pointer,
+// because 0x45917A jumps to a plain `xor eax,eax; ret` that writes nothing,
+// and "wrote -1" against "did not write" is the only pair of distinguishable
+// answers either function has left once the loop is out of reach. The caster
+// has no such input, because the ORIGINAL faults on one: 0x45905C tests the
+// pointer and branches to 0x45911E, which is the block that *stores* through
+// it - `mov DWORD PTR [ebp+0x0],0x0`. CE checks the pointer first and returns
+// without writing, so CE is the more defensive of the two and every CE caller
+// passes `&local`; the divergence is recorded in PORTING-BUGS.md under the
+// unnumbered defects.
+//
+// **This is a PARTIAL case and the domain says so: the 512-entry search loop
+// is not covered, and cannot be.** `magictech_run_info` is a malloc'd pointer
+// on both sides -- 0x6876E0 in the shipped image reads 0, and CE's is NULL
+// until `magictech_init` runs, which nothing here does. Reaching the loop
+// therefore dereferences NULL in *both* binaries rather than searching an
+// empty pool, so the flag mask is drawn to make the guard in front of it
+// always true: the mask lives in the high half of the word and the object's
+// spell flags in the low half, so `spell_flags & flags` is zero by
+// construction while both halves still vary. What is covered is the three
+// guards and the two sentinels, and a mutation to either sentinel is caught.
+//
+// The card that scheduled this predicted the loop would "find nothing either
+// way"; it would fault either way, which is a stronger reason for the same
+// restriction and is why the domain is built rather than merely narrowed.
+static void o_magictech_find_effect_run(const int64_t* a, int64_t* out)
+{
+    int type = (int)a[0];
+    int64_t obj;
+    int index = (int)0xDEADBEEF;
+    bool null_ptr = a[4] != 0;
+
+    if (a[3] != 0) {
+        out[0] = magictech_find_effect_run(OBJ_HANDLE_NULL, (unsigned int)a[2],
+            null_ptr ? NULL : &index);
+        out[1] = (int64_t)(uint32_t)index;
+        return;
+    }
+
+    obj = o_obj_of_type(type);
+    if (obj == OBJ_HANDLE_NULL) {
+        out[0] = -1;
+        out[1] = -1;
+        return;
+    }
+
+    obj_field_int32_set(obj, OBJ_F_SPELL_FLAGS, (int)a[1]);
+
+    out[0] = magictech_find_effect_run(obj, (unsigned int)a[2],
+        null_ptr ? NULL : &index);
+    out[1] = (int64_t)(uint32_t)index;
+}
+
+// `magictech_invisibility_target_check` (0x45A580). Whether `a1` may target
+// `a2` given who is invisible: the target's OSF_INVISIBLE, the caster's
+// OSF_DETECTING_INVISIBLE, the target's own OF_INVISIBLE, and then -- for a PC
+// target only -- whether it is doing something that gives it away.
+//
+// Tier 2, and the only candidate in the file with inner calls. Two of them,
+// the `anim_is_current_goal_type` pair, are dead under the fixture and
+// *symmetrically* so, which is the thing that had to be checked rather than
+// assumed: `anim_run_info` is a static array in both binaries -- 0x687700 in
+// the original, from `mov ecx,0x68770C` at 0x44D2FD -- not a malloc'd pointer
+// like `magictech_run_info` above. It is zeroed, `flags & 1` is false in every
+// one of its 216 slots, and `anim_find_first` therefore answers -1 on both
+// sides for every input. So the PC arm reduces to its third call,
+// `combat_critter_is_combat_mode_active`, which is a case of its own.
+//
+// No NULL on either side: 0x45A58A pushes the target's field first.
+static void o_magictech_invisibility_target_check(const int64_t* a, int64_t* out)
+{
+    int type_a = (int)a[0];
+    int type_b = (int)a[2];
+    int64_t obj_a = o_obj_of_type(type_a);
+    int64_t obj_b = o_obj_of_type_second(type_b);
+
+    if (obj_a == OBJ_HANDLE_NULL || obj_b == OBJ_HANDLE_NULL) {
+        out[0] = -1;
+        return;
+    }
+
+    obj_field_int32_set(obj_a, OBJ_F_SPELL_FLAGS, (int)a[1]);
+    obj_field_int32_set(obj_b, OBJ_F_SPELL_FLAGS, (int)a[3]);
+    obj_field_int32_set(obj_b, OBJ_F_FLAGS, (int)a[4]);
+    if (obj_type_is_critter(type_b)) {
+        obj_field_int32_set(obj_b, OBJ_F_CRITTER_FLAGS, (int)a[5]);
+    }
+
+    out[0] = magictech_invisibility_target_check(obj_a, obj_b);
+}
+
 static void o_combat_hit_loc_penalty(const int64_t* a, int64_t* out)
 {
     out[0] = combat_hit_loc_penalty((int)a[0]);
@@ -2239,6 +2634,16 @@ static const OracleEntry oracle_entries[] = {
     { "item_armor_coverage", 3, 1, o_item_armor_coverage },
     { "item_location_get", 3, 1, o_item_location_get },
     { "item_weapon_skill", 6, 1, o_item_weapon_skill },
+    { "object_hp_pts_get", 2, 1, o_object_hp_pts_get },
+    { "object_hp_adj_get", 2, 1, o_object_hp_adj_get },
+    { "object_hp_damage_get", 2, 1, o_object_hp_damage_get },
+    { "object_hp_from_pts", 2, 1, o_object_hp_from_pts },
+    { "object_is_static_type", 1, 1, o_object_is_static_type },
+    { "object_is_static", 2, 1, o_object_is_static },
+    { "magictech_invocation_parent_get", 4, 1, o_magictech_invocation_parent_get },
+    { "magictech_disallowed_flags_check", 10, 1, o_magictech_disallowed_flags_check },
+    { "magictech_find_effect_run", 5, 2, o_magictech_find_effect_run },
+    { "magictech_invisibility_target_check", 6, 1, o_magictech_invisibility_target_check },
     { "critter_social_class_get", 2, 1, o_critter_social_class_get },
     { "critter_faction_get", 2, 1, o_critter_faction_get },
     { "critter_origin_get", 2, 1, o_critter_origin_get },
