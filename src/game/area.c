@@ -1,5 +1,7 @@
 #include "game/area.h"
 
+#include <string.h>
+
 #include "game/location.h"
 #include "game/map.h"
 #include "game/mes.h"
@@ -293,6 +295,99 @@ void area_mod_unload(void)
     }
 }
 
+// CE: The original writes `area_count()` bytes nine times with nothing in the
+// stream recording how many areas were in force, so adding one area shifts
+// every later module by nine bytes and the load dies at the next sentinel
+// (MODDING-NOTES.md quirk 17). That made every content mod save-incompatible:
+// a location mod required a new game, and uninstalling one invalidated every
+// save written while it was installed.
+//
+// CE writes a `magic + count` prefix and reads both layouts. Old saves keep
+// loading; new ones survive an area being added or removed.
+//
+// **Detection is determined, not guessed.** `AreaFlags` is a uint8_t with the
+// single flag AREA_KNOWN = 0x1, so every byte of `area_flags` is 0 or 1, and
+// the first four bytes of an original-layout block are all in {0, 1}. No byte
+// of 'AREA' is 0 or 1, so an old save cannot be mistaken for a new one.
+//
+// What this costs is byte-identity with Troika's own output for this module,
+// which makes the savegame round-trip one-way. That is the Compatible regime
+// in FIDELITY-CONTRACT.md, and nothing outside this project reads a save CE
+// wrote.
+#define AREA_SAVE_MAGIC 0x41455241u /* 'AREA', little-endian */
+
+// A count read out of a file is not trusted just because we wrote it: a
+// truncated or corrupted save must be refused rather than used to size an
+// allocation.
+#define AREA_SAVE_MAX_COUNT 65536
+
+// How many areas an original-layout block was written with, from the distance
+// to gamelib's sentinel. Returns 0 when it cannot be determined, which the
+// caller treats as "behave as the original did".
+static int area_count_from_block_length(TigFile* stream, int start)
+{
+    // 9 flag arrays + 9 int32s, so the largest block worth considering is
+    // bounded by the same limit as the explicit count.
+    enum { SCAN_MAX = 9 * AREA_SAVE_MAX_COUNT + 9 * (int)sizeof(int) + 8 };
+    unsigned char* buffer;
+    int read_bytes;
+    int index;
+    int length = 0;
+    int payload;
+
+    buffer = (unsigned char*)MALLOC(SCAN_MAX);
+    read_bytes = (int)tig_file_fread(buffer, 1, SCAN_MAX, stream);
+
+    for (index = 0; index + 4 <= read_bytes; index++) {
+        if (buffer[index] == 0xFE
+            && buffer[index + 1] == 0xCA
+            && buffer[index + 2] == 0xEF
+            && buffer[index + 3] == 0xBE) {
+            length = index;
+            break;
+        }
+    }
+    FREE(buffer);
+
+    if (length == 0) return 0;
+
+    payload = length - 9 * (int)sizeof(int);
+    if (payload <= 0 || payload % 9 != 0) return 0;
+
+    payload /= 9;
+    if (payload > AREA_SAVE_MAX_COUNT) return 0;
+
+    (void)start;
+    return payload;
+}
+
+static bool area_read_flags(TigFile* stream, AreaFlags* dst, int saved_count)
+{
+    AreaFlags* scratch;
+    int copy;
+
+    if (saved_count == num_areas) {
+        return tig_file_fread(dst, num_areas, 1, stream) == 1;
+    }
+
+    // Heap, not stack. `saved_count` is bounded above but still comes from a
+    // file, and a multi-kilobyte stack array sized from file content is the
+    // shape of porting bug #11.
+    scratch = (AreaFlags*)MALLOC(sizeof(*scratch) * saved_count);
+    if (tig_file_fread(scratch, saved_count, 1, stream) != 1) {
+        FREE(scratch);
+        return false;
+    }
+
+    // Areas the save never knew about stay unknown, which is what an area a
+    // mod added after the save was written should be.
+    copy = saved_count < num_areas ? saved_count : num_areas;
+    memset(dst, 0, num_areas);
+    memcpy(dst, scratch, copy);
+    FREE(scratch);
+    return true;
+}
+
 /**
  * Called when the game is being loaded.
  *
@@ -301,12 +396,50 @@ void area_mod_unload(void)
 bool area_load(GameLoadInfo* load_info)
 {
     int player;
+    unsigned int magic;
+    int saved_count;
+    int pos;
 
-    if (tig_file_fread(area_flags, num_areas, 1, load_info->stream) != 1) return false;
+    if (tig_file_fgetpos(load_info->stream, &pos) != 0) return false;
+    if (tig_file_fread(&magic, sizeof(magic), 1, load_info->stream) != 1) return false;
+
+    if (magic == AREA_SAVE_MAGIC) {
+        if (tig_file_fread(&saved_count, sizeof(saved_count), 1, load_info->stream) != 1) return false;
+        if (saved_count <= 0 || saved_count > AREA_SAVE_MAX_COUNT) {
+            tig_debug_printf("area_load: refusing implausible area count %d\n", saved_count);
+            return false;
+        }
+    } else {
+        // An original-layout save has no count, so recover it from the block
+        // length. The module is followed by gamelib's 0xBEEFCAFE sentinel,
+        // and the block is exactly `9 * count + 9 * sizeof(int)` bytes, so
+        // the count is arithmetic once the end is known.
+        //
+        // **The sentinel cannot occur inside an Area block**, by the same
+        // argument that makes the magic safe: the block holds only flag bytes
+        // (0 or 1) and small area indices, and none of 0xFE, 0xCA, 0xEF, 0xBE
+        // can be produced by either. So the first match after the block start
+        // is this module's own sentinel and not a coincidence in the data.
+        //
+        // Without this, the count prefix would rescue only saves written
+        // after it existed -- every save a player already had would still die
+        // at the sentinel the moment a mod changed the area list, which is the
+        // whole of quirk 17 and the reason for the change.
+        if (tig_file_fsetpos(load_info->stream, &pos) != 0) return false;
+        saved_count = area_count_from_block_length(load_info->stream, pos);
+        if (saved_count <= 0) {
+            // Could not be determined: behave exactly as the original did,
+            // so a save this cannot read is no worse off than before.
+            saved_count = num_areas;
+        }
+        if (tig_file_fsetpos(load_info->stream, &pos) != 0) return false;
+    }
+
+    if (!area_read_flags(load_info->stream, area_flags, saved_count)) return false;
     if (tig_file_fread(&area_last_known_area, sizeof(area_last_known_area), 1, load_info->stream) != 1) return false;
 
     for (player = 0; player < 8; player++) {
-        if (tig_file_fread(area_flags_per_player[player], num_areas, 1, load_info->stream) != 1) return false;
+        if (!area_read_flags(load_info->stream, area_flags_per_player[player], saved_count)) return false;
         if (tig_file_fread(&(area_last_known_area_per_player[player]), sizeof(area_last_known_area_per_player[0]), 1, load_info->stream) != 1) return false;
     }
 
@@ -321,6 +454,13 @@ bool area_load(GameLoadInfo* load_info)
 bool area_save(TigFile* stream)
 {
     int player;
+    unsigned int magic = AREA_SAVE_MAGIC;
+    int count = num_areas;
+
+    // CE: see area_load. The count is what makes a save survive an area being
+    // added or removed.
+    if (tig_file_fwrite(&magic, sizeof(magic), 1, stream) != 1) return false;
+    if (tig_file_fwrite(&count, sizeof(count), 1, stream) != 1) return false;
 
     if (tig_file_fwrite(area_flags, num_areas, 1, stream) != 1) return false;
     if (tig_file_fwrite(&area_last_known_area, sizeof(area_last_known_area), 1, stream) != 1) return false;
