@@ -336,7 +336,26 @@ int main(int argc, char** argv)
 
     tig_mouse_hide();
 
-    game_init_info.editor = false;
+    // WorldEd's engine half is in this tree: 24 modules take `init_info->editor`
+    // into a per-module static, and `sector.c` swaps in real `sector_load_editor`
+    // / `sector_save_editor` implementations rather than stubs. Card A2 exists to
+    // measure how much of that actually works, so the flag needs a way to be
+    // turned on.
+    //
+    // **It cannot be an X1 feature flag, and that is a property of the ordering
+    // rather than an omission.** `gamelib_init` reads this flag to decide
+    // *which settings file to open* (`worlded.cfg` or `arcanum.cfg`,
+    // gamelib.c:321) and only then calls `settings_load` and `feature_init`. A
+    // feature is read after the load, which is after the decision it would have
+    // to make; there is no ordering that breaks the circle. So this is a
+    // command-line switch, which is also closer to the original, where WorldEd
+    // was a separate binary and no runtime toggle existed at all.
+    //
+    // Off unless asked for, like every other switch here.
+    game_init_info.editor = strstr(lpCmdLine, "-editor") != NULL;
+    if (game_init_info.editor) {
+        tig_debug_printf("main: -editor given; starting in editor mode\n");
+    }
     game_init_info.invalidate_rect_func = iso_invalidate_rect;
     game_init_info.draw_func = iso_redraw;
 

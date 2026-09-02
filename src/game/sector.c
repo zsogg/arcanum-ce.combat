@@ -901,7 +901,21 @@ bool sector_lock(int64_t id, Sector** sector_ptr)
     }
 
     if (!map_is_valid()) {
+        // FIX (porting bug #43): the original returns false here; this printed
+        // the error and fell through. At 0x4D0573 the original calls
+        // `map_is_valid`, and on the false branch pushes the string at
+        // 0x5B7FD4, calls the debug printf, then `xor eax, eax` and returns
+        // (0x4D0589). CE kept the message and dropped the return, so a caller
+        // that locks a sector with no valid map proceeds into the cache and
+        // ends up in `terrain_sector_path` with an uninitialised tile id
+        // (`tid: 65535`), which segfaults.
+        //
+        // Reached by card A2's editor probe: `-editor` starts the engine
+        // without opening a map, and the first sector lock crashes. Nothing in
+        // normal play reaches it, because a map is always valid by then --
+        // which is why this survived.
         tig_debug_printf("ERROR: Attempt to lock a sector when the map is not valid!!!\n");
+        return false;
     }
 
     if (SECTOR_X(id) < 0
