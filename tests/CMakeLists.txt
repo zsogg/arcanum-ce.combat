@@ -413,6 +413,20 @@ target_link_libraries(arcanum-dat-dump PRIVATE
 # `arcanum-work/scripts/overlay_check.py`. Same reason as `arcanum-dat-dump`:
 # the Python model of which archive answers a lookup has never been checked
 # against the code it models. Needs the game's archives, so not a test.
+# The fuzz probe runs CE's own data-file readers over one file and exits, so
+# a malformed file can be pointed at the real reader without booting the
+# game. Links arcanum-game because the readers live there, not in tig.
+add_executable(arcanum-fuzz-probe
+    "fuzz_probe.c"
+)
+
+target_link_libraries(arcanum-fuzz-probe PRIVATE
+    arcanum-game
+    tig
+    SDL3::SDL3
+    ${ZLIB_LIBRARIES}
+)
+
 add_executable(arcanum-file-probe
     "file_probe.c"
 )
