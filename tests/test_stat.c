@@ -51,9 +51,11 @@ static const int EXE_STAT_MAX[STAT_COUNT] = {
 
 TEST(the_uap_switch_is_off_so_these_test_the_faithful_path)
 {
-    // `uap_fixes` is a plain static that nothing in a test initialises, so it
-    // reads false and `stat_level_min`/`stat_level_max` take their original
-    // branches. Asserted rather than assumed, because three of the values below
+    // Nothing in a test calls `feature_init`, so the flag holds the default
+    // its row in `game/feature_list.h` declares - off - and
+    // `stat_level_min`/`stat_level_max` take their original branches. That the
+    // default is readable without initialisation is deliberate: a test binary
+    // that never boots the game still gets the faithful answer. Asserted rather than assumed, because three of the values below
     // are exactly the ones UAP changes - the STAT_AGE floor of 20, the
     // STAT_HEAL_RATE floor of 0, and the STAT_UNSPENT_POINTS cap of 56 - so if
     // the switch were ever on by default in a test build, this suite would be

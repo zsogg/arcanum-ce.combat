@@ -19,6 +19,7 @@
 #include "game/determinism.h"
 #include "game/dialog.h"
 #include "game/facade.h"
+#include "game/feature.h"
 #include "game/gameinit.h"
 #include "game/gfade.h"
 #include "game/gmovie.h"
@@ -327,6 +328,10 @@ bool gamelib_init(GameInitInfo* init_info)
 
     settings_register(&settings, DIFFICULTY_KEY, "1", difficulty_changed);
     difficulty_changed();
+
+    // Before any module that attaches a change callback, and after
+    // `settings_load` so a value already in the config wins over the default.
+    feature_init();
 
     uap_init();
 

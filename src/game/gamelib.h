@@ -29,7 +29,8 @@
 #define OBJECT_LIGHTING_KEY "object lighting"
 #define SHADOWS_KEY "shadows"
 
-#define UAP_FIXES_KEY "uap fixes"
+// `uap fixes` was here. Feature-flag keys live in `game/feature_list.h`
+// now, which is the one list both the engine and `modkit` read.
 
 // CE: reproducible runs. See game/determinism.h.
 #define DETERMINISM_KEY "determinism"

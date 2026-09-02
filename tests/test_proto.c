@@ -16,6 +16,7 @@
 #include <stdint.h>
 #include <stdlib.h>
 
+#include "game/feature.h"
 #include "game/gamelib.h"
 #include "game/obj.h"
 #include "game/proto.h"
@@ -68,10 +69,17 @@ TEST(proto_description_ranges_are_half_open)
 
 TEST(uap_widens_generic_armor_and_monster_ranges)
 {
-    // `uap_init` registers the "uap fixes" setting and reads its default.
+    // The same two calls `gamelib_init` makes, in the same order, and the
+    // order is the contract: `feature_init` registers every flag with
+    // `settings` and installs the trampoline that carries a change back to the
+    // registry, and `uap_init` attaches the callback that pushes the switch
+    // down into tig. Set the value before the trampoline exists and
+    // `settings_set_value` would quietly create an entry with no callback, so
+    // the flag would never move.
+    feature_init();
     uap_init();
 
-    settings_set_value(&settings, UAP_FIXES_KEY, 1);
+    settings_set_value(&settings, feature_key(FEATURE_UAP_FIXES), 1);
 
     // UAP's own widenings, unchanged.
     CHECK(proto_is_valid(15213));
@@ -88,7 +96,7 @@ TEST(uap_widens_generic_armor_and_monster_ranges)
     CHECK(proto_is_valid(9054));
     CHECK(!proto_is_valid(9055)); // OBJ_TYPE_GOLD begins at 9056
 
-    settings_set_value(&settings, UAP_FIXES_KEY, 0);
+    settings_set_value(&settings, feature_key(FEATURE_UAP_FIXES), 0);
 
     // Back to stock: the widened slots are invalid again.
     CHECK(!proto_is_valid(15213));

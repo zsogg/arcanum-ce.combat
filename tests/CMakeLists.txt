@@ -49,6 +49,7 @@ add_executable(arcanum-tests
     "test_obj_file.c"
     "test_highres_config.c"
     "test_settings.c"
+    "test_feature.c"
     "test_obj_id.c"
     "test_reaction.c"
     "test_compat.c"
