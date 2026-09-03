@@ -1252,6 +1252,58 @@ static void o_critter_has_dark_sight(const int64_t* a, int64_t* out)
 // owns. Leaving all types in is the better choice besides: PORTAL falls to
 // `tig_art_id_frame_get`'s *default* arm, and the wrong-type draws walk the
 // rest of that switch, where TILE/WALL/ITEM answer 0 unconditionally.
+// Both are `static` in CE and come in through `reaction_globalized.o` and
+// `skill_ui_globalized.o`; declared here rather than in their headers, for the
+// reason given above `combat_weapon_loudness` - the shipped build must not
+// gain a symbol because a test wanted one.
+int reaction_get_base(int64_t obj);
+bool skill_ui_is_pickpocket_immune(int64_t obj);
+
+// `reaction_get_base` (0x4C12D0). V4 batch 2. A bare read of
+// OBJ_F_NPC_REACTION_BASE - ordinal 0x127, read off the literal at 0x4C12D8 in
+// batch 1 - with no guard of any kind. So NULL is out of the domain, and so is
+// every type but NPC: CE's object refuses a field the type does not own and
+// answers 0, while the emulator's stub answers the drawn value.
+//
+// `static` in CE; reaction_globalized.o is what makes it reachable.
+static void o_reaction_get_base(const int64_t* a, int64_t* out)
+{
+    int64_t obj = o_obj_of_type(OBJ_TYPE_NPC);
+
+    if (obj == OBJ_HANDLE_NULL) {
+        out[0] = -1;
+        return;
+    }
+
+    obj_field_int32_set(obj, OBJ_F_NPC_REACTION_BASE, (int)a[0]);
+
+    out[0] = reaction_get_base(obj);
+}
+
+// `skill_ui_is_pickpocket_immune` (0x57A5E0). V4 batch 2. Two field reads and
+// two mask tests OR'd together, so the domain has to reach all four
+// combinations - `FlagBoundaryArg` on each mask does that, and the OR means a
+// swapped pair of masks still answers correctly whenever both bits agree.
+// That is why the two are drawn independently rather than together.
+//
+// Both fields are critter-owned, so the type domain is PC and NPC. `static` in
+// CE; skill_ui_globalized.o is what makes it reachable.
+static void o_skill_ui_is_pickpocket_immune(const int64_t* a, int64_t* out)
+{
+    int type = (int)a[0];
+    int64_t obj = o_obj_of_type(type);
+
+    if (obj == OBJ_HANDLE_NULL) {
+        out[0] = -1;
+        return;
+    }
+
+    obj_field_int32_set(obj, OBJ_F_CRITTER_FLAGS2, (int)a[1]);
+    obj_field_int32_set(obj, OBJ_F_CRITTER_FLAGS, (int)a[2]);
+
+    out[0] = skill_ui_is_pickpocket_immune(obj);
+}
+
 static void o_portal_is_open(const int64_t* a, int64_t* out)
 {
     int type = (int)a[0];
@@ -3001,6 +3053,8 @@ static const OracleEntry oracle_entries[] = {
     { "critter_is_sleeping", 3, 1, o_critter_is_sleeping },
     { "critter_is_concealed", 3, 1, o_critter_is_concealed },
     { "critter_has_dark_sight", 4, 1, o_critter_has_dark_sight },
+    { "reaction_get_base", 1, 1, o_reaction_get_base },
+    { "skill_ui_is_pickpocket_immune", 3, 1, o_skill_ui_is_pickpocket_immune },
     { "portal_is_open", 2, 1, o_portal_is_open },
     { "critter_is_prone", 3, 1, o_critter_is_prone },
     { "critter_can_jump_window", 2, 1, o_critter_can_jump_window },

@@ -269,6 +269,73 @@ add_custom_command(
 )
 add_custom_target(arcanum-emudiff-magictech-obj DEPENDS "${EMUDIFF_MAGICTECH_OBJ}")
 
+# The same objcopy trick for `reaction.c` and `skill_ui.c` (card V4, batch 2).
+# One static candidate in each, and both are bare field reads once the guard is
+# passed - the two cheapest things left in the candidate tail.
+#
+# `skill_ui.c` is in `src/ui` rather than `src/game`, which the card flagged as
+# something to check before copying this pattern. There is nothing to check:
+# `src/ui/*.c` is in `${SRCS}` and therefore in `libarcanum-game.a` - `ar t`
+# lists `skill_ui.c.o` - so the archive member comes from the same place every
+# other block here pulls from.
+set(EMUDIFF_REACTION_STATICS
+    reaction_get_base
+)
+set(EMUDIFF_REACTION_OBJ "${CMAKE_CURRENT_BINARY_DIR}/reaction_globalized.o")
+set(_reaction_globalize_args "")
+foreach(sym ${EMUDIFF_REACTION_STATICS})
+    list(APPEND _reaction_globalize_args "--globalize-symbol=${sym}")
+endforeach()
+
+file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/reactionobj")
+
+add_custom_command(
+    OUTPUT "${EMUDIFF_REACTION_OBJ}"
+    COMMAND "${CMAKE_AR}" x "$<TARGET_FILE:arcanum-game>" reaction.c.o
+    COMMAND "${CMAKE_OBJCOPY}" ${_reaction_globalize_args} reaction.c.o "${EMUDIFF_REACTION_OBJ}"
+    COMMAND "${CMAKE_COMMAND}" -E rm -f reaction.c.o
+    COMMAND "${CMAKE_COMMAND}"
+        "-DOBJ=${EMUDIFF_REACTION_OBJ}"
+        "-DSYMS=${EMUDIFF_REACTION_STATICS}"
+        "-DDATA_SYMS="
+        "-DNM=${CMAKE_NM}"
+        -P "${CMAKE_CURRENT_SOURCE_DIR}/verify_globalized.cmake"
+    WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/reactionobj"
+    DEPENDS arcanum-game
+    COMMENT "emudiff: globalizing reaction.c statics (no source change)"
+    VERBATIM
+)
+add_custom_target(arcanum-emudiff-reaction-obj DEPENDS "${EMUDIFF_REACTION_OBJ}")
+
+set(EMUDIFF_SKILL_UI_STATICS
+    skill_ui_is_pickpocket_immune
+)
+set(EMUDIFF_SKILL_UI_OBJ "${CMAKE_CURRENT_BINARY_DIR}/skill_ui_globalized.o")
+set(_skill_ui_globalize_args "")
+foreach(sym ${EMUDIFF_SKILL_UI_STATICS})
+    list(APPEND _skill_ui_globalize_args "--globalize-symbol=${sym}")
+endforeach()
+
+file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/skilluiobj")
+
+add_custom_command(
+    OUTPUT "${EMUDIFF_SKILL_UI_OBJ}"
+    COMMAND "${CMAKE_AR}" x "$<TARGET_FILE:arcanum-game>" skill_ui.c.o
+    COMMAND "${CMAKE_OBJCOPY}" ${_skill_ui_globalize_args} skill_ui.c.o "${EMUDIFF_SKILL_UI_OBJ}"
+    COMMAND "${CMAKE_COMMAND}" -E rm -f skill_ui.c.o
+    COMMAND "${CMAKE_COMMAND}"
+        "-DOBJ=${EMUDIFF_SKILL_UI_OBJ}"
+        "-DSYMS=${EMUDIFF_SKILL_UI_STATICS}"
+        "-DDATA_SYMS="
+        "-DNM=${CMAKE_NM}"
+        -P "${CMAKE_CURRENT_SOURCE_DIR}/verify_globalized.cmake"
+    WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/skilluiobj"
+    DEPENDS arcanum-game
+    COMMENT "emudiff: globalizing skill_ui.c statics (no source change)"
+    VERBATIM
+)
+add_custom_target(arcanum-emudiff-skill-ui-obj DEPENDS "${EMUDIFF_SKILL_UI_OBJ}")
+
 # An implicitly declared function defaults to returning `int`, and on x86-64 a
 # `bool` return only sets AL - the rest of EAX keeps whatever the callee last
 # computed. A wrapper that calls a bool-returning engine function without its
@@ -292,11 +359,15 @@ target_link_libraries(arcanum-emudiff-oracle PRIVATE
     "${EMUDIFF_COMBAT_OBJ}"
     "${EMUDIFF_OBJECT_OBJ}"
     "${EMUDIFF_MAGICTECH_OBJ}"
+    "${EMUDIFF_REACTION_OBJ}"
+    "${EMUDIFF_SKILL_UI_OBJ}"
     arcanum-game
     tig
     SDL3::SDL3
 )
 add_dependencies(arcanum-emudiff-oracle
+    arcanum-emudiff-reaction-obj
+    arcanum-emudiff-skill-ui-obj
     arcanum-emudiff-art-obj
     arcanum-emudiff-combat-obj
     arcanum-emudiff-object-obj
