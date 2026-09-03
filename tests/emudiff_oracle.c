@@ -37,6 +37,7 @@
 #include <string.h>
 
 #include "game/ai.h"
+#include "game/anim_private.h"
 #include "game/background.h"
 #include "game/combat.h"
 #include "game/critter.h"
@@ -51,6 +52,7 @@
 #include "game/mt_item.h"
 #include "game/obj.h"
 #include "game/player.h"
+#include "game/portal.h"
 #include "game/random.h"
 #include "game/reaction.h"
 #include "game/sfx.h"
@@ -1241,6 +1243,30 @@ static void o_critter_has_dark_sight(const int64_t* a, int64_t* out)
 //
 // NULL is out of the domain: 0x45D73A pushes OBJ_F_FLAGS with nothing in
 // front of it.
+// `portal_is_open` (0x4F08C0). V4 batch 2. One field read and one tig call:
+// `tig_art_id_frame_get(OBJ_F_CURRENT_AID) != 0`.
+//
+// **No NULL guard and no type guard**, so NULL is out of the domain, but the
+// type domain stays open for the same reason `critter_can_jump_window`'s
+// does - OBJ_F_CURRENT_AID is ordinal 1, inside the common block every object
+// owns. Leaving all types in is the better choice besides: PORTAL falls to
+// `tig_art_id_frame_get`'s *default* arm, and the wrong-type draws walk the
+// rest of that switch, where TILE/WALL/ITEM answer 0 unconditionally.
+static void o_portal_is_open(const int64_t* a, int64_t* out)
+{
+    int type = (int)a[0];
+    int64_t obj = o_obj_of_type(type);
+
+    if (obj == OBJ_HANDLE_NULL) {
+        out[0] = -1;
+        return;
+    }
+
+    obj_field_int32_set(obj, OBJ_F_CURRENT_AID, (int)a[1]);
+
+    out[0] = portal_is_open(obj);
+}
+
 static void o_critter_is_prone(const int64_t* a, int64_t* out)
 {
     int type = (int)a[0];
@@ -2026,6 +2052,21 @@ static void o_ai_max_dialog_distance(const int64_t* a, int64_t* out)
     }
 
     out[0] = ai_max_dialog_distance(obj);
+}
+
+// V4. Scalar in, scalar out - no object fixture, because it takes a goal-type
+// index rather than a handle. It reads `anim_goal_nodes[index]->concurrent`
+// with no bounds check and no NULL check, and the table is statically
+// initialised on BOTH sides (87 entries; the original's is at 0x5B03D0 and is
+// image data, not BSS), so the case compares one transcribed flag per goal
+// type across all 85 non-NULL types at once.
+//
+// The domain excludes 13 and 22, which are NULL in both tables (AG_UNLOCK_DOOR
+// and AG_PICK_WEAPON) - both engines would dereference NULL, which is a shared
+// crash rather than a comparison.
+static void o_anim_goal_type_is_concurrent(const int64_t* a, int64_t* out)
+{
+    out[0] = anim_goal_type_is_concurrent((int)a[0]);
 }
 
 static void o_trap_is_trap_device(const int64_t* a, int64_t* out)
@@ -2938,6 +2979,7 @@ static const OracleEntry oracle_entries[] = {
     { "magictech_invisibility_target_check", 6, 1, o_magictech_invisibility_target_check },
     { "player_is_pc_obj", 2, 1, o_player_is_pc_obj },
     { "ai_max_dialog_distance", 2, 1, o_ai_max_dialog_distance },
+    { "anim_goal_type_is_concurrent", 1, 1, o_anim_goal_type_is_concurrent },
     { "trap_is_trap_device", 3, 1, o_trap_is_trap_device },
     { "background_get", 3, 1, o_background_get },
     { "background_text_get", 1, 1, o_background_text_get },
@@ -2959,6 +3001,7 @@ static const OracleEntry oracle_entries[] = {
     { "critter_is_sleeping", 3, 1, o_critter_is_sleeping },
     { "critter_is_concealed", 3, 1, o_critter_is_concealed },
     { "critter_has_dark_sight", 4, 1, o_critter_has_dark_sight },
+    { "portal_is_open", 2, 1, o_portal_is_open },
     { "critter_is_prone", 3, 1, o_critter_is_prone },
     { "critter_can_jump_window", 2, 1, o_critter_can_jump_window },
     { "critter_light_get", 2, 2, o_critter_light_get },
