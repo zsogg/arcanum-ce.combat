@@ -549,6 +549,26 @@ static MainMenuButtonInfo mainmenu_ui_mainmenu_no_multiplayer_buttons[] = {
 };
 
 // 0x5C4170
+// NOTE: The three fields `460`, the button count and the button table below
+// are the values the original writes into this struct at RUNTIME, not the
+// ones it initialises it with. 0x5C4170+0x24 statically holds `10, 5,
+// 0x5C4080` - a FIVE-entry menu with MultiPlayer at y=343 - and 0x549B10
+// overwrites the same three slots with `460, 4, 0x5C5818`, the
+// no-multiplayer table. CE bakes in the post-call state, consistent with
+// multiplayer being out of scope.
+//
+// The original reaches 0x549B10 from exactly one place, 0x56FF80:
+//
+//     if (!mes_load("mes\\MultiPlayer.mes", ...)) mainmenu_no_multiplayer();
+//
+// so a healthy install NEVER takes it - and the path cannot be forced open
+// either, because `broadcast_init` loads the same file and calls
+// `exit(EXIT_FAILURE)` when it is missing (`src/game/broadcast.c:81`). The
+// two menus therefore differ by one entry in any install where both engines
+// run, which is measurable: the rendered-frame differential reports ~9,575
+// differing px in [319,147,501,376] at 800x600 after the version banner is
+// masked, and that region is this table. See `harness/README.md`, *What
+// stops a zero-difference frame*.
 static MainMenuWindowInfo mainmenu_ui_mainmenu_window_info = {
     329,
     mainmenu_ui_create_mainmenu,
