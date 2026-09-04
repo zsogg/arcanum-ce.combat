@@ -59,6 +59,7 @@
 #include "game/skill.h"
 #include "game/spell.h"
 #include "game/stat.h"
+#include "game/target.h"
 #include "game/tech.h"
 #include "game/terrain.h"
 #include "game/timeevent.h"
@@ -1266,6 +1267,123 @@ bool skill_ui_is_pickpocket_immune(int64_t obj);
 // answers 0, while the emulator's stub answers the drawn value.
 //
 // `static` in CE; reaction_globalized.o is what makes it reachable.
+// --- the targeting batch (card V4, batch 2) ---------------------------------
+//
+// These answer by WRITING A LIST, not by returning, so the case compares the
+// list afterwards. Layout read out of the original at 0x4F3F7A-0x4F3FC1, not
+// out of target.h: `mov (%eax),%ecx` puts the count at +0x00, `lea 0x8(%eax)`
+// puts the entries at +0x08, `add $0x38,%edx` makes the stride 0x38, and the
+// append writes the handle at entry+0x00 and zeroes entry+0x08.
+//
+// **The appended handle itself is not comparable** and this is the reason a
+// case here needs thought: CE appends its own object's handle and the emulator
+// appends the fixture's, so the raw values differ by construction - the
+// `incomparable` shape that refused `item_ui_target_flags_get`. It is
+// normalised instead: 1 if the slot holds the object that was offered, -1 if
+// nothing was written at all, 0 if something else landed there. That keeps
+// "appended", "refused" and "wrote the wrong thing" three distinct answers.
+// Both are `static` in CE and arrive through `target_globalized.o`; declared
+// here rather than in target.h, so the shipped build does not gain a symbol
+// because a test wanted one.
+void target_list_add_obj_unless_off(TargetList* list, int64_t obj);
+void target_list_add_obj_unless_destroyed(TargetList* list, int64_t obj);
+
+#define O_TL_POISON ((int64_t)0xDEADBEEFDEADBEEFLL)
+
+static int64_t o_target_list_seed(TargetList* list, int cnt, int dup, int64_t obj)
+{
+    memset(list, 0, sizeof(*list));
+    list->cnt = cnt;
+    for (int i = 0; i < cnt && i < 4; i++) {
+        // Distinct, non-null, and not the object under test - so the dedup
+        // scan has entries to walk past and reject.
+        list->entries[i].obj = (int64_t)(0x5000 + i);
+        list->entries[i].loc = (int64_t)(0x9000 + i);
+    }
+    if (dup && cnt > 0) {
+        list->entries[0].obj = obj;    // the scan must find this and refuse
+    }
+    // Poison the slot the append would use, so "wrote the sentinel" and "did
+    // not write at all" are different observations.
+    if (cnt >= 0 && cnt < 256) {
+        list->entries[cnt].obj = O_TL_POISON;
+        list->entries[cnt].loc = O_TL_POISON;
+    }
+    return obj;
+}
+
+static void o_target_list_report(const TargetList* list, int cnt_before,
+                                 int64_t obj, int64_t* out)
+{
+    out[0] = list->cnt;
+    if (cnt_before < 0 || cnt_before >= 256) {
+        out[1] = -2;
+        out[2] = -2;
+        return;
+    }
+    int64_t landed = list->entries[cnt_before].obj;
+    out[1] = (landed == O_TL_POISON) ? -1 : (landed == obj ? 1 : 0);
+    // `loc` only when something was appended. Reporting the poison itself
+    // compares 0xDEADBEEFDEADBEEF as a signed int64 here against the same
+    // bits read back unsigned on the emulator side - a difference in how the
+    // two harnesses widen a number, not in what either engine did.
+    out[2] = (landed == O_TL_POISON) ? -1 : list->entries[cnt_before].loc;
+}
+
+static void o_target_list_add_obj_unless_off(const int64_t* a, int64_t* out)
+{
+    int type = (int)a[0];
+    int cnt_before = (int)a[4];
+    static TargetList list;
+    int64_t obj;
+
+    if (a[3] != 0) {
+        obj = OBJ_HANDLE_NULL;
+    } else {
+        obj = o_obj_of_type(type);
+        if (obj == OBJ_HANDLE_NULL) {
+            out[0] = -1; out[1] = -1; out[2] = -1;
+            return;
+        }
+        obj_field_int32_set(obj, OBJ_F_FLAGS, (int)a[1]);
+        // Only on a critter. The field is read behind an is-critter guard, so
+        // setting it elsewhere changes nothing - but CE refuses a field the
+        // type does not own and says so on stderr, and a fixture that fills
+        // the log with refusals it does not need is a fixture that would hide
+        // the one that mattered.
+        if (obj_type_is_critter(type)) {
+            obj_field_int32_set(obj, OBJ_F_CRITTER_FLAGS2, (int)a[2]);
+        }
+    }
+
+    o_target_list_seed(&list, cnt_before, (int)a[5], obj);
+    target_list_add_obj_unless_off(&list, obj);
+    o_target_list_report(&list, cnt_before, obj, out);
+}
+
+static void o_target_list_add_obj_unless_destroyed(const int64_t* a, int64_t* out)
+{
+    int type = (int)a[0];
+    int cnt_before = (int)a[3];
+    static TargetList list;
+    int64_t obj;
+
+    if (a[2] != 0) {
+        obj = OBJ_HANDLE_NULL;
+    } else {
+        obj = o_obj_of_type(type);
+        if (obj == OBJ_HANDLE_NULL) {
+            out[0] = -1; out[1] = -1; out[2] = -1;
+            return;
+        }
+        obj_field_int32_set(obj, OBJ_F_FLAGS, (int)a[1]);
+    }
+
+    o_target_list_seed(&list, cnt_before, (int)a[4], obj);
+    target_list_add_obj_unless_destroyed(&list, obj);
+    o_target_list_report(&list, cnt_before, obj, out);
+}
+
 static void o_reaction_get_base(const int64_t* a, int64_t* out)
 {
     int64_t obj = o_obj_of_type(OBJ_TYPE_NPC);
@@ -1819,6 +1937,44 @@ static int64_t o_handle_token(int64_t result, int64_t self, int64_t parent)
         return O_HANDLE_TOKEN_PARENT;
     }
     return O_HANDLE_TOKEN_OTHER;
+}
+
+// `target_obj_resolve` (0x4F2C60). Reads the type through its `int64_t*`, and
+// on SCENERY substitutes whoever is standing in it: `cmp $0x3` at 0x4F2C7C is
+// OBJ_TYPE_SCENERY, `push $0x46` at 0x4F2C86 is OBJ_F_SCENERY_WHOS_IN_ME, the
+// `or %edx,%ecx` at 0x4F2C94 is the null test on the 64-bit handle, and the
+// substituting arm returns the literal 0x10 - OBJ_TYPE_NPC.
+//
+// **No NULL guard on the handle**, so NULL is out of the domain: the function
+// reads a field off whatever it is given.
+//
+// Two answers: the returned type, and *which* handle the pointer holds
+// afterwards - the handle itself cannot cross the boundary, so `o_handle_token`
+// is used, as for `magictech_invocation_parent_get`.
+static void o_target_obj_resolve(const int64_t* a, int64_t* out)
+{
+    int type = (int)a[0];
+    int64_t obj = o_obj_of_type(type);
+    int64_t whos_in_me = OBJ_HANDLE_NULL;
+
+    if (obj == OBJ_HANDLE_NULL) {
+        out[0] = -1;
+        out[1] = -1;
+        return;
+    }
+
+    if (a[1] != 0) {
+        // A second real object, so the substitution has something to find and
+        // the token can tell "who it answered with" apart from "itself".
+        whos_in_me = o_obj_of_type_second(OBJ_TYPE_NPC);
+    }
+    if (type == OBJ_TYPE_SCENERY) {
+        obj_field_handle_set(obj, OBJ_F_SCENERY_WHOS_IN_ME, whos_in_me);
+    }
+
+    int64_t subject = obj;
+    out[0] = target_obj_resolve(&subject);
+    out[1] = o_handle_token(subject, obj, whos_in_me);
 }
 
 // `magictech_invocation_parent_get` (0x450A50). Answers "who is really casting
@@ -3053,6 +3209,9 @@ static const OracleEntry oracle_entries[] = {
     { "critter_is_sleeping", 3, 1, o_critter_is_sleeping },
     { "critter_is_concealed", 3, 1, o_critter_is_concealed },
     { "critter_has_dark_sight", 4, 1, o_critter_has_dark_sight },
+    { "target_obj_resolve", 2, 2, o_target_obj_resolve },
+    { "target_list_add_obj_unless_off", 6, 3, o_target_list_add_obj_unless_off },
+    { "target_list_add_obj_unless_destroyed", 5, 3, o_target_list_add_obj_unless_destroyed },
     { "reaction_get_base", 1, 1, o_reaction_get_base },
     { "skill_ui_is_pickpocket_immune", 3, 1, o_skill_ui_is_pickpocket_immune },
     { "portal_is_open", 2, 1, o_portal_is_open },

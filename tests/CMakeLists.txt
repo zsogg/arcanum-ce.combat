@@ -336,6 +336,40 @@ add_custom_command(
 )
 add_custom_target(arcanum-emudiff-skill-ui-obj DEPENDS "${EMUDIFF_SKILL_UI_OBJ}")
 
+# `target.c` (card V4, batch 2). The two list-append functions are `static`,
+# which `nm` said and the header did not - both are declared nowhere, so
+# `-Werror=implicit-function-declaration` is what turned it up rather than a
+# link error, which is the guard doing exactly its job.
+set(EMUDIFF_TARGET_STATICS
+    target_list_add_obj_unless_off
+    target_list_add_obj_unless_destroyed
+)
+set(EMUDIFF_TARGET_OBJ "${CMAKE_CURRENT_BINARY_DIR}/target_globalized.o")
+set(_target_globalize_args "")
+foreach(sym ${EMUDIFF_TARGET_STATICS})
+    list(APPEND _target_globalize_args "--globalize-symbol=${sym}")
+endforeach()
+
+file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/targetobj")
+
+add_custom_command(
+    OUTPUT "${EMUDIFF_TARGET_OBJ}"
+    COMMAND "${CMAKE_AR}" x "$<TARGET_FILE:arcanum-game>" target.c.o
+    COMMAND "${CMAKE_OBJCOPY}" ${_target_globalize_args} target.c.o "${EMUDIFF_TARGET_OBJ}"
+    COMMAND "${CMAKE_COMMAND}" -E rm -f target.c.o
+    COMMAND "${CMAKE_COMMAND}"
+        "-DOBJ=${EMUDIFF_TARGET_OBJ}"
+        "-DSYMS=${EMUDIFF_TARGET_STATICS}"
+        "-DDATA_SYMS="
+        "-DNM=${CMAKE_NM}"
+        -P "${CMAKE_CURRENT_SOURCE_DIR}/verify_globalized.cmake"
+    WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/targetobj"
+    DEPENDS arcanum-game
+    COMMENT "emudiff: globalizing target.c statics (no source change)"
+    VERBATIM
+)
+add_custom_target(arcanum-emudiff-target-obj DEPENDS "${EMUDIFF_TARGET_OBJ}")
+
 # An implicitly declared function defaults to returning `int`, and on x86-64 a
 # `bool` return only sets AL - the rest of EAX keeps whatever the callee last
 # computed. A wrapper that calls a bool-returning engine function without its
@@ -361,6 +395,7 @@ target_link_libraries(arcanum-emudiff-oracle PRIVATE
     "${EMUDIFF_MAGICTECH_OBJ}"
     "${EMUDIFF_REACTION_OBJ}"
     "${EMUDIFF_SKILL_UI_OBJ}"
+    "${EMUDIFF_TARGET_OBJ}"
     arcanum-game
     tig
     SDL3::SDL3
@@ -368,6 +403,7 @@ target_link_libraries(arcanum-emudiff-oracle PRIVATE
 add_dependencies(arcanum-emudiff-oracle
     arcanum-emudiff-reaction-obj
     arcanum-emudiff-skill-ui-obj
+    arcanum-emudiff-target-obj
     arcanum-emudiff-art-obj
     arcanum-emudiff-combat-obj
     arcanum-emudiff-object-obj
