@@ -468,7 +468,7 @@ target_link_libraries(arcanum-tests PRIVATE "${ANIM_TEST_OBJ}")
 add_dependencies(arcanum-tests arcanum-anim-test-obj)
 
 
-# The CE half of the archive differential. `arcanum-work/scripts/dbmaker_diff.py`
+# The CE half of the archive differential. `arcanum-work/scripts/verify_dbmaker.py`
 # compares its output against Troika's own `dbmaker.exe`, which is the only
 # reader of this format that did not come from us. Not registered with
 # `add_test`: it needs the game's archives.
