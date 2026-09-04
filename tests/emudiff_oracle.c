@@ -49,6 +49,7 @@
 #include "game/light.h"
 #include "game/location.h"
 #include "game/magictech.h"
+#include "game/mt_ai.h"
 #include "game/mt_item.h"
 #include "game/obj.h"
 #include "game/player.h"
@@ -69,7 +70,11 @@
 #include "obj_harness.h"
 
 #define MAX_ARGS 16
-#define MAX_OUT 3
+// 20 since 2026-09-04: `target_context_init` answers by filling a struct, so
+// its output is one slot per field rather than a return value. Raising this
+// costs 8 bytes of stack per request and nothing else -- `entry->outputs`
+// still decides how many are printed.
+#define MAX_OUT 20
 #define MAX_LINE 512
 
 typedef void (*OracleFunc)(const int64_t* args, int64_t* out);
@@ -1301,7 +1306,7 @@ static int64_t o_target_list_seed(TargetList* list, int cnt, int dup, int64_t ob
         list->entries[i].loc = (int64_t)(0x9000 + i);
     }
     if (dup && cnt > 0) {
-        list->entries[0].obj = obj;    // the scan must find this and refuse
+        list->entries[0].obj = obj; // the scan must find this and refuse
     }
     // Poison the slot the append would use, so "wrote the sentinel" and "did
     // not write at all" are different observations.
@@ -1312,8 +1317,7 @@ static int64_t o_target_list_seed(TargetList* list, int cnt, int dup, int64_t ob
     return obj;
 }
 
-static void o_target_list_report(const TargetList* list, int cnt_before,
-                                 int64_t obj, int64_t* out)
+static void o_target_list_report(const TargetList* list, int cnt_before, int64_t obj, int64_t* out)
 {
     out[0] = list->cnt;
     if (cnt_before < 0 || cnt_before >= 256) {
@@ -1342,7 +1346,9 @@ static void o_target_list_add_obj_unless_off(const int64_t* a, int64_t* out)
     } else {
         obj = o_obj_of_type(type);
         if (obj == OBJ_HANDLE_NULL) {
-            out[0] = -1; out[1] = -1; out[2] = -1;
+            out[0] = -1;
+            out[1] = -1;
+            out[2] = -1;
             return;
         }
         obj_field_int32_set(obj, OBJ_F_FLAGS, (int)a[1]);
@@ -1373,7 +1379,9 @@ static void o_target_list_add_obj_unless_destroyed(const int64_t* a, int64_t* ou
     } else {
         obj = o_obj_of_type(type);
         if (obj == OBJ_HANDLE_NULL) {
-            out[0] = -1; out[1] = -1; out[2] = -1;
+            out[0] = -1;
+            out[1] = -1;
+            out[2] = -1;
             return;
         }
         obj_field_int32_set(obj, OBJ_F_FLAGS, (int)a[1]);
@@ -1975,6 +1983,218 @@ static void o_target_obj_resolve(const int64_t* a, int64_t* out)
     int64_t subject = obj;
     out[0] = target_obj_resolve(&subject);
     out[1] = o_handle_token(subject, obj, whos_in_me);
+}
+
+// --- the candidate tail, batch 3 (card V4) ----------------------------------
+
+// `anim_is_portal` (0x4284A0). Three guards over one handle taken out of a
+// run-info block: null, then `OF_DESTROYED|OF_OFF`, then the type.
+//
+// **The handle's offset is the original's, and it is the only thing this
+// fixture claims.** `mov 0xd00(%eax),%esi` / `mov 0xd04(%eax),%edi` at
+// 0x4284A6 puts `params[0]` at +0xD00; CE's `anim_private.h` says the same in
+// its `/* 0D00 */` comment, but CE is 64-bit and its own offset is larger, so
+// this wrapper writes the named field and the emulator side writes 0xD00.
+//
+// Ordinals and constants off the pushed literals: `push $0x13` at 0x4284B8 is
+// OBJ_F_FLAGS, `test $0x3,%al` at 0x4284C4 is `OF_DESTROYED|OF_OFF`, and
+// `push $0x14F` at 0x4284C8 with the `dec/neg/sbb/inc` at 0x4284D7 is
+// `type == 1`, which pins OBJ_TYPE_PORTAL to 1.
+//
+// `static` in CE, and reached through `anim_globalized.o` - the same object
+// `arcanum-tests` links, not a second copy. Declared here rather than in
+// `anim_private.h` so the shipped build gains no symbol because a test wanted
+// one.
+bool anim_is_portal(AnimRunInfo* run_info);
+
+static void o_anim_is_portal(const int64_t* a, int64_t* out)
+{
+    int type = (int)a[0];
+    static AnimRunInfo run_info;
+    int64_t obj;
+
+    if (a[2] != 0) {
+        obj = OBJ_HANDLE_NULL;
+    } else {
+        obj = o_obj_of_type(type);
+        if (obj == OBJ_HANDLE_NULL) {
+            out[0] = -1;
+            return;
+        }
+        obj_field_int32_set(obj, OBJ_F_FLAGS, (int)a[1]);
+    }
+
+    memset(&run_info, 0, sizeof(run_info));
+    run_info.params[0].obj = obj;
+
+    out[0] = anim_is_portal(&run_info);
+}
+
+// `mt_ai_item_allowed_for_ai` (0x4CCA30) - the producer calls it `sub_4CCA30`
+// because the symbol ledger has no name for it; CE does.
+//
+// "May the AI use this item": an identified item always may, and an
+// unidentified one only if there is no leader to disapprove, or if it is food
+// or a scroll.
+//
+// `test $0x1,%al` at 0x4CCA46 is OIF_IDENTIFIED; `add $0x8,%eax` then the
+// 64-bit read at 0x4CCA4E-0x4CCA53 is `leader_obj` at +0x08 - the ONLY member
+// the function touches, so the struct needs nothing else; `push $0x1` at
+// 0x4CCA5A is OBJ_F_CURRENT_AID, and `cmp $0x4` / `cmp $0x5` at
+// 0x4CCA6C/0x4CCA71 pin TIG_ART_ITEM_TYPE_FOOD to 4 and _SCROLL to 5.
+//
+// `tig_art_item_id_type_get` (0x504550) runs for real on both sides - it is
+// pure art-id arithmetic and is already a case of its own.
+//
+// `static` in CE, reached through `mt_ai_globalized.o`.
+bool mt_ai_item_allowed_for_ai(int64_t item_obj, MagicTechAi* magictech_ai);
+
+static void o_mt_ai_item_allowed_for_ai(const int64_t* a, int64_t* out)
+{
+    MagicTechAi magictech_ai;
+    // Any of the item family carries OBJ_F_ITEM_FLAGS; GENERIC is the plain
+    // one. The function never reads the type, so this is a carrier for the two
+    // fields it does read, not an input.
+    int64_t obj = o_obj_of_type(OBJ_TYPE_GENERIC);
+
+    if (obj == OBJ_HANDLE_NULL) {
+        out[0] = -1;
+        return;
+    }
+
+    obj_field_int32_set(obj, OBJ_F_ITEM_FLAGS, (int)a[0]);
+    obj_field_int32_set(obj, OBJ_F_CURRENT_AID, (int)a[1]);
+
+    // Zeroed and then given a leader, so the one member the function reads is
+    // the only one that differs between trials.
+    memset(&magictech_ai, 0, sizeof(magictech_ai));
+    magictech_ai.leader_obj = a[2] != 0
+        ? OBJ_HANDLE_NULL
+        : o_obj_of_type_second(OBJ_TYPE_NPC);
+
+    out[0] = mt_ai_item_allowed_for_ai(obj, &magictech_ai);
+}
+
+// `target_context_init` (0x4F2600) -- the first case whose whole answer is a
+// struct the function INITIALISES, and the first that needs the third field
+// accessor. Nothing is returned: the function's entire effect is 15 stores
+// into a `TargetContext`, one of them conditional, plus a tail call to
+// `target_params_init` (0x4F25E0) that this case therefore covers too.
+//
+// **The two sides do not share a struct layout and must not pretend to.** CE
+// is 64-bit, so `TargetContext`'s pointers are 8 bytes and every offset in
+// `target.h`'s comments is the ORIGINAL's, not CE's. This wrapper reads named
+// fields; the emulator side reads the original's offsets, each sourced from a
+// store in the disassembly. The comparison is therefore field-by-field, never
+// byte-by-byte.
+//
+// **The struct is poisoned before the call**, so "wrote zero" and "did not
+// write" are different observations. `O_TC_POISON` is 0x5A repeated: positive
+// as a signed int64, which matters because the emulator reads its side back
+// unsigned and CE prints signed -- the widening trap that made the target-list
+// batch report the sentinel as a difference.
+//
+// **Three values cannot cross the boundary raw and are tokenised.**
+//  * `params` is a POINTER. CE's is a host address, the emulator's a guest
+//    one; only its identity is comparable.
+//  * `self_obj` / `source_obj` hold an object handle, which CE takes from its
+//    own pool -- `o_handle_token` again.
+//  * `source_loc` is whatever `obj_field_int64_get(obj, OBJ_F_LOCATION)`
+//    answered, and each side compares against *its own* reading of that field
+//    rather than against a shared constant. So the observable is "the function
+//    stored the field it read", which is what the branch is for, and no claim
+//    is made that the two engines' locations are equal.
+//
+// **`OBJ_F_LOCATION` is read, never written.** Writing it calls `obj_find_move`
+// and there are no sectors here (`obj_harness.h`). That is also why the
+// location is not a drawn input: the domain is exactly the function's two
+// branches, and it is exhaustive at four inputs.
+//
+// The ordinal is checked against the literal the original pushes, not inferred
+// from the name: `push $0x2` at 0x4F2647, and OBJ_F_LOCATION is 2.
+#define O_TC_POISON ((int64_t)0x5A5A5A5A5A5A5A5ALL)
+#define O_TC_POISON32 ((int64_t)0x5A5A5A5AL)
+
+// Untouched / NULL / the params block that was passed / something else.
+#define O_PTR_POISON 3
+#define O_PTR_NULL 0
+#define O_PTR_EXPECTED 1
+#define O_PTR_OTHER 2
+
+static int64_t o_ptr_token(const void* value, const void* expected)
+{
+    if (value == NULL) {
+        return O_PTR_NULL;
+    }
+    if (value == expected) {
+        return O_PTR_EXPECTED;
+    }
+    // The poison pattern the memset wrote, read back as a pointer. The
+    // emulator's poison is four bytes of the same byte and CE's is eight, so
+    // the token is what makes them comparable.
+    if ((int64_t)(intptr_t)value == O_TC_POISON) {
+        return O_PTR_POISON;
+    }
+    return O_PTR_OTHER;
+}
+
+// -1 untouched, 1 the value the field accessor answered, 0 anything else.
+static int64_t o_loc_token(int64_t value, int64_t expected)
+{
+    if (value == O_TC_POISON) {
+        return -1;
+    }
+    return value == expected ? 1 : 0;
+}
+
+static void o_target_context_init(const int64_t* a, int64_t* out)
+{
+    TargetContext ctx;
+    TargetParams params;
+    int64_t obj = OBJ_HANDLE_NULL;
+    int64_t loc = 0;
+
+    if (a[0] == 0) {
+        // Any real object will do -- the function reads exactly one field off
+        // it. OBJ_TYPE_NPC is the one every other case in this batch uses.
+        obj = o_obj_of_type(OBJ_TYPE_NPC);
+        if (obj == OBJ_HANDLE_NULL) {
+            for (int i = 0; i < 20; i++) {
+                out[i] = -1;
+            }
+            return;
+        }
+        loc = obj_field_int64_get(obj, OBJ_F_LOCATION);
+    }
+
+    memset(&ctx, 0x5A, sizeof(ctx));
+    memset(&params, 0x5A, sizeof(params));
+
+    target_context_init(&ctx, a[1] != 0 ? NULL : &params, obj);
+
+    out[0] = o_ptr_token(ctx.params, &params);
+    out[1] = o_handle_token(ctx.self_obj, obj, OBJ_HANDLE_NULL);
+    out[2] = o_handle_token(ctx.source_obj, obj, OBJ_HANDLE_NULL);
+    out[3] = o_loc_token(ctx.source_loc, loc);
+    out[4] = ctx.target_obj;
+    out[5] = ctx.target_loc;
+    out[6] = ctx.orig_target_obj;
+    out[7] = ctx.orig_target_loc;
+    out[8] = ctx.attacker_obj;
+    out[9] = ctx.summoned_obj;
+    out[10] = o_ptr_token(ctx.targets, NULL);
+    out[11] = o_ptr_token(ctx.obj_list, NULL);
+    out[12] = o_ptr_token(ctx.summoned_obj_list, NULL);
+    out[13] = ctx.source_spell_flags;
+    out[14] = ctx.target_spell_flags;
+
+    // What `target_params_init` left behind, or the poison if it was never
+    // called. All six of its stores are covered: 0x4F25E6-0x4F25F4.
+    out[15] = (int64_t)params.tgt;
+    out[16] = params.spell_flags;
+    out[17] = params.no_spell_flags;
+    out[18] = params.radius;
+    out[19] = params.count;
 }
 
 // `magictech_invocation_parent_get` (0x450A50). Answers "who is really casting
@@ -3210,6 +3430,9 @@ static const OracleEntry oracle_entries[] = {
     { "critter_is_concealed", 3, 1, o_critter_is_concealed },
     { "critter_has_dark_sight", 4, 1, o_critter_has_dark_sight },
     { "target_obj_resolve", 2, 2, o_target_obj_resolve },
+    { "target_context_init", 2, 20, o_target_context_init },
+    { "anim_is_portal", 3, 1, o_anim_is_portal },
+    { "mt_ai_item_allowed_for_ai", 3, 1, o_mt_ai_item_allowed_for_ai },
     { "target_list_add_obj_unless_off", 6, 3, o_target_list_add_obj_unless_off },
     { "target_list_add_obj_unless_destroyed", 5, 3, o_target_list_add_obj_unless_destroyed },
     { "reaction_get_base", 1, 1, o_reaction_get_base },

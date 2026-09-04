@@ -366,7 +366,22 @@ int skill_ui_skill_for_action(int a1, TargetDescriptor* td)
     v1 = skill_ui_skills[a1];
     if (v1 == -1) {
         complexity = obj_field_int32_get(td->obj, OBJ_F_ITEM_MAGIC_TECH_COMPLEXITY);
-        if (a1 == 3 && complexity >= 20) {
+        // FIX: the original returns SKILL_REPAIR for complexity *below* 20,
+        // not at or above it. `cmp $0x14,%eax` then `mov $0xc,%eax` (which
+        // does not touch the flags) then `jl 0x57A6F8` at 0x57A6EC-0x57A6F4:
+        // the jump SKIPS the `mov %edi,%eax` that restores `v1`, so taking it
+        // - complexity < 20 - is what returns 12. CE had the comparison the
+        // other way round.
+        //
+        // NOT a numbered porting bug: the branch is dead as shipped. It runs
+        // only when `skill_ui_skills[a1]` is -1, and the original's table at
+        // 0x5CB240 holds {6, 5, 15, 12} - byte-identical to CE's - with the
+        // only two references to it in the whole image being the reads here
+        // and in `skill_ui_skill_get` (0x57A6A0). Corrected anyway, on the
+        // same reasoning as the blit stepping: unreachable as shipped,
+        // correct for whoever changes the table next, which in a modding
+        // toolkit is a live prospect.
+        if (a1 == 3 && complexity < 20) {
             v1 = SKILL_REPAIR;
         }
     }

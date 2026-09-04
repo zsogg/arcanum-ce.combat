@@ -388,6 +388,98 @@ target_compile_options(arcanum-emudiff-oracle PRIVATE
     -Werror=implicit-function-declaration
 )
 
+# `mt_ai.c` (card V4, batch 3). `mt_ai_item_allowed_for_ai` (0x4CCA30) is
+# `static` - the producer prints it as `sub_4CCA30` because the symbol ledger
+# has no name for it, not because CE has none. Two field reads and one art-id
+# call, plus a `MagicTechAi*` of which the function reads exactly one member.
+set(EMUDIFF_MT_AI_STATICS
+    mt_ai_item_allowed_for_ai
+)
+set(EMUDIFF_MT_AI_OBJ "${CMAKE_CURRENT_BINARY_DIR}/mt_ai_globalized.o")
+set(_mt_ai_globalize_args "")
+foreach(sym ${EMUDIFF_MT_AI_STATICS})
+    list(APPEND _mt_ai_globalize_args "--globalize-symbol=${sym}")
+endforeach()
+
+file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/mtaiobj")
+
+add_custom_command(
+    OUTPUT "${EMUDIFF_MT_AI_OBJ}"
+    COMMAND "${CMAKE_AR}" x "$<TARGET_FILE:arcanum-game>" mt_ai.c.o
+    COMMAND "${CMAKE_OBJCOPY}" ${_mt_ai_globalize_args} mt_ai.c.o "${EMUDIFF_MT_AI_OBJ}"
+    COMMAND "${CMAKE_COMMAND}" -E rm -f mt_ai.c.o
+    COMMAND "${CMAKE_COMMAND}"
+        "-DOBJ=${EMUDIFF_MT_AI_OBJ}"
+        "-DSYMS=${EMUDIFF_MT_AI_STATICS}"
+        "-DDATA_SYMS="
+        "-DNM=${CMAKE_NM}"
+        -P "${CMAKE_CURRENT_SOURCE_DIR}/verify_globalized.cmake"
+    WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/mtaiobj"
+    DEPENDS arcanum-game
+    COMMENT "emudiff: globalizing mt_ai.c statics (no source change)"
+    VERBATIM
+)
+add_custom_target(arcanum-emudiff-mt-ai-obj DEPENDS "${EMUDIFF_MT_AI_OBJ}")
+
+# `anim.c`, moved here from below on 2026-09-04 (card V4, batch 3). It was
+# written for `arcanum-tests` alone; `anim_is_portal` makes the oracle a second
+# consumer, and a globalized object has to be listed BEFORE `arcanum-game` or
+# the linker pulls `anim.c.o` out of the archive and every non-static
+# definition in the file is defined twice. That ordering is why the block moved
+# rather than being referenced where it stood: `target_link_libraries` appends,
+# so a second call could only have put it after the archive. One object serves
+# both targets - making a second from the same archive member would be two
+# copies of a 15,000-line translation unit that could drift apart.
+# The same objcopy trick again, for `anim.c` - porting bug #33.
+#
+# The bug is three defects across three `static` functions, and its entire
+# symptom is audible, so the ledger carried it from 2026-08-22 as "verified
+# against the original's bytes but not by ear" and `PLAYTEST-REMAINING.md`
+# asked a human to go and listen.
+#
+# It does not need ears. Every one of the three things a listener was told to
+# judge - does it loop, does it follow, does it restart - is a decision these
+# functions make, and each is observable from outside: which branch `begin`
+# takes, whether `tig_sound_set_position` is driven from the object, and
+# whether `restart` acts when there is no live handle.
+#
+# Globalizing costs no source change and no runtime behaviour, exactly as for
+# `art.c` and `dialog.c` above. `anim.c` is 15,000 lines and these three are
+# 90 of them; nothing else in the file is touched.
+set(ANIM_TEST_STATICS
+    anim_is_portal
+    anim_eye_candy_sound_begin
+    anim_eye_candy_sound_move
+    anim_eye_candy_sound_restart
+)
+set(ANIM_TEST_OBJ "${CMAKE_CURRENT_BINARY_DIR}/anim_globalized.o")
+set(_anim_globalize_args "")
+foreach(sym ${ANIM_TEST_STATICS})
+    list(APPEND _anim_globalize_args "--globalize-symbol=${sym}")
+endforeach()
+
+file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/animobj")
+
+add_custom_command(
+    OUTPUT "${ANIM_TEST_OBJ}"
+    COMMAND "${CMAKE_AR}" x "$<TARGET_FILE:arcanum-game>" anim.c.o
+    COMMAND "${CMAKE_OBJCOPY}" ${_anim_globalize_args} anim.c.o "${ANIM_TEST_OBJ}"
+    COMMAND "${CMAKE_COMMAND}" -E rm -f anim.c.o
+    COMMAND "${CMAKE_COMMAND}"
+        "-DOBJ=${ANIM_TEST_OBJ}"
+        "-DSYMS=${ANIM_TEST_STATICS}"
+        "-DDATA_SYMS="
+        "-DNM=${CMAKE_NM}"
+        -P "${CMAKE_CURRENT_SOURCE_DIR}/verify_globalized.cmake"
+    WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/animobj"
+    DEPENDS arcanum-game
+    COMMENT "tests: globalizing anim.c eye-candy sound statics (no source change)"
+    VERBATIM
+)
+
+add_custom_target(arcanum-anim-test-obj DEPENDS "${ANIM_TEST_OBJ}")
+
+
 target_link_libraries(arcanum-emudiff-oracle PRIVATE
     "${EMUDIFF_ART_OBJ}"
     "${EMUDIFF_COMBAT_OBJ}"
@@ -396,6 +488,8 @@ target_link_libraries(arcanum-emudiff-oracle PRIVATE
     "${EMUDIFF_REACTION_OBJ}"
     "${EMUDIFF_SKILL_UI_OBJ}"
     "${EMUDIFF_TARGET_OBJ}"
+    "${EMUDIFF_MT_AI_OBJ}"
+    "${ANIM_TEST_OBJ}"
     arcanum-game
     tig
     SDL3::SDL3
@@ -408,6 +502,8 @@ add_dependencies(arcanum-emudiff-oracle
     arcanum-emudiff-combat-obj
     arcanum-emudiff-object-obj
     arcanum-emudiff-magictech-obj
+    arcanum-emudiff-mt-ai-obj
+    arcanum-anim-test-obj
 )
 
 
@@ -453,53 +549,6 @@ target_link_libraries(arcanum-tests PRIVATE "${DIALOG_TEST_OBJ}")
 add_dependencies(arcanum-tests arcanum-dialog-test-obj)
 
 
-# The same objcopy trick again, for `anim.c` - porting bug #33.
-#
-# The bug is three defects across three `static` functions, and its entire
-# symptom is audible, so the ledger carried it from 2026-08-22 as "verified
-# against the original's bytes but not by ear" and `PLAYTEST-REMAINING.md`
-# asked a human to go and listen.
-#
-# It does not need ears. Every one of the three things a listener was told to
-# judge - does it loop, does it follow, does it restart - is a decision these
-# functions make, and each is observable from outside: which branch `begin`
-# takes, whether `tig_sound_set_position` is driven from the object, and
-# whether `restart` acts when there is no live handle.
-#
-# Globalizing costs no source change and no runtime behaviour, exactly as for
-# `art.c` and `dialog.c` above. `anim.c` is 15,000 lines and these three are
-# 90 of them; nothing else in the file is touched.
-set(ANIM_TEST_STATICS
-    anim_eye_candy_sound_begin
-    anim_eye_candy_sound_move
-    anim_eye_candy_sound_restart
-)
-set(ANIM_TEST_OBJ "${CMAKE_CURRENT_BINARY_DIR}/anim_globalized.o")
-set(_anim_globalize_args "")
-foreach(sym ${ANIM_TEST_STATICS})
-    list(APPEND _anim_globalize_args "--globalize-symbol=${sym}")
-endforeach()
-
-file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/animobj")
-
-add_custom_command(
-    OUTPUT "${ANIM_TEST_OBJ}"
-    COMMAND "${CMAKE_AR}" x "$<TARGET_FILE:arcanum-game>" anim.c.o
-    COMMAND "${CMAKE_OBJCOPY}" ${_anim_globalize_args} anim.c.o "${ANIM_TEST_OBJ}"
-    COMMAND "${CMAKE_COMMAND}" -E rm -f anim.c.o
-    COMMAND "${CMAKE_COMMAND}"
-        "-DOBJ=${ANIM_TEST_OBJ}"
-        "-DSYMS=${ANIM_TEST_STATICS}"
-        "-DDATA_SYMS="
-        "-DNM=${CMAKE_NM}"
-        -P "${CMAKE_CURRENT_SOURCE_DIR}/verify_globalized.cmake"
-    WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/animobj"
-    DEPENDS arcanum-game
-    COMMENT "tests: globalizing anim.c eye-candy sound statics (no source change)"
-    VERBATIM
-)
-
-add_custom_target(arcanum-anim-test-obj DEPENDS "${ANIM_TEST_OBJ}")
 target_link_libraries(arcanum-tests PRIVATE "${ANIM_TEST_OBJ}")
 add_dependencies(arcanum-tests arcanum-anim-test-obj)
 

@@ -164,6 +164,13 @@ void target_context_init(TargetContext* ctx, TargetParams* params, int64_t sourc
     ctx->summoned_obj = OBJ_HANDLE_NULL;
     ctx->target_loc = 0;
     ctx->target_obj = OBJ_HANDLE_NULL;
+    // FIX (porting bug #44): the original clears `source_spell_flags` here and
+    // CE did not. `mov %edi,0x5c(%esi)` at 0x4F2628, with EDI zeroed at
+    // 0x4F2613 -- one of the fifteen stores this function makes, and the only
+    // one that was missing. Found by emudiff: the case poisons the struct
+    // before the call and this was the single slot of twenty that disagreed,
+    // on all four inputs.
+    ctx->source_spell_flags = 0;
     ctx->target_spell_flags = 0;
 
     if (params != NULL) {
