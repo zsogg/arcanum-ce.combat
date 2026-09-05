@@ -1,5 +1,10 @@
 #include "game/ai.h"
 
+#include <ctype.h>
+#include <limits.h>
+#include <stdlib.h>
+#include <string.h>
+
 #include "game/anim.h"
 #include "game/anim_private.h"
 #include "game/combat.h"
@@ -206,32 +211,152 @@ static AiFatigueConfig ai_fatigue_config = {
     /* use_real_charge_cost      */ false,
 };
 
-// Optional `rules/ai_fatigue.mes` support. Every entry is
-// `{N}{Key: value}`; an absent file, an absent key, or a malformed value
-// leaves the stock default in place. Percentages are clamped to 0..100 and
-// the reserve to 0..1000, so a bad mod cannot make the AI cast from a
-// negative reserve or divide by zero.
-static void ai_fatigue_pct_set(int* dst, int value)
+// Optional `rules/ai_fatigue.mes` support. Every entry is `{N}{Key: value}`;
+// an absent file, an absent key, or a malformed value leaves the stock
+// default in place, and a malformed value **says so on the debug log** rather
+// than passing silently. Each key's clamp is in the table below, so a bad mod
+// cannot make the AI cast from a negative reserve.
+//
+// That first sentence was already here on 2026-09-02 and the code did not
+// keep it: `MinCastPctLeaderless: banana` became 0, not the documented 20.
+// Card X7 made the code true rather than softening the comment, which is the
+// right way round - the comment was the specification and the specification
+// was reasonable.
+
+// The one list of what `rules/ai_fatigue.mes` may say.
+//
+// **`modkit` parses this table out of this file**, the way it parses
+// `feature_list.h`, so the toolkit and the engine cannot disagree about which
+// keys exist or what each clamps to. It was two hand-kept lists until card X7
+// (2026-09-05); they happened to agree, and nothing made them.
+typedef enum {
+    AI_FATIGUE_KIND_PCT,
+    AI_FATIGUE_KIND_RESERVE,
+    AI_FATIGUE_KIND_BOOL,
+} AiFatigueKind;
+
+static const struct {
+    const char* key;
+    AiFatigueKind kind;
+    int lo;
+    int hi;
+} ai_fatigue_keys[] = {
+    /* AI_FATIGUE_KEY */ { "MinCastPctLeaderless:", AI_FATIGUE_KIND_PCT, 0, 100 },
+    /* AI_FATIGUE_KEY */ { "MinCastPctFollower:", AI_FATIGUE_KIND_PCT, 0, 100 },
+    /* AI_FATIGUE_KEY */ { "ReserveAfterCast:", AI_FATIGUE_KIND_RESERVE, 0, 1000 },
+    /* AI_FATIGUE_KEY */ { "ItemFirstPct:", AI_FATIGUE_KIND_PCT, 0, 100 },
+    /* AI_FATIGUE_KEY */ { "RecoverBelowPct:", AI_FATIGUE_KIND_PCT, 0, 100 },
+    /* AI_FATIGUE_KEY */ { "WhiteNecroItemSkipPct:", AI_FATIGUE_KIND_PCT, 0, 100 },
+    /* AI_FATIGUE_KEY */ { "UseRealChargeCost:", AI_FATIGUE_KIND_BOOL, 0, 1 },
+};
+
+#define AI_FATIGUE_KEY_COUNT ((int)(sizeof(ai_fatigue_keys) / sizeof(ai_fatigue_keys[0])))
+
+// If the entry is `MinCastPctLeaderless: 20`, this is the ` 20`; NULL when the
+// entry is about something else.
+static const char* ai_fatigue_after_key(const char* str, const char* key)
 {
-    if (value < 0) {
-        value = 0;
-    } else if (value > 100) {
-        value = 100;
+    size_t length;
+
+    while (isspace((unsigned char)*str)) {
+        str++;
     }
-    *dst = value;
+
+    length = strlen(key);
+    if (strncmp(str, key, length) != 0) {
+        return NULL;
+    }
+
+    return str + length;
 }
 
-static bool ai_fatigue_parse_value(char* str, const char* key, int* value)
+// Strict, and that is the whole of card X7's engine half.
+//
+// `tig_str_parse_named_value` (0x532320) reads the value with `atoi`, which
+// cannot report failure, so `MinCastPctLeaderless: banana` returned *success*
+// with the value 0 - a legal-looking number nobody asked for, in a file whose
+// comment promised a malformed value would leave the default alone. That
+// parser is **Faithful** and shipped data goes through it, so it stays exactly
+// as it is; this is CE's own configuration surface and it can be strict.
+//
+// A second copy, deliberately: `highres_config.c` carries the same twenty
+// lines, file-static, for the same reason - CE's other invented config
+// surface needed a parse that can fail. There is no shared home for it in `src/game` and neither of the two
+// wants a dependency on the other. Two copies with this note is the call made
+// on 2026-09-05; **a third means it gets a home**, and card T2 is the argument
+// for why (the canonical-path fold was open-coded nineteen times).
+static bool ai_fatigue_parse_int(const char* str, int* value)
 {
-    return tig_str_parse_named_value(&str, key, value);
+    char* end;
+    long parsed;
+
+    while (isspace((unsigned char)*str)) {
+        str++;
+    }
+
+    if (*str == '\0') {
+        return false;
+    }
+
+    parsed = strtol(str, &end, 10);
+    if (end == str) {
+        return false;
+    }
+
+    // Trailing anything that is not blank means the author wrote something
+    // this does not understand, and guessing at it is what got us here.
+    while (*end != '\0') {
+        if (!isspace((unsigned char)*end)) {
+            return false;
+        }
+        end++;
+    }
+
+    if (parsed < INT_MIN || parsed > INT_MAX) {
+        return false;
+    }
+
+    *value = (int)parsed;
+    return true;
 }
 
-void ai_fatigue_config_load(void)
+static void ai_fatigue_apply(int index, int value)
 {
-    mes_file_handle_t mes_file;
-    MesFileEntry entry;
-    int value;
+    if (value < ai_fatigue_keys[index].lo) {
+        value = ai_fatigue_keys[index].lo;
+    } else if (value > ai_fatigue_keys[index].hi) {
+        value = ai_fatigue_keys[index].hi;
+    }
 
+    switch (index) {
+    case 0:
+        ai_fatigue_config.min_cast_pct_leaderless = value;
+        break;
+    case 1:
+        ai_fatigue_config.min_cast_pct_follower = value;
+        break;
+    case 2:
+        ai_fatigue_config.reserve_after_cast = value;
+        break;
+    case 3:
+        ai_fatigue_config.item_first_pct = value;
+        break;
+    case 4:
+        ai_fatigue_config.recover_below_pct = value;
+        break;
+    case 5:
+        ai_fatigue_config.white_necro_item_skip_pct = value;
+        break;
+    case 6:
+        ai_fatigue_config.use_real_charge_cost = value != 0;
+        break;
+    default:
+        break;
+    }
+}
+
+void ai_fatigue_config_reset(void)
+{
     ai_fatigue_config.min_cast_pct_leaderless = 20;
     ai_fatigue_config.min_cast_pct_follower = 0;
     ai_fatigue_config.reserve_after_cast = 1;
@@ -239,6 +364,50 @@ void ai_fatigue_config_load(void)
     ai_fatigue_config.recover_below_pct = 20;
     ai_fatigue_config.white_necro_item_skip_pct = 80;
     ai_fatigue_config.use_real_charge_cost = false;
+}
+
+AiFatigueEntryResult ai_fatigue_config_apply_entry(const char* str)
+{
+    const char* rest = NULL;
+    int index;
+    int value;
+
+    for (index = 0; index < AI_FATIGUE_KEY_COUNT; index++) {
+        rest = ai_fatigue_after_key(str, ai_fatigue_keys[index].key);
+        if (rest != NULL) {
+            break;
+        }
+    }
+
+    if (rest == NULL) {
+        return AI_FATIGUE_ENTRY_UNKNOWN;
+    }
+
+    if (!ai_fatigue_parse_int(rest, &value)) {
+        // **The branch card X7 exists to reach.** The key is one this build
+        // knows, so the entry is not "unknown" - it is a value that cannot be
+        // read, and until 2026-09-05 that took the *success* path with the
+        // value 0. The failure path was already here; the malformed value
+        // simply never arrived at it. Name the key and quote what was
+        // written, because a mod author reading this log is the person who
+        // can fix it.
+        tig_debug_printf("AiFatigue: %s expects a whole number, got \"%s\";"
+                         " keeping the default\n",
+            ai_fatigue_keys[index].key,
+            rest);
+        return AI_FATIGUE_ENTRY_BAD_VALUE;
+    }
+
+    ai_fatigue_apply(index, value);
+    return AI_FATIGUE_ENTRY_APPLIED;
+}
+
+void ai_fatigue_config_load(void)
+{
+    mes_file_handle_t mes_file;
+    MesFileEntry entry;
+
+    ai_fatigue_config_reset();
 
     if (!mes_load("rules\\ai_fatigue.mes", &mes_file)) {
         return;
@@ -246,26 +415,10 @@ void ai_fatigue_config_load(void)
 
     if (mes_find_first(mes_file, &entry)) {
         do {
-            if (ai_fatigue_parse_value(entry.str, "MinCastPctLeaderless:", &value)) {
-                ai_fatigue_pct_set(&ai_fatigue_config.min_cast_pct_leaderless, value);
-            } else if (ai_fatigue_parse_value(entry.str, "MinCastPctFollower:", &value)) {
-                ai_fatigue_pct_set(&ai_fatigue_config.min_cast_pct_follower, value);
-            } else if (ai_fatigue_parse_value(entry.str, "ReserveAfterCast:", &value)) {
-                if (value < 0) {
-                    value = 0;
-                } else if (value > 1000) {
-                    value = 1000;
-                }
-                ai_fatigue_config.reserve_after_cast = value;
-            } else if (ai_fatigue_parse_value(entry.str, "ItemFirstPct:", &value)) {
-                ai_fatigue_pct_set(&ai_fatigue_config.item_first_pct, value);
-            } else if (ai_fatigue_parse_value(entry.str, "RecoverBelowPct:", &value)) {
-                ai_fatigue_pct_set(&ai_fatigue_config.recover_below_pct, value);
-            } else if (ai_fatigue_parse_value(entry.str, "WhiteNecroItemSkipPct:", &value)) {
-                ai_fatigue_pct_set(&ai_fatigue_config.white_necro_item_skip_pct, value);
-            } else if (ai_fatigue_parse_value(entry.str, "UseRealChargeCost:", &value)) {
-                ai_fatigue_config.use_real_charge_cost = value != 0;
-            } else if (entry.str[0] != '\0' && entry.str[0] != ';' && entry.str[0] != '/') {
+            if (ai_fatigue_config_apply_entry(entry.str) == AI_FATIGUE_ENTRY_UNKNOWN
+                && entry.str[0] != '\0'
+                && entry.str[0] != ';'
+                && entry.str[0] != '/') {
                 tig_debug_printf("AiFatigue: unknown entry: %s\n", entry.str);
             }
         } while (mes_find_next(mes_file, &entry));

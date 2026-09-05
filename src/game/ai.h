@@ -50,6 +50,31 @@ typedef struct AiFatigueConfig {
 
 const AiFatigueConfig* ai_fatigue_config_get(void);
 
+/**
+ * What `ai_fatigue_config_load` decided about one entry.
+ *
+ * `BAD_VALUE` is the case card X7 exists for: the key is one this build
+ * knows, so the entry is not unknown - the value is unreadable, and the
+ * documented default is kept.
+ */
+typedef enum {
+    AI_FATIGUE_ENTRY_UNKNOWN,
+    AI_FATIGUE_ENTRY_APPLIED,
+    AI_FATIGUE_ENTRY_BAD_VALUE,
+} AiFatigueEntryResult;
+
+/**
+ * Applies one `Key: value` entry exactly as `ai_fatigue_config_load` would.
+ *
+ * Exposed so the suite can drive the judgement without standing up the file
+ * layers a `.mes` read needs - the same reason `asan-gate.sh` and
+ * `mod-matrix.sh` factor their verdicts out for their own tests.
+ */
+AiFatigueEntryResult ai_fatigue_config_apply_entry(const char* str);
+
+/** Restores the documented defaults. For tests, and for a reload. */
+void ai_fatigue_config_reset(void);
+
 // (Re)loads `rules/ai_fatigue.mes` into the AI fatigue config. Called by
 // `ai_init`; exposed for the unit suite.
 void ai_fatigue_config_load(void);
