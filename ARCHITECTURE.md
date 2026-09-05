@@ -145,9 +145,15 @@ the routine a given function came from. Preserve them when moving code.
 
 **Unidentified names.** Functions and data that have not been worked out yet
 keep decompiler placeholders — `sub_XXXXXX`, `dword_XXXXXX`, `off_XXXXXX` —
-where the suffix is the address. Naming these is the project's main ongoing
-task. Roughly half the modules are fully named and documented (`skill.c` and
-`quest.c` are good examples); `anim.c` is the least explored.
+where the suffix is the address.
+
+**Naming is no longer the main task, and the tail is small.** This paragraph
+said it was, and that roughly half the modules were fully named, until
+2026-09-05; both had stopped being true well before that. The remaining
+in-scope unnamed functions are a handful of deliberate keep-outs with written
+reasons, and naming is parked as an activity — see `arcanum-work/STATUS.md`
+for the current counts, which are generated, and `arcanum-work/tasks/README.md`
+for why it is parked. `anim.c` is still the least explored module.
 
 Note that a placeholder-named function usually has *no function defined at that
 address* in a freshly analysed disassembly either, because it is only reachable
