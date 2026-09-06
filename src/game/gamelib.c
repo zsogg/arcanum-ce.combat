@@ -47,6 +47,7 @@
 #include "game/party.h"
 #include "game/player.h"
 #include "game/portrait.h"
+#include "game/provenance.h"
 #include "game/quest.h"
 #include "game/random.h"
 #include "game/reaction.h"
@@ -1058,6 +1059,14 @@ bool gamelib_save(const char* name, const char* description)
     }
 
     gamelib_saveinfo_exit(&save_info);
+
+    // CE: a diagnostic record of the configuration that wrote this save,
+    // written into the folder so the archive below carries it (card H9). It
+    // is **never** allowed to fail a save: a save the player asked for
+    // matters and a diagnostic does not, so a failure is a log line.
+    if (!provenance_save()) {
+        tig_debug_printf("gamelib_save: no provenance record written\n");
+    }
 
     snprintf(path, sizeof(path), "save\\%s", name);
     tig_debug_printf("gamelib_save: creating folder archive...");

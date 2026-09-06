@@ -55,6 +55,7 @@ void test_determinism_suite(void);
 void test_proto_suite(void);
 void test_fatigue_suite(void);
 void test_area_suite(void);
+void test_provenance_suite(void);
 void test_eye_candy_sound_suite(void);
 
 int main(void)
@@ -108,6 +109,7 @@ int main(void)
     test_fatigue_suite();
     test_eye_candy_sound_suite();
     test_area_suite();
+    test_provenance_suite();
 
     return test_report();
 }

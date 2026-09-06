@@ -57,6 +57,7 @@ add_executable(arcanum-tests
     "test_proto.c"
     "test_fatigue.c"
     "test_area.c"
+    "test_provenance.c"
     "test_determinism.c"
     "obj_harness.c"
     "obj_harness.h"

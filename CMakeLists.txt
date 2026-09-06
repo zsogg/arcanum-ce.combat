@@ -159,6 +159,8 @@ set(SRCS
     "src/game/portrait.h"
     "src/game/proto.c"
     "src/game/proto.h"
+    "src/game/provenance.c"
+    "src/game/provenance.h"
     "src/game/quest.c"
     "src/game/quest.h"
     "src/game/random.c"
