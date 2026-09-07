@@ -575,8 +575,12 @@ target_link_libraries(arcanum-dat-dump PRIVATE
 # The fuzz probe runs CE's own data-file readers over one file and exits, so
 # a malformed file can be pointed at the real reader without booting the
 # game. Links arcanum-game because the readers live there, not in tig.
+# `obj_harness.c` is here because the `.pro` and `.mob` probes read objects,
+# and standing the object system up free-standing is a problem this repository
+# had already solved for the unit suites (card H6).
 add_executable(arcanum-fuzz-probe
     "fuzz_probe.c"
+    "obj_harness.c"
 )
 
 target_link_libraries(arcanum-fuzz-probe PRIVATE

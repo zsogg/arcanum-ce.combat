@@ -11,7 +11,7 @@
 // corrupt*, and a reader that segfaults on a modder's typo fails that bar
 // whatever the original does. This is the harness that asks.
 //
-//     arcanum-fuzz-probe mes <path>
+//     arcanum-fuzz-probe {mes|dlg|scr|jmp|mob|pro} <path>
 //
 // Exit 0 means the reader survived -- **not** that the file was valid.
 // Refusing a malformed file is a correct outcome and must not be reported as
@@ -28,7 +28,41 @@
 
 #include <tig/tig.h>
 
+#include "game/dialog.h"
+#include "game/jumppoint.h"
 #include "game/mes.h"
+#include "game/obj.h"
+#include "game/obj_file.h"
+#include "game/script.h"
+
+#include "obj_harness.h"
+
+// **A reader that refuses everything proves nothing**, so each probe below is
+// required to reach real parsing on a valid shipped file before its refusals
+// count as evidence of safety (card H6, work item 1). `--check` in
+// `fuzz_readers.py` is what asserts that, per format, against a seed from the
+// shipped corpus.
+//
+// The initialisation each reader needs is the substance of that item, and it
+// differs per format:
+//
+//   mes  nothing but the file repository.
+//   dlg  the same; `dialog_load` reads a text file and asks `timeevent` only
+//        for a cache timestamp.
+//   jmp  the same; `jumppoint_open` takes explicit paths and does not go
+//        through `jumppoint_init`, which wants a whole GameInitInfo.
+//   pro  the object system, which `tests/obj_harness.c` already stands up
+//        free-standing - `obj_read` is what `proto_init` calls per `.pro`.
+//   mob  the object system too; `objf_solitary_read` is the map loader's
+//        per-object path.
+//   scr  nothing but the file repository. `script_file_load_hdr` and
+//        `script_file_load_code` are the two functions that turn the bytes
+//        into a `ScriptFile`. Both were already defined without `static`;
+//        only their forward declarations made them internal, and card H6
+//        moved those into `script.h`.
+//        Going through `script_load_hdr` instead would add the script *name*
+//        table and reach only the 8-byte header - and the header is not where
+//        the interesting lengths are.
 
 static int probe_mes(const char* path)
 {
@@ -72,6 +106,146 @@ static int probe_mes(const char* path)
     return 0;
 }
 
+
+static int probe_scr(const char* path)
+{
+    TigFile* stream;
+    ScriptHeader hdr;
+    ScriptFile file;
+
+    stream = tig_file_fopen(path, "rb");
+    if (stream == NULL) {
+        printf("refused\n");
+        return 0;
+    }
+
+    if (!script_file_load_hdr(stream, &hdr)) {
+        tig_file_fclose(stream);
+        printf("refused\n");
+        return 0;
+    }
+
+    // Zeroed rather than built by `script_file_create`, which has internal
+    // linkage. `script_file_load_code` allocates `entries` itself, so a zeroed
+    // struct is the same starting state its real caller hands it.
+    memset(&file, 0, sizeof(file));
+    if (!script_file_load_code(stream, &file)) {
+        tig_file_fclose(stream);
+        FREE(file.entries);
+        printf("refused\n");
+        return 0;
+    }
+    tig_file_fclose(stream);
+
+    printf("ok %d\n", file.num_entries);
+    FREE(file.entries);
+    return 0;
+}
+
+static int probe_dlg(const char* path)
+{
+    int dlg = -1;
+
+    if (!dialog_load(path, &dlg)) {
+        printf("refused\n");
+        return 0;
+    }
+
+    // Unlike `mes`, there is no second walk to do: `dialog_load_internal`
+    // parses every entry up front, and `dialog_load` returns false when it
+    // produced none. So a success here already means the parser built at
+    // least one entry out of the bytes - which is the reach this probe has to
+    // demonstrate before its refusals mean anything - and everything the
+    // engine exports for reading an entry back wants a live NPC and PC
+    // object, which is a different harness than this one.
+    dialog_unload(dlg);
+    printf("ok\n");
+    return 0;
+}
+
+static int probe_jmp(const char* path)
+{
+    char* dup;
+    char* dir;
+
+    // `jumppoint_open` builds `<dir>\\map.jmp` itself, so it wants the
+    // directory rather than the file. It tries the save path first and falls
+    // back to the base path; both are the same directory here.
+    dup = strdup(path);
+    dir = dirname(dup);
+
+    if (!jumppoint_open(dir, dir)) {
+        free(dup);
+        printf("refused\n");
+        return 0;
+    }
+
+    jumppoint_map_close();
+    free(dup);
+    printf("ok\n");
+    return 0;
+}
+
+static int probe_pro(const char* path)
+{
+    TigFile* stream;
+    int64_t obj = OBJ_HANDLE_NULL;
+
+    if (!obj_harness_init()) {
+        fprintf(stderr, "obj system refused to initialise\n");
+        return 3;
+    }
+
+    stream = tig_file_fopen(path, "rb");
+    if (stream == NULL) {
+        printf("refused\n");
+        return 0;
+    }
+
+    if (!obj_read(stream, &obj)) {
+        tig_file_fclose(stream);
+        printf("refused\n");
+        return 0;
+    }
+    tig_file_fclose(stream);
+
+    // Touch the object the way `proto_init` does: a field read is where a
+    // bogus field table or string offset is actually dereferenced, and a
+    // `.pro` that parsed is not yet a `.pro` that can be used.
+    {
+        volatile int type = obj_field_int32_get(obj, OBJ_F_TYPE);
+        (void)type;
+    }
+
+    printf("ok\n");
+    return 0;
+}
+
+static int probe_mob(const char* path)
+{
+    int64_t handle = OBJ_HANDLE_NULL;
+
+    if (!obj_harness_init()) {
+        fprintf(stderr, "obj system refused to initialise\n");
+        return 3;
+    }
+
+    // The map loader's per-object path. It takes the game-relative path of
+    // the `.mob` itself, unlike `jumppoint_open`.
+    if (!objf_solitary_read(&handle, path)) {
+        printf("refused\n");
+        return 0;
+    }
+
+    {
+        volatile int type = obj_field_int32_get(handle, OBJ_F_TYPE);
+        (void)type;
+    }
+
+    printf("ok\n");
+    return 0;
+}
+
 int main(int argc, char** argv)
 {
     char* dup;
@@ -80,7 +254,7 @@ int main(int argc, char** argv)
     int rc;
 
     if (argc != 3) {
-        fprintf(stderr, "usage: %s mes <path>\n", argv[0]);
+        fprintf(stderr, "usage: %s {mes|dlg|scr|jmp|mob|pro} <path>\n", argv[0]);
         return 2;
     }
 
@@ -104,6 +278,16 @@ int main(int argc, char** argv)
 
     if (strcmp(argv[1], "mes") == 0) {
         rc = probe_mes(base);
+    } else if (strcmp(argv[1], "dlg") == 0) {
+        rc = probe_dlg(base);
+    } else if (strcmp(argv[1], "jmp") == 0) {
+        rc = probe_jmp(argv[2]);
+    } else if (strcmp(argv[1], "mob") == 0) {
+        rc = probe_mob(base);
+    } else if (strcmp(argv[1], "pro") == 0) {
+        rc = probe_pro(base);
+    } else if (strcmp(argv[1], "scr") == 0) {
+        rc = probe_scr(base);
     } else {
         fprintf(stderr, "unknown format: %s\n", argv[1]);
         rc = 2;

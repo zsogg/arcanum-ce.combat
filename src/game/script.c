@@ -95,8 +95,13 @@ static bool script_file_destroy(ScriptFile* script_file);
 static bool cache_add(int cache_entry_id, int script_id);
 static void cache_remove(int cache_entry_id);
 static int cache_find(int script_id);
-static bool script_file_load_hdr(TigFile* stream, ScriptHeader* hdr);
-static bool script_file_load_code(TigFile* stream, ScriptFile* script_file);
+// Declared in `script.h` rather than here (card H6): these two turn a `.scr`
+// file's bytes into a `ScriptFile`, and `tests/fuzz_probe.c` points malformed
+// files at them. Both definitions below were already written without
+// `static`; only these forward declarations gave them internal linkage, so
+// this changes what can link to them and nothing about what they do.
+bool script_file_load_hdr(TigFile* stream, ScriptHeader* hdr);
+bool script_file_load_code(TigFile* stream, ScriptFile* script_file);
 static void script_fx_play(int64_t obj, int fx_id);
 static void script_fx_stop(int64_t obj, int fx_id);
 

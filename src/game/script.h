@@ -378,6 +378,13 @@ void script_story_state_set(int value);
 char* script_story_state_info(int story_state_num);
 bool script_timeevent_process(TimeEvent* timeevent);
 bool script_load_hdr(Script* scr);
+
+// The two halves of the `.scr` reader, exported for `tests/fuzz_probe.c`
+// (card H6). `script_file_load_code` reads `num_entries` and `max_entries`
+// out of the file and allocates for one while reading the other, which is
+// exactly the kind of reach a malformed-input probe exists to have.
+bool script_file_load_hdr(TigFile* stream, ScriptHeader* hdr);
+bool script_file_load_code(TigFile* stream, ScriptFile* script_file);
 bool script_flags(Script* scr, ScriptFlags* flags_ptr);
 void script_play_explosion_fx(int64_t obj);
 
