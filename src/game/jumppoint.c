@@ -1,3 +1,5 @@
+#include <limits.h>
+
 #include "game/jumppoint.h"
 
 #include <stdio.h>
@@ -610,6 +612,25 @@ bool jumppoint_read_all(TigFile* stream)
 
     // Read the number of jump points.
     if (tig_file_fread(&jumppoints_count, sizeof(jumppoints_count), 1, stream) != 1) {
+        return false;
+    }
+
+    // CE (card H6): refuse a count that cannot describe a real array.
+    //
+    // `jumppoints_count` is read straight off disk and then sizes the
+    // allocation. **The original does the same and fails worse**: 0x4E3800
+    // computes the size with `shl eax, 0x5`, a 32-bit multiply that *wraps*,
+    // so a large count there yields a small allocation and the loop below
+    // overruns it. On x64 the promotion means no wrap, so CE asked for an
+    // impossible allocation instead (ASan, `jumppoint_read_all`). Both are
+    // the same defect; this refuses rather than either.
+    //
+    // A deliberate departure from a faithful transcription, under
+    // FIDELITY-CONTRACT.md's exception for reader bounds checks: a shipped
+    // `map.jmp` cannot reach it.
+    if (jumppoints_count < 0
+        || jumppoints_count > (int)(INT_MAX / sizeof(*jumppoints))) {
+        jumppoints_count = 0;
         return false;
     }
 

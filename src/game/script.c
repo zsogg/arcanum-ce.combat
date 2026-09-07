@@ -1,3 +1,5 @@
+#include <limits.h>
+
 #include "game/script.h"
 
 #include "game/ai.h"
@@ -3590,6 +3592,29 @@ bool script_file_load_code(TigFile* stream, ScriptFile* script_file)
         || tig_file_fread(&(script_file->num_entries), sizeof(script_file->num_entries), 1, stream) != 1
         || tig_file_fread(&(script_file->max_entries), sizeof(script_file->max_entries), 1, stream) != 1
         || tig_file_fseek(stream, 4, SEEK_CUR) != 0) {
+        return false;
+    }
+
+    // CE (card H6): refuse counts that do not agree, instead of allocating
+    // from one and reading with the other.
+    //
+    // `num_entries` and `max_entries` both come off disk, the allocation is
+    // sized from `max_entries` and the read counts `num_entries`, so a `.scr`
+    // declaring more entries than capacity wrote past the buffer - measured
+    // at 3,960 bytes under ASan. **The original does the same**, 0x44C730:
+    // `calloc(max_entries, 0x84)` then `fread(..., num_entries, ...)`. See
+    // MODDING-NOTES.md quirk 40.
+    //
+    // A deliberate departure from a faithful transcription, under
+    // FIDELITY-CONTRACT.md's exception for reader bounds checks. Troika's own
+    // compiler wrote consistent counts, so no shipped script can reach this.
+    if (script_file->num_entries < 0
+        || script_file->max_entries < 0
+        || script_file->num_entries > script_file->max_entries
+        || script_file->max_entries > (int)(INT_MAX / sizeof(ScriptCondition))) {
+        script_file->num_entries = 0;
+        script_file->max_entries = 0;
+        script_file->entries = NULL;
         return false;
     }
 

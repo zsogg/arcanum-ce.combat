@@ -1,3 +1,5 @@
+#include <limits.h>
+
 #include "game/obj_private.h"
 
 #include <stdio.h>
@@ -1428,6 +1430,24 @@ bool bitset_read_file(int* out_id, TigFile* stream)
     id = bitset_alloc();
 
     if (tig_file_fread(&cnt, sizeof(cnt), 1, stream) != 1) {
+        return false;
+    }
+
+    // CE (card H6): refuse a stored bitset size that cannot describe real
+    // storage, before it reaches the growth arithmetic.
+    //
+    // `cnt` comes straight off disk and is handed to `bitset_grow`, which
+    // computes `bitset_storage_size + cnt` as `int` - a signed overflow for a
+    // large value (UBSan, `bitset_grow`) and then a `REALLOC` sized from the
+    // wrapped result. `bitset_grow` returns void and cannot refuse, so the
+    // check belongs here, where the number arrives.
+    //
+    // The bound is what the remaining storage can actually take, so a file
+    // asking for more is rejected rather than wrapped. A deliberate departure
+    // from a faithful transcription, under FIDELITY-CONTRACT.md's exception
+    // for reader bounds checks.
+    if (cnt < 0
+        || cnt > (INT_MAX - bitset_storage_size) / (int)sizeof(*bitset_storage)) {
         return false;
     }
 

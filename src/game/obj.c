@@ -1083,7 +1083,9 @@ void obj_clone(int64_t* new_obj_ptr, int64_t obj)
     new_object->field_40 = object->field_40;
     new_object->modified = object->modified;
     new_object->num_fields = object->num_fields;
-    new_object->data = (intptr_t*)CALLOC(object->num_fields, sizeof(*new_object->data));
+    // Same invariant as `obj_read`: sized by the type, not by the count the
+    // source object happens to carry (card H6).
+    new_object->data = (intptr_t*)CALLOC(object_fields_count_per_type[object->type], sizeof(*new_object->data));
 
     if (object->prototype_oid.type != OID_TYPE_BLOCKED) {
         obj_inst_bitmaps_copy(new_object, object);
@@ -1147,7 +1149,8 @@ void obj_perm_dup(int64_t* copy_obj_ptr, int64_t existing_obj)
     copy_object->field_40 = 0;
     copy_object->num_fields = existing_object->num_fields;
     copy_object->modified = false;
-    copy_object->data = (intptr_t*)CALLOC(copy_object->num_fields, sizeof(*copy_object->data));
+    // Same invariant as `obj_read` (card H6).
+    copy_object->data = (intptr_t*)CALLOC(object_fields_count_per_type[copy_object->type], sizeof(*copy_object->data));
     obj_inst_bitmaps_copy(copy_object, existing_object);
     memset(copy_object->dif, 0, 4 * obj_type_change_array_len(copy_object->type));
 
@@ -3225,6 +3228,7 @@ bool obj_inst_read_file(TigFile* stream, int64_t* obj_ptr, ObjectID oid)
     // NOTE: Deliberate CE hardening. The original CALLOCs with the
     // stream-supplied field count unchecked; a malformed .mob can request a
     // negative or oversized allocation.
+    //
     if (object->num_fields < 0
         || object->num_fields > object_fields_count_per_type[object->type]) {
         tig_debug_printf("Obj: invalid field count %d for object type %d.\n", object->num_fields, object->type);
@@ -3237,7 +3241,23 @@ bool obj_inst_read_file(TigFile* stream, int64_t* obj_ptr, ObjectID oid)
     object->modified = false;
     obj_inst_bitmaps_alloc(object);
 
-    object->data = (intptr_t*)CALLOC(object->num_fields, sizeof(*object->data));
+    // CE (card H6): sized by the **type's** field count, never by the
+    // stream's. Every field access indexes this array with
+    // `object_fields[fld].simple_array_idx`, a compile-time index covering
+    // the type's whole field set, so an allocation sized from a file that
+    // declares fewer fields is smaller than the indices used against it -
+    // measured as heap overflows in `obj_data_fetch` and
+    // `obj_data_read_file_fast`.
+    //
+    // **Requiring the counts to be equal was tried first and is wrong**:
+    // shipped `.mob` files legitimately carry a smaller `num_fields`, and
+    // `scripts/fuzz_readers.py --check` refused the real corpus. Accepting
+    // what the original accepted and over-allocating to the indices actually
+    // used keeps every valid file loading and removes the overflow.
+    //
+    // A deliberate departure from a faithful transcription, under
+    // FIDELITY-CONTRACT.md's exception for reader bounds checks.
+    object->data = (intptr_t*)CALLOC(object_fields_count_per_type[object->type], sizeof(*object->data));
 
     if (!objf_read(object->changed, sizeof(*object->changed) * obj_type_change_array_len(object->type), stream)) {
         obj_unlock(obj);

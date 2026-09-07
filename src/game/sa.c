@@ -1,3 +1,5 @@
+#include <limits.h>
+
 #include "game/sa.h"
 
 #include "game/obj_private.h"
@@ -322,6 +324,25 @@ bool sa_read_no_dealloc(SizeableArray** sa_ptr, TigFile* stream)
     int size;
 
     if (tig_file_fread(&sa, sizeof(sa), 1, stream) != 1) {
+        return false;
+    }
+
+    // CE (card H6): refuse a header whose element size and count cannot
+    // describe a real array, instead of multiplying them and trusting the
+    // answer.
+    //
+    // `sa.size` and `sa.count` come straight off disk. `sa_byte_size`
+    // multiplies them as `int`, so a `.mob` or `.pro` carrying either a
+    // negative value or a large pair produced a signed overflow (UBSan,
+    // `sa.c` `sa_byte_size`) and then a `MALLOC` of whatever the wrapped
+    // arithmetic produced. **The original does exactly the same** - 0x4E7A60
+    // is `imul eax, [ecx]` with no check - so this is a deliberate departure
+    // from a faithful transcription, taken under FIDELITY-CONTRACT.md's
+    // exception for reader bounds checks: it can only fire on a file that
+    // would otherwise corrupt memory, so no well-formed data can observe it.
+    if (sa.size < 0
+        || sa.count < 0
+        || (sa.size != 0 && sa.count > (INT_MAX - (int)sizeof(sa)) / sa.size)) {
         return false;
     }
 
