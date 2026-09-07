@@ -214,8 +214,31 @@ bool mes_find_next(mes_file_handle_t mes_file_handle, MesFileEntry* mes_file_ent
 
     index = (int)(found - mes_files[mes_file_handle].entries);
     if (exists) {
-        // Move to the next entry if the current one exists.
-        index++;
+        // Move past the current entry.
+        //
+        // CE (card H6): past **every** entry carrying this number, not just
+        // one. The iteration state is the entry's value, so with a duplicated
+        // number the position is ambiguous: `tig_bsearch` returns the same
+        // index each call, `index + 1` lands on another copy of the same
+        // number, and the caller's `do { } while (mes_find_next(...))` never
+        // advances. Measured 2026-09-07 - **101 entries with one number
+        // duplicated once loops forever**, and file size is irrelevant.
+        //
+        // The original does the same (0x4D4460, the same `tig_bsearch` call
+        // with comparator 0x4D4D10), so this is a departure from a faithful
+        // transcription in a subsystem FIDELITY-CONTRACT.md marks Faithful.
+        // It is taken because the contract's absolute bar for every regime is
+        // *must not crash, hang or corrupt*, and because a duplicate-free
+        // file is unaffected: exactly one entry matches, so this advances by
+        // one exactly as `index++` did. There is no correct behaviour being
+        // preserved here - the alternative is a freeze.
+        //
+        // It matters because `area.c` walks `gamearea.mes` this way, which is
+        // the file a location mod edits. See MODDING-NOTES.md quirk 41.
+        while (index < mes_files[mes_file_handle].num_entries
+            && mes_files[mes_file_handle].entries[index].num == mes_file_entry->num) {
+            index++;
+        }
     }
 
     // Check range.
@@ -722,20 +745,37 @@ void copy_mes_file_entry(MesFileEntry* dst, MesFileEntry* src, char* str)
  */
 void check_duplicates(MesFile* mes_file)
 {
-    int index1;
-    int index2;
+    int index;
 
     // NOTE: It seems the Troika developers were in a hurry when writing this
-    // check. This is a quick-and-dirty O(n^2) algorithm, which may be slow for
-    // large files. Since the entries are guaranteed to be sorted, duplicates
-    // should be adjacent, which is O(n).
-    for (index1 = 0; index1 < mes_file->num_entries; index1++) {
-        for (index2 = 0; index2 < index1; index2++) {
-            if (mes_file->entries[index1].num == mes_file->entries[index2].num) {
-                tig_debug_printf("%s: two lines numbered %d\n",
-                    mes_file->path,
-                    mes_file->entries[index1].num);
-            }
+    // check. The original is a quick-and-dirty O(n^2) algorithm comparing
+    // every entry against every earlier one (0x4D4D70).
+    //
+    // CE (card H6): linear instead, by comparing each entry with the one
+    // before it. **The entries are sorted when this runs** - `qsort` on
+    // `compare_mes_file_entries` immediately precedes both calls, at the two
+    // sites above - so equal numbers are adjacent and a neighbour comparison
+    // finds every duplicate the double loop finds.
+    //
+    // Measured before the change, one process per file under the ASan build:
+    // 1,000 entries 0.07s, 4,000 0.17s, 8,000 0.48s, 16,000 1.71s, 32,000
+    // 6.67s - four times the work for twice the entries. A `.mes` is the
+    // format mods edit most and `modkit`'s `add:` appends to it, so a
+    // generated file can cross into seconds with nothing looking wrong
+    // (MODDING-NOTES.md quirk 36).
+    //
+    // **The observable difference, stated exactly.** For a number appearing
+    // k times the original prints k*(k-1)/2 warnings and this prints k-1.
+    // They agree at k=2 and diverge from k=3. Across the 731 shipped `.mes`
+    // files the greatest number of copies of any one key is **2**, in two
+    // files, so no shipped data can tell the two apart - verified by running
+    // every one of them through the reader before and after and diffing the
+    // entry counts and warnings.
+    for (index = 1; index < mes_file->num_entries; index++) {
+        if (mes_file->entries[index].num == mes_file->entries[index - 1].num) {
+            tig_debug_printf("%s: two lines numbered %d\n",
+                mes_file->path,
+                mes_file->entries[index].num);
         }
     }
 }
