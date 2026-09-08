@@ -60,6 +60,7 @@ add_executable(arcanum-tests
     "test_provenance.c"
     "test_determinism.c"
     "test_script.c"
+    "test_save_slot.c"
     "obj_harness.c"
     "obj_harness.h"
     "tests_main.c"
@@ -608,6 +609,48 @@ add_custom_command(
 add_custom_target(arcanum-script-test-obj DEPENDS "${SCRIPT_TEST_OBJ}")
 target_link_libraries(arcanum-tests PRIVATE "${SCRIPT_TEST_OBJ}")
 add_dependencies(arcanum-tests arcanum-script-test-obj)
+
+
+# The same objcopy trick again, for `gamelib.c`, so the suite can drive the
+# save slot's backup helpers directly.
+#
+# Card R2: the acceptance item is a save interrupted *at the commit boundary*,
+# and the only honest way to produce that state is to run the real backup, then
+# kill the process. Reconstructing the files by hand tests the recovery pass
+# against a state a test author imagined rather than one the code produces.
+set(GAMELIB_TEST_STATICS
+    gamelib_slot_backup
+    gamelib_slot_backup_undo
+    gamelib_slot_backup_release
+)
+set(GAMELIB_TEST_OBJ "${CMAKE_CURRENT_BINARY_DIR}/gamelib_globalized.o")
+set(_gamelib_globalize_args "")
+foreach(sym ${GAMELIB_TEST_STATICS})
+    list(APPEND _gamelib_globalize_args "--globalize-symbol=${sym}")
+endforeach()
+
+file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/gamelibobj")
+
+add_custom_command(
+    OUTPUT "${GAMELIB_TEST_OBJ}"
+    COMMAND "${CMAKE_AR}" x "$<TARGET_FILE:arcanum-game>" gamelib.c.o
+    COMMAND "${CMAKE_OBJCOPY}" ${_gamelib_globalize_args} gamelib.c.o "${GAMELIB_TEST_OBJ}"
+    COMMAND "${CMAKE_COMMAND}" -E rm -f gamelib.c.o
+    COMMAND "${CMAKE_COMMAND}"
+        "-DOBJ=${GAMELIB_TEST_OBJ}"
+        "-DSYMS=${GAMELIB_TEST_STATICS}"
+        "-DDATA_SYMS="
+        "-DNM=${CMAKE_NM}"
+        -P "${CMAKE_CURRENT_SOURCE_DIR}/verify_globalized.cmake"
+    WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/gamelibobj"
+    DEPENDS arcanum-game
+    COMMENT "tests: globalizing gamelib.c slot statics (no source change)"
+    VERBATIM
+)
+
+add_custom_target(arcanum-gamelib-test-obj DEPENDS "${GAMELIB_TEST_OBJ}")
+target_link_libraries(arcanum-tests PRIVATE "${GAMELIB_TEST_OBJ}")
+add_dependencies(arcanum-tests arcanum-gamelib-test-obj)
 
 
 # The CE half of the archive differential. `arcanum-work/scripts/verify_dbmaker.py`

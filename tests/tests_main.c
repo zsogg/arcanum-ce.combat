@@ -53,6 +53,7 @@ void test_compat_suite(void);
 void test_magitech_suite(void);
 void test_determinism_suite(void);
 void test_script_suite(void);
+void test_save_slot_suite(void);
 void test_proto_suite(void);
 void test_fatigue_suite(void);
 void test_area_suite(void);
@@ -107,6 +108,7 @@ int main(void)
     test_magitech_suite();
     test_determinism_suite();
     test_script_suite();
+    test_save_slot_suite();
     test_proto_suite();
     test_fatigue_suite();
     test_eye_candy_sound_suite();

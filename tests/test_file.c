@@ -919,9 +919,15 @@ static int archive_still_loads(void)
     return tig_file_unarchive(ARC_OUT, ARC_DST) ? 1 : 0;
 }
 
-// Failure 1: the payload open fails after the index is already truncated.
-// `.tfai` is opened "wb" first, so by the time the `.tfaf` open is attempted
-// the previous index is already gone; the early return does not restore it.
+// Failure 1, and what it exercises changed when staging landed.
+//
+// Before staging this was the review's case: `.tfai` was opened "wb" first, so
+// by the time the `.tfaf` open failed the previous index was already gone.
+// Now both opens go to `.tmp` names and succeed, and making `.tfaf` a
+// directory instead fails the **rename** that would commit the payload - which
+// is the fault-injection point for the commit stage. Either way the property
+// asserted is the same one, and it is the one that matters: the previous
+// archive is still there and still loads.
 TEST(a_failed_replacement_leaves_the_previous_archive_loadable)
 {
     long index_before;
@@ -940,10 +946,19 @@ TEST(a_failed_replacement_leaves_the_previous_archive_loadable)
     // The replacement must fail - it does today, and that part is correct.
     CHECK(!tig_file_archive(ARC_OUT, ARC_SRC));
 
-    // ...and the previous archive must have survived it. It does not: the
-    // index was truncated to zero by the "wb" open before the payload open
-    // was ever attempted.
+    // ...and the previous index must have survived it untouched. Note what
+    // this case can and cannot assert: forcing the failure means replacing
+    // `.tfaf` with a directory, so the *pair* cannot load afterwards - the
+    // fixture destroyed the payload, not the code. The loadable-previous-
+    // archive property is asserted by the flush-failure case below, where the
+    // previous pair is left intact. Asserting it here failed for the fixture's
+    // own reason and was removed rather than worked around.
     CHECK_INT(archive_file_size(ARC_INDEX), index_before);
+
+    // Cleanup stage: a failed archive leaves no staging behind for the next
+    // run to trip over.
+    CHECK_INT(archive_file_size(ARC_INDEX ".tmp"), -1);
+    CHECK_INT(archive_file_size(ARC_DATA ".tmp"), -1);
 
     remove(ARC_DATA);
     archive_fixture_remove();
@@ -1017,6 +1032,10 @@ TEST(a_failure_during_the_write_is_not_reported_as_a_successful_save)
     // And the previous archive must have survived.
     CHECK_INT(archive_file_size(ARC_INDEX), index_before);
     CHECK(archive_still_loads());
+
+    // Cleanup stage again, this time after a failure detected at the flush.
+    CHECK_INT(archive_file_size(ARC_INDEX ".tmp"), -1);
+    CHECK_INT(archive_file_size(ARC_DATA ".tmp"), -1);
 
     archive_fixture_remove();
 }

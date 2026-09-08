@@ -946,6 +946,118 @@ void gamelib_current_mode_name_set(const char* name)
     }
 }
 
+// CE (card R2): the two halves of a save slot's archive, and the suffix that
+// holds the previous generation while a replacement is being written.
+//
+// A slot is four files. `.gsi` is the one `gamelib_savelist_create` enumerates
+// on, so it is the slot's existence; `.bmp` is its thumbnail; `.tfai`/`.tfaf`
+// are the archive that actually holds the game. Only the archive pair is moved
+// aside here - the `.gsi` is written last and is the commit point, and a
+// thumbnail is not worth a transaction.
+static const char* const GAMELIB_SLOT_ARCHIVE_EXTS[] = { "tfai", "tfaf" };
+
+// Move the current archive out of the way so a failure has something to put
+// back. Absent files are not an error: saving into a new slot is the ordinary
+// case and there is simply nothing to preserve.
+static bool gamelib_slot_backup(const char* name)
+{
+    char live[TIG_MAX_PATH];
+    char bak[TIG_MAX_PATH];
+    size_t index;
+
+    for (index = 0; index < sizeof(GAMELIB_SLOT_ARCHIVE_EXTS) / sizeof(GAMELIB_SLOT_ARCHIVE_EXTS[0]); index++) {
+        snprintf(live, sizeof(live), "save\\%s.%s", name, GAMELIB_SLOT_ARCHIVE_EXTS[index]);
+        snprintf(bak, sizeof(bak), "save\\%s.%s.bak", name, GAMELIB_SLOT_ARCHIVE_EXTS[index]);
+
+        if (!tig_file_exists(live, NULL)) {
+            continue;
+        }
+
+        if (tig_file_rename(live, bak) != 0) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+// Undo an incomplete replacement: put the previous archive back, or - when the
+// slot was new and there was nothing to set aside - remove the archive that
+// was just written, so a failed save leaves no half-slot behind.
+static void gamelib_slot_backup_undo(const char* name)
+{
+    char live[TIG_MAX_PATH];
+    char bak[TIG_MAX_PATH];
+    size_t index;
+
+    for (index = 0; index < sizeof(GAMELIB_SLOT_ARCHIVE_EXTS) / sizeof(GAMELIB_SLOT_ARCHIVE_EXTS[0]); index++) {
+        snprintf(live, sizeof(live), "save\\%s.%s", name, GAMELIB_SLOT_ARCHIVE_EXTS[index]);
+        snprintf(bak, sizeof(bak), "save\\%s.%s.bak", name, GAMELIB_SLOT_ARCHIVE_EXTS[index]);
+
+        if (tig_file_exists(bak, NULL)) {
+            tig_file_remove(live);
+            tig_file_rename(bak, live);
+        } else {
+            tig_file_remove(live);
+        }
+    }
+}
+
+// The replacement committed: the previous generation is no longer needed.
+static void gamelib_slot_backup_release(const char* name)
+{
+    char bak[TIG_MAX_PATH];
+    size_t index;
+
+    for (index = 0; index < sizeof(GAMELIB_SLOT_ARCHIVE_EXTS) / sizeof(GAMELIB_SLOT_ARCHIVE_EXTS[0]); index++) {
+        snprintf(bak, sizeof(bak), "save\\%s.%s.bak", name, GAMELIB_SLOT_ARCHIVE_EXTS[index]);
+        tig_file_remove(bak);
+    }
+}
+
+// CE (card R2): roll an interrupted save back to its previous generation.
+//
+// A `.bak` only exists while a replacement is in flight, so finding one means
+// the process did not survive the save - and rolling back is right, because
+// the `.gsi` that would have named the new archive was never written. A
+// `.tfai.tmp`/`.tfaf.tmp` is `tig_file_archive`'s own staging, abandoned the
+// same way.
+//
+// Idempotent on purpose: each file is restored independently, so an
+// interruption *during* recovery leaves the rest still to do and a second run
+// finishes it. Called before slots are enumerated and before one is loaded,
+// which are the two ways a caller can reach a save.
+void gamelib_slot_recover(void)
+{
+    TigFileList file_list;
+    unsigned int index;
+    char found[TIG_MAX_PATH];
+    char live[TIG_MAX_PATH];
+    size_t length;
+
+    tig_file_list_create(&file_list, "save\\*.bak");
+    for (index = 0; index < file_list.count; index++) {
+        snprintf(found, sizeof(found), "save\\%s", file_list.entries[index].path);
+        strcpy(live, found);
+        length = strlen(live);
+        if (length > 4) {
+            live[length - 4] = '\0';
+            tig_debug_printf("gamelib: recovering %s from an interrupted save\n", live);
+            tig_file_remove(live);
+            tig_file_rename(found, live);
+        }
+    }
+    tig_file_list_destroy(&file_list);
+
+    tig_file_list_create(&file_list, "save\\*.tmp");
+    for (index = 0; index < file_list.count; index++) {
+        snprintf(found, sizeof(found), "save\\%s", file_list.entries[index].path);
+        tig_debug_printf("gamelib: discarding staged %s from an interrupted save\n", found);
+        tig_file_remove(found);
+    }
+    tig_file_list_destroy(&file_list);
+}
+
 // 0x403030
 bool gamelib_save(const char* name, const char* description)
 {
@@ -1051,15 +1163,6 @@ bool gamelib_save(const char* name, const char* description)
         return false;
     }
 
-    if (!gamelib_saveinfo_save(&save_info)) {
-        tig_debug_printf("gamelib_save(): error saving saveinfo\n");
-        gamelib_saveinfo_exit(&save_info);
-        in_save = false;
-        return false;
-    }
-
-    gamelib_saveinfo_exit(&save_info);
-
     // CE: a diagnostic record of the configuration that wrote this save,
     // written into the folder so the archive below carries it (card H9). It
     // is **never** allowed to fail a save: a save the player asked for
@@ -1068,17 +1171,61 @@ bool gamelib_save(const char* name, const char* description)
         tig_debug_printf("gamelib_save: no provenance record written\n");
     }
 
+    // FIX: a slot is four files - `.gsi`, `.bmp`, `.tfai`, `.tfaf` - and this
+    // function used to write the first two, then the archive, with nothing
+    // tying them together. Overwriting a slot therefore destroyed the old save
+    // in stages, and a failure at any point left new metadata describing an
+    // archive that was old, half-written or gone. Card R2, review finding F2:
+    // "protection must cover the entire slot".
+    //
+    // The order below makes the `.gsi` the commit point, which costs nothing
+    // because it already is one: `gamelib_savelist_create` enumerates
+    // `save\slot*.*` and keeps only the `.gsi` names, so a slot without one is
+    // not a save the player can see. Writing it last means the archive is
+    // complete before anything points at it.
+    //
+    // The previous archive is moved aside rather than overwritten, so a
+    // failure has something to put back. `gamelib_slot_backup_undo` restores
+    // it, or removes the new archive when the slot is new and there is nothing
+    // to restore - either way the tree ends as it began.
+    //
+    // `gamelib_saveinfo_init` above stays where it is: it captures the
+    // thumbnail off the screen, and that has to happen before anything else
+    // draws.
+    if (!gamelib_slot_backup(name)) {
+        tig_debug_printf("gamelib_save(): could not set aside the previous %s\n", name);
+        gamelib_saveinfo_exit(&save_info);
+        in_save = false;
+        return false;
+    }
+
     snprintf(path, sizeof(path), "save\\%s", name);
     tig_debug_printf("gamelib_save: creating folder archive...");
 
     tig_timer_now(&time);
     if (!tig_file_archive(path, "Save\\Current")) {
         tig_debug_printf("gamelib_save(): error archiving folder to %s\n", path);
+        gamelib_slot_backup_undo(name);
+        gamelib_saveinfo_exit(&save_info);
         in_save = false;
         return false;
     }
     duration = tig_timer_elapsed(time);
     tig_debug_printf("done. Time (ms): %d\n", duration);
+
+    if (!gamelib_saveinfo_save(&save_info)) {
+        tig_debug_printf("gamelib_save(): error saving saveinfo\n");
+        gamelib_slot_backup_undo(name);
+        gamelib_saveinfo_exit(&save_info);
+        in_save = false;
+        return false;
+    }
+
+    gamelib_saveinfo_exit(&save_info);
+
+    // Committed. The previous generation is only released once the `.gsi`
+    // naming the new one is on disk.
+    gamelib_slot_backup_release(name);
 
     ui_progressbar_update(MODULE_COUNT + 2);
 
@@ -1106,6 +1253,11 @@ bool gamelib_load(const char* name)
 
     tig_debug_printf("\ngamelib_load: Loading from File: %s.\n", name);
     tig_timer_now(&start_time);
+
+    // CE (card R2): the other way a caller reaches a save. An interrupted
+    // replacement is rolled back to its previous generation before the load
+    // reads anything, so a load never sees a half-written slot.
+    gamelib_slot_recover();
 
     in_load = true;
 
@@ -1301,6 +1453,11 @@ void gamelib_savelist_create(GameSaveList* save_list)
     save_list->count = 0;
     save_list->names = NULL;
     save_list->module = NULL;
+
+    // CE (card R2): before anything is listed, put back any slot an
+    // interrupted save left mid-replacement. A caller reaches a save through
+    // here or through `gamelib_load`, and both recover first.
+    gamelib_slot_recover();
 
     tig_file_list_create(&file_list, "save\\slot*.*");
 
