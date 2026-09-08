@@ -25,6 +25,14 @@
 #include <stdlib.h>
 #include <string.h>
 
+// Card R2's two F2 reproductions drive a write to failure with
+// RLIMIT_FSIZE, in a child so neither the limit nor the SIGXFSZ
+// disposition escapes into the rest of the suite.
+#include <signal.h>
+#include <sys/resource.h>
+#include <sys/wait.h>
+#include <unistd.h>
+
 #include "tig/file.h"
 
 #include "test_harness.h"
@@ -547,6 +555,20 @@ TEST(an_ignored_entry_is_left_out_of_the_listing)
 #define ARC_INDEX ARC_OUT ".tfai"
 #define ARC_DATA ARC_OUT ".tfaf"
 #define ARC_EMPTY "./arcanum_test_archive_empty"
+// A mounted plain repository, so a *relative* destination can be archived
+// the way `gamelib_save` spells one.
+#define ARC_REPO "./arcanum_test_archive_repo"
+#define ARC_REPO_INDEX ARC_REPO "/out.tfai"
+#define ARC_REPO_DATA ARC_REPO "/out.tfaf"
+#define ARC_REPO_TMP_INDEX ARC_REPO "/out.tfai.tmp"
+#define ARC_REPO_TMP_DATA ARC_REPO "/out.tfaf.tmp"
+#define ARC_REPO_SUB ARC_REPO "/sub"
+#define ARC_REPO_SUB_INDEX ARC_REPO_SUB "/out.tfai"
+#define ARC_REPO_SUB_TMP ARC_REPO_SUB "/out.tfai.tmp"
+// Created as `Case`, asked for as `case`.
+#define ARC_REPO_CASE ARC_REPO "/Case"
+#define ARC_REPO_CASE_INDEX ARC_REPO_CASE "/out.tfai"
+#define ARC_REPO_CASE_TMP ARC_REPO_CASE "/out.tfai.tmp"
 
 // `inner.bin` carries an embedded NUL and a 0xFF so a copy that goes through a
 // string function, or a stream opened in text mode, cannot pass.
@@ -862,6 +884,221 @@ TEST(an_index_truncated_before_the_end_record_fails)
     archive_fixture_remove();
 }
 
+// --- card R2 / review finding F2 -----------------------------------------
+//
+// `tig_file_archive` is how every save is written: `gamelib_save` archives
+// `Save\Current` onto `save\<name>`. It writes the destination **in place** -
+// both halves opened "wb" over the previous archive - so a failure part way
+// through does not fail cleanly, it destroys the save that was already there.
+//
+// Two distinct failures, and the second is the one that loses everything.
+// Both tests below assert the property a player depends on: a save that fails
+// to be replaced leaves the previous one loadable. Both are expected to FAIL
+// until the commit protocol lands.
+
+// Is the archive at ARC_OUT still a complete, readable archive? The
+// destination tree is cleared first so a stale unpack cannot pass for a
+// successful one.
+static const char* const ARCHIVE_DST_PATHS[] = {
+    ARC_DST "/sub/deeper/leaf.txt",
+    ARC_DST "/sub/inner.bin",
+    ARC_DST "/top.txt",
+    ARC_DST "/sub/deeper",
+    ARC_DST "/sub",
+    ARC_DST,
+};
+
+static int archive_still_loads(void)
+{
+    size_t index;
+
+    for (index = 0; index < sizeof(ARCHIVE_DST_PATHS) / sizeof(ARCHIVE_DST_PATHS[0]); index++) {
+        remove(ARCHIVE_DST_PATHS[index]);
+    }
+
+    return tig_file_unarchive(ARC_OUT, ARC_DST) ? 1 : 0;
+}
+
+// Failure 1: the payload open fails after the index is already truncated.
+// `.tfai` is opened "wb" first, so by the time the `.tfaf` open is attempted
+// the previous index is already gone; the early return does not restore it.
+TEST(a_failed_replacement_leaves_the_previous_archive_loadable)
+{
+    long index_before;
+
+    archive_fixture_write();
+    CHECK(tig_file_archive(ARC_OUT, ARC_SRC));
+    CHECK(archive_still_loads());
+    index_before = archive_file_size(ARC_INDEX);
+    CHECK(index_before > 4);
+
+    // Make the payload open fail, leaving the index open to succeed: a
+    // directory cannot be opened "wb".
+    CHECK_INT(remove(ARC_DATA), 0);
+    tig_file_mkdir(ARC_DATA);
+
+    // The replacement must fail - it does today, and that part is correct.
+    CHECK(!tig_file_archive(ARC_OUT, ARC_SRC));
+
+    // ...and the previous archive must have survived it. It does not: the
+    // index was truncated to zero by the "wb" open before the payload open
+    // was ever attempted.
+    CHECK_INT(archive_file_size(ARC_INDEX), index_before);
+
+    remove(ARC_DATA);
+    archive_fixture_remove();
+}
+
+// Failure 2: a write that fails mid-archive is REPORTED AS A SUCCESSFUL SAVE.
+//
+// This is not the case the review reproduced, and it is worse than the one it
+// described. The writes are buffered, so `tig_file_fwrite` and
+// `tig_file_fputs` return success into the FILE* buffer and the worker sees
+// nothing wrong. The failure only materialises when the buffer is flushed at
+// `tig_file_fclose` - and `tig_file_archive_native` **ignores both fclose
+// return values**. So `success` is still true, the `!success` cleanup never
+// runs, and the function returns true.
+//
+// `gamelib_save` takes that true and reports "Save Complete." The player is
+// told the save worked. On disk the previous archive has been overwritten
+// with a truncated fragment, and it no longer loads.
+//
+// Measured 2026-09-08: over a valid 97-byte index, this leaves 12 bytes and
+// returns true.
+//
+// RLIMIT_FSIZE is how the write is made to fail without a full filesystem:
+// past the limit the flush fails with EFBIG. SIGXFSZ would otherwise kill the
+// process, so it is ignored for the duration. The child keeps both the limit
+// and the signal disposition away from the rest of the suite, and carries
+// what `tig_file_archive` claimed out through its exit status.
+TEST(a_failure_during_the_write_is_not_reported_as_a_successful_save)
+{
+    struct rlimit saved;
+    long index_before;
+    pid_t child;
+    int status = 0;
+    int claimed_success;
+
+    archive_fixture_write();
+    CHECK(tig_file_archive(ARC_OUT, ARC_SRC));
+    index_before = archive_file_size(ARC_INDEX);
+    CHECK(index_before > 4);
+
+    fflush(NULL);
+    child = fork();
+    if (child == 0) {
+        struct rlimit small;
+
+        signal(SIGXFSZ, SIG_IGN);
+        getrlimit(RLIMIT_FSIZE, &saved);
+        // Enough for the first records, not for the whole index.
+        small.rlim_cur = 12;
+        small.rlim_max = saved.rlim_max;
+        setrlimit(RLIMIT_FSIZE, &small);
+
+        _exit(tig_file_archive(ARC_OUT, ARC_SRC) ? 7 : 0);
+    }
+
+    CHECK(child > 0);
+    if (child > 0) {
+        CHECK(waitpid(child, &status, 0) == child);
+        // The child must have RETURNED from tig_file_archive, not died in it.
+        // If SIGXFSZ killed it, the damage below would be this test's doing
+        // rather than the code's, and the case would prove nothing.
+        CHECK(WIFEXITED(status));
+        CHECK_INT(WIFSIGNALED(status) ? WTERMSIG(status) : 0, 0);
+    }
+
+    claimed_success = (WIFEXITED(status) && WEXITSTATUS(status) == 7) ? 1 : 0;
+
+    // The sharp one: a save that did not happen must not report that it did.
+    CHECK_INT(claimed_success, 0);
+
+    // And the previous archive must have survived.
+    CHECK_INT(archive_file_size(ARC_INDEX), index_before);
+    CHECK(archive_still_loads());
+
+    archive_fixture_remove();
+}
+
+// The game's path shape, which the cases above do NOT exercise.
+//
+// `gamelib_save` archives to `save\<name>` - a *repository-relative* path. The
+// cases above all use "./arcanum_test_archive_out", and a leading '.' takes an
+// entirely different branch in `tig_file_remove_native`, `_rename_native` and
+// `_fopen_native`: it goes straight to SDL, while a relative name walks the
+// mounted repositories instead.
+//
+// That difference is not academic. Card R2's first attempt at staging passed
+// every case above and then produced no archive at all in the real game,
+// leaving `SlotAuto.tfai.tmp` and `SlotAuto.tfaf.tmp` behind - caught by the
+// save matrix, not by this suite. This case is that gap closed.
+TEST(archiving_to_a_repository_relative_path_lands_on_the_real_name)
+{
+    char dir_out[TIG_MAX_PATH];
+    char dir_index[TIG_MAX_PATH];
+    char dir_tmp[TIG_MAX_PATH];
+
+    archive_fixture_write();
+    remove(ARC_REPO_INDEX);
+    remove(ARC_REPO_DATA);
+    remove(ARC_REPO_TMP_INDEX);
+    remove(ARC_REPO_TMP_DATA);
+    tig_file_mkdir(ARC_REPO);
+
+    CHECK(tig_file_repository_add(ARC_REPO));
+
+    // Relative, exactly as `gamelib_save` spells it - including the
+    // subdirectory, because `save\\SlotAuto` has one and a bare name does not.
+    tig_file_mkdir(ARC_REPO_SUB);
+    CHECK(tig_file_archive("sub\\out", ARC_SRC));
+
+    CHECK(archive_file_size(ARC_REPO_SUB_INDEX) > 4);
+    CHECK_INT(archive_file_size(ARC_REPO_SUB_TMP), -1);
+
+    CHECK(tig_file_archive("out", ARC_SRC));
+
+    // The archive must exist under its real name...
+    CHECK(archive_file_size(ARC_REPO_INDEX) > 4);
+    CHECK(archive_file_size(ARC_REPO_DATA) > 0);
+
+    // ...and no staging file may survive a success.
+    CHECK_INT(archive_file_size(ARC_REPO_TMP_INDEX), -1);
+    CHECK_INT(archive_file_size(ARC_REPO_TMP_DATA), -1);
+
+    // The case-mismatch shape, which is what the game actually has: the
+    // directory on disk is `Save`, `gamelib_save` asks for `save\\SlotAuto`,
+    // and only the *open* path calls `compat_resolve_path` after joining the
+    // repository root. `tig_file_rename_native` and `tig_file_remove_native`
+    // do not, so on a case-sensitive filesystem they are handed a name that
+    // does not exist and report failure.
+    tig_file_mkdir(ARC_REPO_CASE);
+    CHECK(tig_file_archive("case\\out", ARC_SRC));
+    CHECK(archive_file_size(ARC_REPO_CASE_INDEX) > 4);
+    CHECK_INT(archive_file_size(ARC_REPO_CASE_TMP), -1);
+
+    (void)dir_out;
+    (void)dir_index;
+    (void)dir_tmp;
+
+    remove(ARC_REPO_CASE_INDEX);
+    remove(ARC_REPO_CASE_TMP);
+    remove(ARC_REPO_CASE "/out.tfaf");
+    remove(ARC_REPO_CASE "/out.tfaf.tmp");
+    remove(ARC_REPO_CASE);
+    remove(ARC_REPO_SUB_INDEX);
+    remove(ARC_REPO_SUB_TMP);
+    remove(ARC_REPO_SUB "/out.tfaf");
+    remove(ARC_REPO_SUB "/out.tfaf.tmp");
+    remove(ARC_REPO_SUB);
+    remove(ARC_REPO_INDEX);
+    remove(ARC_REPO_DATA);
+    remove(ARC_REPO_TMP_INDEX);
+    remove(ARC_REPO_TMP_DATA);
+    remove(ARC_REPO);
+    archive_fixture_remove();
+}
+
 // A missing archive is a failure, not an empty success.
 TEST(unarchiving_an_absent_archive_fails)
 {
@@ -896,5 +1133,8 @@ void test_file_suite(void)
     RUN(an_empty_directory_archives_to_a_bare_end_record);
     RUN(archiving_refuses_a_source_that_is_not_a_directory);
     RUN(an_index_truncated_before_the_end_record_fails);
+    RUN(archiving_to_a_repository_relative_path_lands_on_the_real_name);
+    RUN(a_failed_replacement_leaves_the_previous_archive_loadable);
+    RUN(a_failure_during_the_write_is_not_reported_as_a_successful_save);
     RUN(unarchiving_an_absent_archive_fails);
 }

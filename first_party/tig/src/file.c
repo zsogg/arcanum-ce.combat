@@ -57,6 +57,7 @@ static bool tig_file_empty_directory_native(const char* path);
 static bool tig_file_is_empty_directory_native(const char* path);
 static bool tig_file_is_directory_native(const char* path);
 static bool tig_file_archive_native(const char* dst, const char* src);
+static bool tig_file_archive_staged_is_complete(const char* index_path);
 static bool tig_file_unarchive_native(const char* src, const char* dst);
 static bool copy_file_path(const char* dst, const char* src);
 static bool copy_file_stream(TigFile* dst_stream, TigFile* src_stream);
@@ -261,6 +262,8 @@ bool tig_file_archive_native(const char* dst, const char* src)
 {
     char index_path[TIG_MAX_PATH];
     char data_path[TIG_MAX_PATH];
+    char index_tmp[TIG_MAX_PATH];
+    char data_tmp[TIG_MAX_PATH];
     TigFile* index_stream;
     TigFile* data_stream;
     bool success;
@@ -271,15 +274,51 @@ bool tig_file_archive_native(const char* dst, const char* src)
     }
 
     SDL_snprintf(index_path, sizeof(index_path), "%s.tfai", dst);
-    index_stream = tig_file_fopen_native(index_path, "wb");
+    SDL_snprintf(data_path, sizeof(data_path), "%s.tfaf", dst);
+
+    // FIX: this wrote both halves directly onto the destination, opened "wb",
+    // and every failure from there on damaged the archive that was already
+    // there - which for `gamelib_save` is the player's previous save. Card R2,
+    // review finding F2. Two failures, both reproduced in `tests/test_file.c`:
+    //
+    //  * The `.tfaf` open failing left the `.tfai` already truncated to zero
+    //    by its own "wb", and the early return did not put it back.
+    //  * Worse, and not the case the review described: the writes are
+    //    buffered, so the worker saw success and the failure only appeared
+    //    when the buffer was flushed at `tig_file_fclose` - whose result both
+    //    call sites discarded. `success` stayed true, the cleanup below never
+    //    ran, and this function **returned true**. `gamelib_save` took that
+    //    and logged "Save Complete." Measured 2026-09-08: over a valid
+    //    97-byte index, 12 bytes on disk and a claimed success.
+    //
+    // So the destination is not touched until there is something complete to
+    // put there. Staging names sit beside it, every write is checked, both
+    // closes are checked because that is where a buffered failure surfaces,
+    // and the end record is read back before either rename.
+    //
+    // This is a departure from the original at 0x52E430, and it is licensed:
+    // `tig_file_archive` has one caller in the tree, `gamelib_save` archiving
+    // `Save\Current`, so everything it writes is save bytes and the save
+    // format is Compatible (card H4). See FIDELITY-CONTRACT.md, *The archive
+    // row is the readers*.
+    //
+    // What this does NOT give: the two renames are atomic individually and
+    // not as a pair, so a crash between them still leaves a new index beside
+    // an old payload. The whole-slot commit point is `gamelib_save`'s, not
+    // this function's. Data is renamed first so that a failure to place it
+    // leaves the previous *pair* intact rather than half-replaced.
+    SDL_snprintf(index_tmp, sizeof(index_tmp), "%s.tfai.tmp", dst);
+    SDL_snprintf(data_tmp, sizeof(data_tmp), "%s.tfaf.tmp", dst);
+
+    index_stream = tig_file_fopen_native(index_tmp, "wb");
     if (index_stream == NULL) {
         return false;
     }
 
-    SDL_snprintf(data_path, sizeof(data_path), "%s.tfaf", dst);
-    data_stream = tig_file_fopen_native(data_path, "wb");
+    data_stream = tig_file_fopen_native(data_tmp, "wb");
     if (data_stream == NULL) {
         tig_file_fclose(index_stream);
+        tig_file_remove_native(index_tmp);
         return false;
     }
 
@@ -291,15 +330,69 @@ bool tig_file_archive_native(const char* dst, const char* src)
         }
     }
 
-    tig_file_fclose(data_stream);
-    tig_file_fclose(index_stream);
-
-    if (!success) {
-        tig_file_remove_native(data_path);
-        tig_file_remove_native(index_path);
+    // Both closes are attempted whatever happened, and both results count: a
+    // buffered write that never reached the file reports here and nowhere
+    // else. `!= 0` rather than `== EOF` because that is the documented
+    // failure return.
+    if (tig_file_fclose(data_stream) != 0) {
+        success = false;
     }
 
-    return success;
+    if (tig_file_fclose(index_stream) != 0) {
+        success = false;
+    }
+
+    // Completeness, not just an absence of errors: the index has to end in
+    // the tag-3 end record, which is the same thing a reader stops at.
+    if (success && !tig_file_archive_staged_is_complete(index_tmp)) {
+        success = false;
+    }
+
+    if (!success) {
+        tig_file_remove_native(data_tmp);
+        tig_file_remove_native(index_tmp);
+        return false;
+    }
+
+    if (tig_file_rename_native(data_tmp, data_path) != 0) {
+        tig_file_remove_native(data_tmp);
+        tig_file_remove_native(index_tmp);
+        return false;
+    }
+
+    if (tig_file_rename_native(index_tmp, index_path) != 0) {
+        tig_file_remove_native(index_tmp);
+        return false;
+    }
+
+    return true;
+}
+
+// Does the staged index end in the end record a reader stops at? Written for
+// card R2: `tig_file_archive_native` verifies its staged bytes before it
+// renames them over a save that currently loads.
+static bool tig_file_archive_staged_is_complete(const char* index_path)
+{
+    TigFile* stream;
+    int size;
+    int type = 0;
+
+    stream = tig_file_fopen_native(index_path, "rb");
+    if (stream == NULL) {
+        return false;
+    }
+
+    size = tig_file_filelength(stream);
+    if (size < (int)sizeof(type)
+        || tig_file_fseek(stream, size - (int)sizeof(type), SEEK_SET) != 0
+        || tig_file_fread(&type, sizeof(type), 1, stream) != 1) {
+        tig_file_fclose(stream);
+        return false;
+    }
+
+    tig_file_fclose(stream);
+
+    return type == 3;
 }
 
 // 0x52E550
@@ -1267,6 +1360,12 @@ int tig_file_remove_native(const char* file_name)
         if ((repo->type & TIG_FILE_PLAIN) != 0) {
             compat_join_path(path, sizeof(path), repo->path, file_name);
 
+            // FIX (porting bug #46): see `tig_file_rename_native`. Without
+            // this, removing a repository-relative file whose directory is
+            // spelled in another case silently does nothing and reports
+            // failure.
+            compat_resolve_path(path);
+
             if (SDL_RemovePath(path)) {
                 repo = repo->next;
                 while (repo != NULL) {
@@ -1308,6 +1407,21 @@ int tig_file_rename_native(const char* old_file_name, const char* new_file_name)
         if ((repo->type & TIG_FILE_PLAIN) != 0) {
             compat_join_path(old_path, sizeof(old_path), repo->path, old_file_name);
             compat_join_path(new_path, sizeof(new_path), repo->path, new_file_name);
+
+            // FIX (porting bug #46): `tig_file_open_internal_native` resolves
+            // the joined path and these two did not, so on a case-sensitive
+            // filesystem a name the *open* path reaches is one the rename and
+            // remove paths cannot find. The original ran on Windows, where the
+            // filesystem folded case for it; CE's shim is `compat_resolve_path`
+            // and it was simply missing here.
+            //
+            // It stayed invisible because nothing in the port renamed a game
+            // file, and a failed remove only leaked one. Card R2's staged
+            // archive rename is the first caller that depends on it, and it
+            // failed on `save\\SlotAuto` against a `Save` directory - the
+            // shape `tests/test_file.c` now pins.
+            compat_resolve_path(old_path);
+            compat_resolve_path(new_path);
 
             if (SDL_RenamePath(old_path, new_path)) {
                 return 0;
