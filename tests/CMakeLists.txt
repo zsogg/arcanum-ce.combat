@@ -59,6 +59,7 @@ add_executable(arcanum-tests
     "test_area.c"
     "test_provenance.c"
     "test_determinism.c"
+    "test_script.c"
     "obj_harness.c"
     "obj_harness.h"
     "tests_main.c"
@@ -553,6 +554,60 @@ add_dependencies(arcanum-tests arcanum-dialog-test-obj)
 
 target_link_libraries(arcanum-tests PRIVATE "${ANIM_TEST_OBJ}")
 add_dependencies(arcanum-tests arcanum-anim-test-obj)
+
+
+# The same objcopy trick again, for `script.c`, so the unit suite can execute
+# real VM opcodes through `script_execute_action`.
+#
+# Card R1 / review finding F1: `SAT_DIVIDE` added instead of dividing. The
+# handler is `static` and takes a `ScriptState*` whose struct is file-local, so
+# there is no way to reach it from a test without either changing the source or
+# doing this. Globalizing costs no source change and no runtime behaviour: the
+# object is swapped in ahead of `arcanum-game`, exactly as `dialog_globalized.o`
+# is.
+#
+# `script_global_vars` comes with it, and is the reason this works without
+# game startup. It is the `static int*` the getters and setters index; the
+# suite points it at its own array instead of calling `script_init`, which
+# would want file I/O and the rest of the engine. It is *data*, so it is listed
+# in DATA_SYMS - the verify step looks for a different nm class for those (a
+# pointer in .bss is `B`, not `T`), and a data symbol in SYMS would fail a
+# correct build.
+set(SCRIPT_TEST_STATICS
+    script_execute_action
+)
+set(SCRIPT_TEST_DATA
+    script_global_vars
+    script_global_flags
+)
+set(SCRIPT_TEST_OBJ "${CMAKE_CURRENT_BINARY_DIR}/script_globalized.o")
+set(_script_globalize_args "")
+foreach(sym ${SCRIPT_TEST_STATICS} ${SCRIPT_TEST_DATA})
+    list(APPEND _script_globalize_args "--globalize-symbol=${sym}")
+endforeach()
+
+file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/scriptobj")
+
+add_custom_command(
+    OUTPUT "${SCRIPT_TEST_OBJ}"
+    COMMAND "${CMAKE_AR}" x "$<TARGET_FILE:arcanum-game>" script.c.o
+    COMMAND "${CMAKE_OBJCOPY}" ${_script_globalize_args} script.c.o "${SCRIPT_TEST_OBJ}"
+    COMMAND "${CMAKE_COMMAND}" -E rm -f script.c.o
+    COMMAND "${CMAKE_COMMAND}"
+        "-DOBJ=${SCRIPT_TEST_OBJ}"
+        "-DSYMS=${SCRIPT_TEST_STATICS}"
+        "-DDATA_SYMS=${SCRIPT_TEST_DATA}"
+        "-DNM=${CMAKE_NM}"
+        -P "${CMAKE_CURRENT_SOURCE_DIR}/verify_globalized.cmake"
+    WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/scriptobj"
+    DEPENDS arcanum-game
+    COMMENT "tests: globalizing script.c statics (no source change)"
+    VERBATIM
+)
+
+add_custom_target(arcanum-script-test-obj DEPENDS "${SCRIPT_TEST_OBJ}")
+target_link_libraries(arcanum-tests PRIVATE "${SCRIPT_TEST_OBJ}")
+add_dependencies(arcanum-tests arcanum-script-test-obj)
 
 
 # The CE half of the archive differential. `arcanum-work/scripts/verify_dbmaker.py`

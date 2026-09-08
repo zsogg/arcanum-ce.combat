@@ -1593,10 +1593,33 @@ int script_execute_action(ScriptAction* action, int line, ScriptState* state)
         int value1 = script_get_value(action->op_type[1], action->op_value[1], state);
         int value2 = script_get_value(action->op_type[2], action->op_value[2], state);
         if (value2 != 0) {
+            int quotient;
+
+            // FIX (porting bug #45): this stored `value1 + value2` - the
+            // SAT_ADD case above with a zero guard added, and one of the two
+            // pastes was never edited. The original divides: at 0x4474FE it
+            // does `mov eax,ebx ; cdq ; idiv ecx`, which is signed division
+            // truncating toward zero, exactly what C's `/` gives.
+            //
+            // The zero divisor above is faithful, not defensive: `test
+            // ecx,ecx ; je 0x44ADB0` at 0x4474F6 skips the store entirely, so
+            // the destination keeps whatever it held.
+            if (value1 == INT_MIN && value2 == -1) {
+                // NOTE: the one case with no faithful answer to copy. `idiv`
+                // raises #DE here because the quotient is unrepresentable, so
+                // the original faults; C says the expression is undefined,
+                // which would let the compiler do anything at all. Neither is
+                // acceptable in a port, so the result is defined as the
+                // two's-complement wrap and execution continues.
+                quotient = INT_MIN;
+            } else {
+                quotient = value1 / value2;
+            }
+
             script_set_value(action->op_type[0],
                 action->op_value[0],
                 state,
-                value1 + value2);
+                quotient);
         }
         return NEXT;
     }
