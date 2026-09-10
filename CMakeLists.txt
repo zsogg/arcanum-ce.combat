@@ -74,6 +74,8 @@ set(SRCS
     "src/game/gameinit.h"
     "src/game/gamelib.c"
     "src/game/gamelib.h"
+    "src/game/save_transaction.c"
+    "src/game/save_transaction.h"
     "src/game/gfade.c"
     "src/game/gfade.h"
     "src/game/gmovie.c"

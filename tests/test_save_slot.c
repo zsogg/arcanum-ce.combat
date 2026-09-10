@@ -1,360 +1,482 @@
-// The save slot's commit point and its recovery pass. Card R2, review F2.
-//
-// `gamelib_save` used to write a slot's four files - `.gsi`, `.bmp`, `.tfai`,
-// `.tfaf` - with nothing tying them together, and the `.gsi` first. Overwriting
-// a slot therefore destroyed the previous save in stages, and a failure at any
-// point left new metadata describing an archive that was old, half-written or
-// gone.
-//
-// Two things fix that, and this suite covers the half that can be reached
-// without a running game:
-//
-//   * the `.gsi` is written last, which makes it the commit point for free -
-//     `gamelib_savelist_create` enumerates `save\slot*.*` and keeps only the
-//     `.gsi` names, so a slot without one is not a save the player can see;
-//   * the previous archive is moved to `.bak` first, and `gamelib_slot_recover`
-//     puts it back when a save did not finish.
-//
-// `gamelib_save` itself needs a loaded module, a player and a screen to
-// thumbnail, so the ordering is covered end to end by
-// `arcanum-work/harness/save-matrix.sh --slots SlotXXXX` instead. What is
-// tested here is the recovery pass, which is pure file handling.
-
+// R2: exercise the production four-file transaction, not a second model of it.
+// Every fault/crash boundary is in real I/O. Archives are generated and loaded
+// by TIG; metadata and thumbnail fixtures must agree with their generation.
 #include "game/gamelib.h"
+#include "game/save_transaction.h"
 
-#include <stdio.h>
-#include <string.h>
-
+#include <dirent.h>
 #include <signal.h>
+#include <stdlib.h>
+#include <sys/stat.h>
 #include <sys/wait.h>
 #include <unistd.h>
 
+#include "test_harness.h"
 #include "tig/file.h"
 
-// Globalized for the suite; see tests/CMakeLists.txt.
-extern bool gamelib_slot_backup(const char* name);
-extern void gamelib_slot_backup_undo(const char* name);
-extern void gamelib_slot_backup_release(const char* name);
+#define REPO "./arcanum_test_slot_repo"
+#define TXN REPO "/Save/ce-save-transaction"
+#define OLD_DATA "the previous save's complete data"
+#define NEW_DATA "replacement data, deliberately a different length"
 
-#include "test_harness.h"
+static int events;
+static int fail_at;
+static int kill_at;
+static bool armed;
+static bool fail_publish;
+static bool fail_restore;
+static bool fail_cleanup;
+static const char* fail_open;
+static const char* fail_close;
+static TigFile* close_target;
+static int fake_bmp; // 0: real renderer, 1: successful fixture, 2: failure
+static const char* slot_name = "Slot0001";
+static const char* const ext[] = { "tfai", "tfaf", "bmp", "gsi" };
 
-#define SLOT_REPO "./arcanum_test_slot_repo"
-#define SLOT_SAVE SLOT_REPO "/save"
-#define SLOT_INDEX SLOT_SAVE "/Slot0001.tfai"
-#define SLOT_DATA SLOT_SAVE "/Slot0001.tfaf"
-#define SLOT_INDEX_BAK SLOT_SAVE "/Slot0001.tfai.bak"
-#define SLOT_DATA_BAK SLOT_SAVE "/Slot0001.tfaf.bak"
-#define SLOT_INDEX_TMP SLOT_SAVE "/Slot0001.tfai.tmp"
-#define SLOT_DATA_TMP SLOT_SAVE "/Slot0001.tfaf.tmp"
+extern int __real_tig_file_rename(const char*, const char*);
+extern int __real_tig_file_remove(const char*);
+extern TigFile* __real_tig_file_fopen(const char*, const char*);
+extern int __real_tig_file_fclose(TigFile*);
+extern size_t __real_tig_file_fwrite(const void*, size_t, size_t, TigFile*);
+extern int __real_tig_video_buffer_save_to_bmp(TigVideoBufferSaveToBmpInfo*);
 
-static const char* const SLOT_PATHS[] = {
-    SLOT_INDEX,
-    SLOT_DATA,
-    SLOT_INDEX_BAK,
-    SLOT_DATA_BAK,
-    SLOT_INDEX_TMP,
-    SLOT_DATA_TMP,
-    SLOT_SAVE,
-    SLOT_REPO,
-};
-
-static void slot_clear(void)
+static bool fault(void)
 {
-    size_t index;
+    if (!armed) {
+        return false;
+    }
+    events++;
+    return fail_at != 0 && events == fail_at;
+}
 
-    for (index = 0; index < sizeof(SLOT_PATHS) / sizeof(SLOT_PATHS[0]); index++) {
-        remove(SLOT_PATHS[index]);
+static void crash(void)
+{
+    if (armed && kill_at != 0 && events == kill_at) {
+        kill(getpid(), SIGKILL);
+        _exit(99);
     }
 }
 
-static void slot_begin(void)
+int __wrap_tig_file_rename(const char* src, const char* dst)
 {
-    slot_clear();
-    tig_file_mkdir(SLOT_REPO);
-    tig_file_mkdir(SLOT_SAVE);
-    CHECK(tig_file_repository_add(SLOT_REPO));
-}
-
-static int slot_write(const char* path, const char* text)
-{
-    FILE* stream = fopen(path, "wb");
-
-    if (stream == NULL) {
-        return 0;
+    int rc;
+    if (fault()
+        || (fail_publish && strstr(src, "new.tfaf") != NULL)
+        || (fail_restore && strstr(src, "restore.tmp") != NULL)) {
+        return 1;
     }
-
-    fputs(text, stream);
-    fclose(stream);
-
-    return 1;
+    rc = __real_tig_file_rename(src, dst);
+    crash();
+    return rc;
 }
 
-// Returns the file's contents, or NULL when it is not there.
-static const char* slot_read(const char* path, char* buffer, size_t size)
+int __wrap_tig_file_remove(const char* path)
 {
-    FILE* stream = fopen(path, "rb");
-    size_t got;
+    int rc;
+    if (fault() || (fail_cleanup && strstr(path, "old.tfaf") != NULL)) {
+        return 1;
+    }
+    rc = __real_tig_file_remove(path);
+    crash();
+    return rc;
+}
 
-    if (stream == NULL) {
+TigFile* __wrap_tig_file_fopen(const char* path, const char* mode)
+{
+    TigFile* stream;
+    if (fault() || (fail_open != NULL && strstr(path, fail_open) != NULL)) {
         return NULL;
     }
-
-    got = fread(buffer, 1, size - 1, stream);
-    fclose(stream);
-    buffer[got] = '\0';
-
-    return buffer;
+    stream = __real_tig_file_fopen(path, mode);
+    if (fail_close != NULL && strchr(mode, 'w') != NULL && strstr(path, fail_close) != NULL) {
+        close_target = stream;
+    }
+    crash();
+    return stream;
 }
 
-// The case the whole design exists for: a save that did not finish leaves the
-// previous generation in `.bak`, and the player gets it back.
-TEST(recovery_restores_the_previous_generation)
+int __wrap_tig_file_fclose(TigFile* stream)
 {
-    char buffer[64];
-
-    slot_begin();
-
-    // The half-written replacement, and the good save it displaced.
-    CHECK(slot_write(SLOT_INDEX, "half written"));
-    CHECK(slot_write(SLOT_DATA, "half written"));
-    CHECK(slot_write(SLOT_INDEX_BAK, "the good index"));
-    CHECK(slot_write(SLOT_DATA_BAK, "the good payload"));
-
-    gamelib_slot_recover();
-
-    CHECK_STR(slot_read(SLOT_INDEX, buffer, sizeof(buffer)), "the good index");
-    CHECK_STR(slot_read(SLOT_DATA, buffer, sizeof(buffer)), "the good payload");
-
-    // The backup is consumed, not left to be restored a second time over a
-    // later good save.
-    CHECK(slot_read(SLOT_INDEX_BAK, buffer, sizeof(buffer)) == NULL);
-    CHECK(slot_read(SLOT_DATA_BAK, buffer, sizeof(buffer)) == NULL);
-
-    slot_clear();
+    bool failed = fault() || (stream != NULL && stream == close_target);
+    int rc = __real_tig_file_fclose(stream);
+    if (stream == close_target) {
+        close_target = NULL;
+    }
+    crash();
+    return failed ? EOF : rc;
 }
 
-// A second interruption, this time during recovery itself: one half restored,
-// the other still to do. Running it again has to finish the job rather than
-// get confused by the half-done state.
-TEST(recovery_is_idempotent_and_finishes_a_partial_recovery)
+size_t __wrap_tig_file_fwrite(const void* data, size_t size, size_t count, TigFile* stream)
 {
-    char buffer[64];
-
-    slot_begin();
-
-    // As if the index had already been put back and the process died before
-    // the payload was.
-    CHECK(slot_write(SLOT_INDEX, "the good index"));
-    CHECK(slot_write(SLOT_DATA, "half written"));
-    CHECK(slot_write(SLOT_DATA_BAK, "the good payload"));
-
-    gamelib_slot_recover();
-
-    CHECK_STR(slot_read(SLOT_INDEX, buffer, sizeof(buffer)), "the good index");
-    CHECK_STR(slot_read(SLOT_DATA, buffer, sizeof(buffer)), "the good payload");
-
-    // And again on an already-clean slot: nothing to do, nothing broken.
-    gamelib_slot_recover();
-
-    CHECK_STR(slot_read(SLOT_INDEX, buffer, sizeof(buffer)), "the good index");
-    CHECK_STR(slot_read(SLOT_DATA, buffer, sizeof(buffer)), "the good payload");
-
-    slot_clear();
+    size_t written;
+    if (fault()) {
+        return 0;
+    }
+    written = __real_tig_file_fwrite(data, size, count, stream);
+    crash();
+    return written;
 }
 
-// `tig_file_archive`'s staging files, abandoned by an interrupted save. They
-// are not a generation to restore - they are incomplete by definition - so
-// they are discarded, and a good save beside them is left alone.
-TEST(recovery_discards_staging_files_and_keeps_a_good_save)
+int __wrap_tig_video_buffer_save_to_bmp(TigVideoBufferSaveToBmpInfo* info)
 {
-    char buffer[64];
-
-    slot_begin();
-
-    CHECK(slot_write(SLOT_INDEX, "the good index"));
-    CHECK(slot_write(SLOT_DATA, "the good payload"));
-    CHECK(slot_write(SLOT_INDEX_TMP, "abandoned"));
-    CHECK(slot_write(SLOT_DATA_TMP, "abandoned"));
-
-    gamelib_slot_recover();
-
-    CHECK(slot_read(SLOT_INDEX_TMP, buffer, sizeof(buffer)) == NULL);
-    CHECK(slot_read(SLOT_DATA_TMP, buffer, sizeof(buffer)) == NULL);
-
-    CHECK_STR(slot_read(SLOT_INDEX, buffer, sizeof(buffer)), "the good index");
-    CHECK_STR(slot_read(SLOT_DATA, buffer, sizeof(buffer)), "the good payload");
-
-    slot_clear();
+    TigFile* stream;
+    bool ok;
+    if (fake_bmp == 0) {
+        return __real_tig_video_buffer_save_to_bmp(info);
+    }
+    if (fake_bmp == 2) {
+        return TIG_ERR_IO;
+    }
+    stream = tig_file_fopen(info->path, "wb");
+    if (stream == NULL) {
+        return TIG_ERR_IO;
+    }
+    ok = tig_file_fwrite("fixture bmp", 11, 1, stream) == 1;
+    if (tig_file_fclose(stream) != 0) {
+        ok = false;
+    }
+    return ok ? TIG_OK : TIG_ERR_IO;
 }
 
-// The ordinary case, which must stay cheap and must not touch anything: no
-// interrupted save, nothing to recover.
-TEST(recovery_leaves_an_undisturbed_slot_exactly_as_it_was)
+// Fixture cleanup deliberately uses libc, independent of the code under test.
+static void erase(const char* path)
 {
-    char buffer[64];
-
-    slot_begin();
-
-    CHECK(slot_write(SLOT_INDEX, "the good index"));
-    CHECK(slot_write(SLOT_DATA, "the good payload"));
-
-    gamelib_slot_recover();
-
-    CHECK_STR(slot_read(SLOT_INDEX, buffer, sizeof(buffer)), "the good index");
-    CHECK_STR(slot_read(SLOT_DATA, buffer, sizeof(buffer)), "the good payload");
-
-    slot_clear();
-}
-
-// The acceptance item the constructed cases above cannot meet: a save killed
-// at the commit boundary, with the state produced by the interruption rather
-// than written out by hand.
-//
-// The child runs the real `gamelib_slot_backup` - globalized for the suite,
-// see tests/CMakeLists.txt - then writes a replacement archive and dies with
-// SIGKILL before the `.gsi` that would commit it. SIGKILL cannot be caught, so
-// nothing in the child gets to tidy up: what the parent finds is exactly what
-// a power cut or an OOM kill would leave.
-TEST(a_save_killed_at_the_commit_boundary_recovers_the_previous_generation)
-{
-    char buffer[64];
-    pid_t child;
-    int status = 0;
-
-    slot_begin();
-
-    CHECK(slot_write(SLOT_INDEX, "the good index"));
-    CHECK(slot_write(SLOT_DATA, "the good payload"));
-
-    fflush(NULL);
-    child = fork();
-    if (child == 0) {
-        // Exactly what `gamelib_save` does, up to the point of no return.
-        if (!gamelib_slot_backup("Slot0001")) {
-            _exit(1);
+    DIR* dir = opendir(path);
+    struct dirent* entry;
+    char child[1024];
+    if (dir == NULL) {
+        unlink(path);
+        return;
+    }
+    while ((entry = readdir(dir)) != NULL) {
+        if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0) {
+            continue;
         }
-
-        slot_write(SLOT_INDEX, "replacement, incomplete");
-        slot_write(SLOT_DATA, "replacement, incomplete");
-
-        // No `.gsi` is written: the save never commits.
-        kill(getpid(), SIGKILL);
-        _exit(2);
+        snprintf(child, sizeof(child), "%s/%s", path, entry->d_name);
+        erase(child);
     }
-
-    CHECK(child > 0);
-    if (child > 0) {
-        CHECK(waitpid(child, &status, 0) == child);
-        // It must really have been killed, not have exited early - otherwise
-        // this case is testing a path the child chose rather than a crash.
-        CHECK(WIFSIGNALED(status));
-        CHECK_INT(WIFSIGNALED(status) ? WTERMSIG(status) : 0, SIGKILL);
-    }
-
-    // The interrupted replacement is on disk and the previous generation is in
-    // `.bak`, which is the state recovery exists for.
-    CHECK_STR(slot_read(SLOT_INDEX, buffer, sizeof(buffer)), "replacement, incomplete");
-
-    gamelib_slot_recover();
-
-    CHECK_STR(slot_read(SLOT_INDEX, buffer, sizeof(buffer)), "the good index");
-    CHECK_STR(slot_read(SLOT_DATA, buffer, sizeof(buffer)), "the good payload");
-    CHECK(slot_read(SLOT_INDEX_BAK, buffer, sizeof(buffer)) == NULL);
-    CHECK(slot_read(SLOT_DATA_BAK, buffer, sizeof(buffer)) == NULL);
-
-    slot_clear();
+    closedir(dir);
+    rmdir(path);
 }
 
-// A save killed at the same point in a slot that did not exist yet. There is
-// no previous generation to restore, so the right outcome is no slot at all -
-// never a half one that the save list would show and a load would choke on.
-TEST(a_killed_save_of_a_new_slot_leaves_no_half_slot)
+static void write_text(const char* path, const char* text)
 {
-    char buffer[64];
-    pid_t child;
-    int status = 0;
+    FILE* stream = fopen(path, "wb");
+    CHECK(stream != NULL);
+    if (stream != NULL) {
+        CHECK(fputs(text, stream) >= 0);
+        CHECK_INT(fclose(stream), 0);
+    }
+}
 
-    slot_begin();
+static void check_text(const char* path, const char* text)
+{
+    char buffer[256] = { 0 };
+    FILE* stream = fopen(path, "rb");
+    CHECK(stream != NULL);
+    if (stream != NULL) {
+        fread(buffer, 1, sizeof(buffer) - 1, stream);
+        fclose(stream);
+        CHECK_STR(buffer, text);
+    }
+}
 
-    fflush(NULL);
-    child = fork();
-    if (child == 0) {
-        if (!gamelib_slot_backup("Slot0001")) {
-            _exit(1);
+static void reset_faults(void)
+{
+    armed = false;
+    events = fail_at = kill_at = 0;
+    fail_publish = fail_restore = fail_cleanup = false;
+    fail_open = fail_close = NULL;
+    close_target = NULL;
+    fake_bmp = 0;
+}
+
+static void begin(bool old_exists)
+{
+    char path[TIG_MAX_PATH];
+    reset_faults();
+    erase(REPO);
+    mkdir(REPO, 0700);
+    mkdir(REPO "/Save", 0700); // The real installation's capital S.
+    mkdir(REPO "/source", 0700);
+    mkdir(REPO "/unpacked", 0700);
+    CHECK(tig_file_repository_add(REPO));
+    if (old_exists) {
+        write_text(REPO "/source/data.sav", OLD_DATA);
+        snprintf(path, sizeof(path), "save\\%s", slot_name);
+        CHECK(tig_file_archive(path, "source"));
+        snprintf(path, sizeof(path), REPO "/Save/%s.bmp", slot_name);
+        write_text(path, "old bmp");
+        snprintf(path, sizeof(path), REPO "/Save/%sdescription.gsi", slot_name);
+        write_text(path, "old metadata");
+    }
+    CHECK(save_transaction_begin());
+    write_text(REPO "/source/data.sav", NEW_DATA);
+    CHECK(tig_file_archive(SAVE_TRANSACTION_STAGE, "source"));
+    write_text(TXN "/new.bmp", "new bmp");
+    write_text(TXN "/new.gsi", "new metadata");
+}
+
+static void end(void)
+{
+    reset_faults();
+    CHECK(tig_file_repository_remove(REPO));
+    erase(REPO);
+}
+
+// Asserts archive LOADABILITY and both companion files, not just existence.
+static void check_generation(bool is_new, bool old_exists)
+{
+    char path[TIG_MAX_PATH];
+    int i;
+    if (!is_new && !old_exists) {
+        for (i = 0; i < 4; i++) {
+            snprintf(path, sizeof(path), REPO "/Save/%s%s.%s", slot_name,
+                i == 3 ? "description" : "", ext[i]);
+            CHECK(access(path, F_OK) != 0);
         }
-
-        slot_write(SLOT_INDEX, "replacement, incomplete");
-        slot_write(SLOT_DATA, "replacement, incomplete");
-        kill(getpid(), SIGKILL);
-        _exit(2);
+        return;
     }
-
-    CHECK(child > 0);
-    if (child > 0) {
-        CHECK(waitpid(child, &status, 0) == child);
-        CHECK(WIFSIGNALED(status));
-    }
-
-    gamelib_slot_recover();
-
-    // Nothing was set aside, because there was nothing there. Recovery has no
-    // generation to restore - and the archive that is left has no `.gsi`, so
-    // `gamelib_savelist_create` will not offer it as a save.
-    CHECK(slot_read(SLOT_INDEX_BAK, buffer, sizeof(buffer)) == NULL);
-    CHECK(slot_read(SLOT_DATA_BAK, buffer, sizeof(buffer)) == NULL);
-
-    slot_clear();
+    snprintf(path, sizeof(path), "save\\%s", slot_name);
+    CHECK(tig_file_unarchive(path, "unpacked"));
+    check_text(REPO "/unpacked/data.sav", is_new ? NEW_DATA : OLD_DATA);
+    snprintf(path, sizeof(path), REPO "/Save/%s.bmp", slot_name);
+    check_text(path, is_new ? "new bmp" : "old bmp");
+    snprintf(path, sizeof(path), REPO "/Save/%sdescription.gsi", slot_name);
+    check_text(path, is_new ? "new metadata" : "old metadata");
 }
 
-// `gamelib_slot_backup_undo` on a slot that had no previous generation: the
-// archive just written is removed, so a failed save of a new slot leaves the
-// tree as it found it.
-TEST(undo_removes_a_new_slots_archive_when_there_is_nothing_to_restore)
+TEST(clean_commit_preserves_slot_names_and_loadable_archives)
 {
-    char buffer[64];
-
-    slot_begin();
-
-    CHECK(slot_write(SLOT_INDEX, "written by the failed save"));
-    CHECK(slot_write(SLOT_DATA, "written by the failed save"));
-
-    gamelib_slot_backup_undo("Slot0001");
-
-    CHECK(slot_read(SLOT_INDEX, buffer, sizeof(buffer)) == NULL);
-    CHECK(slot_read(SLOT_DATA, buffer, sizeof(buffer)) == NULL);
-
-    slot_clear();
+    const char* names[] = { "Slot0001", "SlotAuto", "Slot0000" };
+    unsigned int i;
+    for (i = 0; i < sizeof(names) / sizeof(names[0]); i++) {
+        slot_name = names[i];
+        begin(true);
+        CHECK(save_transaction_commit(slot_name, "description"));
+        CHECK(save_transaction_recover());
+        check_generation(true, true);
+        CHECK(access(TXN, F_OK) != 0);
+        end();
+    }
+    slot_name = "Slot0001";
 }
 
-// And `gamelib_slot_backup_release` drops the previous generation once the
-// save has committed, so backups do not accumulate one per save.
-TEST(release_drops_the_previous_generation_after_a_commit)
+TEST(partial_cleanup_never_rolls_back_a_committed_generation)
 {
-    char buffer[64];
+    begin(true);
+    fail_cleanup = true;
+    CHECK(save_transaction_commit(slot_name, "description"));
+    CHECK(access(TXN "/old.tfai", F_OK) != 0);
+    CHECK(access(TXN "/old.tfaf", F_OK) == 0);
+    CHECK(access(TXN "/settled", F_OK) == 0);
+    CHECK(!save_transaction_recover());
+    check_generation(true, true);
+    fail_cleanup = false;
+    CHECK(save_transaction_recover());
+    CHECK(save_transaction_recover());
+    check_generation(true, true);
+    end();
+}
 
-    slot_begin();
+TEST(failed_restore_retains_all_backups_and_blocks_readers)
+{
+    GameSaveList list;
+    begin(true);
+    fail_publish = true;
+    fail_restore = true;
+    CHECK(!save_transaction_commit(slot_name, "description"));
+    CHECK(access(TXN "/pending", F_OK) == 0);
+    CHECK(access(TXN "/old.tfai", F_OK) == 0);
+    CHECK(access(TXN "/old.tfaf", F_OK) == 0);
+    CHECK(!gamelib_slot_recover());
+    gamelib_savelist_create(&list);
+    CHECK_INT(list.count, 0);
+    CHECK(!gamelib_load(slot_name)); // Must return before touching game state.
+    reset_faults();
+    CHECK(save_transaction_recover());
+    check_generation(false, true);
+    end();
+}
 
-    CHECK(slot_write(SLOT_INDEX, "the committed index"));
-    CHECK(slot_write(SLOT_INDEX_BAK, "superseded"));
-    CHECK(slot_write(SLOT_DATA_BAK, "superseded"));
+TEST(metadata_and_thumbnail_failures_do_not_touch_the_old_slot)
+{
+    GameSaveInfo info = { 0 };
+    int kind;
+    strcpy(info.name, "Slot0001");
+    strcpy(info.description, "description");
+    strcpy(info.module_name, "Arcanum");
+    strcpy(info.pc_name, "Player");
+    for (kind = 0; kind < 4; kind++) {
+        begin(true);
+        fake_bmp = kind == 0 ? 2 : 1;
+        if (kind == 1) {
+            fail_open = "new.gsi";
+        } else if (kind == 2) {
+            fail_close = "new.gsi";
+        } else if (kind == 3) {
+            // Actual buffered write failure, not just an injected return code.
+            unlink(TXN "/new.gsi");
+            CHECK_INT(symlink("/dev/full", TXN "/new.gsi"), 0);
+        }
+        CHECK(!gamelib_saveinfo_save(&info));
+        reset_faults();
+        check_generation(false, true);
+        CHECK(save_transaction_recover());
+        end();
+    }
+}
 
-    gamelib_slot_backup_release("Slot0001");
+TEST(every_commit_io_failure_recovers_a_whole_generation)
+{
+    int limit;
+    int point;
+    int old;
+    bool committed;
+    for (old = 0; old < 2; old++) {
+        begin(old != 0);
+        armed = true;
+        CHECK(save_transaction_commit(slot_name, "description"));
+        limit = events;
+        armed = false;
+        CHECK(limit > 10);
+        end();
+        for (point = 1; point <= limit; point++) {
+            begin(old != 0);
+            fail_at = point;
+            armed = true;
+            committed = save_transaction_commit(slot_name, "description");
+            reset_faults();
+            CHECK(save_transaction_recover());
+            CHECK(save_transaction_recover());
+            check_generation(committed, old != 0);
+            end();
+        }
+    }
+}
 
-    CHECK(slot_read(SLOT_INDEX_BAK, buffer, sizeof(buffer)) == NULL);
-    CHECK(slot_read(SLOT_DATA_BAK, buffer, sizeof(buffer)) == NULL);
-    CHECK_STR(slot_read(SLOT_INDEX, buffer, sizeof(buffer)), "the committed index");
+TEST(killing_the_real_commit_at_every_io_boundary_is_recoverable)
+{
+    int limit;
+    int point;
+    int old;
+    for (old = 0; old < 2; old++) {
+        begin(old != 0);
+        armed = true;
+        CHECK(save_transaction_commit(slot_name, "description"));
+        limit = events;
+        armed = false;
+        CHECK(limit > 10);
+        end();
+        for (point = 1; point <= limit; point++) {
+            pid_t child;
+            int status;
+            bool committed;
+            begin(old != 0);
+            fflush(NULL);
+            child = fork();
+            if (child == 0) {
+                kill_at = point;
+                armed = true;
+                _exit(save_transaction_commit(slot_name, "description") ? 0 : 1);
+            }
+            CHECK(child > 0);
+            if (child > 0) {
+                CHECK(waitpid(child, &status, 0) == child);
+                CHECK(WIFSIGNALED(status) && WTERMSIG(status) == SIGKILL);
+                // settled can itself have been cleaned up; with neither
+                // pending nor staged metadata left, publication completed.
+                committed = access(TXN "/settled", F_OK) == 0
+                    || (access(TXN "/pending", F_OK) != 0
+                        && access(TXN "/new.gsi", F_OK) != 0);
+                CHECK(save_transaction_recover());
+                CHECK(save_transaction_recover());
+                check_generation(committed, old != 0);
+            }
+            end();
+        }
+    }
+}
 
-    slot_clear();
+// A second failure or SIGKILL DURING rollback must leave enough information
+// for a third attempt. This exercises restoration copies and settled cleanup.
+static void leave_pending(void)
+{
+    begin(true);
+    fail_publish = true;
+    fail_restore = true;
+    CHECK(!save_transaction_commit(slot_name, "description"));
+    reset_faults();
+    CHECK(access(TXN "/pending", F_OK) == 0);
+}
+
+TEST(recovery_itself_survives_every_io_failure_and_interruption)
+{
+    int limit;
+    int point;
+    leave_pending();
+    armed = true;
+    CHECK(save_transaction_recover());
+    limit = events;
+    reset_faults();
+    end();
+    for (point = 1; point <= limit; point++) {
+        pid_t child;
+        int status;
+        leave_pending();
+        armed = true;
+        fail_at = point;
+        CHECK(!save_transaction_recover());
+        CHECK(access(TXN "/pending", F_OK) == 0 || access(TXN "/settled", F_OK) == 0
+            || access(TXN, F_OK) == 0); // Last directory removal may fail.
+        reset_faults();
+        CHECK(save_transaction_recover());
+        check_generation(false, true);
+        end();
+
+        leave_pending();
+        fflush(NULL);
+        child = fork();
+        if (child == 0) {
+            armed = true;
+            kill_at = point;
+            _exit(save_transaction_recover() ? 0 : 1);
+        }
+        CHECK(child > 0);
+        if (child > 0) {
+            CHECK(waitpid(child, &status, 0) == child);
+            CHECK(WIFSIGNALED(status) && WTERMSIG(status) == SIGKILL);
+            CHECK(save_transaction_recover());
+            CHECK(save_transaction_recover());
+            check_generation(false, true);
+        }
+        end();
+    }
+}
+
+TEST(legacy_backups_and_corrupt_records_are_preserved_not_guessed_at)
+{
+    begin(true);
+    write_text(REPO "/Save/Slot0001.tfai.bak", "ambiguous previous R2 backup");
+    CHECK(!save_transaction_recover());
+    check_text(REPO "/Save/Slot0001.tfai.bak", "ambiguous previous R2 backup");
+    check_generation(false, true);
+    unlink(REPO "/Save/Slot0001.tfai.bak");
+    write_text(TXN "/pending", "incomplete journal");
+    CHECK(!save_transaction_recover());
+    check_text(TXN "/pending", "incomplete journal");
+    check_generation(false, true);
+    end();
 }
 
 void test_save_slot_suite(void)
 {
-    RUN(recovery_restores_the_previous_generation);
-    RUN(recovery_is_idempotent_and_finishes_a_partial_recovery);
-    RUN(recovery_discards_staging_files_and_keeps_a_good_save);
-    RUN(recovery_leaves_an_undisturbed_slot_exactly_as_it_was);
-    RUN(a_save_killed_at_the_commit_boundary_recovers_the_previous_generation);
-    RUN(a_killed_save_of_a_new_slot_leaves_no_half_slot);
-    RUN(undo_removes_a_new_slots_archive_when_there_is_nothing_to_restore);
-    RUN(release_drops_the_previous_generation_after_a_commit);
+    RUN(clean_commit_preserves_slot_names_and_loadable_archives);
+    RUN(partial_cleanup_never_rolls_back_a_committed_generation);
+    RUN(failed_restore_retains_all_backups_and_blocks_readers);
+    RUN(metadata_and_thumbnail_failures_do_not_touch_the_old_slot);
+    RUN(every_commit_io_failure_recovers_a_whole_generation);
+    RUN(killing_the_real_commit_at_every_io_boundary_is_recoverable);
+    RUN(recovery_itself_survives_every_io_failure_and_interruption);
+    RUN(legacy_backups_and_corrupt_records_are_preserved_not_guessed_at);
 }

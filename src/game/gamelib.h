@@ -122,13 +122,15 @@ void gamelib_set_extra_save_func(GameExtraSaveFunc func);
 void gamelib_set_extra_load_func(GameExtraLoadFunc func);
 // CE (card R2): roll an interrupted save back to its previous generation.
 // Idempotent; called before slots are enumerated and before one is loaded.
-void gamelib_slot_recover(void);
+bool gamelib_slot_recover(void);
 void gamelib_savelist_create(GameSaveList* save_list);
 void gamelib_savelist_create_module(const char* module, GameSaveList* save_list);
 void gamelib_savelist_destroy(GameSaveList* save_list);
 void gamelib_savelist_sort(GameSaveList* save_list, GameSaveListOrder order, bool a3);
 bool gamelib_saveinfo_init(const char* name, const char* description, GameSaveInfo* save_info);
 void gamelib_saveinfo_exit(GameSaveInfo* save_info);
+// Writes metadata and thumbnail to SAVE_TRANSACTION_STAGE after begin().
+// The caller must check success before save_transaction_commit publishes them.
 bool gamelib_saveinfo_save(GameSaveInfo* save_info);
 bool gamelib_saveinfo_load(const char* name, GameSaveInfo* save_info);
 void gamelib_thumbnail_size_set(int width, int height);
