@@ -575,11 +575,15 @@ add_dependencies(arcanum-tests arcanum-anim-test-obj)
 # pointer in .bss is `B`, not `T`), and a data symbol in SYMS would fail a
 # correct build.
 set(SCRIPT_TEST_STATICS
+    script_execute_condition
     script_execute_action
+    script_file_validate
+    script_execute_file
 )
 set(SCRIPT_TEST_DATA
     script_global_vars
     script_global_flags
+    script_nested_execute_func
 )
 set(SCRIPT_TEST_OBJ "${CMAKE_CURRENT_BINARY_DIR}/script_globalized.o")
 set(_script_globalize_args "")
@@ -609,6 +613,28 @@ add_custom_command(
 add_custom_target(arcanum-script-test-obj DEPENDS "${SCRIPT_TEST_OBJ}")
 target_link_libraries(arcanum-tests PRIVATE "${SCRIPT_TEST_OBJ}")
 add_dependencies(arcanum-tests arcanum-script-test-obj)
+
+# A focused executable for the script VM. The full suite deliberately contains
+# subprocess crash specifications whose expected signal changes under UBSan;
+# this target lets the VM's boundary and repeated-invocation cases run cleanly
+# under the combined ASan/UBSan preset.
+add_executable(arcanum-script-tests
+    "test_harness.c"
+    "test_harness.h"
+    "test_script.c"
+    "script_tests_main.c"
+)
+target_include_directories(arcanum-script-tests PRIVATE
+    "${CMAKE_CURRENT_SOURCE_DIR}"
+)
+target_link_libraries(arcanum-script-tests PRIVATE
+    "${SCRIPT_TEST_OBJ}"
+    arcanum-game
+    tig
+    SDL3::SDL3
+)
+add_dependencies(arcanum-script-tests arcanum-script-test-obj)
+add_test(NAME arcanum-script-tests COMMAND arcanum-script-tests)
 
 
 # Inject I/O faults at the real save transaction's boundaries. The wrappers

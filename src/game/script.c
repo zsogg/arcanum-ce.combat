@@ -50,6 +50,7 @@
 #define NEXT -1
 #define RETURN_AND_SKIP_DEFAULT -2
 #define RETURN_AND_RUN_DEFAULT -3
+#define INVALID_OPERAND -5
 
 typedef struct ScriptCacheEntry {
     /* 0000 */ int script_id;
@@ -57,6 +58,19 @@ typedef struct ScriptCacheEntry {
     /* 0010 */ int ref_count;
     /* 0014 */ ScriptFile* file;
 } ScriptCacheEntry;
+
+typedef struct ScriptOperandError {
+    int script_id;
+    const char* script_name;
+    const char* instruction;
+    const char* branch;
+    const char* domain;
+    int line;
+    int slot;
+    int value;
+    int minimum;
+    int maximum;
+} ScriptOperandError;
 
 typedef struct ScriptState {
     /* 0000 */ ScriptInvocation* invocation;
@@ -72,10 +86,239 @@ typedef struct ScriptState {
     /* 039C */ int lc_vars[10];
     /* 03C4 */ int field_3C4;
     /* 03C8 */ int64_t lc_objs[10];
+    bool invalid_operand;
+    ScriptOperandError operand_error;
 } ScriptState;
+
+typedef struct ScriptOperandSpec {
+    const char* name;
+    uint8_t used_slots;
+    uint8_t focus_slots;
+} ScriptOperandSpec;
+
+#define SCRIPT_OPERAND_SPEC(name, used, focus) \
+    [name] = { #name, used, focus }
+
+// The masks name the physical operand slots consumed by each instruction.
+// Most instructions use a contiguous prefix. SAT_CALL_SCRIPT_IN is the one
+// exception: it reads script, line and delay from slots 0, 1 and 4 while the
+// focus-object slots 2 and 3 belong only to SAT_CALL_SCRIPT_AT. Keeping the
+// physical masks here prevents unused serialized garbage from being mistaken
+// for runnable operands.
+static const ScriptOperandSpec script_condition_operand_specs[SCT_WAITING_FOR_LEADER + 1] = {
+    SCRIPT_OPERAND_SPEC(SCT_TRUE, 0x00, 0x00),
+    SCRIPT_OPERAND_SPEC(SCT_DAYTIME, 0x00, 0x00),
+    SCRIPT_OPERAND_SPEC(SCT_HAS_GOLD, 0x03, 0x01),
+    SCRIPT_OPERAND_SPEC(SCT_LOCAL_FLAG, 0x01, 0x00),
+    SCRIPT_OPERAND_SPEC(SCT_EQ, 0x03, 0x00),
+    SCRIPT_OPERAND_SPEC(SCT_LE, 0x03, 0x00),
+    SCRIPT_OPERAND_SPEC(SCT_PC_QUEST_STATE, 0x07, 0x01),
+    SCRIPT_OPERAND_SPEC(SCT_GLOBAL_QUEST_STATE, 0x03, 0x00),
+    SCRIPT_OPERAND_SPEC(SCT_OBJ_HAS_BLESS, 0x03, 0x01),
+    SCRIPT_OPERAND_SPEC(SCT_OBJ_HAS_CURSE, 0x03, 0x01),
+    SCRIPT_OPERAND_SPEC(SCT_OBJ_MET_PC_BEFORE, 0x03, 0x03),
+    SCRIPT_OPERAND_SPEC(SCT_OBJ_HAS_BAD_ASSOCIATES, 0x01, 0x01),
+    SCRIPT_OPERAND_SPEC(SCT_OBJ_IS_POLYMORPHED, 0x01, 0x01),
+    SCRIPT_OPERAND_SPEC(SCT_OBJ_IS_SHRUNK, 0x01, 0x01),
+    SCRIPT_OPERAND_SPEC(SCT_OBJ_HAS_BODY_SPELL, 0x01, 0x01),
+    SCRIPT_OPERAND_SPEC(SCT_OBJ_IS_INVISIBLE, 0x01, 0x01),
+    SCRIPT_OPERAND_SPEC(SCT_OBJ_HAS_MIRROR_IMAGE, 0x01, 0x01),
+    SCRIPT_OPERAND_SPEC(SCT_OBJ_HAS_ITEM_NAMED, 0x03, 0x01),
+    SCRIPT_OPERAND_SPEC(SCT_OBJ_FOLLOWING_PC, 0x03, 0x03),
+    SCRIPT_OPERAND_SPEC(SCT_OBJ_IS_MONSTER_OF_TYPE, 0x03, 0x01),
+    SCRIPT_OPERAND_SPEC(SCT_OBJ_IS_NAMED, 0x03, 0x01),
+    SCRIPT_OPERAND_SPEC(SCT_OBJ_IS_WIELDING_ITEM, 0x03, 0x01),
+    SCRIPT_OPERAND_SPEC(SCT_OBJ_IS_DEAD, 0x01, 0x01),
+    SCRIPT_OPERAND_SPEC(SCT_OBJ_HAS_MAX_FOLLOWERS, 0x01, 0x01),
+    SCRIPT_OPERAND_SPEC(SCT_OBJ_CAN_OPEN_CONTAINER, 0x03, 0x03),
+    SCRIPT_OPERAND_SPEC(SCT_OBJ_HAS_SURRENDERED, 0x01, 0x01),
+    SCRIPT_OPERAND_SPEC(SCT_OBJ_IS_IN_DIALOG, 0x01, 0x01),
+    SCRIPT_OPERAND_SPEC(SCT_OBJ_IS_SWITCHED_OFF, 0x01, 0x01),
+    SCRIPT_OPERAND_SPEC(SCT_OBJ_CAN_SEE_OBJ, 0x03, 0x03),
+    SCRIPT_OPERAND_SPEC(SCT_OBJ_CAN_HEAR_OBJ, 0x03, 0x03),
+    SCRIPT_OPERAND_SPEC(SCT_OBJ_IS_INVULNERABLE, 0x01, 0x01),
+    SCRIPT_OPERAND_SPEC(SCT_OBJ_IS_IN_COMBAT, 0x01, 0x01),
+    SCRIPT_OPERAND_SPEC(SCT_OBJ_IS_AT_LOCATION, 0x07, 0x01),
+    SCRIPT_OPERAND_SPEC(SCT_OBJ_HAS_REPUTATION, 0x03, 0x01),
+    SCRIPT_OPERAND_SPEC(SCT_OBJ_WITHIN_RANGE, 0x0F, 0x01),
+    SCRIPT_OPERAND_SPEC(SCT_OBJ_IS_INFLUENCED_BY_SPELL, 0x03, 0x01),
+    SCRIPT_OPERAND_SPEC(SCT_OBJ_IS_OPEN, 0x01, 0x01),
+    SCRIPT_OPERAND_SPEC(SCT_OBJ_IS_ANIMAL, 0x01, 0x01),
+    SCRIPT_OPERAND_SPEC(SCT_OBJ_IS_UNDEAD, 0x01, 0x01),
+    SCRIPT_OPERAND_SPEC(SCT_OBJ_JILTED, 0x01, 0x01),
+    SCRIPT_OPERAND_SPEC(SCT_RUMOR_KNOWN, 0x03, 0x01),
+    SCRIPT_OPERAND_SPEC(SCT_RUMOR_QUELLED, 0x01, 0x00),
+    SCRIPT_OPERAND_SPEC(SCT_OBJ_IS_BUSTED, 0x01, 0x01),
+    SCRIPT_OPERAND_SPEC(SCT_GLOBAL_FLAG, 0x01, 0x00),
+    SCRIPT_OPERAND_SPEC(SCT_CAN_OPEN_PORTAL, 0x07, 0x03),
+    SCRIPT_OPERAND_SPEC(SCT_SECTOR_IS_BLOCKED, 0x03, 0x00),
+    SCRIPT_OPERAND_SPEC(SCT_MONSTERGEN_DISABLED, 0x01, 0x00),
+    SCRIPT_OPERAND_SPEC(SCT_IDENTIFIED, 0x01, 0x01),
+    SCRIPT_OPERAND_SPEC(SCT_KNOWS_SPELL, 0x03, 0x01),
+    SCRIPT_OPERAND_SPEC(SCT_MASTERED_SPELL_COLLEGE, 0x03, 0x01),
+    SCRIPT_OPERAND_SPEC(SCT_ITEMS_ARE_BEING_REWIELDED, 0x00, 0x00),
+    SCRIPT_OPERAND_SPEC(SCT_PROWLING, 0x01, 0x01),
+    SCRIPT_OPERAND_SPEC(SCT_WAITING_FOR_LEADER, 0x01, 0x01),
+};
+
+static const ScriptOperandSpec script_action_operand_specs[SAT_SET_NIGHT_STANDPOINT_EX + 1] = {
+    SCRIPT_OPERAND_SPEC(SAT_DO_NOTHING, 0x00, 0x00),
+    SCRIPT_OPERAND_SPEC(SAT_RETURN_AND_SKIP_DEFAULT, 0x00, 0x00),
+    SCRIPT_OPERAND_SPEC(SAT_RETURN_AND_RUN_DEFAULT, 0x00, 0x00),
+    SCRIPT_OPERAND_SPEC(SAT_GOTO, 0x01, 0x00),
+    SCRIPT_OPERAND_SPEC(SAT_DIALOG, 0x01, 0x00),
+    SCRIPT_OPERAND_SPEC(SAT_REMOVE_THIS_SCRIPT, 0x00, 0x00),
+    SCRIPT_OPERAND_SPEC(SAT_CHANGE_THIS_SCRIPT_TO_SCRIPT, 0x01, 0x00),
+    SCRIPT_OPERAND_SPEC(SAT_CALL_SCRIPT, 0x0F, 0x0C),
+    SCRIPT_OPERAND_SPEC(SAT_SET_LOCAL_FLAG, 0x01, 0x00),
+    SCRIPT_OPERAND_SPEC(SAT_CLEAR_LOCAL_FLAG, 0x01, 0x00),
+    SCRIPT_OPERAND_SPEC(SAT_ASSIGN_NUM, 0x03, 0x00),
+    SCRIPT_OPERAND_SPEC(SAT_ADD, 0x07, 0x00),
+    SCRIPT_OPERAND_SPEC(SAT_SUBTRACT, 0x07, 0x00),
+    SCRIPT_OPERAND_SPEC(SAT_MULTIPLY, 0x07, 0x00),
+    SCRIPT_OPERAND_SPEC(SAT_DIVIDE, 0x07, 0x00),
+    SCRIPT_OPERAND_SPEC(SAT_ASSIGN_OBJ, 0x03, 0x03),
+    SCRIPT_OPERAND_SPEC(SAT_SET_PC_QUEST_STATE, 0x07, 0x01),
+    SCRIPT_OPERAND_SPEC(SAT_SET_QUEST_GLOBAL_STATE, 0x03, 0x00),
+    SCRIPT_OPERAND_SPEC(SAT_LOOP_FOR, 0x01, 0x01),
+    SCRIPT_OPERAND_SPEC(SAT_LOOP_END, 0x00, 0x00),
+    SCRIPT_OPERAND_SPEC(SAT_LOOP_BREAK, 0x00, 0x00),
+    SCRIPT_OPERAND_SPEC(SAT_CRITTER_FOLLOW, 0x03, 0x03),
+    SCRIPT_OPERAND_SPEC(SAT_CRITTER_DISBAND, 0x01, 0x01),
+    SCRIPT_OPERAND_SPEC(SAT_FLOAT_LINE, 0x03, 0x02),
+    SCRIPT_OPERAND_SPEC(SAT_PRINT_LINE, 0x03, 0x00),
+    SCRIPT_OPERAND_SPEC(SAT_ADD_BLESSING, 0x03, 0x02),
+    SCRIPT_OPERAND_SPEC(SAT_REMOVE_BLESSING, 0x03, 0x02),
+    SCRIPT_OPERAND_SPEC(SAT_ADD_CURSE, 0x03, 0x02),
+    SCRIPT_OPERAND_SPEC(SAT_REMOVE_CURSE, 0x03, 0x02),
+    SCRIPT_OPERAND_SPEC(SAT_GET_REACTION, 0x07, 0x03),
+    SCRIPT_OPERAND_SPEC(SAT_SET_REACTION, 0x07, 0x03),
+    SCRIPT_OPERAND_SPEC(SAT_ADJUST_REACTION, 0x07, 0x03),
+    SCRIPT_OPERAND_SPEC(SAT_GET_ARMOR, 0x03, 0x01),
+    SCRIPT_OPERAND_SPEC(SAT_GET_STAT, 0x07, 0x02),
+    SCRIPT_OPERAND_SPEC(SAT_GET_OBJECT_TYPE, 0x03, 0x01),
+    SCRIPT_OPERAND_SPEC(SAT_ADJUST_GOLD, 0x03, 0x01),
+    SCRIPT_OPERAND_SPEC(SAT_ATTACK, 0x03, 0x03),
+    SCRIPT_OPERAND_SPEC(SAT_RANDOM, 0x07, 0x00),
+    SCRIPT_OPERAND_SPEC(SAT_GET_SOCIAL_CLASS, 0x03, 0x01),
+    SCRIPT_OPERAND_SPEC(SAT_GET_ORIGIN, 0x03, 0x01),
+    SCRIPT_OPERAND_SPEC(SAT_TRANSFORM_ATTACHEE_INTO_BASIC_PROTOTYPE, 0x01, 0x00),
+    SCRIPT_OPERAND_SPEC(SAT_TRANSFER_ITEM, 0x07, 0x06),
+    SCRIPT_OPERAND_SPEC(SAT_GET_STORY_STATE, 0x01, 0x00),
+    SCRIPT_OPERAND_SPEC(SAT_SET_STORY_STATE, 0x01, 0x00),
+    SCRIPT_OPERAND_SPEC(SAT_TELEPORT, 0x0F, 0x01),
+    SCRIPT_OPERAND_SPEC(SAT_SET_DAY_STANDPOINT, 0x07, 0x01),
+    SCRIPT_OPERAND_SPEC(SAT_SET_NIGHT_STANDPOINT, 0x07, 0x01),
+    SCRIPT_OPERAND_SPEC(SAT_GET_SKILL, 0x07, 0x02),
+    SCRIPT_OPERAND_SPEC(SAT_CAST_SPELL, 0x07, 0x05),
+    SCRIPT_OPERAND_SPEC(SAT_MARK_MAP_LOCATION, 0x03, 0x02),
+    SCRIPT_OPERAND_SPEC(SAT_SET_RUMOR, 0x03, 0x02),
+    SCRIPT_OPERAND_SPEC(SAT_QUELL_RUMOR, 0x03, 0x02),
+    SCRIPT_OPERAND_SPEC(SAT_CREATE_OBJECT, 0x03, 0x02),
+    SCRIPT_OPERAND_SPEC(SAT_SET_LOCK_STATE, 0x03, 0x01),
+    SCRIPT_OPERAND_SPEC(SAT_CALL_SCRIPT_IN, 0x13, 0x00),
+    SCRIPT_OPERAND_SPEC(SAT_CALL_SCRIPT_AT, 0x1F, 0x0C),
+    SCRIPT_OPERAND_SPEC(SAT_TOGGLE_STATE, 0x01, 0x01),
+    SCRIPT_OPERAND_SPEC(SAT_TOGGLE_INVULNERABILITY, 0x01, 0x01),
+    SCRIPT_OPERAND_SPEC(SAT_KILL, 0x01, 0x01),
+    SCRIPT_OPERAND_SPEC(SAT_CHANGE_ART_NUM, 0x03, 0x01),
+    SCRIPT_OPERAND_SPEC(SAT_DAMAGE, 0x07, 0x01),
+    SCRIPT_OPERAND_SPEC(SAT_CAST_SPELL_ON, 0x03, 0x02),
+    SCRIPT_OPERAND_SPEC(SAT_ACTION_PERFORM_ANIMATION, 0x03, 0x01),
+    SCRIPT_OPERAND_SPEC(SAT_GIVE_QUEST_XP, 0x03, 0x01),
+    SCRIPT_OPERAND_SPEC(SAT_WRITTEN_UI_START_BOOK, 0x03, 0x02),
+    SCRIPT_OPERAND_SPEC(SAT_WRITTEN_UI_START_IMAGE, 0x03, 0x02),
+    SCRIPT_OPERAND_SPEC(SAT_CREATE_ITEM, 0x03, 0x02),
+    SCRIPT_OPERAND_SPEC(SAT_ACTION_WAIT_FOR_LEADER, 0x01, 0x01),
+    SCRIPT_OPERAND_SPEC(SAT_DESTROY, 0x01, 0x01),
+    SCRIPT_OPERAND_SPEC(SAT_ACTION_WALK_TO, 0x07, 0x01),
+    SCRIPT_OPERAND_SPEC(SAT_GET_WEAPON_TYPE, 0x03, 0x01),
+    SCRIPT_OPERAND_SPEC(SAT_DISTANCE_BETWEEN, 0x07, 0x03),
+    SCRIPT_OPERAND_SPEC(SAT_ADD_REPUTATION, 0x03, 0x01),
+    SCRIPT_OPERAND_SPEC(SAT_REMOVE_REPUTATION, 0x03, 0x01),
+    SCRIPT_OPERAND_SPEC(SAT_ACTION_RUN_TO, 0x07, 0x01),
+    SCRIPT_OPERAND_SPEC(SAT_HEAL_HP, 0x03, 0x01),
+    SCRIPT_OPERAND_SPEC(SAT_HEAL_FATIGUE, 0x03, 0x01),
+    SCRIPT_OPERAND_SPEC(SAT_ADD_EFFECT, 0x07, 0x01),
+    SCRIPT_OPERAND_SPEC(SAT_REMOVE_EFFECT, 0x03, 0x01),
+    SCRIPT_OPERAND_SPEC(SAT_ACTION_USE_ITEM, 0x1F, 0x07),
+    SCRIPT_OPERAND_SPEC(SAT_GET_MAGICTECH_ADJUSTMENT, 0x1F, 0x0E),
+    SCRIPT_OPERAND_SPEC(SAT_CALL_SCRIPT_EX, 0x0F, 0x09),
+    SCRIPT_OPERAND_SPEC(SAT_PLAY_SOUND, 0x01, 0x00),
+    SCRIPT_OPERAND_SPEC(SAT_PLAY_SOUND_ON, 0x03, 0x02),
+    SCRIPT_OPERAND_SPEC(SAT_GET_AREA, 0x03, 0x01),
+    SCRIPT_OPERAND_SPEC(SAT_QUEUE_NEWSPAPER, 0x03, 0x00),
+    SCRIPT_OPERAND_SPEC(SAT_FLOAT_NEWSPAPER_HEADLINE, 0x03, 0x02),
+    SCRIPT_OPERAND_SPEC(SAT_PLAY_SOUND_SCHEME, 0x03, 0x00),
+    SCRIPT_OPERAND_SPEC(SAT_TOGGLE_OPEN_CLOSED, 0x01, 0x01),
+    SCRIPT_OPERAND_SPEC(SAT_GET_FACTION, 0x03, 0x01),
+    SCRIPT_OPERAND_SPEC(SAT_GET_SCROLL_DISTANCE, 0x01, 0x00),
+    SCRIPT_OPERAND_SPEC(SAT_GET_MAGICTECH_ADJUSTMENT_EX, 0x0F, 0x06),
+    SCRIPT_OPERAND_SPEC(SAT_RENAME, 0x03, 0x01),
+    SCRIPT_OPERAND_SPEC(SAT_ACTION_BECOME_PRONE, 0x01, 0x01),
+    SCRIPT_OPERAND_SPEC(SAT_SET_WRITTEN_START, 0x03, 0x01),
+    SCRIPT_OPERAND_SPEC(SAT_GET_LOCATION, 0x07, 0x01),
+    SCRIPT_OPERAND_SPEC(SAT_GET_DAY_SINCE_STARTUP, 0x01, 0x00),
+    SCRIPT_OPERAND_SPEC(SAT_GET_CURRENT_HOUR, 0x01, 0x00),
+    SCRIPT_OPERAND_SPEC(SAT_GET_CURRENT_MINUTE, 0x01, 0x00),
+    SCRIPT_OPERAND_SPEC(SAT_CHANGE_SCRIPT, 0x07, 0x01),
+    SCRIPT_OPERAND_SPEC(SAT_SET_GLOBAL_FLAG, 0x01, 0x00),
+    SCRIPT_OPERAND_SPEC(SAT_CLEAR_GLOBAL_FLAG, 0x01, 0x00),
+    SCRIPT_OPERAND_SPEC(SAT_FADE_AND_TELEPORT, 0x7F, 0x08),
+    SCRIPT_OPERAND_SPEC(SAT_FADE, 0x0F, 0x00),
+    SCRIPT_OPERAND_SPEC(SAT_PLAY_SPELL_EYE_CANDY, 0x03, 0x02),
+    SCRIPT_OPERAND_SPEC(SAT_GET_HOURS_SINCE_STARTUP, 0x01, 0x00),
+    SCRIPT_OPERAND_SPEC(SAT_TOGGLE_SECTOR_BLOCKED, 0x03, 0x00),
+    SCRIPT_OPERAND_SPEC(SAT_GET_HIT_POINTS, 0x07, 0x01),
+    SCRIPT_OPERAND_SPEC(SAT_GET_FATIGUE_POINTS, 0x07, 0x01),
+    SCRIPT_OPERAND_SPEC(SAT_ACTION_STOP_ATTACKING, 0x01, 0x01),
+    SCRIPT_OPERAND_SPEC(SAT_TOGGLE_MONSTER_GENERATOR, 0x01, 0x00),
+    SCRIPT_OPERAND_SPEC(SAT_GET_ARMOR_COVERAGE, 0x03, 0x01),
+    SCRIPT_OPERAND_SPEC(SAT_GIVE_SPELL_MASTERY_IN_COLLEGE, 0x03, 0x01),
+    SCRIPT_OPERAND_SPEC(SAT_UNFOG_TOWNMAP, 0x01, 0x00),
+    SCRIPT_OPERAND_SPEC(SAT_START_WRITTEN_UI, 0x03, 0x02),
+    SCRIPT_OPERAND_SPEC(SAT_ACTION_TRY_TO_STEAL_100_COINS, 0x03, 0x03),
+    SCRIPT_OPERAND_SPEC(SAT_STOP_SPELL_EYE_CANDY, 0x03, 0x02),
+    SCRIPT_OPERAND_SPEC(SAT_GRANT_ONE_FATE_POINT, 0x01, 0x01),
+    SCRIPT_OPERAND_SPEC(SAT_CAST_FREE_SPELL, 0x07, 0x05),
+    SCRIPT_OPERAND_SPEC(SAT_SET_PC_QUEST_UNBOTCHED, 0x03, 0x01),
+    SCRIPT_OPERAND_SPEC(SAT_PLAY_SCRIPT_EYE_CANDY, 0x03, 0x02),
+    SCRIPT_OPERAND_SPEC(SAT_ACTION_CAST_UNRESISTABLE_SPELL, 0x07, 0x05),
+    SCRIPT_OPERAND_SPEC(SAT_ACTION_CAST_FREE_UNRESISTABLE_SPELL, 0x07, 0x05),
+    SCRIPT_OPERAND_SPEC(SAT_TOUCH_ART, 0x01, 0x00),
+    SCRIPT_OPERAND_SPEC(SAT_STOP_SCRIPT_EYE_CANDY, 0x03, 0x02),
+    SCRIPT_OPERAND_SPEC(SAT_REMOVE_SCRIPT_CALL, 0x03, 0x02),
+    SCRIPT_OPERAND_SPEC(SAT_DESTROY_ITEM_NAMED, 0x03, 0x02),
+    SCRIPT_OPERAND_SPEC(SAT_TOGGLE_ITEM_INVENTORY_DISPLAY, 0x01, 0x01),
+    SCRIPT_OPERAND_SPEC(SAT_HEAL_POISON, 0x03, 0x01),
+    SCRIPT_OPERAND_SPEC(SAT_START_SCHEMATIC_UI, 0x01, 0x01),
+    SCRIPT_OPERAND_SPEC(SAT_STOP_SPELL, 0x03, 0x02),
+    SCRIPT_OPERAND_SPEC(SAT_QUEUE_SLIDE, 0x01, 0x00),
+    SCRIPT_OPERAND_SPEC(SAT_END_GAME_AND_PLAY_SLIDES, 0x00, 0x00),
+    SCRIPT_OPERAND_SPEC(SAT_SET_ROTATION, 0x03, 0x01),
+    SCRIPT_OPERAND_SPEC(SAT_SET_FACTION, 0x03, 0x01),
+    SCRIPT_OPERAND_SPEC(SAT_DRAIN_CHARGES, 0x03, 0x02),
+    SCRIPT_OPERAND_SPEC(SAT_CAST_UNRESISTABLE_SPELL, 0x03, 0x02),
+    SCRIPT_OPERAND_SPEC(SAT_ADJUST_STAT, 0x07, 0x02),
+    SCRIPT_OPERAND_SPEC(SAT_APPLY_UNRESISTABLE_DAMAGE, 0x07, 0x01),
+    SCRIPT_OPERAND_SPEC(SAT_SET_AUTOLEVEL_SCHEME, 0x03, 0x01),
+    SCRIPT_OPERAND_SPEC(SAT_SET_DAY_STANDPOINT_EX, 0x0F, 0x01),
+    SCRIPT_OPERAND_SPEC(SAT_SET_NIGHT_STANDPOINT_EX, 0x0F, 0x01),
+};
+
+#undef SCRIPT_OPERAND_SPEC
 
 static int script_execute_condition(ScriptCondition* condition, int line, ScriptState* state);
 static int script_execute_action(ScriptAction* action, int line, ScriptState* state);
+static bool script_file_validate(ScriptFile* script_file, int script_id, ScriptOperandError* error);
+static bool script_validate_condition(ScriptCondition* condition, int line, ScriptOperandError* error);
+static bool script_validate_action(ScriptAction* action, int line, const char* branch, ScriptOperandError* error);
+static bool script_execute_file(ScriptInvocation* invocation, ScriptFile* script_file,
+    ScriptFlags flags, ScriptState* state);
+static void script_report_operand_error(const ScriptOperandError* error);
+static bool script_resolve_index(ScriptValueType type, int operand, int minimum, int maximum,
+    ScriptState* state, int line, const char* branch, const char* instruction,
+    int slot, const char* domain, int* value_ptr);
 static bool script_timeevent_check(TimeEvent* timeevent);
 static void script_call_script(ScriptAction* action, ScriptState* state);
 static void script_call_script_ex(ScriptAction* action, ScriptState* state);
@@ -149,6 +392,10 @@ static ScriptStartDialogFunc script_start_dialog_func;
 
 // 0x5E2FF0
 static ScriptCacheEntry* script_cache_entries;
+// The production target is always script_execute. The focused VM suite swaps
+// it briefly so SAT_CALL_SCRIPT can exercise a supplied accepted child file
+// without inventing a second cache or filesystem implementation.
+static bool (*script_nested_execute_func)(ScriptInvocation*) = script_execute;
 
 // 0x5E2FF8
 static int64_t script_timeevent_match_obj;
@@ -281,6 +528,329 @@ void script_set_callbacks(ScriptStartDialogFunc start_dialog_func, ScriptFloatLi
     script_float_line_func = float_line_func;
 }
 
+static bool script_operand_error_set(ScriptOperandError* error,
+    const char* instruction,
+    const char* branch,
+    const char* domain,
+    int line,
+    int slot,
+    int value,
+    int minimum,
+    int maximum)
+{
+    if (error != NULL) {
+        error->instruction = instruction;
+        error->branch = branch;
+        error->domain = domain;
+        error->line = line;
+        error->slot = slot;
+        error->value = value;
+        error->minimum = minimum;
+        error->maximum = maximum;
+    }
+    return false;
+}
+
+static void script_operand_error_set_context(ScriptOperandError* error,
+    int script_id,
+    const char* script_name)
+{
+    if (error != NULL) {
+        error->script_id = script_id;
+        error->script_name = script_name;
+    }
+}
+
+static bool script_validate_record(int type,
+    const uint8_t op_type[8],
+    const int op_value[8],
+    const ScriptOperandSpec* specs,
+    int specs_length,
+    const char* record_kind,
+    const char* branch,
+    int line,
+    ScriptOperandError* error)
+{
+    const ScriptOperandSpec* spec;
+
+    if (type < 0 || type >= specs_length || specs[type].name == NULL) {
+        return script_operand_error_set(error,
+            record_kind,
+            branch,
+            "opcode",
+            line,
+            -1,
+            type,
+            0,
+            specs_length - 1);
+    }
+
+    spec = &(specs[type]);
+    for (int slot = 0; slot < 8; slot++) {
+        int value;
+        int value_type;
+
+        if ((spec->used_slots & (1u << slot)) == 0) {
+            continue;
+        }
+
+        value_type = op_type[slot];
+        value = op_value[slot];
+        if ((spec->focus_slots & (1u << slot)) != 0) {
+            if (value_type < SFO_TRIGGERER || value_type > SFO_ANY_ITEM_IN_VICINITY) {
+                return script_operand_error_set(error,
+                    spec->name,
+                    branch,
+                    "focus object type",
+                    line,
+                    slot,
+                    value_type,
+                    SFO_TRIGGERER,
+                    SFO_ANY_ITEM_IN_VICINITY);
+            }
+            if (value_type == SFO_LOCAL_OBJECT
+                && (value < 0 || value >= (int)(sizeof(((ScriptState*)0)->lc_objs) / sizeof(int64_t)))) {
+                return script_operand_error_set(error,
+                    spec->name,
+                    branch,
+                    "local object index",
+                    line,
+                    slot,
+                    value,
+                    0,
+                    (int)(sizeof(((ScriptState*)0)->lc_objs) / sizeof(int64_t)) - 1);
+            }
+            continue;
+        }
+
+        if (value_type < SVT_COUNTER || value_type > SVT_PC_FLAG) {
+            return script_operand_error_set(error,
+                spec->name,
+                branch,
+                "operand type",
+                line,
+                slot,
+                value_type,
+                SVT_COUNTER,
+                SVT_PC_FLAG);
+        }
+
+        switch (value_type) {
+        case SVT_COUNTER:
+            if (value < 0 || value >= (int)sizeof(((ScriptHeader*)0)->counters)) {
+                return script_operand_error_set(error, spec->name, branch,
+                    "counter index", line, slot, value, 0,
+                    (int)sizeof(((ScriptHeader*)0)->counters) - 1);
+            }
+            break;
+        case SVT_GL_VAR:
+            if (value < 0 || value >= MAX_GLOBAL_VARS) {
+                return script_operand_error_set(error, spec->name, branch,
+                    "global variable index", line, slot, value, 0, MAX_GLOBAL_VARS - 1);
+            }
+            break;
+        case SVT_LC_VAR:
+            if (value < 0 || value >= (int)(sizeof(((ScriptState*)0)->lc_vars) / sizeof(int))) {
+                return script_operand_error_set(error, spec->name, branch,
+                    "local variable index", line, slot, value, 0,
+                    (int)(sizeof(((ScriptState*)0)->lc_vars) / sizeof(int)) - 1);
+            }
+            break;
+        case SVT_GL_FLAG:
+            if (value < 0 || value >= MAX_GLOBAL_FLAGS * 32) {
+                return script_operand_error_set(error, spec->name, branch,
+                    "global flag index", line, slot, value, 0, MAX_GLOBAL_FLAGS * 32 - 1);
+            }
+            break;
+        case SVT_PC_VAR:
+        case SVT_PC_FLAG: {
+            int focus_type = (int)(((uint32_t)value) >> 16);
+            if (focus_type < SFO_TRIGGERER || focus_type > SFO_ANY_ITEM_IN_VICINITY) {
+                return script_operand_error_set(error, spec->name, branch,
+                    "embedded focus object type", line, slot, focus_type,
+                    SFO_TRIGGERER, SFO_ANY_ITEM_IN_VICINITY);
+            }
+            break;
+        }
+        case SVT_NUMBER:
+            break;
+        }
+
+        if (value_type == SVT_NUMBER) {
+            const char* domain = NULL;
+            int minimum = 0;
+            int maximum = 0;
+
+            if (specs == script_condition_operand_specs) {
+                if (type == SCT_LOCAL_FLAG && slot == 0) {
+                    domain = "local flag bit";
+                    maximum = 31;
+                } else if (type == SCT_GLOBAL_FLAG && slot == 0) {
+                    domain = "global flag index";
+                    maximum = MAX_GLOBAL_FLAGS * 32 - 1;
+                }
+            } else {
+                if ((type == SAT_SET_LOCAL_FLAG || type == SAT_CLEAR_LOCAL_FLAG)
+                    && slot == 0) {
+                    domain = "local flag bit";
+                    maximum = 31;
+                } else if ((type == SAT_SET_GLOBAL_FLAG || type == SAT_CLEAR_GLOBAL_FLAG)
+                    && slot == 0) {
+                    domain = "global flag index";
+                    maximum = MAX_GLOBAL_FLAGS * 32 - 1;
+                } else if (type == SAT_CHANGE_SCRIPT && slot == 1) {
+                    domain = "attachment point";
+                    minimum = SAP_EXAMINE;
+                    maximum = SAP_CRITICAL_MISS;
+                }
+            }
+
+            if (domain != NULL && (value < minimum || value > maximum)) {
+                return script_operand_error_set(error, spec->name, branch,
+                    domain, line, slot, value, minimum, maximum);
+            }
+        }
+    }
+
+    return true;
+}
+
+static bool script_validate_condition(ScriptCondition* condition, int line, ScriptOperandError* error)
+{
+    return script_validate_record(condition->type,
+        condition->op_type,
+        condition->op_value,
+        script_condition_operand_specs,
+        sizeof(script_condition_operand_specs) / sizeof(script_condition_operand_specs[0]),
+        "condition",
+        "if",
+        line,
+        error);
+}
+
+static bool script_validate_action(ScriptAction* action, int line, const char* branch, ScriptOperandError* error)
+{
+    return script_validate_record(action->type,
+        action->op_type,
+        action->op_value,
+        script_action_operand_specs,
+        sizeof(script_action_operand_specs) / sizeof(script_action_operand_specs[0]),
+        "action",
+        branch,
+        line,
+        error);
+}
+
+static bool script_file_validate(ScriptFile* script_file, int script_id, ScriptOperandError* error)
+{
+    for (int line = 0; line < script_file->num_entries; line++) {
+        ScriptCondition* condition = &(script_file->entries[line]);
+        if (!script_validate_condition(condition, line, error)
+            || !script_validate_action(&(condition->action), line, "then", error)
+            || !script_validate_action(&(condition->els), line, "else", error)) {
+            script_operand_error_set_context(error, script_id, script_file->description);
+            return false;
+        }
+    }
+    return true;
+}
+
+static void script_report_operand_error(const ScriptOperandError* error)
+{
+    tig_debug_printf(
+        "Script: invalid operand: script %d \"%.40s\", line %d, %s %s slot %d: "
+        "%s value %d is outside %d..%d; invocation refused\n",
+        error->script_id,
+        error->script_name != NULL ? error->script_name : "",
+        error->line,
+        error->branch,
+        error->instruction,
+        error->slot,
+        error->domain,
+        error->value,
+        error->minimum,
+        error->maximum);
+}
+
+static bool script_resolve_index(ScriptValueType type,
+    int operand,
+    int minimum,
+    int maximum,
+    ScriptState* state,
+    int line,
+    const char* branch,
+    const char* instruction,
+    int slot,
+    const char* domain,
+    int* value_ptr)
+{
+    int value = script_get_value(type, operand, state);
+    if (value < minimum || value > maximum) {
+        state->invalid_operand = true;
+        script_operand_error_set(&(state->operand_error), instruction, branch,
+            domain, line, slot, value, minimum, maximum);
+        return false;
+    }
+    *value_ptr = value;
+    return true;
+}
+
+// Executes one already-loaded, already-validated script file. Keeping the
+// interpreter loop separate from cache lookup makes its accepted-file path,
+// invalid-invocation stop behavior, and original 1000-step budget directly
+// testable without replacing the VM with a test implementation.
+static bool script_execute_file(ScriptInvocation* invocation,
+    ScriptFile* script_file,
+    ScriptFlags flags,
+    ScriptState* state)
+{
+    ScriptCondition statement;
+    bool run_default = false;
+    int line = invocation->line;
+
+    // NOTE: Original code is probably different.
+    for (int iter = 0; iter < 1000; iter++) {
+        int next;
+
+        if (!script_file_entry_get(script_file, line, &statement)) {
+            run_default = false;
+            break;
+        }
+
+        next = script_execute_condition(&statement, line, state);
+        if (next == INVALID_OPERAND) {
+            script_operand_error_set_context(&(state->operand_error),
+                invocation->script->num, script_file->description);
+            run_default = false;
+            break;
+        }
+        if (next == NEXT) {
+            if (line < script_file->num_entries - 1) {
+                line++;
+            } else {
+                next = RETURN_AND_SKIP_DEFAULT;
+            }
+        } else {
+            line = next;
+        }
+
+        if (next == RETURN_AND_SKIP_DEFAULT
+            || next == RETURN_AND_RUN_DEFAULT
+            || next == -4) {
+            if ((flags & SF_AUTO_REMOVING) != 0) {
+                invocation->script->num = 0;
+            }
+
+            if (next == RETURN_AND_RUN_DEFAULT || next == -4) {
+                run_default = true;
+            }
+            break;
+        }
+    }
+
+    return run_default;
+}
+
 // 0x4449B0
 bool script_execute(ScriptInvocation* invocation)
 {
@@ -290,10 +860,6 @@ bool script_execute(ScriptInvocation* invocation)
     int saved_script_num;
     ScriptState state;
     ScriptFile* script_file;
-    int iter;
-    int line;
-    int next;
-    ScriptCondition statement;
     bool run_default;
 
     if (tig_net_is_active()
@@ -309,7 +875,6 @@ bool script_execute(ScriptInvocation* invocation)
         return false;
     }
 
-    iter = 0;
     run_default = false;
 
     if (!script_flags(invocation->script, &flags)) {
@@ -350,41 +915,15 @@ bool script_execute(ScriptInvocation* invocation)
     state.current_loop_obj = OBJ_HANDLE_NULL;
     memset(state.lc_vars, 0, sizeof(state.lc_vars));
     memset(state.lc_objs, 0, sizeof(state.lc_objs));
+    state.invalid_operand = false;
+    memset(&(state.operand_error), 0, sizeof(state.operand_error));
 
     script_file = script_lock(invocation->script->num);
     if (script_file != NULL) {
-        line = invocation->line;
+        run_default = script_execute_file(invocation, script_file, flags, &state);
 
-        // NOTE: Original code is probably different.
-        for (iter = 0; iter < 1000; iter++) {
-            if (!script_file_entry_get(script_file, line, &statement)) {
-                run_default = false;
-                break;
-            }
-
-            next = script_execute_condition(&statement, line, &state);
-            if (next == NEXT) {
-                if (line < script_file->num_entries - 1) {
-                    line++;
-                } else {
-                    next = RETURN_AND_SKIP_DEFAULT;
-                }
-            } else {
-                line = next;
-            }
-
-            if (next == RETURN_AND_SKIP_DEFAULT
-                || next == RETURN_AND_RUN_DEFAULT
-                || next == -4) {
-                if ((flags & SF_AUTO_REMOVING) != 0) {
-                    invocation->script->num = 0;
-                }
-
-                if (next == RETURN_AND_RUN_DEFAULT || next == -4) {
-                    run_default = true;
-                }
-                break;
-            }
+        if (state.invalid_operand) {
+            script_report_operand_error(&(state.operand_error));
         }
 
         script_unlock(invocation->script->num);
@@ -422,14 +961,14 @@ void script_global_var_set(int index, int value)
 // 0x444CF0
 int script_global_flag_get(int index)
 {
-    return (script_global_flags[index / 32] >> (index % 32)) & 1;
+    return ((unsigned int)script_global_flags[index / 32] >> (index % 32)) & 1u;
 }
 
 // 0x444D20
 void script_global_flag_set(int index, int value)
 {
-    script_global_flags[index / 32] &= ~(1 << (index % 32));
-    script_global_flags[index / 32] |= value << (index % 32);
+    script_global_flags[index / 32] &= ~(1u << (index % 32));
+    script_global_flags[index / 32] |= (unsigned int)value << (index % 32);
 }
 
 // 0x444DB0
@@ -457,7 +996,7 @@ int script_pc_flag_get(int64_t obj, int index)
 
     if (obj_field_int32_get(obj, OBJ_F_TYPE) == OBJ_TYPE_PC) {
         flags = obj_arrayfield_uint32_get(obj, OBJ_F_PC_GLOBAL_FLAGS, index / 32);
-        return (flags >> (index % 32)) & 1;
+        return ((unsigned int)flags >> (index % 32)) & 1u;
     }
 
     return 0;
@@ -470,8 +1009,8 @@ void script_pc_flag_set(int64_t obj, int index, int value)
 
     if (obj_field_int32_get(obj, OBJ_F_TYPE) == OBJ_TYPE_PC) {
         flags = obj_arrayfield_uint32_get(obj, OBJ_F_PC_GLOBAL_FLAGS, index / 32);
-        flags &= ~(1 << (index % 32));
-        flags |= value << (index % 32);
+        flags &= ~(1u << (index % 32));
+        flags |= (unsigned int)value << (index % 32);
         obj_arrayfield_uint32_set(obj, OBJ_F_PC_GLOBAL_FLAGS, index / 32, flags);
     }
 }
@@ -483,7 +1022,7 @@ bool script_local_flag_get(int64_t obj, int index, int flag)
 
     obj_arrayfield_script_get(obj, OBJ_F_SCRIPTS_IDX, index, &scr);
 
-    return scr.num != 0 ? (scr.hdr.flags & (1 << flag)) != 0 : false;
+    return scr.num != 0 ? (scr.hdr.flags & (1u << flag)) != 0 : false;
 }
 
 // 0x444F60
@@ -495,9 +1034,9 @@ void script_local_flag_set(int64_t obj, int index, int flag, bool enabled)
 
     if (scr.num != 0) {
         if (enabled) {
-            scr.hdr.flags |= 1 << flag;
+            scr.hdr.flags |= 1u << flag;
         } else {
-            scr.hdr.flags &= ~(1 << flag);
+            scr.hdr.flags &= ~(1u << flag);
         }
 
         obj_arrayfield_script_set(obj, OBJ_F_SCRIPTS_IDX, index, &scr);
@@ -522,8 +1061,8 @@ void script_local_counter_set(int64_t obj, int index, int counter, int value)
     obj_arrayfield_script_get(obj, OBJ_F_SCRIPTS_IDX, index, &scr);
 
     if (scr.num) {
-        scr.hdr.counters &= ~(0xFF << (8 * counter));
-        scr.hdr.counters |= value << (8 * counter);
+        scr.hdr.counters &= ~(0xFFu << (8 * counter));
+        scr.hdr.counters |= (unsigned int)(value & 0xFF) << (8 * counter);
 
         obj_arrayfield_script_set(obj, OBJ_F_SCRIPTS_IDX, index, &scr);
     }
@@ -592,6 +1131,13 @@ int script_execute_condition(ScriptCondition* condition, int line, ScriptState* 
     int cnt;
     int index;
     int matched;
+    ScriptOperandError error;
+
+    if (!script_validate_condition(condition, line, &error)) {
+        state->invalid_operand = true;
+        state->operand_error = error;
+        return INVALID_OPERAND;
+    }
 
     switch (condition->type) {
     case SCT_TRUE:
@@ -628,8 +1174,12 @@ int script_execute_condition(ScriptCondition* condition, int line, ScriptState* 
     case SCT_LOCAL_FLAG:
         // local flag (num) is set
 
-        value = script_get_value(condition->op_type[0], condition->op_value[0], state);
-        if ((state->invocation->script->hdr.flags & (1 << value)) != 0) {
+        if (!script_resolve_index(condition->op_type[0], condition->op_value[0],
+                0, 31, state, line, "if", "SCT_LOCAL_FLAG", 0,
+                "local flag bit", &value)) {
+            return INVALID_OPERAND;
+        }
+        if ((state->invocation->script->hdr.flags & (1u << value)) != 0) {
             rc = script_execute_action(&(condition->action), line, state);
         } else {
             rc = script_execute_action(&(condition->els), line, state);
@@ -1342,7 +1892,11 @@ int script_execute_condition(ScriptCondition* condition, int line, ScriptState* 
 
         int num;
 
-        num = script_get_value(condition->op_type[0], condition->op_value[0], state);
+        if (!script_resolve_index(condition->op_type[0], condition->op_value[0],
+                0, MAX_GLOBAL_FLAGS * 32 - 1, state, line, "if",
+                "SCT_GLOBAL_FLAG", 0, "global flag index", &num)) {
+            return INVALID_OPERAND;
+        }
         if (script_global_flag_get(num)) {
             rc = script_execute_action(&(condition->action), line, state);
         } else {
@@ -1509,6 +2063,15 @@ int script_execute_action(ScriptAction* action, int line, ScriptState* state)
     ObjectList objects;
     int64_t handles[100];
     CombatContext combat;
+    ScriptOperandError error;
+
+    if (!script_validate_action(action, line, "action", &error)) {
+        if (state != NULL) {
+            state->invalid_operand = true;
+            state->operand_error = error;
+        }
+        return INVALID_OPERAND;
+    }
 
     switch (action->type) {
     case SAT_RETURN_AND_SKIP_DEFAULT:
@@ -1549,13 +2112,23 @@ int script_execute_action(ScriptAction* action, int line, ScriptState* state)
         script_call_script(action, state);
         return NEXT;
     case SAT_SET_LOCAL_FLAG: {
-        int flag = script_get_value(action->op_type[0], action->op_value[0], state);
-        state->invocation->script->hdr.flags |= 1 << flag;
+        int flag;
+        if (!script_resolve_index(action->op_type[0], action->op_value[0],
+                0, 31, state, line, "action", "SAT_SET_LOCAL_FLAG", 0,
+                "local flag bit", &flag)) {
+            return INVALID_OPERAND;
+        }
+        state->invocation->script->hdr.flags |= 1u << flag;
         return NEXT;
     }
     case SAT_CLEAR_LOCAL_FLAG: {
-        int flag = script_get_value(action->op_type[0], action->op_value[0], state);
-        state->invocation->script->hdr.flags &= ~(1 << flag);
+        int flag;
+        if (!script_resolve_index(action->op_type[0], action->op_value[0],
+                0, 31, state, line, "action", "SAT_CLEAR_LOCAL_FLAG", 0,
+                "local flag bit", &flag)) {
+            return INVALID_OPERAND;
+        }
+        state->invocation->script->hdr.flags &= ~(1u << flag);
         return NEXT;
     }
     case SAT_ASSIGN_NUM:
@@ -2414,8 +2987,13 @@ int script_execute_action(ScriptAction* action, int line, ScriptState* state)
     }
     case SAT_CHANGE_SCRIPT: {
         int64_t obj = script_get_obj(action->op_type[0], action->op_value[0], state);
-        int sap = script_get_value(action->op_type[1], action->op_value[1], state);
+        int sap;
         int num = script_get_value(action->op_type[2], action->op_value[2], state);
+        if (!script_resolve_index(action->op_type[1], action->op_value[1],
+                SAP_EXAMINE, SAP_CRITICAL_MISS, state, line, "action",
+                "SAT_CHANGE_SCRIPT", 1, "attachment point", &sap)) {
+            return INVALID_OPERAND;
+        }
         if (state->invocation->attachee_obj == obj
             && state->invocation->attachment_point == sap) {
             state->script_num = num;
@@ -2428,12 +3006,22 @@ int script_execute_action(ScriptAction* action, int line, ScriptState* state)
         return NEXT;
     }
     case SAT_SET_GLOBAL_FLAG: {
-        int flag = script_get_value(action->op_type[0], action->op_value[0], state);
+        int flag;
+        if (!script_resolve_index(action->op_type[0], action->op_value[0],
+                0, MAX_GLOBAL_FLAGS * 32 - 1, state, line, "action",
+                "SAT_SET_GLOBAL_FLAG", 0, "global flag index", &flag)) {
+            return INVALID_OPERAND;
+        }
         script_global_flag_set(flag, 1);
         return NEXT;
     }
     case SAT_CLEAR_GLOBAL_FLAG: {
-        int flag = script_get_value(action->op_type[0], action->op_value[0], state);
+        int flag;
+        if (!script_resolve_index(action->op_type[0], action->op_value[0],
+                0, MAX_GLOBAL_FLAGS * 32 - 1, state, line, "action",
+                "SAT_CLEAR_GLOBAL_FLAG", 0, "global flag index", &flag)) {
+            return INVALID_OPERAND;
+        }
         script_global_flag_set(flag, 0);
         return NEXT;
     }
@@ -2916,7 +3504,7 @@ void script_call_script(ScriptAction* action, ScriptState* state)
             invocation.extra_obj = OBJ_HANDLE_NULL;
             invocation.triggerer_obj = triggerer_objs[triggerer_idx];
             invocation.attachee_obj = attachee_objs[attachee_idx];
-            script_execute(&invocation);
+            script_nested_execute_func(&invocation);
         }
     }
 
@@ -3304,8 +3892,8 @@ void script_set_value(ScriptValueType type, int index, ScriptState* state, int v
 
     switch (type) {
     case SVT_COUNTER:
-        state->invocation->script->hdr.counters &= ~(0xFF << (8 * index));
-        state->invocation->script->hdr.counters |= value << (8 * index);
+        state->invocation->script->hdr.counters &= ~(0xFFu << (8 * index));
+        state->invocation->script->hdr.counters |= (unsigned int)(value & 0xFF) << (8 * index);
         break;
     case SVT_GL_VAR:
         script_global_var_set(index, value);
@@ -3506,6 +4094,7 @@ bool cache_add(int cache_entry_id, int script_id)
     char path[TIG_MAX_PATH];
     TigFile* stream;
     ScriptHeader hdr;
+    ScriptOperandError operand_error;
 
     if (!script_name_build_scr_name(script_id, path, sizeof(path))) {
         tig_debug_printf("Script: cache_add: ERROR: Failed to build script name: %d!\n", script_id);
@@ -3536,6 +4125,20 @@ bool cache_add(int cache_entry_id, int script_id)
         tig_debug_printf("Script: cache_add: ERROR: Failed to load script code: %d!\n", script_id);
         // NOTE: Verified against 0x44C56F/0x44C5A2 - original returns false
         // without fclose; original leak.
+        return false;
+    }
+
+    // CE (card R5): framing-valid bytes are not necessarily runnable. Validate the
+    // opcode and only the physical operand slots each instruction consumes
+    // before the file enters the cache. The separate scrfile/forensic tools
+    // may still inspect and round-trip these bytes.
+    if (!script_file_validate(script_cache_entries[cache_entry_id].file,
+            script_id,
+            &operand_error)) {
+        script_report_operand_error(&operand_error);
+        script_file_destroy(script_cache_entries[cache_entry_id].file);
+        script_cache_entries[cache_entry_id].file = NULL;
+        tig_file_fclose(stream);
         return false;
     }
 

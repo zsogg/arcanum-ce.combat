@@ -22,13 +22,11 @@
 // source - the same objcopy technique already used for `dialog.c` and
 // `anim.c`. See `tests/CMakeLists.txt`.
 //
-// What these tests do NOT cover, stated rather than implied: `ScriptState` is
-// file-local to `script.c`, so the destination kinds that live in that struct
-// - SVT_LC_VAR, SVT_COUNTER, SVT_PC_VAR, SVT_PC_FLAG - are not reachable from
-// here. Destinations are exercised as SVT_GL_VAR and SVT_GL_FLAG, which route
-// through `script_global_var_set` / `script_global_flag_set` and never touch
-// `state`. Every case below therefore passes NULL for `state`, and would
-// crash rather than mislead if some opcode started reading it.
+// R5 extends the same fixture through compiled-record validation and the
+// dynamic operation boundary. Its tests repeat the private ScriptState layout
+// below so local arrays and diagnostic status are reachable. The R1 arithmetic
+// cases still pass NULL deliberately: their operand kinds need no state, and
+// an accidental new dependency would crash rather than produce a lucky pass.
 
 #include "game/script.h"
 
@@ -36,20 +34,59 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "game/object.h"
 #include "test_harness.h"
 
 // script.c:50. Not exported, so it is pinned here: if the sentinel changes,
 // these tests should say so rather than silently comparing -1 to -1.
 #define SCRIPT_NEXT (-1)
+#define SCRIPT_INVALID_OPERAND (-5)
 
 // script.c:47 and script.c:48.
 #define TEST_MAX_GLOBAL_VARS 2000
 #define TEST_MAX_GLOBAL_FLAGS 100
 
-// Opaque on purpose - see the header comment. Only ever passed as NULL.
-typedef struct ScriptState ScriptState;
+typedef struct ScriptOperandError {
+    int script_id;
+    const char* script_name;
+    const char* instruction;
+    const char* branch;
+    const char* domain;
+    int line;
+    int slot;
+    int value;
+    int minimum;
+    int maximum;
+} ScriptOperandError;
+
+// Private VM state, repeated here because the R5 tests execute dynamic
+// operand checks through the real action handler. Any layout drift is caught
+// by the behavior and sanitizer runs rather than hidden behind a helper that
+// bypasses the operation boundary.
+typedef struct ScriptState {
+    ScriptInvocation* invocation;
+    int field_4;
+    int loop_cnt;
+    int field_C;
+    int script_num;
+    int field_14;
+    int64_t current_loop_obj;
+    int64_t objs[100];
+    ObjectList objects;
+    int field_398;
+    int lc_vars[10];
+    int field_3C4;
+    int64_t lc_objs[10];
+    bool invalid_operand;
+    ScriptOperandError operand_error;
+} ScriptState;
 
 extern int script_execute_action(ScriptAction* action, int line, ScriptState* state);
+extern int script_execute_condition(ScriptCondition* condition, int line, ScriptState* state);
+extern bool script_file_validate(ScriptFile* script_file, int script_id, ScriptOperandError* error);
+extern bool script_execute_file(ScriptInvocation* invocation, ScriptFile* script_file,
+    ScriptFlags flags, ScriptState* state);
+extern bool (*script_nested_execute_func)(ScriptInvocation* invocation);
 
 // `static int* script_global_vars` in script.c, globalized alongside the
 // handler so a test can supply storage without running `script_init`, which
@@ -63,6 +100,11 @@ extern int* script_global_flags;
 
 static int test_global_vars[TEST_MAX_GLOBAL_VARS];
 static int test_global_flags[TEST_MAX_GLOBAL_FLAGS];
+static ScriptFile* nested_test_file;
+static int nested_test_calls;
+static bool nested_test_invalid;
+static int nested_test_script_id;
+static const char* nested_test_script_name;
 
 // A value no case below computes, so "the destination was not written" is
 // distinguishable from "the destination was written with the right answer".
@@ -99,6 +141,419 @@ static int run_binary(int type, int value1, int value2)
     CHECK_INT(rc, SCRIPT_NEXT);
 
     return test_global_vars[0];
+}
+
+static void script_state_begin(ScriptState* state,
+    ScriptInvocation* invocation,
+    Script* script,
+    int script_num)
+{
+    memset(state, 0, sizeof(*state));
+    memset(invocation, 0, sizeof(*invocation));
+    memset(script, 0, sizeof(*script));
+    script->num = script_num;
+    invocation->script = script;
+    state->invocation = invocation;
+    state->script_num = -1;
+}
+
+static bool validate_one(ScriptCondition* condition, ScriptOperandError* error)
+{
+    ScriptFile file;
+    memset(&file, 0, sizeof(file));
+    file.num_entries = 1;
+    file.max_entries = 1;
+    file.entries = condition;
+    memcpy(file.description, "r5-boundary", sizeof("r5-boundary"));
+    return script_file_validate(&file, 4242, error);
+}
+
+static void assign_action(ScriptCondition* condition, int value_type, int value)
+{
+    memset(condition, 0, sizeof(*condition));
+    condition->type = SCT_TRUE;
+    condition->action.type = SAT_ASSIGN_NUM;
+    condition->action.op_type[0] = value_type;
+    condition->action.op_value[0] = value;
+    condition->action.op_type[1] = SVT_NUMBER;
+    condition->action.op_value[1] = 7;
+    condition->els.type = SAT_DO_NOTHING;
+}
+
+static bool execute_nested_test_file(ScriptInvocation* invocation)
+{
+    ScriptOperandError error;
+    ScriptState state;
+    bool result;
+
+    nested_test_calls++;
+    memset(&state, 0, sizeof(state));
+    state.invocation = invocation;
+    state.script_num = -1;
+    CHECK(script_file_validate(nested_test_file, invocation->script->num, &error));
+    result = script_execute_file(invocation, nested_test_file,
+        nested_test_file->flags, &state);
+    nested_test_invalid = state.invalid_operand;
+    nested_test_script_id = state.operand_error.script_id;
+    nested_test_script_name = state.operand_error.script_name;
+    return result;
+}
+
+// --------------------------------------------------------- R5 operand safety
+
+TEST(compiled_records_validate_each_fixed_operand_domain)
+{
+    static const struct {
+        int type;
+        int minimum;
+        int maximum;
+        const char* domain;
+    } cases[] = {
+        { SVT_COUNTER, 0, 3, "counter index" },
+        { SVT_GL_VAR, 0, TEST_MAX_GLOBAL_VARS - 1, "global variable index" },
+        { SVT_LC_VAR, 0, 9, "local variable index" },
+        { SVT_GL_FLAG, 0, TEST_MAX_GLOBAL_FLAGS * 32 - 1, "global flag index" },
+    };
+    ScriptCondition condition;
+    ScriptOperandError error;
+
+    for (unsigned int index = 0; index < sizeof(cases) / sizeof(cases[0]); index++) {
+        assign_action(&condition, cases[index].type, cases[index].minimum);
+        CHECK(validate_one(&condition, &error));
+        condition.action.op_value[0] = cases[index].maximum;
+        CHECK(validate_one(&condition, &error));
+
+        condition.action.op_value[0] = cases[index].minimum - 1;
+        CHECK(!validate_one(&condition, &error));
+        CHECK_STR(error.domain, cases[index].domain);
+        CHECK_INT(error.value, cases[index].minimum - 1);
+
+        condition.action.op_value[0] = cases[index].maximum + 1;
+        CHECK(!validate_one(&condition, &error));
+        CHECK_STR(error.domain, cases[index].domain);
+        CHECK_INT(error.value, cases[index].maximum + 1);
+    }
+
+    // A number is a literal, not an index. The validator must not impose an
+    // invented generic integer range on it.
+    assign_action(&condition, SVT_NUMBER, INT_MIN);
+    CHECK(validate_one(&condition, &error));
+    condition.action.op_value[0] = INT_MAX;
+    CHECK(validate_one(&condition, &error));
+}
+
+TEST(compiled_records_validate_focus_opcode_and_embedded_selector_domains)
+{
+    ScriptCondition condition;
+    ScriptOperandError error;
+
+    memset(&condition, 0, sizeof(condition));
+    condition.type = SCT_HAS_GOLD;
+    condition.op_type[0] = SFO_LOCAL_OBJECT;
+    condition.op_value[0] = 9;
+    condition.op_type[1] = SVT_NUMBER;
+    condition.action.type = SAT_DO_NOTHING;
+    condition.els.type = SAT_DO_NOTHING;
+    CHECK(validate_one(&condition, &error));
+    condition.op_value[0] = -1;
+    CHECK(!validate_one(&condition, &error));
+    CHECK_STR(error.domain, "local object index");
+    condition.op_value[0] = 10;
+    CHECK(!validate_one(&condition, &error));
+
+    condition.op_type[0] = SFO_TRIGGERER;
+    condition.op_value[0] = INT_MAX; // unread for this selector
+    CHECK(validate_one(&condition, &error));
+    condition.op_type[0] = 255;
+    CHECK(!validate_one(&condition, &error));
+    CHECK_STR(error.domain, "focus object type");
+
+    memset(&condition, 0, sizeof(condition));
+    condition.type = SCT_EQ;
+    condition.op_type[0] = SVT_PC_VAR;
+    condition.op_value[0] = 0x7FFF0001;
+    condition.op_type[1] = SVT_NUMBER;
+    condition.action.type = SAT_DO_NOTHING;
+    condition.els.type = SAT_DO_NOTHING;
+    CHECK(!validate_one(&condition, &error));
+    CHECK_STR(error.domain, "embedded focus object type");
+
+    condition.op_type[0] = SVT_NUMBER;
+    condition.type = -1;
+    CHECK(!validate_one(&condition, &error));
+    CHECK_STR(error.domain, "opcode");
+    condition.type = SCT_WAITING_FOR_LEADER + 1;
+    CHECK(!validate_one(&condition, &error));
+}
+
+TEST(call_script_in_validates_its_noncontiguous_operands_only)
+{
+    ScriptCondition condition;
+    ScriptOperandError error;
+
+    memset(&condition, 0, sizeof(condition));
+    condition.type = SCT_TRUE;
+    condition.action.type = SAT_CALL_SCRIPT_IN;
+    condition.action.op_type[0] = SVT_NUMBER;
+    condition.action.op_type[1] = SVT_NUMBER;
+    condition.action.op_type[2] = 255; // serialized garbage; AT alone reads it
+    condition.action.op_type[3] = 255;
+    condition.action.op_type[4] = SVT_GL_VAR;
+    condition.action.op_value[4] = TEST_MAX_GLOBAL_VARS - 1;
+    condition.els.type = SAT_DO_NOTHING;
+    CHECK(validate_one(&condition, &error));
+
+    condition.action.op_value[4] = TEST_MAX_GLOBAL_VARS;
+    CHECK(!validate_one(&condition, &error));
+    CHECK_INT(error.slot, 4);
+    CHECK_STR(error.instruction, "SAT_CALL_SCRIPT_IN");
+}
+
+TEST(compiled_literal_consumer_domains_are_rejected_before_execution)
+{
+    ScriptCondition condition;
+    ScriptOperandError error;
+
+    memset(&condition, 0, sizeof(condition));
+    condition.type = SCT_TRUE;
+    condition.action.type = SAT_SET_LOCAL_FLAG;
+    condition.action.op_type[0] = SVT_NUMBER;
+    condition.action.op_value[0] = 32;
+    condition.els.type = SAT_DO_NOTHING;
+    CHECK(!validate_one(&condition, &error));
+    CHECK_STR(error.domain, "local flag bit");
+    CHECK_INT(error.script_id, 4242);
+    CHECK_STR(error.script_name, "r5-boundary");
+
+    condition.action.type = SAT_SET_GLOBAL_FLAG;
+    condition.action.op_value[0] = TEST_MAX_GLOBAL_FLAGS * 32;
+    CHECK(!validate_one(&condition, &error));
+    CHECK_STR(error.domain, "global flag index");
+
+    condition.action.type = SAT_CHANGE_SCRIPT;
+    condition.action.op_type[0] = SFO_TRIGGERER;
+    condition.action.op_type[1] = SVT_NUMBER;
+    condition.action.op_value[1] = SAP_CRITICAL_MISS + 1;
+    condition.action.op_type[2] = SVT_NUMBER;
+    CHECK(!validate_one(&condition, &error));
+    CHECK_STR(error.domain, "attachment point");
+}
+
+TEST(validated_compiled_record_executes_through_the_condition_handler)
+{
+    ScriptCondition condition;
+    ScriptOperandError error;
+    ScriptState state;
+    ScriptInvocation invocation;
+    Script script;
+
+    script_test_begin();
+    script_state_begin(&state, &invocation, &script, 4242);
+    assign_action(&condition, SVT_GL_VAR, TEST_MAX_GLOBAL_VARS - 1);
+    CHECK(validate_one(&condition, &error));
+    CHECK_INT(script_execute_condition(&condition, 0, &state), SCRIPT_NEXT);
+    CHECK_INT(test_global_vars[TEST_MAX_GLOBAL_VARS - 1], 7);
+    CHECK(!state.invalid_operand);
+}
+
+TEST(dynamic_flag_indices_abort_before_mutation)
+{
+    ScriptAction action;
+    ScriptState state;
+    ScriptInvocation invocation;
+    Script script;
+
+    script_test_begin();
+    script_state_begin(&state, &invocation, &script, 4242);
+    script.hdr.flags = 0x12345678u;
+    memset(&action, 0, sizeof(action));
+    action.type = SAT_SET_LOCAL_FLAG;
+    action.op_type[0] = SVT_GL_VAR;
+    action.op_value[0] = 0;
+
+    test_global_vars[0] = -1;
+    CHECK_INT(script_execute_action(&action, 17, &state), SCRIPT_INVALID_OPERAND);
+    CHECK_INT(script.hdr.flags, 0x12345678u);
+    CHECK(state.invalid_operand);
+    CHECK_STR(state.operand_error.instruction, "SAT_SET_LOCAL_FLAG");
+    CHECK_STR(state.operand_error.domain, "local flag bit");
+    CHECK_INT(state.operand_error.line, 17);
+    CHECK_INT(state.operand_error.value, -1);
+
+    state.invalid_operand = false;
+    test_global_vars[0] = 32;
+    CHECK_INT(script_execute_action(&action, 18, &state), SCRIPT_INVALID_OPERAND);
+    CHECK_INT(script.hdr.flags, 0x12345678u);
+
+    state.invalid_operand = false;
+    script.hdr.flags = 0;
+    test_global_vars[0] = 31;
+    CHECK_INT(script_execute_action(&action, 19, &state), SCRIPT_NEXT);
+    CHECK_INT(script.hdr.flags, 0x80000000u);
+    CHECK(!state.invalid_operand);
+
+    memset(&action, 0, sizeof(action));
+    action.type = SAT_SET_GLOBAL_FLAG;
+    action.op_type[0] = SVT_GL_VAR;
+    action.op_value[0] = 0;
+    test_global_vars[0] = TEST_MAX_GLOBAL_FLAGS * 32;
+    CHECK_INT(script_execute_action(&action, 20, &state), SCRIPT_INVALID_OPERAND);
+    CHECK_INT(test_global_flags[TEST_MAX_GLOBAL_FLAGS - 1], 0);
+
+    state.invalid_operand = false;
+    test_global_vars[0] = TEST_MAX_GLOBAL_FLAGS * 32 - 1;
+    CHECK_INT(script_execute_action(&action, 21, &state), SCRIPT_NEXT);
+    CHECK_INT((unsigned int)test_global_flags[TEST_MAX_GLOBAL_FLAGS - 1], 0x80000000u);
+}
+
+TEST(repeated_invalid_invocations_do_not_mutate_or_accumulate_state)
+{
+    ScriptAction action;
+    ScriptState state;
+    ScriptInvocation invocation;
+    Script script;
+
+    script_test_begin();
+    script_state_begin(&state, &invocation, &script, 4242);
+    script.hdr.flags = 0x55AAu;
+    memset(&action, 0, sizeof(action));
+    action.type = SAT_SET_LOCAL_FLAG;
+    action.op_type[0] = SVT_GL_VAR;
+    action.op_value[0] = 0;
+    test_global_vars[0] = 32;
+
+    for (int iteration = 0; iteration < 2000; iteration++) {
+        state.invalid_operand = false;
+        CHECK_INT(script_execute_action(&action, 22, &state), SCRIPT_INVALID_OPERAND);
+        CHECK_INT(script.hdr.flags, 0x55AAu);
+    }
+}
+
+TEST(accepted_file_path_stops_after_dynamic_error_without_rollback)
+{
+    ScriptCondition entries[3];
+    ScriptFile file;
+    ScriptOperandError error;
+    ScriptState state;
+    ScriptInvocation invocation;
+    Script script;
+
+    script_test_begin();
+    script_state_begin(&state, &invocation, &script, 4242);
+    assign_action(&entries[0], SVT_GL_VAR, 0);
+    entries[0].action.op_value[1] = 7;
+
+    memset(&entries[1], 0, sizeof(entries[1]));
+    entries[1].type = SCT_TRUE;
+    entries[1].action.type = SAT_SET_LOCAL_FLAG;
+    entries[1].action.op_type[0] = SVT_GL_VAR;
+    entries[1].action.op_value[0] = 1;
+    entries[1].els.type = SAT_DO_NOTHING;
+
+    assign_action(&entries[2], SVT_GL_VAR, 2);
+    entries[2].action.op_value[1] = 9;
+
+    memset(&file, 0, sizeof(file));
+    file.num_entries = 3;
+    file.max_entries = 3;
+    file.entries = entries;
+    memcpy(file.description, "r5-full-path", sizeof("r5-full-path"));
+    CHECK(script_file_validate(&file, 4242, &error));
+
+    test_global_vars[1] = 32;
+    CHECK(!script_execute_file(&invocation, &file, 0, &state));
+    CHECK(state.invalid_operand);
+    CHECK_INT(state.operand_error.line, 1);
+    CHECK_INT(state.operand_error.script_id, 4242);
+    CHECK_STR(state.operand_error.script_name, "r5-full-path");
+    CHECK_INT(test_global_vars[0], 7);
+    CHECK_INT(test_global_vars[2], 0);
+    CHECK_INT(script.hdr.flags, 0);
+}
+
+TEST(existing_thousand_step_execution_budget_still_bounds_a_valid_loop)
+{
+    ScriptCondition entries[2];
+    ScriptFile file;
+    ScriptOperandError error;
+    ScriptState state;
+    ScriptInvocation invocation;
+    Script script;
+
+    script_test_begin();
+    script_state_begin(&state, &invocation, &script, 4242);
+    memset(entries, 0, sizeof(entries));
+    entries[0].type = SCT_TRUE;
+    entries[0].action.type = SAT_ADD;
+    entries[0].action.op_type[0] = SVT_GL_VAR;
+    entries[0].action.op_value[0] = 0;
+    entries[0].action.op_type[1] = SVT_GL_VAR;
+    entries[0].action.op_value[1] = 0;
+    entries[0].action.op_type[2] = SVT_NUMBER;
+    entries[0].action.op_value[2] = 1;
+    entries[0].els.type = SAT_DO_NOTHING;
+    entries[1].type = SCT_TRUE;
+    entries[1].action.type = SAT_GOTO;
+    entries[1].action.op_type[0] = SVT_NUMBER;
+    entries[1].action.op_value[0] = 0;
+    entries[1].els.type = SAT_DO_NOTHING;
+
+    memset(&file, 0, sizeof(file));
+    file.num_entries = 2;
+    file.max_entries = 2;
+    file.entries = entries;
+    CHECK(script_file_validate(&file, 4242, &error));
+    CHECK(!script_execute_file(&invocation, &file, 0, &state));
+    CHECK(!state.invalid_operand);
+    CHECK_INT(test_global_vars[0], 500);
+}
+
+TEST(nested_call_failure_is_bounded_to_the_child_invocation)
+{
+    ScriptAction action;
+    ScriptCondition child_entry;
+    ScriptFile child_file;
+    ScriptState parent_state;
+    ScriptInvocation parent_invocation;
+    Script parent_script;
+
+    script_test_begin();
+    script_state_begin(&parent_state, &parent_invocation, &parent_script, 4242);
+    assign_action(&child_entry, SVT_GL_VAR, 0);
+    child_entry.action.type = SAT_SET_LOCAL_FLAG;
+    child_entry.action.op_type[0] = SVT_GL_VAR;
+    child_entry.action.op_value[0] = 1;
+    memset(&child_file, 0, sizeof(child_file));
+    child_file.num_entries = 1;
+    child_file.max_entries = 1;
+    child_file.entries = &child_entry;
+    memcpy(child_file.description, "r5-nested-child", sizeof("r5-nested-child"));
+
+    memset(&action, 0, sizeof(action));
+    action.type = SAT_CALL_SCRIPT;
+    action.op_type[0] = SVT_NUMBER;
+    action.op_value[0] = 9001;
+    action.op_type[1] = SVT_NUMBER;
+    action.op_value[1] = 0;
+    action.op_type[2] = SFO_TRIGGERER;
+    action.op_type[3] = SFO_ATTACHEE;
+
+    nested_test_file = &child_file;
+    nested_test_calls = 0;
+    nested_test_invalid = false;
+    nested_test_script_id = 0;
+    nested_test_script_name = NULL;
+    test_global_vars[1] = 32;
+    script_nested_execute_func = execute_nested_test_file;
+    CHECK_INT(script_execute_action(&action, 5, &parent_state), SCRIPT_NEXT);
+    script_nested_execute_func = script_execute;
+
+    CHECK_INT(nested_test_calls, 1);
+    CHECK(nested_test_invalid);
+    CHECK_INT(nested_test_script_id, 9001);
+    CHECK_STR(nested_test_script_name, "r5-nested-child");
+    CHECK(!parent_state.invalid_operand);
+    CHECK_INT(test_global_vars[0], 0);
 }
 
 // ---------------------------------------------------------------- division
@@ -324,6 +779,16 @@ TEST(the_shipped_level_scaling_script_divides_by_five)
 
 void test_script_suite(void)
 {
+    RUN(compiled_records_validate_each_fixed_operand_domain);
+    RUN(compiled_records_validate_focus_opcode_and_embedded_selector_domains);
+    RUN(call_script_in_validates_its_noncontiguous_operands_only);
+    RUN(compiled_literal_consumer_domains_are_rejected_before_execution);
+    RUN(validated_compiled_record_executes_through_the_condition_handler);
+    RUN(dynamic_flag_indices_abort_before_mutation);
+    RUN(repeated_invalid_invocations_do_not_mutate_or_accumulate_state);
+    RUN(accepted_file_path_stops_after_dynamic_error_without_rollback);
+    RUN(existing_thousand_step_execution_budget_still_bounds_a_valid_loop);
+    RUN(nested_call_failure_is_bounded_to_the_child_invocation);
     RUN(divide_stores_the_quotient_not_the_sum);
     RUN(divide_truncates_toward_zero_like_idiv);
     RUN(divide_handles_exact_and_zero_numerators);
