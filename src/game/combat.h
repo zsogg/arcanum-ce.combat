@@ -5,7 +5,7 @@
 #include "game/damage_type.h"
 #include "game/timeevent.h"
 
-typedef void (*CombatCallbackF0)(int a1);
+typedef void (*CombatCallbackF0)(bool combat_ended);
 typedef void (*CombatCallbackF4)(void);
 typedef void (*CombatCallbackF8)(void);
 typedef void (*CombatCallbackFC)(int a1);
