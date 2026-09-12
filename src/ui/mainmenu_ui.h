@@ -111,9 +111,11 @@ bool mainmenu_ui_quick_load(void);
  * `harness/huddbg-capture.patch` has been patching it in by hand. This makes
  * the same hook a permanent, buildable one.
  *
- * Set by `main` from `-autoload`. Off by default; the menu behaves normally.
+ * Set by `main` from `-autoload`, optionally with an exact `:SLOT`. Off by
+ * default; the menu behaves normally.
  */
 void mainmenu_ui_autoload_set(bool enabled);
+void mainmenu_ui_autoload_slot_set(const char* slot);
 void mainmenu_ui_create_window(void);
 void mainmenu_ui_create_window_func(bool should_display);
 bool mainmenu_ui_process_callback(TimeEvent* timeevent);

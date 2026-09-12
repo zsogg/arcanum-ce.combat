@@ -1285,6 +1285,59 @@ const char* gamelib_last_save_name(void)
     return byte_5D0D88;
 }
 
+// CE: resolve an exact eight-character slot identity (for example
+// `Slot0001`) to the full .gsi base name (`Slot0001My Save`). The load screen
+// stores the description after the first eight characters, while the archive
+// pair itself uses only those eight. Selecting by slot therefore has to find
+// the .gsi name without falling back to the newest file's timestamp.
+//
+// Refuse an ambiguous directory rather than letting its iteration order pick
+// one of two descriptions for the same archive pair.
+bool gamelib_save_name_resolve(const char* slot, char* name, size_t size)
+{
+    GameSaveList save_list;
+    const char* match = NULL;
+    unsigned int index;
+    bool valid;
+
+    if (slot == NULL || name == NULL || size == 0 || strlen(slot) != 8
+        || SDL_strncasecmp(slot, "Slot", 4) != 0) {
+        return false;
+    }
+
+    valid = SDL_strcasecmp(slot, "SlotAuto") == 0;
+    if (!valid) {
+        valid = true;
+        for (index = 4; index < 8; index++) {
+            if (slot[index] < '0' || slot[index] > '9') {
+                valid = false;
+                break;
+            }
+        }
+    }
+    if (!valid) {
+        return false;
+    }
+
+    gamelib_savelist_create(&save_list);
+    for (index = 0; index < save_list.count; index++) {
+        if (SDL_strncasecmp(save_list.names[index], slot, 8) != 0) {
+            continue;
+        }
+        if (match != NULL || strlen(save_list.names[index]) >= size) {
+            gamelib_savelist_destroy(&save_list);
+            return false;
+        }
+        match = save_list.names[index];
+    }
+
+    if (match != NULL) {
+        strcpy(name, match);
+    }
+    gamelib_savelist_destroy(&save_list);
+    return match != NULL;
+}
+
 // 0x4038C0
 bool gamelib_in_save(void)
 {

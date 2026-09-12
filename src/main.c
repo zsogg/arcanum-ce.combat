@@ -68,17 +68,22 @@ static int dword_5CFF00;
 
 // CE: the reproducible-run harness. Not in the original.
 //
-// `-autoload` quick-loads the newest save instead of showing the menu, and
+// `-autoload` quick-loads the newest save instead of showing the menu;
+// `-autoload:Slot0001` selects that exact slot identity instead. A missing or
+// ambiguous exact slot is a harness error, never a timestamp fallback.
 // `-screenshot=N` writes a screenshot at frame N through the shipped F12 path.
 // `-runframes=N` quick-saves and quits after N frames of `main_loop`. With
 // `-deterministic` that is a complete scripted run: same save in, same number
 // of frames, same save out - which is what makes two CE builds comparable
 // byte for byte without Wine, a patched binary, or synthetic input.
 //
-// Slot selection is by mtime, the same contract `mainmenu_ui_quick_load`
-// already has and the same one `harness/make-save-pair.sh` already drives by
-// touching the save it wants. Nothing new is exported for this.
+// Bare `-autoload` selection is by mtime, the same contract
+// `mainmenu_ui_quick_load` already has and the same one
+// `harness/make-save-pair.sh` already drives by touching the save it wants.
+// Nothing new is exported for either form.
 static bool harness_autoload;
+static bool harness_autoload_exact;
+static char harness_autoload_slot[TIG_MAX_PATH];
 static int harness_run_frames;
 static int harness_frames_run;
 // CE: `-screenshot=N` fires the game's own F12 path at a fixed FRAME.
@@ -199,8 +204,20 @@ int main(int argc, char** argv)
         determinism_request(seed);
     }
 
-    if (strstr(lpCmdLine, "-autoload") != NULL) {
+    pch = strstr(lpCmdLine, "-autoload");
+    if (pch != NULL) {
         harness_autoload = true;
+        if (pch[strlen("-autoload")] == ':') {
+            const char* slot = pch + strlen("-autoload:");
+            size_t slot_len = strcspn(slot, " \t\"");
+
+            harness_autoload_exact = true;
+            if (slot_len >= sizeof(harness_autoload_slot)) {
+                slot_len = sizeof(harness_autoload_slot) - 1;
+            }
+            memcpy(harness_autoload_slot, slot, slot_len);
+            harness_autoload_slot[slot_len] = '\0';
+        }
     }
 
     pch = strstr(lpCmdLine, "-screenshot=");
@@ -460,8 +477,12 @@ int main(int argc, char** argv)
     }
 
     // CE: `-autoload` makes the menu load the newest save immediately instead
-    // of waiting for a click. The faithful path is unchanged when it is off.
+    // of waiting for a click. Its `:SLOT` form resolves one exact slot. The
+    // faithful path is unchanged when it is off.
     mainmenu_ui_autoload_set(harness_autoload);
+    if (harness_autoload_exact) {
+        mainmenu_ui_autoload_slot_set(harness_autoload_slot);
+    }
 
     // 2026-08-21: headless savegame round-trip (SAVE-ROUNDTRIP.md in
     // arcanum-work). No-op unless `-roundtrip:` was given. Runs at the exact

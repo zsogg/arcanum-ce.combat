@@ -262,6 +262,33 @@ TEST(clean_commit_preserves_slot_names_and_loadable_archives)
     slot_name = "Slot0001";
 }
 
+TEST(exact_slot_resolution_never_uses_timestamp_or_directory_order)
+{
+    char name[64];
+
+    begin(true);
+    CHECK(gamelib_save_name_resolve("Slot0001", name, sizeof(name)));
+    CHECK_STR(name, "Slot0001description");
+    CHECK(gamelib_save_name_resolve("slot0001", name, sizeof(name)));
+    CHECK_STR(name, "Slot0001description");
+    CHECK(!gamelib_save_name_resolve("Slot0002", name, sizeof(name)));
+    CHECK(!gamelib_save_name_resolve("Slot001", name, sizeof(name)));
+    CHECK(!gamelib_save_name_resolve("Slot00x1", name, sizeof(name)));
+    CHECK(!gamelib_save_name_resolve("Slot0001extra", name, sizeof(name)));
+    CHECK(!gamelib_save_name_resolve("Slot0001", name, 8));
+
+    write_text(REPO "/Save/Slot0001another.gsi", "ambiguous metadata");
+    CHECK(!gamelib_save_name_resolve("Slot0001", name, sizeof(name)));
+    end();
+
+    slot_name = "SlotAuto";
+    begin(true);
+    CHECK(gamelib_save_name_resolve("SlotAuto", name, sizeof(name)));
+    CHECK_STR(name, "SlotAutodescription");
+    end();
+    slot_name = "Slot0001";
+}
+
 TEST(partial_cleanup_never_rolls_back_a_committed_generation)
 {
     begin(true);
@@ -472,6 +499,7 @@ TEST(legacy_backups_and_corrupt_records_are_preserved_not_guessed_at)
 void test_save_slot_suite(void)
 {
     RUN(clean_commit_preserves_slot_names_and_loadable_archives);
+    RUN(exact_slot_resolution_never_uses_timestamp_or_directory_order);
     RUN(partial_cleanup_never_rolls_back_a_committed_generation);
     RUN(failed_restore_retains_all_backups_and_blocks_readers);
     RUN(metadata_and_thumbnail_failures_do_not_touch_the_old_slot);

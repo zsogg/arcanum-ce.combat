@@ -116,6 +116,7 @@ bool gamelib_save(const char* name, const char* description);
 bool gamelib_load(const char* name);
 bool gamelib_delete(const char* name);
 const char* gamelib_last_save_name(void);
+bool gamelib_save_name_resolve(const char* slot, char* name, size_t size);
 bool gamelib_in_save(void);
 bool gamelib_in_load(void);
 void gamelib_set_extra_save_func(GameExtraSaveFunc func);

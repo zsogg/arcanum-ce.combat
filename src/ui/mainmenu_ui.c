@@ -2143,11 +2143,23 @@ void mainmenu_ui_dismiss_ex(bool exiting)
 
 // CE: reproducible-run harness flag. Not in the original.
 static bool mainmenu_ui_autoload;
+static bool mainmenu_ui_autoload_exact;
+static char mainmenu_ui_autoload_slot[TIG_MAX_PATH];
 
 // CE: not in the original - see mainmenu_ui.h.
 void mainmenu_ui_autoload_set(bool enabled)
 {
     mainmenu_ui_autoload = enabled;
+}
+
+// CE: an exact slot supplied by `-autoload:SLOT`. Empty preserves the older
+// newest-save harness contract. `main` has already bounded the argument, and
+// gamelib_save_name_resolve validates the slot syntax and its unique .gsi.
+void mainmenu_ui_autoload_slot_set(const char* slot)
+{
+    mainmenu_ui_autoload_exact = true;
+    snprintf(mainmenu_ui_autoload_slot, sizeof(mainmenu_ui_autoload_slot),
+        "%s", slot != NULL ? slot : "");
 }
 
 // 0x541590
@@ -2177,10 +2189,30 @@ bool mainmenu_ui_handle(void)
     // player had picked it from the load screen, so a scripted run reaches
     // in-game state with no input at all. See mainmenu_ui.h.
     if (mainmenu_ui_autoload) {
-        const char* autoload_path = gamelib_last_save_name();
+        char exact_path[TIG_MAX_PATH];
+        const char* autoload_path;
+        bool exact = mainmenu_ui_autoload_exact;
+
+        if (exact) {
+            if (!gamelib_save_name_resolve(mainmenu_ui_autoload_slot,
+                    exact_path, sizeof(exact_path))) {
+                tig_debug_printf("Harness: exact autoload FAILED to resolve '%s'\n",
+                    mainmenu_ui_autoload_slot);
+                exit(24);
+            }
+            autoload_path = exact_path;
+        } else {
+            autoload_path = gamelib_last_save_name();
+        }
 
         mainmenu_ui_autoload = false;
-        tig_debug_printf("Harness: autoload newest save '%s'\n", autoload_path);
+        mainmenu_ui_autoload_exact = false;
+        if (exact) {
+            tig_debug_printf("Harness: autoload exact slot '%s' as '%s'\n",
+                mainmenu_ui_autoload_slot, autoload_path);
+        } else {
+            tig_debug_printf("Harness: autoload newest save '%s'\n", autoload_path);
+        }
 
         if (autoload_path[0] != '\0'
             && gamelib_saveinfo_load(autoload_path, &mainmenu_ui_gsi)) {
@@ -2195,6 +2227,9 @@ bool mainmenu_ui_handle(void)
             } else {
                 tig_debug_printf("Harness: autoload FAILED to load '%s'\n",
                     autoload_name);
+                if (exact) {
+                    exit(24);
+                }
             }
 
             if (mainmenu_ui_gsi_loaded) {
@@ -2203,6 +2238,9 @@ bool mainmenu_ui_handle(void)
             }
         } else {
             tig_debug_printf("Harness: autoload FAILED to read save info\n");
+            if (exact) {
+                exit(24);
+            }
         }
     }
 
