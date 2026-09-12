@@ -2726,6 +2726,31 @@ void mainmenu_ui_options_tab_switch(int a1)
     }
 }
 
+// CE (review of card R2): say that the list is blocked, not that it is empty.
+//
+// An unresolved save transaction makes `gamelib_savelist_create` refuse to
+// enumerate, so the screen opens with no entries — exactly what a player with
+// no saved games sees, and the one reading that invites them to start a new
+// game over the files recovery is still holding. The strings are Troika's own
+// 5001 and 5003; no message is added to `mainmenu.mes`. This diagnoses a state
+// only CE can be in: the original has no transaction to fail to recover.
+static void mainmenu_ui_report_blocked_savelist(int num)
+{
+    MesFileEntry mes_file_entry;
+    UiMessage ui_message;
+
+    if (!gamelib_slot_recovery_blocked_get()) {
+        return;
+    }
+
+    mes_file_entry.num = num;
+    mes_get_msg(mainmenu_ui_mainmenu_mes_file, &mes_file_entry);
+
+    ui_message.type = UI_MSG_TYPE_EXCLAMATION;
+    ui_message.str = mes_file_entry.str;
+    ui_display_msg(&ui_message);
+}
+
 // 0x541F20
 void mainmenu_ui_load_game_create(void)
 {
@@ -2743,6 +2768,8 @@ void mainmenu_ui_load_game_create(void)
     } else {
         gamelib_savelist_create(&mainmenu_ui_gsl);
     }
+
+    mainmenu_ui_report_blocked_savelist(5001); // "Save Game Corrupt!  Load Failed!"
 
     gamelib_savelist_sort(&mainmenu_ui_gsl, GAME_SAVE_LIST_ORDER_DATE, false);
 
@@ -3476,6 +3503,7 @@ void mainmenu_ui_save_game_create(void)
 
     mainmenu_ui_close_game_screens();
     gamelib_savelist_create(&mainmenu_ui_gsl);
+    mainmenu_ui_report_blocked_savelist(5003); // "Save Game Corrupt!  Save Failed!"
     gamelib_savelist_sort(&mainmenu_ui_gsl, GAME_SAVE_LIST_ORDER_DATE, false);
     mainmenu_ui_textedit_buffer[0] = '\0';
     window->cnt = mainmenu_ui_gsl.count + 1;

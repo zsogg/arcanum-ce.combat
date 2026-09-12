@@ -496,6 +496,26 @@ TEST(legacy_backups_and_corrupt_records_are_preserved_not_guessed_at)
     end();
 }
 
+// An unreadable save list and an empty one look identical on screen, so the
+// verdict has to survive the call that produced it. `mainmenu_ui` reads exactly
+// this to choose between "Load Failed" and showing the player nothing at all.
+TEST(a_blocked_recovery_is_still_reportable_after_the_list_is_refused)
+{
+    begin(true);
+    write_text(REPO "/Save/Slot0001.tfai.bak", "ambiguous previous R2 backup");
+    CHECK(!gamelib_slot_recover());
+    CHECK(gamelib_slot_recovery_blocked_get());
+    // Asking twice must not launder the verdict into a success.
+    CHECK(!gamelib_slot_recover());
+    CHECK(gamelib_slot_recovery_blocked_get());
+
+    unlink(REPO "/Save/Slot0001.tfai.bak");
+    CHECK(gamelib_slot_recover());
+    CHECK(!gamelib_slot_recovery_blocked_get());
+    check_generation(false, true);
+    end();
+}
+
 void test_save_slot_suite(void)
 {
     RUN(clean_commit_preserves_slot_names_and_loadable_archives);
@@ -507,4 +527,5 @@ void test_save_slot_suite(void)
     RUN(killing_the_real_commit_at_every_io_boundary_is_recoverable);
     RUN(recovery_itself_survives_every_io_failure_and_interruption);
     RUN(legacy_backups_and_corrupt_records_are_preserved_not_guessed_at);
+    RUN(a_blocked_recovery_is_still_reportable_after_the_list_is_refused);
 }

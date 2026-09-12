@@ -124,6 +124,7 @@ void gamelib_set_extra_load_func(GameExtraLoadFunc func);
 // CE (card R2): roll an interrupted save back to its previous generation.
 // Idempotent; called before slots are enumerated and before one is loaded.
 bool gamelib_slot_recover(void);
+bool gamelib_slot_recovery_blocked_get(void);
 void gamelib_savelist_create(GameSaveList* save_list);
 void gamelib_savelist_create_module(const char* module, GameSaveList* save_list);
 void gamelib_savelist_destroy(GameSaveList* save_list);

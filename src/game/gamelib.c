@@ -948,13 +948,29 @@ void gamelib_current_mode_name_set(const char* name)
 }
 
 // CE: recovery returns a verdict. Callers must not read a partly restored slot.
+//
+// The verdict is also remembered, because refusing to enumerate makes the save
+// list arrive **empty**, and empty is what a player with no saved games sees.
+// Those two readings are not close: one says "retry or inspect Save", the other
+// says "start over". `gamelib_slot_recovery_blocked` lets the UI tell them
+// apart without teaching it anything about the transaction.
+static bool gamelib_slot_recovery_blocked;
+
 bool gamelib_slot_recover(void)
 {
     if (!save_transaction_recover()) {
         tig_debug_printf("gamelib: save recovery incomplete; files retained, save/list/load blocked\n");
+        gamelib_slot_recovery_blocked = true;
         return false;
     }
+    gamelib_slot_recovery_blocked = false;
     return true;
+}
+
+// CE: did the last recovery attempt leave saves unreadable?
+bool gamelib_slot_recovery_blocked_get(void)
+{
+    return gamelib_slot_recovery_blocked;
 }
 
 // 0x403030
