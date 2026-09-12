@@ -1,4 +1,5 @@
 #include "game/combat.h"
+#include "game/combat_observer.h"
 
 #define _USE_MATH_DEFINES
 #include <math.h>
@@ -73,6 +74,7 @@ static int combat_move_cost(int64_t source_obj, int64_t target_loc, bool adjacen
 static bool combat_turn_based_critter_is_dontdraw(int64_t obj);
 static void sort_combat_list(void);
 static void pc_switch_weapon(int64_t pc_obj, int64_t target_obj);
+static void combat_observer_snapshot_obj(int64_t obj);
 
 // 0x5B5798
 static int hit_loc_penalties[HIT_LOC_COUNT] = {
@@ -828,12 +830,46 @@ void combat_process_attack_result(CombatContext* combat)
     }
 }
 
+static void combat_observer_snapshot_obj(int64_t obj)
+{
+    char actor[COMBAT_OBSERVER_IDENTITY_SIZE];
+    int64_t weapon_obj;
+    int64_t armor_obj;
+
+    if (!combat_observer_is_enabled()
+        || obj == OBJ_HANDLE_NULL
+        || !obj_type_is_critter(obj_field_int32_get(obj, OBJ_F_TYPE))) {
+        return;
+    }
+
+    combat_observer_object_id(obj, actor);
+    weapon_obj = item_wield_get(obj, ITEM_INV_LOC_WEAPON);
+    armor_obj = item_wield_get(obj, ITEM_INV_LOC_ARMOR);
+    combat_observer_actor_snapshot(actor,
+        stat_level_get(obj, STAT_LEVEL),
+        stat_level_get(obj, STAT_STRENGTH),
+        stat_level_get(obj, STAT_DEXTERITY),
+        stat_level_get(obj, STAT_SPEED),
+        basic_skill_level(obj, BASIC_SKILL_MELEE),
+        basic_skill_level(obj, BASIC_SKILL_DODGE),
+        object_hp_current(obj), object_hp_max(obj),
+        critter_fatigue_current(obj), critter_fatigue_max(obj),
+        weapon_obj != OBJ_HANDLE_NULL
+            ? obj_field_int32_get(weapon_obj, OBJ_F_DESCRIPTION) : 0,
+        armor_obj != OBJ_HANDLE_NULL
+            ? obj_field_int32_get(armor_obj, OBJ_F_DESCRIPTION) : 0);
+}
+
 // 0x4B3170
 int combat_attack(CombatContext* combat)
 {
     bool was_in_bed = false;
     int sound_id;
     int aptitude_crit_failure_chance;
+    int attack_result;
+    unsigned long long observer_action_id = 0;
+    char observer_attacker[COMBAT_OBSERVER_IDENTITY_SIZE] = "NULL";
+    char observer_target[COMBAT_OBSERVER_IDENTITY_SIZE] = "NULL";
 
     if (combat->target_obj != OBJ_HANDLE_NULL
         && obj_field_int32_get(combat->target_obj, OBJ_F_TYPE) == OBJ_TYPE_SCENERY) {
@@ -854,6 +890,15 @@ int combat_attack(CombatContext* combat)
         combat->hit_loc = combat_random_hit_loc();
     }
 
+    if (combat_observer_is_enabled()) {
+        combat_observer_object_id(combat->attacker_obj, observer_attacker);
+        combat_observer_object_id(combat->target_obj, observer_target);
+        observer_action_id = combat_observer_attack_started(observer_attacker,
+            observer_target, combat->skill, combat->hit_loc);
+        combat_observer_snapshot_obj(combat->attacker_obj);
+        combat_observer_snapshot_obj(combat->target_obj);
+    }
+
     if (!combat_consume_ammo(combat->weapon_obj, combat->attacker_obj, 1, false)) {
         combat->flags |= 0x400;
 
@@ -866,6 +911,9 @@ int combat_attack(CombatContext* combat)
             pc_switch_weapon(combat->attacker_obj, combat->target_obj);
         }
 
+        combat_observer_attack_resolved(observer_action_id,
+            observer_attacker, observer_target, combat->skill,
+            combat->hit_loc, combat->flags, 0);
         return 0;
     }
 
@@ -966,6 +1014,9 @@ int combat_attack(CombatContext* combat)
             }
 
             if (!skill_invocation_run(&skill_invocation)) {
+                combat_observer_attack_resolved(observer_action_id,
+                    observer_attacker, observer_target, combat->skill,
+                    combat->hit_loc, combat->flags, 0);
                 return 0;
             }
 
@@ -983,6 +1034,9 @@ int combat_attack(CombatContext* combat)
                 object_ref_init(combat->target_obj, &(skill_invocation.source));
                 skill_invocation.skill = SKILL_DODGE;
                 if (!skill_invocation_run(&skill_invocation)) {
+                    combat_observer_attack_resolved(observer_action_id,
+                        observer_attacker, observer_target, combat->skill,
+                        combat->hit_loc, combat->flags, 0);
                     return 0;
                 }
 
@@ -1034,9 +1088,16 @@ int combat_attack(CombatContext* combat)
 
     if (is_melee) {
         combat_process_taunts(combat);
-        return combat_play_hit_fx(combat);
+        attack_result = combat_play_hit_fx(combat);
+        combat_observer_attack_resolved(observer_action_id,
+            observer_attacker, observer_target, combat->skill,
+            combat->hit_loc, combat->flags, attack_result);
+        return attack_result;
     }
 
+    combat_observer_attack_resolved(observer_action_id,
+        observer_attacker, observer_target, combat->skill,
+        combat->hit_loc, combat->flags, 0);
     return 0;
 }
 
@@ -1440,6 +1501,10 @@ void combat_dmg(CombatContext* combat)
     char str[80];
     unsigned int spell_flags = 0;
     bool weapon_dropped = false;
+    int observer_hp_before = -1;
+    int observer_fatigue_before = -1;
+    char observer_attacker[COMBAT_OBSERVER_IDENTITY_SIZE] = "NULL";
+    char observer_target[COMBAT_OBSERVER_IDENTITY_SIZE] = "NULL";
 
     if (combat->target_obj == OBJ_HANDLE_NULL) {
         return;
@@ -1449,6 +1514,13 @@ void combat_dmg(CombatContext* combat)
     if (obj_type_is_critter(obj_type)) {
         unsigned int critter_flags = obj_field_int32_get(combat->target_obj, OBJ_F_CRITTER_FLAGS);
         spell_flags = obj_field_int32_get(combat->target_obj, OBJ_F_SPELL_FLAGS);
+
+        if (combat_observer_is_enabled()) {
+            observer_hp_before = object_hp_damage_get(combat->target_obj);
+            observer_fatigue_before = critter_fatigue_damage_get(combat->target_obj);
+            combat_observer_object_id(combat->attacker_obj, observer_attacker);
+            combat_observer_object_id(combat->target_obj, observer_target);
+        }
 
         if ((critter_flags & (OCF_UNDEAD | OCF_MECHANICAL)) != 0) {
             combat->dam[DAMAGE_TYPE_POISON] = 0;
@@ -1948,6 +2020,17 @@ void combat_dmg(CombatContext* combat)
 
         if (weapon_dropped) {
             pc_switch_weapon(combat->target_obj, combat->attacker_obj);
+        }
+
+        if (combat_observer_is_enabled()) {
+            combat_observer_damage_committed(observer_attacker,
+                observer_target, combat->dam,
+                dam_flags, dam, observer_hp_before,
+                object_hp_damage_get(combat->target_obj),
+                observer_fatigue_before,
+                critter_fatigue_damage_get(combat->target_obj),
+                critter_is_dead(combat->target_obj),
+                critter_is_unconscious(combat->target_obj));
         }
     } else {
         // 0x4B462E
@@ -3057,6 +3140,14 @@ void combat_turn_based_whos_turn_set(int64_t obj)
 
     tig_debug_printf("Combat: TB: Action Points Available: %d.\n", combat_action_points);
 
+    if (combat_observer_is_enabled()) {
+        char actor[COMBAT_OBSERVER_IDENTITY_SIZE];
+
+        combat_observer_object_id(obj, actor);
+        combat_observer_turn_started(actor, combat_action_points);
+        combat_observer_snapshot_obj(obj);
+    }
+
     if (player_is_local_pc_obj(obj)) {
         combat_callbacks.field_C(combat_action_points);
 
@@ -3335,6 +3426,12 @@ void combat_turn_based_subturn_start(void)
 void combat_turn_based_subturn_end(void)
 {
     combat_debug(combat_whos_turn_node->obj, "SubTurn End");
+    if (combat_observer_is_enabled()) {
+        char actor[COMBAT_OBSERVER_IDENTITY_SIZE];
+
+        combat_observer_object_id(combat_whos_turn_node->obj, actor);
+        combat_observer_turn_ended(actor, combat_action_points);
+    }
     if (player_is_local_pc_obj(combat_whos_turn_node->obj)) {
         combat_callbacks.field_C(0);
     } else {
@@ -3410,6 +3507,7 @@ int combat_action_points_get(void)
 bool combat_check_action_points(int64_t obj, int required_action_points)
 {
     bool is_pc;
+    bool accepted;
 
     if (!combat_turn_based_active) {
         return true;
@@ -3445,17 +3543,23 @@ bool combat_check_action_points(int64_t obj, int required_action_points)
         combat_callbacks.field_C(combat_action_points);
     }
 
-    if (combat_action_points >= required_action_points) {
-        return true;
-    }
-
-    if (combat_action_points > 0
+    accepted = combat_action_points >= required_action_points;
+    if (!accepted
+        && combat_action_points > 0
         && is_pc
         && critter_fatigue_current(obj) > 1) {
-        return true;
+        accepted = true;
     }
 
-    return false;
+    if (combat_observer_is_enabled()) {
+        char actor[COMBAT_OBSERVER_IDENTITY_SIZE];
+
+        combat_observer_object_id(obj, actor);
+        combat_observer_ap_checked(actor, required_action_points,
+            combat_action_points, accepted);
+    }
+
+    return accepted;
 }
 
 // 0x4B7830
@@ -3630,6 +3734,8 @@ bool combat_consume_action_points(int64_t obj, int action_points)
 {
     bool is_pc;
     CombatContext combat;
+    int action_points_before;
+    int fatigue_before = -1;
 
     if (!combat_turn_based_active) {
         return true;
@@ -3640,11 +3746,24 @@ bool combat_consume_action_points(int64_t obj, int action_points)
     }
 
     is_pc = player_is_local_pc_obj(obj);
+    action_points_before = combat_action_points;
+    if (combat_observer_is_enabled()) {
+        fatigue_before = critter_fatigue_damage_get(obj);
+    }
     if (combat_action_points >= action_points) {
         combat_action_points -= action_points;
 
         if (is_pc) {
             combat_callbacks.field_C(combat_action_points);
+        }
+
+        if (combat_observer_is_enabled()) {
+            char actor[COMBAT_OBSERVER_IDENTITY_SIZE];
+
+            combat_observer_object_id(obj, actor);
+            combat_observer_ap_committed(actor, action_points,
+                action_points_before, combat_action_points, true,
+                fatigue_before, critter_fatigue_damage_get(obj));
         }
 
         return true;
@@ -3661,10 +3780,27 @@ bool combat_consume_action_points(int64_t obj, int action_points)
         combat_action_points = 0;
         combat_callbacks.field_C(0);
 
+        if (combat_observer_is_enabled()) {
+            char actor[COMBAT_OBSERVER_IDENTITY_SIZE];
+
+            combat_observer_object_id(obj, actor);
+            combat_observer_ap_committed(actor, action_points,
+                action_points_before, combat_action_points, true,
+                fatigue_before, critter_fatigue_damage_get(obj));
+        }
+
         return true;
     }
 
     combat_action_points = 0;
+    if (combat_observer_is_enabled()) {
+        char actor[COMBAT_OBSERVER_IDENTITY_SIZE];
+
+        combat_observer_object_id(obj, actor);
+        combat_observer_ap_committed(actor, action_points,
+            action_points_before, combat_action_points, false,
+            fatigue_before, critter_fatigue_damage_get(obj));
+    }
     combat_turn_based_next_subturn();
 
     return false;

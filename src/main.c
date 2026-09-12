@@ -15,6 +15,7 @@
 #include "game/ai.h"
 #include "game/anim.h"
 #include "game/combat.h"
+#include "game/combat_observer.h"
 #include "game/critter.h"
 #include "game/descriptions.h"
 #include "game/determinism.h"
@@ -108,6 +109,18 @@ int main(int argc, char** argv)
     tig_art_id_t cursor_art_id;
     int64_t pc_starting_location;
     char msg[80];
+    const char* combat_observer_path = NULL;
+
+    // CE: the private observatory passes an absolute per-run output path.
+    // Read argv directly so the legacy lower-casing of lpCmdLine below cannot
+    // corrupt a case-sensitive Linux path. The capability is absent unless
+    // this exact switch is present.
+    for (int arg = 1; arg < argc; arg++) {
+        const char* prefix = "--combat-observe=";
+        if (strncmp(argv[arg], prefix, strlen(prefix)) == 0) {
+            combat_observer_path = argv[arg] + strlen(prefix);
+        }
+    }
 
 #if SDL_PLATFORM_MACOS
     chdir(SDL_GetBasePath());
@@ -383,6 +396,11 @@ int main(int argc, char** argv)
         return EXIT_SUCCESS;
     }
 
+    if (combat_observer_path != NULL
+        && combat_observer_open(combat_observer_path)) {
+        atexit(combat_observer_close);
+    }
+
     if (strstr(lpCmdLine, "-dialogcheck") != NULL) {
         dialog_check();
     }
@@ -513,6 +531,8 @@ int main(int argc, char** argv)
     tig_debug_printf("%s\n", msg);
 
     main_loop();
+
+    combat_observer_close();
 
     gameuilib_mod_unload();
     gamelib_mod_unload();

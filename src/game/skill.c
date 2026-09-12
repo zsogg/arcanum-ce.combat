@@ -3,6 +3,7 @@
 #include "game/ai.h"
 #include "game/anim.h"
 #include "game/background.h"
+#include "game/combat_observer.h"
 #include "game/critter.h"
 #include "game/effect.h"
 #include "game/fate.h"
@@ -2055,6 +2056,17 @@ bool skill_invocation_run(SkillInvocation* skill_invocation)
         skill_invocation->flags |= SKILL_INVOCATION_CRITICAL;
     } else {
         skill_invocation->flags &= ~SKILL_INVOCATION_CRITICAL;
+    }
+
+    if (combat_observer_is_enabled()) {
+        char source[COMBAT_OBSERVER_IDENTITY_SIZE];
+        char target[COMBAT_OBSERVER_IDENTITY_SIZE];
+
+        combat_observer_object_id(source_obj, source);
+        combat_observer_object_id(target_obj, target);
+        combat_observer_skill_roll(source, target, skill, effectiveness,
+            difficulty, rnd_difficulty_roll, crit_roll, is_success,
+            is_critical);
     }
 
     return true;

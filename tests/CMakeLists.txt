@@ -21,6 +21,7 @@ add_executable(arcanum-tests
     "test_idxtable.c"
     "test_art_id.c"
     "test_color.c"
+    "test_combat_observer.c"
     "test_bsearch.c"
     "test_palette.c"
     "test_mes.c"
