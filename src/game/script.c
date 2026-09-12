@@ -2057,6 +2057,41 @@ int script_execute_condition(ScriptCondition* condition, int line, ScriptState* 
     return rc;
 }
 
+// CE: define the wrap the original's three wrapping arithmetic opcodes already
+// produce, instead of leaving C's undefined signed overflow in the VM.
+//
+// `add eax,ebx` at 0x44745D, `sub edi,eax` at 0x447484 and `imul eax,ebx` at
+// 0x4474AD each set the overflow flag and **nothing reads it** - the next
+// instruction is a PUSH or a JMP in all three cases - so an overflowing script
+// statement stores the two's-complement wrap and execution continues.
+//
+// C does not: signed overflow is undefined, so a shipped or authored script
+// could make the compiler emit anything, and under the project's ASan/UBSan
+// preset (`-fno-sanitize-recover=undefined`) it terminates the engine. The
+// same repair as porting bug #45's `INT_MIN / -1`, applied to the three
+// neighbours that kept it: compute the wrap explicitly, through unsigned
+// arithmetic, which is defined. Converting the result back is
+// implementation-defined rather than undefined, and every compiler CE targets
+// defines it as the reinterpretation these opcodes already produce.
+//
+// This is not operand validation (card R5) and not a range check: no value is
+// refused, no invocation stops, and a correctly formed script cannot tell the
+// difference. It only names the answer the original already gives.
+static int script_wrap_add(int value1, int value2)
+{
+    return (int)((unsigned int)value1 + (unsigned int)value2);
+}
+
+static int script_wrap_subtract(int value1, int value2)
+{
+    return (int)((unsigned int)value1 - (unsigned int)value2);
+}
+
+static int script_wrap_multiply(int value1, int value2)
+{
+    return (int)((unsigned int)value1 * (unsigned int)value2);
+}
+
 // 0x447220
 int script_execute_action(ScriptAction* action, int line, ScriptState* state)
 {
@@ -2141,7 +2176,7 @@ int script_execute_action(ScriptAction* action, int line, ScriptState* state)
         script_set_value(action->op_type[0],
             action->op_value[0],
             state,
-            value1 + value2);
+            script_wrap_add(value1, value2));
         return NEXT;
     }
     case SAT_SUBTRACT: {
@@ -2150,7 +2185,7 @@ int script_execute_action(ScriptAction* action, int line, ScriptState* state)
         script_set_value(action->op_type[0],
             action->op_value[0],
             state,
-            value1 - value2);
+            script_wrap_subtract(value1, value2));
         return NEXT;
     }
     case SAT_MULTIPLY: {
@@ -2159,7 +2194,7 @@ int script_execute_action(ScriptAction* action, int line, ScriptState* state)
         script_set_value(action->op_type[0],
             action->op_value[0],
             state,
-            value1 * value2);
+            script_wrap_multiply(value1, value2));
         return NEXT;
     }
     case SAT_DIVIDE: {

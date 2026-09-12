@@ -641,6 +641,37 @@ TEST(add_subtract_and_multiply_are_not_the_same_paste)
     CHECK_INT(run_binary(SAT_MULTIPLY, 7, 0), 0);
 }
 
+TEST(add_subtract_and_multiply_wrap_instead_of_being_undefined)
+{
+    // The original's `add eax,ebx` (0x44745D), `sub edi,eax` (0x447484) and
+    // `imul eax,ebx` (0x4474AD) set the overflow flag and nothing reads it, so
+    // an overflowing statement stores the wrap and the script continues. C
+    // leaves signed overflow undefined, and under the ASan/UBSan preset's
+    // `-fno-sanitize-recover=undefined` these four lines terminated the
+    // process before the wrap was made explicit. Divide got this treatment for
+    // its one edge in porting bug #45; these are the three that kept it.
+    CHECK_INT(run_binary(SAT_ADD, INT_MAX, 1), INT_MIN);
+    CHECK_INT(run_binary(SAT_SUBTRACT, INT_MIN, 1), INT_MAX);
+    CHECK_INT(run_binary(SAT_MULTIPLY, INT_MAX, 2), -2);
+    CHECK_INT(run_binary(SAT_MULTIPLY, INT_MIN, -1), INT_MIN);
+    // 46341 * 46341 is 2147488281, which is 2^31 + 4633 - the smallest square
+    // that overflows, and 4633 past INT_MIN is what `imul` leaves in EAX.
+    CHECK_INT(run_binary(SAT_MULTIPLY, 46341, 46341), INT_MIN + 4633);
+}
+
+TEST(wrapping_does_not_change_any_ordinary_result)
+{
+    // The repair must be invisible to a correctly formed script: the three
+    // opcodes still answer exactly what they answered before, including for
+    // negative operands and at the last value that does not overflow.
+    CHECK_INT(run_binary(SAT_ADD, INT_MAX - 1, 1), INT_MAX);
+    CHECK_INT(run_binary(SAT_SUBTRACT, INT_MIN + 1, 1), INT_MIN);
+    CHECK_INT(run_binary(SAT_ADD, -7, -8), -15);
+    CHECK_INT(run_binary(SAT_SUBTRACT, -7, -8), 1);
+    CHECK_INT(run_binary(SAT_MULTIPLY, -7, -8), 56);
+    CHECK_INT(run_binary(SAT_MULTIPLY, 46340, 46340), 2147395600);
+}
+
 TEST(the_four_arithmetic_opcodes_disagree_with_each_other)
 {
     // The property the copy/paste broke: four opcodes over one pair of
@@ -796,6 +827,8 @@ void test_script_suite(void)
     RUN(divide_int_min_by_minus_one_is_defined);
     RUN(divide_writes_a_flag_destination_too);
     RUN(add_subtract_and_multiply_are_not_the_same_paste);
+    RUN(add_subtract_and_multiply_wrap_instead_of_being_undefined);
+    RUN(wrapping_does_not_change_any_ordinary_result);
     RUN(the_four_arithmetic_opcodes_disagree_with_each_other);
     RUN(assign_num_copies_its_source_operand);
     RUN(assign_num_reads_through_a_global_source);
