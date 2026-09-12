@@ -600,8 +600,9 @@ TEST(divide_int_min_by_minus_one_is_defined)
     // here, so the original traps. CE must not invoke C undefined behaviour
     // to reproduce a crash, so it defines the result as INT_MIN - the
     // two's-complement wrap the quotient cannot represent - and keeps
-    // running. Recorded in PORTING-BUGS.md; see MODDING-NOTES quirk on
-    // script arithmetic.
+    // running. Recorded as the tail of porting bug #45 in PORTING-BUGS.md,
+    // and for modders in MODDING-NOTES quirk 45 - which did not exist when
+    // this comment first pointed at it.
     CHECK_INT(run_binary(SAT_DIVIDE, INT_MIN, -1), INT_MIN);
 }
 
