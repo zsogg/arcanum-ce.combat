@@ -2734,10 +2734,24 @@ void mainmenu_ui_options_tab_switch(int a1)
 // game over the files recovery is still holding. The strings are Troika's own
 // 5001 and 5003; no message is added to `mainmenu.mes`. This diagnoses a state
 // only CE can be in: the original has no transaction to fail to recover.
+//
+// **This used `ui_display_msg` and showed nothing.** Found by playtest,
+// 2026-09-12, and the reason is written two files away: `intgame.c` records
+// that `intgame_message_window_display_func` is "always NULL, in the original
+// as well", so `ui_display_msg` only appends to the HUD message log. That is
+// the right channel for feedback after an action — it is how the existing
+// 5003 reaches the player once a failed save returns them to the game — and
+// the wrong one for explaining a screen while the player is looking at it.
+// A modal dialog is what the main menu uses to interrupt, so this uses the
+// same call `mainmenu_ui_confirm` does, with the OK-only button.
+//
+// Call it after the screen is built and displayed. Called mid-construction it
+// draws over a half-torn-down screen.
 static void mainmenu_ui_report_blocked_savelist(int num)
 {
     MesFileEntry mes_file_entry;
-    UiMessage ui_message;
+    TigWindowModalDialogInfo modal_info;
+    TigWindowModalDialogChoice choice;
 
     if (!gamelib_slot_recovery_blocked_get()) {
         return;
@@ -2746,9 +2760,16 @@ static void mainmenu_ui_report_blocked_savelist(int num)
     mes_file_entry.num = num;
     mes_get_msg(mainmenu_ui_mainmenu_mes_file, &mes_file_entry);
 
-    ui_message.type = UI_MSG_TYPE_EXCLAMATION;
-    ui_message.str = mes_file_entry.str;
-    ui_display_msg(&ui_message);
+    modal_info.type = TIG_WINDOW_MODAL_DIALOG_TYPE_OK;
+    modal_info.x = 237;
+    modal_info.y = 232;
+    modal_info.text = mes_file_entry.str;
+    modal_info.keys[TIG_WINDOW_MODAL_DIALOG_CHOICE_OK] = 'y';
+    modal_info.keys[TIG_WINDOW_MODAL_DIALOG_CHOICE_CANCEL] = 'n';
+    modal_info.process = NULL;
+    modal_info.redraw = gamelib_redraw;
+    hrp_center(&(modal_info.x), &(modal_info.y));
+    tig_window_modal_dialog(&modal_info, &choice);
 }
 
 // 0x541F20
@@ -2768,8 +2789,6 @@ void mainmenu_ui_load_game_create(void)
     } else {
         gamelib_savelist_create(&mainmenu_ui_gsl);
     }
-
-    mainmenu_ui_report_blocked_savelist(5001); // "Save Game Corrupt!  Load Failed!"
 
     gamelib_savelist_sort(&mainmenu_ui_gsl, GAME_SAVE_LIST_ORDER_DATE, false);
 
@@ -2852,6 +2871,8 @@ void mainmenu_ui_load_game_create(void)
 
     scrollbar_ui_control_redraw(mainmenu_ui_scrollbar);
     tig_window_display();
+
+    mainmenu_ui_report_blocked_savelist(5001); // "Save Game Corrupt!  Load Failed!"
 }
 
 // NOTE: Body identical to 0x541D40 (`mainmenu_ui_options_close_game_screens`)
@@ -3503,7 +3524,6 @@ void mainmenu_ui_save_game_create(void)
 
     mainmenu_ui_close_game_screens();
     gamelib_savelist_create(&mainmenu_ui_gsl);
-    mainmenu_ui_report_blocked_savelist(5003); // "Save Game Corrupt!  Save Failed!"
     gamelib_savelist_sort(&mainmenu_ui_gsl, GAME_SAVE_LIST_ORDER_DATE, false);
     mainmenu_ui_textedit_buffer[0] = '\0';
     window->cnt = mainmenu_ui_gsl.count + 1;
@@ -3564,6 +3584,8 @@ void mainmenu_ui_save_game_create(void)
     scrollbar_ui_control_redraw(mainmenu_ui_scrollbar);
 
     tig_window_display();
+
+    mainmenu_ui_report_blocked_savelist(5003); // "Save Game Corrupt!  Save Failed!"
 }
 
 // 0x543580
