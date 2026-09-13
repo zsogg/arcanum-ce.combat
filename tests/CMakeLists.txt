@@ -647,6 +647,10 @@ target_link_options(arcanum-tests PRIVATE
     "-Wl,--wrap=tig_file_fclose"
     "-Wl,--wrap=tig_file_fwrite"
     "-Wl,--wrap=tig_video_buffer_save_to_bmp"
+    "-Wl,--wrap=light_obj_grayscale_get"
+    "-Wl,--wrap=mes_get_msg"
+    "-Wl,--wrap=tf_add"
+    "-Wl,--wrap=combat_observer_attack_started"
 )
 
 # The CE half of the archive differential. `arcanum-work/scripts/verify_dbmaker.py`

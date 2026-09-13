@@ -37,7 +37,11 @@ bool location_empty_tile_find(int64_t from, int64_t* to);
 
 #define LOCATION_GET_X(l) ((l) & 0xFFFFFFFF)
 #define LOCATION_GET_Y(l) (((l) >> 32) & 0xFFFFFFFF)
-#define LOCATION_MAKE(x, y) ((x) | (y) << 32)
+// Same shift, same reason, as `location_make` below: `y` occupies the top 32
+// bits, so shifting a signed value into bit 63 is undefined. The function got
+// this in an earlier pass and the macro did not, which is why the first
+// negative sector boundary UBSan ever reached aborted the suite (card W4).
+#define LOCATION_MAKE(x, y) ((int64_t)(x) | (int64_t)((uint64_t)(y) << 32))
 
 static inline int64_t location_get_x(int64_t location)
 {

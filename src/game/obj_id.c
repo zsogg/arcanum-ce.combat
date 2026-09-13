@@ -142,7 +142,11 @@ void objid_id_to_str(char* buffer, ObjectID oid)
     case OID_TYPE_GUID:
         snprintf(buffer, OID_STR_LEN,
             "G_%08X_%04X_%04X_%02X%02X_%02X%02X%02X%02X%02X%02X",
-            (oid.d.g.data[0] << 24) | (oid.d.g.data[1] << 16) | (oid.d.g.data[2] << 8) | oid.d.g.data[3],
+            // The bytes promote to `int`, so a first byte of 0x80 or above
+            // shifts into the sign bit and overflows - undefined, and fatal
+            // under the sanitizer preset. `%08X` wants an unsigned anyway.
+            ((unsigned int)oid.d.g.data[0] << 24) | ((unsigned int)oid.d.g.data[1] << 16)
+                | ((unsigned int)oid.d.g.data[2] << 8) | oid.d.g.data[3],
             (oid.d.g.data[4] << 8) | oid.d.g.data[5],
             (oid.d.g.data[6] << 8) | oid.d.g.data[7],
             oid.d.g.data[8],
