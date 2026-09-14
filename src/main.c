@@ -49,6 +49,7 @@
 #include "ui/dialog_ui.h"
 #include "ui/gameuilib.h"
 #include "ui/intgame.h"
+#include "ui/replay_ui.h"
 #include "ui/iso.h"
 #include "ui/logbook_ui.h"
 #include "ui/mainmenu_ui.h"
@@ -231,6 +232,30 @@ int main(int argc, char** argv)
             memcpy(harness_autoload_slot, slot, slot_len);
             harness_autoload_slot[slot_len] = '\0';
         }
+    }
+
+    // CE (card O2): restore a random state captured at a previous run's Ready
+    // barrier, so a replay proceeds from the state the recorded run proceeded
+    // from rather than from whatever this process happened to load with.
+    pch = strstr(lpCmdLine, "-rngstate=");
+    if (pch != NULL) {
+        determinism_restore_request(
+            (unsigned int)strtoul(pch + strlen("-rngstate="), NULL, 10));
+    }
+
+    // CE (card O2): `-replay=<file>` re-submits a recorded run's commands.
+    pch = strstr(lpCmdLine, "-replay=");
+    if (pch != NULL) {
+        const char* arg = pch + strlen("-replay=");
+        size_t len = strcspn(arg, " \t\"");
+        char path[TIG_MAX_PATH];
+
+        if (len >= sizeof(path)) {
+            len = sizeof(path) - 1;
+        }
+        memcpy(path, arg, len);
+        path[len] = '\0';
+        replay_ui_load(path);
     }
 
     pch = strstr(lpCmdLine, "-screenshot=");
@@ -612,6 +637,11 @@ void main_loop(void)
         // share it. The comparison is unchanged, so `-runframes` behaves
         // exactly as before.
         harness_frames_run++;
+
+        // CE (card O2): `-replay=<file>`. Submit the next recorded command if
+        // the actor is idle. After the frame is displayed, so the actor's goal
+        // state reflects a completed frame rather than one in progress.
+        replay_ui_tick();
 
         // CE: `-screenshot=N`. Writes modules/<module>/screenNNNN.bmp through
         // the shipped F12 path - the same `tig_video_screenshot_make` the key

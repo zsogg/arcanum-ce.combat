@@ -25,6 +25,13 @@ static unsigned int determinism_active_seed;
 static bool determinism_requested;
 static unsigned int determinism_requested_seed;
 
+// CE (card O2): a random state to restore at the Ready barrier, from a previous
+// run's captured value. Zero means "capture what this run has" - the generator
+// can legitimately hold zero, but a run replaying one would be reproducing a
+// state it could equally reach by seeding, so the ambiguity costs nothing.
+static unsigned int determinism_restore_state;
+static bool determinism_restore_requested;
+
 void determinism_request(unsigned int seed)
 {
     determinism_requested = true;
@@ -111,12 +118,25 @@ unsigned int determinism_seed(void)
 // rather than leaving a reader to assume they match.
 //
 // One line, parseable, printed once per run. It does not touch game state.
+void determinism_restore_request(unsigned int state)
+{
+    determinism_restore_state = state;
+    determinism_restore_requested = true;
+}
+
 void determinism_ready_report(const char* label)
 {
-    tig_debug_printf("Harness: ready label='%s' rng-state=%u rng-method=captured"
+    // Restore before reporting, so the line describes the state the run will
+    // actually proceed from rather than the one it happened to load with.
+    if (determinism_restore_requested) {
+        random_seed(determinism_restore_state);
+    }
+
+    tig_debug_printf("Harness: ready label='%s' rng-state=%u rng-method=%s"
                      " guid-method=%s determinism=%s seed=%u\n",
         label != NULL ? label : "",
         random_state_get(),
+        determinism_restore_requested ? "restored" : "captured",
         determinism_on ? "seeded" : "unseeded",
         determinism_on ? "on" : "off",
         determinism_active_seed);

@@ -165,4 +165,12 @@ int intgame_spell_button_hit_test(void);
 void intgame_hide(void);
 void intgame_show(void);
 
+
+// CE (card O2): the single entry point for "the actor acted on this target" -
+// attack, move, use and throw all pass through it. Exposed so a replay can
+// submit recorded commands through the same validated path a mouse click uses,
+// which is the command adapter the observatory plan's section 7 asks for rather
+// than a second dispatch that would drift from this one.
+void intgame_perform_action_on_target(TargetDescriptor* td);
+
 #endif /* ARCANUM_UI_INTGAME_H_ */

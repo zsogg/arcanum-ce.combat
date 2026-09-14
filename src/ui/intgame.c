@@ -144,7 +144,7 @@ static bool handle_button_unhover(TigMessage* msg);
 static void intgame_center_on_player(void);
 static void intgame_combat_mode_toggle(void);
 static void intgame_examine_refresh(void);
-static void intgame_perform_action_on_target(TargetDescriptor* td);
+
 static void intgame_hotkey_equip_item(int64_t critter_obj, Hotkey* a2, int inventory_location);
 static bool intgame_interface_controls_create(void);
 static bool intgame_rotwin_button_draw_progress(RotatingWindowType window_type, int progress);

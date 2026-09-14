@@ -80,4 +80,11 @@ void determinism_request(unsigned int seed);
  */
 void determinism_ready_report(const char* label);
 
+/**
+ * CE (card O2): restore a random state captured at a previous run's Ready
+ * barrier, applied at this run's barrier. The generator's whole state is one
+ * integer, so this is the other half of `random_state_get`.
+ */
+void determinism_restore_request(unsigned int state);
+
 #endif /* ARCANUM_GAME_DETERMINISM_H_ */

@@ -298,6 +298,8 @@ set(SRCS
     "src/ui/mainmenu_ui.h"
     "src/ui/options_ui.c"
     "src/ui/options_ui.h"
+    "src/ui/replay_ui.c"
+    "src/ui/replay_ui.h"
     "src/ui/roller_ui.c"
     "src/ui/roller_ui.h"
     "src/ui/schematic_ui.c"
