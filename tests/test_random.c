@@ -148,6 +148,68 @@ TEST(rand_reaches_both_ends_of_its_range)
     CHECK(saw_max);
 }
 
+// --- card O2: capture and restore, which is what replay stands on ---------
+
+TEST(the_captured_state_resumes_the_sequence_it_was_taken_from)
+{
+    int before[6];
+    int after[6];
+    unsigned int captured;
+    int i;
+
+    // Run a little way in, so the captured state is mid-sequence rather than
+    // the seed itself - that is the case a Ready barrier actually produces.
+    random_seed(20260913u);
+    for (i = 0; i < 4; i++) {
+        (void)random_rand();
+    }
+
+    captured = random_state_get();
+    for (i = 0; i < 6; i++) {
+        before[i] = random_rand();
+    }
+
+    // Somebody else's run happens in between, moving the generator.
+    random_seed(1u);
+    for (i = 0; i < 50; i++) {
+        (void)random_rand();
+    }
+
+    random_seed(captured);
+    for (i = 0; i < 6; i++) {
+        after[i] = random_rand();
+    }
+
+    for (i = 0; i < 6; i++) {
+        CHECK_INT(after[i], before[i]);
+    }
+}
+
+TEST(capturing_the_state_does_not_move_it)
+{
+    unsigned int first;
+    unsigned int second;
+    int drawn;
+
+    random_seed(4242u);
+    first = random_state_get();
+    second = random_state_get();
+    CHECK_INT((int)first, (int)second);
+
+    // And it is genuinely the live state, not a stale copy: one draw moves it.
+    drawn = random_rand();
+    (void)drawn;
+    CHECK(random_state_get() != first);
+}
+
+TEST(the_state_is_the_seed_the_generator_was_given)
+{
+    // The whole reason capture is one integer. If this ever stops holding,
+    // `random_seed` has grown a transform and O2's restore path is wrong.
+    random_seed(123456789u);
+    CHECK_INT((int)random_state_get(), (int)123456789u);
+}
+
 TEST(seed_generate_returns_the_seed_it_installed)
 {
     // The return value is the only way a caller can reproduce the run it just
@@ -338,6 +400,9 @@ void test_random_suite(void)
     RUN(different_seeds_diverge);
     RUN(rand_stays_inside_fifteen_bits);
     RUN(rand_reaches_both_ends_of_its_range);
+    RUN(the_captured_state_resumes_the_sequence_it_was_taken_from);
+    RUN(capturing_the_state_does_not_move_it);
+    RUN(the_state_is_the_seed_the_generator_was_given);
     RUN(seed_generate_returns_the_seed_it_installed);
 
     RUN(between_is_inclusive_of_both_bounds);

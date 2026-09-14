@@ -8,6 +8,7 @@
 #include "game/background.h"
 #include "game/critter.h"
 #include "game/descriptions.h"
+#include "game/determinism.h"
 #include "game/gamelib.h"
 #include "game/gfade.h"
 #include "game/gmovie.h"
@@ -2224,6 +2225,12 @@ bool mainmenu_ui_handle(void)
 
             if (mainmenu_ui_load_game_by_name(autoload_name)) {
                 tig_debug_printf("Harness: autoload ok\n");
+
+                // CE (card O2): the Ready barrier. Loading is finished, the
+                // actors and their equipment exist, and nothing the scenario
+                // cares about has been committed - so this is where a run's
+                // reproducible identity is worth recording.
+                determinism_ready_report(autoload_name);
             } else {
                 tig_debug_printf("Harness: autoload FAILED to load '%s'\n",
                     autoload_name);

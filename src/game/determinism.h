@@ -71,4 +71,13 @@ unsigned int determinism_seed(void);
  */
 void determinism_request(unsigned int seed);
 
+/**
+ * CE (card O2): record the run's reproducible identity at its Ready barrier -
+ * loading complete, nothing committed. Captures the game RNG state, which is
+ * what a replay restores, and names the method used for each pinned source.
+ *
+ * Prints one parseable line and changes nothing.
+ */
+void determinism_ready_report(const char* label);
+
 #endif /* ARCANUM_GAME_DETERMINISM_H_ */

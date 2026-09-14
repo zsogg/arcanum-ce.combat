@@ -42,6 +42,20 @@ void random_seed(unsigned int value)
     random_set_prev_value(value);
 }
 
+// CE (card O2): read the generator's whole state back.
+//
+// The state *is* the seed: `random_seed` assigns `random_prev_value` directly,
+// with no transform and no warm-up, so one `unsigned int` is the entire
+// generator. That makes capture-and-restore cheaper than re-seeding at a
+// barrier - restore is the existing `random_seed` - and more faithful, because
+// it records what the engine actually had instead of imposing a value.
+//
+// Read-only, and the original has no equivalent. It changes no behaviour.
+unsigned int random_state_get(void)
+{
+    return random_prev_value;
+}
+
 /**
  * Generates a seed based on the current time and sets it.
  *

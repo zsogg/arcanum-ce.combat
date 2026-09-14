@@ -97,3 +97,27 @@ unsigned int determinism_seed(void)
 {
     return determinism_active_seed;
 }
+
+// CE (card O2): the Ready barrier.
+//
+// A run is reproducible from its *initial state*, and the initial state is only
+// pinned once loading has finished and before anything has been committed. That
+// boundary is the one place worth recording, and this is the record.
+//
+// `random_state_get` is a capture, not a re-seed: the game RNG's whole state is
+// one integer, so what the engine actually had can be written down instead of
+// overwritten. The GUID source cannot be read back at all - it is libc `rand` -
+// so a replay has to re-seed it, and the line says which method applies to what
+// rather than leaving a reader to assume they match.
+//
+// One line, parseable, printed once per run. It does not touch game state.
+void determinism_ready_report(const char* label)
+{
+    tig_debug_printf("Harness: ready label='%s' rng-state=%u rng-method=captured"
+                     " guid-method=%s determinism=%s seed=%u\n",
+        label != NULL ? label : "",
+        random_state_get(),
+        determinism_on ? "seeded" : "unseeded",
+        determinism_on ? "on" : "off",
+        determinism_active_seed);
+}
