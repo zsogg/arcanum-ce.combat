@@ -20,6 +20,12 @@ void combat_observer_turn_ended(const char* actor, int action_points);
 void combat_observer_command_requested(const char* actor, const char* target_kind,
     const char* target, int64_t target_loc);
 void combat_observer_command_resolved(const char* actor, bool accepted);
+
+// CE (card O2): whether a command was taken, from the actor's goal state before
+// and after the dispatch. Pure, so the judgement a replay trusts can be tested
+// without standing up a UI.
+bool combat_observer_command_accepted(bool busy_before, bool busy_after,
+    bool same_goal);
 void combat_observer_actor_snapshot(const char* actor, int level,
     int strength, int dexterity, int speed, int melee, int dodge,
     int hp_current, int hp_max, int fatigue_current, int fatigue_max,

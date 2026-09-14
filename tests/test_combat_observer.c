@@ -240,6 +240,43 @@ TEST(a_location_command_carries_its_target_tile_and_no_object)
     CHECK(strstr(trace, "\"target_location\":361700864") != NULL);
 }
 
+TEST(every_goal_state_decides_acceptance_the_same_way)
+{
+    // All eight combinations, because this is the judgement a replay trusts:
+    // a refusal recorded as an acceptance is re-submitted and diverges.
+    //
+    //                                     busy_before  busy_after  same_goal
+    // nothing queued afterwards -> the dispatch took nothing, whatever it did.
+    CHECK(!combat_observer_command_accepted(false, false, false));
+    CHECK(!combat_observer_command_accepted(false, false, true));
+    CHECK(!combat_observer_command_accepted(true,  false, false));
+    CHECK(!combat_observer_command_accepted(true,  false, true));
+
+    // Idle before, busy after: a goal appeared. Taken.
+    CHECK(combat_observer_command_accepted(false, true, false));
+    CHECK(combat_observer_command_accepted(false, true, true));
+
+    // Busy before and after with a *different* goal: the old one was replaced.
+    CHECK(combat_observer_command_accepted(true, true, false));
+
+    // Busy before and after with the *same* goal: the dispatch refused, or
+    // re-issued what was already running. This is the case that matters -- an
+    // actor mid-attack whose next click is rejected still looks busy, and
+    // reading "busy" alone as acceptance would record a refusal as taken.
+    CHECK(!combat_observer_command_accepted(true, true, true));
+}
+
+TEST(a_refused_command_leaves_the_goal_state_untouched)
+{
+    // The shape of a real rejection, stated as the predicate sees it. Every
+    // early return in the dispatch exits before a goal is queued, so the
+    // actor's state is identical either side -- which is precisely the
+    // `same_goal` case above when it was already busy, and the `!busy_after`
+    // case when it was idle. Both must read false.
+    CHECK(!combat_observer_command_accepted(false, false, false));
+    CHECK(!combat_observer_command_accepted(true, true, true));
+}
+
 // --- card W4: the same real attack, observed and not ---------------------
 //
 // The RNG check above compares draws around the *writer* calls. It never drives
@@ -446,6 +483,8 @@ void test_combat_observer_suite(void)
     RUN(an_output_failure_disables_recording_and_leaves_no_false_terminal);
     RUN(observation_does_not_advance_the_combat_rng);
     RUN(a_command_records_its_request_before_its_resolution);
+    RUN(every_goal_state_decides_acceptance_the_same_way);
+    RUN(a_refused_command_leaves_the_goal_state_untouched);
     RUN(a_refused_command_is_not_recorded_as_accepted);
     RUN(a_location_command_carries_its_target_tile_and_no_object);
     RUN(observing_a_real_attack_changes_neither_its_outcome_nor_the_rng);

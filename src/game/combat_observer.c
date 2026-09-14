@@ -206,6 +206,31 @@ void combat_observer_command_requested(const char* actor, const char* target_kin
     combat_observer_write(line);
 }
 
+// CE (card O2): did the engine take the command?
+//
+// The dispatch has around twenty early returns and no return value, so the only
+// honest signal is what it left behind: a goal queued for the actor that was not
+// queued before. Kept as a pure decision over three booleans, separate from the
+// UI code that gathers them, because this is the judgement a replay trusts - a
+// refusal recorded as an acceptance would be re-submitted and diverge silently -
+// and a judgement worth trusting is worth testing exhaustively.
+//
+//   busy_after  false  nothing is queued, so nothing was taken.
+//   busy_before false  and now busy: a goal appeared. Taken.
+//   same_goal   true   busy before and after with the same goal: the dispatch
+//                      refused, or re-issued what was already running. Either
+//                      way nothing new was accepted.
+//   otherwise          busy before and after with a different goal: the old one
+//                      was replaced, which is an acceptance.
+bool combat_observer_command_accepted(bool busy_before, bool busy_after,
+    bool same_goal)
+{
+    if (!busy_after) {
+        return false;
+    }
+    return !(busy_before && same_goal);
+}
+
 void combat_observer_command_resolved(const char* actor, bool accepted)
 {
     char line[384];

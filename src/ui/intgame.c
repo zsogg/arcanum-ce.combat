@@ -3483,8 +3483,8 @@ void intgame_perform_action_on_target(TargetDescriptor* td)
     intgame_perform_action_on_target_inner(td);
 
     busy_after = pc_obj != OBJ_HANDLE_NULL && anim_is_busy(pc_obj, &after_id);
-    accepted = busy_after
-        && (!busy_before || !anim_id_is_equal(&before_id, &after_id));
+    accepted = combat_observer_command_accepted(busy_before, busy_after,
+        busy_before && busy_after && anim_id_is_equal(&before_id, &after_id));
     combat_observer_command_resolved(actor, accepted);
 }
 
