@@ -7,6 +7,7 @@
 #include "game/bless.h"
 #include "game/broadcast.h"
 #include "game/combat.h"
+#include "game/combat_observer.h"
 #include "game/critter.h"
 #include "game/curse.h"
 #include "game/damage_type.h"
@@ -3438,7 +3439,56 @@ void intgame_examine_refresh(void)
 // TODO: Lots of jumps, check.
 //
 // 0x54ED30
+// CE (card O2): record the player's command around the real dispatch.
+//
+// The dispatch below has around twenty early returns - wrong target, polymorph,
+// body of air, a refused goal - so instrumenting each one would be both
+// invasive and easy to get subtly wrong as it changes. Wrapping it costs one
+// function and cannot miss an exit.
+//
+// Acceptance is read from the actor's goal state rather than guessed: if a goal
+// is queued that was not queued before, the engine took the command. That is
+// exactly the distinction a replay needs, because re-submitting a command the
+// engine refused would diverge from the run being reproduced.
+static void intgame_perform_action_on_target_inner(TargetDescriptor* td);
+
 void intgame_perform_action_on_target(TargetDescriptor* td)
+{
+    int64_t pc_obj;
+    AnimID before_id;
+    AnimID after_id;
+    bool busy_before;
+    bool busy_after;
+    bool accepted;
+    char actor[COMBAT_OBSERVER_IDENTITY_SIZE];
+    char target[COMBAT_OBSERVER_IDENTITY_SIZE];
+
+    if (!combat_observer_is_enabled()) {
+        intgame_perform_action_on_target_inner(td);
+        return;
+    }
+
+    pc_obj = player_get_local_pc_obj();
+    combat_observer_object_id(pc_obj, actor);
+    busy_before = pc_obj != OBJ_HANDLE_NULL && anim_is_busy(pc_obj, &before_id);
+
+    if (td->is_loc) {
+        combat_observer_command_requested(actor, "location", "NULL", td->loc);
+    } else {
+        combat_observer_object_id(td->obj, target);
+        combat_observer_command_requested(actor, "object", target,
+            obj_field_int64_get(td->obj, OBJ_F_LOCATION));
+    }
+
+    intgame_perform_action_on_target_inner(td);
+
+    busy_after = pc_obj != OBJ_HANDLE_NULL && anim_is_busy(pc_obj, &after_id);
+    accepted = busy_after
+        && (!busy_before || !anim_id_is_equal(&before_id, &after_id));
+    combat_observer_command_resolved(actor, accepted);
+}
+
+static void intgame_perform_action_on_target_inner(TargetDescriptor* td)
 {
     int64_t pc_obj;
     int64_t item_obj = OBJ_HANDLE_NULL;

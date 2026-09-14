@@ -14,6 +14,12 @@ void combat_observer_object_id(int64_t obj,
     char identity[COMBAT_OBSERVER_IDENTITY_SIZE]);
 void combat_observer_turn_started(const char* actor, int action_points);
 void combat_observer_turn_ended(const char* actor, int action_points);
+
+// CE (card O2): the player's command, and whether a goal was queued for it.
+// Request first so that anything the command causes follows it in the stream.
+void combat_observer_command_requested(const char* actor, const char* target_kind,
+    const char* target, int64_t target_loc);
+void combat_observer_command_resolved(const char* actor, bool accepted);
 void combat_observer_actor_snapshot(const char* actor, int level,
     int strength, int dexterity, int speed, int melee, int dodge,
     int hp_current, int hp_max, int fatigue_current, int fatigue_max,

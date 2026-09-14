@@ -184,6 +184,62 @@ TEST(observation_does_not_advance_the_combat_rng)
 #include "game/tf.h"
 #include "obj_harness.h"
 
+// --- card O2: the player's command, and whether the engine took it -------
+
+TEST(a_command_records_its_request_before_its_resolution)
+{
+    char trace[TRACE_SIZE];
+    const char* requested;
+    const char* resolved;
+
+    clean();
+    CHECK(combat_observer_open(TRACE_FILE));
+    combat_observer_command_requested("fighter", "object", "opponent", 4242);
+    combat_observer_command_resolved("fighter", true);
+    combat_observer_close();
+
+    CHECK(read_trace(trace, sizeof(trace)));
+    requested = strstr(trace, "\"event\":\"command.requested\"");
+    resolved = strstr(trace, "\"event\":\"command.resolved\"");
+    CHECK(requested != NULL);
+    CHECK(resolved != NULL);
+    // Ordering is the point: anything the command causes must follow the
+    // request, not precede the thing that caused it.
+    CHECK(requested < resolved);
+}
+
+TEST(a_refused_command_is_not_recorded_as_accepted)
+{
+    char trace[TRACE_SIZE];
+
+    clean();
+    CHECK(combat_observer_open(TRACE_FILE));
+    combat_observer_command_requested("fighter", "location", "NULL", 99);
+    combat_observer_command_resolved("fighter", false);
+    combat_observer_close();
+
+    CHECK(read_trace(trace, sizeof(trace)));
+    CHECK(strstr(trace, "\"accepted\":false") != NULL);
+    CHECK(strstr(trace, "\"accepted\":true") == NULL);
+}
+
+TEST(a_location_command_carries_its_target_tile_and_no_object)
+{
+    char trace[TRACE_SIZE];
+
+    clean();
+    CHECK(combat_observer_open(TRACE_FILE));
+    combat_observer_command_requested("fighter", "location", "NULL", 361700864);
+    combat_observer_close();
+
+    CHECK(read_trace(trace, sizeof(trace)));
+    CHECK(strstr(trace, "\"target_kind\":\"location\"") != NULL);
+    CHECK(strstr(trace, "\"target\":\"NULL\"") != NULL);
+    // A packed location names its tile reproducibly across runs, which is why
+    // it is recorded as the target rather than a screen position.
+    CHECK(strstr(trace, "\"target_location\":361700864") != NULL);
+}
+
 // --- card W4: the same real attack, observed and not ---------------------
 //
 // The RNG check above compares draws around the *writer* calls. It never drives
@@ -389,6 +445,9 @@ void test_combat_observer_suite(void)
     RUN(the_bound_marks_the_trace_incomplete_once);
     RUN(an_output_failure_disables_recording_and_leaves_no_false_terminal);
     RUN(observation_does_not_advance_the_combat_rng);
+    RUN(a_command_records_its_request_before_its_resolution);
+    RUN(a_refused_command_is_not_recorded_as_accepted);
+    RUN(a_location_command_carries_its_target_tile_and_no_object);
     RUN(observing_a_real_attack_changes_neither_its_outcome_nor_the_rng);
     RUN(the_observed_run_records_that_same_attack);
     RUN(one_extra_observer_rng_draw_is_detected);

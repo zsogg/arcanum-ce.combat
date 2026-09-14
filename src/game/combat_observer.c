@@ -181,6 +181,44 @@ void combat_observer_turn_started(const char* actor, int action_points)
     combat_observer_write(line);
 }
 
+// CE (card O2): what the player asked for, and whether the engine took it.
+//
+// Two events rather than one field, because ordering carries meaning: the
+// request is written *before* the dispatch runs, so any combat the command
+// causes appears after it in the stream rather than before the thing that
+// caused it. The resolution follows once the outcome is known.
+//
+// "Accepted" means a goal was queued for the actor. That is the property a
+// replay needs: a request the engine refused is a click that changed nothing,
+// and re-submitting it would silently diverge from the run being reproduced.
+void combat_observer_command_requested(const char* actor, const char* target_kind,
+    const char* target, int64_t target_loc)
+{
+    char line[512];
+
+    if (!combat_observer_begin_semantic()) return;
+    snprintf(line, sizeof(line),
+        "{\"schema\":1,\"sequence\":%u,\"event\":\"command.requested\",\"turn\":%u,"
+        "\"action_id\":null,\"actor\":\"%s\",\"target_kind\":\"%s\",\"target\":\"%s\","
+        "\"target_location\":%lld}",
+        combat_observer_sequence++, combat_observer_turn, actor, target_kind,
+        target, (long long)target_loc);
+    combat_observer_write(line);
+}
+
+void combat_observer_command_resolved(const char* actor, bool accepted)
+{
+    char line[384];
+
+    if (!combat_observer_begin_semantic()) return;
+    snprintf(line, sizeof(line),
+        "{\"schema\":1,\"sequence\":%u,\"event\":\"command.resolved\",\"turn\":%u,"
+        "\"action_id\":null,\"actor\":\"%s\",\"accepted\":%s}",
+        combat_observer_sequence++, combat_observer_turn, actor,
+        accepted ? "true" : "false");
+    combat_observer_write(line);
+}
+
 void combat_observer_turn_ended(const char* actor, int action_points)
 {
     char line[384];
