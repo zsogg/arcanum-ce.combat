@@ -7,6 +7,7 @@
 #include <tig/debug.h>
 
 #include "game/anim.h"
+#include "game/combat.h"
 #include "game/obj.h"
 #include "game/obj_id.h"
 #include "game/obj_pool.h"
@@ -28,6 +29,30 @@ static ReplayCommand replay_commands[REPLAY_MAX_COMMANDS];
 static int replay_count;
 static int replay_next;
 static bool replay_loaded;
+static bool replay_stall_reported;
+
+// CE (card O2): does the game's mode match the one this command was recorded
+// in?
+//
+// Measured 2026-09-14: the same click is an attack inside combat mode and
+// something else outside it, because `intgame.c` gates the whole attack branch
+// on `combat_critter_is_combat_mode_active`. A replay that ignores the mode
+// therefore does not fail - it quietly performs a *different* action and
+// reports it accepted, which is the worst of the available outcomes.
+//
+// The recorded turn is the proxy: a command recorded at turn 0 was issued
+// before any turn started, and one at turn 1 or later was issued inside
+// turn-based combat. Holding the command until the mode agrees turns a silent
+// substitution into a visible stall.
+bool replay_ui_mode_matches(int recorded_turn, bool combat_active)
+{
+    return recorded_turn >= 1 ? combat_active : !combat_active;
+}
+
+static bool replay_mode_matches(const ReplayCommand* command)
+{
+    return replay_ui_mode_matches(command->turn, combat_turn_based_is_active());
+}
 
 bool replay_ui_load(const char* path)
 {
@@ -37,6 +62,7 @@ bool replay_ui_load(const char* path)
     replay_count = 0;
     replay_next = 0;
     replay_loaded = false;
+    replay_stall_reported = false;
 
     stream = fopen(path, "rb");
     if (stream == NULL) {
@@ -128,6 +154,22 @@ void replay_ui_tick(void)
     }
 
     command = &replay_commands[replay_next];
+
+    if (!replay_mode_matches(command)) {
+        // Say it once. A replay that ends with commands outstanding did not
+        // reproduce its recording, and `replay_ui_remaining` is what the run
+        // record reads - but a reader of the log deserves to know why it
+        // stopped rather than inferring it from a count.
+        if (!replay_stall_reported) {
+            replay_stall_reported = true;
+            tig_debug_printf("Replay: holding command %d (recorded at turn %d);"
+                             " turn-based combat is %s\n",
+                replay_next, command->turn,
+                combat_turn_based_is_active() ? "active" : "not active");
+        }
+        return;
+    }
+    replay_stall_reported = false;
 
     memset(&td, 0, sizeof(td));
     if (command->is_loc) {

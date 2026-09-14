@@ -3,6 +3,7 @@
 #include <string.h>
 
 #include "game/combat_observer.h"
+#include "ui/replay_ui.h"
 #include "game/damage_type.h"
 #include "game/random.h"
 
@@ -277,6 +278,24 @@ TEST(a_refused_command_leaves_the_goal_state_untouched)
     CHECK(!combat_observer_command_accepted(true, true, true));
 }
 
+TEST(a_command_waits_for_the_mode_it_was_recorded_in)
+{
+    // Measured 2026-09-14: the same click is an attack inside combat mode and
+    // something else outside it. A replay that ignores the mode does not fail --
+    // it performs a different action and reports it accepted, which is worse
+    // than stalling. All four states, so the gate cannot quietly invert.
+    CHECK(replay_ui_mode_matches(0, false));   // recorded before combat, no combat now
+    CHECK(!replay_ui_mode_matches(0, true));   // recorded before combat, combat now: wait
+    CHECK(replay_ui_mode_matches(2, true));    // recorded in combat, combat now
+    CHECK(!replay_ui_mode_matches(2, false));  // recorded in combat, none now: wait
+
+    // Turn 1 is the first combat turn, so it must behave like turn 2 and not
+    // like turn 0 -- an off-by-one here would submit every combat command
+    // before combat started.
+    CHECK(replay_ui_mode_matches(1, true));
+    CHECK(!replay_ui_mode_matches(1, false));
+}
+
 // --- card W4: the same real attack, observed and not ---------------------
 //
 // The RNG check above compares draws around the *writer* calls. It never drives
@@ -483,6 +502,7 @@ void test_combat_observer_suite(void)
     RUN(an_output_failure_disables_recording_and_leaves_no_false_terminal);
     RUN(observation_does_not_advance_the_combat_rng);
     RUN(a_command_records_its_request_before_its_resolution);
+    RUN(a_command_waits_for_the_mode_it_was_recorded_in);
     RUN(every_goal_state_decides_acceptance_the_same_way);
     RUN(a_refused_command_leaves_the_goal_state_untouched);
     RUN(a_refused_command_is_not_recorded_as_accepted);

@@ -30,6 +30,12 @@ bool replay_ui_load(const char* path);
 // when no file was loaded or the list is exhausted.
 void replay_ui_tick(void);
 
+// Whether the game's mode matches the one a command was recorded in. Pure, so
+// the judgement that decides between submitting and stalling can be tested
+// without a running game. A command recorded at turn 0 was issued before any
+// turn started; one at turn 1 or later was issued inside turn-based combat.
+bool replay_ui_mode_matches(int recorded_turn, bool combat_active);
+
 // Whether a command file was loaded, and how many commands have not been
 // submitted. A replay that ends with commands outstanding did not reproduce
 // its recording, and the run record should say so rather than look complete.

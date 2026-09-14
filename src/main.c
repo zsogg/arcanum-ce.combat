@@ -557,6 +557,13 @@ int main(int argc, char** argv)
 
     main_loop();
 
+    // CE (card O2): a replay that ends with commands outstanding did not
+    // reproduce its recording. Say so on the way out, so the run record carries
+    // it rather than a reader inferring it from an absent event.
+    if (replay_ui_active()) {
+        tig_debug_printf("Harness: replay outstanding=%d\n", replay_ui_remaining());
+    }
+
     combat_observer_close();
 
     gameuilib_mod_unload();
