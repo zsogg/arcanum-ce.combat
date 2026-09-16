@@ -1,6 +1,7 @@
 #include "ui/intgame.h"
 
 #include <stdio.h>
+#include <string.h>
 
 #include "game/ai.h"
 #include "game/anim.h"
@@ -143,6 +144,8 @@ static void intgame_secondary_button_toggle(IntgameSecondaryButton btn, Rotating
 static bool handle_button_unhover(TigMessage* msg);
 static void intgame_center_on_player(void);
 static void intgame_combat_mode_toggle(void);
+static void intgame_combat_mode_toggle_inner(void);
+static void intgame_turn_based_toggle(void);
 static void intgame_examine_refresh(void);
 
 static void intgame_hotkey_equip_item(int64_t critter_obj, Hotkey* a2, int inventory_location);
@@ -2045,7 +2048,7 @@ bool intgame_process_message(TigMessage* msg)
             if (msg->type == TIG_MESSAGE_KEYBOARD
                 && msg->data.keyboard.key == SDLK_SPACE
                 && msg->data.keyboard.pressed) {
-                combat_turn_based_toggle();
+                intgame_turn_based_toggle();
                 return true;
             }
             return false;
@@ -2695,7 +2698,7 @@ bool intgame_process_message(TigMessage* msg)
         if (msg->data.keyboard.pressed) {
             switch (msg->data.keyboard.key) {
             case SDLK_SPACE:
-                combat_turn_based_toggle();
+                intgame_turn_based_toggle();
                 gsound_play_sfx(0, 1);
                 return true;
             case SDLK_C:
@@ -3376,8 +3379,114 @@ void intgame_center_on_player(void)
     }
 }
 
-// 0x54EBF0
+// CE (card O2): record the actions that change the interaction mode.
+//
+// Both are keyboard actions, so the command recorder - which only sees target
+// clicks through `intgame_perform_action_on_target` - never saw them. Measured
+// 2026-09-14: combat began in a recorded run with no recorded command, because
+// the keypress that started it was invisible, and a replay driven by that record
+// could never reach the state its own commands were recorded in.
+//
+// Wrapped rather than instrumented in place for the same reason the command
+// dispatch is: `intgame_combat_mode_toggle` refuses on several paths - dead,
+// stoned, paralysed, "you cannot exit combat-mode when under attack" - and
+// returns nothing on any of them. Reading the mode on both sides cannot miss an
+// exit, and cannot go stale when an exit is added.
+static void intgame_mode_read(CombatObserverMode* mode)
+{
+    int64_t pc_obj;
+
+    pc_obj = player_get_local_pc_obj();
+    mode->combat_mode = pc_obj != OBJ_HANDLE_NULL
+        && combat_critter_is_combat_mode_active(pc_obj);
+    mode->turn_based = combat_is_turn_based();
+    mode->turn_based_active = combat_turn_based_is_active();
+}
+
+static void intgame_mode_action_begin(const char* action,
+    char actor[COMBAT_OBSERVER_IDENTITY_SIZE], CombatObserverMode* before)
+{
+    combat_observer_object_id(player_get_local_pc_obj(), actor);
+    intgame_mode_read(before);
+    combat_observer_mode_requested(actor, action, before);
+}
+
+static void intgame_mode_action_end(const char* action,
+    const char* actor, const CombatObserverMode* before)
+{
+    CombatObserverMode after;
+
+    intgame_mode_read(&after);
+    combat_observer_mode_resolved(actor, action,
+        combat_observer_mode_accepted(before, &after), &after);
+}
+
+// CE (card O2): the mode as it stands this frame, so a change no player action
+// claimed is still recorded. Combat mode is activated from eight places besides
+// the two keys - an NPC attacking, dialogue, sleep, teleport, a map transition -
+// and a replay that cannot see those changes cannot tell "I failed to reach this
+// state" from "the game got here without me".
+void intgame_mode_observe(void)
+{
+    CombatObserverMode mode;
+    char actor[COMBAT_OBSERVER_IDENTITY_SIZE];
+
+    if (!combat_observer_is_enabled()) {
+        return;
+    }
+
+    combat_observer_object_id(player_get_local_pc_obj(), actor);
+    intgame_mode_read(&mode);
+    combat_observer_mode_observed(actor, &mode);
+}
+
+bool intgame_mode_action(const char* action)
+{
+    if (strcmp(action, "combat-mode") == 0) {
+        intgame_combat_mode_toggle();
+        return true;
+    }
+
+    if (strcmp(action, "turn-based") == 0) {
+        intgame_turn_based_toggle();
+        return true;
+    }
+
+    return false;
+}
+
+static void intgame_turn_based_toggle(void)
+{
+    CombatObserverMode before;
+    char actor[COMBAT_OBSERVER_IDENTITY_SIZE];
+
+    if (!combat_observer_is_enabled()) {
+        combat_turn_based_toggle();
+        return;
+    }
+
+    intgame_mode_action_begin("turn-based", actor, &before);
+    combat_turn_based_toggle();
+    intgame_mode_action_end("turn-based", actor, &before);
+}
+
 void intgame_combat_mode_toggle(void)
+{
+    CombatObserverMode before;
+    char actor[COMBAT_OBSERVER_IDENTITY_SIZE];
+
+    if (!combat_observer_is_enabled()) {
+        intgame_combat_mode_toggle_inner();
+        return;
+    }
+
+    intgame_mode_action_begin("combat-mode", actor, &before);
+    intgame_combat_mode_toggle_inner();
+    intgame_mode_action_end("combat-mode", actor, &before);
+}
+
+// 0x54EBF0
+static void intgame_combat_mode_toggle_inner(void)
 {
     int64_t pc_obj;
     MesFileEntry mes_file_entry;
@@ -3436,9 +3545,6 @@ void intgame_examine_refresh(void)
     tb_ui_examine_object(player_get_local_pc_obj(), intgame_examine_obj);
 }
 
-// TODO: Lots of jumps, check.
-//
-// 0x54ED30
 // CE (card O2): record the player's command around the real dispatch.
 //
 // The dispatch below has around twenty early returns - wrong target, polymorph,
@@ -3488,6 +3594,9 @@ void intgame_perform_action_on_target(TargetDescriptor* td)
     combat_observer_command_resolved(actor, accepted);
 }
 
+// TODO: Lots of jumps, check.
+//
+// 0x54ED30
 static void intgame_perform_action_on_target_inner(TargetDescriptor* td)
 {
     int64_t pc_obj;

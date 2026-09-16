@@ -645,6 +645,10 @@ void main_loop(void)
         // exactly as before.
         harness_frames_run++;
 
+        // CE (card O2): the interaction mode, sampled before the replay acts
+        // on it, so a change the player did not ask for is recorded as such.
+        intgame_mode_observe();
+
         // CE (card O2): `-replay=<file>`. Submit the next recorded command if
         // the actor is idle. After the frame is displayed, so the actor's goal
         // state reflects a completed frame rather than one in progress.

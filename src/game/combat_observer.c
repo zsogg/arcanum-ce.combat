@@ -25,6 +25,8 @@ static unsigned long long combat_observer_next_action;
 static unsigned long long combat_observer_current_action;
 static int combat_observer_fail_after = -1;
 static int combat_observer_lines_written;
+static CombatObserverMode combat_observer_mode;
+static bool combat_observer_mode_known;
 
 static bool combat_observer_write(const char* line)
 {
@@ -244,6 +246,94 @@ void combat_observer_command_resolved(const char* actor, bool accepted)
     combat_observer_write(line);
 }
 
+// CE (card O2): the mode fields every mode event carries, written once here so
+// the three axes cannot drift apart between the three events.
+static int combat_observer_mode_fields(char* buffer, size_t size,
+    const CombatObserverMode* mode)
+{
+    return snprintf(buffer, size,
+        "\"combat_mode\":%s,\"turn_based\":%s,\"turn_based_active\":%s",
+        mode->combat_mode ? "true" : "false",
+        mode->turn_based ? "true" : "false",
+        mode->turn_based_active ? "true" : "false");
+}
+
+void combat_observer_mode_requested(const char* actor, const char* action,
+    const CombatObserverMode* before)
+{
+    char line[512];
+    char fields[160];
+
+    if (!combat_observer_begin_semantic()) return;
+    combat_observer_mode_fields(fields, sizeof(fields), before);
+    snprintf(line, sizeof(line),
+        "{\"schema\":1,\"sequence\":%u,\"event\":\"mode.requested\",\"turn\":%u,"
+        "\"action_id\":null,\"actor\":\"%s\",\"action\":\"%s\",%s}",
+        combat_observer_sequence++, combat_observer_turn, actor, action, fields);
+    combat_observer_write(line);
+}
+
+// See the header for why refusal is the interesting case. Any axis moving is an
+// acceptance; the toggles are independent and one action never moves two.
+bool combat_observer_mode_accepted(const CombatObserverMode* before,
+    const CombatObserverMode* after)
+{
+    return before->combat_mode != after->combat_mode
+        || before->turn_based != after->turn_based
+        || before->turn_based_active != after->turn_based_active;
+}
+
+void combat_observer_mode_resolved(const char* actor, const char* action,
+    bool accepted, const CombatObserverMode* after)
+{
+    char line[512];
+    char fields[160];
+
+    if (!combat_observer_begin_semantic()) return;
+    combat_observer_mode_fields(fields, sizeof(fields), after);
+    snprintf(line, sizeof(line),
+        "{\"schema\":1,\"sequence\":%u,\"event\":\"mode.resolved\",\"turn\":%u,"
+        "\"action_id\":null,\"actor\":\"%s\",\"action\":\"%s\",\"accepted\":%s,%s}",
+        combat_observer_sequence++, combat_observer_turn, actor, action,
+        accepted ? "true" : "false", fields);
+    combat_observer_write(line);
+
+    // The player path owns the change it just made, so the frame watcher below
+    // does not report it a second time as uncaused.
+    combat_observer_mode = *after;
+    combat_observer_mode_known = true;
+}
+
+void combat_observer_mode_observed(const char* actor,
+    const CombatObserverMode* mode)
+{
+    char line[512];
+    char fields[160];
+
+    if (!combat_observer_is_enabled()) return;
+
+    if (!combat_observer_mode_known) {
+        // First sight is the run's starting mode, not a change. Recording it as
+        // one would put a spurious transition at the head of every trace.
+        combat_observer_mode = *mode;
+        combat_observer_mode_known = true;
+        return;
+    }
+
+    if (!combat_observer_mode_accepted(&combat_observer_mode, mode)) {
+        return;
+    }
+
+    combat_observer_mode = *mode;
+    if (!combat_observer_begin_semantic()) return;
+    combat_observer_mode_fields(fields, sizeof(fields), mode);
+    snprintf(line, sizeof(line),
+        "{\"schema\":1,\"sequence\":%u,\"event\":\"mode.changed\",\"turn\":%u,"
+        "\"action_id\":null,\"actor\":\"%s\",\"cause\":\"game\",%s}",
+        combat_observer_sequence++, combat_observer_turn, actor, fields);
+    combat_observer_write(line);
+}
+
 void combat_observer_turn_ended(const char* actor, int action_points)
 {
     char line[384];
@@ -405,4 +495,6 @@ void combat_observer_test_reset(void)
     combat_observer_current_action = 0;
     combat_observer_fail_after = -1;
     combat_observer_lines_written = 0;
+    memset(&combat_observer_mode, 0, sizeof(combat_observer_mode));
+    combat_observer_mode_known = false;
 }

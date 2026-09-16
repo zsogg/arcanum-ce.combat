@@ -18,9 +18,18 @@
 #define REPLAY_MAX_COMMANDS 256
 #define REPLAY_IDENTITY_SIZE 64
 
+typedef enum ReplayKind {
+    REPLAY_KIND_OBJECT,
+    REPLAY_KIND_LOCATION,
+    // CE (card O2): a mode-changing action. Not a target at all - it carries
+    // the action's name and goes through `intgame_mode_action` rather than the
+    // command dispatch.
+    REPLAY_KIND_KEY,
+} ReplayKind;
+
 typedef struct ReplayCommand {
     int turn;
-    bool is_loc;
+    ReplayKind kind;
     int64_t loc;
     char target[REPLAY_IDENTITY_SIZE];
 } ReplayCommand;
@@ -97,13 +106,15 @@ bool replay_ui_load(const char* path)
         }
 
         replay_commands[replay_count].turn = turn;
+        replay_commands[replay_count].loc = 0;
+        replay_commands[replay_count].target[0] = '\0';
         if (strcmp(kind, "location") == 0) {
-            replay_commands[replay_count].is_loc = true;
+            replay_commands[replay_count].kind = REPLAY_KIND_LOCATION;
             replay_commands[replay_count].loc = (int64_t)strtoll(target, NULL, 10);
-            replay_commands[replay_count].target[0] = '\0';
         } else {
-            replay_commands[replay_count].is_loc = false;
-            replay_commands[replay_count].loc = 0;
+            replay_commands[replay_count].kind = strcmp(kind, "key") == 0
+                ? REPLAY_KIND_KEY
+                : REPLAY_KIND_OBJECT;
             strncpy(replay_commands[replay_count].target, target,
                 sizeof(replay_commands[replay_count].target) - 1);
             replay_commands[replay_count].target[
@@ -171,8 +182,19 @@ void replay_ui_tick(void)
     }
     replay_stall_reported = false;
 
+    if (command->kind == REPLAY_KIND_KEY) {
+        // A key action goes through the same UI entry point the keyboard uses,
+        // so the recorder sees it exactly as it saw the original press.
+        replay_next++;
+        if (!intgame_mode_action(command->target)) {
+            tig_debug_printf("Replay: command %d names an unknown action '%s'\n",
+                replay_next - 1, command->target);
+        }
+        return;
+    }
+
     memset(&td, 0, sizeof(td));
-    if (command->is_loc) {
+    if (command->kind == REPLAY_KIND_LOCATION) {
         td.is_loc = 1;
         td.loc = command->loc;
     } else {

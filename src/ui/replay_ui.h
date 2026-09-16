@@ -18,9 +18,14 @@
 // no matching benefit. `observatory.py replay-script` derives it from a run.
 //
 //     # turn  kind      target
+//     0       key       combat-mode
 //     0       object    G_FA62E3B5_9BA4_49A2_89C4_228E9F58BE12
 //     2       object    G_00000083_0001_4040_8000_000000000001
 //     0       location  362014203537285
+//
+// `key` is one of the two actions that change the interaction mode. It is in
+// the file because the mode is the other half of a command: a script of clicks
+// alone could never reach the state its clicks were recorded in.
 //
 // Loads the file. False means nothing will be replayed, and says why on the
 // debug log rather than proceeding silently with an empty list.

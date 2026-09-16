@@ -173,4 +173,16 @@ void intgame_show(void);
 // than a second dispatch that would drift from this one.
 void intgame_perform_action_on_target(TargetDescriptor* td);
 
+// CE (card O2): sample the interaction mode once per frame, so a mode change
+// with no player action behind it is recorded as such. Cheap - three reads and a
+// comparison - and a no-op unless the observer is recording.
+void intgame_mode_observe(void);
+
+// CE (card O2): the two actions that change the interaction mode - "combat-mode"
+// (`R`, or the combat button) and "turn-based" (`SPACE`). Exposed for the same
+// reason the command dispatch is: a replay should press what a player pressed,
+// not reach past the UI and set combat state directly. False means the name is
+// not one of the two, which a replay reports rather than silently ignoring.
+bool intgame_mode_action(const char* action);
+
 #endif /* ARCANUM_UI_INTGAME_H_ */

@@ -25,6 +25,18 @@ static bool read_trace(char* buffer, size_t size)
     return true;
 }
 
+static int count_events(const char* text, const char* needle)
+{
+    int count = 0;
+    size_t width = strlen(needle);
+
+    while ((text = strstr(text, needle)) != NULL) {
+        count++;
+        text += width;
+    }
+    return count;
+}
+
 static int count_lines(const char* text)
 {
     int count = 0;
@@ -296,6 +308,170 @@ TEST(a_command_waits_for_the_mode_it_was_recorded_in)
     CHECK(!replay_ui_mode_matches(1, false));
 }
 
+// --- card O2: the actions that change the interaction mode ---------------
+
+static CombatObserverMode mode_of(bool combat_mode, bool turn_based,
+    bool turn_based_active)
+{
+    CombatObserverMode mode;
+
+    mode.combat_mode = combat_mode;
+    mode.turn_based = turn_based;
+    mode.turn_based_active = turn_based_active;
+    return mode;
+}
+
+TEST(every_mode_state_decides_acceptance_the_same_way)
+{
+    int before;
+    int after;
+
+    // All 64 transitions between the three axes. Exhaustive because this is the
+    // same class of judgement as command acceptance: a refused toggle recorded
+    // as accepted would be re-submitted by a replay and put the run in a state
+    // the recording never reached. Identity is refusal; everything else is not.
+    for (before = 0; before < 8; before++) {
+        for (after = 0; after < 8; after++) {
+            CombatObserverMode a = mode_of((before & 1) != 0,
+                (before & 2) != 0, (before & 4) != 0);
+            CombatObserverMode b = mode_of((after & 1) != 0,
+                (after & 2) != 0, (after & 4) != 0);
+
+            if (before == after) {
+                CHECK(!combat_observer_mode_accepted(&a, &b));
+            } else {
+                CHECK(combat_observer_mode_accepted(&a, &b));
+            }
+        }
+    }
+}
+
+TEST(the_turn_based_setting_and_a_running_encounter_are_not_the_same_axis)
+{
+    // Pressing SPACE outside combat changes the setting and starts nothing.
+    // Collapsing the two into one boolean would record that press as refused,
+    // and a replay would press it again -- turning it back off.
+    CombatObserverMode before = mode_of(false, false, false);
+    CombatObserverMode after = mode_of(false, true, false);
+
+    CHECK(combat_observer_mode_accepted(&before, &after));
+
+    // And the converse: an encounter beginning while the setting already stood
+    // is a change too, one no keypress caused.
+    before = mode_of(true, true, false);
+    after = mode_of(true, true, true);
+    CHECK(combat_observer_mode_accepted(&before, &after));
+}
+
+TEST(a_mode_action_records_its_request_before_its_resolution)
+{
+    char trace[TRACE_SIZE];
+    CombatObserverMode before = mode_of(false, true, false);
+    CombatObserverMode after = mode_of(true, true, true);
+
+    clean();
+    CHECK(combat_observer_open(TRACE_FILE));
+    combat_observer_mode_requested("fighter", "combat-mode", &before);
+    combat_observer_mode_resolved("fighter", "combat-mode", true, &after);
+    combat_observer_close();
+
+    CHECK(read_trace(trace, sizeof(trace)));
+    CHECK(strstr(trace, "\"event\":\"mode.requested\"") != NULL);
+    CHECK(strstr(trace, "\"event\":\"mode.resolved\"") != NULL);
+    CHECK(strstr(trace, "\"event\":\"mode.requested\"")
+        < strstr(trace, "\"event\":\"mode.resolved\""));
+    CHECK(strstr(trace, "\"action\":\"combat-mode\"") != NULL);
+    // All three axes, on both events: a replay reads them to decide whether it
+    // still has work to do before it can submit.
+    CHECK(strstr(trace, "\"combat_mode\":false") != NULL);
+    CHECK(strstr(trace, "\"combat_mode\":true") != NULL);
+    CHECK(strstr(trace, "\"turn_based_active\":true") != NULL);
+}
+
+TEST(a_refused_mode_action_is_not_recorded_as_accepted)
+{
+    char trace[TRACE_SIZE];
+    // "You cannot exit combat-mode when under attack": the toggle runs, says so
+    // on the message window, and changes nothing. It returns void, so the mode
+    // read either side is the only signal there is.
+    CombatObserverMode unchanged = mode_of(true, true, true);
+
+    clean();
+    CHECK(combat_observer_open(TRACE_FILE));
+    combat_observer_mode_requested("fighter", "combat-mode", &unchanged);
+    combat_observer_mode_resolved("fighter", "combat-mode",
+        combat_observer_mode_accepted(&unchanged, &unchanged), &unchanged);
+    combat_observer_close();
+
+    CHECK(read_trace(trace, sizeof(trace)));
+    CHECK(strstr(trace, "\"accepted\":false") != NULL);
+    CHECK(strstr(trace, "\"accepted\":true") == NULL);
+}
+
+TEST(the_starting_mode_is_not_recorded_as_a_change)
+{
+    char trace[TRACE_SIZE];
+    CombatObserverMode start = mode_of(false, true, false);
+
+    clean();
+    CHECK(combat_observer_open(TRACE_FILE));
+    // First sight, then the same mode again for several frames.
+    combat_observer_mode_observed("fighter", &start);
+    combat_observer_mode_observed("fighter", &start);
+    combat_observer_mode_observed("fighter", &start);
+    combat_observer_close();
+
+    CHECK(read_trace(trace, sizeof(trace)));
+    // A transition at the head of every trace, and one per quiet frame, would
+    // bury the changes that matter under thousands that do not.
+    CHECK(strstr(trace, "\"event\":\"mode.changed\"") == NULL);
+}
+
+TEST(a_mode_change_no_player_action_claimed_is_recorded_as_uncaused)
+{
+    char trace[TRACE_SIZE];
+    CombatObserverMode start = mode_of(false, true, false);
+    CombatObserverMode fighting = mode_of(true, true, true);
+
+    clean();
+    CHECK(combat_observer_open(TRACE_FILE));
+    combat_observer_mode_observed("fighter", &start);
+    // An NPC attacks: `anim.c` activates combat mode for both sides and the
+    // encounter begins. No key was pressed, so the recorder that only watches
+    // keys and clicks sees nothing -- which is exactly why the first replay
+    // could not reach the state its commands were recorded in.
+    combat_observer_mode_observed("fighter", &fighting);
+    combat_observer_mode_observed("fighter", &fighting);
+    combat_observer_close();
+
+    CHECK(read_trace(trace, sizeof(trace)));
+    CHECK(strstr(trace, "\"event\":\"mode.changed\"") != NULL);
+    CHECK(strstr(trace, "\"cause\":\"game\"") != NULL);
+    // Once, not once per frame while the state persists.
+    CHECK(count_events(trace, "\"event\":\"mode.changed\"") == 1);
+}
+
+TEST(a_mode_change_the_player_asked_for_is_not_also_recorded_as_uncaused)
+{
+    char trace[TRACE_SIZE];
+    CombatObserverMode before = mode_of(false, true, false);
+    CombatObserverMode after = mode_of(true, true, true);
+
+    clean();
+    CHECK(combat_observer_open(TRACE_FILE));
+    combat_observer_mode_observed("fighter", &before);
+    combat_observer_mode_requested("fighter", "combat-mode", &before);
+    combat_observer_mode_resolved("fighter", "combat-mode", true, &after);
+    // The watcher runs on the very next frame and sees the new mode. It must
+    // recognise it as the one the player just asked for, or every keypress
+    // would be recorded twice and a replay would press twice.
+    combat_observer_mode_observed("fighter", &after);
+    combat_observer_close();
+
+    CHECK(read_trace(trace, sizeof(trace)));
+    CHECK(strstr(trace, "\"event\":\"mode.changed\"") == NULL);
+}
+
 // --- card W4: the same real attack, observed and not ---------------------
 //
 // The RNG check above compares draws around the *writer* calls. It never drives
@@ -503,6 +679,13 @@ void test_combat_observer_suite(void)
     RUN(observation_does_not_advance_the_combat_rng);
     RUN(a_command_records_its_request_before_its_resolution);
     RUN(a_command_waits_for_the_mode_it_was_recorded_in);
+    RUN(every_mode_state_decides_acceptance_the_same_way);
+    RUN(the_turn_based_setting_and_a_running_encounter_are_not_the_same_axis);
+    RUN(a_mode_action_records_its_request_before_its_resolution);
+    RUN(a_refused_mode_action_is_not_recorded_as_accepted);
+    RUN(the_starting_mode_is_not_recorded_as_a_change);
+    RUN(a_mode_change_no_player_action_claimed_is_recorded_as_uncaused);
+    RUN(a_mode_change_the_player_asked_for_is_not_also_recorded_as_uncaused);
     RUN(every_goal_state_decides_acceptance_the_same_way);
     RUN(a_refused_command_leaves_the_goal_state_untouched);
     RUN(a_refused_command_is_not_recorded_as_accepted);
