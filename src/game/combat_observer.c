@@ -16,6 +16,7 @@
 
 static FILE* combat_observer_stream;
 static bool combat_observer_complete;
+static bool combat_observer_terminal;
 static bool combat_observer_truncated;
 static unsigned int combat_observer_sequence;
 static unsigned int combat_observer_semantic_count;
@@ -514,6 +515,22 @@ void combat_observer_damage_committed(const char* attacker,
         hp_after, fatigue_before, fatigue_after, dead ? "true" : "false",
         unconscious ? "true" : "false");
     combat_observer_write(line);
+
+    // Latched after the write, so a harness that exits on this can never cut
+    // the event that caused it out of the trace.
+    if (dead || unconscious) {
+        combat_observer_terminal = true;
+    }
+}
+
+bool combat_observer_terminal_seen(void)
+{
+    return combat_observer_terminal;
+}
+
+unsigned int combat_observer_event_count(void)
+{
+    return combat_observer_sequence;
 }
 
 void combat_observer_test_set_event_limit(unsigned int limit)
@@ -544,4 +561,5 @@ void combat_observer_test_reset(void)
     combat_observer_lines_written = 0;
     memset(&combat_observer_mode, 0, sizeof(combat_observer_mode));
     combat_observer_mode_known = false;
+    combat_observer_terminal = false;
 }

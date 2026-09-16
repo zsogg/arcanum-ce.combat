@@ -506,6 +506,79 @@ TEST(a_refused_end_turn_is_not_recorded_as_accepted)
     CHECK(strstr(trace, "\"action_points\":0") == NULL);
 }
 
+TEST(the_terminal_latch_answers_only_after_a_critter_goes_down)
+{
+    int components[DAMAGE_TYPE_COUNT] = { 0 };
+
+    clean();
+    CHECK(combat_observer_open(TRACE_FILE));
+    // Nothing has happened yet, so a harness waiting on this must keep waiting.
+    CHECK(!combat_observer_terminal_seen());
+
+    // A hit that hurts but does not end anything.
+    combat_observer_damage_committed("fighter", "opponent", components, 0,
+        5, 0, 5, 30, 30, false, false);
+    CHECK(!combat_observer_terminal_seen());
+
+    combat_observer_damage_committed("fighter", "opponent", components, 0,
+        8, 5, 32000, 30, 30, true, false);
+    CHECK(combat_observer_terminal_seen());
+    combat_observer_close();
+}
+
+TEST(an_incapacitation_ends_the_duel_as_much_as_a_death_does)
+{
+    int components[DAMAGE_TYPE_COUNT] = { 0 };
+
+    clean();
+    CHECK(combat_observer_open(TRACE_FILE));
+    combat_observer_damage_committed("opponent", "fighter", components, 0,
+        9, 3, 12, 30, 0, false, true);
+    // Both are terminal outcomes in the scenario, so both must stop a run that
+    // is waiting for one. Reading only `dead` would hang until the frame cap.
+    CHECK(combat_observer_terminal_seen());
+    combat_observer_close();
+}
+
+TEST(the_latch_is_set_after_the_event_is_written)
+{
+    char trace[TRACE_SIZE];
+    int components[DAMAGE_TYPE_COUNT] = { 0 };
+
+    clean();
+    CHECK(combat_observer_open(TRACE_FILE));
+    combat_observer_damage_committed("fighter", "opponent", components, 0,
+        8, 5, 32000, 30, 30, true, false);
+    combat_observer_close();
+
+    // The ordering that matters: a harness exits on this latch, so the event
+    // that caused the exit must already be in the trace. If it were latched
+    // first, an eager exit could cut its own reason out of the record -- and
+    // O1 refuses a truncated run, so the saved time would buy nothing.
+    CHECK(read_trace(trace, sizeof(trace)));
+    CHECK(strstr(trace, "\"dead\":true") != NULL);
+    CHECK(combat_observer_terminal_seen());
+}
+
+TEST(the_event_counter_advances_only_when_something_is_written)
+{
+    unsigned int before;
+    int components[DAMAGE_TYPE_COUNT] = { 0 };
+
+    clean();
+    CHECK(combat_observer_open(TRACE_FILE));
+    before = combat_observer_event_count();
+    combat_observer_damage_committed("fighter", "opponent", components, 0,
+        1, 0, 1, 30, 30, false, false);
+    // A harness watches this stop moving rather than guessing how long a death
+    // animation lasts, so it has to move when -- and only when -- the trace does.
+    CHECK(combat_observer_event_count() > before);
+
+    before = combat_observer_event_count();
+    CHECK(combat_observer_event_count() == before);
+    combat_observer_close();
+}
+
 TEST(a_mode_change_no_player_action_claimed_is_recorded_as_uncaused)
 {
     char trace[TRACE_SIZE];
@@ -768,6 +841,10 @@ void test_combat_observer_suite(void)
     RUN(every_end_turn_state_decides_acceptance_the_same_way);
     RUN(an_end_turn_records_its_request_before_its_resolution);
     RUN(a_refused_end_turn_is_not_recorded_as_accepted);
+    RUN(the_terminal_latch_answers_only_after_a_critter_goes_down);
+    RUN(an_incapacitation_ends_the_duel_as_much_as_a_death_does);
+    RUN(the_latch_is_set_after_the_event_is_written);
+    RUN(the_event_counter_advances_only_when_something_is_written);
     RUN(every_goal_state_decides_acceptance_the_same_way);
     RUN(a_refused_command_leaves_the_goal_state_untouched);
     RUN(a_refused_command_is_not_recorded_as_accepted);

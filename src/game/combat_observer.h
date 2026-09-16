@@ -140,6 +140,21 @@ void combat_observer_damage_committed(const char* attacker,
     int hp_amount, int hp_before, int hp_after, int fatigue_before,
     int fatigue_after, bool dead, bool unconscious);
 
+// CE (card O2): the two facts a harness needs to know the duel is over.
+//
+// `combat_observer_terminal_seen` latches when a `damage.committed` reports a
+// death or an incapacitation. It is deliberately narrower than O1's notion of a
+// *valid* terminal outcome, which is a scenario property compared against
+// `valid_outcomes` in the run record: the engine knows only that a critter went
+// down. For the O1 fixture the two coincide, and a scenario whose ending is
+// survival or escape would need its own signal rather than this one.
+//
+// `combat_observer_event_count` is the write counter. A harness watches it stop
+// moving rather than guessing how long a death animation lasts, so the trace is
+// quiet by measurement instead of by a constant nobody can justify.
+bool combat_observer_terminal_seen(void);
+unsigned int combat_observer_event_count(void);
+
 /* Pure writer fault seams used by the unit suite. */
 void combat_observer_test_set_event_limit(unsigned int limit);
 void combat_observer_test_fail_after(int lines);

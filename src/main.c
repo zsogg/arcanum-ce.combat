@@ -88,6 +88,34 @@ static bool harness_autoload_exact;
 static char harness_autoload_slot[TIG_MAX_PATH];
 static int harness_run_frames;
 static int harness_frames_run;
+
+// CE (card O2): `-untildone[=N]` ends the run when the work is done instead of
+// at a frame count nobody can pick correctly.
+//
+// Measured 2026-09-15: a scripted duel on the O1 fixture finished in about two
+// minutes of an eleven-minute `-runframes=40000` budget, and the rest was dead
+// frames - the loop is vsync-paced, so those minutes are spent waiting rather
+// than computing. The margin was paid on every run of a comparison batch.
+//
+// Three conditions, all of which must hold:
+//
+//   the duel ended       `combat_observer_terminal_seen`, so this needs
+//                        `--combat-observe`; without the observer the engine
+//                        has no terminal signal and the switch refuses.
+//   the script is done   a replay still holding commands has not finished, and
+//                        exiting would turn "it stalled" into "it completed".
+//   the trace is quiet   no event written for N frames. Watching the writer
+//                        stop beats guessing a death animation's length, and it
+//                        is what keeps the tail of the trace intact: O1 refuses
+//                        a truncated run, so an eager exit would trade eleven
+//                        minutes for a run that cannot be compared at all.
+//
+// Unlike `-runframes` this does **not** quick-save on the way out. The save is
+// what a comparison run has to undo afterwards, and nothing here needs it.
+static int harness_until_done;
+static int harness_quiet_frames = 120;
+static unsigned int harness_last_event_count;
+static int harness_last_event_frame;
 // CE: `-screenshot=N` fires the game's own F12 path at a fixed FRAME.
 // A wall-clock screenshot is not reproducible: the frame differential
 // (roadmap P5.5) measured two shots taken seconds apart in one in-game run
@@ -272,6 +300,18 @@ int main(int argc, char** argv)
         harness_run_frames = (int)strtol(pch + strlen("-runframes="), NULL, 10);
     }
 
+    // CE (card O2): `-untildone[=N]`, N being the quiet-frame count. Two
+    // seconds at sixty frames by default, which is comfortably longer than the
+    // gap between events inside a turn.
+    pch = strstr(lpCmdLine, "-untildone");
+    if (pch != NULL) {
+        harness_until_done = 1;
+        if (pch[strlen("-untildone")] == '=') {
+            harness_quiet_frames = (int)strtol(pch + strlen("-untildone") + 1,
+                NULL, 10);
+        }
+    }
+
     mainmenu_ui_female_chars_missing_clear();
 
     // NOTE: These were original switches to set cheat level. They were removed
@@ -430,6 +470,16 @@ int main(int argc, char** argv)
         atexit(combat_observer_close);
     }
 
+    // CE (card O2): `-untildone` reads the duel's end from the observer, so
+    // without one it has nothing to wait for. Refused loudly rather than
+    // silently degrading to "run forever", which is the failure a harness would
+    // notice last.
+    if (harness_until_done && !combat_observer_is_enabled()) {
+        tig_debug_printf("Harness: -untildone needs --combat-observe;"
+                         " ignoring it\n");
+        harness_until_done = 0;
+    }
+
     if (strstr(lpCmdLine, "-dialogcheck") != NULL) {
         dialog_check();
     }
@@ -561,6 +611,19 @@ int main(int argc, char** argv)
 
     main_loop();
 
+    // CE (card O2): how many frames the run actually took.
+    //
+    // `main_loop` has six returns and this is the one place past all of them,
+    // so the count is reported once however the run ended. It is cheap and it
+    // is two different things at once:
+    //
+    //   a budget   `-runframes` was picked by guesswork before this existed,
+    //              and the margin was paid on every run of a batch.
+    //   a signal   a replay that needed materially more frames than the run it
+    //              reproduces has diverged, and says so here without anyone
+    //              having to diff two event streams to find out.
+    tig_debug_printf("Harness: frames run=%d\n", harness_frames_run);
+
     // CE (card O2): a replay that ends with commands outstanding did not
     // reproduce its recording. Say so on the way out, so the run record carries
     // it rather than a reader inferring it from an absent event.
@@ -666,6 +729,28 @@ void main_loop(void)
             tig_debug_printf("Harness: screenshot at frame %d\n",
                 harness_frames_run);
             tig_video_screenshot_make();
+        }
+
+        // CE (card O2): `-untildone`. The natural end of the run, as opposed
+        // to `-runframes` below, which is the cap that catches a duel that
+        // never finishes. Both can be given, and should be.
+        if (harness_until_done) {
+            unsigned int events = combat_observer_event_count();
+
+            if (events != harness_last_event_count) {
+                harness_last_event_count = events;
+                harness_last_event_frame = harness_frames_run;
+            }
+
+            if (combat_observer_terminal_seen()
+                && replay_ui_remaining() == 0
+                && harness_frames_run - harness_last_event_frame
+                    >= harness_quiet_frames) {
+                tig_debug_printf("Harness: duel ended, trace quiet for %d"
+                                 " frames, exiting at frame %d\n",
+                    harness_quiet_frames, harness_frames_run);
+                return;
+            }
         }
 
         // CE: `-runframes=N`. The save is taken from the same point every time.
