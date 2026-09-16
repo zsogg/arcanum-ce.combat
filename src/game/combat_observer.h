@@ -73,6 +73,51 @@ bool combat_observer_mode_accepted(const CombatObserverMode* before,
 // recording with nothing in the record to say how.
 void combat_observer_mode_observed(const char* actor,
     const CombatObserverMode* mode);
+
+// CE (card O2): ending a turn, the third player input a replay needs.
+//
+// Measured 2026-09-14: a replay that could enter combat and attack still froze
+// in turn 4 holding action points, because nothing ended the turn. Ending one is
+// a button (`combat_ui_end_turn_button_info`) and the `E` key, and the recorder -
+// whose boundary was `intgame_perform_action_on_target` - saw neither. That is
+// the same finding as the mode gap, one level in.
+//
+// Recorded as its own pair rather than as a mode action: the three mode axes do
+// not move when a turn ends, so reporting it as a mode change would be false.
+// The convention the two share is what a replay reads - a named action with no
+// target, submitted as a `key` row.
+void combat_observer_end_turn_requested(const char* actor, int action_points);
+void combat_observer_end_turn_resolved(const char* actor, bool accepted,
+    int action_points, bool pc_turn);
+
+// Was the end-turn taken? Pure, like the other two judgements, and for the same
+// reason: a refusal recorded as an acceptance is re-submitted by a replay and
+// diverges silently.
+//
+// Unlike the mode toggles, this decision is the UI's own - `combat_ui`
+// evaluates all three conditions and only then calls
+// `combat_turn_based_next_subturn`, which returns nothing. So the conditions
+// *are* the judgement, and holding them here keeps the button and the `E` key
+// from drifting apart; they carried byte-identical copies of this test until
+// this card deduplicated them.
+//
+//   turn_in_progress   false  nobody has a turn, so there is none to end.
+//                             Deliberately *this* and not
+//                             `combat_turn_based_is_active`: the shipped UI
+//                             tests `combat_turn_based_whos_turn_get() !=
+//                             OBJ_HANDLE_NULL`, and the two are separate
+//                             variables in `combat.c`. Substituting the flag
+//                             would be a behaviour change dressed as a
+//                             refactor.
+//   pc_turn            false  it is someone else's turn; the press is ignored.
+//   actor_ready        false  the PC is mid-animation. Note this is not simply
+//                             "not busy": a critter standing around is busy
+//                             with its fidget goal, and refusing the press then
+//                             would make ending a turn depend on animation
+//                             timing.
+bool combat_observer_end_turn_accepted(bool turn_in_progress, bool pc_turn,
+    bool actor_ready);
+
 void combat_observer_actor_snapshot(const char* actor, int level,
     int strength, int dexterity, int speed, int melee, int dodge,
     int hp_current, int hp_max, int fatigue_current, int fatigue_max,

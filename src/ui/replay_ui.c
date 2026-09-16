@@ -6,13 +6,14 @@
 
 #include <tig/debug.h>
 
-#include "game/anim.h"
 #include "game/combat.h"
+#include "game/critter.h"
 #include "game/obj.h"
 #include "game/obj_id.h"
 #include "game/obj_pool.h"
 #include "game/player.h"
 #include "game/target.h"
+#include "ui/combat_ui.h"
 #include "ui/intgame.h"
 
 #define REPLAY_MAX_COMMANDS 256
@@ -21,9 +22,11 @@
 typedef enum ReplayKind {
     REPLAY_KIND_OBJECT,
     REPLAY_KIND_LOCATION,
-    // CE (card O2): a mode-changing action. Not a target at all - it carries
-    // the action's name and goes through `intgame_mode_action` rather than the
-    // command dispatch.
+    // CE (card O2): a named player action with no target. Not a target at all -
+    // it carries the action's name and goes through `replay_key_action` rather
+    // than the command dispatch. Three so far: the two mode toggles and ending
+    // a turn, each one found by a replay that could not reproduce its
+    // recording without it.
     REPLAY_KIND_KEY,
 } ReplayKind;
 
@@ -61,6 +64,52 @@ bool replay_ui_mode_matches(int recorded_turn, bool combat_active)
 static bool replay_mode_matches(const ReplayCommand* command)
 {
     return replay_ui_mode_matches(command->turn, combat_turn_based_is_active());
+}
+
+// CE (card O2): the named actions a script may press.
+//
+// One place, so a recorded action that has no replay entry point is a named
+// failure rather than a silent no-op. Each goes through the same UI function
+// the keyboard calls, so the recorder sees a replayed press exactly as it saw
+// the original - which is what makes `replay-script` a fixed point.
+static bool replay_key_action(const char* action)
+{
+    if (strcmp(action, "end-turn") == 0) {
+        combat_ui_end_turn_action();
+        return true;
+    }
+
+    return intgame_mode_action(action);
+}
+
+// CE (card O2): a target the click path could not have handed us.
+//
+// The recorder only ever sees commands that came through `target_pick`, which
+// makes dead critters click-through under `TGT_OBJ_NO_ST_CRITTER_DEAD` and
+// skips objects that are destroyed or switched off. A replay resolves a GUID
+// straight to a handle and is bound by none of that, so it says so here.
+//
+// Measured 2026-09-15, and this is why it exists rather than being defensive:
+// a script that outlived its duel submitted the recorded attack again while
+// the guard was mid-`ag_dying`, and the engine asserted in `anim_private.c`
+// line 675 -- `goal_type >= 0 && goal_type < ANIM_GOAL_MAX`. The dispatch's
+// `OBJ_TYPE_PC`/`OBJ_TYPE_NPC` branch leaves its `anim` local uninitialised for
+// a dead critter with no ALT held, and hands it to
+// `anim_goal_data_init_no_interrupt`. That defect is the engine's and is
+// recorded separately; what belongs here is that no player could have made
+// this click, so no recording can contain it and no replay should submit it.
+static bool replay_target_is_live(int64_t obj)
+{
+    if (obj == OBJ_HANDLE_NULL) {
+        return false;
+    }
+
+    if (obj_type_is_critter(obj_field_int32_get(obj, OBJ_F_TYPE))
+        && critter_is_dead(obj)) {
+        return false;
+    }
+
+    return true;
 }
 
 bool replay_ui_load(const char* path)
@@ -144,7 +193,6 @@ void replay_ui_tick(void)
     ReplayCommand* command;
     TargetDescriptor td;
     ObjectID oid;
-    AnimID anim_id;
     int64_t pc_obj;
     int64_t target_obj;
 
@@ -157,17 +205,39 @@ void replay_ui_tick(void)
         return;
     }
 
-    // One command at a time, and only while the actor is idle. A command
+    // One command at a time, and only while the actor is free. A command
     // submitted over a running goal would be refused or would replace it, and
     // either way the replay would stop matching what it is reproducing.
-    if (anim_is_busy(pc_obj, &anim_id)) {
+    //
+    // `combat_ui_actor_ready` rather than `anim_is_busy`, which this read until
+    // 2026-09-15: a standing critter is busy with its fidget goal, so the
+    // stricter test could hold a command forever in a state the engine itself
+    // treats as actionable - including the end-turn press, whose own condition
+    // is exactly this one. Two notions of "free" in one path is the drift this
+    // card has already been bitten by twice.
+    if (!combat_ui_actor_ready(pc_obj)) {
+        return;
+    }
+
+    // The UI drops every message when a turn-based encounter is running and
+    // the turn is not the PC's (`intgame_process_event`, first statement). A
+    // replay calls the dispatch directly and so is not bound by that gate
+    // unless it holds the same line here - and acting on another critter's
+    // turn is something no player could do, so no recording can contain it.
+    if (combat_turn_based_is_active()
+        && combat_turn_based_whos_turn_get() != pc_obj) {
         return;
     }
 
     command = &replay_commands[replay_next];
 
     if (!replay_mode_matches(command)) {
-        // Say it once. A replay that ends with commands outstanding did not
+        // Say it once - the flag is cleared only when a command is actually
+        // submitted, not on the way past this gate. It used to be cleared here,
+        // which meant a stall the *next* check caught reported itself every
+        // frame: 36 017 identical lines and a 4.3 MB log, measured 2026-09-15.
+        //
+        // A replay that ends with commands outstanding did not
         // reproduce its recording, and `replay_ui_remaining` is what the run
         // record reads - but a reader of the log deserves to know why it
         // stopped rather than inferring it from a count.
@@ -180,13 +250,13 @@ void replay_ui_tick(void)
         }
         return;
     }
-    replay_stall_reported = false;
 
     if (command->kind == REPLAY_KIND_KEY) {
         // A key action goes through the same UI entry point the keyboard uses,
         // so the recorder sees it exactly as it saw the original press.
+        replay_stall_reported = false;
         replay_next++;
-        if (!intgame_mode_action(command->target)) {
+        if (!replay_key_action(command->target)) {
             tig_debug_printf("Replay: command %d names an unknown action '%s'\n",
                 replay_next - 1, command->target);
         }
@@ -216,10 +286,27 @@ void replay_ui_tick(void)
             return;
         }
 
+        if (!replay_target_is_live(target_obj)) {
+            // Held rather than skipped, and held rather than submitted. The
+            // recording's command named a living target; this run's is dead, so
+            // the replay has already diverged from what it is reproducing.
+            // Leaving it outstanding is what makes that visible - the engine
+            // reports `replay outstanding=N` on the way out and `compare`
+            // refuses a replay that ended holding commands.
+            if (!replay_stall_reported) {
+                replay_stall_reported = true;
+                tig_debug_printf("Replay: holding command %d; its target '%s'"
+                                 " is not a target the click path would give\n",
+                    replay_next, command->target);
+            }
+            return;
+        }
+
         td.is_loc = 0;
         td.obj = target_obj;
     }
 
+    replay_stall_reported = false;
     replay_next++;
     intgame_perform_action_on_target(&td);
 }

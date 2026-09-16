@@ -111,15 +111,28 @@ int main(int argc, char** argv)
     int64_t pc_starting_location;
     char msg[80];
     const char* combat_observer_path = NULL;
+    const char* replay_path = NULL;
 
     // CE: the private observatory passes an absolute per-run output path.
     // Read argv directly so the legacy lower-casing of lpCmdLine below cannot
     // corrupt a case-sensitive Linux path. The capability is absent unless
     // this exact switch is present.
+    //
+    // CE (card O2): `-replay=` is read here for the same reason, and it was
+    // not until 2026-09-15. Taken from `lpCmdLine` it could not open any path
+    // containing a capital letter - the file simply did not exist under the
+    // lower-cased name - and `lpCmdLine` is 260 bytes, so a long absolute path
+    // was truncated as well. Neither showed up when the switch was built,
+    // because the script it was tested with happened to sit under an
+    // all-lowercase path.
     for (int arg = 1; arg < argc; arg++) {
         const char* prefix = "--combat-observe=";
         if (strncmp(argv[arg], prefix, strlen(prefix)) == 0) {
             combat_observer_path = argv[arg] + strlen(prefix);
+        }
+        prefix = "-replay=";
+        if (strncmp(argv[arg], prefix, strlen(prefix)) == 0) {
+            replay_path = argv[arg] + strlen(prefix);
         }
     }
 
@@ -244,18 +257,9 @@ int main(int argc, char** argv)
     }
 
     // CE (card O2): `-replay=<file>` re-submits a recorded run's commands.
-    pch = strstr(lpCmdLine, "-replay=");
-    if (pch != NULL) {
-        const char* arg = pch + strlen("-replay=");
-        size_t len = strcspn(arg, " \t\"");
-        char path[TIG_MAX_PATH];
-
-        if (len >= sizeof(path)) {
-            len = sizeof(path) - 1;
-        }
-        memcpy(path, arg, len);
-        path[len] = '\0';
-        replay_ui_load(path);
+    // The path comes from argv, above, so it keeps its case and its length.
+    if (replay_path != NULL) {
+        replay_ui_load(replay_path);
     }
 
     pch = strstr(lpCmdLine, "-screenshot=");

@@ -334,6 +334,53 @@ void combat_observer_mode_observed(const char* actor,
     combat_observer_write(line);
 }
 
+// CE (card O2): ending a turn, recorded the same way a command is - the request
+// first, so whatever the end of the turn sets in motion lands after it.
+//
+// The action points are carried because they are what makes an unreproduced
+// replay visible: the run that named this gap sat in turn 4 holding thirteen of
+// them, and a record that did not say so looked like a fight that had simply
+// finished.
+void combat_observer_end_turn_requested(const char* actor, int action_points)
+{
+    char line[384];
+
+    if (!combat_observer_begin_semantic()) return;
+    snprintf(line, sizeof(line),
+        "{\"schema\":1,\"sequence\":%u,\"event\":\"end_turn.requested\",\"turn\":%u,"
+        "\"action_id\":null,\"actor\":\"%s\",\"action\":\"end-turn\","
+        "\"action_points\":%d}",
+        combat_observer_sequence++, combat_observer_turn, actor, action_points);
+    combat_observer_write(line);
+}
+
+// See the header for why the conditions are the judgement here rather than a
+// before/after reading of state.
+bool combat_observer_end_turn_accepted(bool turn_in_progress, bool pc_turn,
+    bool actor_ready)
+{
+    return turn_in_progress && pc_turn && actor_ready;
+}
+
+// `pc_turn` is the state *after*: false means the turn passed to someone else,
+// true after an acceptance means a fresh turn came back around - which happens
+// when the PC is the only critter left with a turn to take.
+void combat_observer_end_turn_resolved(const char* actor, bool accepted,
+    int action_points, bool pc_turn)
+{
+    char line[384];
+
+    if (!combat_observer_begin_semantic()) return;
+    snprintf(line, sizeof(line),
+        "{\"schema\":1,\"sequence\":%u,\"event\":\"end_turn.resolved\",\"turn\":%u,"
+        "\"action_id\":null,\"actor\":\"%s\",\"action\":\"end-turn\","
+        "\"accepted\":%s,\"action_points\":%d,\"pc_turn\":%s}",
+        combat_observer_sequence++, combat_observer_turn, actor,
+        accepted ? "true" : "false", action_points,
+        pc_turn ? "true" : "false");
+    combat_observer_write(line);
+}
+
 void combat_observer_turn_ended(const char* actor, int action_points)
 {
     char line[384];

@@ -427,6 +427,85 @@ TEST(the_starting_mode_is_not_recorded_as_a_change)
     CHECK(strstr(trace, "\"event\":\"mode.changed\"") == NULL);
 }
 
+TEST(every_end_turn_state_decides_acceptance_the_same_way)
+{
+    int state;
+
+    // All eight combinations of the three conditions the shipped UI tests
+    // before it calls `combat_turn_based_next_subturn`. Exhaustive for the same
+    // reason the other two judgements are: an end-turn recorded as taken when
+    // the engine ignored the press would be re-pressed by a replay in a state
+    // the recording never reached.
+    //
+    // Unlike the mode toggles this is a conjunction, so the interesting content
+    // is that *each* condition alone is enough to refuse -- which is what the
+    // loop asserts, rather than the shape of the expression.
+    for (state = 0; state < 8; state++) {
+        bool turn_in_progress = (state & 1) != 0;
+        bool pc_turn = (state & 2) != 0;
+        bool actor_ready = (state & 4) != 0;
+
+        CHECK(combat_observer_end_turn_accepted(turn_in_progress, pc_turn,
+                  actor_ready)
+            == (turn_in_progress && pc_turn && actor_ready));
+    }
+
+    // Named, because these three are the refusals a replay actually meets and
+    // reading any one of them wrongly is a silent divergence rather than a
+    // crash.
+    CHECK(!combat_observer_end_turn_accepted(false, true, true));
+    CHECK(!combat_observer_end_turn_accepted(true, false, true));
+    CHECK(!combat_observer_end_turn_accepted(true, true, false));
+    CHECK(combat_observer_end_turn_accepted(true, true, true));
+}
+
+TEST(an_end_turn_records_its_request_before_its_resolution)
+{
+    char trace[TRACE_SIZE];
+
+    clean();
+    CHECK(combat_observer_open(TRACE_FILE));
+    // Thirteen action points held, then a fresh turn's worth back: the shape of
+    // the press whose absence froze the 2026-09-14 replay in turn 4.
+    combat_observer_end_turn_requested("fighter", 13);
+    combat_observer_end_turn_resolved("fighter", true, 0, false);
+    combat_observer_close();
+
+    CHECK(read_trace(trace, sizeof(trace)));
+    CHECK(strstr(trace, "\"event\":\"end_turn.requested\"") != NULL);
+    CHECK(strstr(trace, "\"event\":\"end_turn.resolved\"") != NULL);
+    CHECK(strstr(trace, "\"event\":\"end_turn.requested\"")
+        < strstr(trace, "\"event\":\"end_turn.resolved\""));
+    // The action name a replay script writes as its `key` row. Shared with the
+    // mode events on purpose: one vocabulary for every named player action.
+    CHECK(strstr(trace, "\"action\":\"end-turn\"") != NULL);
+    // The points held at the press. A record without them made a fight that
+    // was stuck look like a fight that had finished.
+    CHECK(strstr(trace, "\"action_points\":13") != NULL);
+    CHECK(strstr(trace, "\"pc_turn\":false") != NULL);
+}
+
+TEST(a_refused_end_turn_is_not_recorded_as_accepted)
+{
+    char trace[TRACE_SIZE];
+
+    clean();
+    CHECK(combat_observer_open(TRACE_FILE));
+    // The press that arrives on somebody else's turn. The engine ignores it and
+    // says nothing, so the recorded judgement is the only signal there is.
+    combat_observer_end_turn_requested("fighter", 13);
+    combat_observer_end_turn_resolved("fighter",
+        combat_observer_end_turn_accepted(true, false, true), 13, false);
+    combat_observer_close();
+
+    CHECK(read_trace(trace, sizeof(trace)));
+    CHECK(strstr(trace, "\"accepted\":false") != NULL);
+    CHECK(strstr(trace, "\"accepted\":true") == NULL);
+    // Refused, so nothing was spent: the points are the same on both events.
+    CHECK(strstr(trace, "\"action_points\":13") != NULL);
+    CHECK(strstr(trace, "\"action_points\":0") == NULL);
+}
+
 TEST(a_mode_change_no_player_action_claimed_is_recorded_as_uncaused)
 {
     char trace[TRACE_SIZE];
@@ -686,6 +765,9 @@ void test_combat_observer_suite(void)
     RUN(the_starting_mode_is_not_recorded_as_a_change);
     RUN(a_mode_change_no_player_action_claimed_is_recorded_as_uncaused);
     RUN(a_mode_change_the_player_asked_for_is_not_also_recorded_as_uncaused);
+    RUN(every_end_turn_state_decides_acceptance_the_same_way);
+    RUN(an_end_turn_records_its_request_before_its_resolution);
+    RUN(a_refused_end_turn_is_not_recorded_as_accepted);
     RUN(every_goal_state_decides_acceptance_the_same_way);
     RUN(a_refused_command_leaves_the_goal_state_untouched);
     RUN(a_refused_command_is_not_recorded_as_accepted);

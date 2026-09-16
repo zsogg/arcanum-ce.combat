@@ -2,6 +2,7 @@
 
 #include "game/anim.h"
 #include "game/combat.h"
+#include "game/combat_observer.h"
 #include "game/hrp.h"
 #include "game/obj.h"
 #include "game/player.h"
@@ -654,25 +655,85 @@ void combat_ui_turn_notify(int64_t obj)
     }
 }
 
-// 0x56F9B0
-bool combat_ui_message_filter(TigMessage* msg)
+// CE (card O2): is the actor free to act?
+//
+// Not `!anim_is_busy`: a critter standing still is busy with its fidget goal,
+// so reading busy alone would make ending a turn depend on animation timing.
+// Lifted verbatim out of the two copies below, and exported because a replay
+// needs the same notion of free - see `replay_ui_tick`, which used to read
+// `anim_is_busy` directly and could therefore wait forever for a state the
+// engine already considered actionable.
+bool combat_ui_actor_ready(int64_t obj)
 {
-    int64_t obj;
     AnimID curr_anim_id;
     AnimID fidget_anim_id;
 
+    if (!anim_is_busy(obj, &curr_anim_id)) {
+        return true;
+    }
+
+    return anim_is_current_goal_type(obj, AG_ANIM_FIDGET, &fidget_anim_id)
+        && anim_id_is_equal(&curr_anim_id, &fidget_anim_id);
+}
+
+// CE (card O2): ending the PC's turn, in one place.
+//
+// The end-turn button and the `E` key carried byte-identical copies of this
+// test, and the command recorder - whose boundary is
+// `intgame_perform_action_on_target` - could see neither. Measured 2026-09-14:
+// a replay that had learned to enter combat and attack then froze in turn 4
+// holding thirteen action points, because nothing in the record could end a
+// turn. Both inputs now go through here, and so does a replay's `end-turn`
+// row, so the recorder sees a replayed end-turn exactly as it saw the original.
+//
+// Returns whether the engine took it, for the replay's benefit. The conditions
+// are the judgement and they live in `combat_observer_end_turn_accepted`, where
+// they can be tested without a UI; this function only gathers them.
+bool combat_ui_end_turn_action(void)
+{
+    int64_t obj;
+    bool accepted;
+    char actor[COMBAT_OBSERVER_IDENTITY_SIZE];
+
+    obj = combat_turn_based_whos_turn_get();
+    accepted = combat_observer_end_turn_accepted(obj != OBJ_HANDLE_NULL,
+        obj != OBJ_HANDLE_NULL && player_is_local_pc_obj(obj),
+        obj != OBJ_HANDLE_NULL && combat_ui_actor_ready(obj));
+
+    if (!combat_observer_is_enabled()) {
+        if (accepted) {
+            combat_turn_based_next_subturn();
+        }
+        return accepted;
+    }
+
+    // The local PC, not `whos_turn_get`: the player is who pressed the key, and
+    // on a refusal the turn belongs to somebody else or to nobody. Naming the
+    // turn's owner would record a refused press as an NPC ending its own turn.
+    // This is also what the mode events name, so a replay reads one actor field
+    // across every recorded player action.
+    combat_observer_object_id(player_get_local_pc_obj(), actor);
+    combat_observer_end_turn_requested(actor, combat_action_points_get());
+
+    if (accepted) {
+        combat_turn_based_next_subturn();
+    }
+
+    obj = combat_turn_based_whos_turn_get();
+    combat_observer_end_turn_resolved(actor, accepted,
+        combat_action_points_get(),
+        obj != OBJ_HANDLE_NULL && player_is_local_pc_obj(obj));
+    return accepted;
+}
+
+// 0x56F9B0
+bool combat_ui_message_filter(TigMessage* msg)
+{
     switch (msg->type) {
     case TIG_MESSAGE_BUTTON:
         if (msg->data.button.state == TIG_BUTTON_STATE_RELEASED
             && msg->data.button.button_handle == combat_ui_end_turn_button_info.button_handle) {
-            obj = combat_turn_based_whos_turn_get();
-            if (obj != OBJ_HANDLE_NULL
-                && player_is_local_pc_obj(obj)
-                && (!anim_is_busy(obj, &curr_anim_id)
-                    || (anim_is_current_goal_type(obj, AG_ANIM_FIDGET, &fidget_anim_id)
-                        && anim_id_is_equal(&curr_anim_id, &fidget_anim_id)))) {
-                combat_turn_based_next_subturn();
-            }
+            combat_ui_end_turn_action();
             return true;
         }
         break;
@@ -680,14 +741,7 @@ bool combat_ui_message_filter(TigMessage* msg)
         if (!textedit_ui_is_focused()
             && !msg->data.keyboard.pressed
             && msg->data.keyboard.scancode == SDL_SCANCODE_E) {
-            obj = combat_turn_based_whos_turn_get();
-            if (obj != OBJ_HANDLE_NULL
-                && player_is_local_pc_obj(obj)
-                && (!anim_is_busy(obj, &curr_anim_id)
-                    || (anim_is_current_goal_type(obj, AG_ANIM_FIDGET, &fidget_anim_id)
-                        && anim_id_is_equal(&curr_anim_id, &fidget_anim_id)))) {
-                combat_turn_based_next_subturn();
-            }
+            combat_ui_end_turn_action();
             return true;
         }
         break;
