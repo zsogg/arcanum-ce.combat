@@ -3733,10 +3733,22 @@ static void intgame_perform_action_on_target_inner(TargetDescriptor* td)
             case OBJ_TYPE_PC:
             case OBJ_TYPE_NPC:
                 if (critter_is_dead(td->obj)) {
-                    if (tig_kb_get_modifier(SDL_KMOD_ALT)) {
-                        anim = AG_USE_CONTAINER;
-                        v26 = true;
+                    // FIX (porting bug #47): the original RETURNS here when
+                    // ALT is not held. At 0x54EF60 the dead branch tests
+                    // `tig_kb_is_key_pressed(0x38)` (LALT) then `0xb8` (RALT)
+                    // and returns when neither is down; only past that does it
+                    // load goal 0x51 (`AG_USE_CONTAINER`) and set the direct
+                    // path flag. CE kept the assignment under the ALT test and
+                    // dropped the return, so an ordinary click on a corpse
+                    // fell out of the switch with `anim` never written and
+                    // handed an uninitialised value to
+                    // `anim_goal_data_init_no_interrupt` below.
+                    if (!tig_kb_get_modifier(SDL_KMOD_ALT)) {
+                        return;
                     }
+
+                    anim = AG_USE_CONTAINER;
+                    v26 = true;
                 } else {
                     if (tig_kb_get_modifier(SDL_KMOD_SHIFT)) {
                         anim = AG_ATTEMPT_ATTACK;
@@ -3744,9 +3756,17 @@ static void intgame_perform_action_on_target_inner(TargetDescriptor* td)
                         anim = AG_ATTACK;
                     }
 
+                    // FIX (porting bug #48): the `&&` was inside the call.
+                    // `player_is_local_pc_obj(critter_pc_leader_get(obj) && !k)`
+                    // passes a 0-or-1 bool where an object handle belongs, so
+                    // the guard tested whether handle 1 is the local PC and
+                    // never fired. The original keeps them separate: at
+                    // 0x54EFD0 `critter_pc_leader_get` feeds
+                    // `player_is_local_pc_obj`, and only if that is nonzero
+                    // does it test LALT and return.
                     if (!td->is_loc
-                        && player_is_local_pc_obj(critter_pc_leader_get(td->obj)
-                            && !tig_kb_is_key_pressed(SDL_SCANCODE_LALT))) {
+                        && player_is_local_pc_obj(critter_pc_leader_get(td->obj))
+                        && !tig_kb_is_key_pressed(SDL_SCANCODE_LALT)) {
                         return;
                     }
                 }
