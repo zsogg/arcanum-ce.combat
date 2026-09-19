@@ -270,6 +270,7 @@ set(SRCS
     "src/ui/charedit_ui.h"
     "src/ui/combat_ui.c"
     "src/ui/combat_ui.h"
+    "src/ui/called_shot.c"
     "src/ui/compact_ui.c"
     "src/ui/compact_ui.h"
     "src/ui/cyclic_ui.c"

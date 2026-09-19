@@ -28,5 +28,6 @@
 // clang-format off
 
 FEATURE(UAP_FIXES, "uap fixes", false)
+FEATURE(CALLED_SHOT_UI, "called shot ui", false)
 
 // clang-format on

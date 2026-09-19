@@ -19,6 +19,7 @@ void test_rect_suite(void);
 void test_idxtable_suite(void);
 void test_art_id_suite(void);
 void test_color_suite(void);
+void test_called_shot_suite(void);
 void test_combat_observer_suite(void);
 void test_bsearch_suite(void);
 void test_palette_suite(void);
@@ -68,6 +69,7 @@ int main(void)
     test_idxtable_suite();
     test_art_id_suite();
     test_color_suite();
+    test_called_shot_suite();
     test_combat_observer_suite();
     test_bsearch_suite();
     test_palette_suite();

@@ -44,6 +44,7 @@
 #include "game/uap.h"
 #include "ui/anim_ui.h"
 #include "ui/broadcast_ui.h"
+#include "ui/called_shot.h"
 #include "ui/charedit_ui.h"
 #include "ui/compact_ui.h"
 #include "ui/dialog_ui.h"
@@ -1200,6 +1201,10 @@ void intgame_reset(void)
     int index;
 
     intgame_drag_move_active = 0;
+    // CE (card S1): a new game, a load or a controlled-character replacement
+    // all come through here, and none of them should inherit the last
+    // character's aim.
+    called_shot_reset();
     intgame_refresh_cursor();
     hotkey_ui_reset_recent_actions();
     intgame_clock_process_callback(NULL);
@@ -3501,6 +3506,15 @@ static void intgame_combat_mode_toggle_inner(void)
     if (combat_critter_is_combat_mode_active(pc_obj)) {
         if (combat_can_exit_combat_mode(pc_obj)) {
             combat_critter_deactivate_combat_mode(pc_obj);
+            // CE (card S1): leaving combat returns the aim to an ordinary
+            // attack, so a head shot chosen for one fight is not still chosen
+            // for the next one.
+            //
+            // **This is the deliberate exit only.** Combat also ends on its
+            // own when the last opponent falls, and that path does not come
+            // through here; session 7 needs the same hook for the panel's
+            // visibility and will cover both.
+            called_shot_reset();
         } else {
             mes_file_entry.num = 24; // "You cannot exit combat-mode when under attack."
             mes_get_msg(intgame_mes_file, &mes_file_entry);
@@ -3887,15 +3901,17 @@ static void intgame_perform_action_on_target_inner(TargetDescriptor* td)
     }
 
     if (anim == AG_ATTACK || anim == AG_ATTEMPT_ATTACK) {
-        if (tig_kb_is_key_pressed(SDL_SCANCODE_COMMA)) {
-            goal_data.params[AGDATA_SCRATCH_VAL3].data = 1;
-        } else if (tig_kb_is_key_pressed(SDL_SCANCODE_PERIOD)) {
-            goal_data.params[AGDATA_SCRATCH_VAL3].data = 2;
-        } else if (tig_kb_is_key_pressed(SDL_SCANCODE_SLASH)) {
-            goal_data.params[AGDATA_SCRATCH_VAL3].data = 3;
-        } else {
-            goal_data.params[AGDATA_SCRATCH_VAL3].data = 0;
-        }
+        // CE (card S1): the aim is committed here, at the one place the
+        // original writes it, so a selector-chosen limb and a held-key one
+        // reach execution by the same route. Snapshotted into the goal rather
+        // than read again later: once this command is accepted the swing owns
+        // its aim, and changing the selection afterwards must not retarget a
+        // blow already thrown or a missile already in flight.
+        //
+        // With `called shot ui` off, `called_shot_aim_now` reads the same
+        // three keys in the same order and the selection half is always
+        // `HIT_LOC_TORSO`, so this is the shipped behaviour exactly.
+        goal_data.params[AGDATA_SCRATCH_VAL3].data = called_shot_aim_now();
 
         int64_t weapon_obj = item_wield_get(pc_obj, ITEM_INV_LOC_WEAPON);
         if (weapon_obj != OBJ_HANDLE_NULL
