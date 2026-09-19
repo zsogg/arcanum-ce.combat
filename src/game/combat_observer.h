@@ -128,7 +128,8 @@ void combat_observer_ap_committed(const char* actor, int requested,
     int before, int after, bool accepted, int fatigue_before,
     int fatigue_after);
 unsigned long long combat_observer_attack_started(const char* attacker,
-    const char* target, int skill, int hit_location);
+    const char* target, int skill, int hit_location,
+    int requested_hit_location, bool aimed);
 void combat_observer_attack_resolved(unsigned long long action_id,
     const char* attacker, const char* target, int skill, int hit_location,
     unsigned int flags, int result);

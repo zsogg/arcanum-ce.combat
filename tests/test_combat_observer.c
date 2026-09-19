@@ -2,10 +2,11 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "game/combat.h"
 #include "game/combat_observer.h"
-#include "ui/replay_ui.h"
 #include "game/damage_type.h"
 #include "game/random.h"
+#include "ui/replay_ui.h"
 
 #include "test_harness.h"
 #include "tig/file.h"
@@ -78,7 +79,7 @@ TEST(a_complete_trace_has_ordered_control_and_semantic_events)
         22, 22, 20, 20, 6056, 8042);
     combat_observer_ap_checked("fighter", 4, 8, true);
     combat_observer_ap_committed("fighter", 4, 8, 4, true, 0, 0);
-    action = combat_observer_attack_started("fighter", "opponent", 2, 0);
+    action = combat_observer_attack_started("fighter", "opponent", 2, 0, 0, false);
     combat_observer_skill_roll("fighter", "opponent", 2,
         55, 0, 40, 99, true, false);
     combat_observer_damage_committed("fighter", "opponent", damage,
@@ -100,6 +101,44 @@ TEST(a_complete_trace_has_ordered_control_and_semantic_events)
     CHECK(strstr(trace, "\"complete\":true") != NULL);
 }
 
+TEST(a_selected_limb_is_distinguishable_from_one_that_was_rolled)
+{
+    char trace[TRACE_SIZE];
+    const char* aimed_line;
+    const char* rolled_line;
+
+    clean();
+    CHECK(combat_observer_open(TRACE_FILE));
+
+    // A selected head shot: the request survived to resolution.
+    combat_observer_attack_started("fighter", "opponent", 2,
+        HIT_LOC_HEAD, HIT_LOC_HEAD, true);
+
+    // An ordinary attack that *rolled* a head. `combat_attack` has already
+    // replaced the zero with a random limb by the time it reports, so the
+    // resolved location is identical to the line above. Before schema 2 these
+    // two were the same event.
+    combat_observer_attack_started("fighter", "opponent", 2,
+        HIT_LOC_HEAD, HIT_LOC_TORSO, false);
+
+    combat_observer_close();
+    CHECK(read_trace(trace, sizeof(trace)));
+
+    aimed_line = strstr(trace,
+        "\"hit_location\":1,\"requested_hit_location\":1,\"aimed\":true");
+    rolled_line = strstr(trace,
+        "\"hit_location\":1,\"requested_hit_location\":0,\"aimed\":false");
+
+    CHECK(aimed_line != NULL);
+    CHECK(rolled_line != NULL);
+
+    // The whole point: same resolved limb, different events.
+    CHECK(aimed_line != rolled_line);
+
+    // And the version says the contract changed.
+    CHECK(strstr(trace, "\"schema\":2") != NULL);
+}
+
 TEST(hit_miss_critical_and_terminal_values_are_not_conflated)
 {
     char trace[TRACE_SIZE];
@@ -109,10 +148,10 @@ TEST(hit_miss_critical_and_terminal_values_are_not_conflated)
 
     clean();
     CHECK(combat_observer_open(TRACE_FILE));
-    hit = combat_observer_attack_started("fighter", "opponent", 2, 0);
+    hit = combat_observer_attack_started("fighter", "opponent", 2, 0, 0, false);
     combat_observer_attack_resolved(hit, "fighter", "opponent", 2, 0,
         0x2 | 0x4, 1);
-    miss = combat_observer_attack_started("opponent", "fighter", 2, 0);
+    miss = combat_observer_attack_started("opponent", "fighter", 2, 0, 0, false);
     combat_observer_attack_resolved(miss, "opponent", "fighter", 2, 0,
         0, 0);
     combat_observer_damage_committed("fighter", "opponent", damage,
@@ -188,12 +227,11 @@ TEST(observation_does_not_advance_the_combat_rng)
     CHECK_INT(second_with, second_without);
 }
 
-
 #include "game/combat.h"
+#include "game/mes.h"
 #include "game/obj.h"
 #include "game/skill.h"
 #include "game/stat.h"
-#include "game/mes.h"
 #include "game/tf.h"
 #include "obj_harness.h"
 
@@ -262,8 +300,8 @@ TEST(every_goal_state_decides_acceptance_the_same_way)
     // nothing queued afterwards -> the dispatch took nothing, whatever it did.
     CHECK(!combat_observer_command_accepted(false, false, false));
     CHECK(!combat_observer_command_accepted(false, false, true));
-    CHECK(!combat_observer_command_accepted(true,  false, false));
-    CHECK(!combat_observer_command_accepted(true,  false, true));
+    CHECK(!combat_observer_command_accepted(true, false, false));
+    CHECK(!combat_observer_command_accepted(true, false, true));
 
     // Idle before, busy after: a goal appeared. Taken.
     CHECK(combat_observer_command_accepted(false, true, false));
@@ -296,10 +334,10 @@ TEST(a_command_waits_for_the_mode_it_was_recorded_in)
     // something else outside it. A replay that ignores the mode does not fail --
     // it performs a different action and reports it accepted, which is worse
     // than stalling. All four states, so the gate cannot quietly invert.
-    CHECK(replay_ui_mode_matches(0, false));   // recorded before combat, no combat now
-    CHECK(!replay_ui_mode_matches(0, true));   // recorded before combat, combat now: wait
-    CHECK(replay_ui_mode_matches(2, true));    // recorded in combat, combat now
-    CHECK(!replay_ui_mode_matches(2, false));  // recorded in combat, none now: wait
+    CHECK(replay_ui_mode_matches(0, false)); // recorded before combat, no combat now
+    CHECK(!replay_ui_mode_matches(0, true)); // recorded before combat, combat now: wait
+    CHECK(replay_ui_mode_matches(2, true)); // recorded in combat, combat now
+    CHECK(!replay_ui_mode_matches(2, false)); // recorded in combat, none now: wait
 
     // Turn 1 is the first combat turn, so it must behave like turn 2 and not
     // like turn 0 -- an off-by-one here would submit every combat command
@@ -643,7 +681,8 @@ static bool inject_observer_draw;
 extern void __real_mes_get_msg(mes_file_handle_t handle, MesFileEntry* entry);
 extern void __real_tf_add(int64_t obj, int type, const char* str);
 extern unsigned long long __real_combat_observer_attack_started(const char* attacker,
-    const char* target, int skill, int hit_location);
+    const char* target, int skill, int hit_location,
+    int requested_hit_location, bool aimed);
 
 void __wrap_mes_get_msg(mes_file_handle_t handle, MesFileEntry* entry)
 {
@@ -672,12 +711,14 @@ int __wrap_light_obj_grayscale_get(int64_t obj)
 // exact point the engine hands control to the observer - which is what an
 // observer that consumed randomness would do.
 unsigned long long __wrap_combat_observer_attack_started(const char* attacker,
-    const char* target, int skill, int hit_location)
+    const char* target, int skill, int hit_location,
+    int requested_hit_location, bool aimed)
 {
     if (inject_observer_draw) {
         (void)random_rand();
     }
-    return __real_combat_observer_attack_started(attacker, target, skill, hit_location);
+    return __real_combat_observer_attack_started(attacker, target, skill,
+        hit_location, requested_hit_location, aimed);
 }
 
 // Seed 13 lands a hit that computes damage, so the comparison covers the damage

@@ -11,7 +11,12 @@
 #include "game/obj_id.h"
 #include "game/obj_pool.h"
 
-#define COMBAT_OBSERVER_SCHEMA 1
+// 2 (card S1, 2026-09-18): `attack.started` gained `requested_hit_location`
+// and `aimed`. Every event line now reports this macro; before the bump
+// fifteen of the seventeen hardcoded `1` and only `run.started`/`run.ended`
+// used it, so a version change would have been announced by two events out of
+// seventeen.
+#define COMBAT_OBSERVER_SCHEMA 2
 #define COMBAT_OBSERVER_DEFAULT_LIMIT 10000U
 
 static FILE* combat_observer_stream;
@@ -75,7 +80,8 @@ static bool combat_observer_begin_semantic(void)
         combat_observer_truncated = true;
         combat_observer_complete = false;
         snprintf(line, sizeof(line),
-            "{\"schema\":1,\"sequence\":%u,\"event\":\"observer.truncated\",\"turn\":%u,\"action_id\":null,\"limit\":%u}",
+            "{\"schema\":%d,\"sequence\":%u,\"event\":\"observer.truncated\",\"turn\":%u,\"action_id\":null,\"limit\":%u}",
+            COMBAT_OBSERVER_SCHEMA,
             combat_observer_sequence++,
             combat_observer_turn,
             combat_observer_limit);
@@ -179,7 +185,8 @@ void combat_observer_turn_started(const char* actor, int action_points)
     if (!combat_observer_begin_semantic()) return;
     combat_observer_turn++;
     snprintf(line, sizeof(line),
-        "{\"schema\":1,\"sequence\":%u,\"event\":\"turn.started\",\"turn\":%u,\"action_id\":null,\"actor\":\"%s\",\"action_points\":%d}",
+        "{\"schema\":%d,\"sequence\":%u,\"event\":\"turn.started\",\"turn\":%u,\"action_id\":null,\"actor\":\"%s\",\"action_points\":%d}",
+        COMBAT_OBSERVER_SCHEMA,
         combat_observer_sequence++, combat_observer_turn, actor, action_points);
     combat_observer_write(line);
 }
@@ -201,9 +208,10 @@ void combat_observer_command_requested(const char* actor, const char* target_kin
 
     if (!combat_observer_begin_semantic()) return;
     snprintf(line, sizeof(line),
-        "{\"schema\":1,\"sequence\":%u,\"event\":\"command.requested\",\"turn\":%u,"
+        "{\"schema\":%d,\"sequence\":%u,\"event\":\"command.requested\",\"turn\":%u,"
         "\"action_id\":null,\"actor\":\"%s\",\"target_kind\":\"%s\",\"target\":\"%s\","
         "\"target_location\":%lld}",
+        COMBAT_OBSERVER_SCHEMA,
         combat_observer_sequence++, combat_observer_turn, actor, target_kind,
         target, (long long)target_loc);
     combat_observer_write(line);
@@ -240,8 +248,9 @@ void combat_observer_command_resolved(const char* actor, bool accepted)
 
     if (!combat_observer_begin_semantic()) return;
     snprintf(line, sizeof(line),
-        "{\"schema\":1,\"sequence\":%u,\"event\":\"command.resolved\",\"turn\":%u,"
+        "{\"schema\":%d,\"sequence\":%u,\"event\":\"command.resolved\",\"turn\":%u,"
         "\"action_id\":null,\"actor\":\"%s\",\"accepted\":%s}",
+        COMBAT_OBSERVER_SCHEMA,
         combat_observer_sequence++, combat_observer_turn, actor,
         accepted ? "true" : "false");
     combat_observer_write(line);
@@ -268,8 +277,9 @@ void combat_observer_mode_requested(const char* actor, const char* action,
     if (!combat_observer_begin_semantic()) return;
     combat_observer_mode_fields(fields, sizeof(fields), before);
     snprintf(line, sizeof(line),
-        "{\"schema\":1,\"sequence\":%u,\"event\":\"mode.requested\",\"turn\":%u,"
+        "{\"schema\":%d,\"sequence\":%u,\"event\":\"mode.requested\",\"turn\":%u,"
         "\"action_id\":null,\"actor\":\"%s\",\"action\":\"%s\",%s}",
+        COMBAT_OBSERVER_SCHEMA,
         combat_observer_sequence++, combat_observer_turn, actor, action, fields);
     combat_observer_write(line);
 }
@@ -293,8 +303,9 @@ void combat_observer_mode_resolved(const char* actor, const char* action,
     if (!combat_observer_begin_semantic()) return;
     combat_observer_mode_fields(fields, sizeof(fields), after);
     snprintf(line, sizeof(line),
-        "{\"schema\":1,\"sequence\":%u,\"event\":\"mode.resolved\",\"turn\":%u,"
+        "{\"schema\":%d,\"sequence\":%u,\"event\":\"mode.resolved\",\"turn\":%u,"
         "\"action_id\":null,\"actor\":\"%s\",\"action\":\"%s\",\"accepted\":%s,%s}",
+        COMBAT_OBSERVER_SCHEMA,
         combat_observer_sequence++, combat_observer_turn, actor, action,
         accepted ? "true" : "false", fields);
     combat_observer_write(line);
@@ -329,8 +340,9 @@ void combat_observer_mode_observed(const char* actor,
     if (!combat_observer_begin_semantic()) return;
     combat_observer_mode_fields(fields, sizeof(fields), mode);
     snprintf(line, sizeof(line),
-        "{\"schema\":1,\"sequence\":%u,\"event\":\"mode.changed\",\"turn\":%u,"
+        "{\"schema\":%d,\"sequence\":%u,\"event\":\"mode.changed\",\"turn\":%u,"
         "\"action_id\":null,\"actor\":\"%s\",\"cause\":\"game\",%s}",
+        COMBAT_OBSERVER_SCHEMA,
         combat_observer_sequence++, combat_observer_turn, actor, fields);
     combat_observer_write(line);
 }
@@ -348,9 +360,10 @@ void combat_observer_end_turn_requested(const char* actor, int action_points)
 
     if (!combat_observer_begin_semantic()) return;
     snprintf(line, sizeof(line),
-        "{\"schema\":1,\"sequence\":%u,\"event\":\"end_turn.requested\",\"turn\":%u,"
+        "{\"schema\":%d,\"sequence\":%u,\"event\":\"end_turn.requested\",\"turn\":%u,"
         "\"action_id\":null,\"actor\":\"%s\",\"action\":\"end-turn\","
         "\"action_points\":%d}",
+        COMBAT_OBSERVER_SCHEMA,
         combat_observer_sequence++, combat_observer_turn, actor, action_points);
     combat_observer_write(line);
 }
@@ -373,9 +386,10 @@ void combat_observer_end_turn_resolved(const char* actor, bool accepted,
 
     if (!combat_observer_begin_semantic()) return;
     snprintf(line, sizeof(line),
-        "{\"schema\":1,\"sequence\":%u,\"event\":\"end_turn.resolved\",\"turn\":%u,"
+        "{\"schema\":%d,\"sequence\":%u,\"event\":\"end_turn.resolved\",\"turn\":%u,"
         "\"action_id\":null,\"actor\":\"%s\",\"action\":\"end-turn\","
         "\"accepted\":%s,\"action_points\":%d,\"pc_turn\":%s}",
+        COMBAT_OBSERVER_SCHEMA,
         combat_observer_sequence++, combat_observer_turn, actor,
         accepted ? "true" : "false", action_points,
         pc_turn ? "true" : "false");
@@ -388,7 +402,8 @@ void combat_observer_turn_ended(const char* actor, int action_points)
 
     if (!combat_observer_begin_semantic()) return;
     snprintf(line, sizeof(line),
-        "{\"schema\":1,\"sequence\":%u,\"event\":\"turn.ended\",\"turn\":%u,\"action_id\":null,\"actor\":\"%s\",\"action_points\":%d}",
+        "{\"schema\":%d,\"sequence\":%u,\"event\":\"turn.ended\",\"turn\":%u,\"action_id\":null,\"actor\":\"%s\",\"action_points\":%d}",
+        COMBAT_OBSERVER_SCHEMA,
         combat_observer_sequence++, combat_observer_turn, actor, action_points);
     combat_observer_write(line);
 }
@@ -402,7 +417,8 @@ void combat_observer_actor_snapshot(const char* actor, int level,
 
     if (!combat_observer_begin_semantic()) return;
     snprintf(line, sizeof(line),
-        "{\"schema\":1,\"sequence\":%u,\"event\":\"actor.snapshot\",\"turn\":%u,\"action_id\":null,\"actor\":\"%s\",\"level\":%d,\"strength\":%d,\"dexterity\":%d,\"speed\":%d,\"melee\":%d,\"dodge\":%d,\"hp_current\":%d,\"hp_max\":%d,\"fatigue_current\":%d,\"fatigue_max\":%d,\"weapon_description\":%d,\"armor_description\":%d}",
+        "{\"schema\":%d,\"sequence\":%u,\"event\":\"actor.snapshot\",\"turn\":%u,\"action_id\":null,\"actor\":\"%s\",\"level\":%d,\"strength\":%d,\"dexterity\":%d,\"speed\":%d,\"melee\":%d,\"dodge\":%d,\"hp_current\":%d,\"hp_max\":%d,\"fatigue_current\":%d,\"fatigue_max\":%d,\"weapon_description\":%d,\"armor_description\":%d}",
+        COMBAT_OBSERVER_SCHEMA,
         combat_observer_sequence++, combat_observer_turn, actor, level,
         strength, dexterity, speed, melee, dodge, hp_current, hp_max,
         fatigue_current, fatigue_max, weapon_description, armor_description);
@@ -417,7 +433,8 @@ void combat_observer_ap_checked(const char* actor, int requested,
 
     if (!combat_observer_begin_semantic()) return;
     snprintf(line, sizeof(line),
-        "{\"schema\":1,\"sequence\":%u,\"event\":\"ap.checked\",\"turn\":%u,\"action_id\":%s,\"actor\":\"%s\",\"requested\":%d,\"before\":%d,\"accepted\":%s}",
+        "{\"schema\":%d,\"sequence\":%u,\"event\":\"ap.checked\",\"turn\":%u,\"action_id\":%s,\"actor\":\"%s\",\"requested\":%d,\"before\":%d,\"accepted\":%s}",
+        COMBAT_OBSERVER_SCHEMA,
         combat_observer_sequence++, combat_observer_turn,
         combat_observer_action_json(action, sizeof(action)), actor,
         requested, before, accepted ? "true" : "false");
@@ -433,7 +450,8 @@ void combat_observer_ap_committed(const char* actor, int requested,
 
     if (!combat_observer_begin_semantic()) return;
     snprintf(line, sizeof(line),
-        "{\"schema\":1,\"sequence\":%u,\"event\":\"ap.committed\",\"turn\":%u,\"action_id\":%s,\"actor\":\"%s\",\"requested\":%d,\"before\":%d,\"after\":%d,\"accepted\":%s,\"fatigue_before\":%d,\"fatigue_after\":%d}",
+        "{\"schema\":%d,\"sequence\":%u,\"event\":\"ap.committed\",\"turn\":%u,\"action_id\":%s,\"actor\":\"%s\",\"requested\":%d,\"before\":%d,\"after\":%d,\"accepted\":%s,\"fatigue_before\":%d,\"fatigue_after\":%d}",
+        COMBAT_OBSERVER_SCHEMA,
         combat_observer_sequence++, combat_observer_turn,
         combat_observer_action_json(action, sizeof(action)), actor,
         requested, before, after, accepted ? "true" : "false",
@@ -441,19 +459,35 @@ void combat_observer_ap_committed(const char* actor, int requested,
     combat_observer_write(line);
 }
 
+// CE (card S1): `requested_hit_location` and `aimed` are the halves the stream
+// could not previously tell apart.
+//
+// `combat_attack` replaces a zero hit location with `combat_random_hit_loc()`
+// before it reports anything, so by the time this is called `hit_location`
+// holds the *resolved* limb and a selected head shot is indistinguishable from
+// an ordinary attack that rolled a head. Acceptance for the called-shot
+// selector is "the selector and the held key produce the same attack", which
+// cannot be judged by an instrument that cannot see the difference.
+//
+// Both new values are read, not recomputed: `requested` is the caller's own
+// copy taken before the substitution, and `aimed` is the engine's `CF_AIM`
+// after it. No second calculation, no extra draw.
 unsigned long long combat_observer_attack_started(const char* attacker,
-    const char* target, int skill, int hit_location)
+    const char* target, int skill, int hit_location,
+    int requested_hit_location, bool aimed)
 {
-    char line[512];
+    char line[576];
     unsigned long long action_id;
 
     if (!combat_observer_begin_semantic()) return 0;
     action_id = ++combat_observer_next_action;
     combat_observer_current_action = action_id;
     snprintf(line, sizeof(line),
-        "{\"schema\":1,\"sequence\":%u,\"event\":\"attack.started\",\"turn\":%u,\"action_id\":%llu,\"attacker\":\"%s\",\"target\":\"%s\",\"skill\":%d,\"hit_location\":%d}",
+        "{\"schema\":%d,\"sequence\":%u,\"event\":\"attack.started\",\"turn\":%u,\"action_id\":%llu,\"attacker\":\"%s\",\"target\":\"%s\",\"skill\":%d,\"hit_location\":%d,\"requested_hit_location\":%d,\"aimed\":%s}",
+        COMBAT_OBSERVER_SCHEMA,
         combat_observer_sequence++, combat_observer_turn, action_id,
-        attacker, target, skill, hit_location);
+        attacker, target, skill, hit_location,
+        requested_hit_location, aimed ? "true" : "false");
     combat_observer_write(line);
     return action_id;
 }
@@ -466,7 +500,8 @@ void combat_observer_attack_resolved(unsigned long long action_id,
 
     if (combat_observer_begin_semantic()) {
         snprintf(line, sizeof(line),
-            "{\"schema\":1,\"sequence\":%u,\"event\":\"attack.resolved\",\"turn\":%u,\"action_id\":%llu,\"attacker\":\"%s\",\"target\":\"%s\",\"skill\":%d,\"hit_location\":%d,\"hit\":%s,\"critical\":%s,\"flags\":%u,\"result\":%d}",
+            "{\"schema\":%d,\"sequence\":%u,\"event\":\"attack.resolved\",\"turn\":%u,\"action_id\":%llu,\"attacker\":\"%s\",\"target\":\"%s\",\"skill\":%d,\"hit_location\":%d,\"hit\":%s,\"critical\":%s,\"flags\":%u,\"result\":%d}",
+            COMBAT_OBSERVER_SCHEMA,
             combat_observer_sequence++, combat_observer_turn, action_id,
             attacker, target, skill, hit_location,
             (flags & 0x2) != 0 ? "true" : "false",
@@ -488,7 +523,8 @@ void combat_observer_skill_roll(const char* source, const char* target,
     if (combat_observer_current_action == 0
         || !combat_observer_begin_semantic()) return;
     snprintf(line, sizeof(line),
-        "{\"schema\":1,\"sequence\":%u,\"event\":\"skill.roll\",\"turn\":%u,\"action_id\":%s,\"source\":\"%s\",\"target\":\"%s\",\"skill\":%d,\"effectiveness\":%d,\"difficulty\":%d,\"roll\":%d,\"critical_roll\":%d,\"success\":%s,\"critical\":%s}",
+        "{\"schema\":%d,\"sequence\":%u,\"event\":\"skill.roll\",\"turn\":%u,\"action_id\":%s,\"source\":\"%s\",\"target\":\"%s\",\"skill\":%d,\"effectiveness\":%d,\"difficulty\":%d,\"roll\":%d,\"critical_roll\":%d,\"success\":%s,\"critical\":%s}",
+        COMBAT_OBSERVER_SCHEMA,
         combat_observer_sequence++, combat_observer_turn,
         combat_observer_action_json(action, sizeof(action)), source, target,
         skill, effectiveness, difficulty, roll, critical_roll,
@@ -506,7 +542,8 @@ void combat_observer_damage_committed(const char* attacker,
 
     if (!combat_observer_begin_semantic()) return;
     snprintf(line, sizeof(line),
-        "{\"schema\":1,\"sequence\":%u,\"event\":\"damage.committed\",\"turn\":%u,\"action_id\":%s,\"attacker\":\"%s\",\"target\":\"%s\",\"normal\":%d,\"fatigue\":%d,\"poison\":%d,\"electrical\":%d,\"fire\":%d,\"damage_flags\":%u,\"hp_amount\":%d,\"hp_before\":%d,\"hp_after\":%d,\"fatigue_before\":%d,\"fatigue_after\":%d,\"dead\":%s,\"unconscious\":%s}",
+        "{\"schema\":%d,\"sequence\":%u,\"event\":\"damage.committed\",\"turn\":%u,\"action_id\":%s,\"attacker\":\"%s\",\"target\":\"%s\",\"normal\":%d,\"fatigue\":%d,\"poison\":%d,\"electrical\":%d,\"fire\":%d,\"damage_flags\":%u,\"hp_amount\":%d,\"hp_before\":%d,\"hp_after\":%d,\"fatigue_before\":%d,\"fatigue_after\":%d,\"dead\":%s,\"unconscious\":%s}",
+        COMBAT_OBSERVER_SCHEMA,
         combat_observer_sequence++, combat_observer_turn,
         combat_observer_action_json(action, sizeof(action)), attacker, target,
         components[DAMAGE_TYPE_NORMAL], components[DAMAGE_TYPE_FATIGUE],

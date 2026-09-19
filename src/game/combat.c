@@ -855,9 +855,11 @@ static void combat_observer_snapshot_obj(int64_t obj)
         object_hp_current(obj), object_hp_max(obj),
         critter_fatigue_current(obj), critter_fatigue_max(obj),
         weapon_obj != OBJ_HANDLE_NULL
-            ? obj_field_int32_get(weapon_obj, OBJ_F_DESCRIPTION) : 0,
+            ? obj_field_int32_get(weapon_obj, OBJ_F_DESCRIPTION)
+            : 0,
         armor_obj != OBJ_HANDLE_NULL
-            ? obj_field_int32_get(armor_obj, OBJ_F_DESCRIPTION) : 0);
+            ? obj_field_int32_get(armor_obj, OBJ_F_DESCRIPTION)
+            : 0);
 }
 
 // 0x4B3170
@@ -884,6 +886,11 @@ int combat_attack(CombatContext* combat)
         }
     }
 
+    // Kept because the substitution below is destructive: afterwards
+    // `combat->hit_loc` is where the blow landed, not what was asked for, and
+    // telling those apart is what the observer could not do.
+    int requested_hit_loc = combat->hit_loc;
+
     if (combat->hit_loc != HIT_LOC_TORSO) {
         combat->flags |= CF_AIM;
     } else {
@@ -894,7 +901,8 @@ int combat_attack(CombatContext* combat)
         combat_observer_object_id(combat->attacker_obj, observer_attacker);
         combat_observer_object_id(combat->target_obj, observer_target);
         observer_action_id = combat_observer_attack_started(observer_attacker,
-            observer_target, combat->skill, combat->hit_loc);
+            observer_target, combat->skill, combat->hit_loc,
+            requested_hit_loc, (combat->flags & CF_AIM) != 0);
         combat_observer_snapshot_obj(combat->attacker_obj);
         combat_observer_snapshot_obj(combat->target_obj);
     }
