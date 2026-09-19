@@ -732,9 +732,15 @@ typedef struct ObservedAttack {
     int dam[DAMAGE_TYPE_COUNT];
     int target_hp_damage;
     int rng_after[4];
+    // Card S1: the limb the blow resolved against, and whether the engine
+    // considered it aimed. Without these the comparison could agree while the
+    // attack landed somewhere else entirely, which is the difference the
+    // observer was taught to report.
+    int resolved_hit_loc;
+    bool aimed;
 } ObservedAttack;
 
-static void drive_one_attack(bool observe, ObservedAttack* out)
+static void drive_one_attack_at(bool observe, int hit_loc, ObservedAttack* out)
 {
     int64_t attacker;
     int64_t target;
@@ -761,7 +767,7 @@ static void drive_one_attack(bool observe, ObservedAttack* out)
     combat.field_28 = target;
     combat.weapon_obj = OBJ_HANDLE_NULL;
     combat.skill = SKILL_MELEE;
-    combat.hit_loc = HIT_LOC_TORSO;
+    combat.hit_loc = hit_loc;
 
     stub_environment = true;
     random_seed(ATTACK_SEED);
@@ -779,6 +785,8 @@ static void drive_one_attack(bool observe, ObservedAttack* out)
         out->dam[index] = combat.dam[index];
     }
     out->target_hp_damage = obj_field_int32_get(target, OBJ_F_HP_DAMAGE);
+    out->resolved_hit_loc = combat.hit_loc;
+    out->aimed = (combat.flags & CF_AIM) != 0;
 
     // Subsequent RNG state, which is what a hidden draw would move.
     for (index = 0; index < 4; index++) {
@@ -788,6 +796,12 @@ static void drive_one_attack(bool observe, ObservedAttack* out)
 
     obj_harness_destroy(attacker);
     obj_harness_destroy(target);
+}
+
+// The unaimed case, which is what every caller before card S1 meant.
+static void drive_one_attack(bool observe, ObservedAttack* out)
+{
+    drive_one_attack_at(observe, HIT_LOC_TORSO, out);
 }
 
 static void check_attacks_agree(const ObservedAttack* a, const ObservedAttack* b)
@@ -804,6 +818,29 @@ static void check_attacks_agree(const ObservedAttack* a, const ObservedAttack* b
     for (index = 0; index < 4; index++) {
         CHECK_INT(a->rng_after[index], b->rng_after[index]);
     }
+    CHECK_INT(a->resolved_hit_loc, b->resolved_hit_loc);
+    CHECK_INT(a->aimed ? 1 : 0, b->aimed ? 1 : 0);
+}
+
+// Non-aborting, for the negative controls: a control has to be able to observe
+// a difference rather than die on the first one.
+static bool attacks_differ(const ObservedAttack* a, const ObservedAttack* b)
+{
+    int index;
+
+    if (a->rc != b->rc) return true;
+    if (a->flags != b->flags) return true;
+    if (a->total_dam != b->total_dam) return true;
+    if (a->target_hp_damage != b->target_hp_damage) return true;
+    if (a->resolved_hit_loc != b->resolved_hit_loc) return true;
+    if (a->aimed != b->aimed) return true;
+    for (index = 0; index < DAMAGE_TYPE_COUNT; index++) {
+        if (a->dam[index] != b->dam[index]) return true;
+    }
+    for (index = 0; index < 4; index++) {
+        if (a->rng_after[index] != b->rng_after[index]) return true;
+    }
+    return false;
 }
 
 TEST(observing_a_real_attack_changes_neither_its_outcome_nor_the_rng)
@@ -838,6 +875,77 @@ TEST(the_observed_run_records_that_same_attack)
     CHECK(count_lines(trace) >= 6);
 }
 
+TEST(observing_an_aimed_attack_changes_neither_its_outcome_nor_the_rng)
+{
+    ObservedAttack without;
+    ObservedAttack with;
+
+    // Card S1. The neutrality evidence above covers the UNAIMED path, which is
+    // a different branch: a zero location makes `combat_attack` draw for a limb
+    // through `combat_random_hit_loc`, and an aimed one does not. The observer
+    // now reads `CF_AIM` and the pre-substitution location on both, so both
+    // need the evidence.
+    drive_one_attack_at(false, HIT_LOC_HEAD, &without);
+    drive_one_attack_at(true, HIT_LOC_HEAD, &with);
+
+    // Worth nothing unless the attack was really aimed and really happened.
+    CHECK(without.aimed);
+    CHECK_INT(without.resolved_hit_loc, HIT_LOC_HEAD);
+    CHECK(without.flags != 0);
+
+    check_attacks_agree(&without, &with);
+}
+
+TEST(the_aimed_path_does_not_draw_for_a_limb_and_the_unaimed_one_does)
+{
+    ObservedAttack aimed;
+    ObservedAttack rolled;
+
+    drive_one_attack_at(false, HIT_LOC_HEAD, &aimed);
+    drive_one_attack_at(false, HIT_LOC_TORSO, &rolled);
+
+    CHECK(aimed.aimed);
+    CHECK(!rolled.aimed);
+    // From one seed, the two consume the random stream differently, because
+    // only the unaimed path calls `combat_random_hit_loc`. If these ever agreed
+    // the aimed branch would be drawing when it should not.
+    CHECK(attacks_differ(&aimed, &rolled));
+}
+
+TEST(a_wrong_hit_location_is_detected_by_the_comparison)
+{
+    ObservedAttack head;
+    ObservedAttack arm;
+
+    // The deliberate wrong-location control card S1's session 5 asks for. The
+    // agreement checks above are only worth something if this comparison can
+    // tell two aims apart - a check that cannot fail has measured nothing, and
+    // six of this project's gates have been caught doing exactly that.
+    drive_one_attack_at(true, HIT_LOC_HEAD, &head);
+    drive_one_attack_at(true, HIT_LOC_ARM, &arm);
+
+    CHECK_INT(head.resolved_hit_loc, HIT_LOC_HEAD);
+    CHECK_INT(arm.resolved_hit_loc, HIT_LOC_ARM);
+    CHECK(attacks_differ(&head, &arm));
+}
+
+TEST(one_extra_observer_draw_is_detected_on_the_aimed_path_too)
+{
+    ObservedAttack without;
+    ObservedAttack with;
+
+    // The aimed agreement test is worth exactly as much as this: if a draw
+    // smuggled into the observer could NOT move an aimed comparison, that
+    // agreement would be the absence of a measurement rather than a result.
+    drive_one_attack_at(false, HIT_LOC_HEAD, &without);
+
+    inject_observer_draw = true;
+    drive_one_attack_at(true, HIT_LOC_HEAD, &with);
+    inject_observer_draw = false;
+
+    CHECK(attacks_differ(&without, &with));
+}
+
 TEST(one_extra_observer_rng_draw_is_detected)
 {
     ObservedAttack without;
@@ -865,6 +973,10 @@ TEST(one_extra_observer_rng_draw_is_detected)
 void test_combat_observer_suite(void)
 {
     RUN(absent_switch_does_no_output_work);
+    RUN(observing_an_aimed_attack_changes_neither_its_outcome_nor_the_rng);
+    RUN(the_aimed_path_does_not_draw_for_a_limb_and_the_unaimed_one_does);
+    RUN(a_wrong_hit_location_is_detected_by_the_comparison);
+    RUN(one_extra_observer_draw_is_detected_on_the_aimed_path_too);
     RUN(a_complete_trace_has_ordered_control_and_semantic_events);
     RUN(hit_miss_critical_and_terminal_values_are_not_conflated);
     RUN(the_bound_marks_the_trace_incomplete_once);
