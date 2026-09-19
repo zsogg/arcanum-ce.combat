@@ -132,6 +132,42 @@ TEST(the_selection_is_off_unless_the_feature_is_on)
     called_shot_reset();
 }
 
+TEST(each_control_shows_the_limb_it_selects_not_the_one_its_key_raises)
+{
+    // Quirk 48. `interface.mes` names art 819 Cursor-Called-Leg and 820
+    // Cursor-Called-Arm, while the key dispatch raises 819 for an ARM shot and
+    // 820 for a LEG one - Troika's crossing, faithfully kept. The panel is
+    // where a player reads what they are aiming at, so it maps the art to the
+    // limb it depicts.
+    CHECK_INT(called_shot_art_for(HIT_LOC_ARM), 820);
+    CHECK_INT(called_shot_art_for(HIT_LOC_LEG), 819);
+
+    CHECK_INT(called_shot_art_for(HIT_LOC_HEAD), 818);
+    // Body is the ordinary combat cursor, because Body IS an ordinary attack:
+    // the location is rolled, not aimed at the torso.
+    CHECK_INT(called_shot_art_for(HIT_LOC_TORSO), 353);
+}
+
+TEST(no_two_controls_show_the_same_art)
+{
+    int a;
+    int b;
+
+    // Four distinct limbs need four distinct pictures; two controls sharing one
+    // would be unreadable in exactly the way the crossing above already is.
+    for (a = 0; a < HIT_LOC_COUNT; a++) {
+        for (b = a + 1; b < HIT_LOC_COUNT; b++) {
+            CHECK(called_shot_art_for(a) != called_shot_art_for(b));
+        }
+    }
+}
+
+TEST(a_limb_outside_the_table_has_no_art)
+{
+    CHECK_INT(called_shot_art_for(-1), -1);
+    CHECK_INT(called_shot_art_for(HIT_LOC_COUNT), -1);
+}
+
 void test_called_shot_suite(void)
 {
     RUN(with_no_key_held_the_kept_selection_is_what_an_attack_asks_for);
@@ -142,4 +178,7 @@ void test_called_shot_suite(void)
     RUN(with_the_feature_off_the_resolver_is_the_shipped_behaviour);
     RUN(a_refused_selection_does_not_disturb_the_one_already_kept);
     RUN(the_selection_is_off_unless_the_feature_is_on);
+    RUN(each_control_shows_the_limb_it_selects_not_the_one_its_key_raises);
+    RUN(no_two_controls_show_the_same_art);
+    RUN(a_limb_outside_the_table_has_no_art);
 }

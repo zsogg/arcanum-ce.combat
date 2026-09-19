@@ -3506,15 +3506,8 @@ static void intgame_combat_mode_toggle_inner(void)
     if (combat_critter_is_combat_mode_active(pc_obj)) {
         if (combat_can_exit_combat_mode(pc_obj)) {
             combat_critter_deactivate_combat_mode(pc_obj);
-            // CE (card S1): leaving combat returns the aim to an ordinary
-            // attack, so a head shot chosen for one fight is not still chosen
-            // for the next one.
-            //
-            // **This is the deliberate exit only.** Combat also ends on its
-            // own when the last opponent falls, and that path does not come
-            // through here; session 7 needs the same hook for the panel's
-            // visibility and will cover both.
-            called_shot_reset();
+            // The aim reset lives on `combat_ui_combat_mode_changed`, which
+            // this reaches and which the automatic end reaches too.
         } else {
             mes_file_entry.num = 24; // "You cannot exit combat-mode when under attack."
             mes_get_msg(intgame_mes_file, &mes_file_entry);

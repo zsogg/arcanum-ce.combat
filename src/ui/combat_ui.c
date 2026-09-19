@@ -8,6 +8,7 @@
 #include "game/player.h"
 #include "game/uap.h"
 #include "ui/anim_ui.h"
+#include "ui/called_shot.h"
 #include "ui/intgame.h"
 #include "ui/textedit_ui.h"
 #include "ui/wmap_ui.h"
@@ -202,7 +203,21 @@ void combat_ui_combat_mode_changed(bool combat_ended)
     intgame_refresh_cursor();
     if (combat_ended) {
         wmap_ui_close();
+
+        // CE (card S1): the aim returns to an ordinary attack when the fight
+        // does, so a head shot chosen for one fight is not still chosen for the
+        // next. Here rather than on the UI's own toggle because this callback
+        // is reached from `combat_critter_toggle_combat_mode` for **both**
+        // ways out - the player pressing R, and the fight simply ending when
+        // the last opponent falls. Session 6 could only cover the first.
+        //
+        // Already local-PC only: the call site guards it with `if (is_pc)`.
+        called_shot_reset();
     }
+
+    // Shown during the local player's standard turn-based combat and hidden
+    // everywhere else, on both edges of the transition.
+    called_shot_ui_refresh();
 }
 
 // 0x56ED00
@@ -213,6 +228,12 @@ void combat_ui_recreate(void)
     }
     combat_ui_create();
     combat_ui_draw_ap_bar(0);
+
+    // CE (card S1): the panel sits beside this bar and is relocated by the
+    // same layout change, so it is rebuilt with it rather than tracking the
+    // layout on its own.
+    called_shot_ui_destroy();
+    called_shot_ui_create();
 }
 
 // 0x56ED20
@@ -299,6 +320,7 @@ void combat_ui_create(void)
 // 0x56EF40
 void combat_ui_close(void)
 {
+    called_shot_ui_destroy();
     combat_ui_destroy();
 }
 

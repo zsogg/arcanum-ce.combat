@@ -3,6 +3,8 @@
 
 #include <stdbool.h>
 
+#include <tig/tig.h>
+
 #include "game/combat.h"
 
 /**
@@ -57,5 +59,45 @@ int called_shot_effective_aim(int selection, bool comma, bool period, bool slash
 
 /** `called_shot_effective_aim` against the live selection and keyboard. */
 int called_shot_aim_now(void);
+
+/* -- the panel ---------------------------------------------------------- */
+
+/**
+ * Creates the four-control panel, or does nothing when the feature is off.
+ *
+ * The controls are the shipped called-shot cursors, which are already limb
+ * imagery: `battlecur` for Body because that is the ordinary combat cursor,
+ * then head, arm and leg. **The arm and leg art are mapped by what they
+ * depict, not by which key raises them** — the key dispatch raises the leg art
+ * for an arm shot and the arm art for a leg shot
+ * ([quirk 48](../../MODDING-NOTES.md)), and a panel that inherited that
+ * crossing would be wrong in the one place a player checks.
+ */
+bool called_shot_ui_create(void);
+
+/** Destroys the panel and forgets its handles. */
+void called_shot_ui_destroy(void);
+
+/**
+ * Shows the panel during the local player's standard turn-based combat and
+ * hides it everywhere else.
+ *
+ * Session 1's decision: hidden entirely rather than shown disabled, so no inert
+ * control sits on screen for the modes whose support is deferred.
+ */
+void called_shot_ui_refresh(void);
+
+/**
+ * The interface art a limb's control shows; -1 outside the table.
+ *
+ * Exposed so the mapping can be asserted without a display, because this is
+ * the one place quirk 48 sets a trap: the key dispatch raises the **leg** art
+ * for an arm shot and the **arm** art for a leg shot, and a panel that copied
+ * that would mislabel two of its four controls.
+ */
+int called_shot_art_for(int hit_loc);
+
+/** Handles a click on one of the four controls. True when it was ours. */
+bool called_shot_ui_handle_button(tig_button_handle_t button_handle);
 
 #endif /* ARCANUM_UI_CALLED_SHOT_H_ */
