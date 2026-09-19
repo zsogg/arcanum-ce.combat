@@ -52,13 +52,12 @@ static void remove_fixture(const char* path)
 }
 
 // The shape of a real .mes file: braced number, braced text, comments between.
-static const char* const SAMPLE =
-    "// a comment line\n"
-    "{100}{first}\n"
-    "{300}{third}\n"
-    "{200}{second}\n"
-    "\n"
-    "{400}{fourth}\n";
+static const char* const SAMPLE = "// a comment line\n"
+                                  "{100}{first}\n"
+                                  "{300}{third}\n"
+                                  "{200}{second}\n"
+                                  "\n"
+                                  "{400}{fourth}\n";
 
 TEST(load_reads_every_entry)
 {

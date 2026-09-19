@@ -106,7 +106,6 @@ static int probe_mes(const char* path)
     return 0;
 }
 
-
 static int probe_scr(const char* path)
 {
     TigFile* stream;

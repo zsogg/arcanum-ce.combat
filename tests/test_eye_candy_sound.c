@@ -238,7 +238,7 @@ static void a_looping_sound_is_moved_onto_the_object(void)
     tig_sound_create(&live, TIG_SOUND_TYPE_EFFECT);
     if (live == TIG_SOUND_HANDLE_INVALID) {
         // no mixer available; move-position case skipped
-    CHECK(true);
+        CHECK(true);
         return;
     }
 
@@ -262,7 +262,7 @@ static void a_one_shot_is_not_moved(void)
     tig_sound_create(&live, TIG_SOUND_TYPE_EFFECT);
     if (live == TIG_SOUND_HANDLE_INVALID) {
         // no mixer available; move-position case skipped
-    CHECK(true);
+        CHECK(true);
         return;
     }
 
@@ -285,7 +285,7 @@ static void move_honours_the_same_mask(void)
     tig_sound_create(&live, TIG_SOUND_TYPE_EFFECT);
     if (live == TIG_SOUND_HANDLE_INVALID) {
         // no mixer available; move-position case skipped
-    CHECK(true);
+        CHECK(true);
         return;
     }
 
@@ -337,28 +337,28 @@ void test_eye_candy_sound_suite(void)
     }
 
     test_run("begin does not take the one-shot branch when the play fails",
-             begin_does_not_take_the_one_shot_branch_when_the_play_fails);
+        begin_does_not_take_the_one_shot_branch_when_the_play_fails);
     test_run("a failed play clears the sound id",
-             a_failed_play_clears_the_sound_id);
+        a_failed_play_clears_the_sound_id);
     test_run("begin needs a previous id", begin_needs_a_previous_id);
     test_run("begin moves an already-playing sound",
-             begin_moves_an_already_playing_sound);
+        begin_moves_an_already_playing_sound);
     test_run("restart acts when no handle is live",
-             restart_acts_when_no_handle_is_live);
+        restart_acts_when_no_handle_is_live);
     test_run("restart leaves a live sound alone",
-             restart_leaves_a_live_sound_alone);
+        restart_leaves_a_live_sound_alone);
     test_run("restart needs a previous id",
-             restart_needs_a_previous_id);
+        restart_needs_a_previous_id);
     test_run("restart honours the same mask",
-             restart_honours_the_same_mask);
+        restart_honours_the_same_mask);
     test_run("a looping sound is moved onto the object",
-             a_looping_sound_is_moved_onto_the_object);
+        a_looping_sound_is_moved_onto_the_object);
     test_run("a one-shot is not moved",
-             a_one_shot_is_not_moved);
+        a_one_shot_is_not_moved);
     test_run("move honours the same mask",
-             move_honours_the_same_mask);
+        move_honours_the_same_mask);
     test_run("move does nothing without a handle",
-             move_does_nothing_without_a_handle);
+        move_does_nothing_without_a_handle);
 
     obj_harness_destroy(subject);
     tig_sound_exit();

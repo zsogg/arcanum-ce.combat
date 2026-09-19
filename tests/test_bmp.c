@@ -119,10 +119,22 @@ static void bmp_use_argb8888(void)
 
 // A 4x2 paletted image using colours 0..3, plus a 4-entry BGRA table.
 static const unsigned char PAL4[16] = {
-    0x00, 0x00, 0x00, 0x00, // 0: black
-    0x00, 0x00, 0xFF, 0x00, // 1: red    (B,G,R,reserved)
-    0x00, 0xFF, 0x00, 0x00, // 2: green
-    0xFF, 0x00, 0x00, 0x00, // 3: blue
+    0x00,
+    0x00,
+    0x00,
+    0x00, // 0: black
+    0x00,
+    0x00,
+    0xFF,
+    0x00, // 1: red    (B,G,R,reserved)
+    0x00,
+    0xFF,
+    0x00,
+    0x00, // 2: green
+    0xFF,
+    0x00,
+    0x00,
+    0x00, // 3: blue
 };
 
 // ---------------------------------------------------------------------------
@@ -179,8 +191,14 @@ TEST(an_eight_bit_paletted_bmp_loads_with_its_palette)
 {
     TigBmp bmp;
     unsigned char rows[8] = {
-        0, 1, 2, 3,
-        3, 2, 1, 0,
+        0,
+        1,
+        2,
+        3,
+        3,
+        2,
+        1,
+        0,
     };
 
     bmp_use_argb8888();
@@ -247,8 +265,18 @@ TEST(a_twenty_four_bit_bmp_loads_without_a_palette)
     TigBmp bmp;
     // Two pixels per row, BGR order: red then green; blue then black.
     unsigned char rows[12] = {
-        0x00, 0x00, 0xFF,  0x00, 0xFF, 0x00,
-        0xFF, 0x00, 0x00,  0x00, 0x00, 0x00,
+        0x00,
+        0x00,
+        0xFF,
+        0x00,
+        0xFF,
+        0x00,
+        0xFF,
+        0x00,
+        0x00,
+        0x00,
+        0x00,
+        0x00,
     };
 
     bmp_use_argb8888();
@@ -280,8 +308,22 @@ TEST(a_thirty_two_bit_bmp_is_refused)
 {
     TigBmp bmp;
     unsigned char rows[16] = {
-        0, 0, 0xFF, 0xFF,  0, 0xFF, 0, 0xFF,
-        0xFF, 0, 0, 0xFF,  0, 0, 0, 0xFF,
+        0,
+        0,
+        0xFF,
+        0xFF,
+        0,
+        0xFF,
+        0,
+        0xFF,
+        0xFF,
+        0,
+        0,
+        0xFF,
+        0,
+        0,
+        0,
+        0xFF,
     };
 
     bmp_fixture_dir();

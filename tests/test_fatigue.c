@@ -110,9 +110,6 @@ TEST(ai_fatigue_mes_overrides_the_stock_defaults)
     remove(fixture);
 }
 
-
-
-
 // --------------------------------------------------------------------------
 // `rules/ai_fatigue.mes` parsing - card X7, 2026-09-05
 //

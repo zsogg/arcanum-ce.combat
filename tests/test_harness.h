@@ -38,25 +38,25 @@ extern int test_current_failed;
 
 #define RUN(name) test_run(#name, name)
 
-#define CHECK(cond)                                                     \
+#define CHECK(cond) \
     test_check((cond) ? 1 : 0, #cond, __FILE__, __LINE__)
 
-#define CHECK_INT(actual, expected)                                     \
-    test_check_int((long long)(actual), (long long)(expected),          \
+#define CHECK_INT(actual, expected)                            \
+    test_check_int((long long)(actual), (long long)(expected), \
         #actual, __FILE__, __LINE__)
 
-#define CHECK_STR(actual, expected)                                     \
+#define CHECK_STR(actual, expected) \
     test_check_str((actual), (expected), #actual, __FILE__, __LINE__)
 
 // `tig_str_parse_*` advances the caller's pointer and sets it to NULL when the
 // input is exhausted, so "where did it stop" is half of what these tests are
 // checking. This spells that out rather than making every suite write it.
-#define CHECK_AT_END(str)                                               \
-    test_check((str) == NULL, #str " == NULL (input exhausted)",        \
+#define CHECK_AT_END(str)                                        \
+    test_check((str) == NULL, #str " == NULL (input exhausted)", \
         __FILE__, __LINE__)
 
-#define CHECK_REMAINDER(str, expected)                                  \
-    test_check_str((str), (expected), #str " (remainder)",              \
+#define CHECK_REMAINDER(str, expected)                     \
+    test_check_str((str), (expected), #str " (remainder)", \
         __FILE__, __LINE__)
 
 void test_run(const char* name, void (*func)(void));

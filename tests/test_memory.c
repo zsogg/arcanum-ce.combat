@@ -143,7 +143,6 @@ static long long mem_number_after(const char* needle)
 // ---------------------------------------------------------------------------
 // Catching a fatal.
 
-
 // The outer net. A fatal that no `EXPECT_*` armed for would otherwise reach
 // `exit(EXIT_FAILURE)` and take the whole binary down mid-case - and because
 // `test_run` prints its `FAIL` line only after the body returns, the run would
@@ -181,34 +180,34 @@ static void mem_fatal_output(const char* str)
 // in `mem_fatal_message` and sets `mem_fatal_fired`. A `stmt` that returns
 // normally fails the check rather than passing quietly, which is the mutation
 // that would otherwise make every fatal case vacuous.
-#define EXPECT_FATAL(stmt)                                                  \
-    do {                                                                    \
-        mem_fatal_fired = 0;                                                \
-        mem_fatal_message[0] = '\0';                                        \
-        tig_memory_set_output_func(mem_fatal_output);                       \
-        mem_fatal_armed = 1;                                                \
-        if (setjmp(mem_fatal_jmp) == 0) {                                   \
-            stmt;                                                           \
-            mem_fatal_armed = 0;                                            \
-        }                                                                   \
-        mem_fatal_armed = 0;                                                \
-        test_check(mem_fatal_fired != 0, #stmt " reaches a fatal error",    \
-            __FILE__, __LINE__);                                            \
+#define EXPECT_FATAL(stmt)                                               \
+    do {                                                                 \
+        mem_fatal_fired = 0;                                             \
+        mem_fatal_message[0] = '\0';                                     \
+        tig_memory_set_output_func(mem_fatal_output);                    \
+        mem_fatal_armed = 1;                                             \
+        if (setjmp(mem_fatal_jmp) == 0) {                                \
+            stmt;                                                        \
+            mem_fatal_armed = 0;                                         \
+        }                                                                \
+        mem_fatal_armed = 0;                                             \
+        test_check(mem_fatal_fired != 0, #stmt " reaches a fatal error", \
+            __FILE__, __LINE__);                                         \
     } while (0)
 
 // Run `stmt` expecting it NOT to fatal.
-#define EXPECT_NO_FATAL(stmt)                                               \
-    do {                                                                    \
-        mem_fatal_fired = 0;                                                \
-        mem_fatal_message[0] = '\0';                                        \
-        tig_memory_set_output_func(mem_fatal_output);                       \
-        mem_fatal_armed = 1;                                                \
-        if (setjmp(mem_fatal_jmp) == 0) {                                   \
-            stmt;                                                           \
-        }                                                                   \
-        mem_fatal_armed = 0;                                                \
+#define EXPECT_NO_FATAL(stmt)                                                \
+    do {                                                                     \
+        mem_fatal_fired = 0;                                                 \
+        mem_fatal_message[0] = '\0';                                         \
+        tig_memory_set_output_func(mem_fatal_output);                        \
+        mem_fatal_armed = 1;                                                 \
+        if (setjmp(mem_fatal_jmp) == 0) {                                    \
+            stmt;                                                            \
+        }                                                                    \
+        mem_fatal_armed = 0;                                                 \
         test_check(mem_fatal_fired == 0, #stmt " completes without a fatal", \
-            __FILE__, __LINE__);                                            \
+            __FILE__, __LINE__);                                             \
     } while (0)
 
 // ---------------------------------------------------------------------------
@@ -268,10 +267,10 @@ static void mem_guarded_case(void)
     tig_memory_set_output_func(NULL);
 }
 
-#define MEM_RUN(name)                                                       \
-    do {                                                                    \
-        mem_guard_target = name;                                            \
-        test_run(#name, mem_guarded_case);                                  \
+#define MEM_RUN(name)                      \
+    do {                                   \
+        mem_guard_target = name;           \
+        test_run(#name, mem_guarded_case); \
     } while (0)
 
 // ---------------------------------------------------------------------------

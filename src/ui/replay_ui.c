@@ -166,8 +166,7 @@ bool replay_ui_load(const char* path)
                 : REPLAY_KIND_OBJECT;
             strncpy(replay_commands[replay_count].target, target,
                 sizeof(replay_commands[replay_count].target) - 1);
-            replay_commands[replay_count].target[
-                sizeof(replay_commands[replay_count].target) - 1] = '\0';
+            replay_commands[replay_count].target[sizeof(replay_commands[replay_count].target) - 1] = '\0';
         }
         replay_count++;
     }

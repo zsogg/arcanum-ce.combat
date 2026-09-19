@@ -97,9 +97,9 @@ static int collect(const char* body, int node, int* out)
 
 // A node with two adjacent options, then a second node. Intelligence 1 so every
 // option qualifies on the IQ test.
-#define BODY_ADJACENT \
-    "{100}{Well?}{}{}{}{0}{}\r\n" \
-    "{101}{First.}{}{1}{}{0}{}\r\n" \
+#define BODY_ADJACENT                \
+    "{100}{Well?}{}{}{}{0}{}\r\n"    \
+    "{101}{First.}{}{1}{}{0}{}\r\n"  \
     "{102}{Second.}{}{1}{}{0}{}\r\n" \
     "{200}{Another node.}{}{}{}{0}{}\r\n"
 

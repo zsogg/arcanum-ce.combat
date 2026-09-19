@@ -394,8 +394,11 @@ TEST(exceeding_max_size_shrinks_the_cache_after_the_fact)
     TigFileCache* cache;
     TigFileCacheEntry* entry;
     const char* const paths[] = {
-        FC_DIR "/a.txt", FC_DIR "/b.txt", FC_DIR "/c.txt",
-        FC_DIR "/d.txt", FC_DIR "/e.txt",
+        FC_DIR "/a.txt",
+        FC_DIR "/b.txt",
+        FC_DIR "/c.txt",
+        FC_DIR "/d.txt",
+        FC_DIR "/e.txt",
     };
     const int sizes[] = { 100, 200, 300, 400, 500 };
     int index;
