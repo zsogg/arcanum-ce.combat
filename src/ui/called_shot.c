@@ -43,6 +43,36 @@ void called_shot_reset(void)
     called_shot_selected = HIT_LOC_TORSO;
 }
 
+bool called_shot_throws_enabled(void)
+{
+    // Its own row, deliberately not `called shot ui`. The selector is a way to
+    // choose an aim the original already accepted from the keyboard; an aimed
+    // throw is an aim the original never accepted at all. Tying them together
+    // would mean switching on a HUD control silently added a mechanic.
+    return feature_enabled(FEATURE_CALLED_SHOT_THROWS);
+}
+
+int called_shot_throw_aim_for(bool enabled, int committed_aim)
+{
+    if (!enabled) {
+        // The shipped behaviour, and not "aim at the torso": `combat_attack`
+        // reads `HIT_LOC_TORSO` as unaimed and rolls the location at
+        // 70/15/10/5, which is what a thrown weapon has always done.
+        return HIT_LOC_TORSO;
+    }
+
+    if (committed_aim <= HIT_LOC_TORSO || committed_aim >= HIT_LOC_COUNT) {
+        return HIT_LOC_TORSO;
+    }
+
+    return committed_aim;
+}
+
+int called_shot_throw_aim(int committed_aim)
+{
+    return called_shot_throw_aim_for(called_shot_throws_enabled(), committed_aim);
+}
+
 int called_shot_effective_aim(int selection, bool comma, bool period, bool slash)
 {
     // The original's order, preserved exactly: comma, then period, then slash.

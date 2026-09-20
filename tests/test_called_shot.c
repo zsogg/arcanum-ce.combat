@@ -270,6 +270,71 @@ TEST(clearing_a_replayed_aim_returns_the_panel_to_the_player)
     }
 }
 
+/* -- aimed throws (card S2) ---------------------------------------------- */
+
+TEST(with_aimed_throws_off_every_committed_aim_becomes_an_ordinary_throw)
+{
+    int limb;
+
+    // The whole flag-off contract in one loop. Not "aim at the torso":
+    // `combat_attack` reads HIT_LOC_TORSO as unaimed and rolls the location,
+    // which is what a thrown weapon has always done.
+    for (limb = 0; limb < HIT_LOC_COUNT; limb++) {
+        CHECK_INT(called_shot_throw_aim_for(false, limb), HIT_LOC_TORSO);
+    }
+}
+
+TEST(with_aimed_throws_on_the_committed_limb_is_carried)
+{
+    CHECK_INT(called_shot_throw_aim_for(true, HIT_LOC_HEAD), HIT_LOC_HEAD);
+    CHECK_INT(called_shot_throw_aim_for(true, HIT_LOC_ARM), HIT_LOC_ARM);
+    CHECK_INT(called_shot_throw_aim_for(true, HIT_LOC_LEG), HIT_LOC_LEG);
+}
+
+TEST(an_unaimed_command_stays_unaimed_with_the_feature_on)
+{
+    // Switching the feature on must not turn an ordinary throw into a chest
+    // shot: torso in, torso out, and the roll still happens downstream.
+    CHECK_INT(called_shot_throw_aim_for(true, HIT_LOC_TORSO), HIT_LOC_TORSO);
+}
+
+TEST(a_throw_aim_outside_the_table_is_an_ordinary_throw)
+{
+    // `AGDATA_SCRATCH_VAL3` is shared, and one of its other users writes -1.
+    // This value indexes `hit_loc_penalties`, which has HIT_LOC_COUNT entries,
+    // so an out-of-range aim must not reach it.
+    CHECK_INT(called_shot_throw_aim_for(true, -1), HIT_LOC_TORSO);
+    CHECK_INT(called_shot_throw_aim_for(true, HIT_LOC_COUNT), HIT_LOC_TORSO);
+    CHECK_INT(called_shot_throw_aim_for(true, 9999), HIT_LOC_TORSO);
+    CHECK_INT(called_shot_throw_aim_for(false, -1), HIT_LOC_TORSO);
+}
+
+TEST(the_throw_gate_answers_a_real_hit_location_for_every_input)
+{
+    int aim;
+    int result;
+
+    // The property that matters at the call site: whatever is in the shared
+    // slot, what reaches `combat_throw` indexes the penalty table safely.
+    for (aim = -8; aim < HIT_LOC_COUNT + 8; aim++) {
+        result = called_shot_throw_aim_for(true, aim);
+        CHECK(result >= 0 && result < HIT_LOC_COUNT);
+        result = called_shot_throw_aim_for(false, aim);
+        CHECK(result >= 0 && result < HIT_LOC_COUNT);
+    }
+}
+
+TEST(aimed_throws_do_not_ride_on_the_selectors_flag)
+{
+    // Two rows, on purpose: switching on a HUD control must not silently add a
+    // mechanic the original does not have. This asserts the gate reads its own
+    // argument and nothing else - `called_shot_enabled` cannot reach it.
+    CHECK_INT(called_shot_throw_aim_for(false, HIT_LOC_HEAD), HIT_LOC_TORSO);
+    called_shot_select(HIT_LOC_HEAD);
+    CHECK_INT(called_shot_throw_aim_for(false, HIT_LOC_HEAD), HIT_LOC_TORSO);
+    called_shot_reset();
+}
+
 void test_called_shot_suite(void)
 {
     RUN(with_no_key_held_the_kept_selection_is_what_an_attack_asks_for);
@@ -291,4 +356,10 @@ void test_called_shot_suite(void)
     RUN(the_gaps_between_controls_select_nothing);
     RUN(the_hit_test_follows_the_panel_wherever_it_is_placed);
     RUN(a_missing_panel_rectangle_selects_nothing);
+    RUN(with_aimed_throws_off_every_committed_aim_becomes_an_ordinary_throw);
+    RUN(with_aimed_throws_on_the_committed_limb_is_carried);
+    RUN(an_unaimed_command_stays_unaimed_with_the_feature_on);
+    RUN(a_throw_aim_outside_the_table_is_an_ordinary_throw);
+    RUN(the_throw_gate_answers_a_real_hit_location_for_every_input);
+    RUN(aimed_throws_do_not_ride_on_the_selectors_flag);
 }

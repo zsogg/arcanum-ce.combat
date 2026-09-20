@@ -3925,7 +3925,21 @@ static void intgame_perform_action_on_target_inner(TargetDescriptor* td)
             goal_data.params[AGDATA_TARGET_TILE].loc = obj_field_int64_get(td->obj, OBJ_F_LOCATION);
             goal_data.params[AGDATA_SCRATCH_OBJ].obj = throwable_instance_obj;
 
-            anim_goal_throw_item(pc_obj, throwable_instance_obj, obj_field_int64_get(td->obj, OBJ_F_LOCATION));
+            // CE (card S2): carry the aim committed above into the throw.
+            //
+            // This branch abandons `goal_data` - the throw builds its own goal
+            // - so the aim written a few lines up was dropped here, and a
+            // player holding a called-shot key while attacking with a throwing
+            // weapon got an ordinary throw. `combat_throw` always honoured a
+            // limb; nothing ever handed it one.
+            //
+            // Behind its own flag because this is a mechanic the original does
+            // not have. With `called shot throws` off the aim is `HIT_LOC_TORSO`
+            // whatever the panel shows or the keyboard holds, which is the
+            // shipped behaviour exactly.
+            anim_goal_throw_item_aimed(pc_obj, throwable_instance_obj,
+                obj_field_int64_get(td->obj, OBJ_F_LOCATION),
+                called_shot_throw_aim(goal_data.params[AGDATA_SCRATCH_VAL3].data));
             return;
         }
     }

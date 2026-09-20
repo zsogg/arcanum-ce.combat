@@ -28,6 +28,29 @@
 /** Whether the feature is switched on. */
 bool called_shot_enabled(void);
 
+/**
+ * Whether aimed throws are switched on (card S2).
+ *
+ * A separate row from `called shot ui`, and deliberately so. The selector
+ * gives a player a way to choose an aim the original already accepted from the
+ * keyboard; an aimed *throw* is an aim the original never accepted at all, so
+ * it is a new mechanic and carries its own flag and its own acceptance.
+ */
+bool called_shot_throws_enabled(void);
+
+/**
+ * The aim a throw should carry, given the aim its command committed. **Pure.**
+ *
+ * `enabled` is passed rather than read so the whole decision can be tested
+ * without a settings file. Off answers `HIT_LOC_TORSO` — which is not "aim at
+ * the torso" but *unaimed*: `combat_attack` rolls the location at 70/15/10/5,
+ * exactly as a thrown weapon has always behaved.
+ */
+int called_shot_throw_aim_for(bool enabled, int committed_aim);
+
+/** `called_shot_throw_aim_for` over the live flag. */
+int called_shot_throw_aim(int committed_aim);
+
 /** The kept selection; `HIT_LOC_TORSO` means an ordinary attack. */
 int called_shot_selection(void);
 

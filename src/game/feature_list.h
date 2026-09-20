@@ -29,6 +29,7 @@
 
 FEATURE(UAP_FIXES, "uap fixes", false)
 FEATURE(CALLED_SHOT_UI, "called shot ui", false)
+FEATURE(CALLED_SHOT_THROWS, "called shot throws", false)
 FEATURE(DEBUG_CHARACTER_POINTS, "debug character points", false)
 
 // clang-format on

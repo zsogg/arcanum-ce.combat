@@ -8076,11 +8076,27 @@ bool anim_throw_item(AnimRunInfo* run_info)
     int64_t item_obj;
     int64_t target_obj;
     int64_t target_loc;
+    int hit_loc;
 
     source_obj = run_info->params[0].obj;
     item_obj = run_info->params[1].obj;
     target_obj = run_info->cur_stack_data->params[AGDATA_TARGET_OBJ].obj;
     target_loc = run_info->cur_stack_data->params[AGDATA_TARGET_TILE].loc;
+
+    // CE (card S2): the aim this throw was committed with, read from the same
+    // goal slot the attack goal uses (`anim_apply_attack`). The original passes
+    // the literal `HIT_LOC_TORSO` here, and `HIT_LOC_TORSO` is 0, which is what
+    // `anim_goal_data_init_no_interrupt` leaves in the slot - so with nothing
+    // setting it this reads exactly what the original passed.
+    //
+    // Validated rather than trusted. `AGDATA_SCRATCH_VAL3` is shared: one of
+    // its other users writes the `-1` that `anim_apply_attack` asserts against,
+    // and this value indexes `hit_loc_penalties`, a four-element table. An
+    // out-of-range aim is an ordinary throw, not a read off the end.
+    hit_loc = run_info->cur_stack_data->params[AGDATA_SCRATCH_VAL3].data;
+    if (hit_loc < 0 || hit_loc >= HIT_LOC_COUNT) {
+        hit_loc = HIT_LOC_TORSO;
+    }
 
     ASSERT(source_obj != OBJ_HANDLE_NULL); // 7861, "sourceObj != OBJ_HANDLE_NULL"
     ASSERT(item_obj != OBJ_HANDLE_NULL); // 7861, "itemObj != OBJ_HANDLE_NULL"
@@ -8103,7 +8119,7 @@ bool anim_throw_item(AnimRunInfo* run_info)
         return false;
     }
 
-    combat_throw(source_obj, item_obj, target_obj, target_loc, HIT_LOC_TORSO);
+    combat_throw(source_obj, item_obj, target_obj, target_loc, hit_loc);
 
     run_info->cur_stack_data->params[AGDATA_SCRATCH_OBJ].obj = OBJ_HANDLE_NULL;
 
@@ -14460,6 +14476,23 @@ bool anim_goal_knockback(int64_t target_obj, int rot, int range, int64_t source_
 // 0x434F80
 bool anim_goal_throw_item(int64_t obj, int64_t item_obj, int64_t target_loc)
 {
+    // The original's entry point, unchanged in effect: an unaimed throw, which
+    // is what every one of its callers meant when it was the only one there
+    // was. `HIT_LOC_TORSO` is how `combat_attack` spells "roll the location
+    // normally", so this is not a throw forced at the chest.
+    return anim_goal_throw_item_aimed(obj, item_obj, target_loc, HIT_LOC_TORSO);
+}
+
+// CE (card S2): a throw that carries the aim its command committed.
+//
+// Separate from the entry point above rather than a fourth parameter on it,
+// because four of the five callers have no aim to pass and never will: an
+// NPC's aim is its own, and a throw at a tile has no limb to ask for. The one
+// caller that does is the local player attacking a critter with a weapon that
+// throws by default, where `intgame.c` had already committed an aim and then
+// discarded the goal holding it.
+bool anim_goal_throw_item_aimed(int64_t obj, int64_t item_obj, int64_t target_loc, int hit_loc)
+{
     AnimGoalData goal_data;
 
     ASSERT(item_obj != OBJ_HANDLE_NULL); // itemObj != OBJ_HANDLE_NULL
@@ -14478,6 +14511,15 @@ bool anim_goal_throw_item(int64_t obj, int64_t item_obj, int64_t target_loc)
 
     goal_data.params[AGDATA_TARGET_TILE].loc = target_loc;
     goal_data.params[AGDATA_SCRATCH_OBJ].obj = item_obj;
+
+    // Snapshotted here, at command creation, and never re-read: once the throw
+    // is accepted it owns its aim, so changing the selection afterwards cannot
+    // retarget a weapon already in the air. The slot is free in this goal -
+    // `anim_goal_node_throw_item` names only SELF_OBJ, TARGET_TILE, ANIM_ID
+    // and SCRATCH_OBJ, and none of its node functions touches SCRATCH_VAL3.
+    if (hit_loc > HIT_LOC_TORSO && hit_loc < HIT_LOC_COUNT) {
+        goal_data.params[AGDATA_SCRATCH_VAL3].data = hit_loc;
+    }
 
     if (anim_is_current_goal(obj, &goal_data)) {
         return false;
