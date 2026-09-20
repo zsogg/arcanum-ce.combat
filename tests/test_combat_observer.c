@@ -5,6 +5,7 @@
 #include "game/combat.h"
 #include "game/combat_observer.h"
 #include "game/damage_type.h"
+#include "game/item.h"
 #include "game/random.h"
 #include "ui/called_shot.h"
 #include "ui/replay_ui.h"
@@ -959,6 +960,94 @@ TEST(a_wrong_hit_location_is_detected_by_the_comparison)
     CHECK(attacks_differ(&head, &arm));
 }
 
+// Drives one attack with a wielded ranged weapon, returning the ammunition the
+// attacker had left. The attacker is a **PC**: `combat_consume_ammo` returns
+// early for an NPC with no player leader and would consume nothing at all,
+// which would make this test agree for the wrong reason.
+static int drive_one_ranged_attack(int hit_loc, int consumption, int stock)
+{
+    int64_t attacker;
+    int64_t target;
+    int64_t weapon;
+    int64_t ammo;
+    CombatContext combat;
+    int left;
+
+    clean();
+    CHECK(obj_harness_init());
+    attacker = obj_harness_create_proto(OBJ_TYPE_PC);
+    target = obj_harness_create_proto(OBJ_TYPE_NPC);
+    weapon = obj_harness_create_proto(OBJ_TYPE_WEAPON);
+    ammo = obj_harness_create_proto(OBJ_TYPE_AMMO);
+    CHECK(attacker != OBJ_HANDLE_NULL);
+    CHECK(target != OBJ_HANDLE_NULL);
+    CHECK(weapon != OBJ_HANDLE_NULL);
+    CHECK(ammo != OBJ_HANDLE_NULL);
+
+    obj_field_int32_set(weapon, OBJ_F_WEAPON_AMMO_TYPE, 0);
+    obj_field_int32_set(weapon, OBJ_F_WEAPON_AMMO_CONSUMPTION, consumption);
+    obj_field_int32_set(ammo, OBJ_F_AMMO_TYPE, 0);
+    obj_field_int32_set(ammo, OBJ_F_AMMO_QUANTITY, stock);
+    item_insert(ammo, attacker, -1);
+
+    obj_field_int32_set(target, OBJ_F_HP_ADJ, 40);
+    obj_field_int32_set(target, OBJ_F_HP_DAMAGE, 0);
+
+    memset(&combat, 0, sizeof(combat));
+    combat.attacker_obj = attacker;
+    combat.target_obj = target;
+    combat.field_28 = target;
+    combat.weapon_obj = weapon;
+    combat.skill = SKILL_MELEE;
+    combat.hit_loc = hit_loc;
+
+    stub_environment = true;
+    random_seed(ATTACK_SEED);
+    combat_attack(&combat);
+    stub_environment = false;
+
+    left = item_ammo_quantity_get(attacker, 0);
+
+    obj_harness_destroy(ammo);
+    obj_harness_destroy(weapon);
+    obj_harness_destroy(target);
+    obj_harness_destroy(attacker);
+    return left;
+}
+
+TEST(ammunition_is_spent_by_the_weapon_not_by_where_it_is_aimed)
+{
+    int head;
+    int leg;
+    int unaimed;
+
+    // Five bullets an attack: the Rifled Cannon's cost. A one-bullet weapon -
+    // the Revolver the fixture carries, for instance - hides an off-by-one,
+    // and six of the shipped bullet weapons cost more than one. See the
+    // ammunition census in MODDING-NOTES.
+    //
+    // Done-when 1 lists ammunition, and `combat_consume_ammo` takes no hit
+    // location - weapon, critter, count, destroy. This asserts the consequence
+    // rather than trusting the signature.
+    head = drive_one_ranged_attack(HIT_LOC_HEAD, 5, 40);
+    leg = drive_one_ranged_attack(HIT_LOC_LEG, 5, 40);
+    unaimed = drive_one_ranged_attack(HIT_LOC_TORSO, 5, 40);
+
+    CHECK_INT(head, 35);
+    CHECK_INT(leg, 35);
+    CHECK_INT(unaimed, 35);
+}
+
+TEST(a_weapon_that_costs_more_spends_more_whatever_the_aim)
+{
+    // The check above would pass against a build that consumed a fixed one per
+    // attack and ignored the weapon entirely, so the cost has to be shown to
+    // follow the weapon.
+    CHECK_INT(drive_one_ranged_attack(HIT_LOC_HEAD, 1, 40), 39);
+    CHECK_INT(drive_one_ranged_attack(HIT_LOC_HEAD, 6, 40), 34);
+    CHECK_INT(drive_one_ranged_attack(HIT_LOC_ARM, 6, 40), 34);
+}
+
 TEST(a_selected_aim_and_a_held_key_aim_produce_the_same_attack)
 {
     ObservedAttack from_panel;
@@ -1064,6 +1153,8 @@ void test_combat_observer_suite(void)
     RUN(observing_an_aimed_attack_changes_neither_its_outcome_nor_the_rng);
     RUN(the_aimed_path_does_not_draw_for_a_limb_and_the_unaimed_one_does);
     RUN(a_wrong_hit_location_is_detected_by_the_comparison);
+    RUN(ammunition_is_spent_by_the_weapon_not_by_where_it_is_aimed);
+    RUN(a_weapon_that_costs_more_spends_more_whatever_the_aim);
     RUN(a_selected_aim_and_a_held_key_aim_produce_the_same_attack);
     RUN(a_different_aim_does_not_produce_the_same_attack);
     RUN(one_extra_observer_draw_is_detected_on_the_aimed_path_too);

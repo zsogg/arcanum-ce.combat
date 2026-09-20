@@ -30,6 +30,12 @@
 // than a polite failure. Reading it is fine. Everything else in this header
 // works because prototype objects genuinely have no place in the world.
 //
+// **Inventory works too**, which is not obvious and went unclaimed here until
+// it was needed: `item_insert` and `item_ammo_quantity_get` operate on these
+// objects, because an inventory is a parent link and a list field rather than
+// anything spatial. Card S1's ammunition test wields a weapon and spends
+// bullets entirely inside the harness.
+//
 // ---
 //
 // **On using this to create objects in a mod.** This is deliberately built out
