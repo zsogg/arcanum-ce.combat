@@ -20,6 +20,7 @@
 #include "game/descriptions.h"
 #include "game/determinism.h"
 #include "game/dialog.h"
+#include "game/feature.h"
 #include "game/gamelib.h"
 #include "game/gmovie.h"
 #include "game/gsound.h"
@@ -921,6 +922,35 @@ void main_loop(void)
                                 break;
                             case SDL_SCANCODE_P:
                                 ai_npc_fighting_toggle();
+                                break;
+                            case SDL_SCANCODE_J:
+                                // CE: twenty unspent character points, for
+                                // building a test character without a
+                                // playthrough.
+                                //
+                                // **Points, not skills.** Granting firearms
+                                // directly would make a character no rule in
+                                // the game can produce; these are spent
+                                // through the ordinary character screen, so
+                                // what comes out is a legitimate build that
+                                // merely arrived early. Firearms accuracy is
+                                // `5 * level + 25` capped by Perception
+                                // (`skill.c`), and no existing cheat touches
+                                // either - F11 gives spells and INT/WIL, the
+                                // backtick gives tech *degrees*, which are the
+                                // crafting disciplines rather than the skill.
+                                //
+                                // Behind its own flag, default off, so the
+                                // faithful path is unchanged whatever the
+                                // cheat level. UAP already lifts the unspent
+                                // cap from 56 to 10000 (`stat.c`).
+                                if (feature_enabled(FEATURE_DEBUG_CHARACTER_POINTS)) {
+                                    int points = stat_base_get(pc_obj, STAT_UNSPENT_POINTS);
+                                    stat_base_set(pc_obj, STAT_UNSPENT_POINTS, points + 20);
+                                    tig_debug_printf("debug: character points %d -> %d\n",
+                                        points, stat_base_get(pc_obj, STAT_UNSPENT_POINTS));
+                                    charedit_refresh();
+                                }
                                 break;
                             default:
                                 break;
