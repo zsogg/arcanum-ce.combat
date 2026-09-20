@@ -747,6 +747,15 @@ typedef struct ObservedAttack {
     // observer was taught to report.
     int resolved_hit_loc;
     bool aimed;
+    // Card S1, session 8: the lasting consequences. A called shot's whole
+    // point is the injury it can cause - `OCF_CRIPPLED_ARMS_ONE` and its
+    // neighbours live in the target's critter flags - so a comparison that
+    // agreed on damage while disagreeing on whether an arm was crippled would
+    // be agreeing about the wrong thing.
+    unsigned int target_critter_flags;
+    int target_fatigue_damage;
+    unsigned int attacker_critter_flags;
+    int attacker_fatigue_damage;
 } ObservedAttack;
 
 static void drive_one_attack_at(bool observe, int hit_loc, ObservedAttack* out)
@@ -796,6 +805,10 @@ static void drive_one_attack_at(bool observe, int hit_loc, ObservedAttack* out)
     out->target_hp_damage = obj_field_int32_get(target, OBJ_F_HP_DAMAGE);
     out->resolved_hit_loc = combat.hit_loc;
     out->aimed = (combat.flags & CF_AIM) != 0;
+    out->target_critter_flags = (unsigned int)obj_field_int32_get(target, OBJ_F_CRITTER_FLAGS);
+    out->target_fatigue_damage = critter_fatigue_damage_get(target);
+    out->attacker_critter_flags = (unsigned int)obj_field_int32_get(attacker, OBJ_F_CRITTER_FLAGS);
+    out->attacker_fatigue_damage = critter_fatigue_damage_get(attacker);
 
     // Subsequent RNG state, which is what a hidden draw would move.
     for (index = 0; index < 4; index++) {
@@ -829,6 +842,10 @@ static void check_attacks_agree(const ObservedAttack* a, const ObservedAttack* b
     }
     CHECK_INT(a->resolved_hit_loc, b->resolved_hit_loc);
     CHECK_INT(a->aimed ? 1 : 0, b->aimed ? 1 : 0);
+    CHECK_INT((int)a->target_critter_flags, (int)b->target_critter_flags);
+    CHECK_INT(a->target_fatigue_damage, b->target_fatigue_damage);
+    CHECK_INT((int)a->attacker_critter_flags, (int)b->attacker_critter_flags);
+    CHECK_INT(a->attacker_fatigue_damage, b->attacker_fatigue_damage);
 }
 
 // Non-aborting, for the negative controls: a control has to be able to observe
@@ -843,6 +860,10 @@ static bool attacks_differ(const ObservedAttack* a, const ObservedAttack* b)
     if (a->target_hp_damage != b->target_hp_damage) return true;
     if (a->resolved_hit_loc != b->resolved_hit_loc) return true;
     if (a->aimed != b->aimed) return true;
+    if (a->target_critter_flags != b->target_critter_flags) return true;
+    if (a->target_fatigue_damage != b->target_fatigue_damage) return true;
+    if (a->attacker_critter_flags != b->attacker_critter_flags) return true;
+    if (a->attacker_fatigue_damage != b->attacker_fatigue_damage) return true;
     for (index = 0; index < DAMAGE_TYPE_COUNT; index++) {
         if (a->dam[index] != b->dam[index]) return true;
     }
