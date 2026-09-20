@@ -69,8 +69,39 @@ int called_shot_effective_aim(int selection, bool comma, bool period, bool slash
     return selection;
 }
 
+// -1 when no replayed aim is in force. Not a bool plus a value, because the
+// two can disagree and then the question "is an aim forced" has two answers.
+static int called_shot_replay_aim = -1;
+
+void called_shot_replay_aim_set(int hit_loc)
+{
+    if (hit_loc < 0 || hit_loc >= HIT_LOC_COUNT) {
+        // A recording that names a limb this build has no table entry for is
+        // refused rather than clamped: replaying it as a different aim would
+        // be a silently wrong reproduction, which is worse than a loud one.
+        tig_debug_printf("called_shot: replay aim %d is not a hit location\n",
+            hit_loc);
+        called_shot_replay_aim = -1;
+        return;
+    }
+
+    called_shot_replay_aim = hit_loc;
+}
+
+void called_shot_replay_aim_clear(void)
+{
+    called_shot_replay_aim = -1;
+}
+
 int called_shot_aim_now(void)
 {
+    // The recording wins while it is in force. The panel and the keyboard
+    // describe what a player wants next; a replay is reproducing what they
+    // wanted then.
+    if (called_shot_replay_aim >= 0) {
+        return called_shot_replay_aim;
+    }
+
     return called_shot_effective_aim(called_shot_selection(),
         tig_kb_is_key_pressed(SDL_SCANCODE_COMMA),
         tig_kb_is_key_pressed(SDL_SCANCODE_PERIOD),

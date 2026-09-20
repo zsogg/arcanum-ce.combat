@@ -13,6 +13,7 @@
 #include "game/obj_pool.h"
 #include "game/player.h"
 #include "game/target.h"
+#include "ui/called_shot.h"
 #include "ui/combat_ui.h"
 #include "ui/intgame.h"
 
@@ -35,6 +36,11 @@ typedef struct ReplayCommand {
     ReplayKind kind;
     int64_t loc;
     char target[REPLAY_IDENTITY_SIZE];
+    // CE (card S1): the aim this command was recorded with. A fourth field on
+    // the line, absent in every record written before it existed - and absent
+    // means `HIT_LOC_TORSO`, an ordinary attack, which is exactly what those
+    // records meant when they were written.
+    int aim;
 } ReplayCommand;
 
 static ReplayCommand replay_commands[REPLAY_MAX_COMMANDS];
@@ -132,13 +138,30 @@ bool replay_ui_load(const char* path)
         char kind[32];
         char target[REPLAY_IDENTITY_SIZE];
         int turn;
+        int aim;
+        int fields;
 
         if (line[0] == '#' || line[0] == '\n' || line[0] == '\r') {
             continue;
         }
 
-        if (sscanf(line, "%d %31s %63s", &turn, kind, target) != 3) {
+        aim = HIT_LOC_TORSO;
+        fields = sscanf(line, "%d %31s %63s %d", &turn, kind, target, &aim);
+        if (fields != 3 && fields != 4) {
             tig_debug_printf("Replay: cannot parse '%s'; refusing the file\n", line);
+            fclose(stream);
+            replay_count = 0;
+            return false;
+        }
+
+        if (aim < 0 || aim >= HIT_LOC_COUNT) {
+            // Refused rather than clamped. A record naming a limb this build
+            // has no entry for cannot be reproduced, and replaying it as some
+            // other limb would be a wrong reproduction that reads as a
+            // gameplay difference.
+            tig_debug_printf("Replay: aim %d is not a hit location; refusing"
+                             " the file\n",
+                aim);
             fclose(stream);
             replay_count = 0;
             return false;
@@ -155,6 +178,7 @@ bool replay_ui_load(const char* path)
         }
 
         replay_commands[replay_count].turn = turn;
+        replay_commands[replay_count].aim = aim;
         replay_commands[replay_count].loc = 0;
         replay_commands[replay_count].target[0] = '\0';
         if (strcmp(kind, "location") == 0) {
@@ -307,5 +331,10 @@ void replay_ui_tick(void)
 
     replay_stall_reported = false;
     replay_next++;
+
+    // The recorded aim is in force only across this dispatch. Left set, it
+    // would silently aim the player's own next click.
+    called_shot_replay_aim_set(command->aim);
     intgame_perform_action_on_target(&td);
+    called_shot_replay_aim_clear();
 }

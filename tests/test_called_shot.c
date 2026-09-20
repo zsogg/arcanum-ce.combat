@@ -228,6 +228,48 @@ TEST(a_missing_panel_rectangle_selects_nothing)
     CHECK_INT(called_shot_control_index_at(NULL, 10, 10), -1);
 }
 
+TEST(a_replayed_aim_overrides_the_panel_and_the_keyboard)
+{
+    // Card S1, done-when 6. A replay reproduces what the recording committed,
+    // not what the panel happens to say now. The panel and keyboard describe
+    // what a player wants next.
+    called_shot_reset();
+    called_shot_replay_aim_set(HIT_LOC_LEG);
+    CHECK_INT(called_shot_aim_now(), HIT_LOC_LEG);
+
+    called_shot_replay_aim_clear();
+    CHECK_INT(called_shot_aim_now(), HIT_LOC_TORSO);
+}
+
+TEST(a_replayed_aim_outside_the_table_is_refused_not_clamped)
+{
+    called_shot_reset();
+    called_shot_replay_aim_set(HIT_LOC_COUNT + 1);
+
+    // Refused leaves no aim in force, so the command replays as an ordinary
+    // attack rather than as some other limb. Clamping would reproduce the run
+    // wrongly and quietly, which is worse than reproducing it loudly.
+    CHECK_INT(called_shot_aim_now(), HIT_LOC_TORSO);
+
+    called_shot_replay_aim_set(-1);
+    CHECK_INT(called_shot_aim_now(), HIT_LOC_TORSO);
+    called_shot_replay_aim_clear();
+}
+
+TEST(clearing_a_replayed_aim_returns_the_panel_to_the_player)
+{
+    int limb;
+
+    // The override is per command. Left set, it would silently aim the
+    // player's own next click.
+    for (limb = 0; limb < HIT_LOC_COUNT; limb++) {
+        called_shot_replay_aim_set(limb);
+        CHECK_INT(called_shot_aim_now(), limb);
+        called_shot_replay_aim_clear();
+        CHECK_INT(called_shot_aim_now(), HIT_LOC_TORSO);
+    }
+}
+
 void test_called_shot_suite(void)
 {
     RUN(with_no_key_held_the_kept_selection_is_what_an_attack_asks_for);
@@ -241,6 +283,9 @@ void test_called_shot_suite(void)
     RUN(each_control_shows_the_limb_it_selects_not_the_one_its_key_raises);
     RUN(no_two_controls_show_the_same_art);
     RUN(a_limb_outside_the_table_has_no_art);
+    RUN(a_replayed_aim_overrides_the_panel_and_the_keyboard);
+    RUN(a_replayed_aim_outside_the_table_is_refused_not_clamped);
+    RUN(clearing_a_replayed_aim_returns_the_panel_to_the_player);
     RUN(a_click_on_each_control_lands_on_the_limb_it_shows);
     RUN(a_click_outside_the_panel_belongs_to_nobody);
     RUN(the_gaps_between_controls_select_nothing);

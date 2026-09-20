@@ -3586,11 +3586,15 @@ void intgame_perform_action_on_target(TargetDescriptor* td)
     busy_before = pc_obj != OBJ_HANDLE_NULL && anim_is_busy(pc_obj, &before_id);
 
     if (td->is_loc) {
-        combat_observer_command_requested(actor, "location", "NULL", td->loc);
+        combat_observer_command_requested(actor, "location", "NULL", td->loc,
+            called_shot_aim_now());
     } else {
         combat_observer_object_id(td->obj, target);
+        // The aim this command will commit, read before the dispatch runs and
+        // therefore the same value the dispatch is about to write. Reading it
+        // afterwards would read the panel rather than the command.
         combat_observer_command_requested(actor, "object", target,
-            obj_field_int64_get(td->obj, OBJ_F_LOCATION));
+            obj_field_int64_get(td->obj, OBJ_F_LOCATION), called_shot_aim_now());
     }
 
     intgame_perform_action_on_target_inner(td);

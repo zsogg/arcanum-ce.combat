@@ -6,6 +6,7 @@
 #include "game/combat_observer.h"
 #include "game/damage_type.h"
 #include "game/random.h"
+#include "ui/called_shot.h"
 #include "ui/replay_ui.h"
 
 #include "test_harness.h"
@@ -136,7 +137,15 @@ TEST(a_selected_limb_is_distinguishable_from_one_that_was_rolled)
     CHECK(aimed_line != rolled_line);
 
     // And the version says the contract changed.
-    CHECK(strstr(trace, "\"schema\":2") != NULL);
+    // The current contract version, not a literal that goes stale: this
+    // assertion said 2 while the stream said 3, and nothing noticed because
+    // the test was never registered.
+    {
+        char expected[32];
+        snprintf(expected, sizeof(expected), "\"schema\":%d",
+            COMBAT_OBSERVER_SCHEMA);
+        CHECK(strstr(trace, expected) != NULL);
+    }
 }
 
 TEST(hit_miss_critical_and_terminal_values_are_not_conflated)
@@ -245,7 +254,7 @@ TEST(a_command_records_its_request_before_its_resolution)
 
     clean();
     CHECK(combat_observer_open(TRACE_FILE));
-    combat_observer_command_requested("fighter", "object", "opponent", 4242);
+    combat_observer_command_requested("fighter", "object", "opponent", 4242, HIT_LOC_TORSO);
     combat_observer_command_resolved("fighter", true);
     combat_observer_close();
 
@@ -265,7 +274,7 @@ TEST(a_refused_command_is_not_recorded_as_accepted)
 
     clean();
     CHECK(combat_observer_open(TRACE_FILE));
-    combat_observer_command_requested("fighter", "location", "NULL", 99);
+    combat_observer_command_requested("fighter", "location", "NULL", 99, HIT_LOC_TORSO);
     combat_observer_command_resolved("fighter", false);
     combat_observer_close();
 
@@ -280,7 +289,7 @@ TEST(a_location_command_carries_its_target_tile_and_no_object)
 
     clean();
     CHECK(combat_observer_open(TRACE_FILE));
-    combat_observer_command_requested("fighter", "location", "NULL", 361700864);
+    combat_observer_command_requested("fighter", "location", "NULL", 361700864, HIT_LOC_TORSO);
     combat_observer_close();
 
     CHECK(read_trace(trace, sizeof(trace)));
@@ -929,6 +938,64 @@ TEST(a_wrong_hit_location_is_detected_by_the_comparison)
     CHECK(attacks_differ(&head, &arm));
 }
 
+TEST(a_selected_aim_and_a_held_key_aim_produce_the_same_attack)
+{
+    ObservedAttack from_panel;
+    ObservedAttack from_key;
+    int panel_aim;
+    int key_aim;
+    int limb;
+
+    // **Card S1, done-when 1.** The two routes are supposed to be
+    // indistinguishable, and the reason they can be is that they converge:
+    // `called_shot_effective_aim` answers one integer, and the dispatch writes
+    // it at the one place the original writes an aim. This drives the attack
+    // from each route's answer and requires the results to agree - the outcome,
+    // the damage, the resolved limb, the aim flag and the subsequent random
+    // stream.
+    for (limb = HIT_LOC_HEAD; limb < HIT_LOC_COUNT; limb++) {
+        // Kept selection, no key held.
+        panel_aim = called_shot_effective_aim(limb, false, false, false);
+
+        // No selection, the matching key held. Body's key is the absence of
+        // one, so HIT_LOC_TORSO is excluded from the loop above.
+        key_aim = called_shot_effective_aim(HIT_LOC_TORSO,
+            limb == HIT_LOC_HEAD,
+            limb == HIT_LOC_ARM,
+            limb == HIT_LOC_LEG);
+
+        CHECK_INT(panel_aim, limb);
+        CHECK_INT(key_aim, limb);
+
+        drive_one_attack_at(false, panel_aim, &from_panel);
+        drive_one_attack_at(false, key_aim, &from_key);
+
+        // Worth nothing unless the attack was really aimed and really happened.
+        CHECK(from_panel.aimed);
+        CHECK_INT(from_panel.resolved_hit_loc, limb);
+
+        check_attacks_agree(&from_panel, &from_key);
+    }
+}
+
+TEST(a_different_aim_does_not_produce_the_same_attack)
+{
+    ObservedAttack head;
+    ObservedAttack leg;
+
+    // The negative half. If the comparison above could not tell two aims
+    // apart, its agreement would be the absence of a measurement - the failure
+    // six of this project's gates were caught committing.
+    drive_one_attack_at(false,
+        called_shot_effective_aim(HIT_LOC_HEAD, false, false, false), &head);
+    drive_one_attack_at(false,
+        called_shot_effective_aim(HIT_LOC_TORSO, false, false, true), &leg);
+
+    CHECK_INT(head.resolved_hit_loc, HIT_LOC_HEAD);
+    CHECK_INT(leg.resolved_hit_loc, HIT_LOC_LEG);
+    CHECK(attacks_differ(&head, &leg));
+}
+
 TEST(one_extra_observer_draw_is_detected_on_the_aimed_path_too)
 {
     ObservedAttack without;
@@ -976,8 +1043,11 @@ void test_combat_observer_suite(void)
     RUN(observing_an_aimed_attack_changes_neither_its_outcome_nor_the_rng);
     RUN(the_aimed_path_does_not_draw_for_a_limb_and_the_unaimed_one_does);
     RUN(a_wrong_hit_location_is_detected_by_the_comparison);
+    RUN(a_selected_aim_and_a_held_key_aim_produce_the_same_attack);
+    RUN(a_different_aim_does_not_produce_the_same_attack);
     RUN(one_extra_observer_draw_is_detected_on_the_aimed_path_too);
     RUN(a_complete_trace_has_ordered_control_and_semantic_events);
+    RUN(a_selected_limb_is_distinguishable_from_one_that_was_rolled);
     RUN(hit_miss_critical_and_terminal_values_are_not_conflated);
     RUN(the_bound_marks_the_trace_incomplete_once);
     RUN(an_output_failure_disables_recording_and_leaves_no_false_terminal);

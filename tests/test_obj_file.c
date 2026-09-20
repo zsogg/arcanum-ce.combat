@@ -164,6 +164,12 @@ TEST(file_reader_rejects_instance_negative_field_count)
 
 void test_obj_file_suite(void)
 {
+    RUN(file_reader_rejects_instance_negative_field_count);
+    RUN(file_reader_rejects_prototype_type_out_of_range);
+    RUN(memory_reader_rejects_instance_negative_field_count);
+    RUN(memory_reader_rejects_instance_type_out_of_range);
+    RUN(memory_reader_rejects_prototype_type_out_of_range);
+
     memory_reader_rejects_prototype_type_out_of_range();
     memory_reader_rejects_instance_negative_field_count();
     memory_reader_rejects_instance_type_out_of_range();

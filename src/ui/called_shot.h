@@ -57,8 +57,32 @@ void called_shot_reset(void);
  */
 int called_shot_effective_aim(int selection, bool comma, bool period, bool slash);
 
-/** `called_shot_effective_aim` against the live selection and keyboard. */
+/**
+ * The aim a command committed **now** would carry: the replayed aim when one
+ * is in force, otherwise `called_shot_effective_aim` over the live selection
+ * and keyboard.
+ */
 int called_shot_aim_now(void);
+
+/**
+ * Forces the next committed aim, for replaying a recorded command.
+ *
+ * A replayed attack goes through the same dispatch a click does, and that
+ * dispatch *pulls* the aim from the panel and keyboard. So without this a
+ * replay would aim wherever the panel happens to sit at replay time rather
+ * than where the recording aimed — the card's "never infer command aim later
+ * from the current widget or keyboard state", and a divergence that would read
+ * as a gameplay difference rather than a lost input.
+ *
+ * Pushed around the dispatch rather than written into the goal directly, so
+ * the aim still reaches execution through the one write site session 6
+ * established. Two write sites is how a selector and a key stop being the same
+ * thing.
+ */
+void called_shot_replay_aim_set(int hit_loc);
+
+/** Releases the forced aim. Always paired with the call above. */
+void called_shot_replay_aim_clear(void);
 
 /* -- the panel ---------------------------------------------------------- */
 

@@ -7,6 +7,18 @@
 
 bool combat_observer_open(const char* path);
 void combat_observer_close(void);
+// 2 (card S1, 2026-09-18): `attack.started` gained `requested_hit_location`
+// and `aimed`. Every event line now reports this macro; before the bump
+// fifteen of the seventeen hardcoded `1` and only `run.started`/`run.ended`
+// used it, so a version change would have been announced by two events out of
+// seventeen.
+//
+// 3 (card S1, 2026-09-19): `command.requested` gained `aim`, the limb the
+// command is about to commit. Recorded because a replay goes through the same
+// dispatch a click does, and that dispatch reads the aim from the panel - so
+// without it on the record a replay aims wherever the selector happens to sit.
+#define COMBAT_OBSERVER_SCHEMA 3
+
 bool combat_observer_is_enabled(void);
 bool combat_observer_is_complete(void);
 
@@ -17,8 +29,11 @@ void combat_observer_turn_ended(const char* actor, int action_points);
 
 // CE (card O2): the player's command, and whether a goal was queued for it.
 // Request first so that anything the command causes follows it in the stream.
+// CE (card S1): `aim` is the limb the command will commit, taken before the
+// dispatch runs. Recorded here because a replay must reproduce the aim the run
+// had, not read the panel at replay time.
 void combat_observer_command_requested(const char* actor, const char* target_kind,
-    const char* target, int64_t target_loc);
+    const char* target, int64_t target_loc, int aim);
 void combat_observer_command_resolved(const char* actor, bool accepted);
 
 // CE (card O2): whether a command was taken, from the actor's goal state before

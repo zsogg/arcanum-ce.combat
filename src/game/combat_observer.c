@@ -11,12 +11,6 @@
 #include "game/obj_id.h"
 #include "game/obj_pool.h"
 
-// 2 (card S1, 2026-09-18): `attack.started` gained `requested_hit_location`
-// and `aimed`. Every event line now reports this macro; before the bump
-// fifteen of the seventeen hardcoded `1` and only `run.started`/`run.ended`
-// used it, so a version change would have been announced by two events out of
-// seventeen.
-#define COMBAT_OBSERVER_SCHEMA 2
 #define COMBAT_OBSERVER_DEFAULT_LIMIT 10000U
 
 static FILE* combat_observer_stream;
@@ -202,7 +196,7 @@ void combat_observer_turn_started(const char* actor, int action_points)
 // replay needs: a request the engine refused is a click that changed nothing,
 // and re-submitting it would silently diverge from the run being reproduced.
 void combat_observer_command_requested(const char* actor, const char* target_kind,
-    const char* target, int64_t target_loc)
+    const char* target, int64_t target_loc, int aim)
 {
     char line[512];
 
@@ -210,10 +204,10 @@ void combat_observer_command_requested(const char* actor, const char* target_kin
     snprintf(line, sizeof(line),
         "{\"schema\":%d,\"sequence\":%u,\"event\":\"command.requested\",\"turn\":%u,"
         "\"action_id\":null,\"actor\":\"%s\",\"target_kind\":\"%s\",\"target\":\"%s\","
-        "\"target_location\":%lld}",
+        "\"target_location\":%lld,\"aim\":%d}",
         COMBAT_OBSERVER_SCHEMA,
         combat_observer_sequence++, combat_observer_turn, actor, target_kind,
-        target, (long long)target_loc);
+        target, (long long)target_loc, aim);
     combat_observer_write(line);
 }
 
