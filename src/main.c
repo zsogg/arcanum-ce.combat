@@ -142,6 +142,28 @@ int main(int argc, char** argv)
     const char* combat_observer_path = NULL;
     const char* replay_path = NULL;
 
+    // CE (card S1): `-features` prints what this binary was built with and
+    // exits, before anything is initialised, so it needs no display and no
+    // installation.
+    //
+    // **The toolkit reads `feature_list.h` to learn what features exist, and
+    // that is the source, not the thing that will run.** A mod declaring
+    // `requires_features` was therefore validated against a header rather than
+    // against the engine the player has - and a profile can trivially carry an
+    // older binary than the tree it was built from, which has misled this card
+    // three times. This is the probe the plan asks for: identify the build, or
+    // ask it what it supports.
+    for (value = 1; value < argc; value++) {
+        if (strcmp(argv[value], "-features") == 0) {
+            printf("schema 1\n");
+            for (int index = 0; index < FEATURE_COUNT; index++) {
+                printf("%s\t%s\n", feature_key(index),
+                    feature_default(index) ? "default-on" : "default-off");
+            }
+            return EXIT_SUCCESS;
+        }
+    }
+
     // CE: the private observatory passes an absolute per-run output path.
     // Read argv directly so the legacy lower-casing of lpCmdLine below cannot
     // corrupt a case-sensitive Linux path. The capability is absent unless
