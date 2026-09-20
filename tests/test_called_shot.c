@@ -168,6 +168,66 @@ TEST(a_limb_outside_the_table_has_no_art)
     CHECK_INT(called_shot_art_for(HIT_LOC_COUNT), -1);
 }
 
+TEST(a_click_on_each_control_lands_on_the_limb_it_shows)
+{
+    TigRect panel = { 100, 200, 136, 37 };
+    int index;
+    int x;
+
+    // Every control, hit at its own centre. The first panel used tig_button,
+    // which rejects a click on a colour-key pixel - correct for drawn button
+    // art and wrong for cursor art, which is mostly transparent. It drew
+    // perfectly and accepted nothing.
+    for (index = 0; index < HIT_LOC_COUNT; index++) {
+        x = panel.x + index * 34 + 16;
+        CHECK_INT(called_shot_control_index_at(&panel, x, panel.y + 18), index);
+    }
+}
+
+TEST(a_click_outside_the_panel_belongs_to_nobody)
+{
+    TigRect panel = { 100, 200, 136, 37 };
+
+    // Returning a control for a click that missed would make the panel eat
+    // mouse events meant for the map.
+    CHECK_INT(called_shot_control_index_at(&panel, panel.x - 1, panel.y + 18), -1);
+    CHECK_INT(called_shot_control_index_at(&panel, panel.x + 1, panel.y - 1), -1);
+    CHECK_INT(called_shot_control_index_at(&panel, panel.x + 1, panel.y + 37), -1);
+    CHECK_INT(called_shot_control_index_at(&panel,
+                  panel.x + 4 * 34, panel.y + 18),
+        -1);
+}
+
+TEST(the_gaps_between_controls_select_nothing)
+{
+    TigRect panel = { 0, 0, 136, 37 };
+
+    // Two pixels between each control. A gap that selected its neighbour would
+    // make the edge of one control silently choose another limb.
+    CHECK_INT(called_shot_control_index_at(&panel, 32, 18), -1);
+    CHECK_INT(called_shot_control_index_at(&panel, 33, 18), -1);
+    CHECK_INT(called_shot_control_index_at(&panel, 31, 18), 0);
+    CHECK_INT(called_shot_control_index_at(&panel, 34, 18), 1);
+}
+
+TEST(the_hit_test_follows_the_panel_wherever_it_is_placed)
+{
+    TigRect a = { 0, 0, 136, 37 };
+    TigRect b = { 517, 640, 136, 37 };
+
+    // The panel is mapped by hrp_apply onto whatever the screen is, so the
+    // geometry has to be relative to where it landed and not to the design
+    // space it was authored in.
+    CHECK_INT(called_shot_control_index_at(&a, 16, 18), HIT_LOC_TORSO);
+    CHECK_INT(called_shot_control_index_at(&b, 16, 18), -1);
+    CHECK_INT(called_shot_control_index_at(&b, 517 + 16, 640 + 18), HIT_LOC_TORSO);
+}
+
+TEST(a_missing_panel_rectangle_selects_nothing)
+{
+    CHECK_INT(called_shot_control_index_at(NULL, 10, 10), -1);
+}
+
 void test_called_shot_suite(void)
 {
     RUN(with_no_key_held_the_kept_selection_is_what_an_attack_asks_for);
@@ -181,4 +241,9 @@ void test_called_shot_suite(void)
     RUN(each_control_shows_the_limb_it_selects_not_the_one_its_key_raises);
     RUN(no_two_controls_show_the_same_art);
     RUN(a_limb_outside_the_table_has_no_art);
+    RUN(a_click_on_each_control_lands_on_the_limb_it_shows);
+    RUN(a_click_outside_the_panel_belongs_to_nobody);
+    RUN(the_gaps_between_controls_select_nothing);
+    RUN(the_hit_test_follows_the_panel_wherever_it_is_placed);
+    RUN(a_missing_panel_rectangle_selects_nothing);
 }

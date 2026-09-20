@@ -4,6 +4,7 @@
 
 #include "game/combat.h"
 #include "game/feature.h"
+#include "game/hrp.h"
 #include "game/player.h"
 #include "ui/intgame.h"
 
@@ -83,7 +84,7 @@ int called_shot_aim_now(void)
 // **The art is chosen by what it depicts.** `cursor-called-leg` is art 819 and
 // `cursor-called-arm` is 820, while the key dispatch raises 819 for an ARM shot
 // and 820 for a LEG one - Troika's own crossing, recorded as quirk 48 and kept
-// because every shipped map and save depends on the behaviour around it. The
+// because the shipped behaviour around it is what every save depends on. The
 // panel is the one place a player checks what they are aiming at, so it maps
 // the art to the limb it shows and ignores which key raises it.
 //
@@ -95,8 +96,13 @@ int called_shot_aim_now(void)
 #define CALLED_SHOT_ART_LEG 819
 #define CALLED_SHOT_ART_ARM 820
 
-#define CALLED_SHOT_CONTROL_SIZE 32
+// The cursor art is 32x37. The controls are sized to it rather than to a round
+// number, so a click anywhere on a control is a click on its picture.
+#define CALLED_SHOT_CONTROL_WIDTH 32
+#define CALLED_SHOT_CONTROL_HEIGHT 37
 #define CALLED_SHOT_CONTROL_GAP 2
+#define CALLED_SHOT_PANEL_WIDTH \
+    ((CALLED_SHOT_CONTROL_WIDTH + CALLED_SHOT_CONTROL_GAP) * HIT_LOC_COUNT)
 
 static const int called_shot_art[HIT_LOC_COUNT] = {
     /* HIT_LOC_TORSO */ CALLED_SHOT_ART_BODY,
@@ -106,20 +112,35 @@ static const int called_shot_art[HIT_LOC_COUNT] = {
 };
 
 // The combat bar is not merely offset between layouts, it is relocated:
-// `combat_ui` creates it at { 222, 411 } normally and { 617, 577, 124, 14 }
-// compact. The panel sits to its left in both, so the frame is chosen per
-// layout rather than derived once.
-//
-// The normal y is the flag-dependent one: the bar is at 411 with `uap fixes`
-// and 412 without, so it is read from `combat_ui` rather than written here.
-static TigRect called_shot_frame_normal = { 222 - (CALLED_SHOT_CONTROL_SIZE + CALLED_SHOT_CONTROL_GAP) * HIT_LOC_COUNT - 4, 411,
-    (CALLED_SHOT_CONTROL_SIZE + CALLED_SHOT_CONTROL_GAP) * HIT_LOC_COUNT, CALLED_SHOT_CONTROL_SIZE };
-static TigRect called_shot_frame_compact = { 617 - (CALLED_SHOT_CONTROL_SIZE + CALLED_SHOT_CONTROL_GAP) * HIT_LOC_COUNT - 4, 577,
-    (CALLED_SHOT_CONTROL_SIZE + CALLED_SHOT_CONTROL_GAP) * HIT_LOC_COUNT, CALLED_SHOT_CONTROL_SIZE };
+// `combat_ui` creates it at { 222, 411 } normally and { 617, 577 } compact. The
+// panel sits to its left in both, so the frame is chosen per layout rather than
+// derived once. Both are authored in the 800x600 design space and mapped by
+// `hrp_apply`, exactly as the bar is.
+static TigRect called_shot_frame_normal = { 222 - CALLED_SHOT_PANEL_WIDTH - 4,
+    411, CALLED_SHOT_PANEL_WIDTH, CALLED_SHOT_CONTROL_HEIGHT };
+static TigRect called_shot_frame_compact = { 617 - CALLED_SHOT_PANEL_WIDTH - 4,
+    577, CALLED_SHOT_PANEL_WIDTH, CALLED_SHOT_CONTROL_HEIGHT };
 
 static tig_window_handle_t called_shot_window = TIG_WINDOW_HANDLE_INVALID;
-static UiButtonInfo called_shot_buttons[HIT_LOC_COUNT];
+static TigRect called_shot_placed;
 static bool called_shot_ui_created;
+static bool called_shot_ui_shown;
+
+static TigRect* called_shot_frame(void)
+{
+    return intgame_is_compact_interface()
+        ? &called_shot_frame_compact
+        : &called_shot_frame_normal;
+}
+
+// One control's box, in window coordinates.
+static void called_shot_control_rect(int index, TigRect* rect)
+{
+    rect->x = index * (CALLED_SHOT_CONTROL_WIDTH + CALLED_SHOT_CONTROL_GAP);
+    rect->y = 0;
+    rect->width = CALLED_SHOT_CONTROL_WIDTH;
+    rect->height = CALLED_SHOT_CONTROL_HEIGHT;
+}
 
 int called_shot_art_for(int hit_loc)
 {
@@ -130,41 +151,141 @@ int called_shot_art_for(int hit_loc)
     return called_shot_art[hit_loc];
 }
 
-static bool called_shot_ui_message_filter(TigMessage* msg)
+/**
+ * Which control a screen position falls in, or -1.
+ *
+ * **Rectangles, not art pixels.** `tig_button` hit-tests by sampling the
+ * button's art and rejecting a colour-key pixel, which is right for a drawn
+ * button and wrong for these: the limb pictures are cursors and are mostly
+ * transparent, so most of each control was a hole that swallowed the click.
+ * That is why the first panel accepted no clicks at all while drawing
+ * perfectly.
+ */
+int called_shot_control_index_at(const TigRect* panel, int x, int y)
 {
-    // Consuming the release rather than the press, which is what every other
-    // HUD control here does, and returning true so the click stops at the
-    // panel. A click that fell through to the map would order a move or an
-    // attack, which is exactly what session 1 said selecting must never do.
-    if (msg->type == TIG_MESSAGE_BUTTON
-        && msg->data.button.state == TIG_BUTTON_STATE_RELEASED) {
-        return called_shot_ui_handle_button(msg->data.button.button_handle);
+    TigRect rect;
+    int index;
+
+    if (panel == NULL) {
+        return -1;
     }
 
-    return false;
+    for (index = 0; index < HIT_LOC_COUNT; index++) {
+        called_shot_control_rect(index, &rect);
+        if (x >= panel->x + rect.x
+            && x < panel->x + rect.x + rect.width
+            && y >= panel->y + rect.y
+            && y < panel->y + rect.y + rect.height) {
+            return index;
+        }
+    }
+
+    return -1;
 }
 
-static TigRect* called_shot_frame(void)
+static int called_shot_control_at(int x, int y)
 {
-    return intgame_is_compact_interface()
-        ? &called_shot_frame_compact
-        : &called_shot_frame_normal;
+    return called_shot_control_index_at(&called_shot_placed, x, y);
+}
+
+static void called_shot_ui_draw(void)
+{
+    TigArtBlitInfo blit_info;
+    TigArtFrameData frame_data;
+    tig_art_id_t art_id;
+    TigRect rect;
+    TigRect src;
+    TigRect whole;
+    int index;
+
+    if (!called_shot_ui_created) {
+        return;
+    }
+
+    whole.x = 0;
+    whole.y = 0;
+    whole.width = called_shot_placed.width;
+    whole.height = called_shot_placed.height;
+    tig_window_fill(called_shot_window, &whole, 0);
+
+    for (index = 0; index < HIT_LOC_COUNT; index++) {
+        called_shot_control_rect(index, &rect);
+
+        if (tig_art_interface_id_create(called_shot_art[index], 0, 0, 0, &art_id) == TIG_OK
+            && tig_art_frame_data(art_id, &frame_data) == TIG_OK) {
+            src.x = 0;
+            src.y = 0;
+            src.width = frame_data.width < rect.width ? frame_data.width : rect.width;
+            src.height = frame_data.height < rect.height ? frame_data.height : rect.height;
+
+            blit_info.flags = 0;
+            blit_info.art_id = art_id;
+            blit_info.src_rect = &src;
+            blit_info.dst_rect = &rect;
+            tig_window_blit_art(called_shot_window, &blit_info);
+        }
+
+        // The selected control is boxed. Not colour alone: session 1 asked for
+        // an indicator a player can see without relying on it.
+        if (index == called_shot_selection()) {
+            tig_window_box(called_shot_window, &rect, tig_color_make(255, 255, 255));
+        }
+    }
+}
+
+static bool called_shot_ui_message_filter(TigMessage* msg)
+{
+    int index;
+
+    // Every visible window with a filter sees every message, so this has to
+    // decide for itself whether a position is its own.
+    if (msg->type != TIG_MESSAGE_MOUSE || !called_shot_ui_created
+        || !called_shot_ui_shown) {
+        return false;
+    }
+
+    if (msg->data.mouse.event != TIG_MESSAGE_MOUSE_LEFT_BUTTON_DOWN
+        && msg->data.mouse.event != TIG_MESSAGE_MOUSE_LEFT_BUTTON_UP) {
+        return false;
+    }
+
+    index = called_shot_control_at(msg->data.mouse.x, msg->data.mouse.y);
+    if (index < 0) {
+        return false;
+    }
+
+    // Both halves of the click are consumed. Claiming only the release would
+    // leave the press to reach the map, which orders a move or an attack -
+    // exactly what session 1 said selecting must never do.
+    if (msg->data.mouse.event == TIG_MESSAGE_MOUSE_LEFT_BUTTON_UP) {
+        called_shot_select(index);
+        called_shot_ui_draw();
+        tig_debug_printf("called_shot: aiming at %d\n", index);
+    }
+
+    return true;
 }
 
 bool called_shot_ui_create(void)
 {
     TigWindowData window_data;
     TigRect* frame;
-    int index;
 
     if (!called_shot_enabled() || called_shot_ui_created) {
         return called_shot_ui_created;
     }
 
     frame = called_shot_frame();
+    called_shot_placed = *frame;
+
+    // **The design space is 800x600 and the screen is not.** `combat_ui` maps
+    // its bar with the same call, and the first build of this panel omitted it:
+    // the bar moved to the centre and the panel stayed at its raw coordinates,
+    // against the left edge two thirds of the way down.
+    hrp_apply(&called_shot_placed, GRAVITY_CENTER_HORIZONTAL | GRAVITY_BOTTOM);
 
     window_data.flags = TIG_WINDOW_MESSAGE_FILTER;
-    window_data.rect = *frame;
+    window_data.rect = called_shot_placed;
     window_data.background_color = 0;
     window_data.color_key = 0;
     window_data.message_filter = called_shot_ui_message_filter;
@@ -174,23 +295,12 @@ bool called_shot_ui_create(void)
         return false;
     }
 
-    for (index = 0; index < HIT_LOC_COUNT; index++) {
-        called_shot_buttons[index].x = frame->x
-            + index * (CALLED_SHOT_CONTROL_SIZE + CALLED_SHOT_CONTROL_GAP);
-        called_shot_buttons[index].y = frame->y;
-        called_shot_buttons[index].art_num = called_shot_art[index];
-        called_shot_buttons[index].button_handle = TIG_BUTTON_HANDLE_INVALID;
-
-        if (!intgame_button_create_ex(called_shot_window, frame,
-                &(called_shot_buttons[index]), 0)) {
-            tig_debug_printf("called_shot: could not create control %d\n", index);
-            tig_window_destroy(called_shot_window);
-            called_shot_window = TIG_WINDOW_HANDLE_INVALID;
-            return false;
-        }
-    }
-
     called_shot_ui_created = true;
+    tig_debug_printf("called_shot: panel at %d,%d %dx%d (authored %d,%d)\n",
+        called_shot_placed.x, called_shot_placed.y, called_shot_placed.width,
+        called_shot_placed.height, frame->x, frame->y);
+
+    called_shot_ui_draw();
     called_shot_ui_refresh();
     return true;
 }
@@ -204,11 +314,13 @@ void called_shot_ui_destroy(void)
     tig_window_destroy(called_shot_window);
     called_shot_window = TIG_WINDOW_HANDLE_INVALID;
     called_shot_ui_created = false;
+    called_shot_ui_shown = false;
 }
 
 void called_shot_ui_refresh(void)
 {
     int64_t pc_obj;
+    bool was_shown = called_shot_ui_shown;
 
     if (!called_shot_ui_created) {
         return;
@@ -223,28 +335,27 @@ void called_shot_ui_refresh(void)
         && combat_critter_is_combat_mode_active(pc_obj)
         && combat_turn_based_is_active()) {
         tig_window_show(called_shot_window);
+        called_shot_ui_shown = true;
     } else {
         tig_window_hide(called_shot_window);
+        called_shot_ui_shown = false;
+    }
+
+    if (called_shot_ui_shown != was_shown) {
+        if (called_shot_ui_shown) {
+            called_shot_ui_draw();
+        }
+        tig_debug_printf("called_shot: panel %s\n",
+            called_shot_ui_shown ? "shown" : "hidden");
     }
 }
 
 bool called_shot_ui_handle_button(tig_button_handle_t button_handle)
 {
-    int index;
-
-    if (!called_shot_ui_created) {
-        return false;
-    }
-
-    for (index = 0; index < HIT_LOC_COUNT; index++) {
-        if (called_shot_buttons[index].button_handle == button_handle) {
-            // Selecting costs nothing: no attack, no action points, no
-            // ammunition, no randomness. Session 1's contract, and the reason
-            // this is a click rather than a command.
-            called_shot_select(index);
-            return true;
-        }
-    }
-
+    // Kept so the header's contract still holds for a caller that routes
+    // button messages here. The panel no longer uses `tig_button`: its art is
+    // cursor art and `tig_button_get_at_position` rejects a colour-key pixel,
+    // which made most of every control a hole.
+    (void)button_handle;
     return false;
 }

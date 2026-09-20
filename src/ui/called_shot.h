@@ -97,6 +97,20 @@ void called_shot_ui_refresh(void);
  */
 int called_shot_art_for(int hit_loc);
 
+/**
+ * Which control a screen position falls in, or -1. **Pure.**
+ *
+ * Rectangles, not art pixels. `tig_button` hit-tests by sampling the button's
+ * art and rejecting a colour-key pixel, which is right for a drawn button and
+ * wrong for these: the limb pictures are cursors and mostly transparent, so
+ * most of each control was a hole that swallowed the click. The first panel
+ * drew perfectly and accepted nothing.
+ *
+ * Exposed so the geometry can be asserted without a screen, which is the only
+ * way this particular mistake was ever going to be caught early.
+ */
+int called_shot_control_index_at(const TigRect* panel, int x, int y);
+
 /** Handles a click on one of the four controls. True when it was ours. */
 bool called_shot_ui_handle_button(tig_button_handle_t button_handle);
 

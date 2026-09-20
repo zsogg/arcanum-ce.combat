@@ -675,6 +675,14 @@ void combat_ui_turn_notify(int64_t obj)
     if (obj != OBJ_HANDLE_NULL) {
         player_get_local_pc_obj();
     }
+
+    // CE (card S1): the panel's visibility is refreshed here as well as on the
+    // mode change, because entering combat mode runs whole turn-based turns
+    // before it returns (MODDING-NOTES quirk 47). A refresh that happens while
+    // the mode is still settling can read `combat_turn_based_is_active` as
+    // false and hide a panel that nothing would refresh again. A turn
+    // notification only arrives once turn-based combat is genuinely running.
+    called_shot_ui_refresh();
 }
 
 // CE (card O2): is the actor free to act?
