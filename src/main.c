@@ -236,32 +236,6 @@ int main(int argc, char** argv)
         anim_catch_up_enable();
     }
 
-    // UAP (0x401118): "Added a '-cheatmode' switch, which enables Troika's
-    // original cheat mode, see Documents\Cheat Mode.txt for an explanation on
-    // what it does."
-    //
-    // The patch reuses this handler wholesale - it repoints the string at
-    // 0x59A198 from "-animdebug" to "-cheatmode" and the call at 0x401118 from
-    // `anim_debug_enable` to `gamelib_cheat_level_set` - so `-animdebug` is
-    // gone from the patched build rather than sitting beside the new switch.
-    //
-    // NOTE: In the original binary `gamelib_cheat_level_set` (0x402CC0) stores
-    // a hardcoded 0 and `gamelib_cheat_level_get` (0x402CB0) is `xor eax, eax`,
-    // which is how Troika disabled cheat mode in the release build. UAP patches
-    // both back (0x402CC0's immediate becomes 3, 0x402CB0 reads the global);
-    // nothing is needed here because CE already implements the unstubbed pair,
-    // which is why CE's own `-2680`/`-0897`/`-4637` switches work where
-    // 1.0.7.4's do not. See HANDOFF, *UAP: what it changes, and where*.
-    if (uap_fixes_enabled()) {
-        if (strstr(lpCmdLine, "-cheatmode") != NULL) {
-            gamelib_cheat_level_set(3);
-        }
-    } else {
-        if (strstr(lpCmdLine, "-animdebug") != NULL) {
-            anim_debug_enable();
-        }
-    }
-
     if (strstr(lpCmdLine, "-norandom") != NULL) {
         wmap_rnd_disable();
     }
@@ -486,6 +460,49 @@ int main(int argc, char** argv)
         tig_exit();
         // NOTE: Verified against original main 0x401000 - original destroys the window, calls tig_exit, and returns 0; transcription faithful.
         return EXIT_SUCCESS;
+    }
+
+    // UAP (0x401118): "Added a '-cheatmode' switch, which enables Troika's
+    // original cheat mode, see Documents\Cheat Mode.txt for an explanation on
+    // what it does."
+    //
+    // The patch reuses this handler wholesale - it repoints the string at
+    // 0x59A198 from "-animdebug" to "-cheatmode" and the call at 0x401118 from
+    // `anim_debug_enable` to `gamelib_cheat_level_set` - so `-animdebug` is
+    // gone from the patched build rather than sitting beside the new switch.
+    //
+    // NOTE: In the original binary `gamelib_cheat_level_set` (0x402CC0) stores
+    // a hardcoded 0 and `gamelib_cheat_level_get` (0x402CB0) is `xor eax, eax`,
+    // which is how Troika disabled cheat mode in the release build. UAP patches
+    // both back (0x402CC0's immediate becomes 3, 0x402CB0 reads the global);
+    // nothing is needed here because CE already implements the unstubbed pair,
+    // which is why CE's own `-2680`/`-0897`/`-4637` switches work where
+    // 1.0.7.4's do not. See HANDOFF, *UAP: what it changes, and where*.
+    //
+    // FIX: this sat with the other switches ~230 lines above, where
+    // `uap_fixes_enabled()` is **always false** whatever `arcanum.cfg` says.
+    // The feature table holds its compiled defaults until `gamelib_init` calls
+    // `settings_load` and `feature_init`, so the gate was read before the file
+    // that sets it. `-cheatmode` silently did nothing and `-animdebug` was
+    // always the live branch. Found 2026-09-20 when `J` granted no character
+    // points on a profile with `uap fixes=1`.
+    //
+    // Moved rather than gated differently, and it has to be after the whole of
+    // `gamelib_init` rather than merely after `settings_load`. Nothing between
+    // the old site and here reads either flag: `gamelib_cheat_level` is a
+    // plain static nothing initialises, and `anim_debug_enable` is empty in
+    // the original too (0x4232F0), so the `else` arm is a no-op wherever it
+    // runs.
+    if (uap_fixes_enabled()) {
+        if (strstr(lpCmdLine, "-cheatmode") != NULL) {
+            gamelib_cheat_level_set(3);
+            tig_debug_printf("main: -cheatmode given; cheat level %d\n",
+                gamelib_cheat_level_get());
+        }
+    } else {
+        if (strstr(lpCmdLine, "-animdebug") != NULL) {
+            anim_debug_enable();
+        }
     }
 
     if (combat_observer_path != NULL
