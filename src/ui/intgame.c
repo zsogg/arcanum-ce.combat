@@ -3897,6 +3897,24 @@ static void intgame_perform_action_on_target_inner(TargetDescriptor* td)
         goal_data.params[AGDATA_SCRATCH_OBJ].obj = item_obj;
     }
 
+    // CE (card S2): the *other* throw route, and the only one that can injure
+    // anybody.
+    //
+    // Dragging a throwable onto a critter sets `anim = AG_THROW_ITEM` and
+    // falls through to this shared goal-add, so the goal keeps
+    // `AGDATA_TARGET_OBJ` above. The wielded-weapon branch below does not: it
+    // abandons this goal and calls `anim_goal_throw_item`, which takes only a
+    // location, and `combat_projectile_arrive` ends a projectile with no
+    // damage when its target object is null. Measured 2026-09-20 — zsogg could
+    // not hurt a guard with a thrown dagger, and the stream recorded every
+    // throw with `target: NULL`.
+    //
+    // So the aim goes on this path too, or the feature would only ever aim the
+    // throw that cannot land. Same flag, same snapshot-at-creation rule.
+    if (anim == AG_THROW_ITEM) {
+        goal_data.params[AGDATA_SCRATCH_VAL3].data = called_shot_throw_aim(called_shot_aim_now());
+    }
+
     if (anim == AG_ATTACK || anim == AG_ATTEMPT_ATTACK) {
         // CE (card S1): the aim is committed here, at the one place the
         // original writes it, so a selector-chosen limb and a held-key one
