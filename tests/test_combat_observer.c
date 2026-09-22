@@ -279,21 +279,22 @@ TEST(a_cast_is_identified_by_its_spell_not_by_its_cost)
     char trace[TRACE_SIZE];
 
     // Card RT1. Harm and Minor Healing both cost 5 fatigue, and session 1
-    // reported one as the other. Two casts at the same price must name two
+    // reported one as the other. Harm is spell 55 and Minor Healing 60; two
+    // casts at the same price must name two
     // different spells, and a free cast must say it was free.
     clean();
     CHECK(combat_observer_open(TRACE_FILE));
-    combat_observer_resource_charged("mage", "fatigue", 91, 5, 0, 5);
-    combat_observer_spell_cast("mage", "mage", "opponent", 91, false);
-    combat_observer_resource_charged("mage", "fatigue", 70, 5, 5, 10);
-    combat_observer_spell_cast("mage", "mage", "mage", 70, false);
+    combat_observer_resource_charged("mage", "fatigue", 55, 5, 0, 5);
+    combat_observer_spell_cast("mage", "mage", "opponent", 55, false);
+    combat_observer_resource_charged("mage", "fatigue", 60, 5, 5, 10);
+    combat_observer_spell_cast("mage", "mage", "mage", 60, false);
     combat_observer_spell_cast("fighter", "grenade", "NULL", 175, true);
     combat_observer_close();
 
     CHECK(read_trace(trace, sizeof(trace)));
     CHECK_INT(count_events(trace, "\"event\":\"spell.cast\""), 3);
-    CHECK(strstr(trace, "\"target\":\"opponent\",\"spell\":91,\"free\":false") != NULL);
-    CHECK(strstr(trace, "\"target\":\"mage\",\"spell\":70,\"free\":false") != NULL);
+    CHECK(strstr(trace, "\"target\":\"opponent\",\"spell\":55,\"free\":false") != NULL);
+    CHECK(strstr(trace, "\"target\":\"mage\",\"spell\":60,\"free\":false") != NULL);
     CHECK(strstr(trace, "\"caster\":\"fighter\",\"source\":\"grenade\"") != NULL);
     CHECK(strstr(trace, "\"spell\":175,\"free\":true") != NULL);
 }
