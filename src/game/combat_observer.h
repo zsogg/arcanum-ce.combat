@@ -17,7 +17,17 @@ void combat_observer_close(void);
 // command is about to commit. Recorded because a replay goes through the same
 // dispatch a click does, and that dispatch reads the aim from the panel - so
 // without it on the record a replay aims wherever the selector happens to sit.
-#define COMBAT_OBSERVER_SCHEMA 3
+//
+// 4 (real-time combat session 1, 2026-09-21): every event gained `ms`, and
+// `run.started` gained `virtual_clock`. The observer could say what happened
+// and in what order and never how often, which made a timing baseline
+// impossible - the session's own acceptance forbids reporting an event count
+// as a firing rate without clock evidence, and there was none to have. `ms` is
+// elapsed since the stream opened. It counts real milliseconds normally and
+// fixed steps per frame under the deterministic virtual clock, which is why
+// the file records which one was running rather than leaving a reader to
+// assume.
+#define COMBAT_OBSERVER_SCHEMA 4
 
 bool combat_observer_is_enabled(void);
 bool combat_observer_is_complete(void);

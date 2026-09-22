@@ -1,6 +1,9 @@
 // Tests for O1's bounded, default-off combat event writer.
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
+
+#include <tig/timer.h>
 
 #include "game/combat.h"
 #include "game/combat_observer.h"
@@ -101,6 +104,101 @@ TEST(a_complete_trace_has_ordered_control_and_semantic_events)
     CHECK(strstr(trace, "\"hp_before\":0,\"hp_after\":4") != NULL);
     CHECK(strstr(trace, "\"event\":\"run.ended\"") != NULL);
     CHECK(strstr(trace, "\"complete\":true") != NULL);
+}
+
+TEST(every_event_carries_the_clock_the_baseline_needs)
+{
+    char trace[TRACE_SIZE];
+    const char* line;
+    int lines = 0;
+    int stamped = 0;
+
+    // Schema 4. The observer could say what happened and in what order and
+    // never how often, so a firing rate could not be measured from it at all.
+    // The field is injected in one place precisely so a new event cannot
+    // forget it -- which is what this walks the whole file to check.
+    clean();
+    CHECK(combat_observer_open(TRACE_FILE));
+    combat_observer_turn_started("fighter", 8);
+    combat_observer_actor_snapshot("fighter", 1, 8, 8, 8, 0, 0,
+        22, 22, 20, 20, 6056, 8042);
+    combat_observer_ap_checked("fighter", 4, 8, true);
+    combat_observer_turn_ended("fighter", 4);
+    combat_observer_close();
+
+    CHECK(read_trace(trace, sizeof(trace)));
+    for (line = trace; line != NULL && *line != '\0';) {
+        if (*line == '{') {
+            lines++;
+            // Not merely present: FIRST, so a line is self-describing from its
+            // opening brace whatever the event turns out to be.
+            if (strncmp(line, "{\"ms\":", 6) == 0) {
+                stamped++;
+            }
+        }
+        line = strchr(line, '\n');
+        if (line != NULL) {
+            line++;
+        }
+    }
+    CHECK(lines > 4);
+    CHECK(stamped == lines);
+}
+
+TEST(the_trace_says_which_clock_produced_its_numbers)
+{
+    char trace[TRACE_SIZE];
+
+    // `ms` counts real milliseconds normally and fixed steps per frame under
+    // the deterministic virtual clock. Reading one as the other turns a frame
+    // count into a firing rate, which is the specific mistake the session's
+    // acceptance names. So the file states which clock it ran on rather than
+    // leaving a reader to assume, and it states it on its first line.
+    clean();
+    CHECK(!tig_timer_virtual_enabled());
+    CHECK(combat_observer_open(TRACE_FILE));
+    combat_observer_close();
+    CHECK(read_trace(trace, sizeof(trace)));
+    CHECK(strstr(trace, "\"virtual_clock\":false") != NULL);
+
+    tig_timer_virtual_set(true, 16);
+    clean();
+    CHECK(combat_observer_open(TRACE_FILE));
+    combat_observer_close();
+    tig_timer_virtual_set(false, 0);
+    CHECK(read_trace(trace, sizeof(trace)));
+    CHECK(strstr(trace, "\"virtual_clock\":true") != NULL);
+}
+
+TEST(the_clock_starts_at_the_stream_and_never_goes_backwards)
+{
+    char trace[TRACE_SIZE];
+    const char* cursor;
+    long long previous = -1;
+    long long value;
+    int seen = 0;
+
+    // Run-relative, so the first line is 0 rather than however long the
+    // process had been up. Elapsing against an unset baseline is not zero, it
+    // is whatever was on the stack, which is why `run.started` takes the
+    // timestamp before it writes itself.
+    clean();
+    CHECK(combat_observer_open(TRACE_FILE));
+    combat_observer_turn_started("fighter", 8);
+    combat_observer_ap_checked("fighter", 4, 8, true);
+    combat_observer_turn_ended("fighter", 4);
+    combat_observer_close();
+
+    CHECK(read_trace(trace, sizeof(trace)));
+    CHECK(strncmp(trace, "{\"ms\":0,", 8) == 0);
+    for (cursor = trace; (cursor = strstr(cursor, "{\"ms\":")) != NULL;) {
+        value = atoll(cursor + 6);
+        CHECK(value >= previous);
+        previous = value;
+        seen++;
+        cursor++;
+    }
+    CHECK(seen > 3);
 }
 
 TEST(a_selected_limb_is_distinguishable_from_one_that_was_rolled)
@@ -1159,6 +1257,9 @@ void test_combat_observer_suite(void)
     RUN(a_different_aim_does_not_produce_the_same_attack);
     RUN(one_extra_observer_draw_is_detected_on_the_aimed_path_too);
     RUN(a_complete_trace_has_ordered_control_and_semantic_events);
+    RUN(every_event_carries_the_clock_the_baseline_needs);
+    RUN(the_trace_says_which_clock_produced_its_numbers);
+    RUN(the_clock_starts_at_the_stream_and_never_goes_backwards);
     RUN(a_selected_limb_is_distinguishable_from_one_that_was_rolled);
     RUN(hit_miss_critical_and_terminal_values_are_not_conflated);
     RUN(the_bound_marks_the_trace_incomplete_once);

@@ -28,10 +28,51 @@ static int combat_observer_lines_written;
 static CombatObserverMode combat_observer_mode;
 static bool combat_observer_mode_known;
 
-static bool combat_observer_write(const char* line)
+// Card RT1 (session 1): the run-relative clock, injected here rather than at
+// each of the nineteen call sites.
+//
+// A timing baseline was impossible before this: every event carried `sequence`
+// and nothing carried time, so an observer file could say what happened and in
+// what order but never how often. The plan's own acceptance forbids presenting
+// an event count as a firing rate without clock evidence, and the instrument
+// could not supply any.
+//
+// Injected centrally because the alternative is nineteen `snprintf` calls that
+// each have to remember, and the twentieth event somebody adds is the one that
+// forgets. `line` always arrives as a complete object starting `{"schema"`, so
+// the field goes in immediately after the brace.
+//
+// **`ms` is not always milliseconds, and the file says so.** `tig_timer_now`
+// reads `SDL_GetTicks()` normally, but a deterministic run turns on the
+// virtual clock, where it advances a fixed step once per frame instead - so
+// the same field counts real time in one run and frames in another. Rather
+// than pick one and mislead the other, `run.started` records which clock was
+// running, and a reader that ignores it is reading frame counts as if they
+// were a rate. That is the distinction `tig/timer.h` exists to draw.
+static tig_timestamp_t combat_observer_started_at;
+
+static long long combat_observer_ms(void)
 {
     if (combat_observer_stream == NULL) {
+        return 0;
+    }
+    return (long long)tig_timer_elapsed(combat_observer_started_at);
+}
+
+static bool combat_observer_write(const char* line)
+{
+    char stamped[1024];
+
+    if (combat_observer_stream == NULL) {
         return false;
+    }
+
+    // `run.started` stamps itself, because the baseline is taken as the stream
+    // opens and elapsing against an unset start is not zero, it is nonsense.
+    if (line[0] == '{' && strstr(line, "\"ms\":") == NULL) {
+        snprintf(stamped, sizeof(stamped), "{\"ms\":%lld,%s",
+            combat_observer_ms(), line + 1);
+        line = stamped;
     }
 
     if (combat_observer_fail_after >= 0
@@ -111,10 +152,17 @@ bool combat_observer_open(const char* path)
     }
 
     combat_observer_complete = true;
+    // Before the first line, so every `ms` is relative to a real baseline.
+    tig_timer_now(&combat_observer_started_at);
+    // The clock this file was recorded against, stated once by the file
+    // itself. A reader that sees `virtual_clock: true` is looking at frame
+    // steps, not milliseconds, and must not report a rate from them.
     snprintf(line, sizeof(line),
-        "{\"schema\":%d,\"sequence\":%u,\"event\":\"run.started\",\"turn\":null,\"action_id\":null}",
+        "{\"ms\":0,\"schema\":%d,\"sequence\":%u,\"event\":\"run.started\","
+        "\"turn\":null,\"action_id\":null,\"virtual_clock\":%s}",
         COMBAT_OBSERVER_SCHEMA,
-        combat_observer_sequence++);
+        combat_observer_sequence++,
+        tig_timer_virtual_enabled() ? "true" : "false");
     if (!combat_observer_write(line)) {
         return false;
     }
