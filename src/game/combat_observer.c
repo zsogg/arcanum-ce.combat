@@ -453,17 +453,19 @@ void combat_observer_turn_ended(const char* actor, int action_points)
 void combat_observer_actor_snapshot(const char* actor, int level,
     int strength, int dexterity, int speed, int melee, int dodge,
     int hp_current, int hp_max, int fatigue_current, int fatigue_max,
-    int weapon_description, int armor_description)
+    int weapon_description, int armor_description, int weapon_skill,
+    int weapon_skill_level, int weapon_training, int weapon_speed)
 {
-    char line[768];
+    char line[896];
 
     if (!combat_observer_begin_semantic()) return;
     snprintf(line, sizeof(line),
-        "{\"schema\":%d,\"sequence\":%u,\"event\":\"actor.snapshot\",\"turn\":%u,\"action_id\":null,\"actor\":\"%s\",\"level\":%d,\"strength\":%d,\"dexterity\":%d,\"speed\":%d,\"melee\":%d,\"dodge\":%d,\"hp_current\":%d,\"hp_max\":%d,\"fatigue_current\":%d,\"fatigue_max\":%d,\"weapon_description\":%d,\"armor_description\":%d}",
+        "{\"schema\":%d,\"sequence\":%u,\"event\":\"actor.snapshot\",\"turn\":%u,\"action_id\":null,\"actor\":\"%s\",\"level\":%d,\"strength\":%d,\"dexterity\":%d,\"speed\":%d,\"melee\":%d,\"dodge\":%d,\"hp_current\":%d,\"hp_max\":%d,\"fatigue_current\":%d,\"fatigue_max\":%d,\"weapon_description\":%d,\"armor_description\":%d,\"weapon_skill\":%d,\"weapon_skill_level\":%d,\"weapon_training\":%d,\"weapon_speed\":%d}",
         COMBAT_OBSERVER_SCHEMA,
         combat_observer_sequence++, combat_observer_turn, actor, level,
         strength, dexterity, speed, melee, dodge, hp_current, hp_max,
-        fatigue_current, fatigue_max, weapon_description, armor_description);
+        fatigue_current, fatigue_max, weapon_description, armor_description,
+        weapon_skill, weapon_skill_level, weapon_training, weapon_speed);
     combat_observer_write(line);
 }
 
@@ -555,10 +557,11 @@ void combat_observer_attack_resolved(unsigned long long action_id,
     }
 }
 
-void combat_observer_action_released(const char* actor, int frame,
-    int action_frame, int weapon_type)
+void combat_observer_action_released(const char* actor, int goal, int frame,
+    int action_frame, int weapon_type, int art_fps, int speed_fps,
+    int weapon_speed, int step_ms)
 {
-    char line[256];
+    char line[384];
 
     if (combat_observer_stream == NULL) {
         return;
@@ -566,43 +569,76 @@ void combat_observer_action_released(const char* actor, int frame,
 
     snprintf(line, sizeof(line),
         "{\"schema\":%d,\"sequence\":%u,\"event\":\"action.released\","
-        "\"turn\":null,\"action_id\":null,\"actor\":\"%s\",\"frame\":%d,"
-        "\"action_frame\":%d,\"weapon_type\":%d}",
-        COMBAT_OBSERVER_SCHEMA, combat_observer_sequence++, actor, frame,
-        action_frame, weapon_type);
+        "\"turn\":null,\"action_id\":null,\"actor\":\"%s\",\"goal\":%d,"
+        "\"frame\":%d,\"action_frame\":%d,\"weapon_type\":%d,"
+        "\"art_fps\":%d,\"speed_fps\":%d,\"weapon_speed\":%d,"
+        "\"step_ms\":%d}",
+        COMBAT_OBSERVER_SCHEMA, combat_observer_sequence++, actor, goal,
+        frame, action_frame, weapon_type, art_fps, speed_fps, weapon_speed,
+        step_ms);
     combat_observer_write(line);
 }
 
-void combat_observer_projectile_impact(const char* source, const char* target)
+void combat_observer_projectile_ended(const char* source, const char* target,
+    const char* struck, const char* outcome)
 {
-    char line[256];
+    char line[384];
 
     if (combat_observer_stream == NULL) {
         return;
     }
 
     snprintf(line, sizeof(line),
-        "{\"schema\":%d,\"sequence\":%u,\"event\":\"projectile.impact\","
-        "\"turn\":null,\"action_id\":null,\"source\":\"%s\",\"target\":\"%s\"}",
-        COMBAT_OBSERVER_SCHEMA, combat_observer_sequence++, source, target);
+        "{\"schema\":%d,\"sequence\":%u,\"event\":\"projectile.ended\","
+        "\"turn\":null,\"action_id\":null,\"source\":\"%s\","
+        "\"target\":\"%s\",\"struck\":\"%s\",\"outcome\":\"%s\"}",
+        COMBAT_OBSERVER_SCHEMA, combat_observer_sequence++, source, target,
+        struck, outcome);
+    combat_observer_write(line);
+}
+
+void combat_observer_spell_cast(const char* caster, const char* source,
+    const char* target, int spell, bool free)
+{
+    char line[384];
+
+    if (combat_observer_stream == NULL) {
+        return;
+    }
+
+    snprintf(line, sizeof(line),
+        "{\"schema\":%d,\"sequence\":%u,\"event\":\"spell.cast\","
+        "\"turn\":null,\"action_id\":null,\"caster\":\"%s\","
+        "\"source\":\"%s\",\"target\":\"%s\",\"spell\":%d,"
+        "\"free\":%s}",
+        COMBAT_OBSERVER_SCHEMA, combat_observer_sequence++, caster, source,
+        target, spell, free ? "true" : "false");
     combat_observer_write(line);
 }
 
 void combat_observer_resource_charged(const char* actor, const char* resource,
-    int cost, int before, int after)
+    int spell, int cost, int before, int after)
 {
-    char line[256];
+    char line[320];
+    char spell_json[16];
 
     if (combat_observer_stream == NULL) {
         return;
+    }
+
+    if (spell < 0) {
+        snprintf(spell_json, sizeof(spell_json), "null");
+    } else {
+        snprintf(spell_json, sizeof(spell_json), "%d", spell);
     }
 
     snprintf(line, sizeof(line),
         "{\"schema\":%d,\"sequence\":%u,\"event\":\"resource.charged\","
         "\"turn\":null,\"action_id\":null,\"actor\":\"%s\","
-        "\"resource\":\"%s\",\"cost\":%d,\"before\":%d,\"after\":%d}",
+        "\"resource\":\"%s\",\"spell\":%s,\"cost\":%d,\"before\":%d,"
+        "\"after\":%d}",
         COMBAT_OBSERVER_SCHEMA, combat_observer_sequence++, actor, resource,
-        cost, before, after);
+        spell_json, cost, before, after);
     combat_observer_write(line);
 }
 

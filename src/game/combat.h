@@ -101,6 +101,12 @@ bool combat_load(GameLoadInfo* load_info);
 void combat_context_init(int64_t attacker_obj, int64_t target_obj, CombatContext* combat);
 int64_t combat_critter_weapon(int64_t critter_obj);
 void combat_projectile_goal_end(int64_t a1, int64_t a2, CombatContext* combat);
+void combat_projectile_observe(int64_t attacker_obj, int64_t target_obj,
+    int64_t struck_obj, const char* outcome);
+// CE (card RT1): the observer's `actor.snapshot` of one critter. Not static so
+// the observer suite can drive the engine's own reads without the rest of an
+// attack, whose weapon effects need prototype art the object harness lacks.
+void combat_observer_snapshot_obj(int64_t obj);
 bool combat_projectile_arrive(int64_t attacker_obj, int64_t target_obj, int64_t target_loc, int64_t projectile_obj, int range, int64_t cur_loc, int64_t a7);
 int combat_attack(CombatContext* combat);
 void combat_attack_weapon_wear(int64_t attacker_obj, int64_t target_obj, int hit_loc);

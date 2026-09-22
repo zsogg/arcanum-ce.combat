@@ -27,7 +27,16 @@ void combat_observer_close(void);
 // fixed steps per frame under the deterministic virtual clock, which is why
 // the file records which one was running rather than leaving a reader to
 // assume.
-#define COMBAT_OBSERVER_SCHEMA 4
+//
+// 5 (card RT1, 2026-09-22): the four questions session 1 could not answer.
+// `projectile.impact` is replaced by `projectile.ended`, which carries an
+// `outcome`: the old event sat on the animation-cleanup path, fired on 3 of 34
+// releases and always reported a null target. `resource.charged` gained
+// `spell`, and casts gained `spell.cast`, because a fatigue cost of 5 is Harm
+// and Minor Healing alike. `actor.snapshot` gained the wielded weapon's skill,
+// skill level, training and effective speed. `action.released` gained the goal
+// that released and the timing inputs behind the step delay.
+#define COMBAT_OBSERVER_SCHEMA 5
 
 bool combat_observer_is_enabled(void);
 bool combat_observer_is_complete(void);
@@ -143,10 +152,17 @@ void combat_observer_end_turn_resolved(const char* actor, bool accepted,
 bool combat_observer_end_turn_accepted(bool turn_in_progress, bool pc_turn,
     bool actor_ready);
 
+// CE (card RT1): `weapon_skill` is `item_weapon_skill` of the wielded weapon
+// (melee when unarmed), with its level and training degree beside it, and
+// `weapon_speed` is `item_weapon_magic_speed` - the value the attack path
+// subtracts from its step delay, 10 ms a point above 10. Apprentice training
+// is +5 of it. Without these a cadence cannot be interpreted: on 2026-09-21
+// the only sign that training had been attempted was a Strength change.
 void combat_observer_actor_snapshot(const char* actor, int level,
     int strength, int dexterity, int speed, int melee, int dodge,
     int hp_current, int hp_max, int fatigue_current, int fatigue_max,
-    int weapon_description, int armor_description);
+    int weapon_description, int armor_description, int weapon_skill,
+    int weapon_skill_level, int weapon_training, int weapon_speed);
 void combat_observer_ap_checked(const char* actor, int requested,
     int before, bool accepted);
 void combat_observer_ap_committed(const char* actor, int requested,
@@ -169,21 +185,51 @@ void combat_observer_attack_resolved(unsigned long long action_id,
 // it fires once per action. The bow rewind clears 0x0C, which re-arms it - so
 // one release event per arrow, and the spacing between them IS the firing
 // rate the session is trying to measure.
-void combat_observer_action_released(const char* actor, int frame,
-    int action_frame, int weapon_type);
+//
+// CE (card RT1): the timing inputs, so a cadence can be explained and not only
+// restated. `goal` is the animation goal that released, which separates a bow
+// shot from a cast. `art_fps` is the art's own rate; `speed_fps` is
+// `anim_get_animation_fps` at the actor's Speed, which is what the attack path
+// divides into 1000 and clamps to 30..800 ms; `weapon_speed` is subtracted from
+// that 10 ms a point above 10, floored at 30 ms; `step_ms` is the pause the
+// animation is actually running at, after all of it. -1 means the art could
+// not be read, as for `frame`.
+void combat_observer_action_released(const char* actor, int goal, int frame,
+    int action_frame, int weapon_type, int art_fps, int speed_fps,
+    int weapon_speed, int step_ms);
 
-// Where an arrow actually arrives, which is not where it was released and not
-// when damage is committed. Counted separately from releases on purpose: the
-// session has to be able to say arrows released and arrows that hit without
-// inferring either from the other.
-void combat_observer_projectile_impact(const char* source, const char* target);
+// CE (card RT1): how a projectile's flight ended, one event per ending.
+//
+//   struck        it met an object: the intended target on a hit, or a
+//                 bystander or obstacle that intercepted it. `struck` says
+//                 which, and the attack against it follows in the stream.
+//   tile          it reached its target tile with no object to strike there.
+//   returned      a boomerang arriving back after its outbound flight.
+//   out_of_range  it flew past its weapon's range.
+//   abandoned     its animation was torn down while it still existed.
+//
+// The event this replaces sat only on the last of these, which is why it fired
+// on 3 of 34 releases and never named a target. Releases and endings are
+// counted separately on purpose: an arrow that reaches nothing commits no
+// damage and would otherwise be invisible.
+void combat_observer_projectile_ended(const char* source, const char* target,
+    const char* struck, const char* outcome);
+
+// CE (card RT1): a spell that has begun, after its upkeep and fatigue checks
+// passed. `caster` is the critter the spell is attributed to and `source` what
+// cast it - the same critter, or an item such as a grenade or a scroll.
+// `free` is `MAGICTECH_RUN_FREE`: no fatigue was asked of the caster.
+void combat_observer_spell_cast(const char* caster, const char* source,
+    const char* target, int spell, bool free);
 
 // Ammunition and fatigue, the two things an ordinary action spends outside
 // turn-based AP. One event with a `resource` field rather than two events,
 // because the question asked of both is the same - was this charged once per
 // accepted action, or once per release?
+// CE (card RT1): `spell` is the spell a fatigue charge paid for, or -1 (JSON
+// null) for ammunition and for a charge made on no spell's behalf.
 void combat_observer_resource_charged(const char* actor, const char* resource,
-    int cost, int before, int after);
+    int spell, int cost, int before, int after);
 
 void combat_observer_skill_roll(const char* source, const char* target,
     int skill, int effectiveness, int difficulty, int roll,

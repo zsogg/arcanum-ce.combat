@@ -74,7 +74,6 @@ static int combat_move_cost(int64_t source_obj, int64_t target_loc, bool adjacen
 static bool combat_turn_based_critter_is_dontdraw(int64_t obj);
 static void sort_combat_list(void);
 static void pc_switch_weapon(int64_t pc_obj, int64_t target_obj);
-static void combat_observer_snapshot_obj(int64_t obj);
 
 // 0x5B5798
 static int hit_loc_penalties[HIT_LOC_COUNT] = {
@@ -525,17 +524,6 @@ void combat_create_projectile(CombatContext* combat, int64_t loc, int a3, int a4
 // 0x4B2650
 void combat_projectile_goal_end(int64_t a1, int64_t a2, CombatContext* combat)
 {
-    // CE (real-time combat session 1): where the arrow arrives, counted apart
-    // from where it was released. The session has to be able to say "arrows
-    // released" and "arrows that hit" without deriving either from the other,
-    // and a release that reaches nothing emits no damage to count.
-    if (combat_observer_is_enabled()) {
-        char source[COMBAT_OBSERVER_IDENTITY_SIZE];
-        char target[COMBAT_OBSERVER_IDENTITY_SIZE];
-        combat_observer_object_id(a2, source);
-        combat_observer_object_id(combat != NULL ? combat->target_obj : OBJ_HANDLE_NULL, target);
-        combat_observer_projectile_impact(source, target);
-    }
     combat_projectile_end(a1, a2, combat != NULL ? combat->field_28 : OBJ_HANDLE_NULL, combat, false);
 }
 
@@ -602,6 +590,26 @@ int combat_weapon_loudness(int64_t weapon_obj)
     return LOUDNESS_NORMAL;
 }
 
+// CE (card RT1): one `projectile.ended` per way a flight can end. Emitted
+// before the ending is carried out, so the attack a strike causes follows it in
+// the stream rather than preceding it.
+void combat_projectile_observe(int64_t attacker_obj, int64_t target_obj,
+    int64_t struck_obj, const char* outcome)
+{
+    char source[COMBAT_OBSERVER_IDENTITY_SIZE];
+    char target[COMBAT_OBSERVER_IDENTITY_SIZE];
+    char struck[COMBAT_OBSERVER_IDENTITY_SIZE];
+
+    if (!combat_observer_is_enabled()) {
+        return;
+    }
+
+    combat_observer_object_id(attacker_obj, source);
+    combat_observer_object_id(target_obj, target);
+    combat_observer_object_id(struck_obj, struck);
+    combat_observer_projectile_ended(source, target, struck, outcome);
+}
+
 // 0x4B2870
 bool combat_projectile_arrive(int64_t attacker_obj, int64_t target_obj, int64_t target_loc, int64_t proj_obj, int range, int64_t cur_loc, int64_t a7)
 {
@@ -655,6 +663,8 @@ bool combat_projectile_arrive(int64_t attacker_obj, int64_t target_obj, int64_t 
     if (proj_loc == target_loc) {
         if (target_obj == OBJ_HANDLE_NULL
             || (proj_flags & 0x2000) != 0) {
+            combat_projectile_observe(attacker_obj, target_obj, OBJ_HANDLE_NULL,
+                (proj_flags & 0x2000) != 0 ? "returned" : "tile");
             combat_projectile_end(proj_obj, attacker_obj, a7, NULL, true);
 
             if (weapon_obj != OBJ_HANDLE_NULL) {
@@ -735,6 +745,8 @@ bool combat_projectile_arrive(int64_t attacker_obj, int64_t target_obj, int64_t 
     if (block_obj != OBJ_HANDLE_NULL) {
         CombatContext combat;
 
+        combat_projectile_observe(attacker_obj, target_obj, block_obj,
+            "struck");
         combat_context_init(attacker_obj, block_obj, &combat);
 
         if (target_obj != OBJ_HANDLE_NULL) {
@@ -771,6 +783,8 @@ bool combat_projectile_arrive(int64_t attacker_obj, int64_t target_obj, int64_t 
             proj_loc = obj_field_int64_get(proj_obj, OBJ_F_LOCATION);
         }
 
+        combat_projectile_observe(attacker_obj, target_obj, OBJ_HANDLE_NULL,
+            "out_of_range");
         combat_projectile_end(proj_obj, attacker_obj, target_obj, NULL, true);
 
         if (weapon_obj != OBJ_HANDLE_NULL) {
@@ -841,11 +855,14 @@ void combat_process_attack_result(CombatContext* combat)
     }
 }
 
-static void combat_observer_snapshot_obj(int64_t obj)
+void combat_observer_snapshot_obj(int64_t obj)
 {
     char actor[COMBAT_OBSERVER_IDENTITY_SIZE];
     int64_t weapon_obj;
     int64_t armor_obj;
+    int weapon_skill;
+    int weapon_skill_level;
+    int weapon_training;
 
     if (!combat_observer_is_enabled()
         || obj == OBJ_HANDLE_NULL
@@ -856,6 +873,14 @@ static void combat_observer_snapshot_obj(int64_t obj)
     combat_observer_object_id(obj, actor);
     weapon_obj = item_wield_get(obj, ITEM_INV_LOC_WEAPON);
     armor_obj = item_wield_get(obj, ITEM_INV_LOC_ARMOR);
+    weapon_skill = item_weapon_skill(weapon_obj);
+    if (IS_TECH_SKILL(weapon_skill)) {
+        weapon_skill_level = tech_skill_level(obj, GET_TECH_SKILL(weapon_skill));
+        weapon_training = tech_skill_training_get(obj, GET_TECH_SKILL(weapon_skill));
+    } else {
+        weapon_skill_level = basic_skill_level(obj, GET_BASIC_SKILL(weapon_skill));
+        weapon_training = basic_skill_training_get(obj, GET_BASIC_SKILL(weapon_skill));
+    }
     combat_observer_actor_snapshot(actor,
         stat_level_get(obj, STAT_LEVEL),
         stat_level_get(obj, STAT_STRENGTH),
@@ -870,7 +895,9 @@ static void combat_observer_snapshot_obj(int64_t obj)
             : 0,
         armor_obj != OBJ_HANDLE_NULL
             ? obj_field_int32_get(armor_obj, OBJ_F_DESCRIPTION)
-            : 0);
+            : 0,
+        weapon_skill, weapon_skill_level, weapon_training,
+        item_weapon_magic_speed(weapon_obj, obj));
 }
 
 // 0x4B3170
@@ -2769,7 +2796,7 @@ bool combat_consume_ammo(int64_t weapon_obj, int64_t critter_obj, int cnt, bool 
         if (combat_observer_is_enabled()) {
             char shooter[COMBAT_OBSERVER_IDENTITY_SIZE];
             combat_observer_object_id(critter_obj, shooter);
-            combat_observer_resource_charged(shooter, "ammo", consumption,
+            combat_observer_resource_charged(shooter, "ammo", -1, consumption,
                 qty, item_ammo_quantity_get(critter_obj, ammo_type));
         }
         return true;

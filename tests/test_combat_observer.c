@@ -10,6 +10,7 @@
 #include "game/damage_type.h"
 #include "game/item.h"
 #include "game/random.h"
+#include "game/skill.h"
 #include "ui/called_shot.h"
 #include "ui/replay_ui.h"
 
@@ -64,7 +65,7 @@ TEST(absent_switch_does_no_output_work)
     CHECK(!combat_observer_is_enabled());
     combat_observer_turn_started("fighter", 8);
     combat_observer_actor_snapshot("fighter", 1, 8, 8, 8, 0, 0,
-        22, 22, 20, 20, 6056, 8042);
+        22, 22, 20, 20, 6056, 8042, SKILL_MELEE, 3, TRAINING_NONE, 10);
     CHECK(!read_trace((char[2]) { 0 }, 2));
 }
 
@@ -81,7 +82,7 @@ TEST(a_complete_trace_has_ordered_control_and_semantic_events)
     CHECK(combat_observer_open(TRACE_FILE));
     combat_observer_turn_started("fighter", 8);
     combat_observer_actor_snapshot("fighter", 1, 8, 8, 8, 0, 0,
-        22, 22, 20, 20, 6056, 8042);
+        22, 22, 20, 20, 6056, 8042, SKILL_MELEE, 3, TRAINING_NONE, 10);
     combat_observer_ap_checked("fighter", 4, 8, true);
     combat_observer_ap_committed("fighter", 4, 8, 4, true, 0, 0);
     action = combat_observer_attack_started("fighter", "opponent", 2, 0, 0, false);
@@ -99,6 +100,7 @@ TEST(a_complete_trace_has_ordered_control_and_semantic_events)
     CHECK(strstr(trace, "\"sequence\":1,\"event\":\"turn.started\"") != NULL);
     CHECK(strstr(trace, "\"event\":\"skill.roll\"") != NULL);
     CHECK(strstr(trace, "\"weapon_description\":6056") != NULL);
+    CHECK(strstr(trace, "\"weapon_skill_level\":3,\"weapon_training\":0,\"weapon_speed\":10") != NULL);
     CHECK(strstr(trace, "\"success\":true,\"critical\":false") != NULL);
     CHECK(strstr(trace, "\"normal\":4,\"fatigue\":2") != NULL);
     CHECK(strstr(trace, "\"hp_before\":0,\"hp_after\":4") != NULL);
@@ -121,7 +123,7 @@ TEST(every_event_carries_the_clock_the_baseline_needs)
     CHECK(combat_observer_open(TRACE_FILE));
     combat_observer_turn_started("fighter", 8);
     combat_observer_actor_snapshot("fighter", 1, 8, 8, 8, 0, 0,
-        22, 22, 20, 20, 6056, 8042);
+        22, 22, 20, 20, 6056, 8042, SKILL_MELEE, 3, TRAINING_NONE, 10);
     combat_observer_ap_checked("fighter", 4, 8, true);
     combat_observer_turn_ended("fighter", 4);
     combat_observer_close();
@@ -212,18 +214,88 @@ TEST(the_release_impact_and_charge_boundaries_are_each_their_own_event)
     // that could only count damage would report all three as the same number.
     clean();
     CHECK(combat_observer_open(TRACE_FILE));
-    combat_observer_action_released("fighter", 6, 6, 3);
-    combat_observer_resource_charged("fighter", "ammo", 1, 20, 19);
-    combat_observer_projectile_impact("fighter", "opponent");
-    combat_observer_resource_charged("mage", "fatigue", 5, 0, 5);
+    combat_observer_action_released("fighter", 5, 6, 6, 3, 10, 11, 10, 90);
+    combat_observer_resource_charged("fighter", "ammo", -1, 1, 20, 19);
+    combat_observer_projectile_ended("fighter", "opponent", "opponent", "struck");
+    combat_observer_resource_charged("mage", "fatigue", 91, 5, 0, 5);
     combat_observer_close();
 
     CHECK(read_trace(trace, sizeof(trace)));
     CHECK(strstr(trace, "\"event\":\"action.released\"") != NULL);
-    CHECK(strstr(trace, "\"frame\":6,\"action_frame\":6,\"weapon_type\":3") != NULL);
-    CHECK(strstr(trace, "\"event\":\"projectile.impact\"") != NULL);
-    CHECK(strstr(trace, "\"resource\":\"ammo\",\"cost\":1,\"before\":20,\"after\":19") != NULL);
-    CHECK(strstr(trace, "\"resource\":\"fatigue\",\"cost\":5,\"before\":0,\"after\":5") != NULL);
+    CHECK(strstr(trace, "\"goal\":5,\"frame\":6,\"action_frame\":6,\"weapon_type\":3") != NULL);
+    CHECK(strstr(trace, "\"event\":\"projectile.ended\"") != NULL);
+    CHECK(strstr(trace, "\"resource\":\"ammo\",\"spell\":null,\"cost\":1,\"before\":20,\"after\":19") != NULL);
+    CHECK(strstr(trace, "\"resource\":\"fatigue\",\"spell\":91,\"cost\":5,\"before\":0,\"after\":5") != NULL);
+}
+
+TEST(a_release_carries_the_inputs_that_made_its_step_delay)
+{
+    char trace[TRACE_SIZE];
+
+    // Card RT1. 467 ms over four steps is ~117 ms a step and the plan had
+    // calculated 70; without the frame rate and the weapon speed on the record
+    // the difference could only be restated. Each input has its own field, in
+    // the order the attack path applies them, and the result beside them.
+    clean();
+    CHECK(combat_observer_open(TRACE_FILE));
+    combat_observer_action_released("archer", 5, 6, 6, 3, 10, 11, 7, 120);
+    combat_observer_close();
+
+    CHECK(read_trace(trace, sizeof(trace)));
+    CHECK(strstr(trace, "\"art_fps\":10,\"speed_fps\":11,\"weapon_speed\":7,\"step_ms\":120") != NULL);
+}
+
+TEST(every_way_a_flight_ends_is_its_own_outcome)
+{
+    char trace[TRACE_SIZE];
+
+    // Card RT1. The event this replaces fired on the cleanup path alone - 3 of
+    // 34 releases, always with a null target. A reader counting arrivals has to
+    // be able to tell a hit from an interception from an arrow that flew out
+    // of range, and each of those from an arrow that simply stopped existing.
+    clean();
+    CHECK(combat_observer_open(TRACE_FILE));
+    combat_observer_projectile_ended("archer", "opponent", "opponent", "struck");
+    combat_observer_projectile_ended("archer", "opponent", "bystander", "struck");
+    combat_observer_projectile_ended("archer", "NULL", "NULL", "tile");
+    combat_observer_projectile_ended("archer", "archer", "NULL", "returned");
+    combat_observer_projectile_ended("archer", "opponent", "NULL", "out_of_range");
+    combat_observer_projectile_ended("archer", "opponent", "NULL", "abandoned");
+    combat_observer_close();
+
+    CHECK(read_trace(trace, sizeof(trace)));
+    CHECK_INT(count_events(trace, "\"event\":\"projectile.ended\""), 6);
+    CHECK(strstr(trace, "\"target\":\"opponent\",\"struck\":\"opponent\",\"outcome\":\"struck\"") != NULL);
+    CHECK(strstr(trace, "\"target\":\"opponent\",\"struck\":\"bystander\",\"outcome\":\"struck\"") != NULL);
+    CHECK(strstr(trace, "\"outcome\":\"tile\"") != NULL);
+    CHECK(strstr(trace, "\"outcome\":\"returned\"") != NULL);
+    CHECK(strstr(trace, "\"outcome\":\"out_of_range\"") != NULL);
+    CHECK(strstr(trace, "\"outcome\":\"abandoned\"") != NULL);
+    CHECK(strstr(trace, "projectile.impact") == NULL);
+}
+
+TEST(a_cast_is_identified_by_its_spell_not_by_its_cost)
+{
+    char trace[TRACE_SIZE];
+
+    // Card RT1. Harm and Minor Healing both cost 5 fatigue, and session 1
+    // reported one as the other. Two casts at the same price must name two
+    // different spells, and a free cast must say it was free.
+    clean();
+    CHECK(combat_observer_open(TRACE_FILE));
+    combat_observer_resource_charged("mage", "fatigue", 91, 5, 0, 5);
+    combat_observer_spell_cast("mage", "mage", "opponent", 91, false);
+    combat_observer_resource_charged("mage", "fatigue", 70, 5, 5, 10);
+    combat_observer_spell_cast("mage", "mage", "mage", 70, false);
+    combat_observer_spell_cast("fighter", "grenade", "NULL", 175, true);
+    combat_observer_close();
+
+    CHECK(read_trace(trace, sizeof(trace)));
+    CHECK_INT(count_events(trace, "\"event\":\"spell.cast\""), 3);
+    CHECK(strstr(trace, "\"target\":\"opponent\",\"spell\":91,\"free\":false") != NULL);
+    CHECK(strstr(trace, "\"target\":\"mage\",\"spell\":70,\"free\":false") != NULL);
+    CHECK(strstr(trace, "\"caster\":\"fighter\",\"source\":\"grenade\"") != NULL);
+    CHECK(strstr(trace, "\"spell\":175,\"free\":true") != NULL);
 }
 
 TEST(an_unreadable_frame_is_reported_as_unknown_not_as_a_number)
@@ -236,11 +308,12 @@ TEST(an_unreadable_frame_is_reported_as_unknown_not_as_a_number)
     // the one thing this session must not do.
     clean();
     CHECK(combat_observer_open(TRACE_FILE));
-    combat_observer_action_released("fighter", -1, -1, 0);
+    combat_observer_action_released("fighter", 5, -1, -1, 0, -1, -1, 10, 100);
     combat_observer_close();
 
     CHECK(read_trace(trace, sizeof(trace)));
     CHECK(strstr(trace, "\"frame\":-1,\"action_frame\":-1") != NULL);
+    CHECK(strstr(trace, "\"art_fps\":-1,\"speed_fps\":-1") != NULL);
 }
 
 TEST(repeated_releases_are_countable_and_carry_the_clock)
@@ -255,9 +328,9 @@ TEST(repeated_releases_are_countable_and_carry_the_clock)
     // cannot be read off the trace at all.
     clean();
     CHECK(combat_observer_open(TRACE_FILE));
-    combat_observer_action_released("archer", 6, 6, 3);
-    combat_observer_action_released("archer", 6, 6, 3);
-    combat_observer_action_released("archer", 6, 6, 3);
+    combat_observer_action_released("archer", 5, 6, 6, 3, 10, 11, 10, 90);
+    combat_observer_action_released("archer", 5, 6, 6, 3, 10, 11, 10, 90);
+    combat_observer_action_released("archer", 5, 6, 6, 3, 10, 11, 10, 90);
     combat_observer_close();
 
     CHECK(read_trace(trace, sizeof(trace)));
@@ -1184,6 +1257,86 @@ static int drive_one_ranged_attack(int hit_loc, int consumption, int stock)
     return left;
 }
 
+// Card RT1: the snapshot the engine writes for a PC wielding a bow, untrained
+// and then at apprentice. Drives the engine's own reads - `item_weapon_skill`,
+// the skill and training getters and `item_weapon_magic_speed` - rather than
+// the writer, because the defect this closes was a question the engine could
+// answer and the trace never asked.
+//
+// Called directly rather than through `combat_attack`: with a weapon wielded,
+// an attack plays weapon effects keyed on the prototype's description, and a
+// harness object is its own prototype with no description to key on.
+static int trace_int(const char* trace, const char* key)
+{
+    const char* at = strstr(trace, key);
+    CHECK(at != NULL);
+    return at != NULL ? atoi(at + strlen(key)) : -9999;
+}
+
+static void observe_one_archer(bool apprentice, char* trace, size_t size)
+{
+    int64_t archer;
+    int64_t weapon;
+
+    clean();
+    CHECK(obj_harness_init());
+    archer = obj_harness_create_proto(OBJ_TYPE_PC);
+    weapon = obj_harness_create_proto(OBJ_TYPE_WEAPON);
+    CHECK(archer != OBJ_HANDLE_NULL);
+    CHECK(weapon != OBJ_HANDLE_NULL);
+
+    // An arrow weapon is a bow to `item_weapon_skill`.
+    obj_field_int32_set(weapon, OBJ_F_WEAPON_AMMO_TYPE, TIG_ART_AMMO_TYPE_ARROW);
+    // Wielded by its slot field. `item_wield_set` asks the art system whether
+    // the critter can be drawn holding it, and inserting straight into the
+    // slot redraws the critter; the harness has neither art nor a map.
+    // `item_wield_get`, which the snapshot uses, reads only this field.
+    item_insert(weapon, archer, -1);
+    obj_field_int32_set(weapon, OBJ_F_ITEM_INV_LOCATION, ITEM_INV_LOC_WEAPON);
+    CHECK(item_wield_get(archer, ITEM_INV_LOC_WEAPON) == weapon);
+
+    // Dexterity is Bow's key stat and caps its level, so it is raised first.
+    // Points are a quarter of the level: 3 is level 12. Checked, because the
+    // setter refuses silently.
+    stat_base_set(archer, STAT_DEXTERITY, 20);
+    CHECK_INT(basic_skill_points_set(archer, BASIC_SKILL_BOW, 3), 3);
+    if (apprentice) {
+        // The trainer's own call, so the level threshold is enforced exactly
+        // as in play. Checked, because a refused training would make the two
+        // snapshots agree for the wrong reason.
+        CHECK_INT(basic_skill_training_set(archer, BASIC_SKILL_BOW,
+                      TRAINING_APPRENTICE),
+            TRAINING_APPRENTICE);
+    }
+
+    CHECK(combat_observer_open(TRACE_FILE));
+    combat_observer_snapshot_obj(archer);
+    combat_observer_close();
+    CHECK(read_trace(trace, size));
+
+    obj_harness_destroy(weapon);
+    obj_harness_destroy(archer);
+}
+
+TEST(a_real_snapshot_reads_the_wielded_weapons_skill_training_and_speed)
+{
+    char untrained[TRACE_SIZE];
+    char trained[TRACE_SIZE];
+
+    observe_one_archer(false, untrained, sizeof(untrained));
+    observe_one_archer(true, trained, sizeof(trained));
+
+    CHECK_INT(trace_int(untrained, "\"weapon_skill\":"), SKILL_BOW);
+    CHECK_INT(trace_int(untrained, "\"weapon_skill_level\":"), 12);
+    CHECK_INT(trace_int(untrained, "\"weapon_training\":"), TRAINING_NONE);
+    CHECK_INT(trace_int(trained, "\"weapon_training\":"), TRAINING_APPRENTICE);
+
+    // Apprentice is worth +5 of weapon speed, which the attack path spends as
+    // 50 ms off every animation step. The snapshot has to show the lever moved.
+    CHECK_INT(trace_int(trained, "\"weapon_speed\":"),
+        trace_int(untrained, "\"weapon_speed\":") + 5);
+}
+
 TEST(ammunition_is_spent_by_the_weapon_not_by_where_it_is_aimed)
 {
     int head;
@@ -1329,6 +1482,10 @@ void test_combat_observer_suite(void)
     RUN(one_extra_observer_draw_is_detected_on_the_aimed_path_too);
     RUN(a_complete_trace_has_ordered_control_and_semantic_events);
     RUN(the_release_impact_and_charge_boundaries_are_each_their_own_event);
+    RUN(a_release_carries_the_inputs_that_made_its_step_delay);
+    RUN(every_way_a_flight_ends_is_its_own_outcome);
+    RUN(a_cast_is_identified_by_its_spell_not_by_its_cost);
+    RUN(a_real_snapshot_reads_the_wielded_weapons_skill_training_and_speed);
     RUN(an_unreadable_frame_is_reported_as_unknown_not_as_a_number);
     RUN(repeated_releases_are_countable_and_carry_the_clock);
     RUN(every_event_carries_the_clock_the_baseline_needs);

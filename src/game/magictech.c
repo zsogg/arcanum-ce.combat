@@ -1771,7 +1771,8 @@ bool magictech_charge_fatigue(int64_t obj, int cost, bool a3, int magictech)
                 if (combat_observer_is_enabled()) {
                     char caster[COMBAT_OBSERVER_IDENTITY_SIZE];
                     combat_observer_object_id(obj, caster);
-                    combat_observer_resource_charged(caster, "fatigue", cost,
+                    combat_observer_resource_charged(caster, "fatigue",
+                        magictech != 10000 ? magictech : -1, cost,
                         fatigue_dam, critter_fatigue_damage_get(obj));
                 }
 
@@ -2163,6 +2164,24 @@ void magictech_process(void)
             magictech_interrupt_delayed(magictech_cur_run_info->id);
         }
         return;
+    }
+
+    // CE (card RT1): the cast, identified by what it is rather than by what it
+    // cost. Here because this is where a begun spell has passed its upkeep -
+    // the caster conscious, the attributes met, the fatigue paid - and every
+    // begin reaches it, whether from a critter's casting animation, an item or
+    // a script. A spell refused before this point was never cast.
+    if (magictech_cur_run_info->action == MAGICTECH_ACTION_BEGIN
+        && combat_observer_is_enabled()) {
+        char caster[COMBAT_OBSERVER_IDENTITY_SIZE];
+        char source[COMBAT_OBSERVER_IDENTITY_SIZE];
+        char target[COMBAT_OBSERVER_IDENTITY_SIZE];
+        combat_observer_object_id(magictech_cur_run_info->parent_obj.obj, caster);
+        combat_observer_object_id(magictech_cur_run_info->source_obj.obj, source);
+        combat_observer_object_id(magictech_cur_run_info->target_obj.obj, target);
+        combat_observer_spell_cast(caster, source, target,
+            magictech_cur_run_info->spell,
+            (magictech_cur_run_info->flags & MAGICTECH_RUN_FREE) != 0);
     }
 
     magictech_cur_target_ctx_init();

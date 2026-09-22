@@ -9323,6 +9323,8 @@ bool anim_reached_action_frame(AnimRunInfo* run_info)
     char actor[COMBAT_OBSERVER_IDENTITY_SIZE];
     AnimGoalData* goal_data;
     int64_t self_obj;
+    int64_t weapon_obj;
+    bool is_critter;
     tig_art_id_t art_id;
     TigArtAnimData art_anim_data;
 
@@ -9348,13 +9350,30 @@ bool anim_reached_action_frame(AnimRunInfo* run_info)
             // than left as whatever was on the stack: an unreadable frame is a
             // fact about the run, and silently emitting a plausible number
             // would put it in the baseline as data.
+            //
+            // CE (card RT1): the timing inputs are read, not recomputed into
+            // the run. `anim_get_animation_fps` and `item_weapon_magic_speed`
+            // only read fields, and `step_ms` is the pause the animation is
+            // running at now, after both clamps.
+            is_critter = obj_type_is_critter(obj_field_int32_get(self_obj, OBJ_F_TYPE));
+            weapon_obj = is_critter
+                ? item_wield_get(self_obj, ITEM_INV_LOC_WEAPON)
+                : OBJ_HANDLE_NULL;
             if (tig_art_anim_data(art_id, &art_anim_data) != TIG_OK) {
-                combat_observer_action_released(actor, -1, -1,
-                    tig_art_critter_id_weapon_get(art_id));
+                combat_observer_action_released(actor, goal_data->type, -1, -1,
+                    tig_art_critter_id_weapon_get(art_id), -1, -1,
+                    item_weapon_magic_speed(weapon_obj, self_obj),
+                    run_info->pause_time.milliseconds);
             } else {
-                combat_observer_action_released(actor,
+                combat_observer_action_released(actor, goal_data->type,
                     tig_art_id_frame_get(art_id), art_anim_data.action_frame,
-                    tig_art_critter_id_weapon_get(art_id));
+                    tig_art_critter_id_weapon_get(art_id), art_anim_data.fps,
+                    is_critter
+                        ? anim_get_animation_fps(self_obj, art_id,
+                              stat_level_get(self_obj, STAT_SPEED))
+                        : art_anim_data.fps,
+                    item_weapon_magic_speed(weapon_obj, self_obj),
+                    run_info->pause_time.milliseconds);
             }
         }
     }
@@ -9375,6 +9394,13 @@ bool anim_cleanup_projectile(AnimRunInfo* run_info)
         parent_obj = goal_data->params[AGDATA_PARENT_OBJ].obj;
         if (self_obj != OBJ_HANDLE_NULL
             && (obj_field_int32_get(self_obj, OBJ_F_FLAGS) & OF_DESTROYED) == 0) {
+            // CE (card RT1): the flight ended without arriving anywhere. Until
+            // 2026-09-22 this was the only place a projectile was observed, so
+            // it was reported as an impact - on 3 of 34 releases, never with a
+            // target, because `combat` is always NULL here.
+            combat_projectile_observe(parent_obj,
+                goal_data->params[AGDATA_TARGET_OBJ].obj, OBJ_HANDLE_NULL,
+                "abandoned");
             combat_projectile_goal_end(self_obj, parent_obj, NULL);
         }
     }
