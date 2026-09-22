@@ -9,6 +9,7 @@
 #include "game/antiteleport.h"
 #include "game/area.h"
 #include "game/combat.h"
+#include "game/combat_observer.h"
 #include "game/critter.h"
 #include "game/descriptions.h"
 #include "game/effect.h"
@@ -1756,6 +1757,22 @@ bool magictech_charge_fatigue(int64_t obj, int cost, bool a3, int magictech)
                 int fatigue_dam = critter_fatigue_damage_get(obj);
                 if (critter_fatigue_damage_set(obj, fatigue_dam + cost) == 0) {
                     return false;
+                }
+
+                // CE (real-time combat session 1): the committed payment, not
+                // the affordability check. `a3` is what separates them, and
+                // the session needs the difference - "a busy request does not
+                // charge resources" is a claim about exactly this branch.
+                //
+                // Emitted after the set succeeds, so a refused payment is
+                // absent from the trace rather than present and then
+                // contradicted. Fatigue is reported as damage, which is what
+                // moved; `critter_fatigue_current` is derived from it.
+                if (combat_observer_is_enabled()) {
+                    char caster[COMBAT_OBSERVER_IDENTITY_SIZE];
+                    combat_observer_object_id(obj, caster);
+                    combat_observer_resource_charged(caster, "fatigue", cost,
+                        fatigue_dam, critter_fatigue_damage_get(obj));
                 }
 
                 if (info != NULL

@@ -201,6 +201,77 @@ TEST(the_clock_starts_at_the_stream_and_never_goes_backwards)
     CHECK(seen > 3);
 }
 
+TEST(the_release_impact_and_charge_boundaries_are_each_their_own_event)
+{
+    char trace[TRACE_SIZE];
+
+    // Real-time combat session 1 needs these four apart, because in real time
+    // they stop coinciding: a bow rewinds its animation and releases again
+    // without a new attack, an NPC with no PC leader releases without paying
+    // ammunition, and an arrow that reaches nothing commits no damage. A trace
+    // that could only count damage would report all three as the same number.
+    clean();
+    CHECK(combat_observer_open(TRACE_FILE));
+    combat_observer_action_released("fighter", 6, 6, 3);
+    combat_observer_resource_charged("fighter", "ammo", 1, 20, 19);
+    combat_observer_projectile_impact("fighter", "opponent");
+    combat_observer_resource_charged("mage", "fatigue", 5, 0, 5);
+    combat_observer_close();
+
+    CHECK(read_trace(trace, sizeof(trace)));
+    CHECK(strstr(trace, "\"event\":\"action.released\"") != NULL);
+    CHECK(strstr(trace, "\"frame\":6,\"action_frame\":6,\"weapon_type\":3") != NULL);
+    CHECK(strstr(trace, "\"event\":\"projectile.impact\"") != NULL);
+    CHECK(strstr(trace, "\"resource\":\"ammo\",\"cost\":1,\"before\":20,\"after\":19") != NULL);
+    CHECK(strstr(trace, "\"resource\":\"fatigue\",\"cost\":5,\"before\":0,\"after\":5") != NULL);
+}
+
+TEST(an_unreadable_frame_is_reported_as_unknown_not_as_a_number)
+{
+    char trace[TRACE_SIZE];
+
+    // The release hook asks the art system for the frame and can be refused.
+    // -1 says so. Emitting whatever was on the stack would put a plausible
+    // number into a timing baseline as though it had been measured, which is
+    // the one thing this session must not do.
+    clean();
+    CHECK(combat_observer_open(TRACE_FILE));
+    combat_observer_action_released("fighter", -1, -1, 0);
+    combat_observer_close();
+
+    CHECK(read_trace(trace, sizeof(trace)));
+    CHECK(strstr(trace, "\"frame\":-1,\"action_frame\":-1") != NULL);
+}
+
+TEST(repeated_releases_are_countable_and_carry_the_clock)
+{
+    char trace[TRACE_SIZE];
+    const char* cursor;
+    int releases = 0;
+
+    // The bow rewind clears the latch and releases again without restarting
+    // the attack, so the spacing between these events is the firing rate. They
+    // have to be individually countable and individually timed, or the rate
+    // cannot be read off the trace at all.
+    clean();
+    CHECK(combat_observer_open(TRACE_FILE));
+    combat_observer_action_released("archer", 6, 6, 3);
+    combat_observer_action_released("archer", 6, 6, 3);
+    combat_observer_action_released("archer", 6, 6, 3);
+    combat_observer_close();
+
+    CHECK(read_trace(trace, sizeof(trace)));
+    for (cursor = trace;
+        (cursor = strstr(cursor, "\"event\":\"action.released\"")) != NULL;
+        cursor++) {
+        releases++;
+    }
+    CHECK(releases == 3);
+    // Identical events, so `sequence` and `ms` are the only things telling
+    // them apart. Both must be there.
+    CHECK(strstr(trace, "{\"ms\":") != NULL);
+}
+
 TEST(a_selected_limb_is_distinguishable_from_one_that_was_rolled)
 {
     char trace[TRACE_SIZE];
@@ -1257,6 +1328,9 @@ void test_combat_observer_suite(void)
     RUN(a_different_aim_does_not_produce_the_same_attack);
     RUN(one_extra_observer_draw_is_detected_on_the_aimed_path_too);
     RUN(a_complete_trace_has_ordered_control_and_semantic_events);
+    RUN(the_release_impact_and_charge_boundaries_are_each_their_own_event);
+    RUN(an_unreadable_frame_is_reported_as_unknown_not_as_a_number);
+    RUN(repeated_releases_are_countable_and_carry_the_clock);
     RUN(every_event_carries_the_clock_the_baseline_needs);
     RUN(the_trace_says_which_clock_produced_its_numbers);
     RUN(the_clock_starts_at_the_stream_and_never_goes_backwards);

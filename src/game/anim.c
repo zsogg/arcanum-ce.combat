@@ -4,6 +4,7 @@
 
 #include "game/ai.h"
 #include "game/animfx.h"
+#include "game/combat_observer.h"
 #include "game/critter.h"
 #include "game/descriptions.h"
 #include "game/gamelib.h"
@@ -9309,6 +9310,22 @@ bool anim_is_not_animating(AnimRunInfo* run_info)
 // 0x42CAA0
 bool anim_reached_action_frame(AnimRunInfo* run_info)
 {
+    // CE (real-time combat session 1): the release, observed where it is
+    // decided rather than inferred from a later damage event.
+    //
+    // This is the one place that answers "how often did this actor get to
+    // act". The ranged repeat in `AGupdateAnimAttack` rewinds the animation
+    // and clears 0x0C, which re-arms the latch below, so a bow firing four
+    // arrows passes through here four times while the attack animation is
+    // never restarted. Counting `damage.committed` instead would miss every
+    // release that hit nothing, and counting frames would not know which ones
+    // were action frames.
+    char actor[COMBAT_OBSERVER_IDENTITY_SIZE];
+    AnimGoalData* goal_data;
+    int64_t self_obj;
+    tig_art_id_t art_id;
+    TigArtAnimData art_anim_data;
+
     if ((run_info->flags & 0x4) == 0) {
         return false;
     }
@@ -9318,6 +9335,29 @@ bool anim_reached_action_frame(AnimRunInfo* run_info)
     }
 
     run_info->flags |= 0x8;
+
+    if (combat_observer_is_enabled()) {
+        goal_data = run_info->cur_stack_data;
+        self_obj = goal_data != NULL
+            ? goal_data->params[AGDATA_SELF_OBJ].obj
+            : OBJ_HANDLE_NULL;
+        if (self_obj != OBJ_HANDLE_NULL) {
+            combat_observer_object_id(self_obj, actor);
+            art_id = obj_field_int32_get(self_obj, OBJ_F_CURRENT_AID);
+            // A frame the art system cannot describe is reported as -1 rather
+            // than left as whatever was on the stack: an unreadable frame is a
+            // fact about the run, and silently emitting a plausible number
+            // would put it in the baseline as data.
+            if (tig_art_anim_data(art_id, &art_anim_data) != TIG_OK) {
+                combat_observer_action_released(actor, -1, -1,
+                    tig_art_critter_id_weapon_get(art_id));
+            } else {
+                combat_observer_action_released(actor,
+                    tig_art_id_frame_get(art_id), art_anim_data.action_frame,
+                    tig_art_critter_id_weapon_get(art_id));
+            }
+        }
+    }
 
     return true;
 }

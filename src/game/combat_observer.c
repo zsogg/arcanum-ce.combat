@@ -555,6 +555,57 @@ void combat_observer_attack_resolved(unsigned long long action_id,
     }
 }
 
+void combat_observer_action_released(const char* actor, int frame,
+    int action_frame, int weapon_type)
+{
+    char line[256];
+
+    if (combat_observer_stream == NULL) {
+        return;
+    }
+
+    snprintf(line, sizeof(line),
+        "{\"schema\":%d,\"sequence\":%u,\"event\":\"action.released\","
+        "\"turn\":null,\"action_id\":null,\"actor\":\"%s\",\"frame\":%d,"
+        "\"action_frame\":%d,\"weapon_type\":%d}",
+        COMBAT_OBSERVER_SCHEMA, combat_observer_sequence++, actor, frame,
+        action_frame, weapon_type);
+    combat_observer_write(line);
+}
+
+void combat_observer_projectile_impact(const char* source, const char* target)
+{
+    char line[256];
+
+    if (combat_observer_stream == NULL) {
+        return;
+    }
+
+    snprintf(line, sizeof(line),
+        "{\"schema\":%d,\"sequence\":%u,\"event\":\"projectile.impact\","
+        "\"turn\":null,\"action_id\":null,\"source\":\"%s\",\"target\":\"%s\"}",
+        COMBAT_OBSERVER_SCHEMA, combat_observer_sequence++, source, target);
+    combat_observer_write(line);
+}
+
+void combat_observer_resource_charged(const char* actor, const char* resource,
+    int cost, int before, int after)
+{
+    char line[256];
+
+    if (combat_observer_stream == NULL) {
+        return;
+    }
+
+    snprintf(line, sizeof(line),
+        "{\"schema\":%d,\"sequence\":%u,\"event\":\"resource.charged\","
+        "\"turn\":null,\"action_id\":null,\"actor\":\"%s\","
+        "\"resource\":\"%s\",\"cost\":%d,\"before\":%d,\"after\":%d}",
+        COMBAT_OBSERVER_SCHEMA, combat_observer_sequence++, actor, resource,
+        cost, before, after);
+    combat_observer_write(line);
+}
+
 void combat_observer_skill_roll(const char* source, const char* target,
     int skill, int effectiveness, int difficulty, int roll,
     int critical_roll, bool success, bool critical)

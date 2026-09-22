@@ -158,6 +158,33 @@ unsigned long long combat_observer_attack_started(const char* attacker,
 void combat_observer_attack_resolved(unsigned long long action_id,
     const char* attacker, const char* target, int skill, int hit_location,
     unsigned int flags, int result);
+// Real-time combat session 1: the boundaries a timing baseline needs and the
+// observer did not have. `attack.started`/`attack.resolved` bracket a resolved
+// attack, which is not the same question as "when did the animation let this
+// actor act again" - and in real time that is the question, because the ranged
+// repeat path rewinds the animation rather than restarting the attack.
+//
+// `anim_reached_action_frame` is the release: its own comment calls it "the
+// moment the blow lands or the item changes hands", and flag 0x08 latches so
+// it fires once per action. The bow rewind clears 0x0C, which re-arms it - so
+// one release event per arrow, and the spacing between them IS the firing
+// rate the session is trying to measure.
+void combat_observer_action_released(const char* actor, int frame,
+    int action_frame, int weapon_type);
+
+// Where an arrow actually arrives, which is not where it was released and not
+// when damage is committed. Counted separately from releases on purpose: the
+// session has to be able to say arrows released and arrows that hit without
+// inferring either from the other.
+void combat_observer_projectile_impact(const char* source, const char* target);
+
+// Ammunition and fatigue, the two things an ordinary action spends outside
+// turn-based AP. One event with a `resource` field rather than two events,
+// because the question asked of both is the same - was this charged once per
+// accepted action, or once per release?
+void combat_observer_resource_charged(const char* actor, const char* resource,
+    int cost, int before, int after);
+
 void combat_observer_skill_roll(const char* source, const char* target,
     int skill, int effectiveness, int difficulty, int roll,
     int critical_roll, bool success, bool critical);

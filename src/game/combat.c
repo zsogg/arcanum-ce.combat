@@ -525,6 +525,17 @@ void combat_create_projectile(CombatContext* combat, int64_t loc, int a3, int a4
 // 0x4B2650
 void combat_projectile_goal_end(int64_t a1, int64_t a2, CombatContext* combat)
 {
+    // CE (real-time combat session 1): where the arrow arrives, counted apart
+    // from where it was released. The session has to be able to say "arrows
+    // released" and "arrows that hit" without deriving either from the other,
+    // and a release that reaches nothing emits no damage to count.
+    if (combat_observer_is_enabled()) {
+        char source[COMBAT_OBSERVER_IDENTITY_SIZE];
+        char target[COMBAT_OBSERVER_IDENTITY_SIZE];
+        combat_observer_object_id(a2, source);
+        combat_observer_object_id(combat != NULL ? combat->target_obj : OBJ_HANDLE_NULL, target);
+        combat_observer_projectile_impact(source, target);
+    }
     combat_projectile_end(a1, a2, combat != NULL ? combat->field_28 : OBJ_HANDLE_NULL, combat, false);
 }
 
@@ -2748,6 +2759,19 @@ bool combat_consume_ammo(int64_t weapon_obj, int64_t critter_obj, int cnt, bool 
     consumption = cnt * obj_field_int32_get(weapon_obj, OBJ_F_WEAPON_AMMO_CONSUMPTION);
     if (qty >= consumption) {
         item_ammo_transfer(critter_obj, OBJ_HANDLE_NULL, consumption, ammo_type, OBJ_HANDLE_NULL);
+        // CE (real-time combat session 1): charged once per what? The session
+        // exists to answer that, and it cannot be answered by counting arrows.
+        //
+        // Note what is NOT observed: the two early returns above. An NPC with
+        // no PC leader leaves before reaching here and spends nothing, which
+        // is the barrage the investigation describes - so a trace showing
+        // releases with no matching charge is that path, not a lost event.
+        if (combat_observer_is_enabled()) {
+            char shooter[COMBAT_OBSERVER_IDENTITY_SIZE];
+            combat_observer_object_id(critter_obj, shooter);
+            combat_observer_resource_charged(shooter, "ammo", consumption,
+                qty, item_ammo_quantity_get(critter_obj, ammo_type));
+        }
         return true;
     }
 
