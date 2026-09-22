@@ -95,6 +95,7 @@ static bool obj_proto_field_read_mem(Object* object, int fld);
 static bool object_field_write(Object* object, int idx, ObjectFieldInfo* info);
 static bool obj_inst_field_write_mem(Object* object, int idx, ObjectFieldInfo* info);
 static bool object_field_read(Object* object, int idx, ObjectFieldInfo* info);
+static void obj_inst_num_fields_settle(Object* object, const char* source);
 static bool obj_inst_field_read_mem(Object* object, int idx, ObjectFieldInfo* info);
 static bool object_field_write_if_dif(Object* object, int idx, ObjectFieldInfo* info);
 static bool object_field_read_if_dif(Object* object, int idx, ObjectFieldInfo* info);
@@ -3271,6 +3272,7 @@ bool obj_inst_read_file(TigFile* stream, int64_t* obj_ptr, ObjectID oid)
         obj_pool_deallocate(obj);
         return false;
     }
+    obj_inst_num_fields_settle(object, "file");
 
     memset(object->transient_properties, 0, sizeof(object->transient_properties));
 
@@ -3410,7 +3412,9 @@ bool obj_inst_read_mem(uint8_t* data, int64_t* obj_ptr)
     object->modified = false;
     obj_inst_bitmaps_alloc(object);
 
-    object->data = (intptr_t*)CALLOC(object->num_fields, sizeof(*object->data));
+    // CE (card RT1): sized by the type, as `obj_inst_read_file` is since card
+    // H6; the stream's count can understate what the bitmap makes it read.
+    object->data = (intptr_t*)CALLOC(object_fields_count_per_type[object->type], sizeof(*object->data));
     mem_read_advance(object->changed, 4 * obj_type_change_array_len(object->type), &data);
 
     object_enum_read_cursor = data;
@@ -3419,6 +3423,7 @@ bool obj_inst_read_mem(uint8_t* data, int64_t* obj_ptr)
         obj_pool_deallocate(obj);
         return false;
     }
+    obj_inst_num_fields_settle(object, "buffer");
 
     memset(object->transient_properties, 0, sizeof(object->transient_properties));
 
@@ -3521,6 +3526,37 @@ bool obj_inst_field_write_mem(Object* object, int idx, ObjectFieldInfo* info)
 }
 
 // 0x40A290
+// CE (card RT1): an instance's `num_fields` is the number of fields it carries
+// - one per set change bit - and every later insert grows `data` from it. A
+// record that understates it reads cleanly and then corrupts the heap the
+// first time the object gains a field of its own: measured 2026-09-22, when a
+// mod-built Bow with one field more than its count was picked up and the map's
+// teardown wrote past the end of its array. The readers set the count from the
+// bits they actually read, and say so when the file disagreed. Faithful for
+// every record whose count is right, which is every shipped record sampled.
+static int obj_inst_fields_read;
+
+static bool obj_inst_field_count(Object* object, int idx, ObjectFieldInfo* info)
+{
+    (void)object;
+    (void)idx;
+    (void)info;
+
+    obj_inst_fields_read++;
+    return true;
+}
+
+static void obj_inst_num_fields_settle(Object* object, const char* source)
+{
+    obj_inst_fields_read = 0;
+    object_inst_enumerate_overridden_fields(object, obj_inst_field_count);
+    if (object->num_fields != obj_inst_fields_read) {
+        tig_debug_printf("Obj: instance %s declares %d fields and carries %d; using %d.\n",
+            source, object->num_fields, obj_inst_fields_read, obj_inst_fields_read);
+        object->num_fields = (int16_t)obj_inst_fields_read;
+    }
+}
+
 bool object_field_read(Object* object, int idx, ObjectFieldInfo* info)
 {
     ObjDataDescriptor v1;

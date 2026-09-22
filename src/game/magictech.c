@@ -1768,12 +1768,20 @@ bool magictech_charge_fatigue(int64_t obj, int cost, bool a3, int magictech)
                 // absent from the trace rather than present and then
                 // contradicted. Fatigue is reported as damage, which is what
                 // moved; `critter_fatigue_current` is derived from it.
+                //
+                // CE (card RT1): `after` is what this charge set, not a
+                // re-read. Setting fatigue can knock the caster out, and that
+                // can charge again inside the set: measured 2026-09-22, a
+                // final Harm reported "before 29, cost 5, after 39" because
+                // the nested 34 -> 39 had already landed. Each event now
+                // accounts for its own five points; the nested one is its own
+                // event, written first because it finishes first.
                 if (combat_observer_is_enabled()) {
                     char caster[COMBAT_OBSERVER_IDENTITY_SIZE];
                     combat_observer_object_id(obj, caster);
                     combat_observer_resource_charged(caster, "fatigue",
                         magictech != 10000 ? magictech : -1, cost,
-                        fatigue_dam, critter_fatigue_damage_get(obj));
+                        fatigue_dam, fatigue_dam + cost);
                 }
 
                 if (info != NULL
