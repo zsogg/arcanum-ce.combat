@@ -18,6 +18,8 @@
 #include "game/player.h"
 #include "game/proto.h"
 #include "game/skill.h"
+#include "game/spell.h"
+#include "game/stat.h"
 #include "game/target.h"
 #include "ui/called_shot.h"
 #include "ui/combat_ui.h"
@@ -70,6 +72,11 @@ typedef enum ReplayKind {
     //       a skill used on an object, through `skill_use` - what the skill
     //       buttons reach for every skill but pickpocketing and repair.
     REPLAY_KIND_SKILL,
+    //   raise <stat>
+    //       one point into a primary stat (0 Strength ... 4 Intelligence ...
+    //       7 Charisma), as the character screen's plus button spends it.
+    //       Script-only, like `learn`.
+    REPLAY_KIND_RAISE,
 } ReplayKind;
 
 // A cast's target, which is a third shape: the caster, an object or a tile.
@@ -99,6 +106,7 @@ typedef struct ReplayCommand {
     int proto;
     int count;
     int skill;
+    int stat;
 } ReplayCommand;
 
 static ReplayCommand replay_commands[REPLAY_MAX_COMMANDS];
@@ -338,6 +346,15 @@ static bool replay_parse_line(const char* text, ReplayCommand* command)
         return index == count;
     }
 
+    if (strcmp(kind, "raise") == 0) {
+        command->kind = REPLAY_KIND_RAISE;
+        if (!replay_parse_int(tokens[index++], &(command->stat))
+            || command->stat < STAT_STRENGTH || command->stat > STAT_CHARISMA) {
+            return false;
+        }
+        return index == count;
+    }
+
     if (strcmp(kind, "skill") == 0) {
         command->kind = REPLAY_KIND_SKILL;
         if (!replay_parse_int(tokens[index++], &(command->skill))
@@ -403,7 +420,7 @@ int replay_ui_count(void)
 bool replay_ui_describe(int index, char* buffer, size_t size)
 {
     const ReplayCommand* command;
-    static const char* kinds[] = { "object", "location", "key", "cast", "wield", "wait", "learn", "give", "throw", "skill" };
+    static const char* kinds[] = { "object", "location", "key", "cast", "wield", "wait", "learn", "give", "throw", "skill", "raise" };
     int written;
     static const char* casts[] = { "self", "object", "location" };
 
@@ -425,6 +442,9 @@ bool replay_ui_describe(int index, char* buffer, size_t size)
     }
     if (command->kind == REPLAY_KIND_SKILL && written >= 0 && (size_t)written < size) {
         snprintf(buffer + written, size - (size_t)written, " skill=%d", command->skill);
+    }
+    if (command->kind == REPLAY_KIND_RAISE && written >= 0 && (size_t)written < size) {
+        snprintf(buffer + written, size - (size_t)written, " stat=%d", command->stat);
     }
     return true;
 }
@@ -607,6 +627,18 @@ void replay_ui_tick(void)
         replay_stall_reported = false;
         replay_next++;
         spell_ui_add(pc_obj, command->spell);
+        // The character screen refuses on screen - level, Intelligence,
+        // Willpower, the college's order - which a script never sees. Said
+        // here, because a cast of a spell never learned still plays its
+        // animation and reads as a cast that did nothing (measured 2026-09-23).
+        if (!spell_is_known(pc_obj, command->spell)) {
+            tig_debug_printf("Replay: command %d could not learn spell %d"
+                             " (level %d, Intelligence %d, Willpower %d)\n",
+                replay_next - 1, command->spell,
+                stat_level_get(pc_obj, STAT_LEVEL),
+                stat_level_get(pc_obj, STAT_INTELLIGENCE),
+                stat_level_get(pc_obj, STAT_WILLPOWER));
+        }
         return;
     }
 
@@ -631,6 +663,31 @@ void replay_ui_tick(void)
                 return;
             }
         }
+        return;
+    }
+
+    if (command->kind == REPLAY_KIND_RAISE) {
+        int value;
+        int cost;
+        int unspent;
+
+        replay_stall_reported = false;
+        replay_next++;
+        // The plus button's rule (`charedit_ui.c`): refused at the stat's
+        // maximum or without the points, and charged `stat_cost` of the new
+        // value.
+        value = stat_base_get(pc_obj, command->stat) + 1;
+        cost = stat_cost(value);
+        unspent = stat_level_get(pc_obj, STAT_UNSPENT_POINTS);
+        if (stat_level_get(pc_obj, command->stat) >= stat_level_max(pc_obj, command->stat)
+            || cost > unspent) {
+            tig_debug_printf("Replay: command %d could not raise stat %d"
+                             " (%d unspent points, cost %d)\n",
+                replay_next - 1, command->stat, unspent, cost);
+            return;
+        }
+        stat_base_set(pc_obj, command->stat, value);
+        stat_base_set(pc_obj, STAT_UNSPENT_POINTS, unspent - cost);
         return;
     }
 
@@ -701,6 +758,15 @@ void replay_ui_tick(void)
 
         replay_stall_reported = false;
         replay_next++;
+
+        // Only a spell the character knows: the spell button lists nothing
+        // else, and `spell_ui_activate` does not check - measured 2026-09-23,
+        // a cast of an unlearned spell played its animation and did nothing.
+        if (!spell_is_known(pc_obj, command->spell)) {
+            tig_debug_printf("Replay: command %d casts spell %d, which is not known\n",
+                replay_next - 1, command->spell);
+            return;
+        }
 
         // The spell button, then the click. A spell whose target is the caster
         // is applied by activation itself, as the UI does; anything else is

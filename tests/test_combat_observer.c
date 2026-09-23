@@ -677,8 +677,9 @@ TEST(the_throw_rows_load_into_what_they_say)
         "0 throw 15171 361533167198256\n"
         "0 now throw 15171 361533167198256\n"
         "0 wield 6053\n"
-        "0 now skill 10 G_A09DCD63_7A15_D411_8F1D_00E02920220C\n"));
-    CHECK_INT(replay_ui_count(), 5);
+        "0 now skill 10 G_A09DCD63_7A15_D411_8F1D_00E02920220C\n"
+        "0 raise 4\n"));
+    CHECK_INT(replay_ui_count(), 6);
     CHECK(row_is(0, "turn=0 now=0 kind=give target= loc=0 aim=0 spell=0 cast=- wait=0 proto=15171 count=6"));
     CHECK(row_is(1, "turn=0 now=0 kind=throw target= loc=361533167198256 aim=0 spell=0 cast=- wait=0 proto=15171 count=0"));
     CHECK(row_is(2, "turn=0 now=1 kind=throw target= loc=361533167198256 aim=0 spell=0 cast=- wait=0 proto=15171 count=0"));
@@ -686,6 +687,8 @@ TEST(the_throw_rows_load_into_what_they_say)
     CHECK(row_is(3, "turn=0 now=0 kind=wield target=6053 loc=0 aim=0 spell=0 cast=- wait=0"));
     // Heal (10) on Virgil, during a recovery.
     CHECK(row_is(4, "turn=0 now=1 kind=skill target=G_A09DCD63_7A15_D411_8F1D_00E02920220C loc=0 aim=0 spell=0 cast=- wait=0 skill=10"));
+    // One point into Intelligence.
+    CHECK(row_is(5, "turn=0 now=0 kind=raise target= loc=0 aim=0 spell=0 cast=- wait=0 stat=4"));
 
     CHECK(!load_script("0 give 15171\n")); // how many
     CHECK(!load_script("0 give 15171 0\n")); // nothing is not a gift
@@ -696,6 +699,8 @@ TEST(the_throw_rows_load_into_what_they_say)
     CHECK(!load_script("0 skill 10\n")); // on what
     CHECK(!load_script("0 skill 99 G_X\n")); // no such skill
     CHECK(!load_script("0 skill heal G_X\n"));
+    CHECK(!load_script("0 raise 8\n")); // not a primary stat
+    CHECK(!load_script("0 raise\n"));
 }
 
 TEST(a_row_the_parser_cannot_read_refuses_the_whole_file)
