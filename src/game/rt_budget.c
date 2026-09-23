@@ -190,6 +190,9 @@ static bool rt_budget_goal_category(AnimRunInfo* run_info,
     case AG_THROW_ITEM:
         *category = RT_BUDGET_THROW;
         return true;
+    case AG_ATTEMPT_USE_SKILL_ON:
+        *category = RT_BUDGET_SKILL;
+        return true;
     case AG_ATTEMPT_SPELL:
     case AG_ATTEMPT_SPELL_FRIENDLY:
     case AG_ATTEMPT_SPELL_W_CAST_ANIM:
@@ -200,17 +203,21 @@ static bool rt_budget_goal_category(AnimRunInfo* run_info,
     }
 }
 
-static int rt_budget_action_points(int64_t obj, RtBudgetCategory category, int spell)
+static int rt_budget_action_points(int64_t obj, RtBudgetCategory category, int spell,
+    int skill)
 {
     // The costs turn-based charges: `combat_attack_cost` in AGbeginAnimAttack,
     // `combat_throw_cost` in the throw goal's last node (session C, zsogg's
-    // option 1: whatever turn-based charges, so a change there moves both), and
-    // the flat four of `anim_pay_spell_cost`.
+    // option 1: whatever turn-based charges, so a change there moves both),
+    // `combat_skill_cost` in `anim_run_skill_invocation`, and `combat_cast_cost`
+    // in `anim_pay_spell_cost`.
     switch (category) {
     case RT_BUDGET_ATTACK:
         return combat_attack_cost(obj);
     case RT_BUDGET_THROW:
         return combat_throw_cost(obj);
+    case RT_BUDGET_SKILL:
+        return combat_skill_cost(obj, skill);
     default:
         return combat_cast_cost(obj, spell);
     }
@@ -223,6 +230,8 @@ static const char* rt_budget_category_name(RtBudgetCategory category)
         return "attack";
     case RT_BUDGET_THROW:
         return "throw";
+    case RT_BUDGET_SKILL:
+        return "skill";
     default:
         return "cast";
     }
@@ -366,7 +375,10 @@ static void rt_budget_accept(int64_t obj, RtBudgetEntry* entry,
         && magictech_id_to_run_info(run_info->cur_stack_data->params[AGDATA_SPELL_DATA].data, &mt_run_info)) {
         spell = mt_run_info->spell;
     }
-    action_points = rt_budget_action_points(obj, category, spell);
+    action_points = rt_budget_action_points(obj, category, spell,
+        category == RT_BUDGET_SKILL
+            ? run_info->cur_stack_data->params[AGDATA_SKILL_DATA].data
+            : -1);
     // Rule 9: Speed is read now, and the action keeps it. Divided by what a
     // turn grants, through the rule turn-based uses at each turn's start.
     rt_budget_entry_accept(entry, category, run_info->id, action_points,

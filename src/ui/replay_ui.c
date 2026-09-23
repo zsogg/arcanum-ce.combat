@@ -17,6 +17,7 @@
 #include "game/object.h"
 #include "game/player.h"
 #include "game/proto.h"
+#include "game/skill.h"
 #include "game/target.h"
 #include "ui/called_shot.h"
 #include "ui/combat_ui.h"
@@ -65,6 +66,10 @@ typedef enum ReplayKind {
     //       `anim_goal_throw_item` - what dragging it onto the map calls.
     REPLAY_KIND_GIVE,
     REPLAY_KIND_THROW,
+    //   skill <skill> <id>
+    //       a skill used on an object, through `skill_use` - what the skill
+    //       buttons reach for every skill but pickpocketing and repair.
+    REPLAY_KIND_SKILL,
 } ReplayKind;
 
 // A cast's target, which is a third shape: the caster, an object or a tile.
@@ -93,6 +98,7 @@ typedef struct ReplayCommand {
     int wait_ms;
     int proto;
     int count;
+    int skill;
 } ReplayCommand;
 
 static ReplayCommand replay_commands[REPLAY_MAX_COMMANDS];
@@ -332,6 +338,16 @@ static bool replay_parse_line(const char* text, ReplayCommand* command)
         return index == count;
     }
 
+    if (strcmp(kind, "skill") == 0) {
+        command->kind = REPLAY_KIND_SKILL;
+        if (!replay_parse_int(tokens[index++], &(command->skill))
+            || command->skill < 0 || command->skill >= SKILL_COUNT || index >= count) {
+            return false;
+        }
+        replay_copy_target(command, tokens[index++]);
+        return index == count;
+    }
+
     if (strcmp(kind, "throw") == 0) {
         command->kind = REPLAY_KIND_THROW;
         if (!replay_parse_int(tokens[index++], &(command->proto))
@@ -387,7 +403,7 @@ int replay_ui_count(void)
 bool replay_ui_describe(int index, char* buffer, size_t size)
 {
     const ReplayCommand* command;
-    static const char* kinds[] = { "object", "location", "key", "cast", "wield", "wait", "learn", "give", "throw" };
+    static const char* kinds[] = { "object", "location", "key", "cast", "wield", "wait", "learn", "give", "throw", "skill" };
     int written;
     static const char* casts[] = { "self", "object", "location" };
 
@@ -406,6 +422,9 @@ bool replay_ui_describe(int index, char* buffer, size_t size)
         && written >= 0 && (size_t)written < size) {
         snprintf(buffer + written, size - (size_t)written, " proto=%d count=%d",
             command->proto, command->count);
+    }
+    if (command->kind == REPLAY_KIND_SKILL && written >= 0 && (size_t)written < size) {
+        snprintf(buffer + written, size - (size_t)written, " skill=%d", command->skill);
     }
     return true;
 }
@@ -611,6 +630,19 @@ void replay_ui_tick(void)
                     replay_next - 1, given, command->count);
                 return;
             }
+        }
+        return;
+    }
+
+    if (command->kind == REPLAY_KIND_SKILL) {
+        replay_stall_reported = false;
+        replay_next++;
+        if (!replay_resolve(command, &target_obj)) {
+            return;
+        }
+        if (!skill_use(pc_obj, command->skill, target_obj, 0)) {
+            tig_debug_printf("Replay: command %d could not use skill %d on '%s'\n",
+                replay_next - 1, command->skill, command->target);
         }
         return;
     }

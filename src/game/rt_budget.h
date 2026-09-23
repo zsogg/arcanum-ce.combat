@@ -46,6 +46,12 @@ typedef enum RtBudgetCategory {
     // Session C: the throw-item goal - thrown weapons, grenades, anything
     // dragged onto the map. Costs what the throw goal charges in turn-based.
     RT_BUDGET_THROW,
+    // Session C: a skill used on an object - lock picking, disarming, healing,
+    // repair. Its animation runs to an action frame before the skill does,
+    // like an attack's. Pickpocketing is not here: it steals before it
+    // animates, so nothing could hold it first, and zsogg left the instant
+    // actions untimed (2026-09-23).
+    RT_BUDGET_SKILL,
 } RtBudgetCategory;
 
 typedef enum RtBudgetState {
