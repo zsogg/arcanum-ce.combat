@@ -304,6 +304,20 @@ static int rt_budget_action_key(RtBudgetEntry* entry, RtBudgetCategory category,
         : -1;
 }
 
+// A cast goal whose spell run still exists. When the target dies, the game
+// interrupts every spell still aimed at it and frees its run - charging the
+// caster, as the original does - but the casting goal plays on with nothing in
+// it (measured in zsogg's playtest, 2026-09-22). Such a goal is not an action:
+// the budget neither accepts it nor counts it as the one waiting request.
+// A freed slot can be reused by a later spell, so this is exact only until the
+// slot is taken again - the leftover goal is short-lived, which makes that rare.
+static bool rt_budget_spell_live(int mt_id)
+{
+    MagicTechRunInfo* mt_run_info;
+
+    return mt_id != -1 && magictech_id_to_run_info(mt_id, &mt_run_info);
+}
+
 bool rt_budget_cast_waiting(AnimID* anim_id)
 {
     AnimRunInfo* run_info;
@@ -324,6 +338,9 @@ bool rt_budget_cast_waiting(AnimID* anim_id)
         case AG_THROW_SPELL_W_CAST_ANIM:
         case AG_ATTEMPT_SPELL:
         case AG_ATTEMPT_SPELL_W_CAST_ANIM:
+            if (!rt_budget_spell_live(run_info->goals[index].params[AGDATA_SPELL_DATA].data)) {
+                break;
+            }
             if (entry == NULL
                 || entry->category != RT_BUDGET_CAST
                 || !rt_budget_same_run(entry->run, run_info->id)
@@ -406,6 +423,16 @@ bool rt_budget_hold(AnimRunInfo* run_info)
 
     entry = rt_budget_find_or_add(obj);
     if (entry == NULL) {
+        return false;
+    }
+
+    // Session C: a cast whose spell was cancelled while it waited - its target
+    // died - plays out untimed. Accepting it spent a whole budget on nothing.
+    // A hold is undone first: the run gets its step delay and action-frame flag
+    // back, and its release then finds nothing accepted and is ignored.
+    if (category == RT_BUDGET_CAST
+        && !rt_budget_spell_live(run_info->cur_stack_data->params[AGDATA_SPELL_DATA].data)) {
+        rt_budget_unhold(entry, run_info);
         return false;
     }
 
