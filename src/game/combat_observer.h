@@ -36,7 +36,13 @@ void combat_observer_close(void);
 // and Minor Healing alike. `actor.snapshot` gained the wielded weapon's skill,
 // skill level, training and effective speed. `action.released` gained the goal
 // that released and the timing inputs behind the step delay.
-#define COMBAT_OBSERVER_SCHEMA 5
+//
+// 6 (real-time session A, 2026-09-22): what a real-time replay has to drive and
+// check. `actor.moved` for every tile a critter changes, `cast.requested` when
+// the player applies a spell, and `wield.changed` when the player's weapon slot
+// changes by any route. None existed, so a recorded run could not say that the
+// player cast, equipped or moved, and a replay could not reproduce it.
+#define COMBAT_OBSERVER_SCHEMA 6
 
 bool combat_observer_is_enabled(void);
 bool combat_observer_is_complete(void);
@@ -230,6 +236,27 @@ void combat_observer_spell_cast(const char* caster, const char* source,
 // null) for ammunition and for a charge made on no spell's behalf.
 void combat_observer_resource_charged(const char* actor, const char* resource,
     int spell, int cost, int before, int after);
+
+// Real-time session A: a critter left one tile for another. One event per
+// tile, from `object_move_to`, which every movement route passes through -
+// walking, running, knockback, teleports - so the record is what happened and
+// not what was intended. Rule 12's "time spent moving" is measured from these.
+void combat_observer_actor_moved(const char* actor, int64_t from_loc,
+    int64_t to_loc);
+
+// Real-time session A: the player applied a spell to a target. The request,
+// before its fatigue and line-of-sight checks: `spell.cast` follows only if the
+// spell began, so a refused cast is a request with no cast after it.
+// `target_kind` is "object" or "location"; `target_loc` is 0 for an object.
+void combat_observer_cast_requested(const char* actor, int spell,
+    const char* target_kind, const char* target, int64_t target_loc);
+
+// Real-time session A: the player's weapon slot, sampled once a frame like the
+// mode. Equipping has three routes - dragging to the paper doll, the hotkey
+// bar, double-clicking - and none shares a function a hook could sit in, so the
+// slot is watched instead. The first sample is the starting weapon, not a
+// change. `weapon` is "NULL" for an empty slot.
+void combat_observer_wield_observed(const char* actor, const char* weapon);
 
 void combat_observer_skill_roll(const char* source, const char* target,
     int skill, int effectiveness, int difficulty, int roll,

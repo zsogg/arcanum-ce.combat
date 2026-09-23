@@ -1,5 +1,6 @@
 #include "ui/spell_ui.h"
 
+#include "game/combat_observer.h"
 #include "game/critter.h"
 #include "game/item.h"
 #include "game/magictech.h"
@@ -297,6 +298,19 @@ void spell_ui_apply(TargetDescriptor* td)
     if (critter_is_dead(qword_683500)
         || critter_is_unconscious(qword_683500)) {
         return;
+    }
+
+    // CE (real-time session A): the player's cast, recorded as asked for - before
+    // the fatigue and line-of-sight refusals below, so a refused cast is visible
+    // as a request with no `spell.cast` after it.
+    if (combat_observer_is_enabled()) {
+        char actor[COMBAT_OBSERVER_IDENTITY_SIZE];
+        char target[COMBAT_OBSERVER_IDENTITY_SIZE];
+        combat_observer_object_id(qword_683500, actor);
+        combat_observer_object_id(td->is_loc ? OBJ_HANDLE_NULL : td->obj, target);
+        combat_observer_cast_requested(actor, dword_5CB3A0,
+            td->is_loc ? "location" : "object", target,
+            td->is_loc ? td->loc : 0);
     }
 
     if (obj_type_is_critter(obj_field_int32_get(qword_6834F8, OBJ_F_TYPE))

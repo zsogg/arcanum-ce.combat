@@ -5,6 +5,7 @@
 #include <string.h>
 
 #include <tig/debug.h>
+#include <tig/timer.h>
 
 #include "game/combat.h"
 #include "game/critter.h"
@@ -16,6 +17,7 @@
 #include "ui/called_shot.h"
 #include "ui/combat_ui.h"
 #include "ui/intgame.h"
+#include "ui/spell_ui.h"
 
 #define REPLAY_MAX_COMMANDS 256
 #define REPLAY_IDENTITY_SIZE 64
@@ -29,7 +31,31 @@ typedef enum ReplayKind {
     // a turn, each one found by a replay that could not reproduce its
     // recording without it.
     REPLAY_KIND_KEY,
+    // Real-time session A: what a real-time run needs and a click cannot say.
+    //
+    //   cast <spell> self | object <id> | location <loc>
+    //       the spell button, then the target click - `spell_ui_activate`, then
+    //       `intgame_apply_mode_to_target`, the path a click in spell mode takes.
+    //   wield <id>
+    //       the hotkey bar's equip, the one equip route with one function.
+    //   wait <ms>
+    //       hold the next row this long, so a script can space its commands.
+    REPLAY_KIND_CAST,
+    REPLAY_KIND_WIELD,
+    REPLAY_KIND_WAIT,
+    // `learn <spell>`: the character screen's learn button, `spell_ui_add`, which
+    // spends points and checks level and Intelligence as it does for a player.
+    // Script-only, like `key character-points`: they build a test character, and
+    // nothing records them.
+    REPLAY_KIND_LEARN,
 } ReplayKind;
+
+// A cast's target, which is a third shape: the caster, an object or a tile.
+typedef enum ReplayCastTarget {
+    REPLAY_CAST_SELF,
+    REPLAY_CAST_OBJECT,
+    REPLAY_CAST_LOCATION,
+} ReplayCastTarget;
 
 typedef struct ReplayCommand {
     int turn;
@@ -41,6 +67,13 @@ typedef struct ReplayCommand {
     // means `HIT_LOC_TORSO`, an ordinary attack, which is exactly what those
     // records meant when they were written.
     int aim;
+    // Real-time session A. `now` submits without waiting for the actor to be
+    // free, which is the only way a script can click during a wind-up or a
+    // recovery - what cancelling and queueing are about.
+    bool now;
+    int spell;
+    ReplayCastTarget cast_target;
+    int wait_ms;
 } ReplayCommand;
 
 static ReplayCommand replay_commands[REPLAY_MAX_COMMANDS];
@@ -48,6 +81,8 @@ static int replay_count;
 static int replay_next;
 static bool replay_loaded;
 static bool replay_stall_reported;
+static bool replay_waiting;
+static tig_timestamp_t replay_wait_started;
 
 // CE (card O2): does the game's mode match the one this command was recorded
 // in?
@@ -118,6 +153,169 @@ static bool replay_target_is_live(int64_t obj)
     return true;
 }
 
+static bool replay_parse_int(const char* token, int* value)
+{
+    char* end;
+    long parsed;
+
+    if (token == NULL) {
+        return false;
+    }
+    parsed = strtol(token, &end, 10);
+    if (end == token || *end != '\0') {
+        return false;
+    }
+    *value = (int)parsed;
+    return true;
+}
+
+static void replay_copy_target(ReplayCommand* command, const char* token)
+{
+    strncpy(command->target, token, sizeof(command->target) - 1);
+    command->target[sizeof(command->target) - 1] = '\0';
+}
+
+// One line: `<turn> [now] <kind> <arguments>`. The first three kinds keep the
+// grammar every existing script was written in, so those scripts load as
+// before; the rest are real-time session A's.
+static bool replay_parse_line(const char* text, ReplayCommand* command)
+{
+    char line[512];
+    char* tokens[8];
+    int count = 0;
+    int index = 0;
+    char* token;
+    const char* kind;
+
+    snprintf(line, sizeof(line), "%s", text);
+    for (token = strtok(line, " \t\r\n"); token != NULL && count < 8;
+        token = strtok(NULL, " \t\r\n")) {
+        tokens[count++] = token;
+    }
+
+    memset(command, 0, sizeof(*command));
+    command->aim = HIT_LOC_TORSO;
+
+    if (count < 3 || !replay_parse_int(tokens[index++], &(command->turn))) {
+        return false;
+    }
+
+    if (strcmp(tokens[index], "now") == 0) {
+        command->now = true;
+        index++;
+    }
+
+    if (index + 1 >= count) {
+        return false;
+    }
+    kind = tokens[index++];
+
+    if (strcmp(kind, "object") == 0 || strcmp(kind, "location") == 0) {
+        command->kind = strcmp(kind, "location") == 0
+            ? REPLAY_KIND_LOCATION
+            : REPLAY_KIND_OBJECT;
+        if (command->kind == REPLAY_KIND_LOCATION) {
+            command->loc = (int64_t)strtoll(tokens[index], NULL, 10);
+        } else {
+            replay_copy_target(command, tokens[index]);
+        }
+        index++;
+        if (index < count && !replay_parse_int(tokens[index++], &(command->aim))) {
+            return false;
+        }
+        if (command->aim < 0 || command->aim >= HIT_LOC_COUNT) {
+            // Refused rather than clamped. A record naming a limb this build
+            // has no entry for cannot be reproduced, and replaying it as some
+            // other limb would be a wrong reproduction that reads as a
+            // gameplay difference.
+            tig_debug_printf("Replay: aim %d is not a hit location\n", command->aim);
+            return false;
+        }
+        return index == count;
+    }
+
+    if (strcmp(kind, "key") == 0) {
+        command->kind = REPLAY_KIND_KEY;
+        replay_copy_target(command, tokens[index++]);
+        return index == count;
+    }
+
+    if (strcmp(kind, "wield") == 0) {
+        command->kind = REPLAY_KIND_WIELD;
+        replay_copy_target(command, tokens[index++]);
+        return index == count;
+    }
+
+    if (strcmp(kind, "learn") == 0) {
+        command->kind = REPLAY_KIND_LEARN;
+        if (!replay_parse_int(tokens[index++], &(command->spell))
+            || command->spell < 0) {
+            return false;
+        }
+        return index == count;
+    }
+
+    if (strcmp(kind, "wait") == 0) {
+        command->kind = REPLAY_KIND_WAIT;
+        if (!replay_parse_int(tokens[index++], &(command->wait_ms))
+            || command->wait_ms < 0) {
+            return false;
+        }
+        return index == count;
+    }
+
+    if (strcmp(kind, "cast") == 0) {
+        command->kind = REPLAY_KIND_CAST;
+        if (!replay_parse_int(tokens[index++], &(command->spell))
+            || command->spell < 0 || index >= count) {
+            return false;
+        }
+        if (strcmp(tokens[index], "self") == 0) {
+            command->cast_target = REPLAY_CAST_SELF;
+            index++;
+        } else if (strcmp(tokens[index], "object") == 0 && index + 1 < count) {
+            command->cast_target = REPLAY_CAST_OBJECT;
+            replay_copy_target(command, tokens[index + 1]);
+            index += 2;
+        } else if (strcmp(tokens[index], "location") == 0 && index + 1 < count) {
+            command->cast_target = REPLAY_CAST_LOCATION;
+            command->loc = (int64_t)strtoll(tokens[index + 1], NULL, 10);
+            index += 2;
+        } else {
+            return false;
+        }
+        return index == count;
+    }
+
+    return false;
+}
+
+int replay_ui_count(void)
+{
+    return replay_count;
+}
+
+// For the suite: one loaded row, in a fixed form, so a test can say exactly what
+// a line parsed into without reaching into the table.
+bool replay_ui_describe(int index, char* buffer, size_t size)
+{
+    const ReplayCommand* command;
+    static const char* kinds[] = { "object", "location", "key", "cast", "wield", "wait", "learn" };
+    static const char* casts[] = { "self", "object", "location" };
+
+    if (index < 0 || index >= replay_count) {
+        return false;
+    }
+    command = &(replay_commands[index]);
+    snprintf(buffer, size,
+        "turn=%d now=%d kind=%s target=%s loc=%lld aim=%d spell=%d cast=%s wait=%d",
+        command->turn, command->now ? 1 : 0, kinds[command->kind],
+        command->target, (long long)command->loc, command->aim, command->spell,
+        command->kind == REPLAY_KIND_CAST ? casts[command->cast_target] : "-",
+        command->wait_ms);
+    return true;
+}
+
 bool replay_ui_load(const char* path)
 {
     FILE* stream;
@@ -127,6 +325,7 @@ bool replay_ui_load(const char* path)
     replay_next = 0;
     replay_loaded = false;
     replay_stall_reported = false;
+    replay_waiting = false;
 
     stream = fopen(path, "rb");
     if (stream == NULL) {
@@ -135,36 +334,8 @@ bool replay_ui_load(const char* path)
     }
 
     while (fgets(line, sizeof(line), stream) != NULL) {
-        char kind[32];
-        char target[REPLAY_IDENTITY_SIZE];
-        int turn;
-        int aim;
-        int fields;
-
         if (line[0] == '#' || line[0] == '\n' || line[0] == '\r') {
             continue;
-        }
-
-        aim = HIT_LOC_TORSO;
-        fields = sscanf(line, "%d %31s %63s %d", &turn, kind, target, &aim);
-        if (fields != 3 && fields != 4) {
-            tig_debug_printf("Replay: cannot parse '%s'; refusing the file\n", line);
-            fclose(stream);
-            replay_count = 0;
-            return false;
-        }
-
-        if (aim < 0 || aim >= HIT_LOC_COUNT) {
-            // Refused rather than clamped. A record naming a limb this build
-            // has no entry for cannot be reproduced, and replaying it as some
-            // other limb would be a wrong reproduction that reads as a
-            // gameplay difference.
-            tig_debug_printf("Replay: aim %d is not a hit location; refusing"
-                             " the file\n",
-                aim);
-            fclose(stream);
-            replay_count = 0;
-            return false;
         }
 
         if (replay_count >= REPLAY_MAX_COMMANDS) {
@@ -177,20 +348,11 @@ bool replay_ui_load(const char* path)
             return false;
         }
 
-        replay_commands[replay_count].turn = turn;
-        replay_commands[replay_count].aim = aim;
-        replay_commands[replay_count].loc = 0;
-        replay_commands[replay_count].target[0] = '\0';
-        if (strcmp(kind, "location") == 0) {
-            replay_commands[replay_count].kind = REPLAY_KIND_LOCATION;
-            replay_commands[replay_count].loc = (int64_t)strtoll(target, NULL, 10);
-        } else {
-            replay_commands[replay_count].kind = strcmp(kind, "key") == 0
-                ? REPLAY_KIND_KEY
-                : REPLAY_KIND_OBJECT;
-            strncpy(replay_commands[replay_count].target, target,
-                sizeof(replay_commands[replay_count].target) - 1);
-            replay_commands[replay_count].target[sizeof(replay_commands[replay_count].target) - 1] = '\0';
+        if (!replay_parse_line(line, &(replay_commands[replay_count]))) {
+            tig_debug_printf("Replay: cannot parse '%s'; refusing the file\n", line);
+            fclose(stream);
+            replay_count = 0;
+            return false;
         }
         replay_count++;
     }
@@ -211,6 +373,28 @@ int replay_ui_remaining(void)
     return replay_loaded ? replay_count - replay_next : 0;
 }
 
+// An object row's identity, resolved the way the dispatch below does and with
+// the same messages: unreadable, or absent from this run.
+static bool replay_resolve(const ReplayCommand* command, int64_t* obj_ptr)
+{
+    ObjectID oid;
+
+    if (!objid_id_from_str(&oid, command->target)) {
+        tig_debug_printf("Replay: command %d names an unreadable target '%s'\n",
+            replay_next, command->target);
+        return false;
+    }
+
+    *obj_ptr = obj_pool_perm_lookup(oid);
+    if (*obj_ptr == OBJ_HANDLE_NULL) {
+        tig_debug_printf("Replay: command %d targets '%s', absent from this run\n",
+            replay_next, command->target);
+        return false;
+    }
+
+    return true;
+}
+
 void replay_ui_tick(void)
 {
     ReplayCommand* command;
@@ -228,6 +412,25 @@ void replay_ui_tick(void)
         return;
     }
 
+    command = &replay_commands[replay_next];
+
+    // Real-time session A: a wait holds the queue for its time and nothing
+    // else. Measured on the engine's own timer, which the deterministic clock
+    // drives, so a scripted wait is the same length in every repeat.
+    if (command->kind == REPLAY_KIND_WAIT) {
+        if (!replay_waiting) {
+            replay_waiting = true;
+            tig_timer_now(&replay_wait_started);
+            return;
+        }
+        if (tig_timer_elapsed(replay_wait_started) < command->wait_ms) {
+            return;
+        }
+        replay_waiting = false;
+        replay_next++;
+        return;
+    }
+
     // One command at a time, and only while the actor is free. A command
     // submitted over a running goal would be refused or would replace it, and
     // either way the replay would stop matching what it is reproducing.
@@ -238,7 +441,10 @@ void replay_ui_tick(void)
     // treats as actionable - including the end-turn press, whose own condition
     // is exactly this one. Two notions of "free" in one path is the drift this
     // card has already been bitten by twice.
-    if (!combat_ui_actor_ready(pc_obj)) {
+    // Real-time session A: `now` is the exception - a click during a wind-up
+    // or a recovery, which a player can make and cancelling and queueing are
+    // about. Everything else below still holds.
+    if (!command->now && !combat_ui_actor_ready(pc_obj)) {
         return;
     }
 
@@ -251,8 +457,6 @@ void replay_ui_tick(void)
         && combat_turn_based_whos_turn_get() != pc_obj) {
         return;
     }
-
-    command = &replay_commands[replay_next];
 
     if (!replay_mode_matches(command)) {
         // Say it once - the flag is cleared only when a command is actually
@@ -282,6 +486,59 @@ void replay_ui_tick(void)
         if (!replay_key_action(command->target)) {
             tig_debug_printf("Replay: command %d names an unknown action '%s'\n",
                 replay_next - 1, command->target);
+        }
+        return;
+    }
+
+    if (command->kind == REPLAY_KIND_LEARN) {
+        replay_stall_reported = false;
+        replay_next++;
+        spell_ui_add(pc_obj, command->spell);
+        return;
+    }
+
+    if (command->kind == REPLAY_KIND_WIELD) {
+        replay_stall_reported = false;
+        replay_next++;
+        if (!replay_resolve(command, &target_obj)) {
+            return;
+        }
+        if (!intgame_equip_weapon(target_obj)) {
+            tig_debug_printf("Replay: command %d could not wield '%s'\n",
+                replay_next - 1, command->target);
+        }
+        return;
+    }
+
+    if (command->kind == REPLAY_KIND_CAST) {
+        memset(&td, 0, sizeof(td));
+        if (command->cast_target == REPLAY_CAST_LOCATION) {
+            td.is_loc = 1;
+            td.loc = command->loc;
+        } else if (command->cast_target == REPLAY_CAST_SELF) {
+            td.obj = pc_obj;
+        } else {
+            if (!replay_resolve(command, &target_obj)) {
+                replay_next++;
+                return;
+            }
+            td.obj = target_obj;
+        }
+
+        replay_stall_reported = false;
+        replay_next++;
+
+        // The spell button, then the click. A spell whose target is the caster
+        // is applied by activation itself, as the UI does; anything else is
+        // applied through the click path, which checks the target the way a
+        // click would. Left in spell mode - a target the click path refused -
+        // the replay backs out as a right-click would.
+        if (spell_ui_activate(pc_obj, command->spell) == SPELL_UI_ACTIVATE_OK
+            && intgame_mode_get() == INTGAME_MODE_SPELL) {
+            intgame_apply_mode_to_target(&td);
+            if (intgame_mode_get() == INTGAME_MODE_SPELL) {
+                spell_ui_cancel();
+            }
         }
         return;
     }

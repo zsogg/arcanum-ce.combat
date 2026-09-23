@@ -599,6 +599,119 @@ TEST(a_command_waits_for_the_mode_it_was_recorded_in)
     CHECK(!replay_ui_mode_matches(1, false));
 }
 
+// --- real-time session A: the rows a real-time script needs --------------
+
+#define REPLAY_SCRIPT "./combat-observer-replay.txt"
+
+static bool load_script(const char* text)
+{
+    FILE* stream = fopen(REPLAY_SCRIPT, "wb");
+    bool loaded;
+
+    if (stream == NULL) return false;
+    fputs(text, stream);
+    fclose(stream);
+    loaded = replay_ui_load(REPLAY_SCRIPT);
+    remove(REPLAY_SCRIPT);
+    return loaded;
+}
+
+static bool row_is(int index, const char* expected)
+{
+    char described[256];
+
+    if (!replay_ui_describe(index, described, sizeof(described))) return false;
+    if (strcmp(described, expected) != 0) {
+        fprintf(stderr, "  row %d: %s\n  wanted: %s\n", index, described, expected);
+        return false;
+    }
+    return true;
+}
+
+TEST(every_existing_row_form_still_loads_as_it_did)
+{
+    // The three kinds every recorded script uses, with and without an aim. A
+    // parser rewrite that changed any of these would break every replay made
+    // since card O2 without a single one failing to load.
+    CHECK(load_script(
+        "# a comment\n"
+        "0 key combat-mode\n"
+        "2 object G_00000084_0104_4040_8000_000000000401\n"
+        "2 object G_00000084_0104_4040_8000_000000000401 1\n"
+        "3 location 361533167198256 3\n"));
+    CHECK_INT(replay_ui_count(), 4);
+    CHECK(row_is(0, "turn=0 now=0 kind=key target=combat-mode loc=0 aim=0 spell=0 cast=- wait=0"));
+    CHECK(row_is(1, "turn=2 now=0 kind=object target=G_00000084_0104_4040_8000_000000000401 loc=0 aim=0 spell=0 cast=- wait=0"));
+    CHECK(row_is(2, "turn=2 now=0 kind=object target=G_00000084_0104_4040_8000_000000000401 loc=0 aim=1 spell=0 cast=- wait=0"));
+    CHECK(row_is(3, "turn=3 now=0 kind=location target= loc=361533167198256 aim=3 spell=0 cast=- wait=0"));
+}
+
+TEST(the_real_time_rows_load_into_what_they_say)
+{
+    CHECK(load_script(
+        "0 wield G_00000084_0502_4040_8000_000000000205\n"
+        "0 cast 55 object G_A09DCD63_7A15_D411_8F1D_00E02920220C\n"
+        "0 cast 60 self\n"
+        "0 cast 55 location 361533167198256\n"
+        "0 wait 250\n"
+        "0 now object G_00000084_0104_4040_8000_000000000401 2\n"
+        "0 key character-points\n"
+        "0 learn 55\n"));
+    CHECK_INT(replay_ui_count(), 8);
+    CHECK(row_is(0, "turn=0 now=0 kind=wield target=G_00000084_0502_4040_8000_000000000205 loc=0 aim=0 spell=0 cast=- wait=0"));
+    CHECK(row_is(1, "turn=0 now=0 kind=cast target=G_A09DCD63_7A15_D411_8F1D_00E02920220C loc=0 aim=0 spell=55 cast=object wait=0"));
+    CHECK(row_is(2, "turn=0 now=0 kind=cast target= loc=0 aim=0 spell=60 cast=self wait=0"));
+    CHECK(row_is(3, "turn=0 now=0 kind=cast target= loc=361533167198256 aim=0 spell=55 cast=location wait=0"));
+    CHECK(row_is(4, "turn=0 now=0 kind=wait target= loc=0 aim=0 spell=0 cast=- wait=250"));
+    CHECK(row_is(5, "turn=0 now=1 kind=object target=G_00000084_0104_4040_8000_000000000401 loc=0 aim=2 spell=0 cast=- wait=0"));
+    CHECK(row_is(6, "turn=0 now=0 kind=key target=character-points loc=0 aim=0 spell=0 cast=- wait=0"));
+    CHECK(row_is(7, "turn=0 now=0 kind=learn target= loc=0 aim=0 spell=55 cast=- wait=0"));
+}
+
+TEST(a_row_the_parser_cannot_read_refuses_the_whole_file)
+{
+    // Refused, never skipped: a replay missing a row diverges from what it
+    // reproduces and reads as a gameplay difference.
+    CHECK(!load_script("0 object G_X 9\n")); // not a hit location
+    CHECK(!load_script("0 fly G_X\n")); // no such kind
+    CHECK(!load_script("0 cast 55\n")); // a cast with no target
+    CHECK(!load_script("0 cast 55 object\n")); // an object with no id
+    CHECK(!load_script("0 wait -5\n")); // time does not run back
+    CHECK(!load_script("0 wait soon\n"));
+    CHECK(!load_script("0 key combat-mode extra\n")); // nothing may trail a row
+    CHECK(!load_script("zero key combat-mode\n"));
+    CHECK(!load_script("0 learn\n"));
+    CHECK(!load_script("0 learn harm\n"));
+    CHECK_INT(replay_ui_count(), 0);
+}
+
+TEST(a_tile_step_a_cast_request_and_a_weapon_change_are_each_recorded)
+{
+    char trace[TRACE_SIZE];
+
+    clean();
+    CHECK(combat_observer_open(TRACE_FILE));
+    combat_observer_actor_moved("fighter", 1000, 1001);
+    combat_observer_cast_requested("fighter", 55, "object", "virgil", 0);
+    combat_observer_cast_requested("fighter", 55, "location", "NULL", 361533167198256LL);
+    // The first sample is the starting weapon, not a change; the same weapon
+    // again is nothing; a different one, or an empty slot, is a change.
+    combat_observer_wield_observed("fighter", "sword");
+    combat_observer_wield_observed("fighter", "sword");
+    combat_observer_wield_observed("fighter", "bow");
+    combat_observer_wield_observed("fighter", "NULL");
+    combat_observer_close();
+
+    CHECK(read_trace(trace, sizeof(trace)));
+    CHECK(strstr(trace, "\"event\":\"actor.moved\",\"turn\":null,\"action_id\":null,\"actor\":\"fighter\",\"from_location\":1000,\"to_location\":1001") != NULL);
+    CHECK(strstr(trace, "\"spell\":55,\"target_kind\":\"object\",\"target\":\"virgil\",\"target_location\":0") != NULL);
+    CHECK(strstr(trace, "\"target_kind\":\"location\",\"target\":\"NULL\",\"target_location\":361533167198256") != NULL);
+    CHECK_INT(count_events(trace, "\"event\":\"wield.changed\""), 2);
+    CHECK(strstr(trace, "\"weapon\":\"sword\"") == NULL);
+    CHECK(strstr(trace, "\"weapon\":\"bow\"") != NULL);
+    CHECK(strstr(trace, "\"weapon\":\"NULL\"") != NULL);
+}
+
 // --- card O2: the actions that change the interaction mode ---------------
 
 static CombatObserverMode mode_of(bool combat_mode, bool turn_based,
@@ -1499,6 +1612,10 @@ void test_combat_observer_suite(void)
     RUN(observation_does_not_advance_the_combat_rng);
     RUN(a_command_records_its_request_before_its_resolution);
     RUN(a_command_waits_for_the_mode_it_was_recorded_in);
+    RUN(every_existing_row_form_still_loads_as_it_did);
+    RUN(the_real_time_rows_load_into_what_they_say);
+    RUN(a_row_the_parser_cannot_read_refuses_the_whole_file);
+    RUN(a_tile_step_a_cast_request_and_a_weapon_change_are_each_recorded);
     RUN(every_mode_state_decides_acceptance_the_same_way);
     RUN(the_turn_based_setting_and_a_running_encounter_are_not_the_same_axis);
     RUN(a_mode_action_records_its_request_before_its_resolution);

@@ -982,14 +982,10 @@ void main_loop(void)
                                 // Behind its own flag, default off, so the
                                 // faithful path is unchanged whatever the
                                 // cheat level. UAP already lifts the unspent
-                                // cap from 56 to 10000 (`stat.c`).
-                                if (feature_enabled(FEATURE_DEBUG_CHARACTER_POINTS)) {
-                                    int points = stat_base_get(pc_obj, STAT_UNSPENT_POINTS);
-                                    stat_base_set(pc_obj, STAT_UNSPENT_POINTS, points + 20);
-                                    tig_debug_printf("debug: character points %d -> %d\n",
-                                        points, stat_base_get(pc_obj, STAT_UNSPENT_POINTS));
-                                    charedit_refresh();
-                                }
+                                // cap from 56 to 10000 (`stat.c`). The body is
+                                // `intgame_debug_character_points`, which a
+                                // replay's `key character-points` also calls.
+                                intgame_debug_character_points();
                                 break;
                             default:
                                 break;

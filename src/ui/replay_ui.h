@@ -2,6 +2,7 @@
 #define ARCANUM_UI_REPLAY_UI_H_
 
 #include <stdbool.h>
+#include <stddef.h>
 
 // CE (card O2): re-submit a recorded run's commands through the ordinary
 // validated action path.
@@ -46,5 +47,10 @@ bool replay_ui_mode_matches(int recorded_turn, bool combat_active);
 // its recording, and the run record should say so rather than look complete.
 bool replay_ui_active(void);
 int replay_ui_remaining(void);
+
+// Real-time session A, for the suite: how many rows loaded, and one of them in a
+// fixed textual form.
+int replay_ui_count(void);
+bool replay_ui_describe(int index, char* buffer, size_t size);
 
 #endif /* ARCANUM_UI_REPLAY_UI_H_ */

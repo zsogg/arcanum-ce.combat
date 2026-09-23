@@ -176,6 +176,8 @@ void intgame_perform_action_on_target(TargetDescriptor* td);
 // with no player action behind it is recorded as such. Cheap - three reads and a
 // comparison - and a no-op unless the observer is recording.
 void intgame_mode_observe(void);
+bool intgame_equip_weapon(int64_t item_obj);
+bool intgame_debug_character_points(void);
 
 // CE (card O2): the two actions that change the interaction mode - "combat-mode"
 // (`R`, or the combat button) and "turn-based" (`SPACE`). Exposed for the same

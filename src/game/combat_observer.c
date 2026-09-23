@@ -27,6 +27,8 @@ static int combat_observer_fail_after = -1;
 static int combat_observer_lines_written;
 static CombatObserverMode combat_observer_mode;
 static bool combat_observer_mode_known;
+static char combat_observer_weapon[COMBAT_OBSERVER_IDENTITY_SIZE];
+static bool combat_observer_weapon_known;
 
 // Card RT1 (session 1): the run-relative clock, injected here rather than at
 // each of the nineteen call sites.
@@ -642,6 +644,74 @@ void combat_observer_resource_charged(const char* actor, const char* resource,
     combat_observer_write(line);
 }
 
+void combat_observer_actor_moved(const char* actor, int64_t from_loc,
+    int64_t to_loc)
+{
+    char line[320];
+
+    if (combat_observer_stream == NULL) {
+        return;
+    }
+
+    snprintf(line, sizeof(line),
+        "{\"schema\":%d,\"sequence\":%u,\"event\":\"actor.moved\","
+        "\"turn\":null,\"action_id\":null,\"actor\":\"%s\","
+        "\"from_location\":%lld,\"to_location\":%lld}",
+        COMBAT_OBSERVER_SCHEMA, combat_observer_sequence++, actor,
+        (long long)from_loc, (long long)to_loc);
+    combat_observer_write(line);
+}
+
+void combat_observer_cast_requested(const char* actor, int spell,
+    const char* target_kind, const char* target, int64_t target_loc)
+{
+    char line[384];
+
+    // A player command, counted against the bound like `command.requested`.
+    if (!combat_observer_begin_semantic()) return;
+
+    snprintf(line, sizeof(line),
+        "{\"schema\":%d,\"sequence\":%u,\"event\":\"cast.requested\","
+        "\"turn\":%u,\"action_id\":null,\"actor\":\"%s\",\"spell\":%d,"
+        "\"target_kind\":\"%s\",\"target\":\"%s\","
+        "\"target_location\":%lld}",
+        COMBAT_OBSERVER_SCHEMA, combat_observer_sequence++, combat_observer_turn,
+        actor, spell, target_kind, target, (long long)target_loc);
+    combat_observer_write(line);
+}
+
+void combat_observer_wield_observed(const char* actor, const char* weapon)
+{
+    char line[320];
+
+    if (combat_observer_stream == NULL) {
+        return;
+    }
+
+    if (!combat_observer_weapon_known) {
+        snprintf(combat_observer_weapon, sizeof(combat_observer_weapon), "%s",
+            weapon);
+        combat_observer_weapon_known = true;
+        return;
+    }
+
+    if (strcmp(combat_observer_weapon, weapon) == 0) {
+        return;
+    }
+
+    snprintf(combat_observer_weapon, sizeof(combat_observer_weapon), "%s",
+        weapon);
+    // A change of state, counted against the bound like `mode.changed`.
+    if (!combat_observer_begin_semantic()) return;
+    snprintf(line, sizeof(line),
+        "{\"schema\":%d,\"sequence\":%u,\"event\":\"wield.changed\","
+        "\"turn\":%u,\"action_id\":null,\"actor\":\"%s\","
+        "\"weapon\":\"%s\"}",
+        COMBAT_OBSERVER_SCHEMA, combat_observer_sequence++, combat_observer_turn,
+        actor, weapon);
+    combat_observer_write(line);
+}
+
 void combat_observer_skill_roll(const char* source, const char* target,
     int skill, int effectiveness, int difficulty, int roll,
     int critical_roll, bool success, bool critical)
@@ -727,5 +797,7 @@ void combat_observer_test_reset(void)
     combat_observer_lines_written = 0;
     memset(&combat_observer_mode, 0, sizeof(combat_observer_mode));
     combat_observer_mode_known = false;
+    combat_observer_weapon[0] = '\0';
+    combat_observer_weapon_known = false;
     combat_observer_terminal = false;
 }

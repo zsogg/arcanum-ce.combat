@@ -13,6 +13,7 @@
 #include "game/curse.h"
 #include "game/damage_type.h"
 #include "game/descriptions.h"
+#include "game/feature.h"
 #include "game/gamelib.h"
 #include "game/gsound.h"
 #include "game/hrp.h"
@@ -3443,12 +3444,76 @@ void intgame_mode_observe(void)
     combat_observer_object_id(player_get_local_pc_obj(), actor);
     intgame_mode_read(&mode);
     combat_observer_mode_observed(actor, &mode);
+
+    // CE (real-time session A): the weapon slot, watched the same way, because
+    // equipping has three routes and no common function.
+    {
+        char weapon[COMBAT_OBSERVER_IDENTITY_SIZE];
+        combat_observer_object_id(
+            item_wield_get(player_get_local_pc_obj(), ITEM_INV_LOC_WEAPON),
+            weapon);
+        combat_observer_wield_observed(actor, weapon);
+    }
+}
+
+// CE (real-time session A): equip a weapon the way the hotkey bar does, for the
+// replay. That route is the one of the three with a single function behind it,
+// and it already unequips the current weapon and reports refusals as a player
+// would see them. True when the item is wielded afterwards.
+bool intgame_equip_weapon(int64_t item_obj)
+{
+    Hotkey hotkey;
+    int64_t pc_obj;
+
+    pc_obj = player_get_local_pc_obj();
+    if (pc_obj == OBJ_HANDLE_NULL || item_obj == OBJ_HANDLE_NULL) {
+        return false;
+    }
+
+    memset(&hotkey, 0, sizeof(hotkey));
+    object_ref_init(item_obj, &(hotkey.item_obj));
+    intgame_hotkey_equip_item(pc_obj, &hotkey, ITEM_INV_LOC_WEAPON);
+    return item_wield_get(pc_obj, ITEM_INV_LOC_WEAPON) == item_obj;
+}
+
+// CE: the `J` cheat - twenty unspent character points - for the key and for a
+// replay's `key character-points`. Under exactly the key's conditions, cheat
+// level 3 and the `debug character points` setting, so a script cannot do what
+// a player at the keyboard could not. True when points were granted.
+bool intgame_debug_character_points(void)
+{
+    int64_t pc_obj;
+    int points;
+
+    pc_obj = player_get_local_pc_obj();
+    if (pc_obj == OBJ_HANDLE_NULL
+        || gamelib_cheat_level_get() < 3
+        || !feature_enabled(FEATURE_DEBUG_CHARACTER_POINTS)) {
+        return false;
+    }
+
+    points = stat_base_get(pc_obj, STAT_UNSPENT_POINTS);
+    stat_base_set(pc_obj, STAT_UNSPENT_POINTS, points + 20);
+    tig_debug_printf("debug: character points %d -> %d\n",
+        points, stat_base_get(pc_obj, STAT_UNSPENT_POINTS));
+    charedit_refresh();
+    return true;
 }
 
 bool intgame_mode_action(const char* action)
 {
     if (strcmp(action, "combat-mode") == 0) {
         intgame_combat_mode_toggle();
+        return true;
+    }
+
+    // Real-time session A: building the test character a script needs, the way
+    // a player at the keyboard with the cheat enabled would.
+    if (strcmp(action, "character-points") == 0) {
+        if (!intgame_debug_character_points()) {
+            tig_debug_printf("Replay: character-points needs -4637 and"
+                             " 'debug character points'\n");
+        }
         return true;
     }
 

@@ -4,6 +4,7 @@
 
 #include "game/ai.h"
 #include "game/anim.h"
+#include "game/combat_observer.h"
 #include "game/critter.h"
 #include "game/description.h"
 #include "game/descriptions.h"
@@ -2330,6 +2331,16 @@ void object_move_to(int64_t obj, int64_t loc, int offset_x, int offset_y)
     if (cur_loc == loc) {
         object_set_offset_internal(obj, offset_x, offset_y);
         return;
+    }
+
+    // CE (real-time session A): every tile a critter changes, by whatever route
+    // - this is the one function they all pass through. What rule 12's "time
+    // spent moving" is measured from.
+    if (combat_observer_is_enabled()
+        && obj_type_is_critter(obj_field_int32_get(obj, OBJ_F_TYPE))) {
+        char actor[COMBAT_OBSERVER_IDENTITY_SIZE];
+        combat_observer_object_id(obj, actor);
+        combat_observer_actor_moved(actor, cur_loc, loc);
     }
 
     if ((flags & OF_TEXT) != 0) {
