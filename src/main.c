@@ -418,6 +418,26 @@ int main(int argc, char** argv)
         return EXIT_SUCCESS;
     }
 
+    // CE (real-time session B): `-vsyncinterval=N` presents every Nth screen
+    // refresh, so N = 2 runs a 60 Hz display at 30 fps. The loop is paced by the
+    // display, and today's real-time pace depends on it; the action budget is
+    // meant not to, and this is how that is measured. Harness-only, like
+    // `-runframes`: without it the renderer keeps its interval of 1.
+    pch = strstr(lpCmdLine, "-vsyncinterval=");
+    if (pch != NULL) {
+        SDL_Renderer* renderer;
+        int interval = (int)strtol(pch + strlen("-vsyncinterval="), NULL, 10);
+
+        if (interval >= 1 && tig_video_renderer_get(&renderer) == TIG_OK) {
+            if (SDL_SetRenderVSync(renderer, interval)) {
+                tig_debug_printf("Harness: vsync interval %d\n", interval);
+            } else {
+                tig_debug_printf("Harness: vsync interval %d refused: %s\n",
+                    interval, SDL_GetError());
+            }
+        }
+    }
+
     screenshotter.key = SDL_SCANCODE_F12;
     screenshotter.field_4 = 0;
     tig_video_screenshot_set_settings(&screenshotter);
