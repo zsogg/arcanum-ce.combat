@@ -40,8 +40,10 @@ typedef enum ReplayKind {
     //   cast <spell> self | object <id> | location <loc>
     //       the spell button, then the target click - `spell_ui_activate`, then
     //       `intgame_apply_mode_to_target`, the path a click in spell mode takes.
-    //   wield <id>
-    //       the hotkey bar's equip, the one equip route with one function.
+    //   wield <id> | wield <prototype>
+    //       the hotkey bar's equip, the one equip route with one function. A
+    //       bare number names a prototype in the player's pack (session C), for
+    //       a carried item whose identity a script cannot know in advance.
     //   wait <ms>
     //       hold the next row this long, so a script can space its commands.
     REPLAY_KIND_CAST,
@@ -184,6 +186,53 @@ static bool replay_parse_int(const char* token, int* value)
     }
     *value = (int)parsed;
     return true;
+}
+
+// A prototype by the number a modder sees - the `.pro` file's name, and the
+// `prototype` in a scenario file - which is its description plus 20
+// (`proto_description_to_oid`). Taking the description instead was measured
+// wrong on 2026-09-23: `give 15171` made an Explosive Decoy, description 15171,
+// not the Smoke Grenade that is prototype 15171.
+static int64_t replay_prototype(int prototype)
+{
+    return prototype > 20 ? proto_get_by_description(prototype - 20) : OBJ_HANDLE_NULL;
+}
+
+// The player's first usable item of a prototype, or null - saying what the
+// pack does hold when there is none, so a wrong number is visible in the log.
+//
+// Not `item_find_by_proto`, which returns items the engine has finished with.
+// Measured 2026-09-23: a thrown Smoke Grenade stays in the thrower's inventory
+// list flagged `OF_DESTROYED` after its spell goes off, the search returned it
+// for every later throw, and `anim_throw_item` refused it each time - five of
+// six grenades released and never flew.
+static int64_t replay_find_carried(int64_t pc_obj, int prototype, bool pack_only)
+{
+    int64_t proto_obj;
+    int64_t item_obj;
+    int count;
+    int index;
+
+    proto_obj = replay_prototype(prototype);
+    count = obj_field_int32_get(pc_obj, OBJ_F_CRITTER_INVENTORY_NUM);
+    for (index = 0; index < count; index++) {
+        item_obj = obj_arrayfield_handle_get(pc_obj, OBJ_F_CRITTER_INVENTORY_LIST_IDX, index);
+        if (proto_obj == OBJ_HANDLE_NULL
+            || obj_field_handle_get(item_obj, OBJ_F_PROTOTYPE_HANDLE) != proto_obj
+            || (obj_field_int32_get(item_obj, OBJ_F_FLAGS) & (OF_DESTROYED | OF_OFF)) != 0
+            || (pack_only && IS_WEAR_INV_LOC(item_inventory_location_get(item_obj)))) {
+            continue;
+        }
+        return item_obj;
+    }
+
+    tig_debug_printf("Replay: no usable prototype %d in the pack; it holds:", prototype);
+    for (index = 0; index < count; index++) {
+        item_obj = obj_arrayfield_handle_get(pc_obj, OBJ_F_CRITTER_INVENTORY_LIST_IDX, index);
+        tig_debug_printf(" %d", obj_field_int32_get(item_obj, OBJ_F_DESCRIPTION) + 20);
+    }
+    tig_debug_printf("\n");
+    return OBJ_HANDLE_NULL;
 }
 
 static void replay_copy_target(ReplayCommand* command, const char* token)
@@ -549,7 +598,7 @@ void replay_ui_tick(void)
 
         replay_stall_reported = false;
         replay_next++;
-        proto_obj = proto_get_by_description(command->proto);
+        proto_obj = replay_prototype(command->proto);
         if (proto_obj == OBJ_HANDLE_NULL) {
             tig_debug_printf("Replay: command %d names no prototype %d\n",
                 replay_next - 1, command->proto);
@@ -567,19 +616,13 @@ void replay_ui_tick(void)
     }
 
     if (command->kind == REPLAY_KIND_THROW) {
-        int64_t proto_obj;
         int64_t item_obj;
 
         replay_stall_reported = false;
         replay_next++;
-        proto_obj = proto_get_by_description(command->proto);
-        // 0x01: not a worn item - a thrown one comes from the pack.
-        item_obj = proto_obj != OBJ_HANDLE_NULL
-            ? item_find_by_proto(pc_obj, proto_obj, 0x01)
-            : OBJ_HANDLE_NULL;
+        // A thrown item comes from the pack, not the hands.
+        item_obj = replay_find_carried(pc_obj, command->proto, true);
         if (item_obj == OBJ_HANDLE_NULL) {
-            tig_debug_printf("Replay: command %d has no prototype %d to throw\n",
-                replay_next - 1, command->proto);
             return;
         }
         if (!anim_goal_throw_item(pc_obj, item_obj, command->loc)) {
@@ -590,9 +633,16 @@ void replay_ui_tick(void)
     }
 
     if (command->kind == REPLAY_KIND_WIELD) {
+        int proto;
+
         replay_stall_reported = false;
         replay_next++;
-        if (!replay_resolve(command, &target_obj)) {
+        if (replay_parse_int(command->target, &proto) && proto > 0) {
+            target_obj = replay_find_carried(pc_obj, proto, false);
+            if (target_obj == OBJ_HANDLE_NULL) {
+                return;
+            }
+        } else if (!replay_resolve(command, &target_obj)) {
             return;
         }
         if (!intgame_equip_weapon(target_obj)) {

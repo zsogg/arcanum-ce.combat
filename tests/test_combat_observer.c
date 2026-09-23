@@ -675,11 +675,14 @@ TEST(the_throw_rows_load_into_what_they_say)
     CHECK(load_script(
         "0 give 15171 6\n"
         "0 throw 15171 361533167198256\n"
-        "0 now throw 15171 361533167198256\n"));
-    CHECK_INT(replay_ui_count(), 3);
+        "0 now throw 15171 361533167198256\n"
+        "0 wield 6053\n"));
+    CHECK_INT(replay_ui_count(), 4);
     CHECK(row_is(0, "turn=0 now=0 kind=give target= loc=0 aim=0 spell=0 cast=- wait=0 proto=15171 count=6"));
     CHECK(row_is(1, "turn=0 now=0 kind=throw target= loc=361533167198256 aim=0 spell=0 cast=- wait=0 proto=15171 count=0"));
     CHECK(row_is(2, "turn=0 now=1 kind=throw target= loc=361533167198256 aim=0 spell=0 cast=- wait=0 proto=15171 count=0"));
+    // A wield by prototype, for a carried item: the Revolver.
+    CHECK(row_is(3, "turn=0 now=0 kind=wield target=6053 loc=0 aim=0 spell=0 cast=- wait=0"));
 
     CHECK(!load_script("0 give 15171\n")); // how many
     CHECK(!load_script("0 give 15171 0\n")); // nothing is not a gift
