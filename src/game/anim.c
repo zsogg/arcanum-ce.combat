@@ -25,6 +25,7 @@
 #include "game/random.h"
 #include "game/reaction.h"
 #include "game/resistance.h"
+#include "game/rt_budget.h"
 #include "game/sfx.h"
 #include "game/skill.h"
 #include "game/stat.h"
@@ -9338,6 +9339,10 @@ bool anim_reached_action_frame(AnimRunInfo* run_info)
 
     run_info->flags |= 0x8;
 
+    // CE (real-time session B): the release, where the action budget starts
+    // counting recovery rather than wind-up.
+    rt_budget_released(run_info);
+
     if (combat_observer_is_enabled()) {
         goal_data = run_info->cur_stack_data;
         self_obj = goal_data != NULL
@@ -9484,6 +9489,12 @@ bool anim_advance_frame(AnimRunInfo* run_info)
     if (obj == OBJ_HANDLE_NULL) {
         tig_debug_printf("Anim: Warning: Goal Received NULL Object!\n");
         return false;
+    }
+
+    // CE (real-time session B): the same hold for a spell with a casting
+    // animation; every other goal advancing frames here passes straight through.
+    if (rt_budget_hold(run_info)) {
+        return true;
     }
 
     if ((obj_field_int32_get(obj, OBJ_F_SPELL_FLAGS) & OSF_STONED) != 0) {
@@ -12206,6 +12217,13 @@ bool AGupdateAnimEyeCandy(AnimRunInfo* run_info)
         return false;
     }
 
+    // CE (real-time session B): a cast whose caster is still recovering holds
+    // before its casting effect advances. Only for the spell-attempt goals;
+    // every other eye-candy goal passes straight through.
+    if (rt_budget_hold(run_info)) {
+        return true;
+    }
+
     overlay_fore = run_info->cur_stack_data->params[AGDATA_SCRATCH_VAL1].data;
     overlay_back = run_info->cur_stack_data->params[AGDATA_SCRATCH_VAL2].data;
     overlay_light = run_info->cur_stack_data->params[AGDATA_SCRATCH_VAL3].data;
@@ -13182,6 +13200,9 @@ bool AGbeginAnimAttack(AnimRunInfo* run_info)
         return false;
     }
 
+    // CE (real-time session B): a new attack attempt is a new action.
+    rt_budget_attack_begun(run_info);
+
     art_id = run_info->params[1].data;
     if (art_id != TIG_ART_ID_INVALID) {
         object_set_current_aid(source_obj, art_id);
@@ -13264,6 +13285,12 @@ bool AGupdateAnimAttack(AnimRunInfo* run_info)
         return false;
     }
 
+    // CE (real-time session B): an attack whose actor is still recovering holds
+    // here, without advancing a frame, until the action budget allows it.
+    if (rt_budget_hold(run_info)) {
+        return true;
+    }
+
     art_id = obj_field_int32_get(obj, OBJ_F_CURRENT_AID);
 
     if (tig_art_anim_data(art_id, &art_anim_data) != TIG_OK) {
@@ -13295,6 +13322,10 @@ bool AGupdateAnimAttack(AnimRunInfo* run_info)
             && (obj_type == OBJ_TYPE_PC
                 || (obj_field_int32_get(obj, OBJ_F_NPC_FLAGS) & ONF_BACKING_OFF) == 0)
             && anim_can_reach_target(obj, target_obj)) {
+            // CE (real-time session B): another shot is another action.
+            if (rt_budget_hold_repeat(run_info)) {
+                return true;
+            }
             art_id = tig_art_id_frame_set(art_id, frame - 3);
             art_id = tig_art_id_rotation_set(art_id, object_rot(obj, target_obj));
             object_set_current_aid(obj, art_id);
@@ -13305,6 +13336,11 @@ bool AGupdateAnimAttack(AnimRunInfo* run_info)
             && (obj_type == OBJ_TYPE_PC
                 || (obj_field_int32_get(obj, OBJ_F_NPC_FLAGS) & ONF_BACKING_OFF) == 0)
             && anim_can_reach_target(obj, target_obj)) {
+            // CE (real-time session B): another arrow is another action. Until
+            // the last one's time is up the bow stays drawn.
+            if (rt_budget_hold_repeat(run_info)) {
+                return true;
+            }
             art_id = tig_art_id_frame_set(art_id, frame - 3);
             art_id = tig_art_id_rotation_set(art_id, object_rot(obj, target_obj));
             object_set_current_aid(obj, art_id);

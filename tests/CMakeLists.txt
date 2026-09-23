@@ -23,6 +23,7 @@ add_executable(arcanum-tests
     "test_color.c"
     "test_called_shot.c"
     "test_combat_observer.c"
+    "test_rt_budget.c"
     "test_bsearch.c"
     "test_palette.c"
     "test_mes.c"

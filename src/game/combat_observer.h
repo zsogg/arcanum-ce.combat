@@ -37,12 +37,16 @@ void combat_observer_close(void);
 // skill level, training and effective speed. `action.released` gained the goal
 // that released and the timing inputs behind the step delay.
 //
+// 7 (real-time session B, 2026-09-22): the action budget's own events -
+// `action.accepted`, `action.cancelled` and `actor.ready` - so its rules can be
+// read off a trace rather than inferred from releases.
+//
 // 6 (real-time session A, 2026-09-22): what a real-time replay has to drive and
 // check. `actor.moved` for every tile a critter changes, `cast.requested` when
 // the player applies a spell, and `wield.changed` when the player's weapon slot
 // changes by any route. None existed, so a recorded run could not say that the
 // player cast, equipped or moved, and a replay could not reproduce it.
-#define COMBAT_OBSERVER_SCHEMA 6
+#define COMBAT_OBSERVER_SCHEMA 7
 
 bool combat_observer_is_enabled(void);
 bool combat_observer_is_complete(void);
@@ -257,6 +261,14 @@ void combat_observer_cast_requested(const char* actor, int spell,
 // slot is watched instead. The first sample is the starting weapon, not a
 // change. `weapon` is "NULL" for an empty slot.
 void combat_observer_wield_observed(const char* actor, const char* weapon);
+
+// Real-time session B: the action budget (rt_budget.c). `event` is
+// "action.accepted" when an action starts and takes its time, "action.cancelled"
+// when one ends before releasing, and "actor.ready" when an actor may act
+// again. `category` is "attack" or "cast"; `elapsed_ms` is the time counted so
+// far, which for a ready actor is the whole duration.
+void combat_observer_budget(const char* event, const char* actor,
+    const char* category, int action_points, int duration_ms, int elapsed_ms);
 
 void combat_observer_skill_roll(const char* source, const char* target,
     int skill, int effectiveness, int difficulty, int roll,

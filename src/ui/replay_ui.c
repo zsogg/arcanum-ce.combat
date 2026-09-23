@@ -7,6 +7,7 @@
 #include <tig/debug.h>
 #include <tig/timer.h>
 
+#include "game/anim.h"
 #include "game/combat.h"
 #include "game/critter.h"
 #include "game/obj.h"
@@ -543,48 +544,58 @@ void replay_ui_tick(void)
         return;
     }
 
-    memset(&td, 0, sizeof(td));
+    // Real-time session B: a tile is walked to, the way a click on it walks -
+    // `anim_goal_move_to_tile`, which is what the UI's own tile click calls. It
+    // used to go through the target dispatch below, which a real tile click
+    // never reaches: that dispatch reads the target's object type before asking
+    // whether it is a tile, and `TargetDescriptor` keeps `obj` and `loc` in one
+    // union, so the location was read as an object handle and the game crashed
+    // (measured 2026-09-22, SIGSEGV in obj_field_int32_get). No recording ever
+    // contained a location row - movement is not recorded - so none replayed.
     if (command->kind == REPLAY_KIND_LOCATION) {
-        td.is_loc = 1;
-        td.loc = command->loc;
-    } else {
-        if (!objid_id_from_str(&oid, command->target)) {
-            tig_debug_printf("Replay: command %d names an unreadable target '%s'\n",
-                replay_next, command->target);
-            replay_next++;
-            return;
-        }
-
-        target_obj = obj_pool_perm_lookup(oid);
-        if (target_obj == OBJ_HANDLE_NULL) {
-            // The recorded object is not in this run. That is a real
-            // divergence - a replay cannot act on something absent - so say so
-            // and move on rather than silently skipping to a different target.
-            tig_debug_printf("Replay: command %d targets '%s', absent from this run\n",
-                replay_next, command->target);
-            replay_next++;
-            return;
-        }
-
-        if (!replay_target_is_live(target_obj)) {
-            // Held rather than skipped, and held rather than submitted. The
-            // recording's command named a living target; this run's is dead, so
-            // the replay has already diverged from what it is reproducing.
-            // Leaving it outstanding is what makes that visible - the engine
-            // reports `replay outstanding=N` on the way out and `compare`
-            // refuses a replay that ended holding commands.
-            if (!replay_stall_reported) {
-                replay_stall_reported = true;
-                tig_debug_printf("Replay: holding command %d; its target '%s'"
-                                 " is not a target the click path would give\n",
-                    replay_next, command->target);
-            }
-            return;
-        }
-
-        td.is_loc = 0;
-        td.obj = target_obj;
+        replay_stall_reported = false;
+        replay_next++;
+        anim_goal_move_to_tile(pc_obj, command->loc);
+        return;
     }
+
+    memset(&td, 0, sizeof(td));
+    if (!objid_id_from_str(&oid, command->target)) {
+        tig_debug_printf("Replay: command %d names an unreadable target '%s'\n",
+            replay_next, command->target);
+        replay_next++;
+        return;
+    }
+
+    target_obj = obj_pool_perm_lookup(oid);
+    if (target_obj == OBJ_HANDLE_NULL) {
+        // The recorded object is not in this run. That is a real
+        // divergence - a replay cannot act on something absent - so say so
+        // and move on rather than silently skipping to a different target.
+        tig_debug_printf("Replay: command %d targets '%s', absent from this run\n",
+            replay_next, command->target);
+        replay_next++;
+        return;
+    }
+
+    if (!replay_target_is_live(target_obj)) {
+        // Held rather than skipped, and held rather than submitted. The
+        // recording's command named a living target; this run's is dead, so
+        // the replay has already diverged from what it is reproducing.
+        // Leaving it outstanding is what makes that visible - the engine
+        // reports `replay outstanding=N` on the way out and `compare`
+        // refuses a replay that ended holding commands.
+        if (!replay_stall_reported) {
+            replay_stall_reported = true;
+            tig_debug_printf("Replay: holding command %d; its target '%s'"
+                             " is not a target the click path would give\n",
+                replay_next, command->target);
+        }
+        return;
+    }
+
+    td.is_loc = 0;
+    td.obj = target_obj;
 
     replay_stall_reported = false;
     replay_next++;

@@ -1,5 +1,6 @@
 #include "game/combat.h"
 #include "game/combat_observer.h"
+#include "game/rt_budget.h"
 
 #define _USE_MATH_DEFINES
 #include <math.h>
@@ -236,6 +237,9 @@ bool combat_init(GameInitInfo* init_info)
     combat_fast_turn_based = settings_get_value(&settings, FAST_TURN_BASED_KEY);
 
     settings_register(&settings, AUTO_ATTACK_KEY, "0", NULL);
+
+    // CE (real-time session B): the action budget's settings, and an empty table.
+    rt_budget_init();
     settings_register(&settings, COMBAT_TAUNTS_KEY, "0", NULL);
 
     return true;
@@ -254,6 +258,10 @@ void combat_exit(void)
 // 0x4B1E80
 void combat_reset(void)
 {
+    // CE (real-time session B): recovery is not saved (rule 3) - a new game or a
+    // load starts every actor ready.
+    rt_budget_reset();
+
     in_combat_reset = true;
     combat_turn_based_end();
     in_combat_reset = false;
@@ -322,6 +330,9 @@ bool combat_load(GameLoadInfo* load_info)
     ObjectID oid;
     int64_t obj;
     ObjectNode* node;
+
+    // CE (real-time session B): rule 3, as in combat_reset.
+    rt_budget_reset();
 
     if (load_info->stream == NULL) return false;
     if (tig_file_fread(&combat_turn_based, sizeof(combat_turn_based), 1, load_info->stream) != 1) return false;

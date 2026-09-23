@@ -17,6 +17,7 @@
 #include "game/newspaper.h"
 #include "game/obj_private.h"
 #include "game/object.h"
+#include "game/rt_budget.h"
 #include "game/stat.h"
 #include "game/teleport.h"
 #include "game/trap.h"
@@ -887,6 +888,10 @@ void timeevent_ping(tig_timestamp_t timestamp)
                 datetime_add_milliseconds(&timeevent_game_time, 8 * delta);
             }
             datetime_add_milliseconds(&timeevent_anim_time, 8 * delta);
+
+            // CE (real-time session B): the action budget's clock, in real
+            // milliseconds and only while the game is not paused (rules 2, 8).
+            rt_budget_tick((int)delta);
         }
     }
 

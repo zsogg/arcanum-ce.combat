@@ -32,6 +32,7 @@
 #include "game/random.h"
 #include "game/reaction.h"
 #include "game/resistance.h"
+#include "game/rt_budget.h"
 #include "game/script.h"
 #include "game/sector.h"
 #include "game/spell.h"
@@ -5010,8 +5011,14 @@ void magictech_invocation_process(MagicTechInvocation* mt_invocation)
                 }
             }
         } else if (anim_is_current_goal_type(run_info->parent_obj.obj, AG_THROW_SPELL, &anim_id)) {
+            // CE (real-time session B): rule 4 allows one request waiting. A
+            // cast already queued behind the one under way fills the queue, so
+            // a later one is refused, and freed below as a full queue's is.
+            // Interim: the rule asks for the newest to replace the waiting one,
+            // which the queue has no way to do.
             if (num_goal_subslots_in_use(&anim_id) < 4
                 && !combat_turn_based_is_active()
+                && !rt_budget_cast_waiting(&anim_id)
                 && anim_goal_data_init_no_interrupt(&goal_data, run_info->parent_obj.obj, anim)) {
                 goal_data.params[AGDATA_SPELL_DATA].data = run_info->id;
                 goal_data.params[AGDATA_TARGET_OBJ].obj = run_info->target_obj.obj;

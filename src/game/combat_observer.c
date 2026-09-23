@@ -712,6 +712,25 @@ void combat_observer_wield_observed(const char* actor, const char* weapon)
     combat_observer_write(line);
 }
 
+void combat_observer_budget(const char* event, const char* actor,
+    const char* category, int action_points, int duration_ms, int elapsed_ms)
+{
+    char line[384];
+
+    if (combat_observer_stream == NULL) {
+        return;
+    }
+
+    snprintf(line, sizeof(line),
+        "{\"schema\":%d,\"sequence\":%u,\"event\":\"%s\","
+        "\"turn\":null,\"action_id\":null,\"actor\":\"%s\","
+        "\"category\":\"%s\",\"action_points\":%d,\"duration_ms\":%d,"
+        "\"elapsed_ms\":%d}",
+        COMBAT_OBSERVER_SCHEMA, combat_observer_sequence++, event, actor,
+        category, action_points, duration_ms, elapsed_ms);
+    combat_observer_write(line);
+}
+
 void combat_observer_skill_roll(const char* source, const char* target,
     int skill, int effectiveness, int difficulty, int roll,
     int critical_roll, bool success, bool critical)
