@@ -28,6 +28,9 @@
 
 static RtBudgetEntry rt_budget_entries[RT_BUDGET_MAX_ENTRIES];
 static bool rt_budget_was_turn_based;
+// Session D: switching the feature on starts every actor ready, as a load does
+// (rule 3); entries frozen while it was off must not resume.
+static bool rt_budget_was_enabled;
 
 // ---------------------------------------------------------------------------
 // The rules, on one entry. Pure: no engine state is read here.
@@ -126,6 +129,7 @@ void rt_budget_reset(void)
 {
     memset(rt_budget_entries, 0, sizeof(rt_budget_entries));
     rt_budget_was_turn_based = false;
+    rt_budget_was_enabled = false;
 }
 
 bool rt_budget_active(void)
@@ -405,13 +409,39 @@ static void rt_budget_accept(int64_t obj, RtBudgetEntry* entry,
     rt_budget_observe("action.accepted", obj, entry);
 }
 
+// Session D: a run the budget held when the budget stopped applying - the
+// feature switched off mid-hold - gets its step delay and action-frame flag
+// back before it goes on, or an action whose action frame is its first
+// (Harm's) would never release. Turn-based beginning needs no help: it
+// interrupts every goal (`anim_goal_interrupt_all_for_tb_combat`).
+static void rt_budget_let_go(AnimRunInfo* run_info)
+{
+    RtBudgetEntry* entry;
+
+    if (run_info->cur_stack_data == NULL) {
+        return;
+    }
+
+    entry = rt_budget_find(run_info->cur_stack_data->params[AGDATA_SELF_OBJ].obj);
+    if (entry != NULL
+        && entry->held_pause_saved
+        && rt_budget_same_run(entry->held_run, run_info->id)) {
+        rt_budget_unhold(entry, run_info);
+    }
+}
+
 bool rt_budget_hold(AnimRunInfo* run_info)
 {
     RtBudgetCategory category;
     RtBudgetEntry* entry;
     int64_t obj;
 
-    if (!rt_budget_active() || !rt_budget_goal_category(run_info, &category)) {
+    if (!rt_budget_active()) {
+        rt_budget_let_go(run_info);
+        return false;
+    }
+
+    if (!rt_budget_goal_category(run_info, &category)) {
         return false;
     }
 
@@ -470,7 +500,12 @@ bool rt_budget_hold_repeat(AnimRunInfo* run_info)
     RtBudgetEntry* entry;
     int64_t obj;
 
-    if (!rt_budget_active() || !rt_budget_goal_category(run_info, &category)) {
+    if (!rt_budget_active()) {
+        rt_budget_let_go(run_info);
+        return false;
+    }
+
+    if (!rt_budget_goal_category(run_info, &category)) {
         return false;
     }
 
@@ -569,7 +604,14 @@ void rt_budget_tick(int delta_ms)
     int index;
 
     if (!feature_enabled(FEATURE_REAL_TIME_BUDGET)) {
+        rt_budget_was_enabled = false;
         return;
+    }
+
+    // Session D: on the edge into enabled, everyone starts ready.
+    if (!rt_budget_was_enabled) {
+        memset(rt_budget_entries, 0, sizeof(rt_budget_entries));
+        rt_budget_was_enabled = true;
     }
 
     // Rule 5, on the edge into turn-based: an action winding up is cancelled,
