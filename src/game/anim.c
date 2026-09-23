@@ -7290,17 +7290,27 @@ bool anim_target_in_weapon_range(AnimRunInfo* run_info)
 {
     int64_t source_obj;
     int64_t target_obj;
-    int64_t source_loc;
-    int64_t target_loc;
-    int64_t weapon_obj;
-    int range;
-    int64_t v1;
 
     source_obj = run_info->params[0].obj;
     target_obj = run_info->params[1].obj;
 
     ASSERT(source_obj != OBJ_HANDLE_NULL); // 6949, "sourceObj != OBJ_HANDLE_NULL"
     ASSERT(target_obj != OBJ_HANDLE_NULL); // 6950, "targetObj != OBJ_HANDLE_NULL"
+
+    return anim_target_in_weapon_range_of(source_obj, target_obj);
+}
+
+// CE (real-time session D): the body of `anim_target_in_weapon_range`, taking
+// the two objects rather than a node's parameter slots, so the real-time
+// budget can ask the game's own question at an attack's strike frame - where
+// the slots hold the animation id, not the target. Unchanged otherwise.
+bool anim_target_in_weapon_range_of(int64_t source_obj, int64_t target_obj)
+{
+    int64_t source_loc;
+    int64_t target_loc;
+    int64_t weapon_obj;
+    int range;
+    int64_t v1;
 
     if (source_obj == OBJ_HANDLE_NULL
         || target_obj == OBJ_HANDLE_NULL

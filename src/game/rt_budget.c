@@ -10,6 +10,7 @@
 #include "game/critter.h"
 #include "game/feature.h"
 #include "game/gamelib.h"
+#include "game/item.h"
 #include "game/magictech.h"
 #include "game/obj.h"
 #include "game/obj_pool.h"
@@ -527,6 +528,20 @@ bool rt_budget_hold_repeat(AnimRunInfo* run_info)
     return false;
 }
 
+// A melee attack whose target is out of reach, by the game's own test. Melee
+// is a weapon of range 1 or none, as `anim_target_in_weapon_range_of` reads it.
+static bool rt_budget_is_whiff(int64_t obj, int64_t target_obj)
+{
+    int64_t weapon_obj;
+
+    weapon_obj = combat_critter_weapon(obj);
+    if (weapon_obj != OBJ_HANDLE_NULL && item_weapon_range(weapon_obj, obj) > 1) {
+        return false;
+    }
+
+    return !anim_target_in_weapon_range_of(obj, target_obj);
+}
+
 void rt_budget_released(AnimRunInfo* run_info)
 {
     RtBudgetCategory category;
@@ -539,6 +554,20 @@ void rt_budget_released(AnimRunInfo* run_info)
     entry = rt_budget_find(run_info->cur_stack_data->params[AGDATA_SELF_OBJ].obj);
     if (entry != NULL && entry->state == RT_BUDGET_ACCEPTED
         && rt_budget_same_run(entry->run, run_info->id)) {
+        // Session D, zsogg's decision (2026-09-23): a melee swing whose target
+        // is out of reach at its strike frame is a whiff, and a whiff costs no
+        // recovery - rule 7, nothing happened. The game asks the same question
+        // one node later and then applies no damage and charges no AP; the
+        // budget had been charging a full recovery for it. Measured before:
+        // with recovery pausing while moving, guard-beta whiffed 4 of 8
+        // swings, against 1 of 14 in stock. Ranged attacks are unchanged.
+        if (category == RT_BUDGET_ATTACK
+            && rt_budget_is_whiff(run_info->cur_stack_data->params[AGDATA_SELF_OBJ].obj,
+                run_info->cur_stack_data->params[AGDATA_TARGET_OBJ].obj)) {
+            entry->state = RT_BUDGET_READY;
+            rt_budget_observe("action.cancelled", entry->obj, entry);
+            return;
+        }
         rt_budget_entry_release(entry);
     }
 }

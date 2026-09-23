@@ -152,4 +152,8 @@ bool anim_play_weapon_fx(CombatContext* combat, int64_t source_obj, int64_t targ
 void anim_notify_pc_teleported(void);
 bool sub_437CF0(int a1, int a2, int a3);
 
+// CE (real-time session D): can `source_obj` strike `target_obj` now - weapon
+// range and line of fire, the game's own test at an attack's strike frame.
+bool anim_target_in_weapon_range_of(int64_t source_obj, int64_t target_obj);
+
 #endif /* ARCANUM_GAME_ANIM_H_ */
