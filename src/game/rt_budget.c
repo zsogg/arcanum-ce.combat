@@ -10,6 +10,7 @@
 #include "game/critter.h"
 #include "game/feature.h"
 #include "game/gamelib.h"
+#include "game/magictech.h"
 #include "game/obj.h"
 #include "game/obj_pool.h"
 #include "game/settings.h"
@@ -32,16 +33,14 @@ static bool rt_budget_was_turn_based;
 // The rules, on one entry. Pure: no engine state is read here.
 // ---------------------------------------------------------------------------
 
-int rt_budget_duration_ms(int pace_ms, int action_points, int speed)
+int rt_budget_duration_ms(int pace_ms, int action_points, int action_points_per_turn)
 {
-    int allowance;
-
-    if (pace_ms <= 0 || action_points <= 0) {
+    if (pace_ms <= 0 || action_points <= 0 || action_points_per_turn <= 0) {
         return 0;
     }
 
-    allowance = speed > 5 ? speed : 5;
-    return (int)(((long long)pace_ms * action_points + allowance / 2) / allowance);
+    return (int)(((long long)pace_ms * action_points + action_points_per_turn / 2)
+        / action_points_per_turn);
 }
 
 void rt_budget_entry_accept(RtBudgetEntry* entry, RtBudgetCategory category,
@@ -201,7 +200,7 @@ static bool rt_budget_goal_category(AnimRunInfo* run_info,
     }
 }
 
-static int rt_budget_action_points(int64_t obj, RtBudgetCategory category)
+static int rt_budget_action_points(int64_t obj, RtBudgetCategory category, int spell)
 {
     // The costs turn-based charges: `combat_attack_cost` in AGbeginAnimAttack,
     // `combat_throw_cost` in the throw goal's last node (session C, zsogg's
@@ -213,7 +212,7 @@ static int rt_budget_action_points(int64_t obj, RtBudgetCategory category)
     case RT_BUDGET_THROW:
         return combat_throw_cost(obj);
     default:
-        return 4;
+        return combat_cast_cost(obj, spell);
     }
 }
 
@@ -358,13 +357,21 @@ static void rt_budget_accept(int64_t obj, RtBudgetEntry* entry,
 {
     int pace_ms;
     int action_points;
+    int spell;
+    MagicTechRunInfo* mt_run_info;
 
     pace_ms = settings_get_value(&settings, RT_BUDGET_PACE_KEY);
-    action_points = rt_budget_action_points(obj, category);
-    // Rule 9: Speed is read now, and the action keeps it.
+    spell = -1;
+    if (category == RT_BUDGET_CAST
+        && magictech_id_to_run_info(run_info->cur_stack_data->params[AGDATA_SPELL_DATA].data, &mt_run_info)) {
+        spell = mt_run_info->spell;
+    }
+    action_points = rt_budget_action_points(obj, category, spell);
+    // Rule 9: Speed is read now, and the action keeps it. Divided by what a
+    // turn grants, through the rule turn-based uses at each turn's start.
     rt_budget_entry_accept(entry, category, run_info->id, action_points,
         rt_budget_duration_ms(pace_ms, action_points,
-            stat_level_get(obj, STAT_SPEED)));
+            combat_action_points_per_turn(obj)));
     entry->action_key = rt_budget_action_key(entry, category, run_info);
     rt_budget_observe("action.accepted", obj, entry);
 }

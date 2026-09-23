@@ -87,9 +87,12 @@ typedef struct RtBudgetEntry {
     unsigned int held_pause_ms;
 } RtBudgetEntry;
 
-// Rule 1: `pace_ms * action_points / max(5, speed)`, rounded to the
-// millisecond. A non-positive cost or pace is no time at all.
-int rt_budget_duration_ms(int pace_ms, int action_points, int speed);
+// Rule 1: `pace_ms * action_points / action_points_per_turn`, rounded to the
+// millisecond. The caller passes what a turn grants - `max(5, Speed)` today,
+// through `combat_action_points_per_turn` - so a rebalance of either the costs
+// or the allowance moves real time with turn-based. A non-positive cost, pace
+// or allowance is no time at all.
+int rt_budget_duration_ms(int pace_ms, int action_points, int action_points_per_turn);
 
 // The rules on one entry.
 void rt_budget_entry_accept(RtBudgetEntry* entry, RtBudgetCategory category,

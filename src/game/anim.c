@@ -7382,8 +7382,18 @@ bool anim_pay_spell_cost(AnimRunInfo* run_info)
         return false;
     }
 
-    if (!combat_consume_action_points(obj, 4)) {
-        return false;
+    // CE (real-time session C): the shared cast cost, which the real-time
+    // budget reads too - the original's flat 4 today.
+    {
+        MagicTechRunInfo* mt_run_info;
+        int spell = -1;
+
+        if (magictech_id_to_run_info(run_info->cur_stack_data->params[AGDATA_SPELL_DATA].data, &mt_run_info)) {
+            spell = mt_run_info->spell;
+        }
+        if (!combat_consume_action_points(obj, combat_cast_cost(obj, spell))) {
+            return false;
+        }
     }
 
     if (!magictech_charge_run_fatigue(run_info->cur_stack_data->params[AGDATA_SPELL_DATA].data)) {

@@ -41,20 +41,24 @@ static RtBudgetEntry accepted(int duration_ms)
 TEST(the_duration_is_the_rule_sheets_own_arithmetic)
 {
     // Rule 1, R = 2 s, and the worked timelines: the fighter's Speed is 11 and
-    // a guard's 9.
-    CHECK_INT(rt_budget_duration_ms(2000, 6, 11), 1091); // stock Bow
-    CHECK_INT(rt_budget_duration_ms(2000, 4, 11), 727); // fast Bow, Harm
-    CHECK_INT(rt_budget_duration_ms(2000, 5, 11), 909); // Quality Sword
-    CHECK_INT(rt_budget_duration_ms(2000, 7, 9), 1556); // guard, Rusty Sword
+    // a guard's 9. The divisor is what a turn grants, through the rule
+    // turn-based itself uses.
+    CHECK_INT(rt_budget_duration_ms(2000, 6, combat_action_points_for_speed(11)), 1091); // stock Bow
+    CHECK_INT(rt_budget_duration_ms(2000, 4, combat_action_points_for_speed(11)), 727); // fast Bow, Harm
+    CHECK_INT(rt_budget_duration_ms(2000, 5, combat_action_points_for_speed(11)), 909); // Quality Sword
+    CHECK_INT(rt_budget_duration_ms(2000, 7, combat_action_points_for_speed(9)), 1556); // guard, Rusty Sword
 
     // `max(5, Speed)`: a slow actor is not made slower still.
-    CHECK_INT(rt_budget_duration_ms(2000, 4, 3), 1600);
-    CHECK_INT(rt_budget_duration_ms(2000, 4, 5), 1600);
+    CHECK_INT(combat_action_points_for_speed(3), 5);
+    CHECK_INT(combat_action_points_for_speed(5), 5);
+    CHECK_INT(combat_action_points_for_speed(11), 11);
+    CHECK_INT(rt_budget_duration_ms(2000, 4, combat_action_points_for_speed(3)), 1600);
 
-    // No cost, or no pace, is no time - never a negative one.
+    // No cost, pace or allowance is no time - never a negative one.
     CHECK_INT(rt_budget_duration_ms(2000, 0, 11), 0);
     CHECK_INT(rt_budget_duration_ms(0, 6, 11), 0);
     CHECK_INT(rt_budget_duration_ms(-5, 6, 11), 0);
+    CHECK_INT(rt_budget_duration_ms(2000, 6, 0), 0);
 }
 
 TEST(an_action_is_over_only_when_it_has_released_and_its_time_is_up)
@@ -163,12 +167,23 @@ TEST(a_throw_costs_what_the_throw_goal_charges_in_each_build)
     // At the supported baseline, a Speed 11 thrower's grenade is the fast
     // Bow's and Harm's 727 ms; with the player exempt it takes no time at all,
     // which is the original's free throw carried into real time.
-    CHECK_INT(rt_budget_duration_ms(2000, combat_throw_cost_for(true), 11), 727);
+    CHECK_INT(rt_budget_duration_ms(2000, combat_throw_cost_for(true), combat_action_points_for_speed(11)), 727);
     settings_set_value(&settings, feature_key(FEATURE_UAP_FIXES), 0);
-    CHECK_INT(rt_budget_duration_ms(2000, combat_throw_cost_for(true), 11), 0);
+    CHECK_INT(rt_budget_duration_ms(2000, combat_throw_cost_for(true), combat_action_points_for_speed(11)), 0);
 
     feature_on_change(FEATURE_UAP_FIXES, NULL);
     settings_exit(&settings);
+}
+
+TEST(the_shared_costs_are_the_numbers_turn_based_charges)
+{
+    // The real-time budget holds no cost of its own: it reads the functions
+    // turn-based charges through. These pin what those return today, so a
+    // rebalance that changes one sees exactly which number moved - and moves
+    // real time with it by construction. Attacks are pinned by the worked
+    // timelines above (`combat_attack_cost` needs a wielded weapon).
+    CHECK_INT(combat_cast_cost(0, -1), 4); // 0x429B50: a flat 4
+    CHECK_INT(combat_cast_cost(0, 55), 4); // Harm: the spell does not change it yet
 }
 
 TEST(the_budget_events_carry_what_a_tolerance_reads)
@@ -208,5 +223,6 @@ void test_rt_budget_suite(void)
     RUN(turn_based_cancels_a_wind_up_and_restarts_a_recovery);
     RUN(a_release_only_counts_for_an_accepted_action);
     RUN(a_throw_costs_what_the_throw_goal_charges_in_each_build);
+    RUN(the_shared_costs_are_the_numbers_turn_based_charges);
     RUN(the_budget_events_carry_what_a_tolerance_reads);
 }

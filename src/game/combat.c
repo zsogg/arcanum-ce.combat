@@ -3203,10 +3203,9 @@ void combat_turn_based_whos_turn_set(int64_t obj)
         }
     }
 
-    combat_action_points = stat_level_get(obj, STAT_SPEED);
-    if (combat_action_points < 5) {
-        combat_action_points = 5;
-    }
+    // CE (real-time session C): through the shared rule, which the real-time
+    // budget divides by - the same `max(5, Speed)` the original computed here.
+    combat_action_points = combat_action_points_per_turn(obj);
 
     tig_debug_printf("Combat: TB: Action Points Available: %d.\n", combat_action_points);
 
@@ -3729,7 +3728,9 @@ bool combat_check_cast_spell(int64_t source_obj)
         return combat_check_action_points(source_obj, 0);
     }
 
-    return combat_check_action_points(source_obj, 4);
+    // CE (real-time session C): the shared cast cost; the preview does not
+    // know which spell yet.
+    return combat_check_action_points(source_obj, combat_cast_cost(source_obj, -1));
 }
 
 // 0x4B7AE0
@@ -3801,6 +3802,35 @@ int combat_attack_cost(int64_t obj)
 int combat_throw_cost(int64_t obj)
 {
     return combat_throw_cost_for(player_is_local_pc_obj(obj));
+}
+
+// CE (real-time session C): the action points a turn grants. The original
+// computed `max(5, Speed)` inline where each turn starts; it lives here so the
+// real-time budget, which divides an action's cost by it, reads the same rule.
+// A rebalance that changes what a turn grants changes it here, and real time
+// follows.
+int combat_action_points_per_turn(int64_t obj)
+{
+    return combat_action_points_for_speed(stat_level_get(obj, STAT_SPEED));
+}
+
+int combat_action_points_for_speed(int speed)
+{
+    return speed < 5 ? 5 : speed;
+}
+
+// CE (real-time session C): what an ordinary cast costs. The original charges
+// a flat 4 in `anim_pay_spell_cost` (0x429B50) and previews the same 4 in
+// `combat_check_cast_spell`; both now ask here, and so does the real-time
+// budget. `spell` is passed although today's cost ignores it - the rebalance
+// plans spell costs that vary, and this is where they would go. -1 when the
+// caller cannot say which spell.
+int combat_cast_cost(int64_t obj, int spell)
+{
+    (void)obj;
+    (void)spell;
+
+    return 4;
 }
 
 // The rule itself, apart from asking who the player is, so it can be tested
