@@ -3688,7 +3688,8 @@ bool combat_check_use_obj(int64_t source_obj, int64_t target_obj)
         return combat_check_action_points(source_obj, 0);
     }
 
-    action_points = 2;
+    // CE (real-time session C): the shared cost - the original's 2.
+    action_points = combat_use_object_cost(source_obj, target_obj);
 
     source_loc = obj_field_int64_get(source_obj, OBJ_F_LOCATION);
     target_loc = obj_field_int64_get(target_obj, OBJ_F_LOCATION);
@@ -3710,7 +3711,8 @@ bool combat_check_pick_item(int64_t source_obj, int64_t target_obj)
         return combat_check_action_points(source_obj, 0);
     }
 
-    action_points = 1;
+    // CE (real-time session C): the shared cost - the original's 1.
+    action_points = combat_pickup_cost(source_obj, target_obj);
 
     source_loc = obj_field_int64_get(source_obj, OBJ_F_LOCATION);
     target_loc = obj_field_int64_get(target_obj, OBJ_F_LOCATION);
@@ -3740,7 +3742,9 @@ bool combat_check_use_skill(int64_t source_obj)
         return combat_check_action_points(source_obj, 0);
     }
 
-    return combat_check_action_points(source_obj, 4);
+    // CE (real-time session C): the shared skill cost; the preview does not
+    // know which skill yet.
+    return combat_check_action_points(source_obj, combat_skill_cost(source_obj, -1));
 }
 
 // 0x4B7BA0
@@ -3831,6 +3835,63 @@ int combat_cast_cost(int64_t obj, int spell)
     (void)spell;
 
     return 4;
+}
+
+// CE (real-time session C): the three other literal costs, lifted the same way
+// with the same numbers, so the rebalance and the real-time budget read one
+// place each. Each takes the action's inputs though today's rule ignores them.
+//
+// A skill: 4, charged in `anim_run_skill_invocation` (0x42A2A0) - skills and
+// pickpocketing - and for disarming traps directly in `skill_ui.c`, previewed by
+// `combat_check_use_skill`. -1 when the caller cannot say which skill.
+int combat_skill_cost(int64_t obj, int skill)
+{
+    (void)obj;
+    (void)skill;
+
+    return 4;
+}
+
+// Using an object in the world - a door, a container, a lever: 2, charged in
+// `anim_use_object` (0x428A10) and previewed by `combat_check_use_obj`, which
+// adds the walk to it.
+int combat_use_object_cost(int64_t obj, int64_t target_obj)
+{
+    (void)obj;
+    (void)target_obj;
+
+    return 2;
+}
+
+// Using an item from the pack that casts nothing - food, a written item: 4,
+// charged in `item_use_on_obj` and `item_use_on_loc` and previewed in
+// `item_ui.c`. Charged at once, with no animation goal.
+int combat_use_item_cost(int64_t obj, int64_t item_obj)
+{
+    (void)obj;
+    (void)item_obj;
+
+    return 4;
+}
+
+// Picking an item up: 1, charged in `anim_pickup_item` (0x42AA70) and
+// previewed by `combat_check_pick_item`, which adds the walk to it.
+int combat_pickup_cost(int64_t obj, int64_t item_obj)
+{
+    (void)obj;
+    (void)item_obj;
+
+    return 1;
+}
+
+// Getting up after a knockdown: 5, charged in turn-based by
+// `AGbeginGetUpAnim`. Not a chosen action, so the real-time budget does not
+// time it; lifted all the same so the rebalance tunes it in one place.
+int combat_get_up_cost(int64_t obj)
+{
+    (void)obj;
+
+    return 5;
 }
 
 // The rule itself, apart from asking who the player is, so it can be tested

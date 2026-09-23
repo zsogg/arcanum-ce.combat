@@ -1446,8 +1446,10 @@ void item_use_on_obj(int64_t source_obj, int64_t item_obj, int64_t target_obj)
         return;
     }
 
+    // CE (real-time session C): the shared cost, here and below - the
+    // original's 4.
     if (!object_script_execute(source_obj, item_obj, target_obj, SAP_USE, 0)) {
-        combat_consume_action_points(source_obj, 4);
+        combat_consume_action_points(source_obj, combat_use_item_cost(source_obj, item_obj));
         return;
     }
 
@@ -1466,7 +1468,7 @@ void item_use_on_obj(int64_t source_obj, int64_t item_obj, int64_t target_obj)
         return;
     }
 
-    combat_consume_action_points(source_obj, 4);
+    combat_consume_action_points(source_obj, combat_use_item_cost(source_obj, item_obj));
 
     if (item_type == OBJ_TYPE_WRITTEN) {
         ui_written_start_obj(item_obj, source_obj);
@@ -1554,7 +1556,7 @@ void item_use_on_loc(int64_t obj, int64_t item_obj, int64_t target_loc)
         ui_item_spell_activate(item_obj, &td, mt_item_spell(item_obj, 0));
         mt_item_notify_used(item_obj, OBJ_HANDLE_NULL);
     } else {
-        combat_consume_action_points(obj, 4);
+        combat_consume_action_points(obj, combat_use_item_cost(obj, item_obj));
         if (obj_type == OBJ_TYPE_WRITTEN) {
             ui_written_start_obj(item_obj, obj);
             return;

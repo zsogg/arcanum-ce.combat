@@ -115,7 +115,8 @@ void item_ui_activate(int64_t owner_obj, int64_t item_obj)
         return;
     }
 
-    if (combat_check_action_points(owner_obj, 4)) {
+    // CE (real-time session C): the shared cost - the original's 4.
+    if (combat_check_action_points(owner_obj, combat_use_item_cost(owner_obj, qword_6810D8))) {
         target_flags_set(*tgt_ptr);
         if (intgame_mode_set(INTGAME_MODE_ITEM)) {
             target_flags_set(*tgt_ptr);

@@ -297,7 +297,8 @@ void skill_ui_activate(TargetDescriptor* td, int64_t obj, int a3)
         }
         return;
     case SKILL_DISARM_TRAPS:
-        if (!td->is_loc && combat_consume_action_points(obj, 4)) {
+        // CE (real-time session C): the shared cost - the original's 4.
+        if (!td->is_loc && combat_consume_action_points(obj, combat_skill_cost(obj, SKILL_DISARM_TRAPS))) {
             skill_invocation_init(&skill_invocation);
             object_ref_init(obj, &(skill_invocation.source));
             object_ref_init(td->obj, &(skill_invocation.target));

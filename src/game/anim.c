@@ -6711,7 +6711,8 @@ bool anim_use_object(AnimRunInfo* run_info)
         return false;
     }
 
-    if (!combat_consume_action_points(source_obj, 2)) {
+    // CE (real-time session C): the shared cost - the original's 2.
+    if (!combat_consume_action_points(source_obj, combat_use_object_cost(source_obj, target_obj))) {
         return false;
     }
 
@@ -7758,7 +7759,9 @@ bool anim_run_skill_invocation(AnimRunInfo* run_info)
         return false;
     }
 
-    if (!combat_consume_action_points(source_obj, 4)) {
+    // CE (real-time session C): the shared cost - the original's 4.
+    if (!combat_consume_action_points(source_obj,
+            combat_skill_cost(source_obj, run_info->cur_stack_data->params[AGDATA_SKILL_DATA].data))) {
         return false;
     }
 
@@ -8064,7 +8067,8 @@ bool anim_pickup_item(int64_t source_obj, int64_t target_obj)
         }
     }
 
-    if (!combat_consume_action_points(source_obj, 1)) {
+    // CE (real-time session C): the shared cost - the original's 1.
+    if (!combat_consume_action_points(source_obj, combat_pickup_cost(source_obj, target_obj))) {
         return false;
     }
 
@@ -10544,7 +10548,8 @@ bool AGbeginGetUpAnim(AnimRunInfo* run_info)
     }
 
     if (combat_turn_based_is_active()
-        && (combat_turn_based_whos_turn_get() == obj || !combat_consume_action_points(obj, 5))) {
+        // CE (real-time session C): the shared cost - the original's 5.
+        && (combat_turn_based_whos_turn_get() == obj || !combat_consume_action_points(obj, combat_get_up_cost(obj)))) {
         return false;
     }
 

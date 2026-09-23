@@ -184,6 +184,11 @@ TEST(the_shared_costs_are_the_numbers_turn_based_charges)
     // timelines above (`combat_attack_cost` needs a wielded weapon).
     CHECK_INT(combat_cast_cost(0, -1), 4); // 0x429B50: a flat 4
     CHECK_INT(combat_cast_cost(0, 55), 4); // Harm: the spell does not change it yet
+    CHECK_INT(combat_skill_cost(0, -1), 4); // 0x42A2A0, and disarming traps
+    CHECK_INT(combat_use_object_cost(0, 0), 2); // 0x428A10: doors, containers
+    CHECK_INT(combat_use_item_cost(0, 0), 4); // item_use_on_obj / _on_loc
+    CHECK_INT(combat_pickup_cost(0, 0), 1); // 0x42AA70
+    CHECK_INT(combat_get_up_cost(0), 5); // AGbeginGetUpAnim
 }
 
 TEST(the_budget_events_carry_what_a_tolerance_reads)
