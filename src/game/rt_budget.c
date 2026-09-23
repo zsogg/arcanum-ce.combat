@@ -188,6 +188,9 @@ static bool rt_budget_goal_category(AnimRunInfo* run_info,
     case AG_ATTEMPT_ATTACK:
         *category = RT_BUDGET_ATTACK;
         return true;
+    case AG_THROW_ITEM:
+        *category = RT_BUDGET_THROW;
+        return true;
     case AG_ATTEMPT_SPELL:
     case AG_ATTEMPT_SPELL_FRIENDLY:
     case AG_ATTEMPT_SPELL_W_CAST_ANIM:
@@ -201,8 +204,29 @@ static bool rt_budget_goal_category(AnimRunInfo* run_info,
 static int rt_budget_action_points(int64_t obj, RtBudgetCategory category)
 {
     // The costs turn-based charges: `combat_attack_cost` in AGbeginAnimAttack,
-    // and the flat four of `anim_pay_spell_cost`.
-    return category == RT_BUDGET_ATTACK ? combat_attack_cost(obj) : 4;
+    // `combat_throw_cost` in the throw goal's last node (session C, zsogg's
+    // option 1: whatever turn-based charges, so a change there moves both), and
+    // the flat four of `anim_pay_spell_cost`.
+    switch (category) {
+    case RT_BUDGET_ATTACK:
+        return combat_attack_cost(obj);
+    case RT_BUDGET_THROW:
+        return combat_throw_cost(obj);
+    default:
+        return 4;
+    }
+}
+
+static const char* rt_budget_category_name(RtBudgetCategory category)
+{
+    switch (category) {
+    case RT_BUDGET_ATTACK:
+        return "attack";
+    case RT_BUDGET_THROW:
+        return "throw";
+    default:
+        return "cast";
+    }
 }
 
 static void rt_budget_observe(const char* event, int64_t obj,
@@ -216,7 +240,7 @@ static void rt_budget_observe(const char* event, int64_t obj,
 
     combat_observer_object_id(obj, actor);
     combat_observer_budget(event, actor,
-        entry->category == RT_BUDGET_ATTACK ? "attack" : "cast",
+        rt_budget_category_name(entry->category),
         entry->action_points, entry->duration_ms, entry->elapsed_ms);
 }
 

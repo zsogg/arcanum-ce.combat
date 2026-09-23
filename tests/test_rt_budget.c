@@ -8,8 +8,13 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "game/combat.h"
 #include "game/combat_observer.h"
+#include "game/feature.h"
+#include "game/gamelib.h"
 #include "game/rt_budget.h"
+#include "game/settings.h"
+#include "game/uap.h"
 
 #include "test_harness.h"
 
@@ -137,6 +142,35 @@ TEST(a_release_only_counts_for_an_accepted_action)
     CHECK(rt_budget_entry_ready(&entry));
 }
 
+TEST(a_throw_costs_what_the_throw_goal_charges_in_each_build)
+{
+    // MODDING-NOTES.md quirk 51, read from both executables at 0x4332C0: in
+    // 1.0.7.4 the player throws for nothing and everyone else pays 2; UAP
+    // charges everyone 4. The budget reads this same function, so these are
+    // its throw costs too (session C, zsogg's option 1).
+    settings_init(&settings, "unused");
+    feature_init();
+
+    CHECK(!uap_fixes_enabled());
+    CHECK_INT(combat_throw_cost_for(true), 0);
+    CHECK_INT(combat_throw_cost_for(false), 2);
+
+    settings_set_value(&settings, feature_key(FEATURE_UAP_FIXES), 1);
+    CHECK(uap_fixes_enabled());
+    CHECK_INT(combat_throw_cost_for(true), 4);
+    CHECK_INT(combat_throw_cost_for(false), 4);
+
+    // At the supported baseline, a Speed 11 thrower's grenade is the fast
+    // Bow's and Harm's 727 ms; with the player exempt it takes no time at all,
+    // which is the original's free throw carried into real time.
+    CHECK_INT(rt_budget_duration_ms(2000, combat_throw_cost_for(true), 11), 727);
+    settings_set_value(&settings, feature_key(FEATURE_UAP_FIXES), 0);
+    CHECK_INT(rt_budget_duration_ms(2000, combat_throw_cost_for(true), 11), 0);
+
+    feature_on_change(FEATURE_UAP_FIXES, NULL);
+    settings_exit(&settings);
+}
+
 TEST(the_budget_events_carry_what_a_tolerance_reads)
 {
     char trace[4096];
@@ -173,5 +207,6 @@ void test_rt_budget_suite(void)
     RUN(time_that_does_not_count_does_not_recover);
     RUN(turn_based_cancels_a_wind_up_and_restarts_a_recovery);
     RUN(a_release_only_counts_for_an_accepted_action);
+    RUN(a_throw_costs_what_the_throw_goal_charges_in_each_build);
     RUN(the_budget_events_carry_what_a_tolerance_reads);
 }

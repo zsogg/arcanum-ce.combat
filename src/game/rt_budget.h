@@ -11,8 +11,8 @@
 // Turn-based combat limits actions with action points; real time has nothing
 // in their place, so an animation's own length decides how often an actor
 // acts - a bow rewinds three frames and fires again, Harm has no casting
-// animation at all. This gives every real-time attack and ordinary cast a
-// length of `R * AP / max(5, Speed)`, the same proportions turn-based sets.
+// animation at all. This gives every real-time attack, throw and ordinary cast
+// a length of `R * AP / max(5, Speed)`, the same proportions turn-based sets.
 //
 // The rules are the session-2 rule sheet in arcanum-work's
 // docs/REAL-TIME-COMBAT-OVERHAUL-PLAN.md (section 7a); the numbers below name
@@ -43,6 +43,9 @@
 typedef enum RtBudgetCategory {
     RT_BUDGET_ATTACK,
     RT_BUDGET_CAST,
+    // Session C: the throw-item goal - thrown weapons, grenades, anything
+    // dragged onto the map. Costs what the throw goal charges in turn-based.
+    RT_BUDGET_THROW,
 } RtBudgetCategory;
 
 typedef enum RtBudgetState {

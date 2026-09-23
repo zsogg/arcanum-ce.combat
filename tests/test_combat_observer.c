@@ -668,6 +668,27 @@ TEST(the_real_time_rows_load_into_what_they_say)
     CHECK(row_is(7, "turn=0 now=0 kind=learn target= loc=0 aim=0 spell=55 cast=- wait=0"));
 }
 
+TEST(the_throw_rows_load_into_what_they_say)
+{
+    // Real-time session C: stock the character with grenades, then throw one
+    // at a tile - on the queue, and during a recovery.
+    CHECK(load_script(
+        "0 give 15171 6\n"
+        "0 throw 15171 361533167198256\n"
+        "0 now throw 15171 361533167198256\n"));
+    CHECK_INT(replay_ui_count(), 3);
+    CHECK(row_is(0, "turn=0 now=0 kind=give target= loc=0 aim=0 spell=0 cast=- wait=0 proto=15171 count=6"));
+    CHECK(row_is(1, "turn=0 now=0 kind=throw target= loc=361533167198256 aim=0 spell=0 cast=- wait=0 proto=15171 count=0"));
+    CHECK(row_is(2, "turn=0 now=1 kind=throw target= loc=361533167198256 aim=0 spell=0 cast=- wait=0 proto=15171 count=0"));
+
+    CHECK(!load_script("0 give 15171\n")); // how many
+    CHECK(!load_script("0 give 15171 0\n")); // nothing is not a gift
+    CHECK(!load_script("0 give grenade 2\n"));
+    CHECK(!load_script("0 throw 15171\n")); // where
+    CHECK(!load_script("0 throw 15171 0\n")); // not a tile
+    CHECK(!load_script("0 throw 15171 361533167198256 extra\n"));
+}
+
 TEST(a_row_the_parser_cannot_read_refuses_the_whole_file)
 {
     // Refused, never skipped: a replay missing a row diverges from what it
@@ -1614,6 +1635,7 @@ void test_combat_observer_suite(void)
     RUN(a_command_waits_for_the_mode_it_was_recorded_in);
     RUN(every_existing_row_form_still_loads_as_it_did);
     RUN(the_real_time_rows_load_into_what_they_say);
+    RUN(the_throw_rows_load_into_what_they_say);
     RUN(a_row_the_parser_cannot_read_refuses_the_whole_file);
     RUN(a_tile_step_a_cast_request_and_a_weapon_change_are_each_recorded);
     RUN(every_mode_state_decides_acceptance_the_same_way);

@@ -13636,6 +13636,15 @@ bool anim_spend_action_points(AnimRunInfo* run_info)
         return false;
     }
 
+    // CE (real-time session C): a throw pays through `combat_throw_cost_for`,
+    // which the real-time budget reads too. The same numbers as below, and the
+    // same test of who is exempt - the run's own object, as the original asks.
+    if (run_info->cur_stack_data != NULL
+        && run_info->cur_stack_data->type == AG_THROW_ITEM) {
+        int cost = combat_throw_cost_for(player_is_local_pc_obj(run_info->anim_obj));
+        return cost == 0 || combat_consume_action_points(obj, cost);
+    }
+
     // UAP (0x4332C0, 0x4332C2): the local PC stops being exempt, and the cost
     // doubles from 2 to 4. The patch NOPs the `jne` that skipped the charge for
     // the player and rewrites the pushed immediate, so in the patched build

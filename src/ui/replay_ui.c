@@ -10,10 +10,13 @@
 #include "game/anim.h"
 #include "game/combat.h"
 #include "game/critter.h"
+#include "game/item.h"
 #include "game/obj.h"
 #include "game/obj_id.h"
 #include "game/obj_pool.h"
+#include "game/object.h"
 #include "game/player.h"
+#include "game/proto.h"
 #include "game/target.h"
 #include "ui/called_shot.h"
 #include "ui/combat_ui.h"
@@ -49,6 +52,17 @@ typedef enum ReplayKind {
     // Script-only, like `key character-points`: they build a test character, and
     // nothing records them.
     REPLAY_KIND_LEARN,
+    // Real-time session C: the two a throw needs.
+    //
+    //   give <prototype> <count>
+    //       that many new items of that prototype into the player's inventory.
+    //       Script-only, like `learn`: it stocks a test character, and nothing
+    //       records it.
+    //   throw <prototype> <location>
+    //       one item of that prototype from the inventory to the tile, through
+    //       `anim_goal_throw_item` - what dragging it onto the map calls.
+    REPLAY_KIND_GIVE,
+    REPLAY_KIND_THROW,
 } ReplayKind;
 
 // A cast's target, which is a third shape: the caster, an object or a tile.
@@ -75,6 +89,8 @@ typedef struct ReplayCommand {
     int spell;
     ReplayCastTarget cast_target;
     int wait_ms;
+    int proto;
+    int count;
 } ReplayCommand;
 
 static ReplayCommand replay_commands[REPLAY_MAX_COMMANDS];
@@ -256,6 +272,27 @@ static bool replay_parse_line(const char* text, ReplayCommand* command)
         return index == count;
     }
 
+    if (strcmp(kind, "give") == 0) {
+        command->kind = REPLAY_KIND_GIVE;
+        if (!replay_parse_int(tokens[index++], &(command->proto))
+            || command->proto <= 0 || index >= count
+            || !replay_parse_int(tokens[index++], &(command->count))
+            || command->count <= 0) {
+            return false;
+        }
+        return index == count;
+    }
+
+    if (strcmp(kind, "throw") == 0) {
+        command->kind = REPLAY_KIND_THROW;
+        if (!replay_parse_int(tokens[index++], &(command->proto))
+            || command->proto <= 0 || index >= count) {
+            return false;
+        }
+        command->loc = (int64_t)strtoll(tokens[index++], NULL, 10);
+        return index == count && command->loc != 0;
+    }
+
     if (strcmp(kind, "wait") == 0) {
         command->kind = REPLAY_KIND_WAIT;
         if (!replay_parse_int(tokens[index++], &(command->wait_ms))
@@ -301,19 +338,26 @@ int replay_ui_count(void)
 bool replay_ui_describe(int index, char* buffer, size_t size)
 {
     const ReplayCommand* command;
-    static const char* kinds[] = { "object", "location", "key", "cast", "wield", "wait", "learn" };
+    static const char* kinds[] = { "object", "location", "key", "cast", "wield", "wait", "learn", "give", "throw" };
+    int written;
     static const char* casts[] = { "self", "object", "location" };
 
     if (index < 0 || index >= replay_count) {
         return false;
     }
     command = &(replay_commands[index]);
-    snprintf(buffer, size,
+    written = snprintf(buffer, size,
         "turn=%d now=%d kind=%s target=%s loc=%lld aim=%d spell=%d cast=%s wait=%d",
         command->turn, command->now ? 1 : 0, kinds[command->kind],
         command->target, (long long)command->loc, command->aim, command->spell,
         command->kind == REPLAY_KIND_CAST ? casts[command->cast_target] : "-",
         command->wait_ms);
+    // Only the kinds that carry them, so every older row reads as it always did.
+    if ((command->kind == REPLAY_KIND_GIVE || command->kind == REPLAY_KIND_THROW)
+        && written >= 0 && (size_t)written < size) {
+        snprintf(buffer + written, size - (size_t)written, " proto=%d count=%d",
+            command->proto, command->count);
+    }
     return true;
 }
 
@@ -495,6 +539,53 @@ void replay_ui_tick(void)
         replay_stall_reported = false;
         replay_next++;
         spell_ui_add(pc_obj, command->spell);
+        return;
+    }
+
+    if (command->kind == REPLAY_KIND_GIVE) {
+        int64_t proto_obj;
+        int64_t item_obj;
+        int given;
+
+        replay_stall_reported = false;
+        replay_next++;
+        proto_obj = proto_get_by_description(command->proto);
+        if (proto_obj == OBJ_HANDLE_NULL) {
+            tig_debug_printf("Replay: command %d names no prototype %d\n",
+                replay_next - 1, command->proto);
+            return;
+        }
+        for (given = 0; given < command->count; given++) {
+            if (!object_create(proto_obj, obj_field_int64_get(pc_obj, OBJ_F_LOCATION), &item_obj)
+                || !item_transfer(item_obj, pc_obj)) {
+                tig_debug_printf("Replay: command %d gave %d of %d\n",
+                    replay_next - 1, given, command->count);
+                return;
+            }
+        }
+        return;
+    }
+
+    if (command->kind == REPLAY_KIND_THROW) {
+        int64_t proto_obj;
+        int64_t item_obj;
+
+        replay_stall_reported = false;
+        replay_next++;
+        proto_obj = proto_get_by_description(command->proto);
+        // 0x01: not a worn item - a thrown one comes from the pack.
+        item_obj = proto_obj != OBJ_HANDLE_NULL
+            ? item_find_by_proto(pc_obj, proto_obj, 0x01)
+            : OBJ_HANDLE_NULL;
+        if (item_obj == OBJ_HANDLE_NULL) {
+            tig_debug_printf("Replay: command %d has no prototype %d to throw\n",
+                replay_next - 1, command->proto);
+            return;
+        }
+        if (!anim_goal_throw_item(pc_obj, item_obj, command->loc)) {
+            tig_debug_printf("Replay: command %d could not throw prototype %d\n",
+                replay_next - 1, command->proto);
+        }
         return;
     }
 

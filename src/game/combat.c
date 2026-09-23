@@ -3789,6 +3789,33 @@ int combat_attack_cost(int64_t obj)
     return action_points;
 }
 
+// CE (real-time session C): what a throw costs, in one place.
+//
+// The original has no such function: the throw goal's last node,
+// `anim_spend_action_points` (0x433270), charges the literal it shares with
+// about twenty other goals - nothing for the player and 2 for anyone else in
+// 1.0.7.4, and 4 for everyone under UAP (MODDING-NOTES.md quirk 51). The throw
+// goal now charges through here, with the same numbers, and the real-time
+// budget reads the same function, so a later change to what a throw costs
+// moves turn-based and real time together.
+int combat_throw_cost(int64_t obj)
+{
+    return combat_throw_cost_for(player_is_local_pc_obj(obj));
+}
+
+// The rule itself, apart from asking who the player is, so it can be tested
+// without building one.
+int combat_throw_cost_for(bool local_pc)
+{
+    // UAP (0x4332C0, 0x4332C2): the player stops being exempt and the cost
+    // doubles from 2 to 4.
+    if (uap_fixes_enabled()) {
+        return 4;
+    }
+
+    return local_pc ? 0 : 2;
+}
+
 // 0x4B7C90
 void combat_turn_based_end_critter_turn(int64_t obj)
 {
