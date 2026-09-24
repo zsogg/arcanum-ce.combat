@@ -74,6 +74,9 @@ typedef struct RtBudgetEntry {
     // begun (AGbeginAnimAttack); measured 2026-09-22, keying by run alone let
     // three queued Harm casts release on one acceptance.
     int action_key;
+    // The spell run an accepted cast carries - what the game's own spell
+    // queue is asked about (`rt_budget_cast_waiting`), not the action's key.
+    int action_spell;
     int attempts_begun;
     AnimID attempt_run;
     int action_points;
@@ -131,6 +134,8 @@ void rt_budget_released(AnimRunInfo* run_info);
 // Called where an attack attempt begins, so the next hold knows it is a new
 // action and not the rest of the last one.
 void rt_budget_attack_begun(AnimRunInfo* run_info);
+// Called where a cast's goal starts its visuals, once per cast.
+void rt_budget_cast_begun(AnimRunInfo* run_info);
 // True when the casting run `anim_id` already has a cast waiting - one it holds
 // that the budget has not accepted, whether queued at the bottom of its goal
 // stack or current and held. The game's own real-time spell queue asks before

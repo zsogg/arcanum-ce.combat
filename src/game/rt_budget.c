@@ -311,14 +311,18 @@ static void rt_budget_unhold(RtBudgetEntry* entry, AnimRunInfo* run_info)
     entry->held_action_flag = false;
 }
 
-// Which action within its run this attempt is. -1 when that cannot be told -
-// an attack begun before the budget was on.
+// Which action within its run this attempt is: a count of attacks and casts
+// begun, -1 when that cannot be told - one begun before the budget was on.
+//
+// Session E: casts were keyed by their spell run id, which the magic system
+// reuses as soon as a spell ends. Measured in zsogg's 1500 ms playtest: a Harm
+// requested 16 ms after the last one's spell freed its run got the same id,
+// read as the cast already under way, and went off 250 ms after it, with no
+// budget. Casts now count as they begin, as attacks do.
 static int rt_budget_action_key(RtBudgetEntry* entry, RtBudgetCategory category,
     AnimRunInfo* run_info)
 {
-    if (category == RT_BUDGET_CAST) {
-        return run_info->cur_stack_data->params[AGDATA_SPELL_DATA].data;
-    }
+    (void)category;
 
     return rt_budget_same_run(entry->attempt_run, run_info->id)
         ? entry->attempts_begun
@@ -365,7 +369,7 @@ bool rt_budget_cast_waiting(AnimID* anim_id)
             if (entry == NULL
                 || entry->category != RT_BUDGET_CAST
                 || !rt_budget_same_run(entry->run, run_info->id)
-                || entry->action_key != run_info->goals[index].params[AGDATA_SPELL_DATA].data) {
+                || entry->action_spell != run_info->goals[index].params[AGDATA_SPELL_DATA].data) {
                 return true;
             }
             break;
@@ -399,6 +403,23 @@ void rt_budget_attack_begun(AnimRunInfo* run_info)
     }
 }
 
+// Session E: a cast's goal starts its visuals - `AGbeginAnimEyeCandy` for an
+// ordinary or friendly cast, `anim_begin_previous_anim` for one with a casting
+// animation - once per cast, before the step that holds it. Counted here, so a
+// queued cast is a new action however the magic system numbers its runs.
+void rt_budget_cast_begun(AnimRunInfo* run_info)
+{
+    RtBudgetCategory category;
+
+    if (!rt_budget_active()
+        || !rt_budget_goal_category(run_info, &category)
+        || category != RT_BUDGET_CAST) {
+        return;
+    }
+
+    rt_budget_attack_begun(run_info);
+}
+
 static void rt_budget_accept(int64_t obj, RtBudgetEntry* entry,
     RtBudgetCategory category, AnimRunInfo* run_info)
 {
@@ -423,6 +444,9 @@ static void rt_budget_accept(int64_t obj, RtBudgetEntry* entry,
         rt_budget_duration_ms(pace_ms, action_points,
             combat_action_points_per_turn(obj)));
     entry->action_key = rt_budget_action_key(entry, category, run_info);
+    entry->action_spell = category == RT_BUDGET_CAST
+        ? run_info->cur_stack_data->params[AGDATA_SPELL_DATA].data
+        : -1;
     rt_budget_observe("action.accepted", obj, entry);
 }
 

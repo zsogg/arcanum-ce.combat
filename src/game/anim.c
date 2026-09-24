@@ -7638,6 +7638,9 @@ bool anim_begin_previous_anim(AnimRunInfo* run_info)
     int sound_id;
     TigArtAnimData art_anim_data;
 
+    // CE (real-time session E): a new cast, counted before the step that holds it.
+    rt_budget_cast_begun(run_info);
+
     obj = run_info->params[0].obj;
 
     ASSERT(obj != OBJ_HANDLE_NULL); // 7327, "obj != OBJ_HANDLE_NULL"
@@ -12374,6 +12377,9 @@ bool AGbeginAnimEyeCandy(AnimRunInfo* run_info)
     tig_art_id_t light_art_id;
     TigArtAnimData art_anim_data;
     int frame = 0;
+
+    // CE (real-time session E): a new cast, counted before the step that holds it.
+    rt_budget_cast_begun(run_info);
 
     obj = run_info->params[0].obj;
 
