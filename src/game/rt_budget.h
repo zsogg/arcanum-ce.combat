@@ -38,6 +38,12 @@
 // movement goal. Nothing is saved (rule 3): a load or a new game starts every
 // actor ready.
 
+// `R`, the key value for real-time pacing: what a whole turn is worth in real
+// milliseconds, so every action takes `R * AP / AP per turn`. One number sets
+// the tempo of every fight without changing turn-based's proportions. 2000 was
+// chosen by zsogg on 2026-09-23 after playtests at 1500, 2000 and 2500, and the
+// choice is left open. Players and mods change it through `real time pace ms`
+// in arcanum.cfg; this is only its default.
 #define RT_BUDGET_DEFAULT_PACE_MS 2000
 
 typedef enum RtBudgetCategory {
