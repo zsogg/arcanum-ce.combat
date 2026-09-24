@@ -210,6 +210,21 @@ TEST(a_pace_outside_its_range_is_the_default)
     CHECK_INT(rt_budget_duration_ms(RT_BUDGET_MAX_PACE_MS, 100, 5), 1200000);
 }
 
+TEST(a_chaser_swings_only_at_a_target_that_is_not_walking_away)
+{
+    // The chase stopgap (zsogg, 2026-09-24). Nothing changes unless it
+    // applies. Then a swing waits while its target walks away in reach, is
+    // given up at a target out of reach - moving or not, since it could only
+    // strike air - and goes ahead at a target in reach that is not walking away.
+    CHECK_INT(rt_chase_decide(false, true, true), RT_CHASE_SWING);
+    CHECK_INT(rt_chase_decide(false, false, true), RT_CHASE_SWING);
+    CHECK_INT(rt_chase_decide(false, false, false), RT_CHASE_SWING);
+    CHECK_INT(rt_chase_decide(true, true, false), RT_CHASE_SWING);
+    CHECK_INT(rt_chase_decide(true, true, true), RT_CHASE_WAIT);
+    CHECK_INT(rt_chase_decide(true, false, true), RT_CHASE_GIVE_UP);
+    CHECK_INT(rt_chase_decide(true, false, false), RT_CHASE_GIVE_UP);
+}
+
 TEST(the_budget_events_carry_what_a_tolerance_reads)
 {
     char trace[4096];
@@ -249,5 +264,6 @@ void test_rt_budget_suite(void)
     RUN(a_throw_costs_what_the_throw_goal_charges_in_each_build);
     RUN(the_shared_costs_are_the_numbers_turn_based_charges);
     RUN(a_pace_outside_its_range_is_the_default);
+    RUN(a_chaser_swings_only_at_a_target_that_is_not_walking_away);
     RUN(the_budget_events_carry_what_a_tolerance_reads);
 }

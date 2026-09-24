@@ -13316,6 +13316,18 @@ bool AGupdateAnimAttack(AnimRunInfo* run_info)
         return false;
     }
 
+    // CE (rebalance, 2026-09-24): the chase stopgap, behind `real time chase`.
+    // An NPC's melee swing waits while its target walks away in reach, and is
+    // given up - the goal goes back to chasing - once the target is out of it.
+    switch (rt_chase_check(run_info)) {
+    case RT_CHASE_WAIT:
+        return true;
+    case RT_CHASE_GIVE_UP:
+        return false;
+    case RT_CHASE_SWING:
+        break;
+    }
+
     // CE (real-time session B): an attack whose actor is still recovering holds
     // here, without advancing a frame, until the action budget allows it.
     if (rt_budget_hold(run_info)) {

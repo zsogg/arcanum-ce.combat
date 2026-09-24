@@ -11,6 +11,7 @@
 #include "game/feature.h"
 #include "game/gamelib.h"
 #include "game/item.h"
+#include "game/location.h"
 #include "game/magictech.h"
 #include "game/obj.h"
 #include "game/obj_pool.h"
@@ -765,4 +766,114 @@ void rt_budget_tick(int delta_ms)
             rt_budget_observe("actor.ready", entry->obj, entry, NULL);
         }
     }
+}
+
+// ---------------------------------------------------------------------------
+// The chase stopgap (rebalance, zsogg 2026-09-24). See rt_budget.h.
+// ---------------------------------------------------------------------------
+
+RtChaseVerdict rt_chase_decide(bool applies, bool target_in_reach,
+    bool target_moving_away)
+{
+    if (!applies) {
+        return RT_CHASE_SWING;
+    }
+
+    // Out of reach already - it stepped off between the goal's range check
+    // and the first frame - is given up whether or not it is still moving:
+    // a swing begun now could only strike air.
+    if (!target_in_reach) {
+        return RT_CHASE_GIVE_UP;
+    }
+
+    return target_moving_away ? RT_CHASE_WAIT : RT_CHASE_SWING;
+}
+
+// Whether `target_obj` is walking away from `source_obj`: its current goal
+// moves it, and its next step lands farther from the source than it stands
+// now. Stepping around the source at the same distance is not away. The next
+// step is read as `anim_check_next_step` reads it.
+static bool rt_chase_moving_away(int64_t source_obj, int64_t target_obj)
+{
+    AnimRunInfo* run_info;
+    int slot;
+    int rot;
+    int64_t source_loc;
+    int64_t target_loc;
+    int64_t next_loc;
+
+    slot = anim_find_first(target_obj);
+    if (slot == -1) {
+        return false;
+    }
+
+    run_info = &(anim_run_info[slot]);
+    if (run_info->current_goal < 0
+        || !rt_budget_goal_is_movement(run_info->goals[run_info->current_goal].type)
+        || (run_info->path.flags & 0x02) != 0
+        || run_info->path.curr < 0
+        || run_info->path.curr >= run_info->path.max) {
+        return false;
+    }
+
+    if ((run_info->path.flags & 0x01) != 0) {
+        rot = tig_art_id_rotation_get(obj_field_int32_get(target_obj, OBJ_F_CURRENT_AID));
+    } else {
+        rot = run_info->path.rotations[run_info->path.curr];
+    }
+
+    source_loc = obj_field_int64_get(source_obj, OBJ_F_LOCATION);
+    target_loc = obj_field_int64_get(target_obj, OBJ_F_LOCATION);
+    if (!location_in_dir(target_loc, rot, &next_loc)) {
+        return false;
+    }
+
+    return location_dist(source_loc, next_loc) > location_dist(source_loc, target_loc);
+}
+
+RtChaseVerdict rt_chase_check(AnimRunInfo* run_info)
+{
+    int64_t obj;
+    int64_t target_obj;
+    int64_t weapon_obj;
+    RtChaseVerdict verdict;
+    RtBudgetEntry* entry;
+
+    if (!feature_enabled(FEATURE_REAL_TIME_CHASE)
+        || combat_turn_based_is_active()
+        || run_info->cur_stack_data == NULL
+        || run_info->cur_stack_data->type != AG_ATTEMPT_ATTACK) {
+        return RT_CHASE_SWING;
+    }
+
+    obj = run_info->cur_stack_data->params[AGDATA_SELF_OBJ].obj;
+    target_obj = run_info->cur_stack_data->params[AGDATA_TARGET_OBJ].obj;
+    if (obj == OBJ_HANDLE_NULL
+        || target_obj == OBJ_HANDLE_NULL
+        || obj_field_int32_get(obj, OBJ_F_TYPE) != OBJ_TYPE_NPC) {
+        return RT_CHASE_SWING;
+    }
+
+    // A melee weapon, as `anim_has_ranged_weapon` tells one; and a swing
+    // still in its first frame - once the blade moves, it finishes.
+    weapon_obj = combat_critter_weapon(obj);
+    if (item_weapon_range(weapon_obj, obj) > 1
+        || tig_art_id_frame_get(obj_field_int32_get(obj, OBJ_F_CURRENT_AID)) != 0) {
+        return RT_CHASE_SWING;
+    }
+
+    verdict = rt_chase_decide(true,
+        anim_target_in_weapon_range_of(obj, target_obj),
+        rt_chase_moving_away(obj, target_obj));
+
+    // Giving up ends this run's attempt: anything the budget's hold changed
+    // on the run goes back, as when the budget lets a held action go.
+    if (verdict == RT_CHASE_GIVE_UP) {
+        entry = rt_budget_find(obj);
+        if (entry != NULL) {
+            rt_budget_unhold(entry, run_info);
+        }
+    }
+
+    return verdict;
 }
