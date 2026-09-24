@@ -167,10 +167,26 @@ static RtBudgetEntry* rt_budget_find_or_add(int64_t obj)
         return entry;
     }
 
-    // A free slot, else a ready one: a recovering actor is never evicted.
+    // A free slot first; only when the table is full, a ready one. A recovering
+    // actor is never evicted.
+    //
+    // Session E: this took the first slot that was free *or* ready, so a guard
+    // needing its first entry could evict the fighter's ready one with dozens
+    // free - and that entry is what tells a gun's rewind from a new action.
+    // Measured at 30 fps: the Revolver's third shot was then accepted as new by
+    // the attack's own hold and held for good by the repeat hold, and the
+    // fighter stood with his gun drawn for up to 30 s.
     for (index = 0; index < RT_BUDGET_MAX_ENTRIES; index++) {
         entry = &(rt_budget_entries[index]);
-        if (entry->obj == OBJ_HANDLE_NULL || entry->state == RT_BUDGET_READY) {
+        if (entry->obj == OBJ_HANDLE_NULL) {
+            memset(entry, 0, sizeof(*entry));
+            entry->obj = obj;
+            return entry;
+        }
+    }
+    for (index = 0; index < RT_BUDGET_MAX_ENTRIES; index++) {
+        entry = &(rt_budget_entries[index]);
+        if (entry->state == RT_BUDGET_READY) {
             memset(entry, 0, sizeof(*entry));
             entry->obj = obj;
             return entry;
@@ -513,6 +529,13 @@ bool rt_budget_hold_repeat(AnimRunInfo* run_info)
     obj = run_info->cur_stack_data->params[AGDATA_SELF_OBJ].obj;
     entry = rt_budget_find_or_add(obj);
     if (entry == NULL) {
+        return false;
+    }
+
+    // This run's shot was accepted already - by the attack's own hold, if the
+    // entry had been lost in between. Holding an accepted action would hold it
+    // for good; it goes on.
+    if (entry->state == RT_BUDGET_ACCEPTED && rt_budget_same_run(entry->run, run_info->id)) {
         return false;
     }
 
