@@ -713,21 +713,28 @@ void combat_observer_wield_observed(const char* actor, const char* weapon)
 }
 
 void combat_observer_budget(const char* event, const char* actor,
-    const char* category, int action_points, int duration_ms, int elapsed_ms)
+    const char* category, int action_points, int duration_ms, int elapsed_ms,
+    const char* reason)
 {
     char line[384];
+    char reason_field[48];
 
     if (combat_observer_stream == NULL) {
         return;
+    }
+
+    reason_field[0] = '\0';
+    if (reason != NULL) {
+        snprintf(reason_field, sizeof(reason_field), ",\"reason\":\"%s\"", reason);
     }
 
     snprintf(line, sizeof(line),
         "{\"schema\":%d,\"sequence\":%u,\"event\":\"%s\","
         "\"turn\":null,\"action_id\":null,\"actor\":\"%s\","
         "\"category\":\"%s\",\"action_points\":%d,\"duration_ms\":%d,"
-        "\"elapsed_ms\":%d}",
+        "\"elapsed_ms\":%d%s}",
         COMBAT_OBSERVER_SCHEMA, combat_observer_sequence++, event, actor,
-        category, action_points, duration_ms, elapsed_ms);
+        category, action_points, duration_ms, elapsed_ms, reason_field);
     combat_observer_write(line);
 }
 

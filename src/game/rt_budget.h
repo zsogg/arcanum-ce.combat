@@ -46,6 +46,13 @@
 // in arcanum.cfg; this is only its default.
 #define RT_BUDGET_DEFAULT_PACE_MS 2000
 
+// Session F: the paces `real time pace ms` accepts. Outside them the default
+// is used and the log says so once: 0 - also what a word reads as - or seconds
+// typed as "2" would otherwise switch the budget off without a word, and a
+// pace in the millions overflows a duration.
+#define RT_BUDGET_MIN_PACE_MS 100
+#define RT_BUDGET_MAX_PACE_MS 60000
+
 typedef enum RtBudgetCategory {
     RT_BUDGET_ATTACK,
     RT_BUDGET_CAST,
@@ -108,6 +115,9 @@ typedef struct RtBudgetEntry {
 // or the allowance moves real time with turn-based. A non-positive cost, pace
 // or allowance is no time at all.
 int rt_budget_duration_ms(int pace_ms, int action_points, int action_points_per_turn);
+// The pace to use for a configured `real time pace ms`: itself when it is
+// within RT_BUDGET_MIN_PACE_MS..RT_BUDGET_MAX_PACE_MS, the default otherwise.
+int rt_budget_pace_ms(int configured);
 
 // The rules on one entry.
 void rt_budget_entry_accept(RtBudgetEntry* entry, RtBudgetCategory category,

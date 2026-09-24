@@ -191,6 +191,25 @@ TEST(the_shared_costs_are_the_numbers_turn_based_charges)
     CHECK_INT(combat_get_up_cost(0), 5); // AGbeginGetUpAnim
 }
 
+TEST(a_pace_outside_its_range_is_the_default)
+{
+    // Session F: a malformed `real time pace ms` must not switch the budget
+    // off (0 is what atoi makes of a word; "2" is seconds typed by mistake)
+    // or overflow a duration. The range's ends are themselves accepted.
+    CHECK_INT(rt_budget_pace_ms(2000), 2000);
+    CHECK_INT(rt_budget_pace_ms(1500), 1500);
+    CHECK_INT(rt_budget_pace_ms(RT_BUDGET_MIN_PACE_MS), RT_BUDGET_MIN_PACE_MS);
+    CHECK_INT(rt_budget_pace_ms(RT_BUDGET_MAX_PACE_MS), RT_BUDGET_MAX_PACE_MS);
+    CHECK_INT(rt_budget_pace_ms(0), RT_BUDGET_DEFAULT_PACE_MS);
+    CHECK_INT(rt_budget_pace_ms(2), RT_BUDGET_DEFAULT_PACE_MS);
+    CHECK_INT(rt_budget_pace_ms(-2000), RT_BUDGET_DEFAULT_PACE_MS);
+    CHECK_INT(rt_budget_pace_ms(RT_BUDGET_MIN_PACE_MS - 1), RT_BUDGET_DEFAULT_PACE_MS);
+    CHECK_INT(rt_budget_pace_ms(RT_BUDGET_MAX_PACE_MS + 1), RT_BUDGET_DEFAULT_PACE_MS);
+    CHECK_INT(rt_budget_pace_ms(2147483647), RT_BUDGET_DEFAULT_PACE_MS);
+    // The largest accepted pace keeps a heavy action's duration in range.
+    CHECK_INT(rt_budget_duration_ms(RT_BUDGET_MAX_PACE_MS, 100, 5), 1200000);
+}
+
 TEST(the_budget_events_carry_what_a_tolerance_reads)
 {
     char trace[4096];
@@ -200,9 +219,9 @@ TEST(the_budget_events_carry_what_a_tolerance_reads)
     combat_observer_test_reset();
     remove("./rt-budget-test.jsonl");
     CHECK(combat_observer_open("./rt-budget-test.jsonl"));
-    combat_observer_budget("action.accepted", "archer", "attack", 6, 1091, 0);
-    combat_observer_budget("actor.ready", "archer", "attack", 6, 1091, 1091);
-    combat_observer_budget("action.cancelled", "mage", "cast", 4, 727, 120);
+    combat_observer_budget("action.accepted", "archer", "attack", 6, 1091, 0, NULL);
+    combat_observer_budget("actor.ready", "archer", "attack", 6, 1091, 1091, NULL);
+    combat_observer_budget("action.cancelled", "mage", "cast", 4, 727, 120, "turn_based");
     combat_observer_close();
 
     stream = fopen("./rt-budget-test.jsonl", "rb");
@@ -214,9 +233,9 @@ TEST(the_budget_events_carry_what_a_tolerance_reads)
     remove("./rt-budget-test.jsonl");
     combat_observer_test_reset();
 
-    CHECK(strstr(trace, "\"event\":\"action.accepted\",\"turn\":null,\"action_id\":null,\"actor\":\"archer\",\"category\":\"attack\",\"action_points\":6,\"duration_ms\":1091,\"elapsed_ms\":0") != NULL);
+    CHECK(strstr(trace, "\"event\":\"action.accepted\",\"turn\":null,\"action_id\":null,\"actor\":\"archer\",\"category\":\"attack\",\"action_points\":6,\"duration_ms\":1091,\"elapsed_ms\":0}") != NULL);
     CHECK(strstr(trace, "\"event\":\"actor.ready\"") != NULL);
-    CHECK(strstr(trace, "\"event\":\"action.cancelled\",\"turn\":null,\"action_id\":null,\"actor\":\"mage\",\"category\":\"cast\",\"action_points\":4,\"duration_ms\":727,\"elapsed_ms\":120") != NULL);
+    CHECK(strstr(trace, "\"event\":\"action.cancelled\",\"turn\":null,\"action_id\":null,\"actor\":\"mage\",\"category\":\"cast\",\"action_points\":4,\"duration_ms\":727,\"elapsed_ms\":120,\"reason\":\"turn_based\"}") != NULL);
 }
 
 void test_rt_budget_suite(void)
@@ -229,5 +248,6 @@ void test_rt_budget_suite(void)
     RUN(a_release_only_counts_for_an_accepted_action);
     RUN(a_throw_costs_what_the_throw_goal_charges_in_each_build);
     RUN(the_shared_costs_are_the_numbers_turn_based_charges);
+    RUN(a_pace_outside_its_range_is_the_default);
     RUN(the_budget_events_carry_what_a_tolerance_reads);
 }

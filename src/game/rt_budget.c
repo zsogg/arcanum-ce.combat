@@ -32,6 +32,8 @@ static bool rt_budget_was_turn_based;
 // Session D: switching the feature on starts every actor ready, as a load does
 // (rule 3); entries frozen while it was off must not resume.
 static bool rt_budget_was_enabled;
+// The last out-of-range pace the log reported, so it says so once per value.
+static int rt_budget_pace_reported = RT_BUDGET_DEFAULT_PACE_MS;
 
 // ---------------------------------------------------------------------------
 // The rules, on one entry. Pure: no engine state is read here.
@@ -45,6 +47,15 @@ int rt_budget_duration_ms(int pace_ms, int action_points, int action_points_per_
 
     return (int)(((long long)pace_ms * action_points + action_points_per_turn / 2)
         / action_points_per_turn);
+}
+
+int rt_budget_pace_ms(int configured)
+{
+    if (configured < RT_BUDGET_MIN_PACE_MS || configured > RT_BUDGET_MAX_PACE_MS) {
+        return RT_BUDGET_DEFAULT_PACE_MS;
+    }
+
+    return configured;
 }
 
 void rt_budget_entry_accept(RtBudgetEntry* entry, RtBudgetCategory category,
@@ -258,8 +269,9 @@ static const char* rt_budget_category_name(RtBudgetCategory category)
     }
 }
 
+// `reason` is NULL except on "action.cancelled" (session F).
 static void rt_budget_observe(const char* event, int64_t obj,
-    const RtBudgetEntry* entry)
+    const RtBudgetEntry* entry, const char* reason)
 {
     char actor[COMBAT_OBSERVER_IDENTITY_SIZE];
 
@@ -270,7 +282,7 @@ static void rt_budget_observe(const char* event, int64_t obj,
     combat_observer_object_id(obj, actor);
     combat_observer_budget(event, actor,
         rt_budget_category_name(entry->category),
-        entry->action_points, entry->duration_ms, entry->elapsed_ms);
+        entry->action_points, entry->duration_ms, entry->elapsed_ms, reason);
 }
 
 // While holding: ask again when the recovery left is up, not a whole step later.
@@ -420,6 +432,24 @@ void rt_budget_cast_begun(AnimRunInfo* run_info)
     rt_budget_attack_begun(run_info);
 }
 
+// `real time pace ms`, validated (session F).
+static int rt_budget_configured_pace_ms(void)
+{
+    int configured;
+    int pace_ms;
+
+    configured = settings_get_value(&settings, RT_BUDGET_PACE_KEY);
+    pace_ms = rt_budget_pace_ms(configured);
+    if (pace_ms != configured && configured != rt_budget_pace_reported) {
+        tig_debug_printf("rt_budget: \"%s\" is %d, outside %d..%d ms; using %d\n",
+            RT_BUDGET_PACE_KEY, configured, RT_BUDGET_MIN_PACE_MS,
+            RT_BUDGET_MAX_PACE_MS, pace_ms);
+        rt_budget_pace_reported = configured;
+    }
+
+    return pace_ms;
+}
+
 static void rt_budget_accept(int64_t obj, RtBudgetEntry* entry,
     RtBudgetCategory category, AnimRunInfo* run_info)
 {
@@ -428,7 +458,7 @@ static void rt_budget_accept(int64_t obj, RtBudgetEntry* entry,
     int spell;
     MagicTechRunInfo* mt_run_info;
 
-    pace_ms = settings_get_value(&settings, RT_BUDGET_PACE_KEY);
+    pace_ms = rt_budget_configured_pace_ms();
     spell = -1;
     if (category == RT_BUDGET_CAST
         && magictech_id_to_run_info(run_info->cur_stack_data->params[AGDATA_SPELL_DATA].data, &mt_run_info)) {
@@ -447,7 +477,7 @@ static void rt_budget_accept(int64_t obj, RtBudgetEntry* entry,
     entry->action_spell = category == RT_BUDGET_CAST
         ? run_info->cur_stack_data->params[AGDATA_SPELL_DATA].data
         : -1;
-    rt_budget_observe("action.accepted", obj, entry);
+    rt_budget_observe("action.accepted", obj, entry, NULL);
 }
 
 // Session D: a run the budget held when the budget stopped applying - the
@@ -612,7 +642,7 @@ void rt_budget_released(AnimRunInfo* run_info)
             && rt_budget_is_whiff(run_info->cur_stack_data->params[AGDATA_SELF_OBJ].obj,
                 run_info->cur_stack_data->params[AGDATA_TARGET_OBJ].obj)) {
             entry->state = RT_BUDGET_READY;
-            rt_budget_observe("action.cancelled", entry->obj, entry);
+            rt_budget_observe("action.cancelled", entry->obj, entry, "whiff");
             return;
         }
         rt_budget_entry_release(entry);
@@ -698,7 +728,7 @@ void rt_budget_tick(int delta_ms)
             entry = &(rt_budget_entries[index]);
             if (entry->obj != OBJ_HANDLE_NULL
                 && rt_budget_entry_turn_based_began(entry)) {
-                rt_budget_observe("action.cancelled", entry->obj, entry);
+                rt_budget_observe("action.cancelled", entry->obj, entry, "turn_based");
             }
         }
     }
@@ -726,13 +756,13 @@ void rt_budget_tick(int delta_ms)
         if (entry->state == RT_BUDGET_ACCEPTED
             && !anim_id_to_run_info(&(entry->run), &run_info)) {
             entry->state = RT_BUDGET_READY;
-            rt_budget_observe("action.cancelled", entry->obj, entry);
+            rt_budget_observe("action.cancelled", entry->obj, entry, "unreleased");
             continue;
         }
 
         counts = !(pause_while_moving && rt_budget_is_moving(entry->obj));
         if (rt_budget_entry_tick(entry, delta_ms, counts)) {
-            rt_budget_observe("actor.ready", entry->obj, entry);
+            rt_budget_observe("actor.ready", entry->obj, entry, NULL);
         }
     }
 }

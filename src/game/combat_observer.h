@@ -46,7 +46,11 @@ void combat_observer_close(void);
 // the player applies a spell, and `wield.changed` when the player's weapon slot
 // changes by any route. None existed, so a recorded run could not say that the
 // player cast, equipped or moved, and a replay could not reproduce it.
-#define COMBAT_OBSERVER_SCHEMA 7
+//
+// 8 (real-time session F, 2026-09-24): `action.cancelled` gained `reason`, so
+// a trace says why an action cost nothing - a whiff, turn-based beginning, or
+// an animation that ended before its action frame.
+#define COMBAT_OBSERVER_SCHEMA 8
 
 bool combat_observer_is_enabled(void);
 bool combat_observer_is_complete(void);
@@ -265,10 +269,16 @@ void combat_observer_wield_observed(const char* actor, const char* weapon);
 // Real-time session B: the action budget (rt_budget.c). `event` is
 // "action.accepted" when an action starts and takes its time, "action.cancelled"
 // when one ends before releasing, and "actor.ready" when an actor may act
-// again. `category` is "attack" or "cast"; `elapsed_ms` is the time counted so
-// far, which for a ready actor is the whole duration.
+// again. `category` is "attack", "cast", "throw" or "skill"; `elapsed_ms` is
+// the time counted so far, which for a ready actor is the whole duration.
+// `reason` (schema 8, session F) is written only when it is not NULL, which is
+// on "action.cancelled": "whiff" (a melee strike found no one in reach),
+// "turn_based" (turn-based began during the wind-up) or "unreleased" (the
+// animation ended before its action frame - a new order, an interruption, a
+// target gone).
 void combat_observer_budget(const char* event, const char* actor,
-    const char* category, int action_points, int duration_ms, int elapsed_ms);
+    const char* category, int action_points, int duration_ms, int elapsed_ms,
+    const char* reason);
 
 void combat_observer_skill_roll(const char* source, const char* target,
     int skill, int effectiveness, int difficulty, int roll,
