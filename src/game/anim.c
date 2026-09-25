@@ -13317,7 +13317,7 @@ bool AGupdateAnimAttack(AnimRunInfo* run_info)
     }
 
     // CE (rebalance, 2026-09-24): the chase stopgap, behind `real time chase`.
-    // An NPC's melee swing waits while its target walks away in reach, and is
+    // An NPC's melee swing waits while its target moves in reach, and is
     // given up - the goal goes back to chasing - once the target is out of it.
     switch (rt_chase_check(run_info)) {
     case RT_CHASE_WAIT:

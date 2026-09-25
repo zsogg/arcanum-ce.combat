@@ -11,7 +11,6 @@
 #include "game/feature.h"
 #include "game/gamelib.h"
 #include "game/item.h"
-#include "game/location.h"
 #include "game/magictech.h"
 #include "game/obj.h"
 #include "game/obj_pool.h"
@@ -773,7 +772,7 @@ void rt_budget_tick(int delta_ms)
 // ---------------------------------------------------------------------------
 
 RtChaseVerdict rt_chase_decide(bool applies, bool target_in_reach,
-    bool target_moving_away)
+    bool target_moving)
 {
     if (!applies) {
         return RT_CHASE_SWING;
@@ -786,49 +785,10 @@ RtChaseVerdict rt_chase_decide(bool applies, bool target_in_reach,
         return RT_CHASE_GIVE_UP;
     }
 
-    return target_moving_away ? RT_CHASE_WAIT : RT_CHASE_SWING;
-}
-
-// Whether `target_obj` is walking away from `source_obj`: its current goal
-// moves it, and its next step lands farther from the source than it stands
-// now. Stepping around the source at the same distance is not away. The next
-// step is read as `anim_check_next_step` reads it.
-static bool rt_chase_moving_away(int64_t source_obj, int64_t target_obj)
-{
-    AnimRunInfo* run_info;
-    int slot;
-    int rot;
-    int64_t source_loc;
-    int64_t target_loc;
-    int64_t next_loc;
-
-    slot = anim_find_first(target_obj);
-    if (slot == -1) {
-        return false;
-    }
-
-    run_info = &(anim_run_info[slot]);
-    if (run_info->current_goal < 0
-        || !rt_budget_goal_is_movement(run_info->goals[run_info->current_goal].type)
-        || (run_info->path.flags & 0x02) != 0
-        || run_info->path.curr < 0
-        || run_info->path.curr >= run_info->path.max) {
-        return false;
-    }
-
-    if ((run_info->path.flags & 0x01) != 0) {
-        rot = tig_art_id_rotation_get(obj_field_int32_get(target_obj, OBJ_F_CURRENT_AID));
-    } else {
-        rot = run_info->path.rotations[run_info->path.curr];
-    }
-
-    source_loc = obj_field_int64_get(source_obj, OBJ_F_LOCATION);
-    target_loc = obj_field_int64_get(target_obj, OBJ_F_LOCATION);
-    if (!location_in_dir(target_loc, rot, &next_loc)) {
-        return false;
-    }
-
-    return location_dist(source_loc, next_loc) > location_dist(source_loc, target_loc);
+    // Moving at all, not only away (zsogg, 2026-09-24, after his playtest):
+    // waiting only for steps that led away still let 7 swings in 37 begin
+    // while he circled the guard a tile off and then stepped out of reach.
+    return target_moving ? RT_CHASE_WAIT : RT_CHASE_SWING;
 }
 
 RtChaseVerdict rt_chase_check(AnimRunInfo* run_info)
@@ -864,7 +824,7 @@ RtChaseVerdict rt_chase_check(AnimRunInfo* run_info)
 
     verdict = rt_chase_decide(true,
         anim_target_in_weapon_range_of(obj, target_obj),
-        rt_chase_moving_away(obj, target_obj));
+        rt_budget_is_moving(target_obj));
 
     // Giving up ends this run's attempt: anything the budget's hold changed
     // on the run goes back, as when the budget lets a held action go.

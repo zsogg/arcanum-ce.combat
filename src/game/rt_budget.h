@@ -161,10 +161,10 @@ bool rt_budget_cast_waiting(AnimID* anim_id);
 // default off, independent of the budget. In real time a melee NPC cannot
 // catch a running target: it begins its wind-up in reach, the target runs on,
 // and the blow falls on air two tiles behind. Here an NPC's melee swing does
-// not begin while its target is walking away from it - it waits in its first
-// frame while the target stays in reach - and never begins at a target already
-// out of reach: that attempt is given up, and the goal goes back to chasing.
-// It swings when the target stops. A target that sets off after the blade has
+// not begin while its target is moving - it waits in its first frame while the
+// target stays in reach - and never begins at a target already out of reach:
+// that attempt is given up, and the goal goes back to chasing. It swings when
+// the target stops. Moving is a movement goal, as rule 12 counts it. A target that sets off after the blade has
 // started moving still escapes the blow.
 // zsogg expects this not to be the whole answer; it is a stopgap.
 typedef enum RtChaseVerdict {
@@ -176,7 +176,7 @@ typedef enum RtChaseVerdict {
 // The rule, pure. `applies` is everything but the target: the switch on, real
 // time, an NPC attacker, a melee weapon, and the swing not yet begun.
 RtChaseVerdict rt_chase_decide(bool applies, bool target_in_reach,
-    bool target_moving_away);
+    bool target_moving);
 // Called at the top of each attack update, before the budget's hold.
 RtChaseVerdict rt_chase_check(AnimRunInfo* run_info);
 

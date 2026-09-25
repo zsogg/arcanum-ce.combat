@@ -213,9 +213,9 @@ TEST(a_pace_outside_its_range_is_the_default)
 TEST(a_chaser_swings_only_at_a_target_that_is_not_walking_away)
 {
     // The chase stopgap (zsogg, 2026-09-24). Nothing changes unless it
-    // applies. Then a swing waits while its target walks away in reach, is
-    // given up at a target out of reach - moving or not, since it could only
-    // strike air - and goes ahead at a target in reach that is not walking away.
+    // applies. Then a swing waits while its target moves in reach, is given
+    // up at a target out of reach - moving or not, since it could only strike
+    // air - and goes ahead at a target in reach that has stopped.
     CHECK_INT(rt_chase_decide(false, true, true), RT_CHASE_SWING);
     CHECK_INT(rt_chase_decide(false, false, true), RT_CHASE_SWING);
     CHECK_INT(rt_chase_decide(false, false, false), RT_CHASE_SWING);
