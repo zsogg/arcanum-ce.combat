@@ -126,11 +126,12 @@ bool called_shot_ui_create(void);
 void called_shot_ui_destroy(void);
 
 /**
- * Shows the panel during the local player's standard turn-based combat and
- * hides it everywhere else.
+ * Shows the panel while the local player is in combat mode, turn-based or real
+ * time, and hides it everywhere else.
  *
  * Session 1's decision: hidden entirely rather than shown disabled, so no inert
- * control sits on screen for the modes whose support is deferred.
+ * control sits on screen. Real time was added on 2026-09-25 (zsogg): its attack
+ * already commits the aim by the same route, so only the panel was missing.
  */
 void called_shot_ui_refresh(void);
 
@@ -157,6 +158,13 @@ int called_shot_art_for(int hit_loc);
  * way this particular mistake was ever going to be caught early.
  */
 int called_shot_control_index_at(const TigRect* panel, int x, int y);
+
+/**
+ * The screen point at the centre of `hit_loc`'s control, for a scripted click
+ * that has to travel the same route as a real one. False when the panel is
+ * not shown, which is itself the answer a test is often after.
+ */
+bool called_shot_control_point(int hit_loc, int* x, int* y);
 
 /** Handles a click on one of the four controls. True when it was ours. */
 bool called_shot_ui_handle_button(tig_button_handle_t button_handle);

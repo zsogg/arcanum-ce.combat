@@ -244,6 +244,21 @@ int called_shot_control_index_at(const TigRect* panel, int x, int y)
     return -1;
 }
 
+bool called_shot_control_point(int hit_loc, int* x, int* y)
+{
+    TigRect rect;
+
+    if (!called_shot_ui_created || !called_shot_ui_shown
+        || hit_loc < 0 || hit_loc >= HIT_LOC_COUNT) {
+        return false;
+    }
+
+    called_shot_control_rect(hit_loc, &rect);
+    *x = called_shot_placed.x + rect.x + rect.width / 2;
+    *y = called_shot_placed.y + rect.y + rect.height / 2;
+    return true;
+}
+
 static int called_shot_control_at(int x, int y)
 {
     return called_shot_control_index_at(&called_shot_placed, x, y);
@@ -383,18 +398,33 @@ void called_shot_ui_refresh(void)
     int64_t pc_obj;
     bool was_shown = called_shot_ui_shown;
 
+    // Real time (2026-09-25): the panel's window is built with the turn-based
+    // combat bar (`combat_ui_recreate`) and torn down with it
+    // (`combat_ui_close`), so in real-time combat mode it may not exist. It is
+    // built here when it should be shown; `called_shot_ui_create` refreshes
+    // again once it has.
     if (!called_shot_ui_created) {
+        pc_obj = player_get_local_pc_obj();
+        if (called_shot_enabled()
+            && pc_obj != OBJ_HANDLE_NULL
+            && combat_critter_is_combat_mode_active(pc_obj)) {
+            called_shot_ui_create();
+        }
         return;
     }
 
-    // Session 1: shown only during the local player's standard turn-based
-    // combat, and hidden outright elsewhere rather than shown disabled. Real
-    // time and fast turn-based support are deferred, and an inert control is
-    // worse than none.
+    // Shown while the local player is in combat mode, and hidden outright
+    // elsewhere rather than shown disabled: an inert control is worse than
+    // none. Session 1 showed it only in turn-based combat, deferring real time.
+    // Real time was added on 2026-09-25 at zsogg's request. A real-time attack
+    // commits its aim through `intgame_perform_action_on_target_inner`, the
+    // same route as a turn-based one, and the comma, period and slash keys it
+    // mirrors have always worked there, so the panel was all that was missing.
+    // The combat-mode change that shows or hides it reaches
+    // `combat_ui_combat_mode_changed` in both modes.
     pc_obj = player_get_local_pc_obj();
     if (pc_obj != OBJ_HANDLE_NULL
-        && combat_critter_is_combat_mode_active(pc_obj)
-        && combat_turn_based_is_active()) {
+        && combat_critter_is_combat_mode_active(pc_obj)) {
         tig_window_show(called_shot_window);
         called_shot_ui_shown = true;
     } else {

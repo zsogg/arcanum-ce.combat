@@ -215,8 +215,8 @@ void combat_ui_combat_mode_changed(bool combat_ended)
         called_shot_reset();
     }
 
-    // Shown during the local player's standard turn-based combat and hidden
-    // everywhere else, on both edges of the transition.
+    // Shown while the local player is in combat mode, turn-based or real time,
+    // and hidden everywhere else, on both edges of the transition.
     called_shot_ui_refresh();
 }
 
@@ -322,6 +322,11 @@ void combat_ui_close(void)
 {
     called_shot_ui_destroy();
     combat_ui_destroy();
+
+    // CE (2026-09-25): turn-based ending is not combat mode ending. A player
+    // still in combat mode, now in real time, keeps the called-shot panel, so
+    // it is rebuilt here on its own.
+    called_shot_ui_refresh();
 }
 
 // 0x56EF50

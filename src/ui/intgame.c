@@ -3522,6 +3522,13 @@ bool intgame_mode_action(const char* action)
         return true;
     }
 
+    // The skills bar, as K toggles it. A player prowls by opening it and
+    // pressing Prowling, so a scripted prowl needs the bar in the same state.
+    if (strcmp(action, "skills") == 0) {
+        intgame_secondary_button_toggle(INTGAME_SECONDARY_BUTTON_SKILLS, ROTWIN_TYPE_SKILLS);
+        return true;
+    }
+
     return false;
 }
 

@@ -703,6 +703,30 @@ TEST(the_throw_rows_load_into_what_they_say)
     CHECK(!load_script("0 raise\n"));
 }
 
+TEST(the_called_shot_rows_load_into_what_they_say)
+{
+    // 2026-09-25: prowling, a click on the panel, and an attack that takes
+    // the panel's aim rather than forcing one (aim -1).
+    CHECK(load_script(
+        "0 prowl on\n"
+        "0 prowl off\n"
+        "0 key skills\n"
+        "0 panel 1\n"
+        "0 object G_00000084_0104_4040_8000_000000000401 panel\n"));
+    CHECK_INT(replay_ui_count(), 5);
+    CHECK(row_is(0, "turn=0 now=0 kind=prowl target= loc=0 aim=0 spell=0 cast=- wait=0 prowl=1"));
+    CHECK(row_is(1, "turn=0 now=0 kind=prowl target= loc=0 aim=0 spell=0 cast=- wait=0 prowl=0"));
+    CHECK(row_is(2, "turn=0 now=0 kind=key target=skills loc=0 aim=0 spell=0 cast=- wait=0"));
+    CHECK(row_is(3, "turn=0 now=0 kind=panel target= loc=0 aim=1 spell=0 cast=- wait=0"));
+    CHECK(row_is(4, "turn=0 now=0 kind=object target=G_00000084_0104_4040_8000_000000000401 loc=0 aim=-1 spell=0 cast=- wait=0"));
+
+    CHECK(!load_script("0 prowl\n")); // on or off
+    CHECK(!load_script("0 prowl maybe\n"));
+    CHECK(!load_script("0 panel 4\n")); // not a hit location
+    CHECK(!load_script("0 panel head\n"));
+    CHECK(!load_script("0 object G_X panel extra\n"));
+}
+
 TEST(a_row_the_parser_cannot_read_refuses_the_whole_file)
 {
     // Refused, never skipped: a replay missing a row diverges from what it
@@ -1650,6 +1674,7 @@ void test_combat_observer_suite(void)
     RUN(every_existing_row_form_still_loads_as_it_did);
     RUN(the_real_time_rows_load_into_what_they_say);
     RUN(the_throw_rows_load_into_what_they_say);
+    RUN(the_called_shot_rows_load_into_what_they_say);
     RUN(a_row_the_parser_cannot_read_refuses_the_whole_file);
     RUN(a_tile_step_a_cast_request_and_a_weapon_change_are_each_recorded);
     RUN(every_mode_state_decides_acceptance_the_same_way);

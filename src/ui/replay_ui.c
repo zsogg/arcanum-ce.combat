@@ -5,6 +5,7 @@
 #include <string.h>
 
 #include <tig/debug.h>
+#include <tig/message.h>
 #include <tig/timer.h>
 
 #include "game/anim.h"
@@ -24,6 +25,7 @@
 #include "ui/called_shot.h"
 #include "ui/combat_ui.h"
 #include "ui/intgame.h"
+#include "ui/skill_ui.h"
 #include "ui/spell_ui.h"
 
 #define REPLAY_MAX_COMMANDS 256
@@ -77,6 +79,18 @@ typedef enum ReplayKind {
     //       7 Charisma), as the character screen's plus button spends it.
     //       Script-only, like `learn`.
     REPLAY_KIND_RAISE,
+    // Called shots in real time and while prowling (2026-09-25):
+    //
+    //   prowl on | prowl off
+    //       the Prowling skill button, `skill_ui_begin(pc, 0)`, pressed only
+    //       when the player is not already in the asked state.
+    //   panel <limb>
+    //       a left click at the centre of the called-shot panel's control for
+    //       that limb, enqueued as a mouse message so it meets the same
+    //       buttons and window filters a real click does. Logged, and nothing
+    //       sent, when the panel is not shown.
+    REPLAY_KIND_PROWL,
+    REPLAY_KIND_PANEL,
 } ReplayKind;
 
 // A cast's target, which is a third shape: the caster, an object or a tile.
@@ -107,6 +121,8 @@ typedef struct ReplayCommand {
     int count;
     int skill;
     int stat;
+    // `prowl`: 1 on, 0 off.
+    int prowl;
 } ReplayCommand;
 
 static ReplayCommand replay_commands[REPLAY_MAX_COMMANDS];
@@ -300,6 +316,14 @@ static bool replay_parse_line(const char* text, ReplayCommand* command)
             replay_copy_target(command, tokens[index]);
         }
         index++;
+        // `panel` instead of a limb: force no aim, so the command commits
+        // whatever the called-shot panel holds - the one way a script can
+        // test that a click on the panel reached the attack.
+        if (index < count && strcmp(tokens[index], "panel") == 0) {
+            command->aim = -1;
+            index++;
+            return index == count;
+        }
         if (index < count && !replay_parse_int(tokens[index++], &(command->aim))) {
             return false;
         }
@@ -341,6 +365,28 @@ static bool replay_parse_line(const char* text, ReplayCommand* command)
             || command->proto <= 0 || index >= count
             || !replay_parse_int(tokens[index++], &(command->count))
             || command->count <= 0) {
+            return false;
+        }
+        return index == count;
+    }
+
+    if (strcmp(kind, "prowl") == 0) {
+        command->kind = REPLAY_KIND_PROWL;
+        if (strcmp(tokens[index], "on") == 0) {
+            command->prowl = 1;
+        } else if (strcmp(tokens[index], "off") == 0) {
+            command->prowl = 0;
+        } else {
+            return false;
+        }
+        index++;
+        return index == count;
+    }
+
+    if (strcmp(kind, "panel") == 0) {
+        command->kind = REPLAY_KIND_PANEL;
+        if (!replay_parse_int(tokens[index++], &(command->aim))
+            || command->aim < 0 || command->aim >= HIT_LOC_COUNT) {
             return false;
         }
         return index == count;
@@ -420,7 +466,7 @@ int replay_ui_count(void)
 bool replay_ui_describe(int index, char* buffer, size_t size)
 {
     const ReplayCommand* command;
-    static const char* kinds[] = { "object", "location", "key", "cast", "wield", "wait", "learn", "give", "throw", "skill", "raise" };
+    static const char* kinds[] = { "object", "location", "key", "cast", "wield", "wait", "learn", "give", "throw", "skill", "raise", "prowl", "panel" };
     int written;
     static const char* casts[] = { "self", "object", "location" };
 
@@ -445,6 +491,9 @@ bool replay_ui_describe(int index, char* buffer, size_t size)
     }
     if (command->kind == REPLAY_KIND_RAISE && written >= 0 && (size_t)written < size) {
         snprintf(buffer + written, size - (size_t)written, " stat=%d", command->stat);
+    }
+    if (command->kind == REPLAY_KIND_PROWL && written >= 0 && (size_t)written < size) {
+        snprintf(buffer + written, size - (size_t)written, " prowl=%d", command->prowl);
     }
     return true;
 }
@@ -666,6 +715,51 @@ void replay_ui_tick(void)
         return;
     }
 
+    if (command->kind == REPLAY_KIND_PROWL) {
+        bool was_prowling;
+
+        replay_stall_reported = false;
+        replay_next++;
+        was_prowling = critter_is_concealed(pc_obj);
+        if (was_prowling != (command->prowl != 0)) {
+            skill_ui_begin(pc_obj, 0);
+        }
+        tig_debug_printf("Replay: command %d prowl %s; the player was %s and is"
+                         " %s, combat mode %s\n",
+            replay_next - 1, command->prowl ? "on" : "off",
+            was_prowling ? "prowling" : "not prowling",
+            critter_is_concealed(pc_obj) ? "prowling" : "not prowling",
+            combat_critter_is_combat_mode_active(pc_obj) ? "on" : "off");
+        return;
+    }
+
+    if (command->kind == REPLAY_KIND_PANEL) {
+        TigMessage click;
+        int x;
+        int y;
+
+        replay_stall_reported = false;
+        replay_next++;
+        if (!called_shot_control_point(command->aim, &x, &y)) {
+            tig_debug_printf("Replay: command %d: the called-shot panel is not"
+                             " shown; no click sent\n",
+                replay_next - 1);
+            return;
+        }
+        memset(&click, 0, sizeof(click));
+        click.type = TIG_MESSAGE_MOUSE;
+        click.data.mouse.x = x;
+        click.data.mouse.y = y;
+        click.data.mouse.event = TIG_MESSAGE_MOUSE_LEFT_BUTTON_DOWN;
+        tig_message_enqueue(&click);
+        click.data.mouse.event = TIG_MESSAGE_MOUSE_LEFT_BUTTON_UP;
+        tig_message_enqueue(&click);
+        tig_debug_printf("Replay: command %d clicked the called-shot panel at"
+                         " %d,%d for limb %d\n",
+            replay_next - 1, x, y, command->aim);
+        return;
+    }
+
     if (command->kind == REPLAY_KIND_RAISE) {
         int value;
         int cost;
@@ -841,7 +935,9 @@ void replay_ui_tick(void)
 
     // The recorded aim is in force only across this dispatch. Left set, it
     // would silently aim the player's own next click.
-    called_shot_replay_aim_set(command->aim);
+    if (command->aim >= 0) {
+        called_shot_replay_aim_set(command->aim);
+    }
     intgame_perform_action_on_target(&td);
     called_shot_replay_aim_clear();
 }
