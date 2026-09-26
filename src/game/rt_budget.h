@@ -65,6 +65,10 @@ typedef enum RtBudgetCategory {
     // animates, so nothing could hold it first, and zsogg left the instant
     // actions untimed (2026-09-23).
     RT_BUDGET_SKILL,
+    // Reload prototype session 2: one shot loaded by the Reload command
+    // (`reload.c`). It has no animation to hold, so it happens at once and its
+    // time is the recovery after it (`rt_budget_instant_action`).
+    RT_BUDGET_RELOAD,
 } RtBudgetCategory;
 
 typedef enum RtBudgetState {
@@ -179,6 +183,13 @@ RtChaseVerdict rt_chase_decide(bool applies, bool target_in_reach,
     bool target_moving);
 // Called at the top of each attack update, before the budget's hold.
 RtChaseVerdict rt_chase_check(AnimRunInfo* run_info);
+
+// An action with no animation to hold - a reload. False, changing nothing, when
+// the actor is still recovering: the caller refuses it. Otherwise it is
+// accepted and released at once, and the actor then recovers for
+// `R * action_points / AP per turn`, so the next action waits for it. Always
+// true when the budget does not apply.
+bool rt_budget_instant_action(int64_t obj, RtBudgetCategory category, int action_points);
 
 // Called from `timeevent_ping` with the real milliseconds since the last ping.
 void rt_budget_tick(int delta_ms);

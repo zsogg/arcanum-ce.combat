@@ -32,6 +32,7 @@
 #include "game/proto.h"
 #include "game/random.h"
 #include "game/reaction.h"
+#include "game/reload.h"
 #include "game/resistance.h"
 #include "game/script.h"
 #include "game/sfx.h"
@@ -240,6 +241,8 @@ bool combat_init(GameInitInfo* init_info)
 
     // CE (real-time session B): the action budget's settings, and an empty table.
     rt_budget_init();
+    // CE (reload prototype session 2): the listed firearms.
+    reload_init();
     settings_register(&settings, COMBAT_TAUNTS_KEY, "0", NULL);
 
     return true;
@@ -249,6 +252,7 @@ bool combat_init(GameInitInfo* init_info)
 void combat_exit(void)
 {
     mes_unload(combat_mes_file);
+    reload_exit();
     combat_turn_based_end();
     if (!combat_editor) {
         animfx_list_exit(&combat_eye_candies);
@@ -956,13 +960,24 @@ int combat_attack(CombatContext* combat)
         combat_observer_snapshot_obj(combat->target_obj);
     }
 
-    if (!combat_consume_ammo(combat->weapon_obj, combat->attacker_obj, 1, false)) {
+    // CE (reload prototype session 2): a gun under `firearm reloading` fires a
+    // loaded shot and spends no spare ammunition; the reload paid for that.
+    // Only this, the ordinary shot - a critical miss's ammunition loss below
+    // still takes spare ammunition, as it always did.
+    bool reloading = reload_applies(combat->attacker_obj, combat->weapon_obj);
+    if (reloading
+            ? !reload_fire(combat->attacker_obj, combat->weapon_obj)
+            : !combat_consume_ammo(combat->weapon_obj, combat->attacker_obj, 1, false)) {
         combat->flags |= 0x400;
 
         sound_id = sfx_item_sound(combat->weapon_obj, combat->attacker_obj, combat->target_obj, WEAPON_SOUND_OUT_OF_AMMO);
         gsound_play_sfx_on_obj(sound_id, 1, combat->attacker_obj);
 
-        if (obj_field_int32_get(combat->attacker_obj, OBJ_F_TYPE) == OBJ_TYPE_NPC) {
+        // An empty gun under reloading is reloaded, not swapped for another
+        // (zsogg, 2026-09-25); its attack is normally refused before this.
+        if (reloading) {
+            tf_add(combat->attacker_obj, TF_TYPE_WHITE, "Reload");
+        } else if (obj_field_int32_get(combat->attacker_obj, OBJ_F_TYPE) == OBJ_TYPE_NPC) {
             ai_switch_weapon(combat->attacker_obj);
         } else {
             pc_switch_weapon(combat->attacker_obj, combat->target_obj);
@@ -3892,6 +3907,31 @@ int combat_get_up_cost(int64_t obj)
     (void)obj;
 
     return 5;
+}
+
+// CE (reload prototype session 2): what loading one ready shot costs, in AP.
+// The rules file's `LoadAP`, or `LoadAPApprentice` at Apprentice training or
+// better in the weapon's skill - the same training test that gives an attack
+// its +5 speed in `item_weapon_magic_speed`. 0 for a weapon the file does not
+// list. Turn-based charges it and the real-time budget times it, so a change
+// here moves both modes, as with every other `combat_*_cost`.
+int combat_reload_cost(int64_t obj, int64_t weapon_obj)
+{
+    const ReloadRule* rule;
+    int skill;
+    int training;
+
+    rule = reload_rule_for(weapon_obj);
+    if (rule == NULL) {
+        return 0;
+    }
+
+    skill = item_weapon_skill(weapon_obj);
+    training = IS_TECH_SKILL(skill)
+        ? tech_skill_training_get(obj, GET_TECH_SKILL(skill))
+        : basic_skill_training_get(obj, GET_BASIC_SKILL(skill));
+
+    return training >= TRAINING_APPRENTICE ? rule->load_ap_apprentice : rule->load_ap;
 }
 
 // The rule itself, apart from asking who the player is, so it can be tested

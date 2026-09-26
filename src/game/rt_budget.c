@@ -264,6 +264,8 @@ static const char* rt_budget_category_name(RtBudgetCategory category)
         return "throw";
     case RT_BUDGET_SKILL:
         return "skill";
+    case RT_BUDGET_RELOAD:
+        return "reload";
     default:
         return "cast";
     }
@@ -478,6 +480,38 @@ static void rt_budget_accept(int64_t obj, RtBudgetEntry* entry,
         ? run_info->cur_stack_data->params[AGDATA_SPELL_DATA].data
         : -1;
     rt_budget_observe("action.accepted", obj, entry, NULL);
+}
+
+bool rt_budget_instant_action(int64_t obj, RtBudgetCategory category, int action_points)
+{
+    RtBudgetEntry* entry;
+    AnimID no_run;
+
+    if (!rt_budget_active() || obj == OBJ_HANDLE_NULL) {
+        return true;
+    }
+
+    entry = rt_budget_find(obj);
+    if (entry != NULL && !rt_budget_entry_ready(entry)) {
+        return false;
+    }
+
+    entry = rt_budget_find_or_add(obj);
+    if (entry == NULL) {
+        return true;
+    }
+
+    // No run: nothing is animating, so nothing may later read this as the
+    // same action under way (`rt_budget_hold`'s pass-through needs a run).
+    anim_id_init(&no_run);
+    rt_budget_entry_accept(entry, category, no_run, action_points,
+        rt_budget_duration_ms(rt_budget_configured_pace_ms(), action_points,
+            combat_action_points_per_turn(obj)));
+    entry->action_key = -1;
+    entry->action_spell = -1;
+    rt_budget_observe("action.accepted", obj, entry, NULL);
+    rt_budget_entry_release(entry);
+    return true;
 }
 
 // Session D: a run the budget held when the budget stopped applying - the

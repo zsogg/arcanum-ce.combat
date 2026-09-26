@@ -54,6 +54,8 @@ set(SRCS
     "src/game/combat.h"
     "src/game/combat_observer.c"
     "src/game/combat_observer.h"
+    "src/game/reload.c"
+    "src/game/reload.h"
     "src/game/rt_budget.c"
     "src/game/rt_budget.h"
     "src/game/context.h"

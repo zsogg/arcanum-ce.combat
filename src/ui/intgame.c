@@ -31,6 +31,7 @@
 #include "game/portrait.h"
 #include "game/proto.h"
 #include "game/reaction.h"
+#include "game/reload.h"
 #include "game/resistance.h"
 #include "game/scroll.h"
 #include "game/sfx.h"
@@ -2735,6 +2736,15 @@ bool intgame_process_message(TigMessage* msg)
                 wmap_ui_open();
                 gsound_play_sfx(0, 1);
                 return true;
+            case SDLK_Q:
+                // CE (reload prototype session 2): Reload, zsogg's choice of key
+                // (2026-09-25) - no handler used Q. Only under `firearm
+                // reloading`; otherwise Q still does nothing.
+                if (feature_enabled(FEATURE_FIREARM_RELOADING)) {
+                    reload_command(player_get_local_pc_obj());
+                    return true;
+                }
+                break;
             case SDLK_RETURN:
                 if (intgame_iso_window_type == ROTWIN_TYPE_QUANTITY) {
                     inven_ui_send_transfer_packet(intgame_quantity);
@@ -3526,6 +3536,12 @@ bool intgame_mode_action(const char* action)
     // pressing Prowling, so a scripted prowl needs the bar in the same state.
     if (strcmp(action, "skills") == 0) {
         intgame_secondary_button_toggle(INTGAME_SECONDARY_BUTTON_SKILLS, ROTWIN_TYPE_SKILLS);
+        return true;
+    }
+
+    // Reload (Q), for a script.
+    if (strcmp(action, "reload") == 0) {
+        reload_command(player_get_local_pc_obj());
         return true;
     }
 

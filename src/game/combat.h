@@ -149,6 +149,7 @@ int combat_use_object_cost(int64_t obj, int64_t target_obj);
 int combat_use_item_cost(int64_t obj, int64_t item_obj);
 int combat_pickup_cost(int64_t obj, int64_t item_obj);
 int combat_get_up_cost(int64_t obj);
+int combat_reload_cost(int64_t obj, int64_t weapon_obj);
 int combat_action_points_per_turn(int64_t obj);
 int combat_action_points_for_speed(int speed);
 int combat_throw_cost_for(bool local_pc);

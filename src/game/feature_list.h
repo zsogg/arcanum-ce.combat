@@ -33,5 +33,6 @@ FEATURE(CALLED_SHOT_THROWS, "called shot throws", false)
 FEATURE(DEBUG_CHARACTER_POINTS, "debug character points", false)
 FEATURE(REAL_TIME_BUDGET, "real time budget", false)
 FEATURE(REAL_TIME_CHASE, "real time chase", false)
+FEATURE(FIREARM_RELOADING, "firearm reloading", false)
 
 // clang-format on

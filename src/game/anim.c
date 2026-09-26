@@ -24,12 +24,14 @@
 #include "game/proto.h"
 #include "game/random.h"
 #include "game/reaction.h"
+#include "game/reload.h"
 #include "game/resistance.h"
 #include "game/rt_budget.h"
 #include "game/sfx.h"
 #include "game/skill.h"
 #include "game/stat.h"
 #include "game/teleport.h"
+#include "game/tf.h"
 #include "game/tile.h"
 #include "game/timeevent.h"
 #include "game/trap.h"
@@ -13225,6 +13227,17 @@ bool AGbeginAnimAttack(AnimRunInfo* run_info)
         return false;
     }
 
+    // CE (reload prototype session 2): a gun under `firearm reloading` with
+    // nothing loaded is refused here, before its AP is charged (zsogg,
+    // 2026-09-25) - stock charged the attack and only found the gun empty at
+    // the shot. Ended as a failed AP charge ends it, so an automatic follow-up
+    // attack in real time cannot retry it.
+    if (reload_wielded_is_empty(source_obj)) {
+        tf_add(source_obj, TF_TYPE_WHITE, "Reload");
+        anim_interrupt(&(run_info->id), PRIORITY_HIGHEST);
+        return false;
+    }
+
     action_points = combat_attack_cost(source_obj);
     if (!combat_consume_action_points(source_obj, action_points)) {
         anim_interrupt(&(run_info->id), PRIORITY_HIGHEST);
@@ -13438,6 +13451,13 @@ bool anim_weapon_has_ammo(int64_t critter_obj)
     ammo_type = item_weapon_ammo_type(weapon_obj);
     if (ammo_type == 10000) {
         return true;
+    }
+
+    // CE (reload prototype session 2): a gun under `firearm reloading` has
+    // another shot when one is loaded, whatever the pack holds - so real-time
+    // repeat fire stops at an empty gun.
+    if (reload_applies(critter_obj, weapon_obj)) {
+        return reload_loaded_get(weapon_obj) > 0;
     }
 
     qty = item_ammo_quantity_get(critter_obj, ammo_type);
