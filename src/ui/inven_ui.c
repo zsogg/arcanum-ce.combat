@@ -1752,6 +1752,15 @@ static inline bool inven_ui_message_filter_handle_mouse_lbutton_up_accept_drop(T
             inven_ui_drop_dragged_item();
         }
 
+        // CE (reload prototype session 2): `weapon swap cost` - a swap the turn
+        // cannot pay for is refused, and the dragged weapon goes back.
+        if (inventory_location == ITEM_INV_LOC_WEAPON
+            && inven_ui_drag_item_obj != OBJ_HANDLE_NULL
+            && !combat_check_weapon_swap(v2, inven_ui_drag_item_obj)) {
+            inven_ui_drop_dragged_item();
+            return false;
+        }
+
         old_item_obj = item_wield_get(v2, inventory_location);
         if (old_item_obj == OBJ_HANDLE_NULL || old_item_obj == inven_ui_drag_item_obj) {
             if (v2 == inven_ui_pc_obj) {
@@ -1974,6 +1983,13 @@ static inline bool inven_ui_message_filter_handle_mouse_lbutton_up(int x, int y,
                         || inven_ui_drag_source_obj == inven_ui_pc_obj
                         || parent_obj == inven_ui_pc_obj)) {
                     int wield_reason = item_check_wield(inven_ui_drag_item_obj, inventory_location, parent_obj);
+                    // CE (reload prototype session 2): `weapon swap cost`.
+                    if (wield_reason == ITEM_CANNOT_OK
+                        && inventory_location == ITEM_INV_LOC_WEAPON
+                        && !combat_check_weapon_swap(parent_obj, inven_ui_drag_item_obj)) {
+                        inven_ui_drop_dragged_item();
+                        return false;
+                    }
                     if (wield_reason == ITEM_CANNOT_OK) {
                         int64_t old_item_obj = item_wield_get(parent_obj, inventory_location);
                         if (old_item_obj != OBJ_HANDLE_NULL

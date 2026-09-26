@@ -15,6 +15,7 @@
 #include "game/descriptions.h"
 #include "game/effect.h"
 #include "game/fate.h"
+#include "game/feature.h"
 #include "game/gamelib.h"
 #include "game/gsound.h"
 #include "game/item.h"
@@ -76,6 +77,10 @@ static int combat_move_cost(int64_t source_obj, int64_t target_loc, bool adjacen
 static bool combat_turn_based_critter_is_dontdraw(int64_t obj);
 static void sort_combat_list(void);
 static void pc_switch_weapon(int64_t pc_obj, int64_t target_obj);
+
+// CE (reload prototype session 2): the weapon that last left the player's
+// hand, for `weapon swap cost` - see `combat_weapon_swap_entered`.
+static int64_t combat_weapon_swap_last;
 
 // 0x5B5798
 static int hit_loc_penalties[HIT_LOC_COUNT] = {
@@ -262,6 +267,9 @@ void combat_exit(void)
 // 0x4B1E80
 void combat_reset(void)
 {
+    // CE (reload prototype session 2): a new game or a load has no last weapon.
+    combat_weapon_swap_last = OBJ_HANDLE_NULL;
+
     // CE (real-time session B): recovery is not saved (rule 3) - a new game or a
     // load starts every actor ready.
     rt_budget_reset();
@@ -3932,6 +3940,101 @@ int combat_reload_cost(int64_t obj, int64_t weapon_obj)
         : basic_skill_training_get(obj, GET_BASIC_SKILL(skill));
 
     return training >= TRAINING_APPRENTICE ? rule->load_ap_apprentice : rule->load_ap;
+}
+
+// CE (reload prototype session 2): `weapon swap cost`, default off - drawing a
+// weapon or switching to another costs 3 AP in the player's turn-based turn;
+// putting one away is free (zsogg, 2026-09-20 and 2026-09-26). Stock charges
+// nothing for any weapon change. Real time leaves it untimed, with the other
+// instant actions.
+//
+// **A swap is a different weapon entering the weapon slot** than the one last
+// there. The inventory screen lifts an item out of its slot when a drag starts
+// and puts it back if the drag is dropped where it began, so charging every
+// arrival would bill an abandoned drag; and the hotkey bar unequips before it
+// equips, so charging departures and arrivals would bill one swap twice. The
+// weapon that last left the slot is remembered here.
+#define COMBAT_WEAPON_SWAP_COST 3
+
+int combat_weapon_swap_cost(int64_t obj)
+{
+    (void)obj;
+
+    return COMBAT_WEAPON_SWAP_COST;
+}
+
+static bool combat_weapon_swap_applies(int64_t obj)
+{
+    return feature_enabled(FEATURE_WEAPON_SWAP_COST)
+        && combat_turn_based_active
+        && player_is_local_pc_obj(obj)
+        && combat_whos_turn_node != NULL
+        && combat_whos_turn_node->obj == obj;
+}
+
+// Whether `weapon_obj` entering the slot would be a swap: it is a weapon, and
+// not the one in hand - or, with the hand empty, not the one last in it.
+static bool combat_weapon_swap_is_swap(int64_t obj, int64_t weapon_obj)
+{
+    int64_t current_obj;
+
+    if (weapon_obj == OBJ_HANDLE_NULL) {
+        return false;
+    }
+
+    current_obj = item_wield_get(obj, ITEM_INV_LOC_WEAPON);
+    return weapon_obj != (current_obj != OBJ_HANDLE_NULL ? current_obj : combat_weapon_swap_last);
+}
+
+// Asked before a weapon is put in the player's hand. False, with a word over
+// the player's head, when the swap costs more AP than the turn has left - it
+// never draws on fatigue.
+bool combat_check_weapon_swap(int64_t obj, int64_t weapon_obj)
+{
+    if (!combat_weapon_swap_applies(obj)
+        || !combat_weapon_swap_is_swap(obj, weapon_obj)) {
+        return true;
+    }
+
+    if (combat_action_points >= combat_weapon_swap_cost(obj)) {
+        return true;
+    }
+
+    tf_add(obj, TF_TYPE_WHITE, "Not enough action points");
+    return false;
+}
+
+// `item_force_remove`: a weapon left the player's weapon slot.
+void combat_weapon_swap_left(int64_t obj, int64_t weapon_obj)
+{
+    if (player_is_local_pc_obj(obj)) {
+        combat_weapon_swap_last = weapon_obj;
+    }
+}
+
+// `item_insert`: a weapon entered the player's weapon slot. Charged here, once,
+// if it is not the one that left. Never more than the turn has left: a path
+// that did not ask `combat_check_weapon_swap` first is not given fatigue.
+void combat_weapon_swap_entered(int64_t obj, int64_t weapon_obj)
+{
+    int cost;
+
+    if (!player_is_local_pc_obj(obj)) {
+        return;
+    }
+
+    if (combat_weapon_swap_applies(obj) && weapon_obj != combat_weapon_swap_last) {
+        cost = combat_weapon_swap_cost(obj);
+        if (cost > combat_action_points) {
+            cost = combat_action_points;
+        }
+        if (cost > 0) {
+            combat_consume_action_points(obj, cost);
+        }
+        tig_debug_printf("combat: weapon swap, %d AP\n", cost);
+    }
+
+    combat_weapon_swap_last = weapon_obj;
 }
 
 // The rule itself, apart from asking who the player is, so it can be tested

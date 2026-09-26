@@ -34,5 +34,6 @@ FEATURE(DEBUG_CHARACTER_POINTS, "debug character points", false)
 FEATURE(REAL_TIME_BUDGET, "real time budget", false)
 FEATURE(REAL_TIME_CHASE, "real time chase", false)
 FEATURE(FIREARM_RELOADING, "firearm reloading", false)
+FEATURE(WEAPON_SWAP_COST, "weapon swap cost", false)
 
 // clang-format on

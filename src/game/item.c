@@ -2587,6 +2587,13 @@ bool item_wield_set(int64_t item_obj, int inventory_location)
             return false;
         }
 
+        // CE (reload prototype session 2): `weapon swap cost` - refused when the
+        // turn cannot pay for it.
+        if (inventory_location == ITEM_INV_LOC_WEAPON
+            && !combat_check_weapon_swap(owner_obj, item_obj)) {
+            return false;
+        }
+
         if (item_check_remove(item_obj) != ITEM_CANNOT_OK) {
             return false;
         }
@@ -3780,6 +3787,12 @@ void item_insert(int64_t item_obj, int64_t parent_obj, int inventory_location)
     object_script_execute(parent_obj, item_obj, OBJ_HANDLE_NULL, SAP_INSERT_ITEM, 0);
     mt_ai_notify_inventory_changed(parent_obj);
 
+    // CE (reload prototype session 2): `weapon swap cost` - a weapon entering
+    // the player's hand is charged here, once, if it is a swap.
+    if (inventory_location == ITEM_INV_LOC_WEAPON) {
+        combat_weapon_swap_entered(parent_obj, item_obj);
+    }
+
     if (player_is_local_pc_obj(parent_obj)) {
         ui_toggle_primary_button(UI_PRIMARY_BUTTON_INVENTORY, true);
 
@@ -4309,6 +4322,12 @@ void item_force_remove(int64_t item_obj, int64_t parent_obj)
     int inventory_location;
 
     item_force_remove_failed = false;
+
+    // CE (reload prototype session 2): `weapon swap cost` remembers the weapon
+    // that last left the player's hand, so putting it back is not a swap.
+    if (item_inventory_location_get(item_obj) == ITEM_INV_LOC_WEAPON) {
+        combat_weapon_swap_left(parent_obj, item_obj);
+    }
 
     if (item_parent(item_obj, &actual_parent_obj)) {
         if (actual_parent_obj != parent_obj) {
