@@ -308,8 +308,9 @@ static void reload_load_one(int64_t critter_obj, int64_t weapon_obj)
     obj_field_int32_set(weapon_obj, OBJ_F_WEAPON_PAD_I_2, 0);
     snprintf(text, sizeof(text), "Loaded %d/%d", loaded + 1, rule->capacity);
     reload_say(critter_obj, text);
-    tig_debug_printf("reload: loaded %d/%d, %d spare bullet(s) used\n",
-        loaded + 1, rule->capacity, need);
+    tig_debug_printf("reload: loaded %d/%d, %d spare bullet(s) used, %d left\n",
+        loaded + 1, rule->capacity, need,
+        ammo_type != 10000 ? item_ammo_quantity_get(critter_obj, ammo_type) : 0);
     ui_refresh_counters();
 }
 
