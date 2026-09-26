@@ -14,6 +14,7 @@
 #include "game/magictech.h"
 #include "game/obj.h"
 #include "game/obj_pool.h"
+#include "game/reload.h"
 #include "game/settings.h"
 #include "game/stat.h"
 
@@ -482,27 +483,31 @@ static void rt_budget_accept(int64_t obj, RtBudgetEntry* entry,
     rt_budget_observe("action.accepted", obj, entry, NULL);
 }
 
-bool rt_budget_instant_action(int64_t obj, RtBudgetCategory category, int action_points)
+static bool rt_budget_is_moving(int64_t obj);
+
+bool rt_budget_begin_standing_action(int64_t obj, RtBudgetCategory category, int action_points)
 {
     RtBudgetEntry* entry;
     AnimID no_run;
 
     if (!rt_budget_active() || obj == OBJ_HANDLE_NULL) {
-        return true;
+        return false;
     }
 
     entry = rt_budget_find(obj);
-    if (entry != NULL && !rt_budget_entry_ready(entry)) {
+    if ((entry != NULL && !rt_budget_entry_ready(entry))
+        || rt_budget_is_moving(obj)) {
         return false;
     }
 
     entry = rt_budget_find_or_add(obj);
     if (entry == NULL) {
-        return true;
+        return false;
     }
 
     // No run: nothing is animating, so nothing may later read this as the
-    // same action under way (`rt_budget_hold`'s pass-through needs a run).
+    // same action under way (`rt_budget_hold`'s pass-through needs a run). The
+    // tick times it instead, while the actor stands.
     anim_id_init(&no_run);
     rt_budget_entry_accept(entry, category, no_run, action_points,
         rt_budget_duration_ms(rt_budget_configured_pace_ms(), action_points,
@@ -510,7 +515,6 @@ bool rt_budget_instant_action(int64_t obj, RtBudgetCategory category, int action
     entry->action_key = -1;
     entry->action_spell = -1;
     rt_budget_observe("action.accepted", obj, entry, NULL);
-    rt_budget_entry_release(entry);
     return true;
 }
 
@@ -716,6 +720,11 @@ static bool rt_budget_goal_is_movement(int goal_type)
     }
 }
 
+bool rt_budget_is_moving_now(int64_t obj)
+{
+    return rt_budget_is_moving(obj);
+}
+
 static bool rt_budget_is_moving(int64_t obj)
 {
     AnimRunInfo* run_info;
@@ -763,6 +772,9 @@ void rt_budget_tick(int delta_ms)
             if (entry->obj != OBJ_HANDLE_NULL
                 && rt_budget_entry_turn_based_began(entry)) {
                 rt_budget_observe("action.cancelled", entry->obj, entry, "turn_based");
+                if (entry->category == RT_BUDGET_RELOAD) {
+                    reload_standing_done(entry->obj, false);
+                }
             }
         }
     }
@@ -782,6 +794,29 @@ void rt_budget_tick(int delta_ms)
         if (!obj_handle_is_valid(entry->obj)
             || critter_is_dead(entry->obj)) {
             memset(entry, 0, sizeof(*entry));
+            continue;
+        }
+
+        // A standing action (a reload): its time runs while the actor stands,
+        // whatever the movement setting, and a step cancels it. When the time
+        // is up the action is done and the actor ready at once - the time was
+        // the action.
+        if (entry->category == RT_BUDGET_RELOAD && entry->state == RT_BUDGET_ACCEPTED) {
+            if (rt_budget_is_moving(entry->obj)) {
+                entry->state = RT_BUDGET_READY;
+                rt_budget_observe("action.cancelled", entry->obj, entry, "moved");
+                reload_standing_done(entry->obj, false);
+                continue;
+            }
+            if (delta_ms > 0) {
+                entry->elapsed_ms += delta_ms;
+            }
+            if (entry->elapsed_ms >= entry->duration_ms) {
+                entry->elapsed_ms = entry->duration_ms;
+                entry->state = RT_BUDGET_READY;
+                rt_budget_observe("actor.ready", entry->obj, entry, NULL);
+                reload_standing_done(entry->obj, true);
+            }
             continue;
         }
 

@@ -273,9 +273,10 @@ void combat_observer_wield_observed(const char* actor, const char* weapon);
 // the time counted so far, which for a ready actor is the whole duration.
 // `reason` (schema 8, session F) is written only when it is not NULL, which is
 // on "action.cancelled": "whiff" (a melee strike found no one in reach),
-// "turn_based" (turn-based began during the wind-up) or "unreleased" (the
+// "turn_based" (turn-based began during the wind-up), "unreleased" (the
 // animation ended before its action frame - a new order, an interruption, a
-// target gone).
+// target gone) or "moved" (a standing action - a reload - was cancelled by a
+// step, from 2026-09-25).
 void combat_observer_budget(const char* event, const char* actor,
     const char* category, int action_points, int duration_ms, int elapsed_ms,
     const char* reason);

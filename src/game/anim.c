@@ -13233,6 +13233,7 @@ bool AGbeginAnimAttack(AnimRunInfo* run_info)
     // the shot. Ended as a failed AP charge ends it, so an automatic follow-up
     // attack in real time cannot retry it.
     if (reload_wielded_is_empty(source_obj)) {
+        tig_debug_printf("reload: attack refused, nothing loaded\n");
         tf_add(source_obj, TF_TYPE_WHITE, "Reload");
         anim_interrupt(&(run_info->id), PRIORITY_HIGHEST);
         return false;

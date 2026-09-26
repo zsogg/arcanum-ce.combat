@@ -249,19 +249,16 @@ bool reload_fire(int64_t critter_obj, int64_t weapon_obj)
     return true;
 }
 
-bool reload_command(int64_t critter_obj)
+// Whether the wielded gun can take another shot now: governed, not full, and
+// the shot's bullets in the pack. Says why not over the player's head.
+static bool reload_can_load(int64_t critter_obj, int64_t weapon_obj)
 {
-    int64_t weapon_obj;
     const ReloadRule* rule;
     int loaded;
     int ammo_type;
     int need;
-    int cost;
-    int progress;
-    ReloadWork work;
     char text[64];
 
-    weapon_obj = item_wield_get(critter_obj, ITEM_INV_LOC_WEAPON);
     if (!reload_applies(critter_obj, weapon_obj)) {
         return false;
     }
@@ -282,6 +279,50 @@ bool reload_command(int64_t critter_obj)
         : 0;
     if (need > 0 && item_ammo_quantity_get(critter_obj, ammo_type) < need) {
         reload_say(critter_obj, "No ammunition");
+        return false;
+    }
+
+    return true;
+}
+
+// The shot is loaded: its bullets move from the pack into the gun.
+static void reload_load_one(int64_t critter_obj, int64_t weapon_obj)
+{
+    const ReloadRule* rule;
+    int loaded;
+    int ammo_type;
+    int need;
+    char text[64];
+
+    rule = reload_rule_for(weapon_obj);
+    loaded = reload_loaded_get(weapon_obj);
+    ammo_type = item_weapon_ammo_type(weapon_obj);
+    need = ammo_type != 10000
+        ? obj_field_int32_get(weapon_obj, OBJ_F_WEAPON_AMMO_CONSUMPTION)
+        : 0;
+
+    if (need > 0) {
+        item_ammo_transfer(critter_obj, OBJ_HANDLE_NULL, need, ammo_type, OBJ_HANDLE_NULL);
+    }
+    obj_field_int32_set(weapon_obj, OBJ_F_WEAPON_PAD_I_1, loaded + 1);
+    obj_field_int32_set(weapon_obj, OBJ_F_WEAPON_PAD_I_2, 0);
+    snprintf(text, sizeof(text), "Loaded %d/%d", loaded + 1, rule->capacity);
+    reload_say(critter_obj, text);
+    tig_debug_printf("reload: loaded %d/%d, %d spare bullet(s) used\n",
+        loaded + 1, rule->capacity, need);
+    ui_refresh_counters();
+}
+
+bool reload_command(int64_t critter_obj)
+{
+    int64_t weapon_obj;
+    int cost;
+    int progress;
+    ReloadWork work;
+    char text[64];
+
+    weapon_obj = item_wield_get(critter_obj, ITEM_INV_LOC_WEAPON);
+    if (!reload_can_load(critter_obj, weapon_obj)) {
         return false;
     }
 
@@ -309,20 +350,48 @@ bool reload_command(int64_t critter_obj)
                 work.progress, cost);
             return true;
         }
-    } else if (!rt_budget_instant_action(critter_obj, RT_BUDGET_RELOAD, cost - progress)) {
-        // Real time, still recovering from the last action.
+        reload_load_one(critter_obj, weapon_obj);
+        return true;
+    }
+
+    // Real time: only standing still, and the shot is loaded when its time has
+    // passed with the player still standing (`reload_standing_done`).
+    if (rt_budget_is_moving_now(critter_obj)) {
+        reload_say(critter_obj, "Stand still to reload");
+        tig_debug_printf("reload: refused while moving\n");
         return false;
     }
 
-    if (need > 0) {
-        item_ammo_transfer(critter_obj, OBJ_HANDLE_NULL, need, ammo_type, OBJ_HANDLE_NULL);
+    if (rt_budget_active()) {
+        if (!rt_budget_begin_standing_action(critter_obj, RT_BUDGET_RELOAD, cost - progress)) {
+            return false;
+        }
+        reload_say(critter_obj, "Reloading");
+        tig_debug_printf("reload: loading, %d AP, standing\n", cost - progress);
+        return true;
     }
-    obj_field_int32_set(weapon_obj, OBJ_F_WEAPON_PAD_I_1, loaded + 1);
-    obj_field_int32_set(weapon_obj, OBJ_F_WEAPON_PAD_I_2, 0);
-    snprintf(text, sizeof(text), "Loaded %d/%d", loaded + 1, rule->capacity);
-    reload_say(critter_obj, text);
-    tig_debug_printf("reload: loaded %d/%d, %d spare bullet(s) used\n",
-        loaded + 1, rule->capacity, need);
-    ui_refresh_counters();
+
+    // Real time without the budget: stock real time gives no action any time,
+    // and a reload is no different.
+    reload_load_one(critter_obj, weapon_obj);
     return true;
+}
+
+void reload_standing_done(int64_t critter_obj, bool completed)
+{
+    int64_t weapon_obj;
+
+    if (!completed) {
+        reload_say(critter_obj, "Reload interrupted");
+        tig_debug_printf("reload: interrupted; nothing loaded\n");
+        return;
+    }
+
+    // Checked again: the pack or the hand may have changed while it stood.
+    weapon_obj = item_wield_get(critter_obj, ITEM_INV_LOC_WEAPON);
+    if (!reload_can_load(critter_obj, weapon_obj)) {
+        return;
+    }
+
+    reload_load_one(critter_obj, weapon_obj);
 }

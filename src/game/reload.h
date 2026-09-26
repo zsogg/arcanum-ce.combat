@@ -12,9 +12,10 @@
 // with nothing loaded does not fire. One Reload command (Q) works toward one
 // more shot: in turn-based it spends the turn's AP toward the shot's loading
 // cost, keeping unfinished work for a later command, and never draws on
-// fatigue; in real time it loads the shot at once and the real-time budget
-// then times it as a `reload` action. When a shot's loading completes, that
-// shot's spare bullets move into the gun.
+// fatigue; in real time it takes its time **standing still**, timed by the
+// real-time budget as a `reload` action, and a step cancels it with nothing
+// loaded (zsogg, 2026-09-25, after his playtest). When a shot's loading
+// completes, that shot's spare bullets move into the gun.
 //
 // The first build applies to the local player only; followers and hostile
 // gunners keep stock ammunition. The rules, and the decisions behind them,
@@ -81,7 +82,13 @@ int reload_progress_get(int64_t weapon_obj);
 bool reload_fire(int64_t critter_obj, int64_t weapon_obj);
 
 // The Reload command (Q), for the local player. Reports what it did over the
-// player's head; returns true if it did any work.
+// player's head; returns true if it did any work, or began a real-time reload.
 bool reload_command(int64_t critter_obj);
+
+// The real-time budget's answer to a reload begun with
+// `rt_budget_begin_standing_action`: its time passed with the player standing
+// (`completed`) - the shot is loaded now - or it was cancelled by a step or by
+// turn-based beginning, and nothing is loaded or spent.
+void reload_standing_done(int64_t critter_obj, bool completed);
 
 #endif /* ARCANUM_GAME_RELOAD_H_ */

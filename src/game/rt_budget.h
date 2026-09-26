@@ -66,8 +66,8 @@ typedef enum RtBudgetCategory {
     // actions untimed (2026-09-23).
     RT_BUDGET_SKILL,
     // Reload prototype session 2: one shot loaded by the Reload command
-    // (`reload.c`). It has no animation to hold, so it happens at once and its
-    // time is the recovery after it (`rt_budget_instant_action`).
+    // (`reload.c`). It has no animation to hold; it is timed standing still
+    // (`rt_budget_begin_standing_action`).
     RT_BUDGET_RELOAD,
 } RtBudgetCategory;
 
@@ -184,12 +184,17 @@ RtChaseVerdict rt_chase_decide(bool applies, bool target_in_reach,
 // Called at the top of each attack update, before the budget's hold.
 RtChaseVerdict rt_chase_check(AnimRunInfo* run_info);
 
-// An action with no animation to hold - a reload. False, changing nothing, when
-// the actor is still recovering: the caller refuses it. Otherwise it is
-// accepted and released at once, and the actor then recovers for
-// `R * action_points / AP per turn`, so the next action waits for it. Always
-// true when the budget does not apply.
-bool rt_budget_instant_action(int64_t obj, RtBudgetCategory category, int action_points);
+// An action with no animation to hold - a reload - taken **standing still**
+// (zsogg, 2026-09-25, after his playtest: the first version loaded at once and
+// charged the time as recovery afterwards, so a player could stop for a frame,
+// press Q and run on). It is accepted now and lasts `R * action_points / AP per
+// turn`. If that time passes without the actor moving, `reload_standing_done`
+// is told it completed. Moving first, or turn-based beginning, cancels it, and
+// `reload_standing_done` is told it did not. Any other action waits for it.
+// False, changing nothing, when the actor is still recovering or moving.
+bool rt_budget_begin_standing_action(int64_t obj, RtBudgetCategory category, int action_points);
+// Whether the actor's current goal moves it, as rule 12 counts moving.
+bool rt_budget_is_moving_now(int64_t obj);
 
 // Called from `timeevent_ping` with the real milliseconds since the last ping.
 void rt_budget_tick(int delta_ms);
