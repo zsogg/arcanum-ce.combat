@@ -7,6 +7,7 @@
 
 #include "game/anim.h"
 #include "game/anim_private.h"
+#include "game/ce_parse.h"
 #include "game/combat.h"
 #include "game/critter.h"
 #include "game/descriptions.h"
@@ -270,55 +271,9 @@ static const char* ai_fatigue_after_key(const char* str, const char* key)
     return str + length;
 }
 
-// Strict, and that is the whole of card X7's engine half.
-//
-// `tig_str_parse_named_value` (0x532320) reads the value with `atoi`, which
-// cannot report failure, so `MinCastPctLeaderless: banana` returned *success*
-// with the value 0 - a legal-looking number nobody asked for, in a file whose
-// comment promised a malformed value would leave the default alone. That
-// parser is **Faithful** and shipped data goes through it, so it stays exactly
-// as it is; this is CE's own configuration surface and it can be strict.
-//
-// A second copy, deliberately: `highres_config.c` carries the same twenty
-// lines, file-static, for the same reason - CE's other invented config
-// surface needed a parse that can fail. There is no shared home for it in `src/game` and neither of the two
-// wants a dependency on the other. Two copies with this note is the call made
-// on 2026-09-05; **a third means it gets a home**, and card T2 is the argument
-// for why (the canonical-path fold was open-coded nineteen times).
-static bool ai_fatigue_parse_int(const char* str, int* value)
-{
-    char* end;
-    long parsed;
-
-    while (isspace((unsigned char)*str)) {
-        str++;
-    }
-
-    if (*str == '\0') {
-        return false;
-    }
-
-    parsed = strtol(str, &end, 10);
-    if (end == str) {
-        return false;
-    }
-
-    // Trailing anything that is not blank means the author wrote something
-    // this does not understand, and guessing at it is what got us here.
-    while (*end != '\0') {
-        if (!isspace((unsigned char)*end)) {
-            return false;
-        }
-        end++;
-    }
-
-    if (parsed < INT_MIN || parsed > INT_MAX) {
-        return false;
-    }
-
-    *value = (int)parsed;
-    return true;
-}
+// Strict, and that is the whole of card X7's engine half: `ce_parse_int`
+// (`ce_parse.h`) reports failure where `tig_str_parse_named_value`'s `atoi`
+// read `banana` as 0. This file carried its own copy until 2026-09-25.
 
 static void ai_fatigue_apply(int index, int value)
 {
@@ -383,7 +338,7 @@ AiFatigueEntryResult ai_fatigue_config_apply_entry(const char* str)
         return AI_FATIGUE_ENTRY_UNKNOWN;
     }
 
-    if (!ai_fatigue_parse_int(rest, &value)) {
+    if (!ce_parse_int(rest, &value)) {
         // **The branch card X7 exists to reach.** The key is one this build
         // knows, so the entry is not "unknown" - it is a value that cannot be
         // read, and until 2026-09-05 that took the *success* path with the

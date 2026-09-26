@@ -8,10 +8,11 @@
 
 #include <SDL3/SDL_stdinc.h>
 
+#include "game/ce_parse.h"
+
 static void highres_config_reset(void);
 static void highres_config_parse_line(char* line);
 static void highres_config_trim(char** start_ptr, char** end_ptr);
-static bool highres_config_parse_int(const char* str, int* value_ptr);
 
 static HighResConfig highres_config;
 
@@ -116,7 +117,7 @@ void highres_config_parse_line(char* line)
     highres_config_trim(&value_start, &value_end);
     *value_end = '\0';
 
-    if (!highres_config_parse_int(value_start, &value)) {
+    if (!ce_parse_int(value_start, &value)) {
         return;
     }
 
@@ -184,30 +185,4 @@ void highres_config_trim(char** start_ptr, char** end_ptr)
     while (*end_ptr > *start_ptr && isspace((unsigned char)*((*end_ptr) - 1))) {
         (*end_ptr)--;
     }
-}
-
-bool highres_config_parse_int(const char* str, int* value_ptr)
-{
-    char* end;
-    long value;
-
-    if (*str == '\0') {
-        return false;
-    }
-
-    value = strtol(str, &end, 10);
-    if (end == str) {
-        return false;
-    }
-
-    while (*end != '\0') {
-        if (!isspace((unsigned char)*end)) {
-            return false;
-        }
-
-        end++;
-    }
-
-    *value_ptr = (int)value;
-    return true;
 }

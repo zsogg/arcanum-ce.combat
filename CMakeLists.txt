@@ -48,6 +48,8 @@ set(SRCS
     "src/game/broadcast.h"
     "src/game/ci.c"
     "src/game/ci.h"
+    "src/game/ce_parse.c"
+    "src/game/ce_parse.h"
     "src/game/combat.c"
     "src/game/combat.h"
     "src/game/combat_observer.c"
