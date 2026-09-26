@@ -404,9 +404,11 @@ void called_shot_ui_refresh(void)
     // built here when it should be shown; `called_shot_ui_create` refreshes
     // again once it has.
     if (!called_shot_ui_created) {
+        if (!called_shot_enabled()) {
+            return;
+        }
         pc_obj = player_get_local_pc_obj();
-        if (called_shot_enabled()
-            && pc_obj != OBJ_HANDLE_NULL
+        if (pc_obj != OBJ_HANDLE_NULL
             && combat_critter_is_combat_mode_active(pc_obj)) {
             called_shot_ui_create();
         }
