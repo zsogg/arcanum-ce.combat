@@ -44,6 +44,7 @@
 #include "game/tech.h"
 #include "game/timeevent.h"
 #include "game/uap.h"
+#include "game/weapon_rules.h"
 #include "ui/anim_ui.h"
 #include "ui/broadcast_ui.h"
 #include "ui/called_shot.h"
@@ -7914,9 +7915,10 @@ void format_weapon_stats(int64_t weapon_obj, char* buffer, size_t maxlen)
         && item_is_identified(weapon_obj);
     buffer[0] = '\0';
 
-    // D
-    min = obj_arrayfield_int32_get(weapon_obj, OBJ_F_WEAPON_DAMAGE_LOWER_IDX, 0);
-    max = obj_arrayfield_int32_get(weapon_obj, OBJ_F_WEAPON_DAMAGE_UPPER_IDX, 0);
+    // D. CE (turn-based rebalance): `rules/weapons.mes` overrides show here as
+    // they apply in combat.
+    min = weapon_rules_damage(weapon_obj, 0, false, obj_arrayfield_int32_get(weapon_obj, OBJ_F_WEAPON_DAMAGE_LOWER_IDX, 0));
+    max = weapon_rules_damage(weapon_obj, 0, true, obj_arrayfield_int32_get(weapon_obj, OBJ_F_WEAPON_DAMAGE_UPPER_IDX, 0));
     if (identified) {
         adj = obj_arrayfield_int32_get(weapon_obj, OBJ_F_WEAPON_MAGIC_DAMAGE_ADJ_IDX, 0);
     } else {
@@ -7925,8 +7927,8 @@ void format_weapon_stats(int64_t weapon_obj, char* buffer, size_t maxlen)
     append_stat(buffer, maxlen, 43, min, max, adj, false);
 
     // FT
-    min = obj_arrayfield_int32_get(weapon_obj, OBJ_F_WEAPON_DAMAGE_LOWER_IDX, 4);
-    max = obj_arrayfield_int32_get(weapon_obj, OBJ_F_WEAPON_DAMAGE_UPPER_IDX, 4);
+    min = weapon_rules_damage(weapon_obj, 4, false, obj_arrayfield_int32_get(weapon_obj, OBJ_F_WEAPON_DAMAGE_LOWER_IDX, 4));
+    max = weapon_rules_damage(weapon_obj, 4, true, obj_arrayfield_int32_get(weapon_obj, OBJ_F_WEAPON_DAMAGE_UPPER_IDX, 4));
     if (identified) {
         adj = obj_arrayfield_int32_get(weapon_obj, OBJ_F_WEAPON_MAGIC_DAMAGE_ADJ_IDX, 4);
     } else {
@@ -7944,7 +7946,7 @@ void format_weapon_stats(int64_t weapon_obj, char* buffer, size_t maxlen)
     append_stat(buffer, maxlen, 45, min, 0, adj, true);
 
     // RNG
-    min = obj_field_int32_get(weapon_obj, OBJ_F_WEAPON_RANGE);
+    min = weapon_rules_range(weapon_obj, obj_field_int32_get(weapon_obj, OBJ_F_WEAPON_RANGE));
     if (min == 1) {
         min = 0;
     }

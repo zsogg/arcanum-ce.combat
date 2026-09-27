@@ -1,0 +1,123 @@
+// The combat rebalance's weapon table, `rules/weapons.mes`: what an entry may
+// say, pure. The engine side - the overrides at each stat, reloading - is
+// exercised in scripted runs.
+
+#include <string.h>
+
+#include "game/weapon_rules.h"
+
+#include "test_harness.h"
+
+TEST(an_entry_reads_every_key)
+{
+    WeaponRule rule;
+
+    // The Flintlock as zsogg set it on 2026-09-26.
+    CHECK(weapon_rule_parse(6101,
+        "FireAP: 7, FireAPApprentice: 5, Damage: 12-19, CritEffect: 10, Worth: 100,"
+        " Capacity: 1, LoadAP: 8, LoadAPApprentice: 6",
+        &rule));
+    CHECK_INT(rule.prototype, 6101);
+    CHECK_INT(rule.fire_ap, 7);
+    CHECK_INT(rule.fire_ap_apprentice, 5);
+    CHECK_INT(rule.damage_min, 12);
+    CHECK_INT(rule.damage_max, 19);
+    CHECK_INT(rule.fatigue_min, WEAPON_RULE_UNSET);
+    CHECK_INT(rule.crit_effect, 10);
+    CHECK_INT(rule.worth, 100);
+    CHECK_INT(rule.capacity, 1);
+    CHECK_INT(rule.load_ap, 8);
+    CHECK_INT(rule.load_ap_apprentice, 6);
+    CHECK_INT(rule.range, WEAPON_RULE_UNSET);
+
+    // The Repeater: keys in another order, spacing as a hand writes it.
+    CHECK(weapon_rule_parse(6065,
+        "Range: 18 ,Fatigue:1-4, Damage : 5-10, Capacity: 7, LoadAP: 3,"
+        "LoadAPApprentice: 2, FireAP: 6, FireAPApprentice: 4",
+        &rule));
+    CHECK_INT(rule.range, 18);
+    CHECK_INT(rule.fatigue_min, 1);
+    CHECK_INT(rule.fatigue_max, 4);
+    CHECK_INT(rule.damage_min, 5);
+    CHECK_INT(rule.damage_max, 10);
+    CHECK_INT(rule.capacity, 7);
+    CHECK_INT(rule.worth, WEAPON_RULE_UNSET);
+}
+
+TEST(an_entry_may_change_only_stats_or_only_reloading)
+{
+    WeaponRule rule;
+
+    CHECK(weapon_rule_parse(6053, "Damage: 8-12", &rule));
+    CHECK_INT(rule.capacity, WEAPON_RULE_UNSET);
+    CHECK_INT(rule.fire_ap, WEAPON_RULE_UNSET);
+
+    CHECK(weapon_rule_parse(6053, "Capacity: 6, LoadAP: 2", &rule));
+    CHECK_INT(rule.damage_min, WEAPON_RULE_UNSET);
+}
+
+TEST(an_apprentice_cost_defaults_to_the_untrained_one)
+{
+    WeaponRule rule;
+
+    CHECK(weapon_rule_parse(6101, "Capacity: 1, LoadAP: 4, FireAP: 7", &rule));
+    CHECK_INT(rule.load_ap_apprentice, 4);
+    CHECK_INT(rule.fire_ap_apprentice, 7);
+}
+
+TEST(a_single_number_is_both_ends_and_a_reversed_range_is_ordered)
+{
+    WeaponRule rule;
+
+    CHECK(weapon_rule_parse(6101, "Damage: 9", &rule));
+    CHECK_INT(rule.damage_min, 9);
+    CHECK_INT(rule.damage_max, 9);
+    CHECK(weapon_rule_parse(6101, "Damage: 19-12", &rule));
+    CHECK_INT(rule.damage_min, 12);
+    CHECK_INT(rule.damage_max, 19);
+}
+
+TEST(a_value_outside_its_range_is_clamped)
+{
+    WeaponRule rule;
+
+    CHECK(weapon_rule_parse(6101,
+        "Capacity: 0, LoadAP: 99, FireAP: 0, Range: 500, CritEffect: -300,"
+        " Worth: -5, Damage: 0-9999",
+        &rule));
+    CHECK_INT(rule.capacity, WEAPON_RULE_CAPACITY_MIN);
+    CHECK_INT(rule.load_ap, WEAPON_RULE_AP_MAX);
+    CHECK_INT(rule.fire_ap, WEAPON_RULE_AP_MIN);
+    CHECK_INT(rule.range, WEAPON_RULE_RANGE_MAX);
+    CHECK_INT(rule.crit_effect, WEAPON_RULE_CRIT_EFFECT_MIN);
+    CHECK_INT(rule.worth, 0);
+    CHECK_INT(rule.damage_max, WEAPON_RULE_DAMAGE_MAX);
+}
+
+TEST(a_malformed_entry_changes_nothing)
+{
+    WeaponRule rule;
+
+    memset(&rule, 0x5a, sizeof(rule));
+    CHECK(!weapon_rule_parse(6101, "Capacity: 1", &rule)); // no LoadAP
+    CHECK(!weapon_rule_parse(6101, "LoadAP: 4", &rule)); // no Capacity
+    CHECK(!weapon_rule_parse(6101, "LoadAPApprentice: 3, Damage: 5", &rule));
+    CHECK(!weapon_rule_parse(6101, "FireAPApprentice: 3", &rule)); // no FireAP
+    CHECK(!weapon_rule_parse(6101, "Capacity: one, LoadAP: 4", &rule));
+    CHECK(!weapon_rule_parse(6101, "Damage: 12 to 19", &rule));
+    CHECK(!weapon_rule_parse(6101, "Damage: 12-", &rule));
+    CHECK(!weapon_rule_parse(6101, "Jams: 2", &rule)); // unknown key
+    CHECK(!weapon_rule_parse(6101, "Range 18", &rule)); // no colon
+    CHECK(!weapon_rule_parse(6101, "", &rule)); // nothing said
+    CHECK_INT(rule.capacity, 0x5a5a5a5a);
+}
+
+void test_weapon_rules_suite(void)
+{
+    RUN(an_entry_reads_every_key);
+    RUN(an_entry_may_change_only_stats_or_only_reloading);
+    RUN(an_apprentice_cost_defaults_to_the_untrained_one);
+    RUN(a_single_number_is_both_ends_and_a_reversed_range_is_ordered);
+    RUN(a_value_outside_its_range_is_clamped);
+    RUN(a_malformed_entry_changes_nothing);
+}

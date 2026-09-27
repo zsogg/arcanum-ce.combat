@@ -28,6 +28,7 @@
 #include "game/timeevent.h"
 #include "game/trap.h"
 #include "game/ui.h"
+#include "game/weapon_rules.h"
 
 #define FIRST_AMMUNITION_TYPE_ID 0
 #define FIRST_ARMOR_COVERAGE_TYPE_ID (FIRST_AMMUNITION_TYPE_ID + TIG_ART_AMMO_TYPE_COUNT)
@@ -848,7 +849,8 @@ int item_worth(int64_t item_id)
         return 300;
     }
 
-    worth = obj_field_int32_get(item_id, OBJ_F_ITEM_WORTH);
+    // CE (turn-based rebalance): a weapon's `rules/weapons.mes` Worth.
+    worth = weapon_rules_worth(item_id, obj_field_int32_get(item_id, OBJ_F_ITEM_WORTH));
     if (worth < 2) {
         worth = 2;
     }
@@ -859,7 +861,7 @@ int item_worth(int64_t item_id)
 // 0x461F60
 bool item_is_worthless(int64_t item_id)
 {
-    return obj_field_int32_get(item_id, OBJ_F_ITEM_WORTH) == 0;
+    return weapon_rules_worth(item_id, obj_field_int32_get(item_id, OBJ_F_ITEM_WORTH)) == 0;
 }
 
 // 0x461F80
@@ -1013,8 +1015,11 @@ void item_damage_min_max(int64_t item_obj, int damage_type, int* min_damage, int
 
     if (obj_field_int32_get(item_obj, OBJ_F_TYPE) == OBJ_TYPE_WEAPON
         && (obj_field_int32_get(item_obj, OBJ_F_WEAPON_FLAGS) & OWF_THROWABLE) != 0) {
-        *min_damage = obj_arrayfield_int32_get(item_obj, OBJ_F_WEAPON_DAMAGE_LOWER_IDX, damage_type);
-        *max_damage = obj_arrayfield_int32_get(item_obj, OBJ_F_WEAPON_DAMAGE_UPPER_IDX, damage_type);
+        // CE (turn-based rebalance): `rules/weapons.mes` damage.
+        *min_damage = weapon_rules_damage(item_obj, damage_type, false,
+            obj_arrayfield_int32_get(item_obj, OBJ_F_WEAPON_DAMAGE_LOWER_IDX, damage_type));
+        *max_damage = weapon_rules_damage(item_obj, damage_type, true,
+            obj_arrayfield_int32_get(item_obj, OBJ_F_WEAPON_DAMAGE_UPPER_IDX, damage_type));
         return;
     }
 
@@ -3377,7 +3382,10 @@ int item_weapon_range(int64_t item_id, int64_t critter_id)
     }
 
     magic_range_adj = obj_field_int32_get(item_id, OBJ_F_WEAPON_MAGIC_RANGE_ADJ);
-    return obj_field_int32_get(item_id, OBJ_F_WEAPON_RANGE) + item_adjust_magic(item_id, critter_id, magic_range_adj);
+    // CE (turn-based rebalance): a weapon's `rules/weapons.mes` Range replaces
+    // its base range; magic still adjusts it.
+    return weapon_rules_range(item_id, obj_field_int32_get(item_id, OBJ_F_WEAPON_RANGE))
+        + item_adjust_magic(item_id, critter_id, magic_range_adj);
 }
 
 // 0x465E90
@@ -3442,8 +3450,11 @@ void item_weapon_damage(int64_t weapon_obj, int64_t critter_obj, int damage_type
         if (skill == SKILL_THROWING) {
             item_damage_min_max(weapon_obj, damage_type, &min_dam, &max_dam);
         } else {
-            min_dam = obj_arrayfield_int32_get(weapon_obj, OBJ_F_WEAPON_DAMAGE_LOWER_IDX, damage_type);
-            max_dam = obj_arrayfield_int32_get(weapon_obj, OBJ_F_WEAPON_DAMAGE_UPPER_IDX, damage_type);
+            // CE (turn-based rebalance): `rules/weapons.mes` Damage and Fatigue.
+            min_dam = weapon_rules_damage(weapon_obj, damage_type, false,
+                obj_arrayfield_int32_get(weapon_obj, OBJ_F_WEAPON_DAMAGE_LOWER_IDX, damage_type));
+            max_dam = weapon_rules_damage(weapon_obj, damage_type, true,
+                obj_arrayfield_int32_get(weapon_obj, OBJ_F_WEAPON_DAMAGE_UPPER_IDX, damage_type));
         }
     } else {
         unarmed_dam = 0;

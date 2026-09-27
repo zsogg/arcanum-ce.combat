@@ -23,6 +23,7 @@ void test_called_shot_suite(void);
 void test_combat_observer_suite(void);
 void test_reload_suite(void);
 void test_rt_budget_suite(void);
+void test_weapon_rules_suite(void);
 void test_bsearch_suite(void);
 void test_palette_suite(void);
 void test_mes_suite(void);
@@ -75,6 +76,7 @@ int main(void)
     test_combat_observer_suite();
     test_reload_suite();
     test_rt_budget_suite();
+    test_weapon_rules_suite();
     test_bsearch_suite();
     test_palette_suite();
     test_mes_suite();

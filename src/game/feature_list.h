@@ -36,5 +36,6 @@ FEATURE(REAL_TIME_CHASE, "real time chase", false)
 FEATURE(FIREARM_RELOADING, "firearm reloading", false)
 FEATURE(WEAPON_SWAP_COST, "weapon swap cost", false)
 FEATURE(EXERTION, "exertion", false)
+FEATURE(WEAPON_RULES, "weapon rules", false)
 
 // clang-format on

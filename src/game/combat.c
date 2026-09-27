@@ -42,6 +42,7 @@
 #include "game/tf.h"
 #include "game/trap.h"
 #include "game/uap.h"
+#include "game/weapon_rules.h"
 #include "game/ui.h"
 
 static void turn_based_changed(void);
@@ -246,8 +247,8 @@ bool combat_init(GameInitInfo* init_info)
 
     // CE (real-time session B): the action budget's settings, and an empty table.
     rt_budget_init();
-    // CE (reload prototype session 2): the listed firearms.
-    reload_init();
+    // CE (turn-based rebalance): the listed weapons' rules.
+    weapon_rules_init();
     settings_register(&settings, COMBAT_TAUNTS_KEY, "0", NULL);
 
     return true;
@@ -257,7 +258,7 @@ bool combat_init(GameInitInfo* init_info)
 void combat_exit(void)
 {
     mes_unload(combat_mes_file);
-    reload_exit();
+    weapon_rules_exit();
     combat_turn_based_end();
     if (!combat_editor) {
         animfx_list_exit(&combat_eye_candies);
@@ -2585,9 +2586,12 @@ void combat_process_crit_hit(CombatContext* combat)
         && obj_field_int32_get(combat->weapon_obj, OBJ_F_TYPE) == OBJ_TYPE_WEAPON) {
         crit_hit_type = obj_field_int32_get(combat->weapon_obj, OBJ_F_WEAPON_CRIT_HIT_CHART);
         if ((combat->flags & 0x20000) == 0) {
+            // CE (turn-based rebalance): a weapon's `rules/weapons.mes`
+            // CritEffect replaces its critical-effect bonus.
             chance = item_adjust_magic(combat->weapon_obj,
                 combat->attacker_obj,
-                obj_field_int32_get(combat->weapon_obj, OBJ_F_WEAPON_MAGIC_CRIT_HIT_EFFECT));
+                weapon_rules_crit_effect(combat->weapon_obj,
+                    obj_field_int32_get(combat->weapon_obj, OBJ_F_WEAPON_MAGIC_CRIT_HIT_EFFECT)));
         }
     } else {
         crit_hit_type = CRIT_HIT_TYPE_CRUSHING;
@@ -3822,6 +3826,15 @@ int combat_attack_cost(int64_t obj)
     int action_points;
 
     weapon_obj = item_wield_get(obj, ITEM_INV_LOC_WEAPON);
+
+    // CE (turn-based rebalance): a weapon's `rules/weapons.mes` FireAP, under
+    // `weapon rules`, replaces the cost its speed gives. zsogg chose the rules
+    // file over a speed-factor edit (2026-09-26): speed also sets how fast the
+    // attack animates in real time, which a firing cost should not move.
+    if (weapon_rules_fire_ap(obj, weapon_obj, &action_points)) {
+        return action_points;
+    }
+
     speed = item_weapon_magic_speed(weapon_obj, obj);
     if (speed > 24) {
         action_points = 1;
@@ -3938,28 +3951,20 @@ int combat_get_up_cost(int64_t obj)
 }
 
 // CE (reload prototype session 2): what loading one ready shot costs, in AP.
-// The rules file's `LoadAP`, or `LoadAPApprentice` at Apprentice training or
-// better in the weapon's skill - the same training test that gives an attack
-// its +5 speed in `item_weapon_magic_speed`. 0 for a weapon the file does not
-// list. Turn-based charges it and the real-time budget times it, so a change
+// The weapon's `rules/weapons.mes` `LoadAP`, or `LoadAPApprentice` at Apprentice
+// training or better in its skill (`weapon_rules_trained`). 0 for a weapon
+// whose rule names no Capacity. Turn-based charges it and the real-time budget times it, so a change
 // here moves both modes, as with every other `combat_*_cost`.
 int combat_reload_cost(int64_t obj, int64_t weapon_obj)
 {
-    const ReloadRule* rule;
-    int skill;
-    int training;
+    const WeaponRule* rule;
 
-    rule = reload_rule_for(weapon_obj);
-    if (rule == NULL) {
+    rule = weapon_rule_for(weapon_obj);
+    if (rule == NULL || rule->capacity == WEAPON_RULE_UNSET) {
         return 0;
     }
 
-    skill = item_weapon_skill(weapon_obj);
-    training = IS_TECH_SKILL(skill)
-        ? tech_skill_training_get(obj, GET_TECH_SKILL(skill))
-        : basic_skill_training_get(obj, GET_BASIC_SKILL(skill));
-
-    return training >= TRAINING_APPRENTICE ? rule->load_ap_apprentice : rule->load_ap;
+    return weapon_rules_trained(obj, weapon_obj) ? rule->load_ap_apprentice : rule->load_ap;
 }
 
 // CE (reload prototype session 2): `weapon swap cost`, default off - drawing a

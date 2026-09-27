@@ -5,96 +5,19 @@
 
 #include <tig/tig.h>
 
-#include "game/ce_parse.h"
 #include "game/combat.h"
 #include "game/feature.h"
 #include "game/item.h"
-#include "game/mes.h"
 #include "game/obj.h"
 #include "game/player.h"
-#include "game/proto.h"
 #include "game/rt_budget.h"
 #include "game/tf.h"
 #include "game/ui.h"
-
-// Weapons the rules file may list. The shipped game has 150 weapon prototypes;
-// a rebalance lists a handful.
-#define RELOAD_MAX_RULES 64
-
-static ReloadRule reload_rules[RELOAD_MAX_RULES];
-// The prototype object each rule names, found on first use: prototypes are
-// not all loaded when the rules are read at init. 0 is not yet looked up.
-static int64_t reload_rule_protos[RELOAD_MAX_RULES];
-static int reload_rule_count;
+#include "game/weapon_rules.h"
 
 // ---------------------------------------------------------------------------
-// The rules, pure.
+// The work, pure.
 // ---------------------------------------------------------------------------
-
-static int reload_clamp(int value, int lo, int hi)
-{
-    return value < lo ? lo : (value > hi ? hi : value);
-}
-
-bool reload_rule_parse(int prototype, const char* str, ReloadRule* rule)
-{
-    char buffer[256];
-    char* part;
-    char* save;
-    char* colon;
-    char* key;
-    char* end;
-    int value;
-    int capacity = -1;
-    int load_ap = -1;
-    int load_ap_apprentice = -1;
-
-    if (str == NULL || strlen(str) >= sizeof(buffer)) {
-        return false;
-    }
-    strcpy(buffer, str);
-
-    for (part = strtok_r(buffer, ",", &save); part != NULL; part = strtok_r(NULL, ",", &save)) {
-        colon = strchr(part, ':');
-        if (colon == NULL) {
-            return false;
-        }
-        *colon = '\0';
-
-        key = part;
-        while (*key == ' ' || *key == '\t') {
-            key++;
-        }
-        end = key + strlen(key);
-        while (end > key && (end[-1] == ' ' || end[-1] == '\t')) {
-            *--end = '\0';
-        }
-
-        if (!ce_parse_int(colon + 1, &value)) {
-            return false;
-        }
-
-        if (strcmp(key, "Capacity") == 0) {
-            capacity = reload_clamp(value, RELOAD_CAPACITY_MIN, RELOAD_CAPACITY_MAX);
-        } else if (strcmp(key, "LoadAP") == 0) {
-            load_ap = reload_clamp(value, RELOAD_LOAD_AP_MIN, RELOAD_LOAD_AP_MAX);
-        } else if (strcmp(key, "LoadAPApprentice") == 0) {
-            load_ap_apprentice = reload_clamp(value, RELOAD_LOAD_AP_MIN, RELOAD_LOAD_AP_MAX);
-        } else {
-            return false;
-        }
-    }
-
-    if (capacity < 0 || load_ap < 0) {
-        return false;
-    }
-
-    rule->prototype = prototype;
-    rule->capacity = capacity;
-    rule->load_ap = load_ap;
-    rule->load_ap_apprentice = load_ap_apprentice >= 0 ? load_ap_apprentice : load_ap;
-    return true;
-}
 
 ReloadWork reload_work(int cost, int progress, int available_ap)
 {
@@ -126,76 +49,13 @@ ReloadWork reload_work(int cost, int progress, int available_ap)
 // The engine side.
 // ---------------------------------------------------------------------------
 
-void reload_init(void)
+// The weapon's rule when it names a Capacity: reloading's own view of it.
+static const WeaponRule* reload_rule_for(int64_t weapon_obj)
 {
-    reload_rules_load();
-}
+    const WeaponRule* rule;
 
-void reload_exit(void)
-{
-    reload_rule_count = 0;
-}
-
-void reload_rules_load(void)
-{
-    mes_file_handle_t mes_file;
-    MesFileEntry entry;
-    ReloadRule rule;
-
-    reload_rule_count = 0;
-    memset(reload_rule_protos, 0, sizeof(reload_rule_protos));
-
-    if (!mes_load("rules\\firearm_reload.mes", &mes_file)) {
-        return;
-    }
-
-    if (mes_find_first(mes_file, &entry)) {
-        do {
-            if (!reload_rule_parse(entry.num, entry.str, &rule)) {
-                tig_debug_printf("reload: refusing entry {%d}{%s}\n", entry.num, entry.str);
-                continue;
-            }
-            if (reload_rule_count >= RELOAD_MAX_RULES) {
-                tig_debug_printf("reload: more than %d weapons listed; {%d} ignored\n",
-                    RELOAD_MAX_RULES, entry.num);
-                continue;
-            }
-            reload_rules[reload_rule_count++] = rule;
-        } while (mes_find_next(mes_file, &entry));
-    }
-
-    mes_unload(mes_file);
-    tig_debug_printf("reload: %d weapon(s) listed\n", reload_rule_count);
-}
-
-const ReloadRule* reload_rule_for(int64_t weapon_obj)
-{
-    int64_t proto_obj;
-    int index;
-
-    if (weapon_obj == OBJ_HANDLE_NULL
-        || obj_field_int32_get(weapon_obj, OBJ_F_TYPE) != OBJ_TYPE_WEAPON) {
-        return NULL;
-    }
-
-    proto_obj = obj_field_handle_get(weapon_obj, OBJ_F_PROTOTYPE_HANDLE);
-    for (index = 0; index < reload_rule_count; index++) {
-        if (reload_rule_protos[index] == 0) {
-            // Prototype number = description + 20, the convention the replay
-            // driver and the modding notes use.
-            reload_rule_protos[index] = reload_rules[index].prototype > 20
-                ? proto_get_by_description(reload_rules[index].prototype - 20)
-                : OBJ_HANDLE_NULL;
-            if (reload_rule_protos[index] == OBJ_HANDLE_NULL) {
-                reload_rule_protos[index] = -1;
-            }
-        }
-        if (reload_rule_protos[index] == proto_obj) {
-            return &(reload_rules[index]);
-        }
-    }
-
-    return NULL;
+    rule = weapon_rule_for(weapon_obj);
+    return rule != NULL && rule->capacity != WEAPON_RULE_UNSET ? rule : NULL;
 }
 
 bool reload_applies(int64_t critter_obj, int64_t weapon_obj)
@@ -253,7 +113,7 @@ bool reload_fire(int64_t critter_obj, int64_t weapon_obj)
 // the shot's bullets in the pack. Says why not over the player's head.
 static bool reload_can_load(int64_t critter_obj, int64_t weapon_obj)
 {
-    const ReloadRule* rule;
+    const WeaponRule* rule;
     int loaded;
     int ammo_type;
     int need;
@@ -288,7 +148,7 @@ static bool reload_can_load(int64_t critter_obj, int64_t weapon_obj)
 // The shot is loaded: its bullets move from the pack into the gun.
 static void reload_load_one(int64_t critter_obj, int64_t weapon_obj)
 {
-    const ReloadRule* rule;
+    const WeaponRule* rule;
     int loaded;
     int ammo_type;
     int need;
