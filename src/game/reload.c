@@ -401,8 +401,25 @@ bool reload_ai_act(int64_t critter_obj, int64_t enemy_obj)
         return true;
     }
 
+    // A shot loaded: fire it whenever the target is in range (zsogg,
+    // 2026-09-27, after his session 4 playtest). With no target in range, the
+    // gun is topped up a shot at a time before closing in; a full gun closes
+    // in as stock does.
     if (reload_loaded_get(weapon_obj) > 0) {
-        return false;
+        if (enemy_obj != OBJ_HANDLE_NULL
+            && object_dist(critter_obj, enemy_obj) <= item_weapon_range(weapon_obj, critter_obj)) {
+            return false;
+        }
+        if (!reload_can_load_quiet(critter_obj, weapon_obj)) {
+            return false;
+        }
+        tig_debug_printf("reload: an NPC tops up, no target in range\n");
+        if (!reload_command(critter_obj)
+            && combat_turn_based_is_active()
+            && combat_turn_based_whos_turn_get() == critter_obj) {
+            combat_turn_based_end_critter_turn(critter_obj);
+        }
+        return true;
     }
 
     // Empty, with an enemy right beside it: a melee backup if it carries one

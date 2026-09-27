@@ -75,7 +75,9 @@ void reload_standing_done(int64_t critter_obj, bool completed);
 // attacking. With an enemy adjacent it takes a melee backup if it carries one
 // (and returns false, so the attack goes ahead with it); otherwise it reloads,
 // ending its turn-based turn if no AP is left for the work; with nothing to
-// load, it switches weapon. True when it has acted and must not attack.
+// load, it switches weapon. A gun with a shot loaded fires at a target in
+// range, and with none in range is topped up a shot at a time first (session
+// 5). True when it has acted and must not attack.
 bool reload_ai_act(int64_t critter_obj, int64_t enemy_obj);
 
 // Session 4: automatic loading outside combat, from `timeevent_ping`. The
