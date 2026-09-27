@@ -3596,6 +3596,24 @@ int combat_action_points_get(void)
 }
 
 // 0x4B7790
+// CE (turn-based rebalance): `exertion`, default off (zsogg, 2026-09-20, built
+// 2026-09-26). Stock lets the player finish any action with too few AP - one AP
+// left and a 7 AP shot alike - for 2 fatigue taken as damage, and so reduced by
+// fatigue resistance. Exertion narrows that to what zsogg chose: only a shortfall
+// of **exactly 1 AP**, with at least 1 AP left and at least 3 fatigue; the 2
+// fatigue is spent directly, which no armor or resistance touches, and the
+// remaining AP becomes zero. The player character only, and automatic.
+#define COMBAT_EXERTION_FATIGUE 2
+#define COMBAT_EXERTION_MIN_FATIGUE 3
+
+static bool combat_exertion_covers(int64_t obj, int required_action_points)
+{
+    return player_is_local_pc_obj(obj)
+        && combat_action_points >= 1
+        && required_action_points - combat_action_points == 1
+        && critter_fatigue_current(obj) >= COMBAT_EXERTION_MIN_FATIGUE;
+}
+
 bool combat_check_action_points(int64_t obj, int required_action_points)
 {
     bool is_pc;
@@ -3636,7 +3654,9 @@ bool combat_check_action_points(int64_t obj, int required_action_points)
     }
 
     accepted = combat_action_points >= required_action_points;
-    if (!accepted
+    if (!accepted && feature_enabled(FEATURE_EXERTION)) {
+        accepted = combat_exertion_covers(obj, required_action_points);
+    } else if (!accepted
         && combat_action_points > 0
         && is_pc
         && critter_fatigue_current(obj) > 1) {
@@ -4100,7 +4120,45 @@ bool combat_consume_action_points(int64_t obj, int action_points)
         return true;
     }
 
-    if (combat_action_points > 0
+    if (feature_enabled(FEATURE_EXERTION)) {
+        if (combat_exertion_covers(obj, action_points)) {
+            critter_fatigue_damage_set(obj,
+                critter_fatigue_damage_get(obj) + COMBAT_EXERTION_FATIGUE);
+            combat_action_points = 0;
+            combat_callbacks.field_C(0);
+            tf_add(obj, TF_TYPE_YELLOW, "Exertion");
+            tig_debug_printf("combat: exertion, %d AP short, %d fatigue\n",
+                action_points - action_points_before, COMBAT_EXERTION_FATIGUE);
+
+            if (combat_observer_is_enabled()) {
+                char actor[COMBAT_OBSERVER_IDENTITY_SIZE];
+
+                combat_observer_object_id(obj, actor);
+                combat_observer_ap_committed(actor, action_points,
+                    action_points_before, combat_action_points, true,
+                    fatigue_before, critter_fatigue_damage_get(obj));
+            }
+
+            return true;
+        }
+
+        // Refused, and the player keeps the AP they have. Stock never reached
+        // the tail below for the player - its overreach accepted any shortfall -
+        // and that tail empties the turn; an action that did not happen must
+        // not cost the rest of it.
+        if (is_pc) {
+            tf_add(obj, TF_TYPE_WHITE, "Not enough action points");
+            if (combat_observer_is_enabled()) {
+                char actor[COMBAT_OBSERVER_IDENTITY_SIZE];
+
+                combat_observer_object_id(obj, actor);
+                combat_observer_ap_committed(actor, action_points,
+                    action_points_before, combat_action_points, false,
+                    fatigue_before, critter_fatigue_damage_get(obj));
+            }
+            return false;
+        }
+    } else if (combat_action_points > 0
         && is_pc
         && critter_fatigue_current(obj) > 1) {
         combat_context_init(OBJ_HANDLE_NULL, obj, &combat);
