@@ -15,7 +15,7 @@
 // weapon, which zsogg asked to be the way weapon editing is streamlined.
 //
 //     {6101}{FireAP: 7, FireAPApprentice: 5, Damage: 12-19, CritEffect: 10,
-//            Worth: 100, Capacity: 1, LoadAP: 8, LoadAPApprentice: 6}
+//            Worth: 100, Capacity: 1, LoadAP: 10, LoadAPApprentice: 8}
 //
 // Two switches read it. `weapon rules` applies the stat overrides - firing AP,
 // damage, fatigue damage, range, critical-effect bonus and worth - to anyone

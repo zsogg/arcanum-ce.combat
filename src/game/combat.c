@@ -3968,8 +3968,9 @@ int combat_reload_cost(int64_t obj, int64_t weapon_obj)
 }
 
 // CE (reload prototype session 2): `weapon swap cost`, default off - drawing a
-// weapon or switching to another costs 3 AP in the player's turn-based turn;
-// putting one away is free (zsogg, 2026-09-20 and 2026-09-26). Stock charges
+// weapon or switching to another costs 4 AP in the player's turn-based turn;
+// putting one away is free (zsogg, 2026-09-20 and 2026-09-26; raised from 3 to
+// 4 in tuning, 2026-09-27). NPCs swap for free (zsogg, 2026-09-27). Stock charges
 // nothing for any weapon change. Real time leaves it untimed, with the other
 // instant actions.
 //
@@ -3979,7 +3980,7 @@ int combat_reload_cost(int64_t obj, int64_t weapon_obj)
 // arrival would bill an abandoned drag; and the hotkey bar unequips before it
 // equips, so charging departures and arrivals would bill one swap twice. The
 // weapon that last left the slot is remembered here.
-#define COMBAT_WEAPON_SWAP_COST 3
+#define COMBAT_WEAPON_SWAP_COST 4
 
 int combat_weapon_swap_cost(int64_t obj)
 {
