@@ -11,17 +11,20 @@
 #include "game/anim.h"
 #include "game/combat.h"
 #include "game/critter.h"
+#include "game/gamelib.h"
 #include "game/item.h"
 #include "game/obj.h"
 #include "game/obj_id.h"
 #include "game/obj_pool.h"
 #include "game/object.h"
+#include "game/object_node.h"
 #include "game/player.h"
 #include "game/proto.h"
 #include "game/skill.h"
 #include "game/spell.h"
 #include "game/stat.h"
 #include "game/target.h"
+#include "game/weapon_rules.h"
 #include "ui/called_shot.h"
 #include "ui/combat_ui.h"
 #include "ui/intgame.h"
@@ -91,6 +94,27 @@ typedef enum ReplayKind {
     //       sent, when the panel is not shown.
     REPLAY_KIND_PROWL,
     REPLAY_KIND_PANEL,
+    // Reload prototype session 3 (2026-09-26): where a gun's loaded rounds go.
+    //
+    //   save <slot>
+    //       a save named <slot> (e.g. Slot0009), as the autosave writes one;
+    //       `observatory.py launch --slot` then loads it in a later run.
+    //   inspect guns
+    //       one log line for every weapon the weapon table lists, carried by
+    //       the player or a follower or lying on the player's tile: its
+    //       loaded shots and loading work, and where it is.
+    //   transfer <prototype> <id> / take <prototype> <id>
+    //       one carried item of that prototype to that critter, or from it to
+    //       the player, through `item_transfer` - where trading and looting end.
+    //   drop <prototype> / pickup <prototype>
+    //       one carried item dropped at the player's feet (`item_drop`), or
+    //       one lying on the player's tile picked up (`item_transfer`).
+    REPLAY_KIND_SAVE,
+    REPLAY_KIND_INSPECT,
+    REPLAY_KIND_TRANSFER,
+    REPLAY_KIND_TAKE,
+    REPLAY_KIND_DROP,
+    REPLAY_KIND_PICKUP,
 } ReplayKind;
 
 // A cast's target, which is a third shape: the caster, an object or a tile.
@@ -265,6 +289,58 @@ static int64_t replay_find_carried(int64_t pc_obj, int prototype, bool pack_only
     return OBJ_HANDLE_NULL;
 }
 
+// `inspect guns`: one listed weapon's state, and where it is.
+static void replay_inspect_one(int64_t item_obj, const char* where)
+{
+    if (weapon_rule_for(item_obj) == NULL) {
+        return;
+    }
+    tig_debug_printf("Replay: inspect %d loaded %d progress %d %s%s\n",
+        obj_field_int32_get(item_obj, OBJ_F_DESCRIPTION) + 20,
+        obj_field_int32_get(item_obj, OBJ_F_WEAPON_PAD_I_1),
+        obj_field_int32_get(item_obj, OBJ_F_WEAPON_PAD_I_2),
+        where,
+        IS_WEAR_INV_LOC(item_inventory_location_get(item_obj)) ? " (wielded)" : "");
+}
+
+static void replay_inspect_critter(int64_t critter_obj, const char* who)
+{
+    int count;
+    int index;
+
+    count = obj_field_int32_get(critter_obj, OBJ_F_CRITTER_INVENTORY_NUM);
+    for (index = 0; index < count; index++) {
+        replay_inspect_one(obj_arrayfield_handle_get(critter_obj, OBJ_F_CRITTER_INVENTORY_LIST_IDX, index), who);
+    }
+}
+
+static void replay_inspect_guns(int64_t pc_obj)
+{
+    ObjectList objects;
+    ObjectNode* node;
+    char who[REPLAY_IDENTITY_SIZE + 16];
+
+    replay_inspect_critter(pc_obj, "carried by the player");
+
+    object_list_all_followers(pc_obj, &objects);
+    for (node = objects.head; node != NULL; node = node->next) {
+        ObjectID oid = obj_get_id(node->obj);
+        char id[REPLAY_IDENTITY_SIZE];
+
+        objid_id_to_str(id, oid);
+        snprintf(who, sizeof(who), "carried by %s", id);
+        replay_inspect_critter(node->obj, who);
+    }
+    object_list_destroy(&objects);
+
+    object_list_location(obj_field_int64_get(pc_obj, OBJ_F_LOCATION), OBJ_TM_WEAPON, &objects);
+    for (node = objects.head; node != NULL; node = node->next) {
+        replay_inspect_one(node->obj, "on the player's tile");
+    }
+    object_list_destroy(&objects);
+    tig_debug_printf("Replay: inspect done\n");
+}
+
 static void replay_copy_target(ReplayCommand* command, const char* token)
 {
     strncpy(command->target, token, sizeof(command->target) - 1);
@@ -392,6 +468,42 @@ static bool replay_parse_line(const char* text, ReplayCommand* command)
         return index == count;
     }
 
+    if (strcmp(kind, "save") == 0) {
+        command->kind = REPLAY_KIND_SAVE;
+        if (strlen(tokens[index]) > 8) {
+            return false; // the archive pair is named from eight characters
+        }
+        replay_copy_target(command, tokens[index++]);
+        return index == count;
+    }
+
+    if (strcmp(kind, "inspect") == 0) {
+        command->kind = REPLAY_KIND_INSPECT;
+        if (strcmp(tokens[index++], "guns") != 0) {
+            return false;
+        }
+        return index == count;
+    }
+
+    if (strcmp(kind, "transfer") == 0 || strcmp(kind, "take") == 0) {
+        command->kind = strcmp(kind, "take") == 0 ? REPLAY_KIND_TAKE : REPLAY_KIND_TRANSFER;
+        if (!replay_parse_int(tokens[index++], &(command->proto))
+            || command->proto <= 0 || index >= count) {
+            return false;
+        }
+        replay_copy_target(command, tokens[index++]);
+        return index == count;
+    }
+
+    if (strcmp(kind, "drop") == 0 || strcmp(kind, "pickup") == 0) {
+        command->kind = strcmp(kind, "drop") == 0 ? REPLAY_KIND_DROP : REPLAY_KIND_PICKUP;
+        if (!replay_parse_int(tokens[index++], &(command->proto))
+            || command->proto <= 0) {
+            return false;
+        }
+        return index == count;
+    }
+
     if (strcmp(kind, "raise") == 0) {
         command->kind = REPLAY_KIND_RAISE;
         if (!replay_parse_int(tokens[index++], &(command->stat))
@@ -466,7 +578,7 @@ int replay_ui_count(void)
 bool replay_ui_describe(int index, char* buffer, size_t size)
 {
     const ReplayCommand* command;
-    static const char* kinds[] = { "object", "location", "key", "cast", "wield", "wait", "learn", "give", "throw", "skill", "raise", "prowl", "panel" };
+    static const char* kinds[] = { "object", "location", "key", "cast", "wield", "wait", "learn", "give", "throw", "skill", "raise", "prowl", "panel", "save", "inspect", "transfer", "take", "drop", "pickup" };
     int written;
     static const char* casts[] = { "self", "object", "location" };
 
@@ -481,7 +593,9 @@ bool replay_ui_describe(int index, char* buffer, size_t size)
         command->kind == REPLAY_KIND_CAST ? casts[command->cast_target] : "-",
         command->wait_ms);
     // Only the kinds that carry them, so every older row reads as it always did.
-    if ((command->kind == REPLAY_KIND_GIVE || command->kind == REPLAY_KIND_THROW)
+    if ((command->kind == REPLAY_KIND_GIVE || command->kind == REPLAY_KIND_THROW
+            || command->kind == REPLAY_KIND_TRANSFER || command->kind == REPLAY_KIND_TAKE
+            || command->kind == REPLAY_KIND_DROP || command->kind == REPLAY_KIND_PICKUP)
         && written >= 0 && (size_t)written < size) {
         snprintf(buffer + written, size - (size_t)written, " proto=%d count=%d",
             command->proto, command->count);
@@ -711,6 +825,76 @@ void replay_ui_tick(void)
                     replay_next - 1, given, command->count);
                 return;
             }
+        }
+        return;
+    }
+
+    if (command->kind == REPLAY_KIND_SAVE) {
+        replay_stall_reported = false;
+        replay_next++;
+        tig_debug_printf("Replay: command %d save %s: %s\n", replay_next - 1,
+            command->target, gamelib_save(command->target, "replay") ? "saved" : "FAILED");
+        return;
+    }
+
+    if (command->kind == REPLAY_KIND_INSPECT) {
+        replay_stall_reported = false;
+        replay_next++;
+        replay_inspect_guns(pc_obj);
+        return;
+    }
+
+    if (command->kind == REPLAY_KIND_TRANSFER || command->kind == REPLAY_KIND_TAKE) {
+        int64_t item_obj;
+
+        replay_stall_reported = false;
+        replay_next++;
+        if (!replay_resolve(command, &target_obj)) {
+            return;
+        }
+        item_obj = replay_find_carried(command->kind == REPLAY_KIND_TAKE ? target_obj : pc_obj,
+            command->proto, false);
+        if (item_obj == OBJ_HANDLE_NULL
+            || !item_transfer(item_obj, command->kind == REPLAY_KIND_TAKE ? pc_obj : target_obj)) {
+            tig_debug_printf("Replay: command %d could not move prototype %d\n",
+                replay_next - 1, command->proto);
+        }
+        return;
+    }
+
+    if (command->kind == REPLAY_KIND_DROP) {
+        int64_t item_obj;
+
+        replay_stall_reported = false;
+        replay_next++;
+        item_obj = replay_find_carried(pc_obj, command->proto, false);
+        if (item_obj == OBJ_HANDLE_NULL || !item_drop(item_obj)) {
+            tig_debug_printf("Replay: command %d could not drop prototype %d\n",
+                replay_next - 1, command->proto);
+        }
+        return;
+    }
+
+    if (command->kind == REPLAY_KIND_PICKUP) {
+        ObjectList objects;
+        ObjectNode* node;
+        int64_t proto_obj;
+        bool moved = false;
+
+        replay_stall_reported = false;
+        replay_next++;
+        proto_obj = replay_prototype(command->proto);
+        object_list_location(obj_field_int64_get(pc_obj, OBJ_F_LOCATION), OBJ_TM_WEAPON, &objects);
+        for (node = objects.head; node != NULL; node = node->next) {
+            if (obj_field_handle_get(node->obj, OBJ_F_PROTOTYPE_HANDLE) == proto_obj) {
+                moved = item_transfer(node->obj, pc_obj);
+                break;
+            }
+        }
+        object_list_destroy(&objects);
+        if (!moved) {
+            tig_debug_printf("Replay: command %d found no prototype %d to pick up\n",
+                replay_next - 1, command->proto);
         }
         return;
     }

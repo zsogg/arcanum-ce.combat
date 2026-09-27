@@ -727,6 +727,32 @@ TEST(the_called_shot_rows_load_into_what_they_say)
     CHECK(!load_script("0 object G_X panel extra\n"));
 }
 
+TEST(the_persistence_rows_load_into_what_they_say)
+{
+    // Reload prototype session 3 (2026-09-26): saving, looking, and moving a
+    // gun between owners.
+    CHECK(load_script(
+        "0 save Slot0009\n"
+        "0 inspect guns\n"
+        "0 transfer 6065 G_A09DCD63_7A15_D411_8F1D_00E02920220C\n"
+        "0 take 6065 G_A09DCD63_7A15_D411_8F1D_00E02920220C\n"
+        "0 drop 6101\n"
+        "0 pickup 6101\n"));
+    CHECK_INT(replay_ui_count(), 6);
+    CHECK(row_is(0, "turn=0 now=0 kind=save target=Slot0009 loc=0 aim=0 spell=0 cast=- wait=0"));
+    CHECK(row_is(1, "turn=0 now=0 kind=inspect target= loc=0 aim=0 spell=0 cast=- wait=0"));
+    CHECK(row_is(2, "turn=0 now=0 kind=transfer target=G_A09DCD63_7A15_D411_8F1D_00E02920220C loc=0 aim=0 spell=0 cast=- wait=0 proto=6065 count=0"));
+    CHECK(row_is(3, "turn=0 now=0 kind=take target=G_A09DCD63_7A15_D411_8F1D_00E02920220C loc=0 aim=0 spell=0 cast=- wait=0 proto=6065 count=0"));
+    CHECK(row_is(4, "turn=0 now=0 kind=drop target= loc=0 aim=0 spell=0 cast=- wait=0 proto=6101 count=0"));
+    CHECK(row_is(5, "turn=0 now=0 kind=pickup target= loc=0 aim=0 spell=0 cast=- wait=0 proto=6101 count=0"));
+
+    CHECK(!load_script("0 save Slot00099\n")); // more than eight characters
+    CHECK(!load_script("0 inspect\n"));
+    CHECK(!load_script("0 inspect everything\n"));
+    CHECK(!load_script("0 transfer 6065\n")); // to whom
+    CHECK(!load_script("0 drop flintlock\n"));
+}
+
 TEST(a_row_the_parser_cannot_read_refuses_the_whole_file)
 {
     // Refused, never skipped: a replay missing a row diverges from what it
@@ -1675,6 +1701,7 @@ void test_combat_observer_suite(void)
     RUN(the_real_time_rows_load_into_what_they_say);
     RUN(the_throw_rows_load_into_what_they_say);
     RUN(the_called_shot_rows_load_into_what_they_say);
+    RUN(the_persistence_rows_load_into_what_they_say);
     RUN(a_row_the_parser_cannot_read_refuses_the_whole_file);
     RUN(a_tile_step_a_cast_request_and_a_weapon_change_are_each_recorded);
     RUN(every_mode_state_decides_acceptance_the_same_way);
