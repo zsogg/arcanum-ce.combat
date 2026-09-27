@@ -3599,7 +3599,6 @@ int combat_action_points_get(void)
     return combat_action_points;
 }
 
-// 0x4B7790
 // CE (turn-based rebalance): `exertion`, default off (zsogg, 2026-09-20, built
 // 2026-09-26). Stock lets the player finish any action with too few AP - one AP
 // left and a 7 AP shot alike - for 2 fatigue taken as damage, and so reduced by
@@ -3618,6 +3617,7 @@ static bool combat_exertion_covers(int64_t obj, int required_action_points)
         && critter_fatigue_current(obj) >= COMBAT_EXERTION_MIN_FATIGUE;
 }
 
+// 0x4B7790
 bool combat_check_action_points(int64_t obj, int required_action_points)
 {
     bool is_pc;
