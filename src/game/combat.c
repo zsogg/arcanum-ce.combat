@@ -42,8 +42,8 @@
 #include "game/tf.h"
 #include "game/trap.h"
 #include "game/uap.h"
-#include "game/weapon_rules.h"
 #include "game/ui.h"
+#include "game/weapon_rules.h"
 
 static void turn_based_changed(void);
 static void fast_turn_based_changed(void);
