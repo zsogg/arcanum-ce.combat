@@ -195,6 +195,12 @@ RtChaseVerdict rt_chase_check(AnimRunInfo* run_info);
 bool rt_budget_begin_standing_action(int64_t obj, RtBudgetCategory category, int action_points);
 // Whether the actor's current goal moves it, as rule 12 counts moving.
 bool rt_budget_is_moving_now(int64_t obj);
+// Reload prototype session 4: whether the actor is in the middle of a standing
+// action, so the AI waits for it rather than cancelling it with a new order.
+bool rt_budget_standing_action_pending(int64_t obj);
+// `real time pace ms`, validated - for a time that is not an action's budget
+// (automatic loading outside combat).
+int rt_budget_pace_ms_now(void);
 
 // Called from `timeevent_ping` with the real milliseconds since the last ping.
 void rt_budget_tick(int delta_ms);

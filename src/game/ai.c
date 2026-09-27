@@ -28,6 +28,7 @@
 #include "game/proto.h"
 #include "game/random.h"
 #include "game/reaction.h"
+#include "game/reload.h"
 #include "game/script.h"
 #include "game/sector.h"
 #include "game/sfx.h"
@@ -2876,7 +2877,12 @@ void ai_action_perform_combat(Ai* ai)
         npc_flags |= ONF_CHECK_GRENADE;
         obj_field_int32_set(ai->obj, OBJ_F_NPC_FLAGS, npc_flags);
     } else if (!ai_use_grenade(ai, distance)) {
-        anim_goal_attack_ex(ai->obj, ai->danger_source, ai->sound_id);
+        // CE (reload prototype session 4): an empty gun under `firearm
+        // reloading` is reloaded, swapped for a melee backup, or given up
+        // before any attack is issued with it.
+        if (!reload_ai_act(ai->obj, ai->danger_source)) {
+            anim_goal_attack_ex(ai->obj, ai->danger_source, ai->sound_id);
+        }
     }
 }
 

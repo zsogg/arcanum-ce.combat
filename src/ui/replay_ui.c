@@ -20,6 +20,7 @@
 #include "game/object_node.h"
 #include "game/player.h"
 #include "game/proto.h"
+#include "game/reload.h"
 #include "game/skill.h"
 #include "game/spell.h"
 #include "game/stat.h"
@@ -298,7 +299,7 @@ static void replay_inspect_one(int64_t item_obj, const char* where)
     tig_debug_printf("Replay: inspect %d loaded %d progress %d %s%s\n",
         obj_field_int32_get(item_obj, OBJ_F_DESCRIPTION) + 20,
         obj_field_int32_get(item_obj, OBJ_F_WEAPON_PAD_I_1),
-        obj_field_int32_get(item_obj, OBJ_F_WEAPON_PAD_I_2),
+        reload_progress_get(item_obj),
         where,
         IS_WEAR_INV_LOC(item_inventory_location_get(item_obj)) ? " (wielded)" : "");
 }

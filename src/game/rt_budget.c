@@ -720,6 +720,21 @@ static bool rt_budget_goal_is_movement(int goal_type)
     }
 }
 
+bool rt_budget_standing_action_pending(int64_t obj)
+{
+    RtBudgetEntry* entry;
+
+    entry = rt_budget_find(obj);
+    return entry != NULL
+        && entry->category == RT_BUDGET_RELOAD
+        && entry->state == RT_BUDGET_ACCEPTED;
+}
+
+int rt_budget_pace_ms_now(void)
+{
+    return rt_budget_configured_pace_ms();
+}
+
 bool rt_budget_is_moving_now(int64_t obj)
 {
     return rt_budget_is_moving(obj);

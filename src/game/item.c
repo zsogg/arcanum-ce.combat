@@ -19,6 +19,7 @@
 #include "game/proto.h"
 #include "game/random.h"
 #include "game/reaction.h"
+#include "game/reload.h"
 #include "game/resistance.h"
 #include "game/script.h"
 #include "game/skill.h"
@@ -2890,6 +2891,7 @@ void item_wield_best(int64_t critter_obj, int inventory_location, int64_t target
     int best_ranged_weapon_worth;
     int64_t best_ranged_weapon_obj;
     int64_t item_obj;
+    int64_t empty_gun_obj = OBJ_HANDLE_NULL;
 
     cnt = obj_field_int32_get(critter_obj, OBJ_F_CRITTER_INVENTORY_NUM);
     equipped_item_obj = item_wield_get(critter_obj, inventory_location);
@@ -2918,8 +2920,23 @@ void item_wield_best(int64_t critter_obj, int inventory_location, int64_t target
         if (item_check_wield(item_obj, inventory_location, critter_obj) == ITEM_CANNOT_OK) {
             if (inventory_location == ITEM_INV_LOC_WEAPON) {
                 int ammo_type = item_weapon_ammo_type(item_obj);
+                // CE (reload prototype session 4): a gun under `firearm
+                // reloading` is also usable while it has a shot loaded,
+                // whatever the pack holds. An empty one with an enemy beside
+                // the wielder is only the last resort, so the melee backup
+                // `reload_ai_act` takes is not swapped straight back.
+                if (target_obj != OBJ_HANDLE_NULL
+                    && dist <= 1
+                    && reload_applies(critter_obj, item_obj)
+                    && reload_loaded_get(item_obj) <= 0) {
+                    if (reload_can_load_quiet(critter_obj, item_obj)) {
+                        empty_gun_obj = item_obj;
+                    }
+                    continue;
+                }
                 if (ammo_type == 10000
-                    || obj_field_int32_get(item_obj, OBJ_F_WEAPON_AMMO_CONSUMPTION) <= item_ammo_quantity_get(critter_obj, ammo_type)) {
+                    || obj_field_int32_get(item_obj, OBJ_F_WEAPON_AMMO_CONSUMPTION) <= item_ammo_quantity_get(critter_obj, ammo_type)
+                    || (reload_applies(critter_obj, item_obj) && reload_loaded_get(item_obj) > 0)) {
                     int total_dam = 0;
                     int skill = item_weapon_skill(item_obj);
                     for (DamageType damage_type = 0; damage_type < DAMAGE_TYPE_COUNT; damage_type++) {
@@ -2983,6 +3000,10 @@ void item_wield_best(int64_t critter_obj, int inventory_location, int64_t target
 
     if (best_ranged_weapon_obj != OBJ_HANDLE_NULL) {
         best_item_obj = best_ranged_weapon_obj;
+    }
+
+    if (best_item_obj == OBJ_HANDLE_NULL) {
+        best_item_obj = empty_gun_obj;
     }
 
     if (best_item_obj != OBJ_HANDLE_NULL) {

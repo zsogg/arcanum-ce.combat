@@ -18,9 +18,11 @@
 // loaded (zsogg, 2026-09-25, after his playtest). When a shot's loading
 // completes, that shot's spare bullets move into the gun.
 //
-// The first build applies to the local player only; followers and hostile
-// gunners keep stock ammunition. The rules, and the decisions behind them,
-// are arcanum-work docs/RELOAD-PROTOTYPE.md.
+// It governs everyone who uses a listed gun (session 4; the first build was
+// the player's only). An NPC's gun starts loaded to capacity, the player's
+// empty; an NPC loads from the bullets it carries, so a hostile gunner's
+// ammunition is finite where stock gave it unlimited. The rules, and the
+// decisions behind them, are arcanum-work docs/RELOAD-PROTOTYPE.md.
 //
 // **Where the state lives:** the weapon's two padding fields, which nothing
 // else uses. `OBJ_F_WEAPON_PAD_I_1` is the loaded shots, `OBJ_F_WEAPON_PAD_I_2`
@@ -41,11 +43,15 @@ typedef struct ReloadWork {
 ReloadWork reload_work(int cost, int progress, int available_ap);
 
 // True when reloading governs this critter's use of this weapon: the feature
-// is on, the weapon's rule names a Capacity, and - in the first build - the
-// critter is the local player.
+// is on and the weapon's rule names a Capacity. The first time it is asked
+// about a gun, it also sets how that gun starts: full for an NPC.
 bool reload_applies(int64_t critter_obj, int64_t weapon_obj);
 // True when the critter's wielded weapon is governed and has nothing loaded.
 bool reload_wielded_is_empty(int64_t critter_obj);
+
+// Whether the gun can take another shot now: governed, not full, and the
+// shot's bullets in the pack. Says nothing over anyone's head.
+bool reload_can_load_quiet(int64_t critter_obj, int64_t weapon_obj);
 
 int reload_loaded_get(int64_t weapon_obj);
 int reload_progress_get(int64_t weapon_obj);
@@ -53,8 +59,9 @@ int reload_progress_get(int64_t weapon_obj);
 // Fires: uses one loaded shot. False, changing nothing, when none is loaded.
 bool reload_fire(int64_t critter_obj, int64_t weapon_obj);
 
-// The Reload command (Q), for the local player. Reports what it did over the
-// player's head; returns true if it did any work, or began a real-time reload.
+// The Reload command: Q for the player, and an NPC's reload (`reload_ai_act`).
+// Reports what it did over the player's head; returns true if it did any work,
+// or began a real-time reload.
 bool reload_command(int64_t critter_obj);
 
 // The real-time budget's answer to a reload begun with
@@ -62,5 +69,20 @@ bool reload_command(int64_t critter_obj);
 // (`completed`) - the shot is loaded now - or it was cancelled by a step or by
 // turn-based beginning, and nothing is loaded or spent.
 void reload_standing_done(int64_t critter_obj, bool completed);
+
+// Session 4, the AI (`ai_action_perform_combat`): for an NPC whose governed
+// gun is empty - or whose standing reload is under way - decide instead of
+// attacking. With an enemy adjacent it takes a melee backup if it carries one
+// (and returns false, so the attack goes ahead with it); otherwise it reloads,
+// ending its turn-based turn if no AP is left for the work; with nothing to
+// load, it switches weapon. True when it has acted and must not attack.
+bool reload_ai_act(int64_t critter_obj, int64_t enemy_obj);
+
+// Session 4: automatic loading outside combat, from `timeevent_ping`. The
+// player's and each follower's wielded listed gun, while the player and it are
+// out of combat mode, loads one shot each time its loading cost passes as time
+// - the length a standing reload would take - using real ammunition. A fight
+// starting keeps what is loaded and drops the time toward the next.
+void reload_prep_tick(int delta_ms);
 
 #endif /* ARCANUM_GAME_RELOAD_H_ */
