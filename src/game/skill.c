@@ -16,6 +16,7 @@
 #include "game/random.h"
 #include "game/stat.h"
 #include "game/trap.h"
+#include "game/weapon_rules.h"
 
 #define FIRST_BASIC_SKILL_NAME_ID 0
 #define FIRST_TECH_SKILL_NAME_ID (FIRST_BASIC_SKILL_NAME_ID + BASIC_SKILL_COUNT)
@@ -2612,6 +2613,19 @@ int skill_invocation_difficulty(SkillInvocation* skill_invocation)
             difficulty += obj_field_int32_get(target_obj, OBJ_F_TRAP_DIFFICULTY);
         }
         break;
+    }
+
+    // CE (turn-based rebalance): a weapon's `rules/weapons.mes` Accuracy, under
+    // `weapon rules`, scales the chance to hit - effectiveness less difficulty -
+    // to that percentage, by raising the difficulty. Here rather than at the
+    // roll so the chance the combat display shows is the one rolled.
+    if (item_obj != OBJ_HANDLE_NULL
+        && obj_field_int32_get(item_obj, OBJ_F_TYPE) == OBJ_TYPE_WEAPON) {
+        int accuracy = weapon_rules_accuracy(item_obj);
+        int chance = effectiveness - difficulty;
+        if (accuracy != 100 && chance > 0) {
+            difficulty += chance - chance * accuracy / 100;
+        }
     }
 
     return difficulty;

@@ -94,6 +94,21 @@ TEST(a_value_outside_its_range_is_clamped)
     CHECK_INT(rule.damage_max, WEAPON_RULE_DAMAGE_MAX);
 }
 
+TEST(accuracy_is_a_percentage)
+{
+    WeaponRule rule;
+
+    // The Old Flintlock Pistol, zsogg 2026-09-28: half the Flintlock's chance.
+    CHECK(weapon_rule_parse(6102, "Accuracy: 50", &rule));
+    CHECK_INT(rule.accuracy, 50);
+    CHECK(weapon_rule_parse(6102, "Damage: 12-19", &rule));
+    CHECK_INT(rule.accuracy, WEAPON_RULE_UNSET);
+    CHECK(weapon_rule_parse(6102, "Accuracy: 900", &rule));
+    CHECK_INT(rule.accuracy, WEAPON_RULE_ACCURACY_MAX);
+    CHECK(weapon_rule_parse(6102, "Accuracy: -5", &rule));
+    CHECK_INT(rule.accuracy, WEAPON_RULE_ACCURACY_MIN);
+}
+
 TEST(a_malformed_entry_changes_nothing)
 {
     WeaponRule rule;
@@ -119,5 +134,6 @@ void test_weapon_rules_suite(void)
     RUN(an_apprentice_cost_defaults_to_the_untrained_one);
     RUN(a_single_number_is_both_ends_and_a_reversed_range_is_ordered);
     RUN(a_value_outside_its_range_is_clamped);
+    RUN(accuracy_is_a_percentage);
     RUN(a_malformed_entry_changes_nothing);
 }

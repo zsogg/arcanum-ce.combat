@@ -93,6 +93,7 @@ bool weapon_rule_parse(int prototype, const char* str, WeaponRule* rule)
     parsed.range = WEAPON_RULE_UNSET;
     parsed.crit_effect = WEAPON_RULE_UNSET;
     parsed.worth = WEAPON_RULE_UNSET;
+    parsed.accuracy = WEAPON_RULE_UNSET;
 
     for (part = strtok_r(buffer, ",", &save); part != NULL; part = strtok_r(NULL, ",", &save)) {
         colon = strchr(part, ':');
@@ -144,6 +145,8 @@ bool weapon_rule_parse(int prototype, const char* str, WeaponRule* rule)
             parsed.crit_effect = weapon_rule_clamp(value, WEAPON_RULE_CRIT_EFFECT_MIN, WEAPON_RULE_CRIT_EFFECT_MAX);
         } else if (strcmp(key, "Worth") == 0) {
             parsed.worth = weapon_rule_clamp(value, 0, WEAPON_RULE_WORTH_MAX);
+        } else if (strcmp(key, "Accuracy") == 0) {
+            parsed.accuracy = weapon_rule_clamp(value, WEAPON_RULE_ACCURACY_MIN, WEAPON_RULE_ACCURACY_MAX);
         } else {
             return false;
         }
@@ -303,6 +306,14 @@ int weapon_rules_worth(int64_t weapon_obj, int stock)
 
     rule = weapon_rules_active_for(weapon_obj);
     return rule != NULL && rule->worth != WEAPON_RULE_UNSET ? rule->worth : stock;
+}
+
+int weapon_rules_accuracy(int64_t weapon_obj)
+{
+    const WeaponRule* rule;
+
+    rule = weapon_rules_active_for(weapon_obj);
+    return rule != NULL && rule->accuracy != WEAPON_RULE_UNSET ? rule->accuracy : 100;
 }
 
 bool weapon_rules_fire_ap(int64_t critter_obj, int64_t weapon_obj, int* action_points)
