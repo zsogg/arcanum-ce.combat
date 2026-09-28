@@ -3430,7 +3430,11 @@ int item_weapon_min_strength(int64_t item_obj, int64_t critter_obj)
         adj = item_adjust_magic(item_obj, critter_obj, adj);
     }
 
-    min_strength = obj_field_int32_get(item_obj, OBJ_F_WEAPON_MIN_STRENGTH) + adj;
+    // CE (turn-based rebalance): a weapon's `rules/weapons.mes` MinStrength
+    // replaces its base requirement; magic still adjusts it.
+    min_strength = weapon_rules_min_strength(item_obj,
+                       obj_field_int32_get(item_obj, OBJ_F_WEAPON_MIN_STRENGTH))
+        + adj;
     flags = obj_field_int32_get(item_obj, OBJ_F_WEAPON_FLAGS);
     if (critter_obj != OBJ_HANDLE_NULL
         && (flags & OWF_HAND_COUNT_FIXED) == 0) {

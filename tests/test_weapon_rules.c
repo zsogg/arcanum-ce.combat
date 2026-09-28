@@ -109,6 +109,19 @@ TEST(accuracy_is_a_percentage)
     CHECK_INT(rule.accuracy, WEAPON_RULE_ACCURACY_MIN);
 }
 
+TEST(minimum_strength_is_read_and_clamped)
+{
+    WeaponRule rule;
+
+    // The Folding Rifle, zsogg 2026-09-28: less Strength than the other rifles.
+    CHECK(weapon_rule_parse(6121, "MinStrength: 6", &rule));
+    CHECK_INT(rule.min_strength, 6);
+    CHECK(weapon_rule_parse(6121, "Damage: 10-18", &rule));
+    CHECK_INT(rule.min_strength, WEAPON_RULE_UNSET);
+    CHECK(weapon_rule_parse(6121, "MinStrength: 0", &rule));
+    CHECK_INT(rule.min_strength, WEAPON_RULE_MIN_STRENGTH_MIN);
+}
+
 TEST(a_malformed_entry_changes_nothing)
 {
     WeaponRule rule;
@@ -135,5 +148,6 @@ void test_weapon_rules_suite(void)
     RUN(a_single_number_is_both_ends_and_a_reversed_range_is_ordered);
     RUN(a_value_outside_its_range_is_clamped);
     RUN(accuracy_is_a_percentage);
+    RUN(minimum_strength_is_read_and_clamped);
     RUN(a_malformed_entry_changes_nothing);
 }
