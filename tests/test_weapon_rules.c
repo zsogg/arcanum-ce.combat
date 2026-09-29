@@ -135,6 +135,19 @@ TEST(weight_is_read_and_clamped)
     CHECK_INT(rule.weight, 0);
 }
 
+TEST(armor_damage_is_read_and_clamped)
+{
+    WeaponRule rule;
+
+    // The Acid Gun, zsogg 2026-09-28: 40 a hit, where the engine takes 10.
+    CHECK(weapon_rule_parse(6173, "ArmorDamage: 40", &rule));
+    CHECK_INT(rule.armor_damage, 40);
+    CHECK(weapon_rule_parse(6173, "Damage: 15-38", &rule));
+    CHECK_INT(rule.armor_damage, WEAPON_RULE_UNSET);
+    CHECK(weapon_rule_parse(6173, "ArmorDamage: -3", &rule));
+    CHECK_INT(rule.armor_damage, 0);
+}
+
 TEST(a_malformed_entry_changes_nothing)
 {
     WeaponRule rule;
@@ -163,5 +176,6 @@ void test_weapon_rules_suite(void)
     RUN(accuracy_is_a_percentage);
     RUN(minimum_strength_is_read_and_clamped);
     RUN(weight_is_read_and_clamped);
+    RUN(armor_damage_is_read_and_clamped);
     RUN(a_malformed_entry_changes_nothing);
 }

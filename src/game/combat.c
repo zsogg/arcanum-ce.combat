@@ -1871,7 +1871,12 @@ void combat_dmg(CombatContext* combat)
         if ((dam_flags & CDF_DAMAGE_ARMOR) != 0) {
             int64_t armor_obj = combat_critter_armor(combat->target_obj, combat->hit_loc);
             if (armor_obj != OBJ_HANDLE_NULL) {
-                object_hp_damage_set(armor_obj, object_hp_damage_get(armor_obj) + 10);
+                // CE (turn-based rebalance): the weapon's `rules/weapons.mes`
+                // ArmorDamage, under `weapon rules`, replaces the 10 a hit
+                // takes from armor.
+                object_hp_damage_set(armor_obj,
+                    object_hp_damage_get(armor_obj)
+                        + weapon_rules_armor_damage(combat->weapon_obj, 10));
 
                 if (object_hp_current(armor_obj) > 0) {
                     mes_file_entry.num = 7; // "Armor damaged"
