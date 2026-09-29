@@ -126,6 +126,10 @@ static int harness_last_event_frame;
 // *when* somebody presses a key. Pinning the frame number is what makes an
 // in-game frame comparable across runs.
 static int harness_shot_frame;
+// CE (2026-09-28): `-screenshot=N-M` shoots every frame from N through M, to
+// catch an effect that lasts a handful of frames - a hit's eye candy - where
+// one frame number would have to be guessed exactly.
+static int harness_shot_last_frame;
 
 // 0x401000
 int main(int argc, char** argv)
@@ -289,7 +293,12 @@ int main(int argc, char** argv)
 
     pch = strstr(lpCmdLine, "-screenshot=");
     if (pch != NULL) {
-        harness_shot_frame = (int)strtol(pch + strlen("-screenshot="), NULL, 10);
+        char* end;
+
+        harness_shot_frame = (int)strtol(pch + strlen("-screenshot="), &end, 10);
+        harness_shot_last_frame = *end == '-'
+            ? (int)strtol(end + 1, NULL, 10)
+            : harness_shot_frame;
     }
 
     pch = strstr(lpCmdLine, "-runframes=");
@@ -785,7 +794,9 @@ void main_loop(void)
         // the shipped F12 path - the same `tig_video_screenshot_make` the key
         // handler calls, so this captures what the engine actually presented
         // rather than a second, harness-only rendering of it.
-        if (harness_shot_frame > 0 && harness_frames_run == harness_shot_frame) {
+        if (harness_shot_frame > 0
+            && harness_frames_run >= harness_shot_frame
+            && harness_frames_run <= harness_shot_last_frame) {
             tig_debug_printf("Harness: screenshot at frame %d\n",
                 harness_frames_run);
             tig_video_screenshot_make();
