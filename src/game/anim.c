@@ -37,6 +37,7 @@
 #include "game/trap.h"
 #include "game/uap.h"
 #include "game/ui.h"
+#include "game/weapon_rules.h"
 
 static bool anim_id_matches_run_info(AnimID* anim_id, AnimRunInfo* run_info);
 static void violence_filter_changed(void);
@@ -13462,7 +13463,8 @@ bool anim_weapon_has_ammo(int64_t critter_obj)
     }
 
     qty = item_ammo_quantity_get(critter_obj, ammo_type);
-    consumption = obj_field_int32_get(weapon_obj, OBJ_F_WEAPON_AMMO_CONSUMPTION);
+    // CE (turn-based rebalance): `rules/weapons.mes` AmmoPerShot.
+    consumption = weapon_rules_ammo_per_shot(weapon_obj);
     if (qty >= consumption) {
         return true;
     }

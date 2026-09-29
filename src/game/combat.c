@@ -2826,7 +2826,8 @@ bool combat_consume_ammo(int64_t weapon_obj, int64_t critter_obj, int cnt, bool 
         return true;
     }
 
-    consumption = cnt * obj_field_int32_get(weapon_obj, OBJ_F_WEAPON_AMMO_CONSUMPTION);
+    // CE (turn-based rebalance): `rules/weapons.mes` AmmoPerShot.
+    consumption = cnt * weapon_rules_ammo_per_shot(weapon_obj);
     if (qty >= consumption) {
         item_ammo_transfer(critter_obj, OBJ_HANDLE_NULL, consumption, ammo_type, OBJ_HANDLE_NULL);
         // CE (real-time combat session 1): charged once per what? The session

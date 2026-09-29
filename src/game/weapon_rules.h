@@ -19,7 +19,8 @@
 //
 // Two switches read it. `weapon rules` applies the stat overrides - firing AP,
 // damage, fatigue damage, range, critical-effect bonus, worth, accuracy,
-// minimum strength, weight and armor damage - to anyone
+// minimum strength, weight, armor damage, elemental damage and ammunition
+// per shot - to anyone
 // who uses the weapon. `firearm reloading` (`reload.c`) uses Capacity and the
 // loading costs, for the player in its first build. A key an entry does not
 // name leaves that stat as the weapon's own.
@@ -44,6 +45,14 @@ typedef struct WeaponRule {
     int damage_max;
     int fatigue_min;
     int fatigue_max;
+    // Elemental damage (2026-09-28, zsogg: the Charged Accelerator Gun's
+    // electrical 10-18), as `low-high` like the other two.
+    int poison_min;
+    int poison_max;
+    int electrical_min;
+    int electrical_max;
+    int fire_min;
+    int fire_max;
     int range;
     int crit_effect;
     int worth;
@@ -60,6 +69,9 @@ typedef struct WeaponRule {
     // every hit for an acid weapon, fire damage, some criticals. The engine's
     // own figure is 10 (2026-09-28, zsogg: the Acid Gun at 40).
     int armor_damage;
+    // Ammunition a shot spends (2026-09-28, zsogg: the Charged Accelerator Gun
+    // at 2, from its stock 3).
+    int ammo_per_shot;
 } WeaponRule;
 
 #define WEAPON_RULE_CAPACITY_MIN 1
@@ -78,6 +90,8 @@ typedef struct WeaponRule {
 #define WEAPON_RULE_MIN_STRENGTH_MAX 30
 #define WEAPON_RULE_WEIGHT_MAX 10000
 #define WEAPON_RULE_ARMOR_DAMAGE_MAX 1000
+#define WEAPON_RULE_AMMO_PER_SHOT_MIN 1
+#define WEAPON_RULE_AMMO_PER_SHOT_MAX 100
 
 // Pure: reads one entry's text into `rule`. False, with `rule` untouched, for
 // anything malformed - an unknown key, a value that is not a number or a
@@ -109,6 +123,9 @@ int weapon_rules_accuracy(int64_t weapon_obj);
 int weapon_rules_min_strength(int64_t weapon_obj, int stock);
 int weapon_rules_weight(int64_t weapon_obj, int stock);
 int weapon_rules_armor_damage(int64_t weapon_obj, int stock);
+// The ammunition a shot spends: the entry's AmmoPerShot, or the weapon's own
+// OBJ_F_WEAPON_AMMO_CONSUMPTION. Every reader of that field goes through here.
+int weapon_rules_ammo_per_shot(int64_t weapon_obj);
 // True, with `*action_points` set, when the entry names a firing cost.
 bool weapon_rules_fire_ap(int64_t critter_obj, int64_t weapon_obj, int* action_points);
 

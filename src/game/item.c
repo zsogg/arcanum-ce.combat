@@ -2937,7 +2937,7 @@ void item_wield_best(int64_t critter_obj, int inventory_location, int64_t target
                     continue;
                 }
                 if (ammo_type == 10000
-                    || obj_field_int32_get(item_obj, OBJ_F_WEAPON_AMMO_CONSUMPTION) <= item_ammo_quantity_get(critter_obj, ammo_type)
+                    || weapon_rules_ammo_per_shot(item_obj) <= item_ammo_quantity_get(critter_obj, ammo_type)
                     || (reload_applies(critter_obj, item_obj) && reload_loaded_get(item_obj) > 0)) {
                     int total_dam = 0;
                     int skill = item_weapon_skill(item_obj);

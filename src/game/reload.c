@@ -224,7 +224,7 @@ static bool reload_can_load_impl(int64_t critter_obj, int64_t weapon_obj, bool q
     // reload never charges for a shot it cannot finish.
     ammo_type = item_weapon_ammo_type(weapon_obj);
     need = ammo_type != 10000
-        ? obj_field_int32_get(weapon_obj, OBJ_F_WEAPON_AMMO_CONSUMPTION)
+        ? weapon_rules_ammo_per_shot(weapon_obj)
         : 0;
     if (need > 0 && item_ammo_quantity_get(critter_obj, ammo_type) < need) {
         if (!quiet) {
@@ -249,7 +249,7 @@ static void reload_load_one(int64_t critter_obj, int64_t weapon_obj, bool quiet)
     loaded = reload_loaded_get(weapon_obj);
     ammo_type = item_weapon_ammo_type(weapon_obj);
     need = ammo_type != 10000
-        ? obj_field_int32_get(weapon_obj, OBJ_F_WEAPON_AMMO_CONSUMPTION)
+        ? weapon_rules_ammo_per_shot(weapon_obj)
         : 0;
 
     if (need > 0) {

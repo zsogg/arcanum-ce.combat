@@ -148,6 +148,28 @@ TEST(armor_damage_is_read_and_clamped)
     CHECK_INT(rule.armor_damage, 0);
 }
 
+TEST(elemental_damage_and_ammunition_per_shot_are_read)
+{
+    WeaponRule rule;
+
+    // The Charged Accelerator Gun, zsogg 2026-09-28.
+    CHECK(weapon_rule_parse(6176,
+        "Damage: 14-25, Electrical: 10-18, Fatigue: 5-10, AmmoPerShot: 2", &rule));
+    CHECK_INT(rule.electrical_min, 10);
+    CHECK_INT(rule.electrical_max, 18);
+    CHECK_INT(rule.fire_min, WEAPON_RULE_UNSET);
+    CHECK_INT(rule.poison_min, WEAPON_RULE_UNSET);
+    CHECK_INT(rule.ammo_per_shot, 2);
+    CHECK(weapon_rule_parse(6061, "Fire: 30-15, Poison: 4", &rule));
+    CHECK_INT(rule.fire_min, 15);
+    CHECK_INT(rule.fire_max, 30);
+    CHECK_INT(rule.poison_min, 4);
+    CHECK_INT(rule.poison_max, 4);
+    CHECK_INT(rule.ammo_per_shot, WEAPON_RULE_UNSET);
+    CHECK(weapon_rule_parse(6176, "AmmoPerShot: 0", &rule));
+    CHECK_INT(rule.ammo_per_shot, WEAPON_RULE_AMMO_PER_SHOT_MIN);
+}
+
 TEST(a_malformed_entry_changes_nothing)
 {
     WeaponRule rule;
@@ -177,5 +199,6 @@ void test_weapon_rules_suite(void)
     RUN(minimum_strength_is_read_and_clamped);
     RUN(weight_is_read_and_clamped);
     RUN(armor_damage_is_read_and_clamped);
+    RUN(elemental_damage_and_ammunition_per_shot_are_read);
     RUN(a_malformed_entry_changes_nothing);
 }

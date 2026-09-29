@@ -90,6 +90,12 @@ bool weapon_rule_parse(int prototype, const char* str, WeaponRule* rule)
     parsed.damage_max = WEAPON_RULE_UNSET;
     parsed.fatigue_min = WEAPON_RULE_UNSET;
     parsed.fatigue_max = WEAPON_RULE_UNSET;
+    parsed.poison_min = WEAPON_RULE_UNSET;
+    parsed.poison_max = WEAPON_RULE_UNSET;
+    parsed.electrical_min = WEAPON_RULE_UNSET;
+    parsed.electrical_max = WEAPON_RULE_UNSET;
+    parsed.fire_min = WEAPON_RULE_UNSET;
+    parsed.fire_max = WEAPON_RULE_UNSET;
     parsed.range = WEAPON_RULE_UNSET;
     parsed.crit_effect = WEAPON_RULE_UNSET;
     parsed.worth = WEAPON_RULE_UNSET;
@@ -97,6 +103,7 @@ bool weapon_rule_parse(int prototype, const char* str, WeaponRule* rule)
     parsed.min_strength = WEAPON_RULE_UNSET;
     parsed.weight = WEAPON_RULE_UNSET;
     parsed.armor_damage = WEAPON_RULE_UNSET;
+    parsed.ammo_per_shot = WEAPON_RULE_UNSET;
 
     for (part = strtok_r(buffer, ",", &save); part != NULL; part = strtok_r(NULL, ",", &save)) {
         colon = strchr(part, ':');
@@ -111,19 +118,35 @@ bool weapon_rule_parse(int prototype, const char* str, WeaponRule* rule)
             *--end = '\0';
         }
 
-        if (strcmp(key, "Damage") == 0 || strcmp(key, "Fatigue") == 0) {
+        if (strcmp(key, "Damage") == 0 || strcmp(key, "Fatigue") == 0
+            || strcmp(key, "Poison") == 0 || strcmp(key, "Electrical") == 0
+            || strcmp(key, "Fire") == 0) {
+            int* min_ptr;
+            int* max_ptr;
+
             if (!weapon_rule_parse_range(colon + 1, &lo, &hi)) {
                 return false;
             }
             lo = weapon_rule_clamp(lo, 0, WEAPON_RULE_DAMAGE_MAX);
             hi = weapon_rule_clamp(hi, 0, WEAPON_RULE_DAMAGE_MAX);
-            if (key[0] == 'D') {
-                parsed.damage_min = lo;
-                parsed.damage_max = hi;
+            if (strcmp(key, "Damage") == 0) {
+                min_ptr = &(parsed.damage_min);
+                max_ptr = &(parsed.damage_max);
+            } else if (strcmp(key, "Fatigue") == 0) {
+                min_ptr = &(parsed.fatigue_min);
+                max_ptr = &(parsed.fatigue_max);
+            } else if (strcmp(key, "Poison") == 0) {
+                min_ptr = &(parsed.poison_min);
+                max_ptr = &(parsed.poison_max);
+            } else if (strcmp(key, "Electrical") == 0) {
+                min_ptr = &(parsed.electrical_min);
+                max_ptr = &(parsed.electrical_max);
             } else {
-                parsed.fatigue_min = lo;
-                parsed.fatigue_max = hi;
+                min_ptr = &(parsed.fire_min);
+                max_ptr = &(parsed.fire_max);
             }
+            *min_ptr = lo;
+            *max_ptr = hi;
             keys++;
             continue;
         }
@@ -156,6 +179,8 @@ bool weapon_rule_parse(int prototype, const char* str, WeaponRule* rule)
             parsed.weight = weapon_rule_clamp(value, 0, WEAPON_RULE_WEIGHT_MAX);
         } else if (strcmp(key, "ArmorDamage") == 0) {
             parsed.armor_damage = weapon_rule_clamp(value, 0, WEAPON_RULE_ARMOR_DAMAGE_MAX);
+        } else if (strcmp(key, "AmmoPerShot") == 0) {
+            parsed.ammo_per_shot = weapon_rule_clamp(value, WEAPON_RULE_AMMO_PER_SHOT_MIN, WEAPON_RULE_AMMO_PER_SHOT_MAX);
         } else {
             return false;
         }
@@ -290,6 +315,15 @@ int weapon_rules_damage(int64_t weapon_obj, int damage_type, bool upper, int sto
     if (damage_type == DAMAGE_TYPE_FATIGUE && rule->fatigue_min != WEAPON_RULE_UNSET) {
         return upper ? rule->fatigue_max : rule->fatigue_min;
     }
+    if (damage_type == DAMAGE_TYPE_POISON && rule->poison_min != WEAPON_RULE_UNSET) {
+        return upper ? rule->poison_max : rule->poison_min;
+    }
+    if (damage_type == DAMAGE_TYPE_ELECTRICAL && rule->electrical_min != WEAPON_RULE_UNSET) {
+        return upper ? rule->electrical_max : rule->electrical_min;
+    }
+    if (damage_type == DAMAGE_TYPE_FIRE && rule->fire_min != WEAPON_RULE_UNSET) {
+        return upper ? rule->fire_max : rule->fire_min;
+    }
     return stock;
 }
 
@@ -347,6 +381,16 @@ int weapon_rules_armor_damage(int64_t weapon_obj, int stock)
 
     rule = weapon_rules_active_for(weapon_obj);
     return rule != NULL && rule->armor_damage != WEAPON_RULE_UNSET ? rule->armor_damage : stock;
+}
+
+int weapon_rules_ammo_per_shot(int64_t weapon_obj)
+{
+    const WeaponRule* rule;
+
+    rule = weapon_rules_active_for(weapon_obj);
+    return rule != NULL && rule->ammo_per_shot != WEAPON_RULE_UNSET
+        ? rule->ammo_per_shot
+        : obj_field_int32_get(weapon_obj, OBJ_F_WEAPON_AMMO_CONSUMPTION);
 }
 
 bool weapon_rules_fire_ap(int64_t critter_obj, int64_t weapon_obj, int* action_points)

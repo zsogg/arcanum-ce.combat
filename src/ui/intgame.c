@@ -7812,7 +7812,8 @@ void intgame_examine_item(int64_t pc_obj, int64_t item_obj, char* str)
         case OBJ_TYPE_WEAPON: {
             int ammo_type = item_weapon_ammo_type(item_obj);
             if (ammo_type != 10000) {
-                int consumption = obj_field_int32_get(item_obj, OBJ_F_WEAPON_AMMO_CONSUMPTION);
+                // CE (turn-based rebalance): `rules/weapons.mes` AmmoPerShot.
+                int consumption = weapon_rules_ammo_per_shot(item_obj);
                 if (consumption > 0) {
                     snprintf(buffer, sizeof(buffer),
                         "%s: %d",
