@@ -18,8 +18,8 @@
 //            Worth: 100, Capacity: 1, LoadAP: 10, LoadAPApprentice: 8}
 //
 // Two switches read it. `weapon rules` applies the stat overrides - firing AP,
-// damage, fatigue damage, range, critical-effect bonus, worth, accuracy and
-// minimum strength - to anyone
+// damage, fatigue damage, range, critical-effect bonus, worth, accuracy,
+// minimum strength and weight - to anyone
 // who uses the weapon. `firearm reloading` (`reload.c`) uses Capacity and the
 // loading costs, for the player in its first build. A key an entry does not
 // name leaves that stat as the weapon's own.
@@ -53,6 +53,9 @@ typedef struct WeaponRule {
     // The Strength a wielder needs to avoid the to-hit penalty (2026-09-28,
     // zsogg: the Folding Rifle asks less than the other rifles).
     int min_strength;
+    // Weight, in the game's weight units (2026-09-28, zsogg: the Mechanized Gun
+    // at 240, double its stock 120).
+    int weight;
 } WeaponRule;
 
 #define WEAPON_RULE_CAPACITY_MIN 1
@@ -69,6 +72,7 @@ typedef struct WeaponRule {
 #define WEAPON_RULE_ACCURACY_MAX 200
 #define WEAPON_RULE_MIN_STRENGTH_MIN 1
 #define WEAPON_RULE_MIN_STRENGTH_MAX 30
+#define WEAPON_RULE_WEIGHT_MAX 10000
 
 // Pure: reads one entry's text into `rule`. False, with `rule` untouched, for
 // anything malformed - an unknown key, a value that is not a number or a
@@ -98,6 +102,7 @@ int weapon_rules_worth(int64_t weapon_obj, int stock);
 // does not name it.
 int weapon_rules_accuracy(int64_t weapon_obj);
 int weapon_rules_min_strength(int64_t weapon_obj, int stock);
+int weapon_rules_weight(int64_t weapon_obj, int stock);
 // True, with `*action_points` set, when the entry names a firing cost.
 bool weapon_rules_fire_ap(int64_t critter_obj, int64_t weapon_obj, int* action_points);
 

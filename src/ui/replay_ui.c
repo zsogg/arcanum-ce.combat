@@ -296,10 +296,13 @@ static void replay_inspect_one(int64_t item_obj, const char* where)
     if (weapon_rule_for(item_obj) == NULL) {
         return;
     }
-    tig_debug_printf("Replay: inspect %d loaded %d progress %d %s%s\n",
+    // The weight is the engine's (`item_weight`, which the weapon table's
+    // Weight overrides): the figure encumbrance sums.
+    tig_debug_printf("Replay: inspect %d loaded %d progress %d weight %d %s%s\n",
         obj_field_int32_get(item_obj, OBJ_F_DESCRIPTION) + 20,
         obj_field_int32_get(item_obj, OBJ_F_WEAPON_PAD_I_1),
         reload_progress_get(item_obj),
+        item_weight(item_obj, OBJ_HANDLE_NULL),
         where,
         IS_WEAR_INV_LOC(item_inventory_location_get(item_obj)) ? " (wielded)" : "");
 }

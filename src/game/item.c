@@ -374,7 +374,9 @@ int item_weight(int64_t item_obj, int64_t owner_obj)
         return 0;
     }
 
-    weight = obj_field_int32_get(item_obj, OBJ_F_ITEM_WEIGHT);
+    // CE (turn-based rebalance): a weapon's `rules/weapons.mes` Weight replaces
+    // its base weight; magic still adjusts it.
+    weight = weapon_rules_weight(item_obj, obj_field_int32_get(item_obj, OBJ_F_ITEM_WEIGHT));
 
     if (owner_obj != OBJ_HANDLE_NULL) {
         weight_adj = obj_field_int32_get(item_obj, OBJ_F_ITEM_MAGIC_WEIGHT_ADJ);

@@ -122,6 +122,19 @@ TEST(minimum_strength_is_read_and_clamped)
     CHECK_INT(rule.min_strength, WEAPON_RULE_MIN_STRENGTH_MIN);
 }
 
+TEST(weight_is_read_and_clamped)
+{
+    WeaponRule rule;
+
+    // The Mechanized Gun, zsogg 2026-09-28: double its stock weight.
+    CHECK(weapon_rule_parse(6124, "Weight: 240", &rule));
+    CHECK_INT(rule.weight, 240);
+    CHECK(weapon_rule_parse(6124, "Damage: 5-30", &rule));
+    CHECK_INT(rule.weight, WEAPON_RULE_UNSET);
+    CHECK(weapon_rule_parse(6124, "Weight: -1", &rule));
+    CHECK_INT(rule.weight, 0);
+}
+
 TEST(a_malformed_entry_changes_nothing)
 {
     WeaponRule rule;
@@ -149,5 +162,6 @@ void test_weapon_rules_suite(void)
     RUN(a_value_outside_its_range_is_clamped);
     RUN(accuracy_is_a_percentage);
     RUN(minimum_strength_is_read_and_clamped);
+    RUN(weight_is_read_and_clamped);
     RUN(a_malformed_entry_changes_nothing);
 }
