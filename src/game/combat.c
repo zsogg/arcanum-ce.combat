@@ -1109,8 +1109,12 @@ int combat_attack(CombatContext* combat)
                 combat->flags |= CF_CRITICAL;
             }
 
+            // CE (turn-based rebalance): a weapon whose `rules/weapons.mes`
+            // entry says `Dodgeable: 0`, under `weapon rules`, gets no Dodge
+            // roll - the Flame Thrower (zsogg, 2026-10-02).
             if (combat->target_obj != OBJ_HANDLE_NULL
-                && (combat->flags & CF_HIT) != 0) {
+                && (combat->flags & CF_HIT) != 0
+                && weapon_rules_dodgeable(combat->weapon_obj)) {
                 skill_invocation_init(&skill_invocation);
                 object_ref_init(combat->target_obj, &(skill_invocation.source));
                 skill_invocation.skill = SKILL_DODGE;

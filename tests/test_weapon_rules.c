@@ -135,6 +135,21 @@ TEST(weight_is_read_and_clamped)
     CHECK_INT(rule.weight, 0);
 }
 
+TEST(dodgeable_is_read_and_clamped)
+{
+    WeaponRule rule;
+
+    // The Flame Thrower, zsogg 2026-10-02: a hit cannot be dodged.
+    CHECK(weapon_rule_parse(6061, "Dodgeable: 0", &rule));
+    CHECK_INT(rule.dodgeable, 0);
+    CHECK(weapon_rule_parse(6061, "Damage: 5-10", &rule));
+    CHECK_INT(rule.dodgeable, WEAPON_RULE_UNSET);
+    CHECK(weapon_rule_parse(6061, "Dodgeable: 7", &rule));
+    CHECK_INT(rule.dodgeable, 1);
+    CHECK(weapon_rule_parse(6061, "Dodgeable: -1", &rule));
+    CHECK_INT(rule.dodgeable, 0);
+}
+
 TEST(armor_damage_is_read_and_clamped)
 {
     WeaponRule rule;
@@ -198,6 +213,7 @@ void test_weapon_rules_suite(void)
     RUN(accuracy_is_a_percentage);
     RUN(minimum_strength_is_read_and_clamped);
     RUN(weight_is_read_and_clamped);
+    RUN(dodgeable_is_read_and_clamped);
     RUN(armor_damage_is_read_and_clamped);
     RUN(elemental_damage_and_ammunition_per_shot_are_read);
     RUN(a_malformed_entry_changes_nothing);

@@ -104,6 +104,7 @@ bool weapon_rule_parse(int prototype, const char* str, WeaponRule* rule)
     parsed.weight = WEAPON_RULE_UNSET;
     parsed.armor_damage = WEAPON_RULE_UNSET;
     parsed.ammo_per_shot = WEAPON_RULE_UNSET;
+    parsed.dodgeable = WEAPON_RULE_UNSET;
 
     for (part = strtok_r(buffer, ",", &save); part != NULL; part = strtok_r(NULL, ",", &save)) {
         colon = strchr(part, ':');
@@ -181,6 +182,8 @@ bool weapon_rule_parse(int prototype, const char* str, WeaponRule* rule)
             parsed.armor_damage = weapon_rule_clamp(value, 0, WEAPON_RULE_ARMOR_DAMAGE_MAX);
         } else if (strcmp(key, "AmmoPerShot") == 0) {
             parsed.ammo_per_shot = weapon_rule_clamp(value, WEAPON_RULE_AMMO_PER_SHOT_MIN, WEAPON_RULE_AMMO_PER_SHOT_MAX);
+        } else if (strcmp(key, "Dodgeable") == 0) {
+            parsed.dodgeable = weapon_rule_clamp(value, WEAPON_RULE_DODGEABLE_MIN, WEAPON_RULE_DODGEABLE_MAX);
         } else {
             return false;
         }
@@ -373,6 +376,14 @@ int weapon_rules_weight(int64_t weapon_obj, int stock)
 
     rule = weapon_rules_active_for(weapon_obj);
     return rule != NULL && rule->weight != WEAPON_RULE_UNSET ? rule->weight : stock;
+}
+
+bool weapon_rules_dodgeable(int64_t weapon_obj)
+{
+    const WeaponRule* rule;
+
+    rule = weapon_rules_active_for(weapon_obj);
+    return rule == NULL || rule->dodgeable != 0;
 }
 
 int weapon_rules_armor_damage(int64_t weapon_obj, int stock)

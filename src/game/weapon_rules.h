@@ -19,8 +19,8 @@
 //
 // Two switches read it. `weapon rules` applies the stat overrides - firing AP,
 // damage, fatigue damage, range, critical-effect bonus, worth, accuracy,
-// minimum strength, weight, armor damage, elemental damage and ammunition
-// per shot - to anyone
+// minimum strength, weight, armor damage, elemental damage, ammunition per
+// shot and whether a hit can be dodged - to anyone
 // who uses the weapon. `firearm reloading` (`reload.c`) uses Capacity and the
 // loading costs, for the player in its first build. A key an entry does not
 // name leaves that stat as the weapon's own.
@@ -72,6 +72,11 @@ typedef struct WeaponRule {
     // Ammunition a shot spends (2026-09-28, zsogg: the Charged Accelerator Gun
     // at 2, from its stock 3).
     int ammo_per_shot;
+    // 0: the target cannot dodge a hit with this weapon; 1, or unset, as
+    // stock, where every hit gets a Dodge roll (2026-10-02, zsogg: "the
+    // flamethrower is also dodged quite easily by the level 30 guard, this
+    // should not be possible").
+    int dodgeable;
 } WeaponRule;
 
 #define WEAPON_RULE_CAPACITY_MIN 1
@@ -92,6 +97,8 @@ typedef struct WeaponRule {
 #define WEAPON_RULE_ARMOR_DAMAGE_MAX 1000
 #define WEAPON_RULE_AMMO_PER_SHOT_MIN 1
 #define WEAPON_RULE_AMMO_PER_SHOT_MAX 100
+#define WEAPON_RULE_DODGEABLE_MIN 0
+#define WEAPON_RULE_DODGEABLE_MAX 1
 
 // Pure: reads one entry's text into `rule`. False, with `rule` untouched, for
 // anything malformed - an unknown key, a value that is not a number or a
@@ -126,6 +133,9 @@ int weapon_rules_armor_damage(int64_t weapon_obj, int stock);
 // The ammunition a shot spends: the entry's AmmoPerShot, or the weapon's own
 // OBJ_F_WEAPON_AMMO_CONSUMPTION. Every reader of that field goes through here.
 int weapon_rules_ammo_per_shot(int64_t weapon_obj);
+// False when the entry says `Dodgeable: 0`: combat then skips the target's
+// Dodge roll for a hit with this weapon. True otherwise, as stock.
+bool weapon_rules_dodgeable(int64_t weapon_obj);
 // True, with `*action_points` set, when the entry names a firing cost.
 bool weapon_rules_fire_ap(int64_t critter_obj, int64_t weapon_obj, int* action_points);
 
