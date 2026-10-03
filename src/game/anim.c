@@ -13243,6 +13243,19 @@ bool AGbeginAnimAttack(AnimRunInfo* run_info)
     // 2026-09-25) - stock charged the attack and only found the gun empty at
     // the shot. Ended as a failed AP charge ends it, so an automatic follow-up
     // attack in real time cannot retry it.
+    //
+    // And a gun that cannot fire for want of ammunition (zsogg, 2026-10-03):
+    // the player's attack is refused before its AP is charged, saying so.
+    // Stock charged the attack, found the pack empty at the shot and said
+    // nothing. Checked first, so an empty magazine with nothing to load says
+    // "No ammo!" rather than "Reload".
+    if (reload_wielded_out_of_ammo(source_obj)) {
+        tig_debug_printf("reload: attack refused, no ammunition\n");
+        tf_add(source_obj, TF_TYPE_WHITE, "No ammo!");
+        anim_interrupt(&(run_info->id), PRIORITY_HIGHEST);
+        return false;
+    }
+
     if (reload_wielded_is_empty(source_obj)) {
         tig_debug_printf("reload: attack refused, nothing loaded\n");
         tf_add(source_obj, TF_TYPE_WHITE, "Reload");

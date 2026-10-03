@@ -48,6 +48,13 @@ ReloadWork reload_work(int cost, int progress, int available_ap);
 bool reload_applies(int64_t critter_obj, int64_t weapon_obj);
 // True when the critter's wielded weapon is governed and has nothing loaded.
 bool reload_wielded_is_empty(int64_t critter_obj);
+// True when the player's wielded firearm cannot fire for want of ammunition:
+// a gun with no magazine and less in the pack than a shot spends, or a
+// governed gun with nothing loaded and nothing in the pack to load. Under
+// `firearm reloading`, and for the player only (zsogg, 2026-10-03: "make empty
+// guns refuse the shot with 'No ammo!'"); an NPC keeps the stock path, where
+// running dry is what sends the AI for another weapon.
+bool reload_wielded_out_of_ammo(int64_t critter_obj);
 
 // Whether the gun can take another shot now: governed, not full, and the
 // shot's bullets in the pack. Says nothing over anyone's head.

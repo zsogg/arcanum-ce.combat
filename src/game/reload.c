@@ -146,6 +146,39 @@ bool reload_wielded_is_empty(int64_t critter_obj)
         && reload_loaded_get(weapon_obj) <= 0;
 }
 
+bool reload_wielded_out_of_ammo(int64_t critter_obj)
+{
+    int64_t weapon_obj;
+    int ammo_type;
+    int spare;
+
+    if (!feature_enabled(FEATURE_FIREARM_RELOADING)
+        || critter_obj == OBJ_HANDLE_NULL
+        || !player_is_local_pc_obj(critter_obj)) {
+        return false;
+    }
+
+    weapon_obj = item_wield_get(critter_obj, ITEM_INV_LOC_WEAPON);
+    if (weapon_obj == OBJ_HANDLE_NULL
+        || obj_field_int32_get(weapon_obj, OBJ_F_TYPE) != OBJ_TYPE_WEAPON
+        || item_weapon_skill(weapon_obj) != SKILL_FIREARMS) {
+        return false;
+    }
+
+    ammo_type = item_weapon_ammo_type(weapon_obj);
+    if (ammo_type == 10000) {
+        return false;
+    }
+
+    spare = item_ammo_quantity_get(critter_obj, ammo_type);
+    if (reload_applies(critter_obj, weapon_obj)) {
+        return reload_loaded_get(weapon_obj) <= 0
+            && spare < weapon_rules_ammo_per_shot(weapon_obj);
+    }
+
+    return spare < weapon_rules_ammo_per_shot(weapon_obj);
+}
+
 // The player's own messages. An NPC says nothing about its gun but that it is
 // reloading (`reload_bark`).
 static void reload_say(int64_t critter_obj, const char* text)
