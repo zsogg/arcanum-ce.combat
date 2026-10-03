@@ -788,7 +788,11 @@ int basic_skill_effectiveness(int64_t obj, int bs, int64_t target_obj)
             value = 5 * level + 25;
             break;
         case BASIC_SKILL_DODGE:
-            value = 5 * level;
+            // FIX (porting bug #49): was `5 * level`. The original's jump
+            // table at 0x4C63DC sends Dodge (index 1) to 0x4C6333,
+            // `lea esi,[eax+eax]` - twice the level, 40 at Dodge 20 where CE
+            // gave 100, clamped to 95. The shipped UAP executable is the same.
+            value = 2 * level;
             break;
         case BASIC_SKILL_MELEE:
             value = 5 * level + 25;
