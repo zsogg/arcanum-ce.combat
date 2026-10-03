@@ -37,6 +37,12 @@ typedef struct WeaponRule {
     int capacity;
     int load_ap;
     int load_ap_apprentice;
+    // 1: a reload fills the whole magazine, and LoadAP is what that costs -
+    // as many shots as the capacity and the pack allow, when the work is
+    // done. Unset or 0: one shot a reload, LoadAP each (2026-10-03, zsogg: the
+    // Tesla Rod, the Tesla Gun, the Charged Accelerator Gun and the Flame
+    // Thrower). Needs a Capacity.
+    int whole_magazine;
     // The stats (`weapon rules`). Each Apprentice value defaults to its own
     // untrained one.
     int fire_ap;

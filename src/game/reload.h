@@ -30,6 +30,10 @@
 // persist through the ordinary changed-field path: saves, swaps, drops and
 // trades carry them with the gun. A new gun, and every gun in an existing save,
 // reads 0 in both - empty, as zsogg decided (2026-09-25).
+//
+// **A whole-magazine reload** (2026-10-03): an entry with `WholeMagazine: 1`
+// takes its LoadAP once for the magazine, by the same routes, and the
+// completed work loads every shot the capacity and the pack allow.
 
 // Pure: one Reload command's turn-based work. Spends up to `available_ap`
 // toward the `cost - progress` still owed, and says how much it spent and

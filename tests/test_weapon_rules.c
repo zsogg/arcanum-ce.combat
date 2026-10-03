@@ -135,6 +135,23 @@ TEST(weight_is_read_and_clamped)
     CHECK_INT(rule.weight, 0);
 }
 
+TEST(whole_magazine_is_read_and_needs_a_capacity)
+{
+    WeaponRule rule;
+
+    // The Tesla Gun, zsogg 2026-10-03: 5 shots, 6 AP for the magazine.
+    CHECK(weapon_rule_parse(6174, "Capacity: 5, LoadAP: 6, WholeMagazine: 1", &rule));
+    CHECK_INT(rule.whole_magazine, 1);
+    CHECK_INT(rule.capacity, 5);
+    CHECK(weapon_rule_parse(6174, "Capacity: 5, LoadAP: 6", &rule));
+    CHECK_INT(rule.whole_magazine, WEAPON_RULE_UNSET);
+    CHECK(weapon_rule_parse(6174, "Capacity: 5, LoadAP: 6, WholeMagazine: 9", &rule));
+    CHECK_INT(rule.whole_magazine, 1);
+    // A whole-magazine reload of no magazine is a half-written rule.
+    CHECK(!weapon_rule_parse(6174, "WholeMagazine: 1", &rule));
+    CHECK(!weapon_rule_parse(6174, "Damage: 5-15, WholeMagazine: 1", &rule));
+}
+
 TEST(dodgeable_is_read_and_clamped)
 {
     WeaponRule rule;
@@ -213,6 +230,7 @@ void test_weapon_rules_suite(void)
     RUN(accuracy_is_a_percentage);
     RUN(minimum_strength_is_read_and_clamped);
     RUN(weight_is_read_and_clamped);
+    RUN(whole_magazine_is_read_and_needs_a_capacity);
     RUN(dodgeable_is_read_and_clamped);
     RUN(armor_damage_is_read_and_clamped);
     RUN(elemental_damage_and_ammunition_per_shot_are_read);

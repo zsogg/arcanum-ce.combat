@@ -105,6 +105,7 @@ bool weapon_rule_parse(int prototype, const char* str, WeaponRule* rule)
     parsed.armor_damage = WEAPON_RULE_UNSET;
     parsed.ammo_per_shot = WEAPON_RULE_UNSET;
     parsed.dodgeable = WEAPON_RULE_UNSET;
+    parsed.whole_magazine = WEAPON_RULE_UNSET;
 
     for (part = strtok_r(buffer, ",", &save); part != NULL; part = strtok_r(NULL, ",", &save)) {
         colon = strchr(part, ':');
@@ -182,6 +183,8 @@ bool weapon_rule_parse(int prototype, const char* str, WeaponRule* rule)
             parsed.armor_damage = weapon_rule_clamp(value, 0, WEAPON_RULE_ARMOR_DAMAGE_MAX);
         } else if (strcmp(key, "AmmoPerShot") == 0) {
             parsed.ammo_per_shot = weapon_rule_clamp(value, WEAPON_RULE_AMMO_PER_SHOT_MIN, WEAPON_RULE_AMMO_PER_SHOT_MAX);
+        } else if (strcmp(key, "WholeMagazine") == 0) {
+            parsed.whole_magazine = weapon_rule_clamp(value, 0, 1);
         } else if (strcmp(key, "Dodgeable") == 0) {
             parsed.dodgeable = weapon_rule_clamp(value, WEAPON_RULE_DODGEABLE_MIN, WEAPON_RULE_DODGEABLE_MAX);
         } else {
@@ -195,6 +198,7 @@ bool weapon_rule_parse(int prototype, const char* str, WeaponRule* rule)
     if (keys == 0
         || (parsed.capacity == WEAPON_RULE_UNSET) != (parsed.load_ap == WEAPON_RULE_UNSET)
         || (parsed.load_ap_apprentice != WEAPON_RULE_UNSET && parsed.load_ap == WEAPON_RULE_UNSET)
+        || (parsed.whole_magazine != WEAPON_RULE_UNSET && parsed.capacity == WEAPON_RULE_UNSET)
         || (parsed.fire_ap_apprentice != WEAPON_RULE_UNSET && parsed.fire_ap == WEAPON_RULE_UNSET)) {
         return false;
     }

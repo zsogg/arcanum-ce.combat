@@ -269,13 +269,15 @@ static bool reload_can_load_impl(int64_t critter_obj, int64_t weapon_obj, bool q
     return true;
 }
 
-// The shot is loaded: its bullets move from the pack into the gun.
+// The loading is done: one shot, or with WholeMagazine as many as the
+// magazine and the pack allow. Their bullets move from the pack into the gun.
 static void reload_load_one(int64_t critter_obj, int64_t weapon_obj, bool quiet)
 {
     const WeaponRule* rule;
     int loaded;
     int ammo_type;
     int need;
+    int shots;
     char text[64];
 
     rule = reload_rule_for(weapon_obj);
@@ -285,17 +287,29 @@ static void reload_load_one(int64_t critter_obj, int64_t weapon_obj, bool quiet)
         ? weapon_rules_ammo_per_shot(weapon_obj)
         : 0;
 
-    if (need > 0) {
-        item_ammo_transfer(critter_obj, OBJ_HANDLE_NULL, need, ammo_type, OBJ_HANDLE_NULL);
+    shots = 1;
+    if (rule->whole_magazine == 1) {
+        shots = rule->capacity - loaded;
+        if (need > 0 && item_ammo_quantity_get(critter_obj, ammo_type) / need < shots) {
+            shots = item_ammo_quantity_get(critter_obj, ammo_type) / need;
+        }
+        // `reload_can_load` saw a shot's worth in the pack and room for it.
+        if (shots < 1) {
+            shots = 1;
+        }
     }
-    obj_field_int32_set(weapon_obj, OBJ_F_WEAPON_PAD_I_1, loaded + 1);
+
+    if (need > 0) {
+        item_ammo_transfer(critter_obj, OBJ_HANDLE_NULL, need * shots, ammo_type, OBJ_HANDLE_NULL);
+    }
+    obj_field_int32_set(weapon_obj, OBJ_F_WEAPON_PAD_I_1, loaded + shots);
     reload_progress_set(weapon_obj, 0);
-    snprintf(text, sizeof(text), "Loaded %d/%d", loaded + 1, rule->capacity);
+    snprintf(text, sizeof(text), "Loaded %d/%d", loaded + shots, rule->capacity);
     if (!quiet) {
         reload_say(critter_obj, text);
     }
     tig_debug_printf("reload: loaded %d/%d, %d spare bullet(s) used, %d left\n",
-        loaded + 1, rule->capacity, need,
+        loaded + shots, rule->capacity, need * shots,
         ammo_type != 10000 ? item_ammo_quantity_get(critter_obj, ammo_type) : 0);
     ui_refresh_counters();
 }
