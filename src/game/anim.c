@@ -7401,11 +7401,19 @@ bool anim_pay_spell_cost(AnimRunInfo* run_info)
     {
         MagicTechRunInfo* mt_run_info;
         int spell = -1;
+        bool on_hit = false;
 
         if (magictech_id_to_run_info(run_info->cur_stack_data->params[AGDATA_SPELL_DATA].data, &mt_run_info)) {
             spell = mt_run_info->spell;
+            on_hit = (mt_run_info->flags & MAGICTECH_RUN_CE_ON_HIT) != 0;
         }
-        if (!combat_consume_action_points(obj, combat_cast_cost(obj, spell))) {
+
+        // FIX (`on-hit spells free`, zsogg 2026-10-02): the original charges
+        // the wielder 4 AP for every spell a weapon casts on a hit, as if he
+        // had cast it. In turn-based the Grenade Launcher's explosion is a
+        // second such cast and is refused for want of AP, so it never lands.
+        // The mark is set only while the feature is on.
+        if (!on_hit && !combat_consume_action_points(obj, combat_cast_cost(obj, spell))) {
             return false;
         }
     }

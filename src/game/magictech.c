@@ -2358,6 +2358,13 @@ void MTComponentCast_ProcFunc(void)
     mt_invocation.flags |= MAGICTECH_INVOCATION_FRIENDLY;
     mt_invocation.target_loc = magictech_cur_target_ctx.target_loc;
 
+    // CE (`on-hit spells free`): a spell cast by an on-hit run is part of
+    // the same hit - the Grenade Launcher's explosion is spell 205, cast by
+    // its spell 203 - so it inherits the mark.
+    if ((magictech_cur_run_info->flags & MAGICTECH_RUN_CE_ON_HIT) != 0) {
+        mt_invocation.flags |= MAGICTECH_INVOCATION_CE_ON_HIT;
+    }
+
     if (mt_invocation.parent_obj.obj != OBJ_HANDLE_NULL) {
         mt_invocation.loc = obj_field_int64_get(mt_invocation.parent_obj.obj, OBJ_F_LOCATION);
     }
@@ -4956,6 +4963,10 @@ void magictech_invocation_process(MagicTechInvocation* mt_invocation)
 
     if ((mt_invocation->flags & MAGICTECH_INVOCATION_UNRESISTABLE) != 0) {
         run_info->flags |= MAGICTECH_RUN_UNRESISTABLE;
+    }
+
+    if ((mt_invocation->flags & MAGICTECH_INVOCATION_CE_ON_HIT) != 0) {
+        run_info->flags |= MAGICTECH_RUN_CE_ON_HIT;
     }
 
     run_info->field_138 = 0;

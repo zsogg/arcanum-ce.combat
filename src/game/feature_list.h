@@ -18,7 +18,9 @@
 // * the default is what the flag reads when the key is absent. Everything
 //   here defaults to off: the port mirrors Troika's 1.0.7.4 build, and a
 //   feature that changed behaviour without being asked for would make that
-//   false.
+//   false. **One exception, by zsogg's decision (2026-10-02):**
+//   `on-hit spells free` defaults on, because the faithful path is a
+//   turn-based defect - see its row and FIDELITY-CONTRACT.md.
 //
 // A change callback is *not* declared here. Modules attach their own with
 // `feature_on_change` at init, which keeps a callback's side effects in the
@@ -37,5 +39,6 @@ FEATURE(FIREARM_RELOADING, "firearm reloading", false)
 FEATURE(WEAPON_SWAP_COST, "weapon swap cost", false)
 FEATURE(EXERTION, "exertion", false)
 FEATURE(WEAPON_RULES, "weapon rules", false)
+FEATURE(ON_HIT_SPELLS_FREE, "on-hit spells free", true)
 
 // clang-format on

@@ -1,5 +1,6 @@
 #include "game/mt_item.h"
 
+#include "game/feature.h"
 #include "game/item.h"
 #include "game/magictech.h"
 #include "game/obj.h"
@@ -257,6 +258,13 @@ void handle_item_event_func(int64_t item_obj, int64_t parent_obj, int64_t extra_
 
         mt_invocation.trigger = flags;
         mt_invocation.flags |= MAGICTECH_INVOCATION_FRIENDLY;
+
+        // CE (`on-hit spells free`): mark what a weapon casts on damaging
+        // with it, so the hit's spell is not charged as the wielder's cast.
+        if ((flags & MT_ITEM_TRIG_PARENT_DMGS_OPPONENT_W_ITEM) != 0
+            && feature_enabled(FEATURE_ON_HIT_SPELLS_FREE)) {
+            mt_invocation.flags |= MAGICTECH_INVOCATION_CE_ON_HIT;
+        }
 
         if (store_attacker_obj != OBJ_HANDLE_NULL) {
             object_ref_init(store_attacker_obj, &(mt_invocation.attacker_obj));

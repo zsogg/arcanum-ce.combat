@@ -262,6 +262,10 @@ typedef unsigned int MagicTechRunFlags;
 #define MAGICTECH_RUN_UNRESISTABLE 0x0010u
 #define MAGICTECH_RUN_0x20 0x0020u
 #define MAGICTECH_RUN_0x40 0x0040u
+// CE (`on-hit spells free`): a run a weapon started by damaging with it -
+// `Parent_Dmgs_Opponent_W_Item` - or a spell such a run cast. Set only while
+// the feature is on; `anim_pay_spell_cost` charges it no action points.
+#define MAGICTECH_RUN_CE_ON_HIT 0x00010000u
 #define MAGICTECH_RUN_DISPELLED 0x80000000u
 
 typedef struct MagicTechRunInfo {
@@ -289,6 +293,8 @@ typedef unsigned int MagicTechInvocationFlags;
 #define MAGICTECH_INVOCATION_FRIENDLY 0x01u
 #define MAGICTECH_INVOCATION_FREE 0x02u
 #define MAGICTECH_INVOCATION_UNRESISTABLE 0x04u
+// CE: becomes `MAGICTECH_RUN_CE_ON_HIT` on the run.
+#define MAGICTECH_INVOCATION_CE_ON_HIT 0x08u
 
 typedef struct MagicTechInvocation {
     /* 0000 */ int spell;
