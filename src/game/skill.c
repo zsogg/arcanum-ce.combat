@@ -2454,7 +2454,10 @@ int skill_invocation_difficulty(SkillInvocation* skill_invocation)
             } else if ((critter_flags & OCF_LIGHT_MEDIUM) != 0) {
                 penalty /= 2;
             } else if ((critter_flags & OCF_LIGHT_SMALL) != 0) {
-                penalty = 2 * penalty / 3;
+                // FIX (porting bug #50): was `2 * penalty / 3`. The original
+                // takes three quarters: `lea eax,[edi+edi*2]` then the signed
+                // shift by 2 at 0x4C8A70-0x4C8A79.
+                penalty = 3 * penalty / 4;
             }
 
             // Adjust for dark sight.
