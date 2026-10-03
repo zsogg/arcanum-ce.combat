@@ -7411,8 +7411,10 @@ bool anim_pay_spell_cost(AnimRunInfo* run_info)
         // FIX (`on-hit spells free`, zsogg 2026-10-02): the original charges
         // the wielder 4 AP for every spell a weapon casts on a hit, as if he
         // had cast it. In turn-based the Grenade Launcher's explosion is a
-        // second such cast and is refused for want of AP, so it never lands.
-        // The mark is set only while the feature is on.
+        // second such cast and is refused for want of AP, so it never lands -
+        // a bug in the original game. Off by default, so CE matches the
+        // original unless a player opts in. The mark is set only while the
+        // feature is on.
         if (!on_hit && !combat_consume_action_points(obj, combat_cast_cost(obj, spell))) {
             return false;
         }
