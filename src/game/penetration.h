@@ -79,4 +79,11 @@ int penetration_gap_chance(int crit_bonus, int hit_loc, bool aimed);
 // Steps 1 to 5 for one hit.
 PenetrationResult penetration_resolve(const PenetrationHit* hit);
 
+// CE (combat AI, milestone AI-1): the share of normal damage expected to pass,
+// in thousandths, for `hit` without its location, block, gap or variation:
+// averaged over the unaimed hit locations (torso 70, leg 15, arm 10, head 5,
+// as `combat_random_hit_loc` rolls them), every variation 80-120% equally,
+// and a block on `block_chance` percent. No gap: only a critical finds one.
+int penetration_expected_permille(const PenetrationHit* hit, int block_chance);
+
 #endif /* ARCANUM_GAME_PENETRATION_H_ */

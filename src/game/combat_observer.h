@@ -304,6 +304,17 @@ void combat_observer_ai_decided(const char* actor, const char* target,
     const char* item, const char* weapon, int cast_chance, int cast_roll,
     const int considered[][2], int considered_count);
 
+// CE (combat AI, milestone AI-1): an NPC choosing its weapon under `ai armor
+// aware`. `candidates` lists each weapon weighed as [description, score,
+// expected_permille]: the score is its average damage times skill
+// effectiveness with the normal part at the share expected through the
+// target's armor; `kept` is true when the weapon already in hand stayed for
+// commitment though another scored higher.
+#define COMBAT_OBSERVER_AI_WEAPONS_MAX 8
+void combat_observer_ai_weapon_chosen(const char* actor, const char* target,
+    const char* previous, const char* chosen, bool kept,
+    const int candidates[][3], int candidate_count);
+
 // CE (armor milestone 3): one weapon hit's normal damage resolved against
 // armor under `armor penetration`. `worn` is the location's worn protection
 // and `natural` the creature's own, before block, gap and magic; the

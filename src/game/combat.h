@@ -150,6 +150,12 @@ int combat_use_item_cost(int64_t obj, int64_t item_obj);
 int combat_pickup_cost(int64_t obj, int64_t item_obj);
 int combat_get_up_cost(int64_t obj);
 int combat_reload_cost(int64_t obj, int64_t weapon_obj);
+// CE (combat AI, milestone AI-1): under `armor penetration`, the share of a
+// weapon's normal damage expected to pass `target_obj`'s armor, in thousandths:
+// averaged over the unaimed hit locations, the penetration roll and the
+// shield's block chance, by the rules a hit is resolved with. 1000 for a
+// weapon that ignores resistance; -1 when the armor rules do not apply.
+int combat_armor_expected_permille(int64_t weapon_obj, int64_t target_obj);
 int combat_weapon_swap_cost(int64_t obj);
 bool combat_check_weapon_swap(int64_t obj, int64_t weapon_obj);
 void combat_weapon_swap_left(int64_t obj, int64_t weapon_obj);

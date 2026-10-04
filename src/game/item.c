@@ -2,9 +2,12 @@
 
 #include "game/anim.h"
 #include "game/background.h"
+#include "game/combat.h"
+#include "game/combat_observer.h"
 #include "game/critter.h"
 #include "game/description.h"
 #include "game/descriptions.h"
+#include "game/feature.h"
 #include "game/invensource.h"
 #include "game/magictech.h"
 #include "game/mes.h"
@@ -2882,6 +2885,12 @@ tig_art_id_t item_wield_attack_art_id(int64_t critter_obj)
 }
 
 // 0x465170
+// CE (combat AI, milestone AI-1): under `ai armor aware`, an NPC keeps the
+// weapon in its hand unless another scores at least this much better, in
+// percent (zsogg's agreed commitment: "require clearly improved circumstances
+// to switch").
+#define ITEM_WIELD_COMMIT_PERCENT 125
+
 void item_wield_best(int64_t critter_obj, int inventory_location, int64_t target_obj)
 {
     int cnt;
@@ -2894,9 +2903,24 @@ void item_wield_best(int64_t critter_obj, int inventory_location, int64_t target
     int64_t best_ranged_weapon_obj;
     int64_t item_obj;
     int64_t empty_gun_obj = OBJ_HANDLE_NULL;
+    // CE (combat AI, milestone AI-1): the armor-aware choice and what the
+    // observer reports of it.
+    bool armor_aware;
+    int64_t held_obj;
+    int held_worth = INT_MIN;
+    bool held_reaches = false;
+    bool kept = false;
+    int weighed[COMBAT_OBSERVER_AI_WEAPONS_MAX][3];
+    int weighed_count = 0;
 
     cnt = obj_field_int32_get(critter_obj, OBJ_F_CRITTER_INVENTORY_NUM);
     equipped_item_obj = item_wield_get(critter_obj, inventory_location);
+    held_obj = equipped_item_obj;
+    armor_aware = feature_enabled(FEATURE_AI_ARMOR_AWARE)
+        && inventory_location == ITEM_INV_LOC_WEAPON
+        && obj_field_int32_get(critter_obj, OBJ_F_TYPE) == OBJ_TYPE_NPC
+        && target_obj != OBJ_HANDLE_NULL
+        && obj_type_is_critter(obj_field_int32_get(target_obj, OBJ_F_TYPE));
     best_item_worth = INT_MIN;
     best_item_obj = equipped_item_obj;
 
@@ -2941,18 +2965,28 @@ void item_wield_best(int64_t critter_obj, int inventory_location, int64_t target
                     || (reload_applies(critter_obj, item_obj) && reload_loaded_get(item_obj) > 0)) {
                     int total_dam = 0;
                     int skill = item_weapon_skill(item_obj);
+                    // CE (combat AI, milestone AI-1): the normal damage at the
+                    // share expected through the target's armor.
+                    int expected = armor_aware ? combat_armor_expected_permille(item_obj, target_obj) : -1;
                     for (DamageType damage_type = 0; damage_type < DAMAGE_TYPE_COUNT; damage_type++) {
                         int min_dam;
                         int max_dam;
 
                         item_weapon_damage(item_obj, critter_obj, damage_type, skill, false, &min_dam, &max_dam);
+                        if (damage_type == DAMAGE_TYPE_NORMAL && expected >= 0) {
+                            total_dam += (min_dam + max_dam) * 50 * expected / 1000;
+                            continue;
+                        }
                         // FIX (porting bug #52): the average of every damage
                         // type is added up, as the original does (0x465300
                         // `add edx,eax` into the running total). CE assigned
                         // it, so a weapon scored only its last type's average,
                         // fatigue: an NPC preferred a Mace (1-4, fatigue 1-8)
                         // to a Quality Sword (2-9, fatigue 2-5).
-                        total_dam += (min_dam + max_dam) / 2;
+                        // CE (combat AI, milestone AI-1): in hundredths when
+                        // armor-aware, so a modest wielder's scores do not all
+                        // round to the same handful of points.
+                        total_dam += armor_aware ? (min_dam + max_dam) * 50 : (min_dam + max_dam) / 2;
                     }
 
                     int effectiveness;
@@ -2978,6 +3012,20 @@ void item_wield_best(int64_t critter_obj, int inventory_location, int64_t target
                     }
 
                     int effective_total_dam = total_dam * effectiveness / 100;
+
+                    if (armor_aware) {
+                        if (item_obj == held_obj) {
+                            held_worth = effective_total_dam;
+                            held_reaches = target_obj != OBJ_HANDLE_NULL
+                                && item_weapon_range(item_obj, critter_obj) >= dist;
+                        }
+                        if (weighed_count < COMBAT_OBSERVER_AI_WEAPONS_MAX) {
+                            weighed[weighed_count][0] = obj_field_int32_get(item_obj, OBJ_F_DESCRIPTION);
+                            weighed[weighed_count][1] = effective_total_dam;
+                            weighed[weighed_count][2] = expected;
+                            weighed_count++;
+                        }
+                    }
 
                     if (best_item_worth == INT_MIN
                         || effective_total_dam > best_item_worth
@@ -3014,6 +3062,36 @@ void item_wield_best(int64_t critter_obj, int inventory_location, int64_t target
 
     if (best_ranged_weapon_obj != OBJ_HANDLE_NULL) {
         best_item_obj = best_ranged_weapon_obj;
+    }
+
+    // CE (combat AI, milestone AI-1): commitment. The weapon already in hand
+    // stays unless the best scores clearly higher - and, when a weapon reaches
+    // the target, only one that reaches can stay.
+    if (armor_aware
+        && held_obj != OBJ_HANDLE_NULL
+        && best_item_obj != OBJ_HANDLE_NULL
+        && best_item_obj != held_obj
+        && held_worth > 0
+        && (best_ranged_weapon_obj == OBJ_HANDLE_NULL || held_reaches)) {
+        int best_worth = best_ranged_weapon_obj != OBJ_HANDLE_NULL ? best_ranged_weapon_worth : best_item_worth;
+        if ((int64_t)best_worth * 100 < (int64_t)held_worth * ITEM_WIELD_COMMIT_PERCENT) {
+            best_item_obj = held_obj;
+            kept = true;
+        }
+    }
+
+    if (armor_aware && combat_observer_is_enabled()) {
+        char actor[COMBAT_OBSERVER_IDENTITY_SIZE];
+        char target[COMBAT_OBSERVER_IDENTITY_SIZE];
+        char previous[COMBAT_OBSERVER_IDENTITY_SIZE];
+        char chosen[COMBAT_OBSERVER_IDENTITY_SIZE];
+
+        combat_observer_object_id(critter_obj, actor);
+        combat_observer_object_id(target_obj, target);
+        combat_observer_object_id(held_obj, previous);
+        combat_observer_object_id(best_item_obj, chosen);
+        combat_observer_ai_weapon_chosen(actor, target, previous, chosen, kept,
+            (const int (*)[3])weighed, weighed_count);
     }
 
     if (best_item_obj == OBJ_HANDLE_NULL) {

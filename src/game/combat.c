@@ -3014,21 +3014,21 @@ static int combat_armor_magic(int64_t critter_obj)
     return magic;
 }
 
-static bool combat_armor_penetration(CombatContext* combat, int* penetration)
+static bool combat_armor_weapon_penetration(int64_t weapon_obj, bool thrown, int* penetration)
 {
     int skill;
 
-    if (weapon_rules_penetration(combat->weapon_obj, penetration)) {
+    if (weapon_rules_penetration(weapon_obj, penetration)) {
         return true;
     }
 
-    if ((combat->flags & 0x40) != 0) {
+    if (thrown) {
         *penetration = armor_rules_default_penetration(ARMOR_RULE_KIND_THROWN);
-    } else if (combat->weapon_obj == OBJ_HANDLE_NULL
-        || obj_field_int32_get(combat->weapon_obj, OBJ_F_TYPE) != OBJ_TYPE_WEAPON) {
+    } else if (weapon_obj == OBJ_HANDLE_NULL
+        || obj_field_int32_get(weapon_obj, OBJ_F_TYPE) != OBJ_TYPE_WEAPON) {
         *penetration = armor_rules_default_penetration(ARMOR_RULE_KIND_NATURAL);
     } else {
-        skill = item_weapon_skill(combat->weapon_obj);
+        skill = item_weapon_skill(weapon_obj);
         if (skill == SKILL_BOW) {
             *penetration = armor_rules_default_penetration(ARMOR_RULE_KIND_BOW);
         } else if (skill == SKILL_FIREARMS) {
@@ -3041,15 +3041,78 @@ static bool combat_armor_penetration(CombatContext* combat, int* penetration)
     return *penetration != ARMOR_RULE_UNSET;
 }
 
+static bool combat_armor_penetration(CombatContext* combat, int* penetration)
+{
+    return combat_armor_weapon_penetration(combat->weapon_obj, (combat->flags & 0x40) != 0, penetration);
+}
+
+// The critter's natural protection: its own normal resistance and innate
+// effects, the undead's share of it under the table's undead entry.
+static int combat_armor_natural(int64_t critter_obj)
+{
+    int innate;
+    int unused;
+    int natural;
+    int undead_scale;
+
+    effect_resistance_split(critter_obj, RESISTANCE_TYPE_NORMAL, &innate, &unused);
+    natural = obj_arrayfield_int32_get(critter_obj, OBJ_F_RESISTANCE_IDX, RESISTANCE_TYPE_NORMAL) + innate;
+    // The undead keep a share of it (zsogg, 2026-10-03), to the nearest point.
+    undead_scale = armor_rules_undead_natural_scale();
+    if (undead_scale != ARMOR_RULE_UNSET
+        && natural > 0
+        && (obj_field_int32_get(critter_obj, OBJ_F_CRITTER_FLAGS) & OCF_UNDEAD) != 0) {
+        natural = (natural * undead_scale + 50) / 100;
+    }
+    return natural;
+}
+
+int combat_armor_expected_permille(int64_t weapon_obj, int64_t target_obj)
+{
+    PenetrationHit hit = { 0 };
+    int64_t shield_obj;
+    int block_chance = 0;
+    int penetration;
+
+    if (!feature_enabled(FEATURE_ARMOR_PENETRATION)
+        || target_obj == OBJ_HANDLE_NULL
+        || !obj_type_is_critter(obj_field_int32_get(target_obj, OBJ_F_TYPE))) {
+        return -1;
+    }
+    if (weapon_obj != OBJ_HANDLE_NULL
+        && obj_field_int32_get(weapon_obj, OBJ_F_TYPE) == OBJ_TYPE_WEAPON
+        && (obj_field_int32_get(weapon_obj, OBJ_F_WEAPON_FLAGS) & OWF_IGNORE_RESISTANCE) != 0) {
+        return 1000;
+    }
+    if (!combat_armor_weapon_penetration(weapon_obj, false, &penetration)) {
+        return -1;
+    }
+
+    hit.worn.helmet = combat_armor_piece(target_obj, ITEM_INV_LOC_HELMET);
+    hit.worn.body = combat_armor_piece(target_obj, ITEM_INV_LOC_ARMOR);
+    hit.worn.gloves = combat_armor_piece(target_obj, ITEM_INV_LOC_GAUNTLET);
+    hit.worn.boots = combat_armor_piece(target_obj, ITEM_INV_LOC_BOOTS);
+    hit.natural = combat_armor_natural(target_obj);
+    hit.magic = combat_armor_magic(target_obj);
+    hit.penetration = penetration;
+
+    shield_obj = item_wield_get(target_obj, ITEM_INV_LOC_SHIELD);
+    if (shield_obj != OBJ_HANDLE_NULL
+        && armor_rules_block_chance(shield_obj, &block_chance)) {
+        armor_rules_protection(shield_obj, &hit.shield);
+    } else {
+        block_chance = 0;
+    }
+
+    return penetration_expected_permille(&hit, block_chance);
+}
+
 static int combat_armor_resolve(CombatContext* combat)
 {
     PenetrationHit hit = { 0 };
     PenetrationResult result;
     int64_t shield_obj;
     int block_chance;
-    int innate;
-    int unused;
-    int undead_scale;
     int stopped_fatigue;
     int fatigue_added = 0;
     int crit_bonus;
@@ -3100,15 +3163,7 @@ static int combat_armor_resolve(CombatContext* combat)
     hit.worn.body = combat_armor_piece(combat->target_obj, ITEM_INV_LOC_ARMOR);
     hit.worn.gloves = combat_armor_piece(combat->target_obj, ITEM_INV_LOC_GAUNTLET);
     hit.worn.boots = combat_armor_piece(combat->target_obj, ITEM_INV_LOC_BOOTS);
-    effect_resistance_split(combat->target_obj, RESISTANCE_TYPE_NORMAL, &innate, &unused);
-    hit.natural = obj_arrayfield_int32_get(combat->target_obj, OBJ_F_RESISTANCE_IDX, RESISTANCE_TYPE_NORMAL) + innate;
-    // The undead keep a share of it (zsogg, 2026-10-03), to the nearest point.
-    undead_scale = armor_rules_undead_natural_scale();
-    if (undead_scale != ARMOR_RULE_UNSET
-        && hit.natural > 0
-        && (obj_field_int32_get(combat->target_obj, OBJ_F_CRITTER_FLAGS) & OCF_UNDEAD) != 0) {
-        hit.natural = (hit.natural * undead_scale + 50) / 100;
-    }
+    hit.natural = combat_armor_natural(combat->target_obj);
     hit.magic = combat_armor_magic(combat->target_obj);
 
     // A shield blocks on its own chance, before any gap.

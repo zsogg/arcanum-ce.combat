@@ -13,6 +13,7 @@
 #include "game/critter.h"
 #include "game/descriptions.h"
 #include "game/dialog.h"
+#include "game/feature.h"
 #include "game/highres_config.h"
 #include "game/item.h"
 #include "game/magictech.h"
@@ -135,6 +136,7 @@ static void ai_action_perform_fleeing(Ai* ai);
 static void ai_action_perform_surrender(Ai* ai);
 static void ai_action_perform_combat(Ai* ai);
 static void ai_action_perform_baking_off(Ai* ai);
+static void ai_armor_rewield(Ai* ai);
 static bool ai_use_grenade(Ai* ai, int64_t a2);
 static bool ai_waypoints_process(int64_t obj, bool a2);
 static bool ai_is_day(void);
@@ -2982,6 +2984,7 @@ void ai_action_perform_combat(Ai* ai)
         // CE (reload prototype session 4): an empty gun under `firearm
         // reloading` is reloaded, swapped for a melee backup, or given up
         // before any attack is issued with it.
+        ai_armor_rewield(ai);
         if (reload_ai_act(ai->obj, ai->danger_source)) {
             ai_observe_decision(ai, "reload");
         } else {
@@ -2989,6 +2992,49 @@ void ai_action_perform_combat(Ai* ai)
             anim_goal_attack_ex(ai->obj, ai->danger_source, ai->sound_id);
         }
     }
+}
+
+// CE (combat AI, milestone AI-1): under `ai armor aware`, an NPC that turns to
+// a new target weighs its weapons against that target's armor again, before it
+// attacks. The table remembers each NPC's last target; one turning back to an
+// earlier target weighs again, and commitment keeps a weapon that is close
+// enough.
+#define AI_ARMOR_TARGETS_MAX 64
+
+static struct {
+    int64_t obj;
+    int64_t target;
+} ai_armor_targets[AI_ARMOR_TARGETS_MAX];
+
+static void ai_armor_rewield(Ai* ai)
+{
+    int slot;
+    int free_slot = -1;
+
+    if (!feature_enabled(FEATURE_AI_ARMOR_AWARE)
+        || obj_field_int32_get(ai->obj, OBJ_F_TYPE) != OBJ_TYPE_NPC
+        || ai->danger_source == OBJ_HANDLE_NULL) {
+        return;
+    }
+
+    for (slot = 0; slot < AI_ARMOR_TARGETS_MAX; slot++) {
+        if (ai_armor_targets[slot].obj == ai->obj) {
+            break;
+        }
+        if (free_slot < 0 && ai_armor_targets[slot].obj == OBJ_HANDLE_NULL) {
+            free_slot = slot;
+        }
+    }
+    if (slot < AI_ARMOR_TARGETS_MAX && ai_armor_targets[slot].target == ai->danger_source) {
+        return;
+    }
+    if (slot == AI_ARMOR_TARGETS_MAX) {
+        slot = free_slot >= 0 ? free_slot : 0;
+    }
+    ai_armor_targets[slot].obj = ai->obj;
+    ai_armor_targets[slot].target = ai->danger_source;
+
+    item_wield_best(ai->obj, ITEM_INV_LOC_WEAPON, ai->danger_source);
 }
 
 // 0x4AC7B0

@@ -190,8 +190,40 @@ TEST(the_gap_chance)
     CHECK_INT(penetration_gap_chance(-80, HIT_LOC_TORSO, false), 0);
 }
 
+// Combat AI milestone AI-1: the expected share passed, against a Python
+// replica of the same integer arithmetic (2026-10-04).
+TEST(the_expected_share_averages_locations_rolls_and_blocks)
+{
+    PenetrationHit hit = { 0 };
+
+    hit.penetration = 24;
+    CHECK_INT(penetration_expected_permille(&hit, 0), 1000); // unarmored
+
+    hit.worn.body = 36; // plate body only: the bare head passes everything
+    CHECK_INT(penetration_expected_permille(&hit, 0), 370);
+
+    hit.worn.helmet = 36; // a matched plate suit
+    hit.worn.gloves = 24;
+    hit.worn.boots = 30;
+    CHECK_INT(penetration_expected_permille(&hit, 0), 129);
+    hit.penetration = 46; // a mace against it
+    CHECK_INT(penetration_expected_permille(&hit, 0), 746);
+
+    hit.penetration = 24; // and a Quality Iron Shield, 45 on 30%
+    hit.shield = 45;
+    CHECK_INT(penetration_expected_permille(&hit, 30), 99);
+    CHECK_INT(penetration_expected_permille(&hit, 250), penetration_expected_permille(&hit, 100));
+
+    // Nothing gets through natural protection 40 at penetration 10.
+    hit = (PenetrationHit) { 0 };
+    hit.natural = 40;
+    hit.penetration = 10;
+    CHECK_INT(penetration_expected_permille(&hit, 0), 0);
+}
+
 void test_penetration_suite(void)
 {
+    RUN(the_expected_share_averages_locations_rolls_and_blocks);
     RUN(the_curve_against_protection_40);
     RUN(no_protection_passes_everything);
     RUN(limbs_weigh_body_armor_and_the_limb_piece);

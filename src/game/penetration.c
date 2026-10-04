@@ -63,6 +63,48 @@ int penetration_gap_chance(int crit_bonus, int hit_loc, bool aimed)
     return chance;
 }
 
+int penetration_expected_permille(const PenetrationHit* hit, int block_chance)
+{
+    static const int weights[HIT_LOC_COUNT] = {
+        /* HIT_LOC_TORSO */ 70,
+        /*  HIT_LOC_HEAD */ 5,
+        /*   HIT_LOC_ARM */ 10,
+        /*   HIT_LOC_LEG */ 15,
+    };
+    PenetrationHit each = *hit;
+    PenetrationResult result;
+    int64_t sum;
+    int64_t pass[2];
+    int64_t total = 0;
+    int loc;
+    int blocked;
+    int variation;
+
+    if (block_chance < 0) {
+        block_chance = 0;
+    } else if (block_chance > 100) {
+        block_chance = 100;
+    }
+
+    each.gap = false;
+    for (loc = 0; loc < HIT_LOC_COUNT; loc++) {
+        each.hit_loc = loc;
+        for (blocked = 0; blocked < 2; blocked++) {
+            each.blocked = blocked != 0;
+            sum = 0;
+            for (variation = PENETRATION_VARIATION_MIN; variation <= PENETRATION_VARIATION_MAX; variation++) {
+                each.variation_percent = variation;
+                result = penetration_resolve(&each);
+                sum += 1000 * (int64_t)result.passed_num / result.passed_den;
+            }
+            pass[blocked] = sum / (PENETRATION_VARIATION_MAX - PENETRATION_VARIATION_MIN + 1);
+        }
+        total += weights[loc] * (((100 - block_chance) * pass[0] + block_chance * pass[1]) / 100);
+    }
+
+    return (int)((total + 50) / 100);
+}
+
 PenetrationResult penetration_resolve(const PenetrationHit* hit)
 {
     PenetrationResult result;

@@ -789,6 +789,37 @@ void combat_observer_ai_decided(const char* actor, const char* target,
     combat_observer_write(line);
 }
 
+void combat_observer_ai_weapon_chosen(const char* actor, const char* target,
+    const char* previous, const char* chosen, bool kept,
+    const int candidates[][3], int candidate_count)
+{
+    char line[2048];
+    char action_id[32];
+    char list[640];
+    size_t used = 0;
+    int index;
+
+    if (!combat_observer_begin_semantic()) return;
+
+    list[0] = '\0';
+    for (index = 0; index < candidate_count && index < COMBAT_OBSERVER_AI_WEAPONS_MAX; index++) {
+        int written = snprintf(list + used, sizeof(list) - used, "%s[%d,%d,%d]",
+            index > 0 ? "," : "", candidates[index][0], candidates[index][1], candidates[index][2]);
+        if (written < 0 || (size_t)written >= sizeof(list) - used) {
+            break;
+        }
+        used += (size_t)written;
+    }
+
+    snprintf(line, sizeof(line),
+        "{\"schema\":%d,\"sequence\":%u,\"event\":\"ai.weapon_chosen\",\"turn\":%u,\"action_id\":%s,\"actor\":\"%s\",\"target\":\"%s\",\"previous\":\"%s\",\"chosen\":\"%s\",\"kept\":%s,\"candidates\":[%s]}",
+        COMBAT_OBSERVER_SCHEMA,
+        combat_observer_sequence++, combat_observer_turn,
+        combat_observer_action_json(action_id, sizeof(action_id)), actor, target,
+        previous, chosen, kept ? "true" : "false", list);
+    combat_observer_write(line);
+}
+
 void combat_observer_armor_resolved(const char* attacker, const char* target,
     int hit_loc, int worn_centi, int natural, int magic, bool blocked,
     bool gap, int penetration, int variation_percent, int protection_centi,

@@ -127,12 +127,36 @@ TEST(an_ai_decision_lists_what_it_weighed)
     CHECK(read_trace(trace, sizeof(trace)));
     CHECK(strstr(trace, "\"event\":\"ai.decided\",") != NULL);
     CHECK(strstr(trace, "\"actor\":\"mage\",\"target\":\"fighter\",\"danger\":\"combat\","
-                        "\"origin\":\"decide\",\"action\":\"cast\",\"spell\":40,") != NULL);
+                        "\"origin\":\"decide\",\"action\":\"cast\",\"spell\":40,")
+        != NULL);
     CHECK(strstr(trace, "\"cast_chance\":50,\"cast_roll\":17,\"considered\":[[11,2],[25,9],[40,0]]}") != NULL);
     CHECK(strstr(trace, "\"weapon\":\"G_SWORD\",\"cast_chance\":25,\"cast_roll\":-1,") != NULL);
     // No more than the cap is written, however many are passed.
     CHECK(strstr(trace, "[0,0],[0,0],[0,0],[0,0],[0,0],[0,0],[0,0],[0,0]]}") != NULL);
     CHECK(strstr(trace, "[0,0],[0,0],[0,0],[0,0],[0,0],[0,0],[0,0],[0,0],[0,0]") == NULL);
+}
+
+TEST(an_armor_aware_weapon_choice_lists_its_candidates)
+{
+    char trace[TRACE_SIZE];
+    const int candidates[][3] = { { 6074, 168, 746 }, { 6057, 136, 355 } };
+
+    // Combat AI milestone AI-1: each weapon weighed, with its score and the
+    // share expected through the target's armor.
+    clean();
+    CHECK(combat_observer_open(TRACE_FILE));
+    combat_observer_ai_weapon_chosen("guard", "fighter", "G_SWORD", "G_HAMMER", false,
+        candidates, 2);
+    combat_observer_ai_weapon_chosen("guard", "fighter", "G_HAMMER", "G_HAMMER", true,
+        candidates, 2);
+    combat_observer_close();
+
+    CHECK(read_trace(trace, sizeof(trace)));
+    CHECK(strstr(trace, "\"event\":\"ai.weapon_chosen\",") != NULL);
+    CHECK(strstr(trace, "\"previous\":\"G_SWORD\",\"chosen\":\"G_HAMMER\",\"kept\":false,"
+                        "\"candidates\":[[6074,168,746],[6057,136,355]]}")
+        != NULL);
+    CHECK(strstr(trace, "\"kept\":true,") != NULL);
 }
 
 TEST(every_event_carries_the_clock_the_baseline_needs)
@@ -1730,6 +1754,7 @@ void test_combat_observer_suite(void)
     RUN(an_unreadable_frame_is_reported_as_unknown_not_as_a_number);
     RUN(repeated_releases_are_countable_and_carry_the_clock);
     RUN(an_ai_decision_lists_what_it_weighed);
+    RUN(an_armor_aware_weapon_choice_lists_its_candidates);
     RUN(every_event_carries_the_clock_the_baseline_needs);
     RUN(the_trace_says_which_clock_produced_its_numbers);
     RUN(the_clock_starts_at_the_stream_and_never_goes_backwards);
