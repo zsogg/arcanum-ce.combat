@@ -2887,8 +2887,9 @@ tig_art_id_t item_wield_attack_art_id(int64_t critter_obj)
 // CE (combat AI, milestone AI-1): under `ai armor aware`, an NPC keeps the
 // weapon in its hand unless another scores at least this much better, in
 // percent (zsogg's agreed commitment: "require clearly improved circumstances
-// to switch").
-#define ITEM_WIELD_COMMIT_PERCENT 125
+// to switch"; 17% his choice, 2026-10-04, after 25% kept a Quality Sword
+// against plate where a Hammer scored 23.5% higher).
+#define ITEM_WIELD_COMMIT_PERCENT 117
 
 // 0x465170
 void item_wield_best(int64_t critter_obj, int inventory_location, int64_t target_obj)
