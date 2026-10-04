@@ -42,6 +42,7 @@ int effect_adjust_stat_level_no_innate(int64_t obj, int stat, int value);
 int effect_adjust_basic_skill_level(int64_t obj, int skill, int value);
 int effect_adjust_tech_skill_level(int64_t obj, int skill, int value);
 int effect_adjust_resistance(int64_t obj, int resistance, int value);
+void effect_resistance_split(int64_t obj, int resistance, int* innate, int* magical);
 int effect_adjust_tech_level(int64_t obj, int tech, int value);
 int effect_adjust_max_hit_points(int64_t obj, int value);
 int effect_adjust_max_fatigue(int64_t obj, int value);

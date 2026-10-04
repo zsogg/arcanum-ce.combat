@@ -900,6 +900,53 @@ int effect_adjust_resistance(int64_t obj, int resistance, int value)
     return effect_adjust_func(obj, resistance, value, effect_resistance_effects, false);
 }
 
+// CE (turn-based rebalance, armor milestone 3): a resistance's effects split
+// in two for the armor rules (`penetration.h`), which add a creature's natural
+// protection everywhere and its magical protection last.
+//
+// `*innate` is the additions of the innate effects - race, background, class,
+// gender: the half-ogre's +10, the ogre's +20, tough hide, the lunatic. Every
+// shipped innate resistance effect is an addition; any other operator on an
+// innate effect is not counted. `*magical` is every other effect - spells,
+// potions, blessings, items - applied to nothing, so additions add and the
+// "Body of" spells' floors (min 50, min 95) stand as a minimum.
+void effect_resistance_split(int64_t obj, int resistance, int* innate, int* magical)
+{
+    int cnt;
+    int index;
+    unsigned int effect;
+    int cause;
+    int change;
+    Effect* meta;
+
+    *innate = 0;
+    *magical = effect_adjust_func(obj, resistance, 0, effect_resistance_effects, true);
+
+    if (!obj_type_is_critter(obj_field_int32_get(obj, OBJ_F_TYPE))) {
+        return;
+    }
+
+    cnt = obj_arrayfield_length_get(obj, OBJ_F_CRITTER_EFFECTS_IDX);
+    for (index = 0; index < cnt; index++) {
+        cause = obj_arrayfield_uint32_get(obj, OBJ_F_CRITTER_EFFECT_CAUSE_IDX, index);
+        if (cause != EFFECT_CAUSE_RACE
+            && cause != EFFECT_CAUSE_BACKGROUND
+            && cause != EFFECT_CAUSE_CLASS
+            && cause != EFFECT_CAUSE_GENDER) {
+            continue;
+        }
+
+        effect = obj_arrayfield_uint32_get(obj, OBJ_F_CRITTER_EFFECTS_IDX, index);
+        meta = &(effect_resistance_effects[effect]);
+        for (change = 0; change < meta->count; change++) {
+            if (meta->ids[change] == resistance
+                && meta->operators[change] == EFFECT_OPERATOR_ADD) {
+                *innate += meta->params[change];
+            }
+        }
+    }
+}
+
 /**
  * Adjusts a critter's tech effective level based on applied effects.
  *

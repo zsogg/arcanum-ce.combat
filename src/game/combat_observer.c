@@ -757,6 +757,28 @@ void combat_observer_skill_roll(const char* source, const char* target,
     combat_observer_write(line);
 }
 
+void combat_observer_armor_resolved(const char* attacker, const char* target,
+    int hit_loc, int worn_centi, int natural, int magic, bool blocked,
+    bool gap, int penetration, int variation_percent, int protection_centi,
+    int penetration_centi, int passed_num, int passed_den, int damage_before,
+    int damage_after)
+{
+    char line[1024];
+    char action[32];
+
+    if (!combat_observer_begin_semantic()) return;
+    snprintf(line, sizeof(line),
+        "{\"schema\":%d,\"sequence\":%u,\"event\":\"armor.resolved\",\"turn\":%u,\"action_id\":%s,\"attacker\":\"%s\",\"target\":\"%s\",\"hit_location\":%d,\"worn_centi\":%d,\"natural\":%d,\"magic\":%d,\"blocked\":%s,\"gap\":%s,\"penetration\":%d,\"variation_percent\":%d,\"protection_centi\":%d,\"penetration_centi\":%d,\"passed_num\":%d,\"passed_den\":%d,\"damage_before\":%d,\"damage_after\":%d}",
+        COMBAT_OBSERVER_SCHEMA,
+        combat_observer_sequence++, combat_observer_turn,
+        combat_observer_action_json(action, sizeof(action)), attacker, target,
+        hit_loc, worn_centi, natural, magic, blocked ? "true" : "false",
+        gap ? "true" : "false", penetration, variation_percent,
+        protection_centi, penetration_centi, passed_num, passed_den,
+        damage_before, damage_after);
+    combat_observer_write(line);
+}
+
 void combat_observer_damage_committed(const char* attacker,
     const char* target, const int* components, unsigned int damage_flags,
     int hp_amount, int hp_before, int hp_after, int fatigue_before,

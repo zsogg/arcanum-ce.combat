@@ -289,6 +289,17 @@ void combat_observer_damage_committed(const char* attacker,
     int hp_amount, int hp_before, int hp_after, int fatigue_before,
     int fatigue_after, bool dead, bool unconscious);
 
+// CE (armor milestone 3): one weapon hit's normal damage resolved against
+// armor under `armor penetration`. `worn` is the location's worn protection
+// and `natural` the creature's own, before block, gap and magic; the
+// effective figures are in hundredths, as `penetration.h` computes them;
+// `passed_num / passed_den` is the share of damage passed.
+void combat_observer_armor_resolved(const char* attacker, const char* target,
+    int hit_loc, int worn_centi, int natural, int magic, bool blocked,
+    bool gap, int penetration, int variation_percent, int protection_centi,
+    int penetration_centi, int passed_num, int passed_den, int damage_before,
+    int damage_after);
+
 // CE (card O2): the two facts a harness needs to know the duel is over.
 //
 // `combat_observer_terminal_seen` latches when a `damage.committed` reports a

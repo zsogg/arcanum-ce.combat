@@ -9,6 +9,7 @@
 #include "game/description.h"
 #include "game/descriptions.h"
 #include "game/effect.h"
+#include "game/feature.h"
 #include "game/gamelib.h"
 #include "game/gsound.h"
 #include "game/item.h"
@@ -1809,6 +1810,12 @@ int object_get_ac(int64_t obj, bool a2)
     obj_type = obj_field_int32_get(obj, OBJ_F_TYPE);
     if (obj_type_is_critter(obj_type)) {
         for (index = FIRST_WEAR_INV_LOC; index <= LAST_WEAR_INV_LOC; index++) {
+            // CE (armor milestone 3): under `armor penetration` a shield
+            // blocks on its own chance instead, and its armor class is
+            // dropped (zsogg, 2026-09-24).
+            if (index == ITEM_INV_LOC_SHIELD && feature_enabled(FEATURE_ARMOR_PENETRATION)) {
+                continue;
+            }
             item_obj = item_wield_get(obj, index);
             if (item_obj != OBJ_HANDLE_NULL) {
                 ac += item_armor_ac_adj(item_obj, obj, a2);

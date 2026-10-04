@@ -30,6 +30,7 @@
 #include "game/obj_private.h"
 #include "game/object.h"
 #include "game/object_node.h"
+#include "game/penetration.h"
 #include "game/player.h"
 #include "game/proto.h"
 #include "game/random.h"
@@ -64,6 +65,7 @@ static int combat_random_hit_loc(void);
 static bool combat_consume_ammo(int64_t weapon_obj, int64_t critter_obj, int cnt, bool destroy);
 static void combat_calc_dmg(CombatContext* combat);
 static void combat_apply_resistance(CombatContext* combat);
+static int combat_armor_resolve(CombatContext* combat);
 static int combat_play_hit_fx(CombatContext* combat);
 static void combat_process_taunts(CombatContext* combat);
 static void combat_turn_based_anims_complete(void);
@@ -1658,6 +1660,16 @@ void combat_dmg(CombatContext* combat)
         combat_process_crit_hit(combat);
     }
 
+    // CE (armor milestone 3): under `armor penetration` a weapon hit's normal
+    // damage is resolved against armor instead of normal resistance, with the
+    // difficulty scaling and the critical bonus already in it (zsogg's decision
+    // 3). It is set aside here and added back after the multipliers below,
+    // which then scale only the elemental damage.
+    int armor_normal = combat_armor_resolve(combat);
+    if (armor_normal >= 0) {
+        combat->dam[DAMAGE_TYPE_NORMAL] = 0;
+    }
+
     combat_apply_resistance(combat);
 
     dam_flags = combat->dam_flags;
@@ -1698,6 +1710,11 @@ void combat_dmg(CombatContext* combat)
         dam *= 2;
     } else if ((dam_flags & CDF_BONUS_DAM_50) != 0) {
         dam += dam / 2;
+    }
+
+    if (armor_normal >= 0) {
+        combat->dam[DAMAGE_TYPE_NORMAL] = armor_normal;
+        dam += armor_normal;
     }
 
     if (obj_type_is_critter(obj_type)) {
@@ -2933,6 +2950,198 @@ void combat_calc_dmg(CombatContext* combat)
 }
 
 // 0x4B6860
+// CE (turn-based rebalance, armor milestone 3): the armor rules
+// (`penetration.h`) for one weapon hit's normal damage, under `armor
+// penetration`. Returns the normal damage that gets through - with the
+// player's difficulty scaling and the critical bonus applied first, as
+// `combat_dmg` applies them to the rest - or -1 when the rules do not apply
+// and the stock path stands:
+//
+//   - only a connected weapon hit on a critter: not a spell (0x80), a forced
+//     or struck-bystander hit (0x100), a trap, a full or killing blow, or a
+//     weapon or hit that ignores resistance;
+//   - only when a penetration is known: the weapon table's, else the default
+//     for the kind of attack (`armor_rules.h`).
+//
+// Worn protection comes from the armor table, a piece it does not list
+// keeping its stock normal resistance; natural protection is the creature's
+// own normal resistance and innate effects; magical protection is the worn
+// pieces' enchantments, rings' and the amulet's resistance, and every other
+// effect (zsogg's decisions 7 and 8). Fatigue and the elemental damage keep
+// stock resistance (decision 4).
+static int combat_armor_piece(int64_t critter_obj, int inventory_location)
+{
+    int64_t item_obj;
+    int protection;
+
+    item_obj = item_wield_get(critter_obj, inventory_location);
+    if (item_obj == OBJ_HANDLE_NULL
+        || obj_field_int32_get(item_obj, OBJ_F_TYPE) != OBJ_TYPE_ARMOR) {
+        return 0;
+    }
+    if (armor_rules_protection(item_obj, &protection)) {
+        return protection;
+    }
+    return obj_arrayfield_int32_get(item_obj, OBJ_F_ARMOR_RESISTANCE_ADJ_IDX, RESISTANCE_TYPE_NORMAL);
+}
+
+static int combat_armor_magic(int64_t critter_obj)
+{
+    int magic;
+    int innate;
+    int inventory_location;
+    int64_t item_obj;
+
+    effect_resistance_split(critter_obj, RESISTANCE_TYPE_NORMAL, &innate, &magic);
+
+    for (inventory_location = FIRST_WEAR_INV_LOC; inventory_location <= LAST_WEAR_INV_LOC; inventory_location++) {
+        item_obj = item_wield_get(critter_obj, inventory_location);
+        if (item_obj == OBJ_HANDLE_NULL
+            || obj_field_int32_get(item_obj, OBJ_F_TYPE) != OBJ_TYPE_ARMOR) {
+            continue;
+        }
+        magic += item_adjust_magic(item_obj, critter_obj,
+            obj_arrayfield_int32_get(item_obj, OBJ_F_ARMOR_MAGIC_RESISTANCE_ADJ_IDX, RESISTANCE_TYPE_NORMAL));
+        if (inventory_location == ITEM_INV_LOC_RING1
+            || inventory_location == ITEM_INV_LOC_RING2
+            || inventory_location == ITEM_INV_LOC_MEDALLION) {
+            magic += obj_arrayfield_int32_get(item_obj, OBJ_F_ARMOR_RESISTANCE_ADJ_IDX, RESISTANCE_TYPE_NORMAL);
+        }
+    }
+
+    return magic;
+}
+
+static bool combat_armor_penetration(CombatContext* combat, int* penetration)
+{
+    int skill;
+
+    if (weapon_rules_penetration(combat->weapon_obj, penetration)) {
+        return true;
+    }
+
+    if ((combat->flags & 0x40) != 0) {
+        *penetration = armor_rules_default_penetration(ARMOR_RULE_KIND_THROWN);
+    } else if (combat->weapon_obj == OBJ_HANDLE_NULL
+        || obj_field_int32_get(combat->weapon_obj, OBJ_F_TYPE) != OBJ_TYPE_WEAPON) {
+        *penetration = armor_rules_default_penetration(ARMOR_RULE_KIND_NATURAL);
+    } else {
+        skill = item_weapon_skill(combat->weapon_obj);
+        if (skill == SKILL_BOW) {
+            *penetration = armor_rules_default_penetration(ARMOR_RULE_KIND_BOW);
+        } else if (skill == SKILL_FIREARMS) {
+            *penetration = armor_rules_default_penetration(ARMOR_RULE_KIND_FIREARM);
+        } else {
+            *penetration = armor_rules_default_penetration(ARMOR_RULE_KIND_MELEE);
+        }
+    }
+
+    return *penetration != ARMOR_RULE_UNSET;
+}
+
+static int combat_armor_resolve(CombatContext* combat)
+{
+    PenetrationHit hit = { 0 };
+    PenetrationResult result;
+    int64_t shield_obj;
+    int block_chance;
+    int innate;
+    int unused;
+    int crit_bonus;
+    int damage;
+    char attacker[COMBAT_OBSERVER_IDENTITY_SIZE] = "NULL";
+    char target[COMBAT_OBSERVER_IDENTITY_SIZE] = "NULL";
+
+    if (!feature_enabled(FEATURE_ARMOR_PENETRATION)
+        || !obj_type_is_critter(obj_field_int32_get(combat->target_obj, OBJ_F_TYPE))
+        || (combat->flags & CF_HIT) == 0
+        || (combat->flags & (0x80 | 0x100 | CF_TRAP)) != 0
+        || (combat->dam_flags & (CDF_FULL | CDF_DEATH | CDF_IGNORE_RESISTANCE)) != 0
+        || combat->dam[DAMAGE_TYPE_NORMAL] <= 0) {
+        return -1;
+    }
+    if (combat->weapon_obj != OBJ_HANDLE_NULL
+        && obj_field_int32_get(combat->weapon_obj, OBJ_F_TYPE) == OBJ_TYPE_WEAPON
+        && (obj_field_int32_get(combat->weapon_obj, OBJ_F_WEAPON_FLAGS) & OWF_IGNORE_RESISTANCE) != 0) {
+        return -1;
+    }
+    if (!combat_armor_penetration(combat, &hit.penetration)) {
+        return -1;
+    }
+
+    // The normal damage as `combat_dmg` scales the rest: the player's
+    // difficulty, then the critical bonus.
+    damage = combat->dam[DAMAGE_TYPE_NORMAL];
+    if (player_is_pc_obj(combat->attacker_obj)) {
+        switch (gamelib_game_difficulty_get()) {
+        case GAME_DIFFICULTY_EASY:
+            damage += damage / 2;
+            break;
+        case GAME_DIFFICULTY_HARD:
+            damage -= damage / 4;
+            break;
+        }
+    }
+    if ((combat->dam_flags & CDF_BONUS_DAM_200) != 0) {
+        damage *= 3;
+    } else if ((combat->dam_flags & CDF_BONUS_DAM_100) != 0) {
+        damage *= 2;
+    } else if ((combat->dam_flags & CDF_BONUS_DAM_50) != 0) {
+        damage += damage / 2;
+    }
+
+    hit.hit_loc = combat->hit_loc;
+    hit.worn.helmet = combat_armor_piece(combat->target_obj, ITEM_INV_LOC_HELMET);
+    hit.worn.body = combat_armor_piece(combat->target_obj, ITEM_INV_LOC_ARMOR);
+    hit.worn.gloves = combat_armor_piece(combat->target_obj, ITEM_INV_LOC_GAUNTLET);
+    hit.worn.boots = combat_armor_piece(combat->target_obj, ITEM_INV_LOC_BOOTS);
+    effect_resistance_split(combat->target_obj, RESISTANCE_TYPE_NORMAL, &innate, &unused);
+    hit.natural = obj_arrayfield_int32_get(combat->target_obj, OBJ_F_RESISTANCE_IDX, RESISTANCE_TYPE_NORMAL) + innate;
+    hit.magic = combat_armor_magic(combat->target_obj);
+
+    // A shield blocks on its own chance, before any gap.
+    shield_obj = item_wield_get(combat->target_obj, ITEM_INV_LOC_SHIELD);
+    if (shield_obj != OBJ_HANDLE_NULL
+        && armor_rules_block_chance(shield_obj, &block_chance)
+        && random_between(1, 100) <= block_chance) {
+        hit.blocked = true;
+        armor_rules_protection(shield_obj, &hit.shield);
+    }
+
+    // An unblocked critical finds a gap on 50%, the weapon's critical bonus,
+    // and the aiming bonus.
+    if (!hit.blocked && (combat->flags & CF_CRITICAL) != 0) {
+        crit_bonus = 0;
+        if (combat->weapon_obj != OBJ_HANDLE_NULL
+            && obj_field_int32_get(combat->weapon_obj, OBJ_F_TYPE) == OBJ_TYPE_WEAPON
+            && (combat->flags & 0x20000) == 0) {
+            crit_bonus = item_adjust_magic(combat->weapon_obj,
+                combat->attacker_obj,
+                weapon_rules_crit_effect(combat->weapon_obj,
+                    obj_field_int32_get(combat->weapon_obj, OBJ_F_WEAPON_MAGIC_CRIT_HIT_EFFECT)));
+        }
+        hit.gap = random_between(1, 100)
+            <= penetration_gap_chance(crit_bonus, combat->hit_loc, (combat->flags & CF_AIM) != 0);
+    }
+
+    hit.variation_percent = random_between(PENETRATION_VARIATION_MIN, PENETRATION_VARIATION_MAX);
+    hit.damage = damage;
+    result = penetration_resolve(&hit);
+
+    if (combat_observer_is_enabled()) {
+        combat_observer_object_id(combat->attacker_obj, attacker);
+        combat_observer_object_id(combat->target_obj, target);
+        combat_observer_armor_resolved(attacker, target, hit.hit_loc,
+            penetration_location_protection_centi(hit.hit_loc, &(hit.worn), 0),
+            hit.natural, hit.magic, hit.blocked, hit.gap, hit.penetration,
+            hit.variation_percent, result.protection_centi,
+            result.penetration_centi, result.passed_num, result.passed_den,
+            damage, result.damage);
+    }
+
+    return result.damage;
+}
+
 void combat_apply_resistance(CombatContext* combat)
 {
     int damage_type;
