@@ -108,6 +108,33 @@ TEST(a_complete_trace_has_ordered_control_and_semantic_events)
     CHECK(strstr(trace, "\"complete\":true") != NULL);
 }
 
+TEST(an_ai_decision_lists_what_it_weighed)
+{
+    char trace[TRACE_SIZE];
+    const int considered[][2] = { { 11, 2 }, { 25, 9 }, { 40, 0 } };
+    int many[COMBAT_OBSERVER_AI_CONSIDERED_MAX + 3][2] = { { 0 } };
+
+    // Combat AI milestone AI-0: what the NPC did, and each spell it weighed
+    // with the code `ai_check_use_spell` gave it.
+    clean();
+    CHECK(combat_observer_open(TRACE_FILE));
+    combat_observer_ai_decided("mage", "fighter", "combat", "decide", "cast",
+        40, "NULL", "NULL", 50, 17, considered, 3);
+    combat_observer_ai_decided("guard", "fighter", "combat", "decide", "attack",
+        -1, "NULL", "G_SWORD", 25, -1, many, COMBAT_OBSERVER_AI_CONSIDERED_MAX + 3);
+    combat_observer_close();
+
+    CHECK(read_trace(trace, sizeof(trace)));
+    CHECK(strstr(trace, "\"event\":\"ai.decided\",") != NULL);
+    CHECK(strstr(trace, "\"actor\":\"mage\",\"target\":\"fighter\",\"danger\":\"combat\","
+                        "\"origin\":\"decide\",\"action\":\"cast\",\"spell\":40,") != NULL);
+    CHECK(strstr(trace, "\"cast_chance\":50,\"cast_roll\":17,\"considered\":[[11,2],[25,9],[40,0]]}") != NULL);
+    CHECK(strstr(trace, "\"weapon\":\"G_SWORD\",\"cast_chance\":25,\"cast_roll\":-1,") != NULL);
+    // No more than the cap is written, however many are passed.
+    CHECK(strstr(trace, "[0,0],[0,0],[0,0],[0,0],[0,0],[0,0],[0,0],[0,0]]}") != NULL);
+    CHECK(strstr(trace, "[0,0],[0,0],[0,0],[0,0],[0,0],[0,0],[0,0],[0,0],[0,0]") == NULL);
+}
+
 TEST(every_event_carries_the_clock_the_baseline_needs)
 {
     char trace[TRACE_SIZE];
@@ -1702,6 +1729,7 @@ void test_combat_observer_suite(void)
     RUN(a_real_snapshot_reads_the_wielded_weapons_skill_training_and_speed);
     RUN(an_unreadable_frame_is_reported_as_unknown_not_as_a_number);
     RUN(repeated_releases_are_countable_and_carry_the_clock);
+    RUN(an_ai_decision_lists_what_it_weighed);
     RUN(every_event_carries_the_clock_the_baseline_needs);
     RUN(the_trace_says_which_clock_produced_its_numbers);
     RUN(the_clock_starts_at_the_stream_and_never_goes_backwards);

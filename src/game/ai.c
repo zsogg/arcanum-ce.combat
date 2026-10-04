@@ -9,6 +9,7 @@
 #include "game/anim_private.h"
 #include "game/ce_parse.h"
 #include "game/combat.h"
+#include "game/combat_observer.h"
 #include "game/critter.h"
 #include "game/descriptions.h"
 #include "game/dialog.h"
@@ -79,6 +80,13 @@ typedef struct Ai {
     /* 0020 */ int64_t item_obj;
     /* 0028 */ int64_t leader_obj;
     /* 0030 */ int sound_id;
+    // CE (combat AI, milestone AI-0): what `ai.decided` reports. Not in the
+    // original's layout, which nothing outside this file sees.
+    const char* origin;
+    int cast_chance;
+    int cast_roll;
+    int considered_count;
+    int considered[COMBAT_OBSERVER_AI_CONSIDERED_MAX][2];
 } Ai;
 
 typedef struct S4ABF10 {
@@ -501,11 +509,75 @@ void ai_process(int64_t obj)
         return;
     }
 
-    if (!ai_heal(&ai) && !ai_look_for_item(&ai)) {
+    if (ai_heal(&ai)) {
+        ai.origin = "heal";
+    } else if (ai_look_for_item(&ai)) {
+        ai.origin = "pickup";
+    } else {
         ai_update_danger_state(&ai);
     }
 
     ai_action_perform(&ai);
+}
+
+// CE (combat AI, milestone AI-0): `ai.decided` for one combat decision. In
+// turn-based every decision is written; in real time, where the AI is polled
+// many times a second, only one that differs from the actor's last.
+#define AI_OBSERVE_SEEN_MAX 64
+
+static struct {
+    int64_t obj;
+    const char* action;
+    int64_t target;
+    int spell;
+} ai_observe_seen[AI_OBSERVE_SEEN_MAX];
+
+static void ai_observe_decision(Ai* ai, const char* action)
+{
+    static const char* dangers[] = { "none", "combat", "flee", "surrender" };
+    char actor[COMBAT_OBSERVER_IDENTITY_SIZE];
+    char target[COMBAT_OBSERVER_IDENTITY_SIZE];
+    char item[COMBAT_OBSERVER_IDENTITY_SIZE];
+    char weapon[COMBAT_OBSERVER_IDENTITY_SIZE];
+    int slot;
+    int free_slot = -1;
+
+    if (!combat_observer_is_enabled()) {
+        return;
+    }
+
+    if (!combat_turn_based_is_active()) {
+        for (slot = 0; slot < AI_OBSERVE_SEEN_MAX; slot++) {
+            if (ai_observe_seen[slot].obj == ai->obj) {
+                break;
+            }
+            if (free_slot < 0 && ai_observe_seen[slot].obj == OBJ_HANDLE_NULL) {
+                free_slot = slot;
+            }
+        }
+        if (slot < AI_OBSERVE_SEEN_MAX) {
+            if (ai_observe_seen[slot].action == action
+                && ai_observe_seen[slot].target == ai->danger_source
+                && ai_observe_seen[slot].spell == ai->spell) {
+                return;
+            }
+        } else {
+            slot = free_slot >= 0 ? free_slot : (int)(ai->obj % AI_OBSERVE_SEEN_MAX);
+        }
+        ai_observe_seen[slot].obj = ai->obj;
+        ai_observe_seen[slot].action = action;
+        ai_observe_seen[slot].target = ai->danger_source;
+        ai_observe_seen[slot].spell = ai->spell;
+    }
+
+    combat_observer_object_id(ai->obj, actor);
+    combat_observer_object_id(ai->danger_source, target);
+    combat_observer_object_id(ai->item_obj, item);
+    combat_observer_object_id(item_wield_get(ai->obj, ITEM_INV_LOC_WEAPON), weapon);
+    combat_observer_ai_decided(actor, target,
+        ai->danger_type >= 0 && ai->danger_type <= 3 ? dangers[ai->danger_type] : "unknown",
+        ai->origin, action, ai->spell == 10000 ? -1 : ai->spell, item, weapon,
+        ai->cast_chance, ai->cast_roll, (const int (*)[2])ai->considered, ai->considered_count);
 }
 
 // Decides whether this critter acts at all this tick, and does the once-a-tick
@@ -656,6 +728,10 @@ void ai_setup(Ai* ai, int64_t obj)
     ai->leader_obj = critter_leader_get(obj);
     ai_danger_source(obj, &(ai->danger_type), &(ai->danger_source));
     ai->sound_id = -1;
+    ai->origin = "decide";
+    ai->cast_chance = -1;
+    ai->cast_roll = -1;
+    ai->considered_count = 0;
 }
 
 // 0x4A8940
@@ -2512,11 +2588,13 @@ int64_t ai_keep_or_find_target(int64_t obj)
     return ai_find_target(obj);
 }
 
-// Decides what the critter opens with once it has a target.
+// Decides whether the critter's next action at its target is a spell.
 //
-// Called from `ai_process` immediately after `ai->danger_source` is set and
-// before the danger type is applied, so it runs once per newly chosen target
-// rather than every tick. Anything it does not fill in stays
+// Called from `ai_update_danger_state` after `ai->danger_source` is set and
+// before the danger type is applied - on every pass that keeps or finds a
+// combat target, not only when the target is new, so the spell roll is made
+// before every action (measured 2026-10-04 with `ai.decided`: a cast roll on
+// each of 26 attack decisions). Anything it does not fill in stays
 // `AI_ACTION_TYPE_UNKNOWN`, which is the plain-attack fallback against
 // CAST_SPELL / USE_ITEM / USE_SKILL.
 //
@@ -2552,7 +2630,12 @@ bool ai_choose_magictech_action(Ai* ai)
         return false;
     }
 
-    if (random_between(1, 100) > ai_magictech_chance(ai)) {
+    // CE (combat AI, milestone AI-0): the roll and chance are kept for
+    // `ai.decided`; `ai_magictech_chance` draws no random number, so taking the
+    // roll first changes nothing.
+    ai->cast_roll = random_between(1, 100);
+    ai->cast_chance = ai_magictech_chance(ai);
+    if (ai->cast_roll > ai->cast_chance) {
         return false;
     }
 
@@ -2679,8 +2762,18 @@ bool ai_choose_action_from_list(Ai* ai, S4ABF10* a2)
             return true;
         }
 
-        if (!magictech_is_under_influence_of(obj, entry->spell)
-            && ai_check_use_spell(ai->obj, entry->item_obj, obj, entry->spell) == 0) {
+        // CE (combat AI, milestone AI-0): each spell weighed is kept for
+        // `ai.decided`, in the same calls and order as the original's test.
+        int code = magictech_is_under_influence_of(obj, entry->spell)
+            ? 9
+            : ai_check_use_spell(ai->obj, entry->item_obj, obj, entry->spell);
+        if (ai->considered_count < COMBAT_OBSERVER_AI_CONSIDERED_MAX) {
+            ai->considered[ai->considered_count][0] = entry->spell;
+            ai->considered[ai->considered_count][1] = code;
+            ai->considered_count++;
+        }
+
+        if (code == 0) {
             if (entry->item_obj != OBJ_HANDLE_NULL
                 && mt_item_valid_ai_action(entry->item_obj)) {
                 ai->action_type = AI_ACTION_TYPE_USE_ITEM;
@@ -2705,18 +2798,22 @@ void ai_action_perform(Ai* ai)
 {
     if (!combat_turn_based_is_active() || combat_turn_based_whos_turn_get() == ai->obj) {
         if ((obj_field_int32_get(ai->obj, OBJ_F_NPC_FLAGS) & ONF_BACKING_OFF) != 0) {
+            ai_observe_decision(ai, "back_off");
             ai_action_perform_baking_off(ai);
             return;
         }
 
         switch (ai->action_type) {
         case AI_ACTION_TYPE_CAST_SPELL:
+            ai_observe_decision(ai, "cast");
             ai_action_perform_cast(ai);
             break;
         case AI_ACTION_TYPE_USE_ITEM:
+            ai_observe_decision(ai, "item");
             ai_action_perform_item(ai);
             break;
         case AI_ACTION_TYPE_USE_SKILL:
+            ai_observe_decision(ai, "skill");
             ai_action_perform_skill(ai);
             break;
         default:
@@ -2728,9 +2825,11 @@ void ai_action_perform(Ai* ai)
                 ai_action_perform_combat(ai);
                 break;
             case 2:
+                ai_observe_decision(ai, "flee");
                 ai_action_perform_fleeing(ai);
                 break;
             case 3:
+                ai_observe_decision(ai, "surrender");
                 ai_action_perform_surrender(ai);
                 break;
             }
@@ -2876,11 +2975,17 @@ void ai_action_perform_combat(Ai* ai)
         npc_flags |= ONF_BACKING_OFF;
         npc_flags |= ONF_CHECK_GRENADE;
         obj_field_int32_set(ai->obj, OBJ_F_NPC_FLAGS, npc_flags);
-    } else if (!ai_use_grenade(ai, distance)) {
+        ai_observe_decision(ai, "back_off");
+    } else if (ai_use_grenade(ai, distance)) {
+        ai_observe_decision(ai, "grenade");
+    } else {
         // CE (reload prototype session 4): an empty gun under `firearm
         // reloading` is reloaded, swapped for a melee backup, or given up
         // before any attack is issued with it.
-        if (!reload_ai_act(ai->obj, ai->danger_source)) {
+        if (reload_ai_act(ai->obj, ai->danger_source)) {
+            ai_observe_decision(ai, "reload");
+        } else {
+            ai_observe_decision(ai, "attack");
             anim_goal_attack_ex(ai->obj, ai->danger_source, ai->sound_id);
         }
     }

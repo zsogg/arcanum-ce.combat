@@ -289,6 +289,21 @@ void combat_observer_damage_committed(const char* attacker,
     int hp_amount, int hp_before, int hp_after, int fatigue_before,
     int fatigue_after, bool dead, bool unconscious);
 
+// CE (combat AI, milestone AI-0): one combat decision by an NPC - what it
+// meant to do this pass and why. `danger` is none, combat, flee or surrender;
+// `origin` is the branch that decided (heal, pickup or decide); `action` what
+// it did (attack, cast, item, skill, grenade, reload, back_off, flee,
+// surrender). `cast_chance` and `cast_roll` are the spell roll when it was
+// made this pass, else -1; `considered` lists each spell weighed as [spell,
+// code], code 0 for castable and `ai_check_use_spell`'s refusal otherwise (9:
+// the target is already under it). In real time only a changed decision is
+// written.
+#define COMBAT_OBSERVER_AI_CONSIDERED_MAX 8
+void combat_observer_ai_decided(const char* actor, const char* target,
+    const char* danger, const char* origin, const char* action, int spell,
+    const char* item, const char* weapon, int cast_chance, int cast_roll,
+    const int considered[][2], int considered_count);
+
 // CE (armor milestone 3): one weapon hit's normal damage resolved against
 // armor under `armor penetration`. `worn` is the location's worn protection
 // and `natural` the creature's own, before block, gap and magic; the
