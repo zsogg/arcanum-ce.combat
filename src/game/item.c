@@ -2994,6 +2994,12 @@ void item_wield_best(int64_t critter_obj, int inventory_location, int64_t target
                                 && item_obj > best_ranged_weapon_obj))
                         && item_weapon_range(item_obj, critter_obj) >= dist) {
                         best_ranged_weapon_obj = item_obj;
+                        // FIX (porting bug #53): the best score among the
+                        // weapons that reach the target is kept, as the
+                        // original keeps it (0x465420 stores it). CE never
+                        // updated it, so every reaching weapon passed the
+                        // comparison and the last one in the pack won.
+                        best_ranged_weapon_worth = effective_total_dam;
                     }
                 }
             } else if (!IS_WEAR_INV_LOC(item_inventory_location_get(item_obj))) {
