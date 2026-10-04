@@ -402,6 +402,11 @@ int magictech_projectile_speed_get(int mt_id);
 bool magictech_find_effect_caster(int64_t obj, unsigned int flags, int64_t* parent_obj_ptr);
 bool magictech_find_effect_run(int64_t obj, unsigned int flags, int* index_ptr);
 bool magictech_is_under_influence_of(int64_t obj, int magictech);
+// CE (combat AI, milestone AI-2): the living creatures `caster_obj` has
+// summoned. Summons are not followers - a caster's follower list does not hold
+// them - and a summon spell's run ends once its creature appears, so CE keeps
+// its own record of who summoned whom (not saved).
+int magictech_summons_alive(int64_t caster_obj);
 bool magictech_stop_spell(int64_t obj, int magictech);
 bool magictech_timeevent_process(TimeEvent* timeevent);
 bool magictech_reschedule_run(int index);

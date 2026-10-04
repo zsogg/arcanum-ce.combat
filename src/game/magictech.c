@@ -24,6 +24,7 @@
 #include "game/mt_ai.h"
 #include "game/mt_item.h"
 #include "game/multiplayer.h"
+#include "game/obj_pool.h"
 #include "game/obj_private.h"
 #include "game/object.h"
 #include "game/path.h"
@@ -120,6 +121,8 @@ static void magictech_teleport_move(int64_t obj, int64_t target_loc);
 static void magictech_summoned_obj_add(MagicTechRunInfo* run_info, int64_t obj);
 static bool magictech_target_shield_check(TargetContext* target_ctx, MagicTechRunInfo* run_info);
 static void magictech_run_info_clear_all(void);
+static void magictech_summons_record(int64_t summoner_obj, int64_t summon_obj);
+static void magictech_summons_clear(void);
 static void magictech_id_new_lock(MagicTechRunInfo** lock_ptr);
 static bool magictech_run_info_validate(MagicTechRunInfo* run_info);
 static void magictech_id_free_lock(int mt_id);
@@ -4595,6 +4598,12 @@ void magictech_summoned_obj_add(MagicTechRunInfo* run_info, int64_t obj)
     }
 
     object_locator_init(obj, &(run_info->summoned_obj->field_8));
+
+    // CE (combat AI, milestone AI-2): remember the caster.
+    if (obj_type_is_critter(run_info->summoned_obj->type)
+        && run_info->parent_obj.obj != OBJ_HANDLE_NULL) {
+        magictech_summons_record(run_info->parent_obj.obj, obj);
+    }
 }
 
 // 0x455550
@@ -4685,6 +4694,7 @@ bool magictech_target_shield_check(TargetContext* target_ctx, MagicTechRunInfo* 
 // 0x455710
 void magictech_run_info_clear_all(void)
 {
+    magictech_summons_clear();
     int index;
     MagicTechRunInfo* run_info;
 
@@ -6734,6 +6744,86 @@ bool magictech_find_by_spell(int64_t obj, int spell, int* index_ptr)
 }
 
 // 0x459380
+// CE (combat AI, milestone AI-2): who summoned whom. A summon spell that is not
+// maintained ends once its creature appears, and its run's list of summoned
+// objects goes with it, so nothing in the original links the creature back
+// to its caster afterwards. Not saved: after a load the count starts again.
+#define MAGICTECH_SUMMONS_MAX 64
+
+static struct {
+    int64_t summoner;
+    int64_t summon;
+} magictech_summons[MAGICTECH_SUMMONS_MAX];
+static int magictech_summons_next;
+
+static bool magictech_summon_lives(int64_t obj)
+{
+    return obj != OBJ_HANDLE_NULL
+        && obj_handle_is_valid(obj)
+        && (obj_field_int32_get(obj, OBJ_F_FLAGS) & (OF_OFF | OF_DESTROYED)) == 0
+        && obj_type_is_critter(obj_field_int32_get(obj, OBJ_F_TYPE))
+        && !critter_is_dead(obj);
+}
+
+static void magictech_summons_record(int64_t summoner_obj, int64_t summon_obj)
+{
+    int slot;
+
+    for (slot = 0; slot < MAGICTECH_SUMMONS_MAX; slot++) {
+        if (magictech_summons[slot].summon == OBJ_HANDLE_NULL
+            || !magictech_summon_lives(magictech_summons[slot].summon)) {
+            break;
+        }
+    }
+    if (slot == MAGICTECH_SUMMONS_MAX) {
+        slot = magictech_summons_next;
+        magictech_summons_next = (magictech_summons_next + 1) % MAGICTECH_SUMMONS_MAX;
+    }
+    magictech_summons[slot].summoner = summoner_obj;
+    magictech_summons[slot].summon = summon_obj;
+}
+
+static void magictech_summons_clear(void)
+{
+    memset(magictech_summons, 0, sizeof(magictech_summons));
+    magictech_summons_next = 0;
+}
+
+int magictech_summons_alive(int64_t caster_obj)
+{
+    int slot;
+    int idx;
+    int count = 0;
+
+    if (caster_obj == OBJ_HANDLE_NULL) {
+        return 0;
+    }
+
+    for (slot = 0; slot < MAGICTECH_SUMMONS_MAX; slot++) {
+        if (magictech_summons[slot].summoner == caster_obj
+            && magictech_summon_lives(magictech_summons[slot].summon)) {
+            count++;
+        }
+    }
+
+    // A summon still being cast: its run is active and has produced nothing
+    // yet. The AI decides before the creature appears, so without these a
+    // caster could start a fourth summon while its third was in the air
+    // (measured 2026-10-04).
+    for (idx = 0; idx < 512; idx++) {
+        if ((magictech_run_info[idx].flags & MAGICTECH_RUN_ACTIVE) != 0
+            && magictech_run_info[idx].parent_obj.obj == caster_obj
+            && magictech_run_info[idx].summoned_obj == NULL
+            && magictech_run_info[idx].spell >= 0
+            && magictech_run_info[idx].spell < MT_SPELL_COUNT
+            && magictech_spells[magictech_run_info[idx].spell].ai.values[MAGICTECH_AI_ACTION_SUMMON] != -1) {
+            count++;
+        }
+    }
+
+    return count;
+}
+
 bool magictech_is_under_influence_of(int64_t obj, int magictech)
 {
     int mt_id;

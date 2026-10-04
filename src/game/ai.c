@@ -31,6 +31,7 @@
 #include "game/random.h"
 #include "game/reaction.h"
 #include "game/reload.h"
+#include "game/rt_budget.h"
 #include "game/script.h"
 #include "game/sector.h"
 #include "game/sfx.h"
@@ -43,6 +44,7 @@
 #include "game/ui.h"
 
 #include <tig/str_parse.h>
+#include <tig/timer.h>
 
 #define CLOCKWORK_DECOY 6719
 
@@ -137,6 +139,10 @@ static void ai_action_perform_surrender(Ai* ai);
 static void ai_action_perform_combat(Ai* ai);
 static void ai_action_perform_baking_off(Ai* ai);
 static void ai_armor_rewield(Ai* ai);
+static bool ai_prefers_spells(Ai* ai);
+static bool ai_may_summon(Ai* ai);
+static bool ai_desperate_now(int64_t obj);
+static bool ai_desperation_rolled(int64_t obj);
 static bool ai_use_grenade(Ai* ai, int64_t a2);
 static bool ai_waypoints_process(int64_t obj, bool a2);
 static bool ai_is_day(void);
@@ -579,7 +585,8 @@ static void ai_observe_decision(Ai* ai, const char* action)
     combat_observer_ai_decided(actor, target,
         ai->danger_type >= 0 && ai->danger_type <= 3 ? dangers[ai->danger_type] : "unknown",
         ai->origin, action, ai->spell == 10000 ? -1 : ai->spell, item, weapon,
-        ai->cast_chance, ai->cast_roll, (const int (*)[2])ai->considered, ai->considered_count);
+        ai->cast_chance, ai->cast_roll, (const int (*)[2])ai->considered, ai->considered_count,
+        ai_desperation_rolled(ai->obj));
 }
 
 // Decides whether this critter acts at all this tick, and does the once-a-tick
@@ -2637,11 +2644,17 @@ bool ai_choose_magictech_action(Ai* ai)
     // roll first changes nothing.
     ai->cast_roll = random_between(1, 100);
     ai->cast_chance = ai_magictech_chance(ai);
+    // CE (combat AI, milestone AI-2): a caster that would otherwise fall back
+    // on a poor attack tries its spells first; `ai.decided` shows it as a
+    // chance of 100. A chance of 0 - a healthy follower's restraint - stands.
+    if (ai->cast_chance > 0 && ai_prefers_spells(ai)) {
+        ai->cast_chance = 100;
+    }
     if (ai->cast_roll > ai->cast_chance) {
         return false;
     }
 
-    if (critter_num_followers(ai->obj, false) == 0) {
+    if (ai_may_summon(ai)) {
         mt_ai_create(&magictech_ai, ai->obj, MAGICTECH_AI_ACTION_SUMMON);
         v3.flags = 0x1;
         v3.entries = magictech_ai.actions[MAGICTECH_AI_ACTION_SUMMON].entries;
@@ -2690,6 +2703,140 @@ bool ai_choose_magictech_action(Ai* ai)
 // threatening it, returns 0 and so never casts. Otherwise it is 25, or 50 for
 // the more spell-inclined AI parameter set.
 //
+// CE (combat AI, milestone AI-2): under `ai spellcasting`, whether an NPC
+// should reach for its spells before a weapon attack: a caster-type NPC (an AI
+// set that keeps its distance in combat, the stock test for the higher spell
+// chance), one with no weapon in hand, or one whose weapon passes less than
+// half its normal damage through the target's armor (AI-1's estimate). zsogg,
+// 2026-10-04: "casters stop punching". It only waives the spell roll; with
+// nothing castable the NPC still attacks.
+bool ai_prefers_spells(Ai* ai)
+{
+    AiParams ai_params;
+    int64_t weapon_obj;
+    int expected;
+
+    if (!feature_enabled(FEATURE_AI_SPELLCASTING)
+        || obj_field_int32_get(ai->obj, OBJ_F_TYPE) != OBJ_TYPE_NPC) {
+        return false;
+    }
+
+    ai_copy_params(ai->obj, &ai_params);
+    if (ai_params.field_3C > 1) {
+        return true;
+    }
+
+    weapon_obj = item_wield_get(ai->obj, ITEM_INV_LOC_WEAPON);
+    if (weapon_obj == OBJ_HANDLE_NULL) {
+        return true;
+    }
+
+    expected = combat_armor_expected_permille(weapon_obj, ai->danger_source);
+    return expected >= 0 && expected < 500;
+}
+
+// CE (combat AI, milestone AI-2): how many summons a caster may have alive at
+// once under `ai spellcasting` (zsogg, 2026-10-04: "a cap of 3"; agreed earlier
+// that ordinary casters "may summon repeatedly", mass summoning with care).
+#define AI_SUMMON_CAP 3
+
+// Whether the critter considers its summoning list. Stock: only with no
+// followers - which never holds a caster back, since its summons are not
+// followers (measured 2026-10-04: Joachim cast Call Fire Elemental three times
+// in two seconds and then Hellgate, every one alive). Under `ai spellcasting`,
+// only while fewer than the cap of its summons are alive.
+bool ai_may_summon(Ai* ai)
+{
+    if (!feature_enabled(FEATURE_AI_SPELLCASTING)
+        || obj_field_int32_get(ai->obj, OBJ_F_TYPE) != OBJ_TYPE_NPC) {
+        return critter_num_followers(ai->obj, false) == 0;
+    }
+
+    return magictech_summons_alive(ai->obj) < AI_SUMMON_CAP;
+}
+
+// CE (combat AI, milestone AI-2): desperate casting under `ai spellcasting`.
+// Once per turn - the turn-based round, or in real time one turn length `R` -
+// an NPC whose fatigue floor or reserve would refuse a spell rolls its
+// willingness: on 40 in 100 it may cast below the floor this turn, so long as
+// the cost can be charged. zsogg, 2026-10-04: 40%, and "I have no objection to
+// casters becoming fatigued during combat". The roll is made only when a
+// refusal is about to happen, and remembered for the rest of the turn.
+#define AI_DESPERATION_CHANCE 40
+#define AI_DESPERATION_MAX 64
+
+static struct {
+    int64_t obj;
+    int key;
+    bool desperate;
+} ai_desperation[AI_DESPERATION_MAX];
+
+static int ai_desperation_key(void)
+{
+    tig_timestamp_t now;
+    int pace;
+
+    if (combat_turn_based_is_active()) {
+        return combat_turn_based_turn_get();
+    }
+
+    tig_timer_now(&now);
+    pace = rt_budget_pace_ms_now();
+    // Negative, so a real-time turn never matches a turn-based round.
+    return -1 - (int)(now / (pace > 0 ? pace : RT_BUDGET_DEFAULT_PACE_MS));
+}
+
+static int ai_desperation_slot(int64_t obj)
+{
+    int slot;
+    int free_slot = -1;
+
+    for (slot = 0; slot < AI_DESPERATION_MAX; slot++) {
+        if (ai_desperation[slot].obj == obj) {
+            return slot;
+        }
+        if (free_slot < 0 && ai_desperation[slot].obj == OBJ_HANDLE_NULL) {
+            free_slot = slot;
+        }
+    }
+    return free_slot;
+}
+
+bool ai_desperate_now(int64_t obj)
+{
+    int slot;
+    int key;
+
+    if (!feature_enabled(FEATURE_AI_SPELLCASTING)
+        || obj_field_int32_get(obj, OBJ_F_TYPE) != OBJ_TYPE_NPC) {
+        return false;
+    }
+
+    key = ai_desperation_key();
+    slot = ai_desperation_slot(obj);
+    if (slot < 0) {
+        slot = 0;
+    }
+    if (ai_desperation[slot].obj != obj || ai_desperation[slot].key != key) {
+        ai_desperation[slot].obj = obj;
+        ai_desperation[slot].key = key;
+        ai_desperation[slot].desperate = random_between(1, 100) <= AI_DESPERATION_CHANCE;
+    }
+    return ai_desperation[slot].desperate;
+}
+
+// Whether `obj` is desperate this turn by a roll already made - for the
+// observer, which must not make one.
+bool ai_desperation_rolled(int64_t obj)
+{
+    int slot = ai_desperation_slot(obj);
+
+    return slot >= 0
+        && ai_desperation[slot].obj == obj
+        && ai_desperation[slot].key == ai_desperation_key()
+        && ai_desperation[slot].desperate;
+}
+
 // 0x4ABE20
 int ai_magictech_chance(Ai* ai)
 {
@@ -4233,11 +4380,15 @@ int ai_check_use_spell(int64_t attacker_obj, int64_t item_obj, int64_t target_ob
         if (attacker_obj_type == OBJ_TYPE_NPC) {
             int fatigue_ratio = ai_critter_fatigue_ratio(attacker_obj);
 
+            // CE (combat AI, milestone AI-2): a desperate caster ignores its
+            // fatigue floor this turn (`ai_desperate_now`).
             if (critter_pc_leader_get(attacker_obj) == OBJ_HANDLE_NULL) {
-                if (fatigue_ratio < fatigue_cfg->min_cast_pct_leaderless) {
+                if (fatigue_ratio < fatigue_cfg->min_cast_pct_leaderless
+                    && !ai_desperate_now(attacker_obj)) {
                     return 2;
                 }
-            } else if (fatigue_ratio < fatigue_cfg->min_cast_pct_follower) {
+            } else if (fatigue_ratio < fatigue_cfg->min_cast_pct_follower
+                && !ai_desperate_now(attacker_obj)) {
                 return 2;
             }
 
@@ -4251,7 +4402,14 @@ int ai_check_use_spell(int64_t attacker_obj, int64_t item_obj, int64_t target_ob
                 return 2;
             }
         } else if (spell_cast_cost(spell, attacker_obj) + fatigue_cfg->reserve_after_cast > critter_fatigue_current(attacker_obj)) {
-            return 2;
+            // CE (combat AI, milestone AI-2): a desperate caster keeps no
+            // reserve, but the cost must still be chargeable, so the cast
+            // completes before exhaustion can interrupt it.
+            if (!(attacker_obj_type == OBJ_TYPE_NPC
+                    && ai_desperate_now(attacker_obj)
+                    && magictech_can_charge_spell_fatigue(attacker_obj, spell))) {
+                return 2;
+            }
         }
 
         if (spell_min_intelligence(spell) > stat_level_get(attacker_obj, STAT_INTELLIGENCE)) {
