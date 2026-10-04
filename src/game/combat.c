@@ -2969,7 +2969,8 @@ void combat_calc_dmg(CombatContext* combat)
 // table's undead entry; magical protection is the worn pieces' enchantments,
 // rings' and the amulet's resistance, and every other effect (zsogg's
 // decisions 7 and 8). Fatigue and the elemental damage keep stock resistance
-// (decision 4).
+// (decision 4); a monster's natural attack turns the table's share of what
+// armor stopped into fatigue.
 static int combat_armor_piece(int64_t critter_obj, int inventory_location)
 {
     int64_t item_obj;
@@ -3049,6 +3050,8 @@ static int combat_armor_resolve(CombatContext* combat)
     int innate;
     int unused;
     int undead_scale;
+    int stopped_fatigue;
+    int fatigue_added = 0;
     int crit_bonus;
     int damage;
     char attacker[COMBAT_OBSERVER_IDENTITY_SIZE] = "NULL";
@@ -3137,6 +3140,20 @@ static int combat_armor_resolve(CombatContext* combat)
     hit.damage = damage;
     result = penetration_resolve(&hit);
 
+    // A monster's natural attack: part of what armor stopped lands as fatigue
+    // (zsogg, 2026-10-04: monsters still threaten a player in plate). Added
+    // before resistance, so fatigue's stock resistance applies to it.
+    stopped_fatigue = armor_rules_stopped_to_fatigue();
+    if (stopped_fatigue != ARMOR_RULE_UNSET
+        && damage > result.damage
+        && (combat->flags & 0x40) == 0
+        && (combat->weapon_obj == OBJ_HANDLE_NULL
+            || obj_field_int32_get(combat->weapon_obj, OBJ_F_TYPE) != OBJ_TYPE_WEAPON)
+        && critter_is_monstrous(combat->attacker_obj)) {
+        fatigue_added = ((damage - result.damage) * stopped_fatigue + 50) / 100;
+        combat->dam[DAMAGE_TYPE_FATIGUE] += fatigue_added;
+    }
+
     if (combat_observer_is_enabled()) {
         combat_observer_object_id(combat->attacker_obj, attacker);
         combat_observer_object_id(combat->target_obj, target);
@@ -3145,7 +3162,7 @@ static int combat_armor_resolve(CombatContext* combat)
             hit.natural, hit.magic, hit.blocked, hit.gap, hit.penetration,
             hit.variation_percent, result.protection_centi,
             result.penetration_centi, result.passed_num, result.passed_den,
-            damage, result.damage);
+            damage, result.damage, fatigue_added);
     }
 
     return result.damage;

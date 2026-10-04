@@ -21,6 +21,7 @@ static int64_t armor_rule_protos[ARMOR_RULES_MAX];
 static int armor_rule_count;
 static int armor_rule_penetration[ARMOR_RULE_KIND_COUNT];
 static int armor_rule_undead_scale;
+static int armor_rule_stopped_fatigue;
 
 // ---------------------------------------------------------------------------
 // The rules, pure.
@@ -49,6 +50,7 @@ bool armor_rule_parse(int id, const char* str, ArmorRule* rule)
     int value;
     bool kind;
     bool undead;
+    bool fatigue;
     bool valid;
 
     if (str == NULL || strlen(str) >= sizeof(buffer)) {
@@ -57,7 +59,8 @@ bool armor_rule_parse(int id, const char* str, ArmorRule* rule)
 
     kind = id >= ARMOR_RULE_KIND_MELEE && id < ARMOR_RULE_KIND_COUNT;
     undead = id == ARMOR_RULE_UNDEAD;
-    if (!kind && !undead && id <= 20) {
+    fatigue = id == ARMOR_RULE_STOPPED_FATIGUE;
+    if (!kind && !undead && !fatigue && id <= 20) {
         return false;
     }
 
@@ -67,6 +70,7 @@ bool armor_rule_parse(int id, const char* str, ArmorRule* rule)
     parsed.block_chance = ARMOR_RULE_UNSET;
     parsed.penetration = ARMOR_RULE_UNSET;
     parsed.natural_scale = ARMOR_RULE_UNSET;
+    parsed.stopped_fatigue = ARMOR_RULE_UNSET;
 
     for (part = strtok_r(buffer, ",", &save); part != NULL; part = strtok_r(NULL, ",", &save)) {
         colon = strchr(part, ':');
@@ -93,28 +97,25 @@ bool armor_rule_parse(int id, const char* str, ArmorRule* rule)
             parsed.penetration = armor_rule_clamp(value, ARMOR_RULE_VALUE_MAX);
         } else if (strcmp(key, "NaturalScale") == 0) {
             parsed.natural_scale = armor_rule_clamp(value, ARMOR_RULE_VALUE_MAX);
+        } else if (strcmp(key, "StoppedToFatigue") == 0) {
+            parsed.stopped_fatigue = armor_rule_clamp(value, ARMOR_RULE_VALUE_MAX);
         } else {
             return false;
         }
     }
 
     // A kind takes a penetration and nothing else, the undead entry a natural
-    // scale and nothing else; a piece takes a protection, a shield also a
-    // block chance, and nothing else.
-    if (kind) {
-        valid = parsed.penetration != ARMOR_RULE_UNSET
+    // scale and nothing else, the fatigue entry its share and nothing else; a
+    // piece takes a protection, a shield also a block chance, and nothing else.
+    valid = (kind ? parsed.penetration != ARMOR_RULE_UNSET : parsed.penetration == ARMOR_RULE_UNSET)
+        && (undead ? parsed.natural_scale != ARMOR_RULE_UNSET : parsed.natural_scale == ARMOR_RULE_UNSET)
+        && (fatigue ? parsed.stopped_fatigue != ARMOR_RULE_UNSET : parsed.stopped_fatigue == ARMOR_RULE_UNSET);
+    if (kind || undead || fatigue) {
+        valid = valid
             && parsed.protection == ARMOR_RULE_UNSET
-            && parsed.block_chance == ARMOR_RULE_UNSET
-            && parsed.natural_scale == ARMOR_RULE_UNSET;
-    } else if (undead) {
-        valid = parsed.natural_scale != ARMOR_RULE_UNSET
-            && parsed.protection == ARMOR_RULE_UNSET
-            && parsed.block_chance == ARMOR_RULE_UNSET
-            && parsed.penetration == ARMOR_RULE_UNSET;
+            && parsed.block_chance == ARMOR_RULE_UNSET;
     } else {
-        valid = parsed.protection != ARMOR_RULE_UNSET
-            && parsed.penetration == ARMOR_RULE_UNSET
-            && parsed.natural_scale == ARMOR_RULE_UNSET;
+        valid = valid && parsed.protection != ARMOR_RULE_UNSET;
     }
     if (!valid) {
         return false;
@@ -151,6 +152,7 @@ void armor_rules_load(void)
         armor_rule_penetration[index] = ARMOR_RULE_UNSET;
     }
     armor_rule_undead_scale = ARMOR_RULE_UNSET;
+    armor_rule_stopped_fatigue = ARMOR_RULE_UNSET;
 
     if (!mes_load("rules\\armor.mes", &mes_file)) {
         return;
@@ -168,6 +170,10 @@ void armor_rules_load(void)
             }
             if (rule.natural_scale != ARMOR_RULE_UNSET) {
                 armor_rule_undead_scale = rule.natural_scale;
+                continue;
+            }
+            if (rule.stopped_fatigue != ARMOR_RULE_UNSET) {
+                armor_rule_stopped_fatigue = rule.stopped_fatigue;
                 continue;
             }
             if (armor_rule_count >= ARMOR_RULES_MAX) {
@@ -249,4 +255,12 @@ int armor_rules_undead_natural_scale(void)
         return ARMOR_RULE_UNSET;
     }
     return armor_rule_undead_scale;
+}
+
+int armor_rules_stopped_to_fatigue(void)
+{
+    if (!feature_enabled(FEATURE_ARMOR_PENETRATION)) {
+        return ARMOR_RULE_UNSET;
+    }
+    return armor_rule_stopped_fatigue;
 }

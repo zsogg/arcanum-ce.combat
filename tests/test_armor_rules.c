@@ -64,6 +64,27 @@ TEST(the_undead_entry_takes_a_natural_scale_and_nothing_else)
     CHECK_INT(rule.natural_scale, ARMOR_RULE_VALUE_MAX);
 }
 
+TEST(the_fatigue_entry_takes_its_share_and_nothing_else)
+{
+    ArmorRule rule;
+
+    CHECK(armor_rule_parse(ARMOR_RULE_STOPPED_FATIGUE, "StoppedToFatigue: 60", &rule));
+    CHECK_INT(rule.id, ARMOR_RULE_STOPPED_FATIGUE);
+    CHECK_INT(rule.stopped_fatigue, 60);
+    CHECK_INT(rule.natural_scale, ARMOR_RULE_UNSET);
+    CHECK_INT(rule.penetration, ARMOR_RULE_UNSET);
+
+    CHECK(!armor_rule_parse(ARMOR_RULE_STOPPED_FATIGUE, "NaturalScale: 60", &rule));
+    CHECK(!armor_rule_parse(ARMOR_RULE_STOPPED_FATIGUE, "StoppedToFatigue: 60, Protection: 5", &rule));
+    CHECK(!armor_rule_parse(ARMOR_RULE_UNDEAD, "NaturalScale: 80, StoppedToFatigue: 60", &rule));
+    CHECK(!armor_rule_parse(ARMOR_RULE_KIND_NATURAL, "Penetration: 27, StoppedToFatigue: 60", &rule));
+    CHECK(!armor_rule_parse(8094, "Protection: 20, StoppedToFatigue: 60", &rule));
+    CHECK(!armor_rule_parse(13, "StoppedToFatigue: 60", &rule));
+
+    CHECK(armor_rule_parse(ARMOR_RULE_STOPPED_FATIGUE, "StoppedToFatigue: -5", &rule));
+    CHECK_INT(rule.stopped_fatigue, 0);
+}
+
 TEST(malformed_entries_are_refused_and_change_nothing)
 {
     ArmorRule rule;
@@ -107,6 +128,7 @@ void test_armor_rules_suite(void)
     RUN(a_shield_takes_a_block_chance_too);
     RUN(a_kind_takes_a_penetration_and_nothing_else);
     RUN(the_undead_entry_takes_a_natural_scale_and_nothing_else);
+    RUN(the_fatigue_entry_takes_its_share_and_nothing_else);
     RUN(malformed_entries_are_refused_and_change_nothing);
     RUN(values_are_clamped);
 }
