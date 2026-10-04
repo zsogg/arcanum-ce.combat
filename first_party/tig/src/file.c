@@ -1914,6 +1914,25 @@ bool tig_file_close_internal(TigFile* stream)
     return success;
 }
 
+// FIX (porting bug #51): a plain open of a directory fails, as it did for the
+// original on Windows, where `fopen` refuses one. On Linux `fopen(dir, "rb")`
+// succeeds, `tig_file_filelength` then answers -1, and
+// `tig_file_cache_read_contents_into` - faithfully unchecked - allocates and
+// reads with that size: three sound ids whose `snd_*.mes` entries are empty
+// resolve to the bare `sound\` directory, and the heap was corrupted until the
+// game aborted at exit (found by the combat AI's caster fight, 2026-10-04).
+static FILE* tig_file_fopen_plain(const char* path, const char* mode)
+{
+    SDL_PathInfo info;
+
+    if (SDL_GetPathInfo(path, &info) && info.type == SDL_PATHTYPE_DIRECTORY) {
+        errno = EISDIR;
+        return NULL;
+    }
+
+    return fopen(path, mode);
+}
+
 // 0x530C70
 int tig_file_open_internal_native(const char* path, const char* mode, TigFile* stream)
 {
@@ -1926,7 +1945,7 @@ int tig_file_open_internal_native(const char* path, const char* mode, TigFile* s
     stream->flags &= ~(TIG_FILE_DATABASE | TIG_FILE_PLAIN);
 
     if (path[0] == '.' || path[0] == '\\' || path[1] == ':' || path[0] == '/') {
-        stream->impl.plain_file_stream = fopen(path, mode);
+        stream->impl.plain_file_stream = tig_file_fopen_plain(path, mode);
         if (stream->impl.plain_file_stream == NULL) {
             return 0;
         }
@@ -1948,7 +1967,7 @@ int tig_file_open_internal_native(const char* path, const char* mode, TigFile* s
                             compat_join_path(mutable_path, sizeof(mutable_path), writeable_repo->path, path);
                             compat_resolve_path(mutable_path);
 
-                            stream->impl.plain_file_stream = fopen(mutable_path, mode);
+                            stream->impl.plain_file_stream = tig_file_fopen_plain(mutable_path, mode);
                             if (stream->impl.plain_file_stream != NULL) {
                                 stream->flags |= TIG_FILE_PLAIN;
                                 database_entry->flags &= ~TIG_DATABASE_ENTRY_0x100;
@@ -1978,7 +1997,7 @@ int tig_file_open_internal_native(const char* path, const char* mode, TigFile* s
                     compat_join_path(mutable_path, sizeof(mutable_path), repo->path, path);
                     compat_resolve_path(mutable_path);
 
-                    stream->impl.plain_file_stream = fopen(mutable_path, mode);
+                    stream->impl.plain_file_stream = tig_file_fopen_plain(mutable_path, mode);
                     if (stream->impl.plain_file_stream != NULL) {
                         stream->flags |= TIG_FILE_PLAIN;
                         break;

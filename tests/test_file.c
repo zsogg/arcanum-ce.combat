@@ -232,6 +232,34 @@ TEST(a_directory_mounted_after_an_archive_beats_it)
     remove_fixtures();
 }
 
+// Porting bug #51: naming a directory opens nothing, as `fopen` refused one
+// for the original on Windows. Three sound ids resolve to the bare `sound\`
+// directory; on Linux it opened, its length read -1 and the file cache
+// corrupted the heap.
+TEST(a_directory_is_not_a_file)
+{
+    TigFile* stream;
+    char buffer[64];
+
+    write_fixtures();
+    tig_file_mkdir(DIR_PATH);
+    tig_file_mkdir(DIR_RULES);
+    CHECK(write_text(DIR_HELLO, "from the directory"));
+    CHECK(tig_file_repository_add(DIR_PATH));
+
+    CHECK(tig_file_fopen("rules\\", "rb") == NULL);
+    CHECK(tig_file_fopen("rules", "rb") == NULL);
+    stream = tig_file_fopen(DIR_RULES, "rb");
+    CHECK(stream == NULL);
+    if (stream != NULL) {
+        tig_file_fclose(stream);
+    }
+    // The file inside it still opens.
+    CHECK_STR(read_path("rules\\hello.txt", buffer, sizeof(buffer)), "from the directory");
+
+    remove_fixtures();
+}
+
 // The other way round: a directory mounted *before* an archive loses to it,
 // which is why a loose file in the game root does not override an archive but
 // the same file under `data/` does.
@@ -1137,6 +1165,7 @@ void test_file_suite(void)
     RUN(the_archive_mounted_last_wins);
     RUN(reversing_the_mount_order_reverses_the_answer);
     RUN(a_directory_mounted_after_an_archive_beats_it);
+    RUN(a_directory_is_not_a_file);
     RUN(a_directory_mounted_before_an_archive_loses_to_it);
     RUN(an_ignore_sidecar_falls_through_to_the_next_repository);
     RUN(an_entry_already_read_from_an_archive_ignores_a_later_override);
