@@ -2946,7 +2946,13 @@ void item_wield_best(int64_t critter_obj, int inventory_location, int64_t target
                         int max_dam;
 
                         item_weapon_damage(item_obj, critter_obj, damage_type, skill, false, &min_dam, &max_dam);
-                        total_dam = (min_dam + max_dam) / 2;
+                        // FIX (porting bug #52): the average of every damage
+                        // type is added up, as the original does (0x465300
+                        // `add edx,eax` into the running total). CE assigned
+                        // it, so a weapon scored only its last type's average,
+                        // fatigue: an NPC preferred a Mace (1-4, fatigue 1-8)
+                        // to a Quality Sword (2-9, fatigue 2-5).
+                        total_dam += (min_dam + max_dam) / 2;
                     }
 
                     int effectiveness;
