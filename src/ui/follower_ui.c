@@ -597,6 +597,17 @@ void follower_ui_exit(void)
     }
 
     FREE(follower_ui_followers);
+    // FIX: the original frees the list and keeps the pointer and the count
+    // (0x56A851 frees 0x67BC08; nothing clears it or 0x67BC58), so anything
+    // that refreshes the follower bar after the UI has gone walks freed
+    // memory and writes into it through `object_ref_validate`. The game's
+    // own shutdown does exactly that: `gamelib_exit` runs after
+    // `gameuilib_exit`, and clearing the map interrupts a summoner's
+    // maintained spell, whose fatigue charge refreshes the bar. Silent on the
+    // original's heap; on Linux glibc aborts at exit. Found 2026-10-04 by
+    // ASan, after a fight with a summoning caster on the Rebalance Range.
+    follower_ui_followers = NULL;
+    follower_ui_followers_count = 0;
 
     if (follower_ui_drop_down_menu_window != TIG_WINDOW_HANDLE_INVALID) {
         follower_ui_drop_down_menu_destroy();
