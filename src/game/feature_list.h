@@ -38,5 +38,6 @@ FEATURE(WEAPON_SWAP_COST, "weapon swap cost", false)
 FEATURE(EXERTION, "exertion", false)
 FEATURE(WEAPON_RULES, "weapon rules", false)
 FEATURE(ON_HIT_SPELLS_FREE, "on-hit spells free", false)
+FEATURE(ARMOR_PENETRATION, "armor penetration", false)
 
 // clang-format on

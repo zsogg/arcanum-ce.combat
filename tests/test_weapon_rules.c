@@ -135,6 +135,20 @@ TEST(weight_is_read_and_clamped)
     CHECK_INT(rule.weight, 0);
 }
 
+TEST(penetration_is_read_and_clamped)
+{
+    WeaponRule rule;
+
+    CHECK(weapon_rule_parse(6059, "Penetration: 60", &rule));
+    CHECK_INT(rule.penetration, 60);
+    CHECK(weapon_rule_parse(6059, "Damage: 20-50", &rule));
+    CHECK_INT(rule.penetration, WEAPON_RULE_UNSET);
+    CHECK(weapon_rule_parse(6059, "Penetration: 5000", &rule));
+    CHECK_INT(rule.penetration, WEAPON_RULE_PENETRATION_MAX);
+    CHECK(weapon_rule_parse(6059, "Penetration: -4", &rule));
+    CHECK_INT(rule.penetration, 0);
+}
+
 TEST(whole_magazine_is_read_and_needs_a_capacity)
 {
     WeaponRule rule;
@@ -230,6 +244,7 @@ void test_weapon_rules_suite(void)
     RUN(accuracy_is_a_percentage);
     RUN(minimum_strength_is_read_and_clamped);
     RUN(weight_is_read_and_clamped);
+    RUN(penetration_is_read_and_clamped);
     RUN(whole_magazine_is_read_and_needs_a_capacity);
     RUN(dodgeable_is_read_and_clamped);
     RUN(armor_damage_is_read_and_clamped);

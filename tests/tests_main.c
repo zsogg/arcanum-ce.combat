@@ -21,6 +21,7 @@ void test_art_id_suite(void);
 void test_color_suite(void);
 void test_called_shot_suite(void);
 void test_combat_observer_suite(void);
+void test_armor_rules_suite(void);
 void test_penetration_suite(void);
 void test_reload_suite(void);
 void test_rt_budget_suite(void);
@@ -75,6 +76,7 @@ int main(void)
     test_color_suite();
     test_called_shot_suite();
     test_combat_observer_suite();
+    test_armor_rules_suite();
     test_penetration_suite();
     test_reload_suite();
     test_rt_budget_suite();

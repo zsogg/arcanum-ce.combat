@@ -83,6 +83,9 @@ typedef struct WeaponRule {
     // flamethrower is also dodged quite easily by the level 30 guard, this
     // should not be possible").
     int dodgeable;
+    // Against armor's protection, under `armor penetration` (armor milestone
+    // 2): the weapon's own; unset takes its kind's default (`armor_rules.h`).
+    int penetration;
 } WeaponRule;
 
 #define WEAPON_RULE_CAPACITY_MIN 1
@@ -105,6 +108,7 @@ typedef struct WeaponRule {
 #define WEAPON_RULE_AMMO_PER_SHOT_MAX 100
 #define WEAPON_RULE_DODGEABLE_MIN 0
 #define WEAPON_RULE_DODGEABLE_MAX 1
+#define WEAPON_RULE_PENETRATION_MAX 1000
 
 // Pure: reads one entry's text into `rule`. False, with `rule` untouched, for
 // anything malformed - an unknown key, a value that is not a number or a
@@ -142,6 +146,10 @@ int weapon_rules_ammo_per_shot(int64_t weapon_obj);
 // False when the entry says `Dodgeable: 0`: combat then skips the target's
 // Dodge roll for a hit with this weapon. True otherwise, as stock.
 bool weapon_rules_dodgeable(int64_t weapon_obj);
+// True, with `*penetration` set, when the entry names a Penetration. Read
+// under `armor penetration`, not `weapon rules`: it means nothing without the
+// armor rules.
+bool weapon_rules_penetration(int64_t weapon_obj, int* penetration);
 // True, with `*action_points` set, when the entry names a firing cost.
 bool weapon_rules_fire_ap(int64_t critter_obj, int64_t weapon_obj, int* action_points);
 

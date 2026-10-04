@@ -9,6 +9,7 @@
 #include "game/ai.h"
 #include "game/anim.h"
 #include "game/animfx.h"
+#include "game/armor_rules.h"
 #include "game/ci.h"
 #include "game/criticals.h"
 #include "game/critter.h"
@@ -247,8 +248,10 @@ bool combat_init(GameInitInfo* init_info)
 
     // CE (real-time session B): the action budget's settings, and an empty table.
     rt_budget_init();
-    // CE (turn-based rebalance): the listed weapons' rules.
+    // CE (turn-based rebalance): the listed weapons' rules, and the armor
+    // table (armor milestone 2).
     weapon_rules_init();
+    armor_rules_init();
     settings_register(&settings, COMBAT_TAUNTS_KEY, "0", NULL);
 
     return true;
@@ -259,6 +262,7 @@ void combat_exit(void)
 {
     mes_unload(combat_mes_file);
     weapon_rules_exit();
+    armor_rules_exit();
     combat_turn_based_end();
     if (!combat_editor) {
         animfx_list_exit(&combat_eye_candies);
