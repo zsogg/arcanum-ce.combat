@@ -6743,7 +6743,6 @@ bool magictech_find_by_spell(int64_t obj, int spell, int* index_ptr)
     return false;
 }
 
-// 0x459380
 // CE (combat AI, milestone AI-2): who summoned whom. A summon spell that is not
 // maintained ends once its creature appears, and its run's list of summoned
 // objects goes with it, so nothing in the original links the creature back
@@ -6824,6 +6823,7 @@ int magictech_summons_alive(int64_t caster_obj)
     return count;
 }
 
+// 0x459380
 bool magictech_is_under_influence_of(int64_t obj, int magictech)
 {
     int mt_id;
