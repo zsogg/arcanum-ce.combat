@@ -753,6 +753,21 @@ TEST(the_persistence_rows_load_into_what_they_say)
     CHECK(!load_script("0 drop flintlock\n"));
 }
 
+TEST(the_wear_row_loads_with_or_without_a_wearer)
+{
+    // Armor milestone 3 (2026-10-03): armor on the player, or on a critter.
+    CHECK(load_script(
+        "0 wear 8095\n"
+        "0 wear 8213 G_00000084_1104_4040_8000_000000000411\n"));
+    CHECK_INT(replay_ui_count(), 2);
+    CHECK(row_is(0, "turn=0 now=0 kind=wear target= loc=0 aim=0 spell=0 cast=- wait=0 proto=8095 count=0"));
+    CHECK(row_is(1, "turn=0 now=0 kind=wear target=G_00000084_1104_4040_8000_000000000411 loc=0 aim=0 spell=0 cast=- wait=0 proto=8213 count=0"));
+
+    CHECK(!load_script("0 wear\n"));
+    CHECK(!load_script("0 wear platemail\n"));
+    CHECK(!load_script("0 wear 8095 G_X extra\n"));
+}
+
 TEST(a_row_the_parser_cannot_read_refuses_the_whole_file)
 {
     // Refused, never skipped: a replay missing a row diverges from what it
@@ -1702,6 +1717,7 @@ void test_combat_observer_suite(void)
     RUN(the_throw_rows_load_into_what_they_say);
     RUN(the_called_shot_rows_load_into_what_they_say);
     RUN(the_persistence_rows_load_into_what_they_say);
+    RUN(the_wear_row_loads_with_or_without_a_wearer);
     RUN(a_row_the_parser_cannot_read_refuses_the_whole_file);
     RUN(a_tile_step_a_cast_request_and_a_weapon_change_are_each_recorded);
     RUN(every_mode_state_decides_acceptance_the_same_way);

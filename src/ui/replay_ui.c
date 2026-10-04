@@ -110,12 +110,17 @@ typedef enum ReplayKind {
     //   drop <prototype> / pickup <prototype>
     //       one carried item dropped at the player's feet (`item_drop`), or
     //       one lying on the player's tile picked up (`item_transfer`).
+    //   wear <prototype> [<id>]
+    //       armor or a shield of that prototype, carried by the player or by
+    //       that critter, put on through `item_wield_set` and its checks
+    //       (armor milestone 3, 2026-10-03).
     REPLAY_KIND_SAVE,
     REPLAY_KIND_INSPECT,
     REPLAY_KIND_TRANSFER,
     REPLAY_KIND_TAKE,
     REPLAY_KIND_DROP,
     REPLAY_KIND_PICKUP,
+    REPLAY_KIND_WEAR,
 } ReplayKind;
 
 // A cast's target, which is a third shape: the caster, an object or a tile.
@@ -508,6 +513,18 @@ static bool replay_parse_line(const char* text, ReplayCommand* command)
         return index == count;
     }
 
+    if (strcmp(kind, "wear") == 0) {
+        command->kind = REPLAY_KIND_WEAR;
+        if (!replay_parse_int(tokens[index++], &(command->proto))
+            || command->proto <= 0) {
+            return false;
+        }
+        if (index < count) {
+            replay_copy_target(command, tokens[index++]);
+        }
+        return index == count;
+    }
+
     if (strcmp(kind, "raise") == 0) {
         command->kind = REPLAY_KIND_RAISE;
         if (!replay_parse_int(tokens[index++], &(command->stat))
@@ -582,7 +599,7 @@ int replay_ui_count(void)
 bool replay_ui_describe(int index, char* buffer, size_t size)
 {
     const ReplayCommand* command;
-    static const char* kinds[] = { "object", "location", "key", "cast", "wield", "wait", "learn", "give", "throw", "skill", "raise", "prowl", "panel", "save", "inspect", "transfer", "take", "drop", "pickup" };
+    static const char* kinds[] = { "object", "location", "key", "cast", "wield", "wait", "learn", "give", "throw", "skill", "raise", "prowl", "panel", "save", "inspect", "transfer", "take", "drop", "pickup", "wear" };
     int written;
     static const char* casts[] = { "self", "object", "location" };
 
@@ -599,7 +616,8 @@ bool replay_ui_describe(int index, char* buffer, size_t size)
     // Only the kinds that carry them, so every older row reads as it always did.
     if ((command->kind == REPLAY_KIND_GIVE || command->kind == REPLAY_KIND_THROW
             || command->kind == REPLAY_KIND_TRANSFER || command->kind == REPLAY_KIND_TAKE
-            || command->kind == REPLAY_KIND_DROP || command->kind == REPLAY_KIND_PICKUP)
+            || command->kind == REPLAY_KIND_DROP || command->kind == REPLAY_KIND_PICKUP
+            || command->kind == REPLAY_KIND_WEAR)
         && written >= 0 && (size_t)written < size) {
         snprintf(buffer + written, size - (size_t)written, " proto=%d count=%d",
             command->proto, command->count);
@@ -861,6 +879,25 @@ void replay_ui_tick(void)
         if (item_obj == OBJ_HANDLE_NULL
             || !item_transfer(item_obj, command->kind == REPLAY_KIND_TAKE ? pc_obj : target_obj)) {
             tig_debug_printf("Replay: command %d could not move prototype %d\n",
+                replay_next - 1, command->proto);
+        }
+        return;
+    }
+
+    if (command->kind == REPLAY_KIND_WEAR) {
+        int64_t item_obj;
+        int64_t wearer_obj = pc_obj;
+
+        replay_stall_reported = false;
+        replay_next++;
+        if (command->target[0] != '\0' && !replay_resolve(command, &wearer_obj)) {
+            return;
+        }
+        item_obj = replay_find_carried(wearer_obj, command->proto, false);
+        if (item_obj == OBJ_HANDLE_NULL
+            || obj_field_int32_get(item_obj, OBJ_F_TYPE) != OBJ_TYPE_ARMOR
+            || !item_wield_set(item_obj, item_location_get(item_obj))) {
+            tig_debug_printf("Replay: command %d could not wear prototype %d\n",
                 replay_next - 1, command->proto);
         }
         return;
