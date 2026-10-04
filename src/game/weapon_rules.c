@@ -13,9 +13,10 @@
 #include "game/proto.h"
 #include "game/skill.h"
 
-// Weapons the file may list. The shipped game has 150 weapon prototypes; a
-// rebalance lists a handful to a few dozen.
-#define WEAPON_RULES_MAX 128
+// Weapons the file may list. The shipped game has about 150 weapon prototypes;
+// the combat rebalance lists every one of them since the melee, bow and thrown
+// pass (2026-10-04) gave each a penetration.
+#define WEAPON_RULES_MAX 320
 
 static WeaponRule weapon_rules[WEAPON_RULES_MAX];
 // The prototype object each rule names, found on first use: not every
