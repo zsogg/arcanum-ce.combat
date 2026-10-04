@@ -20,6 +20,7 @@ static ArmorRule armor_rules[ARMOR_RULES_MAX];
 static int64_t armor_rule_protos[ARMOR_RULES_MAX];
 static int armor_rule_count;
 static int armor_rule_penetration[ARMOR_RULE_KIND_COUNT];
+static int armor_rule_undead_scale;
 
 // ---------------------------------------------------------------------------
 // The rules, pure.
@@ -47,13 +48,16 @@ bool armor_rule_parse(int id, const char* str, ArmorRule* rule)
     char* end;
     int value;
     bool kind;
+    bool undead;
+    bool valid;
 
     if (str == NULL || strlen(str) >= sizeof(buffer)) {
         return false;
     }
 
     kind = id >= ARMOR_RULE_KIND_MELEE && id < ARMOR_RULE_KIND_COUNT;
-    if (!kind && id <= 20) {
+    undead = id == ARMOR_RULE_UNDEAD;
+    if (!kind && !undead && id <= 20) {
         return false;
     }
 
@@ -62,6 +66,7 @@ bool armor_rule_parse(int id, const char* str, ArmorRule* rule)
     parsed.protection = ARMOR_RULE_UNSET;
     parsed.block_chance = ARMOR_RULE_UNSET;
     parsed.penetration = ARMOR_RULE_UNSET;
+    parsed.natural_scale = ARMOR_RULE_UNSET;
 
     for (part = strtok_r(buffer, ",", &save); part != NULL; part = strtok_r(NULL, ",", &save)) {
         colon = strchr(part, ':');
@@ -86,19 +91,32 @@ bool armor_rule_parse(int id, const char* str, ArmorRule* rule)
             parsed.block_chance = armor_rule_clamp(value, ARMOR_RULE_CHANCE_MAX);
         } else if (strcmp(key, "Penetration") == 0) {
             parsed.penetration = armor_rule_clamp(value, ARMOR_RULE_VALUE_MAX);
+        } else if (strcmp(key, "NaturalScale") == 0) {
+            parsed.natural_scale = armor_rule_clamp(value, ARMOR_RULE_VALUE_MAX);
         } else {
             return false;
         }
     }
 
-    // A kind takes a penetration and nothing else; a piece takes a protection,
-    // a shield also a block chance, and no penetration.
-    if (kind
-            ? (parsed.penetration == ARMOR_RULE_UNSET
-                  || parsed.protection != ARMOR_RULE_UNSET
-                  || parsed.block_chance != ARMOR_RULE_UNSET)
-            : (parsed.protection == ARMOR_RULE_UNSET
-                  || parsed.penetration != ARMOR_RULE_UNSET)) {
+    // A kind takes a penetration and nothing else, the undead entry a natural
+    // scale and nothing else; a piece takes a protection, a shield also a
+    // block chance, and nothing else.
+    if (kind) {
+        valid = parsed.penetration != ARMOR_RULE_UNSET
+            && parsed.protection == ARMOR_RULE_UNSET
+            && parsed.block_chance == ARMOR_RULE_UNSET
+            && parsed.natural_scale == ARMOR_RULE_UNSET;
+    } else if (undead) {
+        valid = parsed.natural_scale != ARMOR_RULE_UNSET
+            && parsed.protection == ARMOR_RULE_UNSET
+            && parsed.block_chance == ARMOR_RULE_UNSET
+            && parsed.penetration == ARMOR_RULE_UNSET;
+    } else {
+        valid = parsed.protection != ARMOR_RULE_UNSET
+            && parsed.penetration == ARMOR_RULE_UNSET
+            && parsed.natural_scale == ARMOR_RULE_UNSET;
+    }
+    if (!valid) {
         return false;
     }
 
@@ -132,6 +150,7 @@ void armor_rules_load(void)
     for (index = 0; index < ARMOR_RULE_KIND_COUNT; index++) {
         armor_rule_penetration[index] = ARMOR_RULE_UNSET;
     }
+    armor_rule_undead_scale = ARMOR_RULE_UNSET;
 
     if (!mes_load("rules\\armor.mes", &mes_file)) {
         return;
@@ -145,6 +164,10 @@ void armor_rules_load(void)
             }
             if (rule.penetration != ARMOR_RULE_UNSET) {
                 armor_rule_penetration[rule.id] = rule.penetration;
+                continue;
+            }
+            if (rule.natural_scale != ARMOR_RULE_UNSET) {
+                armor_rule_undead_scale = rule.natural_scale;
                 continue;
             }
             if (armor_rule_count >= ARMOR_RULES_MAX) {
@@ -218,4 +241,12 @@ int armor_rules_default_penetration(ArmorRuleKind kind)
         return ARMOR_RULE_UNSET;
     }
     return armor_rule_penetration[kind];
+}
+
+int armor_rules_undead_natural_scale(void)
+{
+    if (!feature_enabled(FEATURE_ARMOR_PENETRATION)) {
+        return ARMOR_RULE_UNSET;
+    }
+    return armor_rule_undead_scale;
 }

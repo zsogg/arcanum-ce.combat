@@ -43,6 +43,27 @@ TEST(a_kind_takes_a_penetration_and_nothing_else)
     CHECK(!armor_rule_parse(ARMOR_RULE_KIND_BOW, "", &rule));
 }
 
+TEST(the_undead_entry_takes_a_natural_scale_and_nothing_else)
+{
+    ArmorRule rule;
+
+    CHECK(armor_rule_parse(ARMOR_RULE_UNDEAD, "NaturalScale: 80", &rule));
+    CHECK_INT(rule.id, ARMOR_RULE_UNDEAD);
+    CHECK_INT(rule.natural_scale, 80);
+    CHECK_INT(rule.penetration, ARMOR_RULE_UNSET);
+    CHECK_INT(rule.protection, ARMOR_RULE_UNSET);
+
+    CHECK(!armor_rule_parse(ARMOR_RULE_UNDEAD, "Penetration: 30", &rule));
+    CHECK(!armor_rule_parse(ARMOR_RULE_UNDEAD, "NaturalScale: 80, Protection: 5", &rule));
+    // Only the undead entry takes one.
+    CHECK(!armor_rule_parse(ARMOR_RULE_KIND_MELEE, "Penetration: 30, NaturalScale: 80", &rule));
+    CHECK(!armor_rule_parse(8094, "Protection: 20, NaturalScale: 80", &rule));
+    CHECK(!armor_rule_parse(12, "NaturalScale: 80", &rule));
+
+    CHECK(armor_rule_parse(ARMOR_RULE_UNDEAD, "NaturalScale: 5000", &rule));
+    CHECK_INT(rule.natural_scale, ARMOR_RULE_VALUE_MAX);
+}
+
 TEST(malformed_entries_are_refused_and_change_nothing)
 {
     ArmorRule rule;
@@ -85,6 +106,7 @@ void test_armor_rules_suite(void)
     RUN(a_piece_takes_a_protection);
     RUN(a_shield_takes_a_block_chance_too);
     RUN(a_kind_takes_a_penetration_and_nothing_else);
+    RUN(the_undead_entry_takes_a_natural_scale_and_nothing_else);
     RUN(malformed_entries_are_refused_and_change_nothing);
     RUN(values_are_clamped);
 }

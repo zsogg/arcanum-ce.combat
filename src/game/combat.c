@@ -2965,10 +2965,11 @@ void combat_calc_dmg(CombatContext* combat)
 //
 // Worn protection comes from the armor table, a piece it does not list
 // keeping its stock normal resistance; natural protection is the creature's
-// own normal resistance and innate effects; magical protection is the worn
-// pieces' enchantments, rings' and the amulet's resistance, and every other
-// effect (zsogg's decisions 7 and 8). Fatigue and the elemental damage keep
-// stock resistance (decision 4).
+// own normal resistance and innate effects, scaled for the undead by the
+// table's undead entry; magical protection is the worn pieces' enchantments,
+// rings' and the amulet's resistance, and every other effect (zsogg's
+// decisions 7 and 8). Fatigue and the elemental damage keep stock resistance
+// (decision 4).
 static int combat_armor_piece(int64_t critter_obj, int inventory_location)
 {
     int64_t item_obj;
@@ -3047,6 +3048,7 @@ static int combat_armor_resolve(CombatContext* combat)
     int block_chance;
     int innate;
     int unused;
+    int undead_scale;
     int crit_bonus;
     int damage;
     char attacker[COMBAT_OBSERVER_IDENTITY_SIZE] = "NULL";
@@ -3097,6 +3099,13 @@ static int combat_armor_resolve(CombatContext* combat)
     hit.worn.boots = combat_armor_piece(combat->target_obj, ITEM_INV_LOC_BOOTS);
     effect_resistance_split(combat->target_obj, RESISTANCE_TYPE_NORMAL, &innate, &unused);
     hit.natural = obj_arrayfield_int32_get(combat->target_obj, OBJ_F_RESISTANCE_IDX, RESISTANCE_TYPE_NORMAL) + innate;
+    // The undead keep a share of it (zsogg, 2026-10-03), to the nearest point.
+    undead_scale = armor_rules_undead_natural_scale();
+    if (undead_scale != ARMOR_RULE_UNSET
+        && hit.natural > 0
+        && (obj_field_int32_get(combat->target_obj, OBJ_F_CRITTER_FLAGS) & OCF_UNDEAD) != 0) {
+        hit.natural = (hit.natural * undead_scale + 50) / 100;
+    }
     hit.magic = combat_armor_magic(combat->target_obj);
 
     // A shield blocks on its own chance, before any gap.

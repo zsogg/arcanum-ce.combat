@@ -28,6 +28,10 @@
 #define ARMOR_RULE_VALUE_MAX 1000
 #define ARMOR_RULE_CHANCE_MAX 100
 
+// The reserved entry scaling the undead's natural protection (ids 6 to 20,
+// apart from this one, are refused).
+#define ARMOR_RULE_UNDEAD 11
+
 typedef enum ArmorRuleKind {
     ARMOR_RULE_KIND_MELEE = 1,
     ARMOR_RULE_KIND_BOW = 2,
@@ -38,17 +42,19 @@ typedef enum ArmorRuleKind {
 } ArmorRuleKind;
 
 typedef struct ArmorRule {
-    // A prototype number, or an `ArmorRuleKind`.
+    // A prototype number, an `ArmorRuleKind`, or ARMOR_RULE_UNDEAD.
     int id;
     int protection;
     int block_chance;
     int penetration;
+    int natural_scale;
 } ArmorRule;
 
 // Pure: reads one entry into `rule`. False, with `rule` untouched, for
 // anything the engine would misread: an unknown key, a value that is not a
-// number, a kind entry (1-5) without Penetration or with anything else, a
-// piece without Protection or with Penetration, an id that is neither.
+// number, a kind entry (1-5) without Penetration or with anything else, the
+// undead entry without NaturalScale or with anything else, a piece without
+// Protection or with Penetration or NaturalScale, an id that is none of them.
 // Values are clamped to 0..1000, BlockChance to 0..100.
 bool armor_rule_parse(int id, const char* str, ArmorRule* rule);
 
@@ -65,5 +71,8 @@ bool armor_rules_block_chance(int64_t shield_obj, int* chance);
 // Under `armor penetration`. The default penetration of a kind of attack, or
 // ARMOR_RULE_UNSET when the file does not give one.
 int armor_rules_default_penetration(ArmorRuleKind kind);
+// Under `armor penetration`. The percentage of their natural protection the
+// undead keep, or ARMOR_RULE_UNSET when the file does not give one.
+int armor_rules_undead_natural_scale(void);
 
 #endif /* ARCANUM_GAME_ARMOR_RULES_H_ */
