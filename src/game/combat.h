@@ -146,6 +146,8 @@ int combat_throw_cost(int64_t obj);
 int combat_cast_cost(int64_t obj, int spell);
 int combat_skill_cost(int64_t obj, int skill);
 int combat_use_object_cost(int64_t obj, int64_t target_obj);
+// CE: a restorative's AP under `restorative cost` (combat AI milestone AI-4).
+#define COMBAT_RESTORATIVE_COST 6
 int combat_use_item_cost(int64_t obj, int64_t item_obj);
 int combat_pickup_cost(int64_t obj, int64_t item_obj);
 int combat_get_up_cost(int64_t obj);
@@ -164,6 +166,7 @@ int combat_action_points_per_turn(int64_t obj);
 int combat_action_points_for_speed(int speed);
 int combat_throw_cost_for(bool local_pc);
 void combat_turn_based_end_critter_turn(int64_t obj);
+bool combat_can_pay_action_points(int64_t obj, int action_points);
 bool combat_consume_action_points(int64_t obj, int action_points);
 void combat_turn_based_add_critter(int64_t obj);
 bool combat_turn_based_critter_can_fastforward(int64_t obj);

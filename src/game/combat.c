@@ -4229,7 +4229,15 @@ int combat_use_object_cost(int64_t obj, int64_t target_obj)
 int combat_use_item_cost(int64_t obj, int64_t item_obj)
 {
     (void)obj;
-    (void)item_obj;
+
+    // CE (`restorative cost`, combat AI milestone AI-4, zsogg 2026-10-05): a
+    // restorative - a food item, which is what every potion and remedy is -
+    // costs 6 for the player and NPCs alike. Anything else stays at 4.
+    if (feature_enabled(FEATURE_RESTORATIVE_COST)
+        && item_obj != OBJ_HANDLE_NULL
+        && obj_field_int32_get(item_obj, OBJ_F_TYPE) == OBJ_TYPE_FOOD) {
+        return COMBAT_RESTORATIVE_COST;
+    }
 
     return 4;
 }
@@ -4388,6 +4396,20 @@ void combat_turn_based_end_critter_turn(int64_t obj)
         combat_action_points = 0;
         combat_turn_based_next_subturn();
     }
+}
+
+// CE (`restorative cost`, combat AI milestone AI-4): whether
+// `combat_consume_action_points` would accept this charge, without making it
+// or telling anyone. A restorative's effect runs before its cost is charged,
+// so one that could not be paid for has to be refused first.
+bool combat_can_pay_action_points(int64_t obj, int action_points)
+{
+    if (!combat_turn_based_active || combat_whos_turn_node->obj != obj) {
+        return true;
+    }
+
+    return combat_action_points >= action_points
+        || (feature_enabled(FEATURE_EXERTION) && combat_exertion_covers(obj, action_points));
 }
 
 // 0x4B7CD0

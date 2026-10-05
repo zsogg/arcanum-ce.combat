@@ -44,5 +44,6 @@ FEATURE(AI_SPELLCASTING, "ai spellcasting", false)
 FEATURE(AI_TARGETING, "ai targeting", false)
 FEATURE(AI_FOLLOWER_LEASH, "ai follower leash", false)
 FEATURE(AI_RESTORATIVES, "ai restoratives", false)
+FEATURE(RESTORATIVE_COST, "restorative cost", false)
 
 // clang-format on

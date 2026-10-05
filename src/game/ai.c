@@ -2,6 +2,7 @@
 
 #include <ctype.h>
 #include <limits.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -39,6 +40,7 @@
 #include "game/spell.h"
 #include "game/stat.h"
 #include "game/teleport.h"
+#include "game/tf.h"
 #include "game/tile.h"
 #include "game/timeevent.h"
 #include "game/ui.h"
@@ -149,9 +151,9 @@ static int64_t ai_turn_from_unreachable(int64_t obj, int64_t target_obj);
 static int64_t ai_hunter_choose(int64_t obj, int64_t target_obj);
 static void ai_roles_load(void);
 static void ai_observe_item_used(Ai* ai, int64_t item_obj, int64_t target_obj);
-static bool ai_restorative_refused(int64_t obj);
+static bool ai_restorative_refused(int64_t obj, int64_t item_obj);
 static bool ai_heal_choosing;
-static void ai_restorative_note_used(int64_t obj);
+static void ai_restorative_note_used(int64_t obj, int64_t item_obj);
 static void ai_restorative_forget(int64_t obj);
 static bool ai_use_grenade(Ai* ai, int64_t a2);
 static bool ai_waypoints_process(int64_t obj, bool a2);
@@ -632,14 +634,24 @@ static void ai_observe_item_used(Ai* ai, int64_t item_obj, int64_t target_obj)
     ai->origin = origin_before;
 }
 
-// CE (combat AI, milestone AI-4): under `ai restoratives` an enemy - an NPC
-// outside the player's party - uses at most one restorative item a fight,
-// whatever it carries (zsogg, 2026-10-05). It applies while `ai_heal`
-// chooses; spells are not limited. The record clears once the NPC is out of
-// combat mode, which is what "a fight" means here.
+// CE (combat AI, milestone AI-4): restoratives, while `ai_heal` chooses
+// (zsogg, 2026-10-05).
+// - Under `ai restoratives` an enemy - an NPC outside the player's party -
+//   uses at most AI_RESTORATIVES_PER_FIGHT restorative items a fight,
+//   whatever it carries. Spells are not limited, and the allowance returns
+//   once the NPC is out of combat mode. And every NPC's restorative floats
+//   "Uses <item>" over it, as the player knows the item: a drink has no
+//   animation, so nothing else on screen shows it.
+// - Under `restorative cost` an NPC passes over a restorative it cannot pay
+//   for, rather than reach `item_use_on_obj`'s refusal.
 #define AI_RESTORATIVES_MAX 64
+#define AI_RESTORATIVES_PER_FIGHT 2
 
-static int64_t ai_restorative_users[AI_RESTORATIVES_MAX];
+static struct {
+    int64_t obj;
+    int count;
+} ai_restorative_users[AI_RESTORATIVES_MAX];
+
 static int ai_restorative_next;
 
 static bool ai_restorative_capped(int64_t obj)
@@ -655,7 +667,7 @@ static int ai_restorative_slot(int64_t obj)
     int slot;
 
     for (slot = 0; slot < AI_RESTORATIVES_MAX; slot++) {
-        if (ai_restorative_users[slot] == obj) {
+        if (ai_restorative_users[slot].obj == obj) {
             return slot;
         }
     }
@@ -668,23 +680,60 @@ void ai_restorative_forget(int64_t obj)
     int slot = ai_restorative_slot(obj);
 
     if (slot >= 0) {
-        ai_restorative_users[slot] = OBJ_HANDLE_NULL;
+        ai_restorative_users[slot].obj = OBJ_HANDLE_NULL;
+        ai_restorative_users[slot].count = 0;
     }
 }
 
-bool ai_restorative_refused(int64_t obj)
+bool ai_restorative_refused(int64_t obj, int64_t item_obj)
 {
-    return ai_restorative_capped(obj) && ai_restorative_slot(obj) >= 0;
+    int slot;
+
+    if (!ai_heal_choosing) {
+        return false;
+    }
+
+    if (feature_enabled(FEATURE_RESTORATIVE_COST)
+        && !combat_can_pay_action_points(obj, combat_use_item_cost(obj, item_obj))) {
+        return true;
+    }
+
+    if (!ai_restorative_capped(obj)) {
+        return false;
+    }
+
+    slot = ai_restorative_slot(obj);
+    return slot >= 0 && ai_restorative_users[slot].count >= AI_RESTORATIVES_PER_FIGHT;
 }
 
-void ai_restorative_note_used(int64_t obj)
+void ai_restorative_note_used(int64_t obj, int64_t item_obj)
 {
-    if (!ai_restorative_capped(obj) || ai_restorative_slot(obj) >= 0) {
+    char name[MAX_STRING];
+    char line[MAX_STRING + 8];
+    int slot;
+
+    if (!ai_heal_choosing || !feature_enabled(FEATURE_AI_RESTORATIVES)) {
         return;
     }
 
-    ai_restorative_users[ai_restorative_next] = obj;
-    ai_restorative_next = (ai_restorative_next + 1) % AI_RESTORATIVES_MAX;
+    if (obj_field_int32_get(obj, OBJ_F_TYPE) == OBJ_TYPE_NPC) {
+        object_examine(item_obj, player_get_local_pc_obj(), name);
+        snprintf(line, sizeof(line), "Uses %s", name);
+        tf_add(obj, TF_TYPE_GREEN, line);
+    }
+
+    if (!ai_restorative_capped(obj)) {
+        return;
+    }
+
+    slot = ai_restorative_slot(obj);
+    if (slot < 0) {
+        slot = ai_restorative_next;
+        ai_restorative_next = (ai_restorative_next + 1) % AI_RESTORATIVES_MAX;
+        ai_restorative_users[slot].obj = obj;
+        ai_restorative_users[slot].count = 0;
+    }
+    ai_restorative_users[slot].count++;
 }
 
 // Decides whether this critter acts at all this tick, and does the once-a-tick
@@ -3418,7 +3467,7 @@ bool ai_choose_action_from_list(Ai* ai, S4ABF10* a2)
             }
         }
 
-        if (entry->item_obj != OBJ_HANDLE_NULL && ai_restorative_refused(ai->obj)) {
+        if (entry->item_obj != OBJ_HANDLE_NULL && ai_restorative_refused(ai->obj, entry->item_obj)) {
             continue;
         }
 
@@ -3428,7 +3477,7 @@ bool ai_choose_action_from_list(Ai* ai, S4ABF10* a2)
             // a drink is followed by the pass's own action. `ai.decided`
             // reported only that action, so a drink read as an attack.
             ai_observe_item_used(ai, entry->item_obj, obj);
-            ai_restorative_note_used(ai->obj);
+            ai_restorative_note_used(ai->obj, entry->item_obj);
             item_use_on_obj(ai->obj, entry->item_obj, obj);
             return true;
         }
@@ -3447,7 +3496,7 @@ bool ai_choose_action_from_list(Ai* ai, S4ABF10* a2)
         if (code == 0) {
             if (entry->item_obj != OBJ_HANDLE_NULL
                 && mt_item_valid_ai_action(entry->item_obj)) {
-                ai_restorative_note_used(ai->obj);
+                ai_restorative_note_used(ai->obj, entry->item_obj);
                 ai->action_type = AI_ACTION_TYPE_USE_ITEM;
                 ai->spell = entry->spell;
                 ai->item_obj = entry->item_obj;

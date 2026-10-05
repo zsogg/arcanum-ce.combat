@@ -1452,6 +1452,19 @@ void item_use_on_obj(int64_t source_obj, int64_t item_obj, int64_t target_obj)
         return;
     }
 
+    // CE (`restorative cost`, combat AI milestone AI-4): a restorative's
+    // effect runs before its cost is charged, and a charge that fails is
+    // simply not made, so at 6 AP one could otherwise be drunk for free.
+    // Refused here instead, for the player and NPCs alike.
+    if (feature_enabled(FEATURE_RESTORATIVE_COST)
+        && item_type == OBJ_TYPE_FOOD
+        && !combat_can_pay_action_points(source_obj, combat_use_item_cost(source_obj, item_obj))) {
+        if (player_is_local_pc_obj(source_obj)) {
+            tf_add(source_obj, TF_TYPE_WHITE, "Not enough action points");
+        }
+        return;
+    }
+
     if (trap_is_trap_device(item_obj)) {
         trap_use_on_obj(source_obj, item_obj, target_obj);
         return;
@@ -1466,6 +1479,17 @@ void item_use_on_obj(int64_t source_obj, int64_t item_obj, int64_t target_obj)
 
     if (obj_field_int32_get(item_obj, OBJ_F_ITEM_SPELL_MANA_STORE) != 0
         || (obj_field_int32_get(item_obj, OBJ_F_ITEM_FLAGS) & OIF_IS_MAGICAL) != 0) {
+        // CE (`restorative cost`, combat AI milestone AI-4): a remedy whose
+        // effect is a spell, such as the Healing Salve, pays the cast cost
+        // when that spell is cast, in another animation that does not know
+        // the item. The rest of a restorative's cost is charged here, so the
+        // whole is the same 6 a drunk potion costs.
+        if (feature_enabled(FEATURE_RESTORATIVE_COST) && item_type == OBJ_TYPE_FOOD) {
+            combat_consume_action_points(source_obj,
+                combat_use_item_cost(source_obj, item_obj)
+                    - combat_cast_cost(source_obj, mt_item_spell(item_obj, 0)));
+        }
+
         target_descriptor_set_obj(&td, target_obj);
         ui_item_spell_activate(item_obj, &td, mt_item_spell(item_obj, 0));
         mt_item_notify_used(item_obj, target_obj);
