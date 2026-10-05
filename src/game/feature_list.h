@@ -41,5 +41,6 @@ FEATURE(ON_HIT_SPELLS_FREE, "on-hit spells free", false)
 FEATURE(ARMOR_PENETRATION, "armor penetration", false)
 FEATURE(AI_ARMOR_AWARE, "ai armor aware", false)
 FEATURE(AI_SPELLCASTING, "ai spellcasting", false)
+FEATURE(AI_TARGETING, "ai targeting", false)
 
 // clang-format on

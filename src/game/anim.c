@@ -6094,6 +6094,10 @@ bool anim_create_path_near_tile(AnimRunInfo* run_info)
 // 0x427990
 bool anim_create_path_near_obj(AnimRunInfo* run_info)
 {
+    // CE: each exit that ends a non-PC's turn for want of a path first calls
+    // `ai_note_unreachable`, so under `ai targeting` the NPC can turn to a
+    // target it can reach (combat AI milestone AI-3). It records nothing with
+    // the switch off.
     int64_t source_obj;
     int64_t target_obj;
     int64_t orig_range;
@@ -6193,6 +6197,7 @@ bool anim_create_path_near_obj(AnimRunInfo* run_info)
 
         if (!anim_set_path_flags(&path_create_info, true)) {
             if (!player_is_pc_obj(source_obj)) {
+                ai_note_unreachable(source_obj, target_obj);
                 combat_turn_based_end_critter_turn(source_obj);
             }
             return false;
@@ -6210,6 +6215,7 @@ bool anim_create_path_near_obj(AnimRunInfo* run_info)
                 run_info->path.max -= (int)range - 1;
                 if (run_info->path.max < 1) {
                     if (!player_is_pc_obj(source_obj)) {
+                        ai_note_unreachable(source_obj, target_obj);
                         combat_turn_based_end_critter_turn(source_obj);
                     }
                     return false;
@@ -6231,6 +6237,7 @@ bool anim_create_path_near_obj(AnimRunInfo* run_info)
 
     if (range != 0 || orig_range == 0) {
         if (!player_is_pc_obj(source_obj)) {
+            ai_note_unreachable(source_obj, target_obj);
             combat_turn_based_end_critter_turn(source_obj);
         }
         return false;
@@ -6261,6 +6268,7 @@ bool anim_create_path_near_obj(AnimRunInfo* run_info)
 
     if (path_create_info.flags == PATH_FLAG_0x0001 || (run_info->flags & 0x4000) != 0) {
         if (!player_is_pc_obj(source_obj)) {
+            ai_note_unreachable(source_obj, target_obj);
             combat_turn_based_end_critter_turn(source_obj);
         }
         return false;
@@ -6270,6 +6278,7 @@ bool anim_create_path_near_obj(AnimRunInfo* run_info)
 
     if (!anim_set_path_flags(&path_create_info, true)) {
         if (!player_is_pc_obj(source_obj)) {
+            ai_note_unreachable(source_obj, target_obj);
             combat_turn_based_end_critter_turn(source_obj);
         }
         return false;
@@ -6281,6 +6290,7 @@ bool anim_create_path_near_obj(AnimRunInfo* run_info)
 
     if (run_info->path.max <= 0) {
         if (!player_is_pc_obj(source_obj)) {
+            ai_note_unreachable(source_obj, target_obj);
             combat_turn_based_end_critter_turn(source_obj);
         }
         return false;

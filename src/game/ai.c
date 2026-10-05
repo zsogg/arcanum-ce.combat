@@ -120,8 +120,10 @@ static int ai_apply_danger_type(int64_t source_obj, int danger_type, int64_t tar
 static bool ai_choose_flee_action(Ai* ai);
 static bool ai_can_stop_fleeing(int64_t a1, int64_t a2);
 static int64_t ai_choose_target(int64_t attacker_obj, int64_t candidate1_obj, int64_t candidate2_obj);
+static int64_t ai_choose_target_steady(int64_t attacker_obj, int64_t current_obj, int64_t threat_obj);
 static void ai_engage_or_flee(int64_t a1, int64_t a2);
 static bool ai_should_flee(int64_t source_obj, int64_t target_obj);
+static bool ai_holds_ground(int64_t obj);
 static int64_t ai_find_target(int64_t a1);
 static bool ai_is_valid_target(int64_t a1, int64_t a2);
 static void ai_choose_action(Ai* ai);
@@ -143,6 +145,7 @@ static bool ai_prefers_spells(Ai* ai);
 static bool ai_may_summon(Ai* ai);
 static bool ai_desperate_now(int64_t obj);
 static bool ai_desperation_rolled(int64_t obj);
+static int64_t ai_turn_from_unreachable(int64_t obj, int64_t target_obj);
 static bool ai_use_grenade(Ai* ai, int64_t a2);
 static bool ai_waypoints_process(int64_t obj, bool a2);
 static bool ai_is_day(void);
@@ -1115,6 +1118,9 @@ void ai_update_danger_state(Ai* ai)
     case 1:
         danger_source_obj = ai_keep_or_find_target(ai->obj);
         if (danger_source_obj != OBJ_HANDLE_NULL) {
+            // CE: under `ai targeting`, turn from a target this NPC could not
+            // reach (combat AI milestone AI-3).
+            danger_source_obj = ai_turn_from_unreachable(ai->obj, danger_source_obj);
             ai->danger_source = danger_source_obj;
             ai_choose_action(ai);
             ai->danger_type = ai_apply_danger_type(ai->obj,
@@ -1582,7 +1588,8 @@ void ai_witness_attack(int64_t npc_obj, int64_t source_obj, int64_t target_obj, 
                 ai_react_to_threat(npc_obj, target_obj);
             }
         } else if (critter_social_class_get(npc_obj) != SOCIAL_CLASS_GUARD
-            && (obj_field_int32_get(npc_obj, OBJ_F_CRITTER_FLAGS) & OCF_NO_FLEE) == 0) {
+            && (obj_field_int32_get(npc_obj, OBJ_F_CRITTER_FLAGS) & OCF_NO_FLEE) == 0
+            && !ai_holds_ground(npc_obj)) {
             ai_danger_source(npc_obj, &danger_type, NULL);
             if (danger_type == AI_DANGER_SOURCE_TYPE_NONE
                 && (ai_can_see(npc_obj, target_obj) == 0 || ai_can_hear(npc_obj, target_obj, loudness) == 0)) {
@@ -1832,7 +1839,10 @@ void ai_react_to_threat(int64_t obj, int64_t threat_obj)
         break;
     case AI_DANGER_SOURCE_TYPE_COMBAT_FOCUS:
         if (danger_source_obj == threat_obj
-            || ai_choose_target(obj, danger_source_obj, threat_obj) == threat_obj) {
+            || (feature_enabled(FEATURE_AI_TARGETING)
+                       ? ai_choose_target_steady(obj, danger_source_obj, threat_obj)
+                       : ai_choose_target(obj, danger_source_obj, threat_obj))
+                == threat_obj) {
             ai_engage_or_flee(obj, threat_obj);
         }
         break;
@@ -2255,6 +2265,71 @@ int64_t ai_choose_target(int64_t attacker_obj, int64_t candidate1_obj, int64_t c
     }
 }
 
+// CE: `ai_choose_target` for an NPC that is already fighting, under `ai
+// targeting` (combat AI milestone AI-3). The stock filters stand - a
+// non-critter, an unconscious critter or one beyond 20 tiles is passed over,
+// and a decoy still draws the attack - but the coin flip between the nearer
+// and the higher level minus distance is replaced by commitment: the NPC
+// turns to the new attacker only when `ai_targeting_prefers_new_attacker`
+// says it is adjacent or clearly nearer. zsogg's direction (2026-09-18):
+// ordinary enemies commit to a nearby opponent, so a companion holding one's
+// attention protects the player.
+int64_t ai_choose_target_steady(int64_t attacker_obj, int64_t current_obj, int64_t threat_obj)
+{
+    int64_t current_dist;
+    int64_t threat_dist;
+
+    if (current_obj == OBJ_HANDLE_NULL) {
+        return threat_obj;
+    }
+
+    if (threat_obj == OBJ_HANDLE_NULL) {
+        return current_obj;
+    }
+
+    if (!obj_type_is_critter(obj_field_int32_get(threat_obj, OBJ_F_TYPE))
+        || critter_is_unconscious(threat_obj)) {
+        return current_obj;
+    }
+
+    if (!obj_type_is_critter(obj_field_int32_get(current_obj, OBJ_F_TYPE))
+        || critter_is_unconscious(current_obj)) {
+        return threat_obj;
+    }
+
+    threat_dist = object_dist(attacker_obj, threat_obj);
+    if (threat_dist > 20) {
+        return current_obj;
+    }
+
+    current_dist = object_dist(attacker_obj, current_obj);
+    if (current_dist > 20) {
+        return threat_obj;
+    }
+
+    if (ai_check_decoy(attacker_obj, current_obj)) {
+        return current_obj;
+    }
+
+    if (ai_check_decoy(attacker_obj, threat_obj)) {
+        return threat_obj;
+    }
+
+    return ai_targeting_prefers_new_attacker((int)current_dist, (int)threat_dist)
+        ? threat_obj
+        : current_obj;
+}
+
+bool ai_targeting_prefers_new_attacker(int current_dist, int threat_dist)
+{
+    if (threat_dist <= 1 && current_dist > 1) {
+        return true;
+    }
+
+    return current_dist - threat_dist >= AI_RETARGET_NEARER_BY
+        && threat_dist * 2 <= current_dist;
+}
+
 // 0x4AB2A0
 void ai_engage_or_flee(int64_t obj, int64_t threat_obj)
 {
@@ -2275,6 +2350,10 @@ bool ai_should_flee(int64_t source_obj, int64_t target_obj)
     int source_party_lvl;
 
     if ((obj_field_int32_get(source_obj, OBJ_F_CRITTER_FLAGS) & OCF_NO_FLEE) != 0) {
+        return false;
+    }
+
+    if (ai_holds_ground(source_obj)) {
         return false;
     }
 
@@ -2304,6 +2383,19 @@ bool ai_should_flee(int64_t source_obj, int64_t target_obj)
     }
 
     return false;
+}
+
+// CE: under `ai targeting` (combat AI milestone AI-3, zsogg 2026-10-04) the
+// undead never flee of their own accord: neither as a bystander to an attack
+// (`ai_witness_attack`) nor by `ai_should_flee`'s health, numbers and level
+// tests. Stock leaves that to `OCF_NO_FLEE`, which 51 of the 53 undead
+// prototypes carry; the Gore Guard is one of the two that do not. A spell
+// that compels fleeing still works: it sets `OCF_FLEEING` through
+// `magictech`, which calls `ai_flee` and never asks this.
+static bool ai_holds_ground(int64_t obj)
+{
+    return feature_enabled(FEATURE_AI_TARGETING)
+        && (obj_field_int32_get(obj, OBJ_F_CRITTER_FLAGS) & OCF_UNDEAD) != 0;
 }
 
 // 0x4AB400
@@ -2835,6 +2927,118 @@ bool ai_desperation_rolled(int64_t obj)
         && ai_desperation[slot].obj == obj
         && ai_desperation[slot].key == ai_desperation_key()
         && ai_desperation[slot].desperate;
+}
+
+// CE (combat AI, milestone AI-3): unreachable targets under `ai targeting`.
+// When an NPC's approach to an object finds no path, the animation system
+// ends its turn (`anim_create_path_near_obj`) and, through
+// `ai_note_unreachable`, says so here. On its next decision, within a turn of
+// that, an NPC whose target is recorded turns to the nearest member of the
+// target's side it may attack and has not failed to reach; with none, it
+// keeps the stock behaviour. No extra path search is made: the NPC path
+// budget (`path_limit`, ten a second) is shared with every NPC's movement,
+// and an exhausted budget would read as "unreachable". The turn is
+// `ai_desperation_key`'s: the turn-based round, or one turn length `R`.
+#define AI_UNREACHABLE_MAX 64
+
+static struct {
+    int64_t obj;
+    int64_t target;
+    int key;
+} ai_unreachable[AI_UNREACHABLE_MAX];
+
+static int ai_unreachable_next;
+
+void ai_note_unreachable(int64_t obj, int64_t target_obj)
+{
+    int slot;
+
+    if (!feature_enabled(FEATURE_AI_TARGETING)
+        || obj == OBJ_HANDLE_NULL
+        || target_obj == OBJ_HANDLE_NULL
+        || obj_field_int32_get(obj, OBJ_F_TYPE) != OBJ_TYPE_NPC) {
+        return;
+    }
+
+    for (slot = 0; slot < AI_UNREACHABLE_MAX; slot++) {
+        if (ai_unreachable[slot].obj == obj && ai_unreachable[slot].target == target_obj) {
+            break;
+        }
+    }
+    if (slot == AI_UNREACHABLE_MAX) {
+        slot = ai_unreachable_next;
+        ai_unreachable_next = (ai_unreachable_next + 1) % AI_UNREACHABLE_MAX;
+    }
+
+    ai_unreachable[slot].obj = obj;
+    ai_unreachable[slot].target = target_obj;
+    ai_unreachable[slot].key = ai_desperation_key();
+}
+
+static bool ai_is_unreachable(int64_t obj, int64_t target_obj)
+{
+    int key = ai_desperation_key();
+    int slot;
+
+    for (slot = 0; slot < AI_UNREACHABLE_MAX; slot++) {
+        if (ai_unreachable[slot].obj == obj && ai_unreachable[slot].target == target_obj) {
+            // This turn or the last: turn-based keys count up, real-time
+            // keys (negative) count down, and the two never mix.
+            return (key < 0) == (ai_unreachable[slot].key < 0)
+                && key - ai_unreachable[slot].key >= -1
+                && key - ai_unreachable[slot].key <= 1;
+        }
+    }
+
+    return false;
+}
+
+static int64_t ai_turn_from_unreachable(int64_t obj, int64_t target_obj)
+{
+    int64_t leader_obj;
+    int64_t best_obj = OBJ_HANDLE_NULL;
+    int64_t best_dist = 0;
+    int64_t dist;
+    ObjectList objects;
+    ObjectNode* node;
+
+    if (!feature_enabled(FEATURE_AI_TARGETING)
+        || !ai_is_unreachable(obj, target_obj)
+        || !obj_type_is_critter(obj_field_int32_get(target_obj, OBJ_F_TYPE))) {
+        return target_obj;
+    }
+
+    leader_obj = obj_field_int32_get(target_obj, OBJ_F_TYPE) == OBJ_TYPE_PC
+        ? target_obj
+        : critter_leader_get(target_obj);
+    if (leader_obj == OBJ_HANDLE_NULL) {
+        return target_obj;
+    }
+
+    if (leader_obj != target_obj
+        && ai_is_valid_target(obj, leader_obj)
+        && !ai_is_unreachable(obj, leader_obj)) {
+        best_obj = leader_obj;
+        best_dist = object_dist(obj, leader_obj);
+    }
+
+    object_list_all_followers(leader_obj, &objects);
+    for (node = objects.head; node != NULL; node = node->next) {
+        if (node->obj == target_obj
+            || !ai_is_valid_target(obj, node->obj)
+            || ai_is_unreachable(obj, node->obj)) {
+            continue;
+        }
+
+        dist = object_dist(obj, node->obj);
+        if (best_obj == OBJ_HANDLE_NULL || dist < best_dist) {
+            best_obj = node->obj;
+            best_dist = dist;
+        }
+    }
+    object_list_destroy(&objects);
+
+    return best_obj != OBJ_HANDLE_NULL ? best_obj : target_obj;
 }
 
 // 0x4ABE20
@@ -4130,7 +4334,10 @@ void ai_calc_party_size_and_level_internal(int64_t obj, int* cnt_ptr, int* lvl_p
     node = objects.head;
     while (node != NULL) {
         *cnt_ptr += 1;
-        *lvl_ptr += stat_level_get(obj, STAT_LEVEL);
+        // FIX (porting bug #54): each follower's own level is added, as the
+        // original adds it (0x4AE0E9-0x4AE0F0 pass the node's object to
+        // stat_level_get). CE added the leader's level once per follower.
+        *lvl_ptr += stat_level_get(node->obj, STAT_LEVEL);
         node = node->next;
     }
 

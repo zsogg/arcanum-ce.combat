@@ -243,4 +243,16 @@ int ai_max_dialog_distance(int64_t obj);
 void ai_target_lock(int64_t obj, int64_t tgt);
 void ai_target_unlock(int64_t obj);
 
+// CE: combat AI milestone AI-3 (`ai targeting`). Whether an NPC fighting a
+// target `current_dist` tiles away turns to a new attacker `threat_dist`
+// tiles away: only for an adjacent attacker while the present target is not
+// adjacent, or one at least AI_RETARGET_NEARER_BY tiles nearer and at most
+// half the distance. Pure, so the rule is tested without a game.
+#define AI_RETARGET_NEARER_BY 3
+bool ai_targeting_prefers_new_attacker(int current_dist, int threat_dist);
+
+// CE: combat AI milestone AI-3. The animation system reports an NPC whose
+// approach to `target_obj` found no path, so its AI can turn to another target.
+void ai_note_unreachable(int64_t obj, int64_t target_obj);
+
 #endif /* ARCANUM_GAME_AI_H_ */
