@@ -45,5 +45,7 @@ FEATURE(AI_TARGETING, "ai targeting", false)
 FEATURE(AI_FOLLOWER_LEASH, "ai follower leash", false)
 FEATURE(AI_RESTORATIVES, "ai restoratives", false)
 FEATURE(RESTORATIVE_COST, "restorative cost", false)
+FEATURE(CRITICAL_PROTECTION, "critical protection", false)
+FEATURE(DEBUG_CRITICALS, "debug criticals", false)
 
 // clang-format on

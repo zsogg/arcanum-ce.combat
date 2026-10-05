@@ -4,6 +4,7 @@
 #include "game/anim.h"
 #include "game/background.h"
 #include "game/combat_observer.h"
+#include "game/crit_guard.h"
 #include "game/critter.h"
 #include "game/effect.h"
 #include "game/fate.h"
@@ -2141,6 +2142,17 @@ bool skill_invocation_check_crit_hit(int roll, int effectiveness, SkillInvocatio
 
     // Apply effects.
     chance = effect_adjust_crit_hit_chance(skill_invocation->source.obj, chance);
+
+    // CE (criticals, milestone CR-1): a test instrument. Under `debug
+    // criticals` an attack that lands, by or on the player as its value
+    // says, is critical, so the effects that follow can be measured; Dodge
+    // and other skills are untouched. `combat_process_crit_hit` raises their
+    // effect rolls too.
+    if (skill_invocation->skill != SKILL_DODGE
+        && crit_guard_debug_forces(skill_invocation->source.obj,
+            skill_invocation->target.obj)) {
+        chance = 100;
+    }
 
     // CE (criticals, milestone CR-0): kept for `skill.roll`.
     skill_invocation_last_critical_chance = chance;

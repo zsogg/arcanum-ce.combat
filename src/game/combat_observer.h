@@ -295,10 +295,13 @@ void combat_observer_skill_roll(const char* source, const char* target,
 // that an NPC's critical against the player rolls no bonus damage, blinding,
 // weapon drop or knockout; `weapon_chart` and `body_chart` the weapon's and
 // the target's critical charts; `effects` the damage flags it set, by name.
+// `resisted` (milestone CR-1) the incapacitations protection skipped, which
+// are not among `effects`; `target_down` whether the target was already
+// stunned, unconscious or lying down when the critical struck.
 void combat_observer_critical_rolled(const char* attacker, const char* target,
     bool hit, int hit_location, int effect_bonus, bool aimed,
     bool player_spared, int weapon_chart, int body_chart,
-    unsigned int effects);
+    unsigned int effects, unsigned int resisted, bool target_down);
 void combat_observer_damage_committed(const char* attacker,
     const char* target, const int* components, unsigned int damage_flags,
     int hp_amount, int hp_before, int hp_after, int fatigue_before,

@@ -27,6 +27,7 @@ add_executable(arcanum-tests
     "test_penetration.c"
     "test_ai_targeting.c"
     "test_reload.c"
+    "test_crit_guard.c"
     "test_rt_budget.c"
     "test_weapon_rules.c"
     "test_bsearch.c"

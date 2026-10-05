@@ -1,5 +1,6 @@
 #include "game/combat.h"
 #include "game/combat_observer.h"
+#include "game/crit_guard.h"
 #include "game/rt_budget.h"
 
 #define _USE_MATH_DEFINES
@@ -280,6 +281,9 @@ void combat_reset(void)
     // CE (real-time session B): recovery is not saved (rule 3) - a new game or a
     // load starts every actor ready.
     rt_budget_reset();
+    // CE (criticals, milestone CR-1): protection after critical
+    // incapacitation is not saved either.
+    crit_guard_reset();
 
     in_combat_reset = true;
     combat_turn_based_end();
@@ -352,6 +356,8 @@ bool combat_load(GameLoadInfo* load_info)
 
     // CE (real-time session B): rule 3, as in combat_reset.
     rt_budget_reset();
+    // CE (criticals, milestone CR-1): as in combat_reset.
+    crit_guard_reset();
 
     if (load_info->stream == NULL) return false;
     if (tig_file_fread(&combat_turn_based, sizeof(combat_turn_based), 1, load_info->stream) != 1) return false;
@@ -2579,9 +2585,11 @@ int combat_hit_loc_penalty(int hit_loc)
 
 // CE (criticals, milestone CR-0): `critical.rolled` for one critical, with the
 // effects this roll added. A fumble writes its miss and then the hit it deals
-// its own wielder, so a hit reports only what its own pass set.
+// its own wielder, so a hit reports only what its own pass set. `resisted` is
+// what CR-1's protection skipped.
 static void combat_observe_critical(CombatContext* combat, bool hit, int effect_bonus,
-    bool player_spared, int weapon_chart, int body_chart, unsigned int effects)
+    bool player_spared, int weapon_chart, int body_chart, unsigned int effects,
+    unsigned int resisted)
 {
     char attacker[COMBAT_OBSERVER_IDENTITY_SIZE];
     char target[COMBAT_OBSERVER_IDENTITY_SIZE];
@@ -2594,7 +2602,9 @@ static void combat_observe_critical(CombatContext* combat, bool hit, int effect_
     combat_observer_object_id(combat->target_obj, target);
     combat_observer_critical_rolled(attacker, target, hit, combat->hit_loc,
         effect_bonus, (combat->flags & CF_AIM) != 0, player_spared,
-        weapon_chart, body_chart, effects);
+        weapon_chart, body_chart, effects, resisted,
+        obj_type_is_critter(obj_field_int32_get(combat->target_obj, OBJ_F_TYPE))
+            && crit_guard_is_down(combat->target_obj));
 }
 
 // 0x4B5F40
@@ -2610,6 +2620,7 @@ void combat_process_crit_hit(CombatContext* combat)
     int64_t helmet_obj;
     int difficulty;
     unsigned int flags_before;
+    unsigned int resisted;
 
     if (combat->target_obj == OBJ_HANDLE_NULL) {
         return;
@@ -2654,6 +2665,13 @@ void combat_process_crit_hit(CombatContext* combat)
     }
 
     chance = effect_adjust_crit_hit_effect(combat->attacker_obj, chance);
+
+    // CE (criticals, milestone CR-1): the test instrument's other half. Under
+    // `debug criticals` a forced critical also rolls its effects 60 points
+    // more easily, so incapacitations happen often enough to measure.
+    if (crit_guard_debug_forces(combat->attacker_obj, combat->target_obj)) {
+        chance += 60;
+    }
 
     if ((combat->flags & CF_AIM) != 0) {
         chance += 10;
@@ -2780,8 +2798,15 @@ void combat_process_crit_hit(CombatContext* combat)
         combat->dam_flags = CDF_BONUS_DAM_50;
     }
 
+    // CE (criticals, milestone CR-1): under `critical protection`, a target
+    // that has recovered from a critical's incapacitation resists another
+    // until its protection ends. The critical still lands; only the stun,
+    // knockdown or knockout is skipped, after every roll, so no draw changes.
+    resisted = crit_guard_filter(combat->target_obj, combat->dam_flags & ~flags_before);
+    combat->dam_flags &= ~resisted;
+
     combat_observe_critical(combat, true, chance, npc_attacks_pc,
-        crit_hit_type, crit_body_type, combat->dam_flags & ~flags_before);
+        crit_hit_type, crit_body_type, combat->dam_flags & ~flags_before, resisted);
 }
 
 // 0x4B6410
@@ -2844,11 +2869,11 @@ void combat_process_crit_miss(CombatContext* combat)
         // CE (criticals, milestone CR-0): the miss, then the hit it deals
         // its own wielder.
         combat_observe_critical(combat, false, chance, false, crit_miss_type, -1,
-            combat->dam_flags);
+            combat->dam_flags, 0);
         combat_process_crit_hit(combat);
     } else {
         // CE (criticals, milestone CR-0): a critical miss that does nothing.
-        combat_observe_critical(combat, false, chance, false, crit_miss_type, -1, 0);
+        combat_observe_critical(combat, false, chance, false, crit_miss_type, -1, 0, 0);
     }
 }
 
@@ -3851,6 +3876,9 @@ void combat_turn_based_subturn_start(void)
         combat_debug(combat_whos_turn_node->obj, "SubTurn Start");
         combat_turn_based_whos_turn_set(combat_whos_turn_node->obj);
         combat_check_action_points(combat_whos_turn_node->obj, 0);
+        // CE (criticals, milestone CR-1): a turn that begins with them up
+        // ends their protection when it ends.
+        crit_guard_turn_started(combat_whos_turn_node->obj);
     } else {
         tig_debug_printf("Combat: combat_turn_based_subturn_start: ERROR: Couldn't start TB Combat Turn due to no Active Critters!\n");
         combat_turn_based_end();
@@ -3861,6 +3889,8 @@ void combat_turn_based_subturn_start(void)
 void combat_turn_based_subturn_end(void)
 {
     combat_debug(combat_whos_turn_node->obj, "SubTurn End");
+    // CE (criticals, milestone CR-1).
+    crit_guard_turn_ended(combat_whos_turn_node->obj);
     if (combat_observer_is_enabled()) {
         char actor[COMBAT_OBSERVER_IDENTITY_SIZE];
 

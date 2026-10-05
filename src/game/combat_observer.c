@@ -784,39 +784,49 @@ static const struct {
     { CDF_DAMAGE_ARMOR, "damage_armor" },
 };
 
-void combat_observer_critical_rolled(const char* attacker, const char* target,
-    bool hit, int hit_location, int effect_bonus, bool aimed,
-    bool player_spared, int weapon_chart, int body_chart,
-    unsigned int effects)
+// `flags`' effects as a JSON list's contents, in the table's order.
+static void combat_observer_critical_effect_names(unsigned int flags, char* list, size_t size)
 {
-    char line[1024];
-    char action[32];
-    char list[512];
     size_t used = 0;
     size_t index;
 
-    if (!combat_observer_begin_semantic()) return;
-
     list[0] = '\0';
     for (index = 0; index < sizeof(combat_observer_critical_effects) / sizeof(combat_observer_critical_effects[0]); index++) {
-        if ((effects & combat_observer_critical_effects[index].flag) != 0) {
-            int written = snprintf(list + used, sizeof(list) - used, "%s\"%s\"",
+        if ((flags & combat_observer_critical_effects[index].flag) != 0) {
+            int written = snprintf(list + used, size - used, "%s\"%s\"",
                 used > 0 ? "," : "", combat_observer_critical_effects[index].name);
-            if (written < 0 || (size_t)written >= sizeof(list) - used) {
+            if (written < 0 || (size_t)written >= size - used) {
                 break;
             }
             used += (size_t)written;
         }
     }
+}
+
+void combat_observer_critical_rolled(const char* attacker, const char* target,
+    bool hit, int hit_location, int effect_bonus, bool aimed,
+    bool player_spared, int weapon_chart, int body_chart,
+    unsigned int effects, unsigned int resisted, bool target_down)
+{
+    char line[1280];
+    char action[32];
+    char list[512];
+    char resisted_list[128];
+
+    if (!combat_observer_begin_semantic()) return;
+
+    combat_observer_critical_effect_names(effects, list, sizeof(list));
+    combat_observer_critical_effect_names(resisted, resisted_list, sizeof(resisted_list));
 
     snprintf(line, sizeof(line),
-        "{\"schema\":%d,\"sequence\":%u,\"event\":\"critical.rolled\",\"turn\":%u,\"action_id\":%s,\"attacker\":\"%s\",\"target\":\"%s\",\"kind\":\"%s\",\"hit_location\":%d,\"effect_bonus\":%d,\"aimed\":%s,\"player_spared\":%s,\"weapon_chart\":%d,\"body_chart\":%d,\"effects\":[%s]}",
+        "{\"schema\":%d,\"sequence\":%u,\"event\":\"critical.rolled\",\"turn\":%u,\"action_id\":%s,\"attacker\":\"%s\",\"target\":\"%s\",\"kind\":\"%s\",\"hit_location\":%d,\"effect_bonus\":%d,\"aimed\":%s,\"player_spared\":%s,\"weapon_chart\":%d,\"body_chart\":%d,\"effects\":[%s],\"resisted\":[%s],\"target_down\":%s}",
         COMBAT_OBSERVER_SCHEMA,
         combat_observer_sequence++, combat_observer_turn,
         combat_observer_action_json(action, sizeof(action)), attacker, target,
         hit ? "hit" : "miss", hit_location, effect_bonus,
         aimed ? "true" : "false", player_spared ? "true" : "false",
-        weapon_chart, body_chart, list);
+        weapon_chart, body_chart, list, resisted_list,
+        target_down ? "true" : "false");
     combat_observer_write(line);
 }
 

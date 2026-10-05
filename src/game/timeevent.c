@@ -5,6 +5,7 @@
 #include "game/ai.h"
 #include "game/anim.h"
 #include "game/combat.h"
+#include "game/crit_guard.h"
 #include "game/critter.h"
 #include "game/gfade.h"
 #include "game/item.h"
@@ -893,6 +894,9 @@ void timeevent_ping(tig_timestamp_t timestamp)
             // CE (real-time session B): the action budget's clock, in real
             // milliseconds and only while the game is not paused (rules 2, 8).
             rt_budget_tick((int)delta);
+            // CE (criticals, milestone CR-1): protection's clock, on the same
+            // terms.
+            crit_guard_tick((int)delta);
             // CE (reload prototype session 4): loading outside combat.
             reload_prep_tick((int)delta);
         }

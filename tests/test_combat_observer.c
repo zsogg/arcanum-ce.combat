@@ -89,7 +89,7 @@ TEST(a_complete_trace_has_ordered_control_and_semantic_events)
     combat_observer_skill_roll("fighter", "opponent", 2,
         55, 0, 40, 99, 2, true, false);
     combat_observer_critical_rolled("fighter", "opponent", true, 1, 10,
-        true, false, 0, 0, CDF_BONUS_DAM_100 | CDF_STUN);
+        true, false, 0, 0, CDF_BONUS_DAM_100 | CDF_STUN, CDF_KNOCKDOWN, true);
     combat_observer_damage_committed("fighter", "opponent", damage,
         0, 4, 0, 4, 0, 2, false, false);
     combat_observer_attack_resolved(action, "fighter", "opponent",
@@ -107,7 +107,7 @@ TEST(a_complete_trace_has_ordered_control_and_semantic_events)
     // Criticals, milestone CR-0: the effects by name, in their flags' order.
     CHECK(strstr(trace, "\"event\":\"critical.rolled\"") != NULL);
     CHECK(strstr(trace, "\"kind\":\"hit\",\"hit_location\":1,\"effect_bonus\":10,\"aimed\":true,\"player_spared\":false") != NULL);
-    CHECK(strstr(trace, "\"effects\":[\"bonus_100\",\"stun\"]") != NULL);
+    CHECK(strstr(trace, "\"effects\":[\"bonus_100\",\"stun\"],\"resisted\":[\"knockdown\"],\"target_down\":true") != NULL);
     CHECK(strstr(trace, "\"normal\":4,\"fatigue\":2") != NULL);
     CHECK(strstr(trace, "\"hp_before\":0,\"hp_after\":4") != NULL);
     CHECK(strstr(trace, "\"event\":\"run.ended\"") != NULL);
