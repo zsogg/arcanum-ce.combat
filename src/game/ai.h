@@ -253,6 +253,11 @@ void ai_target_unlock(int64_t obj);
 // CE: under `ai follower leash` (combat AI milestone AI-3), how far from its
 // PC leader a follower's target may be, in tiles; stock is 20.
 #define AI_FOLLOWER_LEASH 8
+
+// CE: how far from `leader_obj` the follower `obj` may take a target. 20, the
+// stock distance, except under `ai follower leash` for a follower of a PC
+// that has not been told to Spread Out (combat AI milestones AI-3 and AI-4).
+int ai_follower_reach(int64_t obj, int64_t leader_obj);
 bool ai_targeting_prefers_new_attacker(int current_dist, int threat_dist);
 
 // CE: combat AI milestone AI-3. The animation system reports an NPC whose

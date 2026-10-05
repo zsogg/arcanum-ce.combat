@@ -43,5 +43,6 @@ FEATURE(AI_ARMOR_AWARE, "ai armor aware", false)
 FEATURE(AI_SPELLCASTING, "ai spellcasting", false)
 FEATURE(AI_TARGETING, "ai targeting", false)
 FEATURE(AI_FOLLOWER_LEASH, "ai follower leash", false)
+FEATURE(AI_RESTORATIVES, "ai restoratives", false)
 
 // clang-format on

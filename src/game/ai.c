@@ -124,7 +124,6 @@ static int64_t ai_choose_target_steady(int64_t attacker_obj, int64_t current_obj
 static void ai_engage_or_flee(int64_t a1, int64_t a2);
 static bool ai_should_flee(int64_t source_obj, int64_t target_obj);
 static bool ai_holds_ground(int64_t obj);
-static int ai_follower_reach(int64_t leader_obj);
 static int64_t ai_find_target(int64_t a1);
 static bool ai_is_valid_target(int64_t a1, int64_t a2);
 static void ai_choose_action(Ai* ai);
@@ -149,6 +148,11 @@ static bool ai_desperation_rolled(int64_t obj);
 static int64_t ai_turn_from_unreachable(int64_t obj, int64_t target_obj);
 static int64_t ai_hunter_choose(int64_t obj, int64_t target_obj);
 static void ai_roles_load(void);
+static void ai_observe_item_used(Ai* ai, int64_t item_obj, int64_t target_obj);
+static bool ai_restorative_refused(int64_t obj);
+static bool ai_heal_choosing;
+static void ai_restorative_note_used(int64_t obj);
+static void ai_restorative_forget(int64_t obj);
 static bool ai_use_grenade(Ai* ai, int64_t a2);
 static bool ai_waypoints_process(int64_t obj, bool a2);
 static bool ai_is_day(void);
@@ -513,6 +517,7 @@ void ai_set_callbacks(Func5F848C a1, AiFloatLineFunc float_line_func)
 void ai_process(int64_t obj)
 {
     Ai ai;
+    bool healed;
 
     if (map_is_clearing_objects()) {
         return;
@@ -524,7 +529,17 @@ void ai_process(int64_t obj)
         return;
     }
 
-    if (ai_heal(&ai)) {
+    // CE (combat AI, milestone AI-4): the item cap applies while `ai_heal`
+    // chooses, to restoratives and to nothing else on the lists; an NPC out
+    // of combat mode starts its next fight with its allowance back.
+    if (!combat_critter_is_combat_mode_active(obj)) {
+        ai_restorative_forget(obj);
+    }
+    ai_heal_choosing = true;
+    healed = ai_heal(&ai);
+    ai_heal_choosing = false;
+
+    if (healed) {
         ai.origin = "heal";
     } else if (ai_look_for_item(&ai)) {
         ai.origin = "pickup";
@@ -594,6 +609,82 @@ static void ai_observe_decision(Ai* ai, const char* action)
         ai->origin, action, ai->spell == 10000 ? -1 : ai->spell, item, weapon,
         ai->cast_chance, ai->cast_roll, (const int (*)[2])ai->considered, ai->considered_count,
         ai_desperation_rolled(ai->obj));
+}
+
+// CE (combat AI, milestone AI-4): `ai.decided` for an item the lists use at
+// once (`ai_choose_action_from_list`, an entry with no spell), as an "item"
+// decision of its own. The pass's state is left as it was.
+static void ai_observe_item_used(Ai* ai, int64_t item_obj, int64_t target_obj)
+{
+    int64_t item_before = ai->item_obj;
+    int64_t target_before = ai->danger_source;
+    const char* origin_before = ai->origin;
+
+    ai->item_obj = item_obj;
+    ai->danger_source = target_obj;
+    if (ai_heal_choosing) {
+        // `ai_process` names the origin only once `ai_heal` returns.
+        ai->origin = "heal";
+    }
+    ai_observe_decision(ai, "item");
+    ai->item_obj = item_before;
+    ai->danger_source = target_before;
+    ai->origin = origin_before;
+}
+
+// CE (combat AI, milestone AI-4): under `ai restoratives` an enemy - an NPC
+// outside the player's party - uses at most one restorative item a fight,
+// whatever it carries (zsogg, 2026-10-05). It applies while `ai_heal`
+// chooses; spells are not limited. The record clears once the NPC is out of
+// combat mode, which is what "a fight" means here.
+#define AI_RESTORATIVES_MAX 64
+
+static int64_t ai_restorative_users[AI_RESTORATIVES_MAX];
+static int ai_restorative_next;
+
+static bool ai_restorative_capped(int64_t obj)
+{
+    return ai_heal_choosing
+        && feature_enabled(FEATURE_AI_RESTORATIVES)
+        && obj_field_int32_get(obj, OBJ_F_TYPE) == OBJ_TYPE_NPC
+        && critter_pc_leader_get(obj) == OBJ_HANDLE_NULL;
+}
+
+static int ai_restorative_slot(int64_t obj)
+{
+    int slot;
+
+    for (slot = 0; slot < AI_RESTORATIVES_MAX; slot++) {
+        if (ai_restorative_users[slot] == obj) {
+            return slot;
+        }
+    }
+
+    return -1;
+}
+
+void ai_restorative_forget(int64_t obj)
+{
+    int slot = ai_restorative_slot(obj);
+
+    if (slot >= 0) {
+        ai_restorative_users[slot] = OBJ_HANDLE_NULL;
+    }
+}
+
+bool ai_restorative_refused(int64_t obj)
+{
+    return ai_restorative_capped(obj) && ai_restorative_slot(obj) >= 0;
+}
+
+void ai_restorative_note_used(int64_t obj)
+{
+    if (!ai_restorative_capped(obj) || ai_restorative_slot(obj) >= 0) {
+        return;
+    }
+
+    ai_restorative_users[ai_restorative_next] = obj;
+    ai_restorative_next = (ai_restorative_next + 1) % AI_RESTORATIVES_MAX;
 }
 
 // Decides whether this critter acts at all this tick, and does the once-a-tick
@@ -2411,10 +2502,15 @@ static bool ai_holds_ground(int64_t obj)
 // followers "less aggressive and stay close to the player character") a
 // follower of a PC takes targets only within AI_FOLLOWER_LEASH tiles of it,
 // and with none left follows it again. An NPC led by an NPC keeps 20.
-static int ai_follower_reach(int64_t leader_obj)
+//
+// The leash is the Defensive stance (milestone AI-4, zsogg 2026-10-05): a
+// follower told to Spread Out (`ONF_AI_SPREAD_OUT`, which the game saves) is
+// Aggressive and keeps the stock 20; Stay Close, the default, is Defensive.
+int ai_follower_reach(int64_t obj, int64_t leader_obj)
 {
     if (feature_enabled(FEATURE_AI_FOLLOWER_LEASH)
-        && obj_field_int32_get(leader_obj, OBJ_F_TYPE) == OBJ_TYPE_PC) {
+        && obj_field_int32_get(leader_obj, OBJ_F_TYPE) == OBJ_TYPE_PC
+        && (obj_field_int32_get(obj, OBJ_F_NPC_FLAGS) & ONF_AI_SPREAD_OUT) == 0) {
         return AI_FOLLOWER_LEASH;
     }
 
@@ -2676,9 +2772,10 @@ bool ai_is_valid_target(int64_t source_obj, int64_t target_obj)
     }
 
     // CE: `ai_follower_reach` is 20, the stock distance, except under `ai
-    // follower leash` for a follower of a PC (combat AI milestone AI-3).
+    // follower leash` for a Defensive follower of a PC (combat AI milestones
+    // AI-3 and AI-4).
     if (source_leader_obj != OBJ_HANDLE_NULL
-        && object_dist(source_leader_obj, target_obj) > ai_follower_reach(source_leader_obj)) {
+        && object_dist(source_leader_obj, target_obj) > ai_follower_reach(source_obj, source_leader_obj)) {
         return false;
     }
 
@@ -3321,7 +3418,17 @@ bool ai_choose_action_from_list(Ai* ai, S4ABF10* a2)
             }
         }
 
+        if (entry->item_obj != OBJ_HANDLE_NULL && ai_restorative_refused(ai->obj)) {
+            continue;
+        }
+
         if (entry->spell == -1) {
+            // CE (combat AI, milestone AI-4): the item is used here, at once,
+            // and this pass then acts as usual - the original's flow, in which
+            // a drink is followed by the pass's own action. `ai.decided`
+            // reported only that action, so a drink read as an attack.
+            ai_observe_item_used(ai, entry->item_obj, obj);
+            ai_restorative_note_used(ai->obj);
             item_use_on_obj(ai->obj, entry->item_obj, obj);
             return true;
         }
@@ -3340,6 +3447,7 @@ bool ai_choose_action_from_list(Ai* ai, S4ABF10* a2)
         if (code == 0) {
             if (entry->item_obj != OBJ_HANDLE_NULL
                 && mt_item_valid_ai_action(entry->item_obj)) {
+                ai_restorative_note_used(ai->obj);
                 ai->action_type = AI_ACTION_TYPE_USE_ITEM;
                 ai->spell = entry->spell;
                 ai->item_obj = entry->item_obj;
