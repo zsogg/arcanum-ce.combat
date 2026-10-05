@@ -29,6 +29,10 @@ int max_skill_for_stat_level(int stat_level);
 int skill_gambling_random_roll(void);
 static bool skill_invocation_check_crit_hit(int roll, int effectiveness, SkillInvocation* skill_invocation);
 static bool skill_invocation_check_crit_miss(int roll, int effectiveness, SkillInvocation* skill_invocation);
+
+// CE (criticals, milestone CR-0): the chance the last critical roll was
+// compared with, for `skill.roll`; -1 when neither check ran.
+static int skill_invocation_last_critical_chance = -1;
 static bool is_controlled_by_local_pc(int64_t obj);
 
 /**
@@ -1582,6 +1586,7 @@ bool skill_invocation_run(SkillInvocation* skill_invocation)
 
     // Roll for critical hit/critical miss.
     crit_roll = random_between(1, 100);
+    skill_invocation_last_critical_chance = -1;
     if (is_success) {
         // Determine if a hit is critical.
         is_critical = skill_invocation_check_crit_hit(crit_roll, effectiveness, skill_invocation);
@@ -2070,8 +2075,8 @@ bool skill_invocation_run(SkillInvocation* skill_invocation)
         combat_observer_object_id(source_obj, source);
         combat_observer_object_id(target_obj, target);
         combat_observer_skill_roll(source, target, skill, effectiveness,
-            difficulty, rnd_difficulty_roll, crit_roll, is_success,
-            is_critical);
+            difficulty, rnd_difficulty_roll, crit_roll,
+            skill_invocation_last_critical_chance, is_success, is_critical);
     }
 
     return true;
@@ -2137,6 +2142,9 @@ bool skill_invocation_check_crit_hit(int roll, int effectiveness, SkillInvocatio
     // Apply effects.
     chance = effect_adjust_crit_hit_chance(skill_invocation->source.obj, chance);
 
+    // CE (criticals, milestone CR-0): kept for `skill.roll`.
+    skill_invocation_last_critical_chance = chance;
+
     // Compare the roll (1-100) to the final critical hit chance to determine if
     // a critical hit occurs.
     return roll <= chance;
@@ -2194,6 +2202,9 @@ bool skill_invocation_check_crit_miss(int roll, int effectiveness, SkillInvocati
     if (chance < 2) {
         chance = 2;
     }
+
+    // CE (criticals, milestone CR-0): kept for `skill.roll`.
+    skill_invocation_last_critical_chance = chance;
 
     // Compare the roll (1-100) to the final critical miss chance to determine
     // if a critical miss occurs.

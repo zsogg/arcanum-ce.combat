@@ -7,6 +7,7 @@
 
 #include <tig/tig.h>
 
+#include "game/combat.h"
 #include "game/damage_type.h"
 #include "game/obj_id.h"
 #include "game/obj_pool.h"
@@ -740,20 +741,82 @@ void combat_observer_budget(const char* event, const char* actor,
 
 void combat_observer_skill_roll(const char* source, const char* target,
     int skill, int effectiveness, int difficulty, int roll,
-    int critical_roll, bool success, bool critical)
+    int critical_roll, int critical_chance, bool success, bool critical)
 {
-    char line[640];
+    char line[704];
     char action[32];
 
     if (combat_observer_current_action == 0
         || !combat_observer_begin_semantic()) return;
     snprintf(line, sizeof(line),
-        "{\"schema\":%d,\"sequence\":%u,\"event\":\"skill.roll\",\"turn\":%u,\"action_id\":%s,\"source\":\"%s\",\"target\":\"%s\",\"skill\":%d,\"effectiveness\":%d,\"difficulty\":%d,\"roll\":%d,\"critical_roll\":%d,\"success\":%s,\"critical\":%s}",
+        "{\"schema\":%d,\"sequence\":%u,\"event\":\"skill.roll\",\"turn\":%u,\"action_id\":%s,\"source\":\"%s\",\"target\":\"%s\",\"skill\":%d,\"effectiveness\":%d,\"difficulty\":%d,\"roll\":%d,\"critical_roll\":%d,\"critical_chance\":%d,\"success\":%s,\"critical\":%s}",
         COMBAT_OBSERVER_SCHEMA,
         combat_observer_sequence++, combat_observer_turn,
         combat_observer_action_json(action, sizeof(action)), source, target,
-        skill, effectiveness, difficulty, roll, critical_roll,
+        skill, effectiveness, difficulty, roll, critical_roll, critical_chance,
         success ? "true" : "false", critical ? "true" : "false");
+    combat_observer_write(line);
+}
+
+// CE (criticals, milestone CR-0): the effects a critical rolled, by name, in
+// the order of their flags.
+static const struct {
+    unsigned int flag;
+    const char* name;
+} combat_observer_critical_effects[] = {
+    { CDF_BONUS_DAM_50, "bonus_50" },
+    { CDF_BONUS_DAM_100, "bonus_100" },
+    { CDF_BONUS_DAM_200, "bonus_200" },
+    { CDF_STUN, "stun" },
+    { CDF_KNOCKDOWN, "knockdown" },
+    { CDF_KNOCKOUT, "knockout" },
+    { CDF_BLIND, "blind" },
+    { CDF_CRIPPLE_ARM, "cripple_arm" },
+    { CDF_CRIPPLE_LEG, "cripple_leg" },
+    { CDF_SCAR, "scar" },
+    { CDF_DROP_WEAPON, "drop_weapon" },
+    { CDF_DAMAGE_WEAPON, "damage_weapon" },
+    { CDF_DESTROY_WEAPON, "destroy_weapon" },
+    { CDF_EXPLODE_WEAPON, "explode_weapon" },
+    { CDF_LOST_AMMO, "lost_ammo" },
+    { CDF_DESTROY_AMMO, "destroy_ammo" },
+    { CDF_DROP_HELMET, "drop_helmet" },
+    { CDF_DAMAGE_ARMOR, "damage_armor" },
+};
+
+void combat_observer_critical_rolled(const char* attacker, const char* target,
+    bool hit, int hit_location, int effect_bonus, bool aimed,
+    bool player_spared, int weapon_chart, int body_chart,
+    unsigned int effects)
+{
+    char line[1024];
+    char action[32];
+    char list[512];
+    size_t used = 0;
+    size_t index;
+
+    if (!combat_observer_begin_semantic()) return;
+
+    list[0] = '\0';
+    for (index = 0; index < sizeof(combat_observer_critical_effects) / sizeof(combat_observer_critical_effects[0]); index++) {
+        if ((effects & combat_observer_critical_effects[index].flag) != 0) {
+            int written = snprintf(list + used, sizeof(list) - used, "%s\"%s\"",
+                used > 0 ? "," : "", combat_observer_critical_effects[index].name);
+            if (written < 0 || (size_t)written >= sizeof(list) - used) {
+                break;
+            }
+            used += (size_t)written;
+        }
+    }
+
+    snprintf(line, sizeof(line),
+        "{\"schema\":%d,\"sequence\":%u,\"event\":\"critical.rolled\",\"turn\":%u,\"action_id\":%s,\"attacker\":\"%s\",\"target\":\"%s\",\"kind\":\"%s\",\"hit_location\":%d,\"effect_bonus\":%d,\"aimed\":%s,\"player_spared\":%s,\"weapon_chart\":%d,\"body_chart\":%d,\"effects\":[%s]}",
+        COMBAT_OBSERVER_SCHEMA,
+        combat_observer_sequence++, combat_observer_turn,
+        combat_observer_action_json(action, sizeof(action)), attacker, target,
+        hit ? "hit" : "miss", hit_location, effect_bonus,
+        aimed ? "true" : "false", player_spared ? "true" : "false",
+        weapon_chart, body_chart, list);
     combat_observer_write(line);
 }
 

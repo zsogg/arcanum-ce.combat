@@ -281,9 +281,24 @@ void combat_observer_budget(const char* event, const char* actor,
     const char* category, int action_points, int duration_ms, int elapsed_ms,
     const char* reason);
 
+// `critical_chance` (criticals, milestone CR-0) is what `critical_roll` was
+// compared with: the critical-hit chance on a success, the critical-miss chance
+// on a failure, -1 when neither was rolled.
 void combat_observer_skill_roll(const char* source, const char* target,
     int skill, int effectiveness, int difficulty, int roll,
-    int critical_roll, bool success, bool critical);
+    int critical_roll, int critical_chance, bool success, bool critical);
+
+// CE (criticals, milestone CR-0): one critical, after its effects are rolled.
+// `kind` is "hit" or "miss"; `effect_bonus` is the weapon's critical-effect
+// bonus (critical-failure bonus for a miss) after effects, the number every
+// effect roll adds; `aimed` a called shot; `player_spared` the stock rule
+// that an NPC's critical against the player rolls no bonus damage, blinding,
+// weapon drop or knockout; `weapon_chart` and `body_chart` the weapon's and
+// the target's critical charts; `effects` the damage flags it set, by name.
+void combat_observer_critical_rolled(const char* attacker, const char* target,
+    bool hit, int hit_location, int effect_bonus, bool aimed,
+    bool player_spared, int weapon_chart, int body_chart,
+    unsigned int effects);
 void combat_observer_damage_committed(const char* attacker,
     const char* target, const int* components, unsigned int damage_flags,
     int hp_amount, int hp_before, int hp_after, int fatigue_before,

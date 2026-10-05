@@ -87,7 +87,9 @@ TEST(a_complete_trace_has_ordered_control_and_semantic_events)
     combat_observer_ap_committed("fighter", 4, 8, 4, true, 0, 0);
     action = combat_observer_attack_started("fighter", "opponent", 2, 0, 0, false);
     combat_observer_skill_roll("fighter", "opponent", 2,
-        55, 0, 40, 99, true, false);
+        55, 0, 40, 99, 2, true, false);
+    combat_observer_critical_rolled("fighter", "opponent", true, 1, 10,
+        true, false, 0, 0, CDF_BONUS_DAM_100 | CDF_STUN);
     combat_observer_damage_committed("fighter", "opponent", damage,
         0, 4, 0, 4, 0, 2, false, false);
     combat_observer_attack_resolved(action, "fighter", "opponent",
@@ -101,7 +103,11 @@ TEST(a_complete_trace_has_ordered_control_and_semantic_events)
     CHECK(strstr(trace, "\"event\":\"skill.roll\"") != NULL);
     CHECK(strstr(trace, "\"weapon_description\":6056") != NULL);
     CHECK(strstr(trace, "\"weapon_skill_level\":3,\"weapon_training\":0,\"weapon_speed\":10") != NULL);
-    CHECK(strstr(trace, "\"success\":true,\"critical\":false") != NULL);
+    CHECK(strstr(trace, "\"critical_roll\":99,\"critical_chance\":2,\"success\":true,\"critical\":false") != NULL);
+    // Criticals, milestone CR-0: the effects by name, in their flags' order.
+    CHECK(strstr(trace, "\"event\":\"critical.rolled\"") != NULL);
+    CHECK(strstr(trace, "\"kind\":\"hit\",\"hit_location\":1,\"effect_bonus\":10,\"aimed\":true,\"player_spared\":false") != NULL);
+    CHECK(strstr(trace, "\"effects\":[\"bonus_100\",\"stun\"]") != NULL);
     CHECK(strstr(trace, "\"normal\":4,\"fatigue\":2") != NULL);
     CHECK(strstr(trace, "\"hp_before\":0,\"hp_after\":4") != NULL);
     CHECK(strstr(trace, "\"event\":\"run.ended\"") != NULL);
@@ -525,7 +531,7 @@ TEST(observation_does_not_advance_the_combat_rng)
     CHECK(combat_observer_open(TRACE_FILE));
     combat_observer_turn_started("fighter", 8);
     combat_observer_skill_roll("fighter", "opponent", 2,
-        50, 0, 10, 10, true, true);
+        50, 0, 10, 10, 2, true, true);
     combat_observer_close();
     second_with = random_rand();
 

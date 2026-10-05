@@ -2577,6 +2577,26 @@ int combat_hit_loc_penalty(int hit_loc)
     return hit_loc_penalties[hit_loc];
 }
 
+// CE (criticals, milestone CR-0): `critical.rolled` for one critical, with the
+// effects this roll added. A fumble writes its miss and then the hit it deals
+// its own wielder, so a hit reports only what its own pass set.
+static void combat_observe_critical(CombatContext* combat, bool hit, int effect_bonus,
+    bool player_spared, int weapon_chart, int body_chart, unsigned int effects)
+{
+    char attacker[COMBAT_OBSERVER_IDENTITY_SIZE];
+    char target[COMBAT_OBSERVER_IDENTITY_SIZE];
+
+    if (!combat_observer_is_enabled()) {
+        return;
+    }
+
+    combat_observer_object_id(combat->attacker_obj, attacker);
+    combat_observer_object_id(combat->target_obj, target);
+    combat_observer_critical_rolled(attacker, target, hit, combat->hit_loc,
+        effect_bonus, (combat->flags & CF_AIM) != 0, player_spared,
+        weapon_chart, body_chart, effects);
+}
+
 // 0x4B5F40
 void combat_process_crit_hit(CombatContext* combat)
 {
@@ -2589,6 +2609,7 @@ void combat_process_crit_hit(CombatContext* combat)
     unsigned int critter_flags;
     int64_t helmet_obj;
     int difficulty;
+    unsigned int flags_before;
 
     if (combat->target_obj == OBJ_HANDLE_NULL) {
         return;
@@ -2609,6 +2630,10 @@ void combat_process_crit_hit(CombatContext* combat)
 
     npc_attacks_pc = target_obj_type == OBJ_TYPE_PC
         && attacker_obj_type == OBJ_TYPE_NPC;
+
+    // CE (criticals, milestone CR-0): what was already set, so the event
+    // reports only this pass's effects.
+    flags_before = combat->dam_flags;
 
     crit_body_type = obj_field_int32_get(combat->target_obj, OBJ_F_CRITTER_CRIT_HIT_CHART);
 
@@ -2754,6 +2779,9 @@ void combat_process_crit_hit(CombatContext* combat)
     if (combat->dam_flags == 0) {
         combat->dam_flags = CDF_BONUS_DAM_50;
     }
+
+    combat_observe_critical(combat, true, chance, npc_attacks_pc,
+        crit_hit_type, crit_body_type, combat->dam_flags & ~flags_before);
 }
 
 // 0x4B6410
@@ -2813,7 +2841,14 @@ void combat_process_crit_miss(CombatContext* combat)
             }
         }
 
+        // CE (criticals, milestone CR-0): the miss, then the hit it deals
+        // its own wielder.
+        combat_observe_critical(combat, false, chance, false, crit_miss_type, -1,
+            combat->dam_flags);
         combat_process_crit_hit(combat);
+    } else {
+        // CE (criticals, milestone CR-0): a critical miss that does nothing.
+        combat_observe_critical(combat, false, chance, false, crit_miss_type, -1, 0);
     }
 }
 
