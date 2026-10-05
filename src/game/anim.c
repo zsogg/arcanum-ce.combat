@@ -10581,9 +10581,14 @@ bool AGbeginGetUpAnim(AnimRunInfo* run_info)
         return false;
     }
 
+    // FIX (porting bug #55): in turn-based a critter gets up only on its own
+    // turn, paying for it, as the original refuses when it is not
+    // (0x42E5F2-0x42E5F8: `jne` to the failure exit). CE had the test
+    // inverted, so a knocked-down critter got up for free on anyone else's
+    // turn and was refused the animation on its own.
     if (combat_turn_based_is_active()
         // CE (real-time session C): the shared cost - the original's 5.
-        && (combat_turn_based_whos_turn_get() == obj || !combat_consume_action_points(obj, combat_get_up_cost(obj)))) {
+        && (combat_turn_based_whos_turn_get() != obj || !combat_consume_action_points(obj, combat_get_up_cost(obj)))) {
         return false;
     }
 

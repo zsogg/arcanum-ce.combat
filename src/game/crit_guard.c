@@ -1,5 +1,6 @@
 #include "game/crit_guard.h"
 
+#include <stdio.h>
 #include <string.h>
 
 #include "game/combat.h"
@@ -151,7 +152,13 @@ static bool crit_guard_observe(CritGuardEntry* entry)
 
     incapacitated = crit_guard_is_down(entry->obj);
     if (entry->down && !incapacitated && entry->seen_down) {
-        crit_guard_log(entry->obj, "recovered");
+        char what[48];
+
+        // The animation they came up into: TIG_ART_ANIM_GET_UP (8) when
+        // they got up properly.
+        snprintf(what, sizeof(what), "recovered (animation %d)",
+            tig_art_id_anim_get(obj_field_int32_get(entry->obj, OBJ_F_CURRENT_AID)));
+        crit_guard_log(entry->obj, what);
     }
     crit_guard_entry_observe(entry, incapacitated, crit_guard_clock_ms);
     entry->down = incapacitated;
