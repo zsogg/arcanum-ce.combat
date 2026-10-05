@@ -534,7 +534,8 @@ void ai_process(int64_t obj)
     // CE (combat AI, milestone AI-4): the item cap applies while `ai_heal`
     // chooses, to restoratives and to nothing else on the lists; an NPC out
     // of combat mode starts its next fight with its allowance back.
-    if (!combat_critter_is_combat_mode_active(obj)) {
+    if (feature_enabled(FEATURE_AI_RESTORATIVES)
+        && !combat_critter_is_combat_mode_active(obj)) {
         ai_restorative_forget(obj);
     }
     ai_heal_choosing = true;
