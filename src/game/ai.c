@@ -124,6 +124,7 @@ static int64_t ai_choose_target_steady(int64_t attacker_obj, int64_t current_obj
 static void ai_engage_or_flee(int64_t a1, int64_t a2);
 static bool ai_should_flee(int64_t source_obj, int64_t target_obj);
 static bool ai_holds_ground(int64_t obj);
+static int ai_follower_reach(int64_t leader_obj);
 static int64_t ai_find_target(int64_t a1);
 static bool ai_is_valid_target(int64_t a1, int64_t a2);
 static void ai_choose_action(Ai* ai);
@@ -146,6 +147,8 @@ static bool ai_may_summon(Ai* ai);
 static bool ai_desperate_now(int64_t obj);
 static bool ai_desperation_rolled(int64_t obj);
 static int64_t ai_turn_from_unreachable(int64_t obj, int64_t target_obj);
+static int64_t ai_hunter_choose(int64_t obj, int64_t target_obj);
+static void ai_roles_load(void);
 static bool ai_use_grenade(Ai* ai, int64_t a2);
 static bool ai_waypoints_process(int64_t obj, bool a2);
 static bool ai_is_day(void);
@@ -448,6 +451,7 @@ bool ai_init(GameInitInfo* init_info)
     mes_unload(mes_file);
 
     ai_fatigue_config_load();
+    ai_roles_load();
 
     return true;
 }
@@ -1107,6 +1111,9 @@ void ai_update_danger_state(Ai* ai)
     case 0:
         danger_source_obj = ai_find_target(ai->obj);
         if (danger_source_obj != OBJ_HANDLE_NULL) {
+            // CE: a hunter turns to prey on its first target's side (combat
+            // AI milestone AI-3).
+            danger_source_obj = ai_hunter_choose(ai->obj, danger_source_obj);
             ai->danger_source = danger_source_obj;
             ai_choose_action(ai);
             ai->danger_type = ai_apply_danger_type(ai->obj,
@@ -1121,6 +1128,7 @@ void ai_update_danger_state(Ai* ai)
             // CE: under `ai targeting`, turn from a target this NPC could not
             // reach (combat AI milestone AI-3).
             danger_source_obj = ai_turn_from_unreachable(ai->obj, danger_source_obj);
+            danger_source_obj = ai_hunter_choose(ai->obj, danger_source_obj);
             ai->danger_source = danger_source_obj;
             ai_choose_action(ai);
             ai->danger_type = ai_apply_danger_type(ai->obj,
@@ -2398,6 +2406,21 @@ static bool ai_holds_ground(int64_t obj)
         && (obj_field_int32_get(obj, OBJ_F_CRITTER_FLAGS) & OCF_UNDEAD) != 0;
 }
 
+// CE: how far from its leader a follower's target may be. Stock is 20 tiles.
+// Under `ai follower leash` (combat AI milestone AI-3; zsogg, 2026-10-04:
+// followers "less aggressive and stay close to the player character") a
+// follower of a PC takes targets only within AI_FOLLOWER_LEASH tiles of it,
+// and with none left follows it again. An NPC led by an NPC keeps 20.
+static int ai_follower_reach(int64_t leader_obj)
+{
+    if (feature_enabled(FEATURE_AI_FOLLOWER_LEASH)
+        && obj_field_int32_get(leader_obj, OBJ_F_TYPE) == OBJ_TYPE_PC) {
+        return AI_FOLLOWER_LEASH;
+    }
+
+    return 20;
+}
+
 // 0x4AB400
 int ai_object_hp_ratio(int64_t obj)
 {
@@ -2652,8 +2675,10 @@ bool ai_is_valid_target(int64_t source_obj, int64_t target_obj)
         return false;
     }
 
+    // CE: `ai_follower_reach` is 20, the stock distance, except under `ai
+    // follower leash` for a follower of a PC (combat AI milestone AI-3).
     if (source_leader_obj != OBJ_HANDLE_NULL
-        && object_dist(source_leader_obj, target_obj) > 20) {
+        && object_dist(source_leader_obj, target_obj) > ai_follower_reach(source_leader_obj)) {
         return false;
     }
 
@@ -2993,7 +3018,12 @@ static bool ai_is_unreachable(int64_t obj, int64_t target_obj)
     return false;
 }
 
-static int64_t ai_turn_from_unreachable(int64_t obj, int64_t target_obj)
+// The nearest member of `target_obj`'s side - its PC, or its leader, and that
+// leader's followers - that `obj` may attack and `filter` accepts. A critter
+// with no leader is a side of one.
+typedef bool (*AiSideFilter)(int64_t obj, int64_t candidate_obj);
+
+static int64_t ai_side_nearest(int64_t obj, int64_t target_obj, AiSideFilter filter)
 {
     int64_t leader_obj;
     int64_t best_obj = OBJ_HANDLE_NULL;
@@ -3002,22 +3032,16 @@ static int64_t ai_turn_from_unreachable(int64_t obj, int64_t target_obj)
     ObjectList objects;
     ObjectNode* node;
 
-    if (!feature_enabled(FEATURE_AI_TARGETING)
-        || !ai_is_unreachable(obj, target_obj)
-        || !obj_type_is_critter(obj_field_int32_get(target_obj, OBJ_F_TYPE))) {
-        return target_obj;
-    }
-
     leader_obj = obj_field_int32_get(target_obj, OBJ_F_TYPE) == OBJ_TYPE_PC
         ? target_obj
         : critter_leader_get(target_obj);
     if (leader_obj == OBJ_HANDLE_NULL) {
-        return target_obj;
+        return OBJ_HANDLE_NULL;
     }
 
     if (leader_obj != target_obj
         && ai_is_valid_target(obj, leader_obj)
-        && !ai_is_unreachable(obj, leader_obj)) {
+        && filter(obj, leader_obj)) {
         best_obj = leader_obj;
         best_dist = object_dist(obj, leader_obj);
     }
@@ -3026,7 +3050,7 @@ static int64_t ai_turn_from_unreachable(int64_t obj, int64_t target_obj)
     for (node = objects.head; node != NULL; node = node->next) {
         if (node->obj == target_obj
             || !ai_is_valid_target(obj, node->obj)
-            || ai_is_unreachable(obj, node->obj)) {
+            || !filter(obj, node->obj)) {
             continue;
         }
 
@@ -3038,7 +3062,194 @@ static int64_t ai_turn_from_unreachable(int64_t obj, int64_t target_obj)
     }
     object_list_destroy(&objects);
 
-    return best_obj != OBJ_HANDLE_NULL ? best_obj : target_obj;
+    return best_obj;
+}
+
+static bool ai_side_filter_reachable(int64_t obj, int64_t candidate_obj)
+{
+    return !ai_is_unreachable(obj, candidate_obj);
+}
+
+static int64_t ai_turn_from_unreachable(int64_t obj, int64_t target_obj)
+{
+    int64_t other_obj;
+
+    if (!feature_enabled(FEATURE_AI_TARGETING)
+        || !obj_type_is_critter(obj_field_int32_get(target_obj, OBJ_F_TYPE))
+        || !ai_is_unreachable(obj, target_obj)) {
+        return target_obj;
+    }
+
+    other_obj = ai_side_nearest(obj, target_obj, ai_side_filter_reachable);
+    return other_obj != OBJ_HANDLE_NULL ? other_obj : target_obj;
+}
+
+// CE (combat AI, milestone AI-3): hunters under `ai targeting`. An NPC whose
+// description `rules/ai_roles.mes` lists as a Hunter goes after the nearest
+// prey on its target's side: a character visibly ranged - wielding a weapon
+// that reaches beyond one tile, or one thrown by default - or seen casting a
+// spell in the last AI_PREY_CAST_TURNS turns. zsogg, 2026-10-04: Human Thief
+// and Kite Scout to start, "basic, even if the behavior is not ideal". A
+// hunter already fighting someone adjacent keeps fighting them, so a
+// companion who intercepts it holds it.
+#define AI_HUNTERS_MAX 64
+#define AI_CASTERS_MAX 64
+#define AI_PREY_CAST_TURNS 10
+
+static int ai_hunter_descriptions[AI_HUNTERS_MAX];
+static int ai_hunter_count;
+
+static struct {
+    int64_t obj;
+    int key;
+} ai_casters[AI_CASTERS_MAX];
+
+static int ai_casters_next;
+
+void ai_roles_reset(void)
+{
+    ai_hunter_count = 0;
+}
+
+// One `rules/ai_roles.mes` entry: `Hunter: <description number>`.
+AiFatigueEntryResult ai_roles_apply_entry(const char* str)
+{
+    const char* rest = ai_fatigue_after_key(str, "Hunter:");
+    int value;
+
+    if (rest == NULL) {
+        return AI_FATIGUE_ENTRY_UNKNOWN;
+    }
+
+    if (!ce_parse_int(rest, &value)) {
+        tig_debug_printf("AiRoles: Hunter expects a description number, got \"%s\"\n", rest);
+        return AI_FATIGUE_ENTRY_BAD_VALUE;
+    }
+
+    if (ai_hunter_count < AI_HUNTERS_MAX) {
+        ai_hunter_descriptions[ai_hunter_count++] = value;
+    }
+
+    return AI_FATIGUE_ENTRY_APPLIED;
+}
+
+bool ai_roles_is_hunter_description(int description)
+{
+    int index;
+
+    for (index = 0; index < ai_hunter_count; index++) {
+        if (ai_hunter_descriptions[index] == description) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+static void ai_roles_load(void)
+{
+    mes_file_handle_t mes_file;
+    MesFileEntry entry;
+
+    ai_roles_reset();
+
+    if (!mes_load("rules\\ai_roles.mes", &mes_file)) {
+        return;
+    }
+
+    if (mes_find_first(mes_file, &entry)) {
+        do {
+            if (ai_roles_apply_entry(entry.str) == AI_FATIGUE_ENTRY_UNKNOWN) {
+                tig_debug_printf("AiRoles: unknown entry: %s\n", entry.str);
+            }
+        } while (mes_find_next(mes_file, &entry));
+    }
+
+    mes_unload(mes_file);
+
+    tig_debug_printf("AiRoles: %d hunter description(s)\n", ai_hunter_count);
+}
+
+static bool ai_is_hunter(int64_t obj)
+{
+    return ai_roles_is_hunter_description(obj_field_int32_get(obj, OBJ_F_DESCRIPTION));
+}
+
+void ai_note_cast(int64_t obj)
+{
+    int slot;
+
+    if (!feature_enabled(FEATURE_AI_TARGETING)
+        || obj == OBJ_HANDLE_NULL
+        || !obj_type_is_critter(obj_field_int32_get(obj, OBJ_F_TYPE))) {
+        return;
+    }
+
+    for (slot = 0; slot < AI_CASTERS_MAX; slot++) {
+        if (ai_casters[slot].obj == obj) {
+            break;
+        }
+    }
+    if (slot == AI_CASTERS_MAX) {
+        slot = ai_casters_next;
+        ai_casters_next = (ai_casters_next + 1) % AI_CASTERS_MAX;
+    }
+
+    ai_casters[slot].obj = obj;
+    ai_casters[slot].key = ai_desperation_key();
+}
+
+static bool ai_seen_casting(int64_t obj)
+{
+    int key = ai_desperation_key();
+    int slot;
+    int age;
+
+    for (slot = 0; slot < AI_CASTERS_MAX; slot++) {
+        if (ai_casters[slot].obj == obj) {
+            // Turn-based keys count up, real-time keys (negative) count down.
+            age = key >= 0 ? key - ai_casters[slot].key : ai_casters[slot].key - key;
+            return (key < 0) == (ai_casters[slot].key < 0)
+                && age >= 0
+                && age <= AI_PREY_CAST_TURNS;
+        }
+    }
+
+    return false;
+}
+
+static bool ai_is_prey(int64_t obj)
+{
+    int64_t weapon_obj = item_wield_get(obj, ITEM_INV_LOC_WEAPON);
+
+    if (weapon_obj != OBJ_HANDLE_NULL
+        && (item_weapon_range(weapon_obj, obj) > 1
+            || (obj_field_int32_get(weapon_obj, OBJ_F_WEAPON_FLAGS) & OWF_DEFAULT_THROWS) != 0)) {
+        return true;
+    }
+
+    return ai_seen_casting(obj);
+}
+
+static bool ai_side_filter_prey(int64_t obj, int64_t candidate_obj)
+{
+    return ai_is_prey(candidate_obj) && !ai_is_unreachable(obj, candidate_obj);
+}
+
+static int64_t ai_hunter_choose(int64_t obj, int64_t target_obj)
+{
+    int64_t prey_obj;
+
+    if (!feature_enabled(FEATURE_AI_TARGETING)
+        || !ai_is_hunter(obj)
+        || !obj_type_is_critter(obj_field_int32_get(target_obj, OBJ_F_TYPE))
+        || object_dist(obj, target_obj) <= 1
+        || ai_is_prey(target_obj)) {
+        return target_obj;
+    }
+
+    prey_obj = ai_side_nearest(obj, target_obj, ai_side_filter_prey);
+    return prey_obj != OBJ_HANDLE_NULL ? prey_obj : target_obj;
 }
 
 // 0x4ABE20

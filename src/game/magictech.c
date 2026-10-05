@@ -2183,6 +2183,12 @@ void magictech_process(void)
     // the caster conscious, the attributes met, the fatigue paid - and every
     // begin reaches it, whether from a critter's casting animation, an item or
     // a script. A spell refused before this point was never cast.
+    // CE (combat AI milestone AI-3): the same point tells the AI who was
+    // seen casting, for a hunter's choice of prey under `ai targeting`.
+    if (magictech_cur_run_info->action == MAGICTECH_ACTION_BEGIN) {
+        ai_note_cast(magictech_cur_run_info->parent_obj.obj);
+    }
+
     if (magictech_cur_run_info->action == MAGICTECH_ACTION_BEGIN
         && combat_observer_is_enabled()) {
         char caster[COMBAT_OBSERVER_IDENTITY_SIZE];

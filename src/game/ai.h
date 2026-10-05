@@ -249,10 +249,24 @@ void ai_target_unlock(int64_t obj);
 // adjacent, or one at least AI_RETARGET_NEARER_BY tiles nearer and at most
 // half the distance. Pure, so the rule is tested without a game.
 #define AI_RETARGET_NEARER_BY 3
+
+// CE: under `ai follower leash` (combat AI milestone AI-3), how far from its
+// PC leader a follower's target may be, in tiles; stock is 20.
+#define AI_FOLLOWER_LEASH 8
 bool ai_targeting_prefers_new_attacker(int current_dist, int threat_dist);
 
 // CE: combat AI milestone AI-3. The animation system reports an NPC whose
 // approach to `target_obj` found no path, so its AI can turn to another target.
 void ai_note_unreachable(int64_t obj, int64_t target_obj);
+
+// CE: combat AI milestone AI-3. Magictech reports a spell a critter has begun
+// casting, so a hunter can see who casts.
+void ai_note_cast(int64_t obj);
+
+// CE: combat AI milestone AI-3, `rules/ai_roles.mes`. Each entry is
+// `Hunter: <description number>`; the result codes are the fatigue file's.
+void ai_roles_reset(void);
+AiFatigueEntryResult ai_roles_apply_entry(const char* str);
+bool ai_roles_is_hunter_description(int description);
 
 #endif /* ARCANUM_GAME_AI_H_ */
