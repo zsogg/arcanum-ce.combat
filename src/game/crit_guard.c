@@ -3,6 +3,7 @@
 #include <string.h>
 
 #include "game/combat.h"
+#include "game/combat_observer.h"
 #include "game/critter.h"
 #include "game/feature.h"
 #include "game/gamelib.h"
@@ -128,6 +129,35 @@ static CritGuardEntry* crit_guard_add(int64_t obj)
     return entry;
 }
 
+// One line per step in the engine log, so a playtest can be read back:
+// "CritGuard: <object id> <what> at <clock> ms".
+static void crit_guard_log(int64_t obj, const char* what)
+{
+    char id[COMBAT_OBSERVER_IDENTITY_SIZE];
+
+    combat_observer_object_id(obj, id);
+    tig_debug_printf("CritGuard: %s%s %s at %u ms (%s)\n",
+        id,
+        player_is_local_pc_obj(obj) ? " (player)" : "",
+        what,
+        crit_guard_clock_ms,
+        combat_turn_based_is_active() ? "turn-based" : "real time");
+}
+
+// Observes `entry`'s character now, and logs a recovery.
+static bool crit_guard_observe(CritGuardEntry* entry)
+{
+    bool incapacitated;
+
+    incapacitated = crit_guard_is_down(entry->obj);
+    if (entry->down && !incapacitated && entry->seen_down) {
+        crit_guard_log(entry->obj, "recovered");
+    }
+    crit_guard_entry_observe(entry, incapacitated, crit_guard_clock_ms);
+    entry->down = incapacitated;
+    return incapacitated;
+}
+
 static int crit_guard_window_ms(void)
 {
     // One turn length, the real-time budget's `R`.
@@ -207,6 +237,7 @@ unsigned int crit_guard_filter(int64_t obj, unsigned int dam_flags)
             tf_type = TF_TYPE_WHITE;
         }
         tf_add(obj, tf_type, what);
+        crit_guard_log(obj, what);
 
         return effects;
     }
@@ -216,6 +247,8 @@ unsigned int crit_guard_filter(int64_t obj, unsigned int dam_flags)
         entry = crit_guard_add(obj);
     }
     crit_guard_entry_incapacitate(entry, crit_guard_clock_ms);
+    crit_guard_log(obj, (effects & CDF_KNOCKOUT) != 0 ? "knocked out" : (effects & CDF_KNOCKDOWN) != 0 ? "knocked down"
+                                                                                                       : "stunned");
 
     return 0;
 }
@@ -231,9 +264,9 @@ void crit_guard_turn_started(int64_t obj)
 
     entry = crit_guard_find(obj);
     if (entry != NULL) {
-        incapacitated = crit_guard_is_down(obj);
-        crit_guard_entry_observe(entry, incapacitated, crit_guard_clock_ms);
+        incapacitated = crit_guard_observe(entry);
         crit_guard_entry_turn_started(entry, incapacitated);
+        crit_guard_log(obj, incapacitated ? "begins a turn down" : "begins a turn up");
     }
 }
 
@@ -247,6 +280,7 @@ void crit_guard_turn_ended(int64_t obj)
 
     entry = crit_guard_find(obj);
     if (entry != NULL && crit_guard_entry_turn_ended(entry)) {
+        crit_guard_log(obj, "is no longer protected: a full turn ended");
         memset(entry, 0, sizeof(*entry));
     }
 }
@@ -282,10 +316,10 @@ void crit_guard_tick(int delta_ms)
             continue;
         }
 
-        incapacitated = crit_guard_is_down(entry->obj);
-        crit_guard_entry_observe(entry, incapacitated, crit_guard_clock_ms);
+        incapacitated = crit_guard_observe(entry);
         if (crit_guard_entry_lapsed(entry, incapacitated, turn_based,
                 crit_guard_clock_ms, window_ms)) {
+            crit_guard_log(entry->obj, "is no longer protected: its time is up");
             memset(entry, 0, sizeof(*entry));
         }
     }

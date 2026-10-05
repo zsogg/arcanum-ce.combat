@@ -42,6 +42,8 @@ typedef struct CritGuardEntry {
     bool seen_down;
     // The clock when they were last seen incapacitated.
     unsigned int incapacitated_ms;
+    // The last observation, so the log can say when they recovered.
+    bool down;
 } CritGuardEntry;
 
 // The rules, on one record. Pure: no engine state is read.
