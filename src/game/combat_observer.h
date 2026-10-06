@@ -299,8 +299,9 @@ void combat_observer_skill_roll(const char* source, const char* target,
 // are not among `effects`; `target_down` whether the target was already
 // stunned, unconscious or lying down when the critical struck; `temporary`
 // (milestone CR-2) the temporary effects it left, by name. `outcome`
-// (milestone CR-4.0) is what a critical miss did - "self_hit" or "nothing" -
-// and NULL, written as null, for a hit.
+// (milestone CR-4.0) is what a critical miss did - "critical_self_hit" or
+// "self_hit", since every stock fumble hits its wielder (MODDING-NOTES quirk
+// 59) - and NULL, written as null, for a hit.
 void combat_observer_critical_rolled(const char* attacker, const char* target,
     bool hit, int hit_location, int effect_bonus, bool aimed,
     bool player_spared, int weapon_chart, int body_chart,

@@ -94,7 +94,7 @@ TEST(a_complete_trace_has_ordered_control_and_semantic_events)
         CRIT_EFFECT_STAGGERED, NULL);
     // Milestone CR-4.0: a fumble says what it did.
     combat_observer_critical_rolled("fighter", "fighter", false, 0, 0,
-        false, false, 2, -1, 0, 0, false, 0, "nothing");
+        false, false, 2, -1, 0, 0, false, 0, "self_hit");
     combat_observer_damage_committed("fighter", "opponent", damage,
         0, 4, 0, 4, 0, 2, false, false);
     combat_observer_attack_resolved(action, "fighter", "opponent",
@@ -114,7 +114,7 @@ TEST(a_complete_trace_has_ordered_control_and_semantic_events)
     CHECK(strstr(trace, "\"kind\":\"hit\",\"hit_location\":1,\"effect_bonus\":10,\"aimed\":true,\"player_spared\":false") != NULL);
     CHECK(strstr(trace, "\"effects\":[\"bonus_100\",\"stun\"],\"resisted\":[\"knockdown\"],\"target_down\":true,\"temporary\":[\"staggered\"],\"outcome\":null") != NULL);
     CHECK(strstr(trace, "\"kind\":\"miss\"") != NULL);
-    CHECK(strstr(trace, "\"outcome\":\"nothing\"}") != NULL);
+    CHECK(strstr(trace, "\"outcome\":\"self_hit\"}") != NULL);
     CHECK(strstr(trace, "\"normal\":4,\"fatigue\":2") != NULL);
     CHECK(strstr(trace, "\"hp_before\":0,\"hp_after\":4") != NULL);
     CHECK(strstr(trace, "\"event\":\"run.ended\"") != NULL);

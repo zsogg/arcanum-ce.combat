@@ -2924,12 +2924,15 @@ void combat_process_crit_miss(CombatContext* combat)
         // CE (criticals, milestone CR-0): the miss, then the hit it deals
         // its own wielder.
         combat_observe_critical(combat, false, chance, false, crit_miss_type, -1,
-            combat->dam_flags, 0, 0, "self_hit");
+            combat->dam_flags, 0, 0, "critical_self_hit");
         combat_process_crit_hit(combat);
     } else {
-        // CE (criticals, milestone CR-0): a critical miss that does nothing.
+        // CE (criticals, milestone CR-0): the other half. The flags above
+        // already made the attack a hit on its own wielder, so this is an
+        // ordinary, non-critical self-hit, as in the original (verified at
+        // 0x4B64AB-0x4B659B, 2026-10-06; MODDING-NOTES quirk 59).
         combat_observe_critical(combat, false, chance, false, crit_miss_type, -1, 0, 0, 0,
-            "nothing");
+            "self_hit");
     }
 }
 
