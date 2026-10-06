@@ -43,6 +43,11 @@ typedef struct WeaponRule {
     // Tesla Rod, the Tesla Gun, the Charged Accelerator Gun and the Flame
     // Thrower). Needs a Capacity.
     int whole_magazine;
+    // AP to clear a jam (`firearm fumbles`, criticals CR-4.1; zsogg,
+    // 2026-10-06): the class's in the generated table - muzzle-loader 7,
+    // pistol 4, rifle and repeater 5, heavy 6. Unset: the gun's LoadAP, one
+    // more reload. Needs a Capacity.
+    int clear_ap;
     // The stats (`weapon rules`). Each Apprentice value defaults to its own
     // untrained one.
     int fire_ap;

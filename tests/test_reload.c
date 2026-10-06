@@ -5,7 +5,43 @@
 
 #include "game/reload.h"
 
+#include "game/skill.h"
 #include "test_harness.h"
+
+// Criticals CR-4.1 (zsogg, 2026-10-06): a firearm's fumble is 50% a jam, 20%
+// a hit on its wielder, 30% nothing; Expert jams instead of the hit, and a
+// Master's fumble is nothing.
+TEST(a_firearm_fumble_jams_hits_or_does_nothing_by_the_roll)
+{
+    int roll;
+    int counts[3] = { 0, 0, 0 };
+
+    CHECK_INT(reload_fumble_outcome(1, TRAINING_NONE), RELOAD_FUMBLE_JAM);
+    CHECK_INT(reload_fumble_outcome(50, TRAINING_NONE), RELOAD_FUMBLE_JAM);
+    CHECK_INT(reload_fumble_outcome(51, TRAINING_NONE), RELOAD_FUMBLE_SELF_HIT);
+    CHECK_INT(reload_fumble_outcome(70, TRAINING_APPRENTICE), RELOAD_FUMBLE_SELF_HIT);
+    CHECK_INT(reload_fumble_outcome(71, TRAINING_NONE), RELOAD_FUMBLE_NOTHING);
+    CHECK_INT(reload_fumble_outcome(100, TRAINING_NONE), RELOAD_FUMBLE_NOTHING);
+
+    for (roll = 1; roll <= 100; roll++) {
+        counts[reload_fumble_outcome(roll, TRAINING_NONE)]++;
+    }
+    CHECK_INT(counts[RELOAD_FUMBLE_JAM], 50);
+    CHECK_INT(counts[RELOAD_FUMBLE_SELF_HIT], 20);
+    CHECK_INT(counts[RELOAD_FUMBLE_NOTHING], 30);
+}
+
+TEST(training_turns_the_self_hit_into_a_jam_and_a_master_never_fumbles)
+{
+    int roll;
+
+    for (roll = 1; roll <= 100; roll++) {
+        CHECK(reload_fumble_outcome(roll, TRAINING_EXPERT) != RELOAD_FUMBLE_SELF_HIT);
+        CHECK_INT(reload_fumble_outcome(roll, TRAINING_MASTER), RELOAD_FUMBLE_NOTHING);
+    }
+    CHECK_INT(reload_fumble_outcome(60, TRAINING_EXPERT), RELOAD_FUMBLE_JAM);
+    CHECK_INT(reload_fumble_outcome(71, TRAINING_EXPERT), RELOAD_FUMBLE_NOTHING);
+}
 
 TEST(a_reload_spends_only_what_the_turn_has)
 {
@@ -50,4 +86,6 @@ void test_reload_suite(void)
 {
     RUN(a_reload_spends_only_what_the_turn_has);
     RUN(work_already_past_a_lowered_cost_completes_for_nothing);
+    RUN(a_firearm_fumble_jams_hits_or_does_nothing_by_the_roll);
+    RUN(training_turns_the_self_hit_into_a_jam_and_a_master_never_fumbles);
 }

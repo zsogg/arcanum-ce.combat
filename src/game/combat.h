@@ -153,6 +153,7 @@ int combat_use_item_cost(int64_t obj, int64_t item_obj);
 int combat_pickup_cost(int64_t obj, int64_t item_obj);
 int combat_get_up_cost(int64_t obj);
 int combat_reload_cost(int64_t obj, int64_t weapon_obj);
+int combat_jam_clear_cost(int64_t obj, int64_t weapon_obj);
 // CE (combat AI, milestone AI-1): under `armor penetration`, the share of a
 // weapon's normal damage expected to pass `target_obj`'s armor, in thousandths:
 // averaged over the unaimed hit locations, the penetration roll and the

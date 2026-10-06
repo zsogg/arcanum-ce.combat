@@ -81,6 +81,48 @@ bool reload_command(int64_t critter_obj);
 // turn-based beginning, and nothing is loaded or spent.
 void reload_standing_done(int64_t critter_obj, bool completed);
 
+// ---------------------------------------------------------------------------
+// Criticals CR-4.1: jams, under `firearm fumbles`, default off (zsogg,
+// 2026-10-06; arcanum-work docs/CRITICALS.md). A firearm's fumble jams the
+// gun half the time, hits its wielder a fifth of the time - for half damage,
+// losing 5 shots of ammunition rather than all of it - and otherwise does
+// nothing. At Firearms Expert the self-hit jams instead; a Firearms Master
+// never fumbles. A jammed gun does not fire. The Reload command clears it
+// instead of loading, for `combat_jam_clear_cost` - the work kept across
+// turns as loading's is - keeping the shots loaded and needing no ammunition.
+//
+// **Where the state lives:** beside loading's, in `OBJ_F_WEAPON_PAD_I_2`: a
+// jammed bit and, above it, the clearing work done. A gun in an existing save
+// reads neither. With the switch off the bit is ignored, as reloading ignores
+// loaded shots when it is off.
+//
+// In this first build it governs the player's fumbles only: an NPC keeps the
+// stock fumble until the AI can clear a jam (milestone CR-4.2).
+// ---------------------------------------------------------------------------
+
+typedef enum ReloadFumble {
+    RELOAD_FUMBLE_JAM,
+    RELOAD_FUMBLE_SELF_HIT,
+    RELOAD_FUMBLE_NOTHING,
+} ReloadFumble;
+
+// Pure: what a firearm's fumble does, from a 1-100 roll and the shooter's
+// Firearms training: 50% a jam, 20% a hit on itself, 30% nothing; at Expert
+// that hit is a jam too, and a Master's fumble is nothing.
+ReloadFumble reload_fumble_outcome(int roll, int training);
+
+// True when `firearm fumbles` governs this critter's fumble with this
+// weapon: the switch is on, reloading governs the gun, and (CR-4.1) the
+// critter is the player.
+bool reload_jams_apply(int64_t critter_obj, int64_t weapon_obj);
+// True when the gun is jammed and the switch is on.
+bool reload_jammed(int64_t weapon_obj);
+// True when the critter's wielded gun is governed and jammed.
+bool reload_wielded_is_jammed(int64_t critter_obj);
+// Jams the gun, saying so over its user's head.
+void reload_jam(int64_t critter_obj, int64_t weapon_obj);
+int reload_clear_progress_get(int64_t weapon_obj);
+
 // Session 4, the AI (`ai_action_perform_combat`): for an NPC whose governed
 // gun is empty - or whose standing reload is under way - decide instead of
 // attacking. With an enemy adjacent it takes a melee backup if it carries one

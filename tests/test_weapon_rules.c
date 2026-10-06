@@ -166,6 +166,24 @@ TEST(whole_magazine_is_read_and_needs_a_capacity)
     CHECK(!weapon_rule_parse(6174, "Damage: 5-15, WholeMagazine: 1", &rule));
 }
 
+TEST(clear_ap_is_read_clamped_and_needs_a_capacity)
+{
+    WeaponRule rule;
+
+    // Criticals CR-4.1, zsogg 2026-10-06: a pistol clears a jam for 4 AP.
+    CHECK(weapon_rule_parse(6100, "Capacity: 6, LoadAP: 5, ClearAP: 4", &rule));
+    CHECK_INT(rule.clear_ap, 4);
+    CHECK(weapon_rule_parse(6100, "Capacity: 6, LoadAP: 5", &rule));
+    CHECK_INT(rule.clear_ap, WEAPON_RULE_UNSET);
+    CHECK(weapon_rule_parse(6100, "Capacity: 6, LoadAP: 5, ClearAP: 99", &rule));
+    CHECK_INT(rule.clear_ap, WEAPON_RULE_AP_MAX);
+    CHECK(weapon_rule_parse(6100, "Capacity: 6, LoadAP: 5, ClearAP: 0", &rule));
+    CHECK_INT(rule.clear_ap, WEAPON_RULE_AP_MIN);
+    // Clearing a gun that has no magazine is a half-written rule.
+    CHECK(!weapon_rule_parse(6100, "ClearAP: 4", &rule));
+    CHECK(!weapon_rule_parse(6100, "Damage: 3-10, ClearAP: 4", &rule));
+}
+
 TEST(dodgeable_is_read_and_clamped)
 {
     WeaponRule rule;
@@ -246,6 +264,7 @@ void test_weapon_rules_suite(void)
     RUN(weight_is_read_and_clamped);
     RUN(penetration_is_read_and_clamped);
     RUN(whole_magazine_is_read_and_needs_a_capacity);
+    RUN(clear_ap_is_read_clamped_and_needs_a_capacity);
     RUN(dodgeable_is_read_and_clamped);
     RUN(armor_damage_is_read_and_clamped);
     RUN(elemental_damage_and_ammunition_per_shot_are_read);

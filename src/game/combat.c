@@ -1002,7 +1002,8 @@ int combat_attack(CombatContext* combat)
         // An empty gun under reloading is reloaded, not swapped for another
         // (zsogg, 2026-09-25); its attack is normally refused before this.
         if (reloading) {
-            tf_add(combat->attacker_obj, TF_TYPE_WHITE, "Reload");
+            tf_add(combat->attacker_obj, TF_TYPE_WHITE,
+                reload_jammed(combat->weapon_obj) ? "Jammed" : "Reload");
         } else if (obj_field_int32_get(combat->attacker_obj, OBJ_F_TYPE) == OBJ_TYPE_NPC) {
             ai_switch_weapon(combat->attacker_obj);
         } else {
@@ -2891,6 +2892,26 @@ void combat_process_crit_miss(CombatContext* combat)
 
     chance = effect_adjust_crit_fail_effect(combat->attacker_obj, chance);
 
+    // CE (criticals, milestone CR-4.1): under `firearm fumbles` the player's
+    // firearm fumble jams the gun half the time and does nothing 30% of the
+    // time; either way the attack is an ordinary miss. The remaining fifth
+    // hits its wielder below, tamed (zsogg, 2026-10-06). Stock turns every
+    // fumble on its wielder (MODDING-NOTES quirk 59).
+    bool firearm_fumble = reload_jams_apply(combat->attacker_obj, combat->weapon_obj);
+    if (firearm_fumble) {
+        ReloadFumble fumble = reload_fumble_outcome(random_between(1, 100),
+            tech_skill_training_get(combat->attacker_obj, TECH_SKILL_FIREARMS));
+        if (fumble != RELOAD_FUMBLE_SELF_HIT) {
+            combat->flags &= ~CF_CRITICAL;
+            if (fumble == RELOAD_FUMBLE_JAM) {
+                reload_jam(combat->attacker_obj, combat->weapon_obj);
+            }
+            combat_observe_critical(combat, false, chance, false, crit_miss_type, -1, 0, 0, 0,
+                fumble == RELOAD_FUMBLE_JAM ? "jam" : "nothing");
+            return;
+        }
+    }
+
     combat->flags &= ~CF_AIM;
     combat->flags &= ~CF_CRITICAL;
     combat->flags |= 0x8;
@@ -2915,7 +2936,10 @@ void combat_process_crit_miss(CombatContext* combat)
 
         if (item_weapon_ammo_type(combat->weapon_obj) != 10000) {
             if (random_between(1, 100) <= chance + 1) {
-                combat->dam_flags |= CDF_DESTROY_AMMO;
+                // CE (criticals, milestone CR-4.1): under `firearm fumbles`
+                // the player's fumble loses 5 shots, never all the spare
+                // ammunition (zsogg, 2026-10-06).
+                combat->dam_flags |= firearm_fumble ? CDF_LOST_AMMO : CDF_DESTROY_AMMO;
             } else if (random_between(1, 100) <= chance + 11) {
                 combat->dam_flags |= CDF_LOST_AMMO;
             }
@@ -3064,6 +3088,17 @@ void combat_calc_dmg(CombatContext* combat)
             combat->dam[DAMAGE_TYPE_FATIGUE] += 15;
         } else if ((spell_flags & OSF_HARDENED_HANDS) != 0) {
             combat->dam[DAMAGE_TYPE_NORMAL] += 2;
+        }
+    }
+
+    // CE (criticals, milestone CR-4.1): under `firearm fumbles` the player's
+    // firearm fumble that hits its wielder (0x8) deals half its damage,
+    // critical or not (zsogg, 2026-10-06).
+    if ((combat->flags & 0x8) != 0
+        && combat->target_obj == combat->attacker_obj
+        && reload_jams_apply(combat->attacker_obj, combat->weapon_obj)) {
+        for (damage_type = 0; damage_type < DAMAGE_TYPE_COUNT; damage_type++) {
+            combat->dam[damage_type] /= 2;
         }
     }
 }
@@ -4415,6 +4450,22 @@ int combat_reload_cost(int64_t obj, int64_t weapon_obj)
     }
 
     return weapon_rules_trained(obj, weapon_obj) ? rule->load_ap_apprentice : rule->load_ap;
+}
+
+// CE (criticals, milestone CR-4.1): what clearing a jam costs, in AP, under
+// `firearm fumbles`. The weapon's `rules/weapons.mes` `ClearAP`, or without
+// one the cost of loading a shot - one more reload, as agreed on 2026-09-18.
+// Both modes read it, as they read the loading cost.
+int combat_jam_clear_cost(int64_t obj, int64_t weapon_obj)
+{
+    const WeaponRule* rule;
+
+    rule = weapon_rule_for(weapon_obj);
+    if (rule != NULL && rule->capacity != WEAPON_RULE_UNSET && rule->clear_ap != WEAPON_RULE_UNSET) {
+        return rule->clear_ap;
+    }
+
+    return combat_reload_cost(obj, weapon_obj);
 }
 
 // CE (reload prototype session 2): `weapon swap cost`, default off - drawing a

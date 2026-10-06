@@ -18,6 +18,7 @@
 #include "game/mp_utils.h"
 #include "game/player.h"
 #include "game/random.h"
+#include "game/reload.h"
 #include "game/stat.h"
 #include "game/trap.h"
 #include "game/weapon_rules.h"
@@ -1606,6 +1607,11 @@ bool skill_invocation_run(SkillInvocation* skill_invocation)
         // Determine if a miss is critical. Special case - master of melee
         // combat cannot critically fail.
         if (basic_skill == BASIC_SKILL_MELEE && training >= TRAINING_MASTER) {
+            is_critical = false;
+        } else if (tech_skill == TECH_SKILL_FIREARMS && training >= TRAINING_MASTER
+            && reload_jams_apply(source_obj, skill_invocation->item.obj)) {
+            // CE (criticals, milestone CR-4.1): under `firearm fumbles` a
+            // master of firearms never fumbles either (zsogg, 2026-10-06).
             is_critical = false;
         } else {
             is_critical = skill_invocation_check_crit_miss(crit_roll, effectiveness, skill_invocation);

@@ -13267,6 +13267,16 @@ bool AGbeginAnimAttack(AnimRunInfo* run_info)
     // Stock charged the attack, found the pack empty at the shot and said
     // nothing. Checked first, so an empty magazine with nothing to load says
     // "No ammo!" rather than "Reload".
+    //
+    // And a jammed gun (criticals CR-4.1, under `firearm fumbles`): refused
+    // first, since clearing it needs no ammunition.
+    if (reload_wielded_is_jammed(source_obj)) {
+        tig_debug_printf("reload: attack refused, jammed\n");
+        tf_add(source_obj, TF_TYPE_WHITE, "Jammed");
+        anim_interrupt(&(run_info->id), PRIORITY_HIGHEST);
+        return false;
+    }
+
     if (reload_wielded_out_of_ammo(source_obj)) {
         tig_debug_printf("reload: attack refused, no ammunition\n");
         tf_add(source_obj, TF_TYPE_WHITE, "No ammo!");
