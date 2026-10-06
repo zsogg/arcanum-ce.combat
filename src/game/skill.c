@@ -8,6 +8,7 @@
 #include "game/critter.h"
 #include "game/effect.h"
 #include "game/fate.h"
+#include "game/feature.h"
 #include "game/gamelib.h"
 #include "game/item.h"
 #include "game/light.h"
@@ -2143,6 +2144,14 @@ bool skill_invocation_check_crit_hit(int roll, int effectiveness, SkillInvocatio
     // Apply effects.
     chance = effect_adjust_crit_hit_chance(skill_invocation->source.obj, chance);
 
+    // CE (criticals, milestone CR-2): under `more criticals`, every attack is
+    // more critical-prone, and a firearm most of all at low skill (zsogg,
+    // 2026-10-05): a firearm's chance is at least 8 before the +5, so a
+    // beginner's 2% becomes 13%. Dodge is not an attack and is unchanged.
+    if (feature_enabled(FEATURE_MORE_CRITICALS)) {
+        chance = skill_more_criticals(skill_invocation->skill, chance);
+    }
+
     // CE (criticals, milestone CR-1): a test instrument. Under `debug
     // criticals` an attack that lands, by or on the player as its value
     // says, is critical, so the effects that follow can be measured; Dodge
@@ -2160,6 +2169,22 @@ bool skill_invocation_check_crit_hit(int roll, int effectiveness, SkillInvocatio
     // Compare the roll (1-100) to the final critical hit chance to determine if
     // a critical hit occurs.
     return roll <= chance;
+}
+
+// CE (criticals, milestone CR-2): the critical chance of an attack under
+// `more criticals`, from its stock chance. Pure, for the suite.
+int skill_more_criticals(int skill, int chance)
+{
+    switch (skill) {
+    case SKILL_FIREARMS:
+        return (chance > 8 ? chance : 8) + 5;
+    case SKILL_BOW:
+    case SKILL_MELEE:
+    case SKILL_THROWING:
+        return chance + 5;
+    default:
+        return chance;
+    }
 }
 
 /**

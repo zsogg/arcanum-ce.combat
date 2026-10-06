@@ -1057,9 +1057,14 @@ void replay_ui_tick(void)
     if (command->kind == REPLAY_KIND_STAT_LEVEL) {
         replay_stall_reported = false;
         replay_next++;
+        // `stat_base_set` refuses to lower a stat below what the character's
+        // skills, spells or technologies need: lower those first.
         stat_base_set(pc_obj, command->stat, command->count);
-        tig_debug_printf("Replay: command %d set stat %d to %d; its level is %d\n",
-            replay_next - 1, command->stat, command->count,
+        tig_debug_printf("Replay: command %d set stat %d to %d%s; its level is %d\n",
+            replay_next - 1, command->stat, stat_base_get(pc_obj, command->stat),
+            stat_base_get(pc_obj, command->stat) == command->count
+                ? ""
+                : " (refused: a skill, spell or technology needs more)",
             stat_level_get(pc_obj, command->stat));
         return;
     }

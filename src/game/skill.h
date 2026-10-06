@@ -169,6 +169,7 @@ int basic_skill_min_stat_level_required(int skill_level);
 int max_skill_for_stat_level(int stat_level);
 int skill_melee_damage_percent_get(int64_t obj);
 int skill_gambling_max_item_cost(int64_t obj);
+int skill_more_criticals(int skill, int chance);
 int skill_gambling_random_roll(void);
 int tech_skill_base(int64_t obj, int ts);
 int tech_skill_level(int64_t obj, int ts);

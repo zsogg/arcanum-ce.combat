@@ -47,5 +47,6 @@ FEATURE(AI_RESTORATIVES, "ai restoratives", false)
 FEATURE(RESTORATIVE_COST, "restorative cost", false)
 FEATURE(CRITICAL_PROTECTION, "critical protection", false)
 FEATURE(DEBUG_CRITICALS, "debug criticals", false)
+FEATURE(MORE_CRITICALS, "more criticals", false)
 
 // clang-format on

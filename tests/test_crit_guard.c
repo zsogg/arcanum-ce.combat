@@ -9,6 +9,7 @@
 #include <string.h>
 
 #include "game/crit_guard.h"
+#include "game/skill.h"
 
 #include "test_harness.h"
 
@@ -133,6 +134,21 @@ TEST(the_clock_may_wrap)
     CHECK(!crit_guard_entry_lapsed(&entry, false, false, 0x00000100u, R));
 }
 
+TEST(more_criticals_lift_a_firearm_to_a_floor_then_add_five)
+{
+    // Criticals milestone CR-2, zsogg's rule: a firearm gets max(8, stock)
+    // + 5, every other attack stock + 5, and Dodge and the other skills
+    // nothing.
+    CHECK_INT(skill_more_criticals(SKILL_FIREARMS, 2), 13); // a beginner
+    CHECK_INT(skill_more_criticals(SKILL_FIREARMS, 6), 13); // Firearms 20
+    CHECK_INT(skill_more_criticals(SKILL_FIREARMS, 10), 15);
+    CHECK_INT(skill_more_criticals(SKILL_MELEE, 2), 7);
+    CHECK_INT(skill_more_criticals(SKILL_BOW, 6), 11);
+    CHECK_INT(skill_more_criticals(SKILL_THROWING, 0), 5);
+    CHECK_INT(skill_more_criticals(SKILL_DODGE, 2), 2);
+    CHECK_INT(skill_more_criticals(SKILL_HEAL, 40), 40);
+}
+
 void test_crit_guard_suite(void)
 {
     RUN(protection_starts_on_recovery);
@@ -144,4 +160,5 @@ void test_crit_guard_suite(void)
     RUN(real_time_protection_lasts_one_turn_length_from_recovery);
     RUN(time_does_not_end_protection_in_turn_based_or_while_down);
     RUN(the_clock_may_wrap);
+    RUN(more_criticals_lift_a_firearm_to_a_floor_then_add_five);
 }
