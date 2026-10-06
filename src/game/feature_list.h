@@ -48,5 +48,7 @@ FEATURE(RESTORATIVE_COST, "restorative cost", false)
 FEATURE(CRITICAL_PROTECTION, "critical protection", false)
 FEATURE(DEBUG_CRITICALS, "debug criticals", false)
 FEATURE(MORE_CRITICALS, "more criticals", false)
+FEATURE(CRITICAL_EFFECTS, "critical effects", false)
+FEATURE(OPENING_SHOT, "opening shot", false)
 
 // clang-format on

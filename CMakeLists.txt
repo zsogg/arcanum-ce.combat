@@ -60,6 +60,8 @@ set(SRCS
     "src/game/penetration.h"
     "src/game/reload.c"
     "src/game/reload.h"
+    "src/game/crit_effects.c"
+    "src/game/crit_effects.h"
     "src/game/crit_guard.c"
     "src/game/crit_guard.h"
     "src/game/rt_budget.c"

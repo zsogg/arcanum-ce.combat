@@ -1,5 +1,6 @@
 #include "game/combat.h"
 #include "game/combat_observer.h"
+#include "game/crit_effects.h"
 #include "game/crit_guard.h"
 #include "game/rt_budget.h"
 
@@ -284,6 +285,8 @@ void combat_reset(void)
     // CE (criticals, milestone CR-1): protection after critical
     // incapacitation is not saved either.
     crit_guard_reset();
+    // CE (criticals, milestone CR-2): nor are temporary critical effects.
+    crit_effects_reset();
 
     in_combat_reset = true;
     combat_turn_based_end();
@@ -358,6 +361,8 @@ bool combat_load(GameLoadInfo* load_info)
     rt_budget_reset();
     // CE (criticals, milestone CR-1): as in combat_reset.
     crit_guard_reset();
+    // CE (criticals, milestone CR-2): as in combat_reset.
+    crit_effects_reset();
 
     if (load_info->stream == NULL) return false;
     if (tig_file_fread(&combat_turn_based, sizeof(combat_turn_based), 1, load_info->stream) != 1) return false;
@@ -1662,7 +1667,12 @@ void combat_dmg(CombatContext* combat)
         return;
     }
 
-    if ((combat->flags & CF_CRITICAL) != 0) {
+    // CE (criticals, milestone CR-2): under `critical effects` a fumble's
+    // hit on its wielder (0x8) has already rolled its effects in
+    // `combat_process_crit_miss` and does not roll them again (MODDING-NOTES
+    // quirk 58).
+    if ((combat->flags & CF_CRITICAL) != 0
+        && !(feature_enabled(FEATURE_CRITICAL_EFFECTS) && (combat->flags & 0x8) != 0)) {
         combat_process_crit_hit(combat);
     }
 
@@ -2586,10 +2596,10 @@ int combat_hit_loc_penalty(int hit_loc)
 // CE (criticals, milestone CR-0): `critical.rolled` for one critical, with the
 // effects this roll added. A fumble writes its miss and then the hit it deals
 // its own wielder, so a hit reports only what its own pass set. `resisted` is
-// what CR-1's protection skipped.
+// what CR-1's protection skipped, and `temporary` CR-2's effects.
 static void combat_observe_critical(CombatContext* combat, bool hit, int effect_bonus,
     bool player_spared, int weapon_chart, int body_chart, unsigned int effects,
-    unsigned int resisted)
+    unsigned int resisted, unsigned int temporary)
 {
     char attacker[COMBAT_OBSERVER_IDENTITY_SIZE];
     char target[COMBAT_OBSERVER_IDENTITY_SIZE];
@@ -2604,7 +2614,8 @@ static void combat_observe_critical(CombatContext* combat, bool hit, int effect_
         effect_bonus, (combat->flags & CF_AIM) != 0, player_spared,
         weapon_chart, body_chart, effects, resisted,
         obj_type_is_critter(obj_field_int32_get(combat->target_obj, OBJ_F_TYPE))
-            && crit_guard_is_down(combat->target_obj));
+            && crit_guard_is_down(combat->target_obj),
+        temporary);
 }
 
 // 0x4B5F40
@@ -2621,6 +2632,7 @@ void combat_process_crit_hit(CombatContext* combat)
     int difficulty;
     unsigned int flags_before;
     unsigned int resisted;
+    unsigned int temporary = 0;
 
     if (combat->target_obj == OBJ_HANDLE_NULL) {
         return;
@@ -2794,6 +2806,47 @@ void combat_process_crit_hit(CombatContext* combat)
         combat->dam_flags |= CDF_DAMAGE_ARMOR;
     }
 
+    // CE (criticals, milestone CR-2): under `critical effects`, the
+    // temporary effect of where the critical struck, and the stock injuries
+    // made mostly temporary: a crippling or blinding leaves its temporary
+    // version and stays permanent only on a second roll, a scar likewise, and
+    // a fumble's hit on its wielder (0x8) never scars. Undead and amorphous
+    // creatures are spared, as from the stock bodily effects.
+    if (feature_enabled(FEATURE_CRITICAL_EFFECTS)
+        && crit_body_type != CRIT_BODY_TYPE_AMORPHOUS
+        && (obj_field_int32_get(combat->target_obj, OBJ_F_CRITTER_FLAGS) & OCF_UNDEAD) == 0) {
+        unsigned int added = combat->dam_flags & ~flags_before;
+
+        temporary = crit_effects_for_location(combat->hit_loc);
+        if ((added & CDF_CRIPPLE_ARM) != 0
+            && random_between(1, 100) > CRIT_EFFECT_PERMANENT_CHANCE) {
+            combat->dam_flags &= ~CDF_CRIPPLE_ARM;
+            temporary |= CRIT_EFFECT_NUMBED_ARM;
+        }
+        if ((added & CDF_CRIPPLE_LEG) != 0
+            && random_between(1, 100) > CRIT_EFFECT_PERMANENT_CHANCE) {
+            combat->dam_flags &= ~CDF_CRIPPLE_LEG;
+            temporary |= CRIT_EFFECT_HOBBLED;
+        }
+        if ((added & CDF_BLIND) != 0
+            && random_between(1, 100) > CRIT_EFFECT_PERMANENT_CHANCE) {
+            combat->dam_flags &= ~CDF_BLIND;
+            temporary |= CRIT_EFFECT_DAZZLED;
+        }
+        if ((added & CDF_SCAR) != 0
+            && ((combat->flags & 0x8) != 0
+                || random_between(1, 100) > CRIT_EFFECT_PERMANENT_CHANCE)) {
+            combat->dam_flags &= ~CDF_SCAR;
+        }
+        if ((temporary & CRIT_EFFECT_WINDED) != 0
+            && (obj_field_int32_get(combat->target_obj, OBJ_F_CRITTER_FLAGS) & OCF_FATIGUE_IMMUNE) == 0) {
+            combat->dam[DAMAGE_TYPE_FATIGUE] += combat->dam[DAMAGE_TYPE_NORMAL] / 2;
+        } else {
+            temporary &= ~CRIT_EFFECT_WINDED;
+        }
+        crit_effects_apply(combat->target_obj, temporary);
+    }
+
     if (combat->dam_flags == 0) {
         combat->dam_flags = CDF_BONUS_DAM_50;
     }
@@ -2806,7 +2859,8 @@ void combat_process_crit_hit(CombatContext* combat)
     combat->dam_flags &= ~resisted;
 
     combat_observe_critical(combat, true, chance, npc_attacks_pc,
-        crit_hit_type, crit_body_type, combat->dam_flags & ~flags_before, resisted);
+        crit_hit_type, crit_body_type, combat->dam_flags & ~flags_before, resisted,
+        temporary);
 }
 
 // 0x4B6410
@@ -2869,11 +2923,11 @@ void combat_process_crit_miss(CombatContext* combat)
         // CE (criticals, milestone CR-0): the miss, then the hit it deals
         // its own wielder.
         combat_observe_critical(combat, false, chance, false, crit_miss_type, -1,
-            combat->dam_flags, 0);
+            combat->dam_flags, 0, 0);
         combat_process_crit_hit(combat);
     } else {
         // CE (criticals, milestone CR-0): a critical miss that does nothing.
-        combat_observe_critical(combat, false, chance, false, crit_miss_type, -1, 0, 0);
+        combat_observe_critical(combat, false, chance, false, crit_miss_type, -1, 0, 0, 0);
     }
 }
 
@@ -3595,6 +3649,9 @@ void combat_turn_based_whos_turn_set(int64_t obj)
     // CE (real-time session C): through the shared rule, which the real-time
     // budget divides by - the same `max(5, Speed)` the original computed here.
     combat_action_points = combat_action_points_per_turn(obj);
+    // CE (criticals, milestone CR-2): a Staggered critter's next turn grants
+    // half.
+    combat_action_points = crit_effects_turn_action_points(obj, combat_action_points);
 
     tig_debug_printf("Combat: TB: Action Points Available: %d.\n", combat_action_points);
 
@@ -3877,6 +3934,7 @@ void combat_turn_based_subturn_start(void)
         // CE (criticals, milestone CR-1): a turn that begins with them up
         // ends their protection when it ends.
         crit_guard_turn_started(combat_whos_turn_node->obj);
+        crit_effects_turn_started(combat_whos_turn_node->obj);
     } else {
         tig_debug_printf("Combat: combat_turn_based_subturn_start: ERROR: Couldn't start TB Combat Turn due to no Active Critters!\n");
         combat_turn_based_end();
@@ -3887,8 +3945,9 @@ void combat_turn_based_subturn_start(void)
 void combat_turn_based_subturn_end(void)
 {
     combat_debug(combat_whos_turn_node->obj, "SubTurn End");
-    // CE (criticals, milestone CR-1).
+    // CE (criticals, milestones CR-1 and CR-2).
     crit_guard_turn_ended(combat_whos_turn_node->obj);
+    crit_effects_turn_ended(combat_whos_turn_node->obj);
     if (combat_observer_is_enabled()) {
         char actor[COMBAT_OBSERVER_IDENTITY_SIZE];
 
@@ -4171,6 +4230,10 @@ int combat_move_cost(int64_t source_obj, int64_t target_loc, bool adjacent)
         && get_always_run(source_obj)) {
         mult = 1;
     }
+
+    // CE (criticals, milestone CR-2): Hobbled doubles it, as
+    // `anim_spend_move_cost` charges.
+    mult *= crit_effects_move_multiplier(source_obj);
 
     if (adjacent) {
         return mult * anim_straight_path_length_to_tile(source_obj, target_loc);

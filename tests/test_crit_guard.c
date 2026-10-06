@@ -8,6 +8,8 @@
 // seen down.
 #include <string.h>
 
+#include "game/combat.h"
+#include "game/crit_effects.h"
 #include "game/crit_guard.h"
 #include "game/skill.h"
 
@@ -149,6 +151,86 @@ TEST(more_criticals_lift_a_firearm_to_a_floor_then_add_five)
     CHECK_INT(skill_more_criticals(SKILL_HEAL, 40), 40);
 }
 
+// Criticals milestone CR-2: temporary critical effects, zsogg's rules.
+
+static CritEffectEntry effects_applied(unsigned int effects)
+{
+    CritEffectEntry entry;
+
+    memset(&entry, 0, sizeof(entry));
+    entry.obj = 1;
+    crit_effects_entry_apply(&entry, effects, 1000);
+    return entry;
+}
+
+TEST(a_critical_leaves_the_effect_of_where_it_struck)
+{
+    CHECK_INT(crit_effects_for_location(HIT_LOC_TORSO), CRIT_EFFECT_WINDED);
+    CHECK_INT(crit_effects_for_location(HIT_LOC_ARM), CRIT_EFFECT_NUMBED_ARM);
+    CHECK_INT(crit_effects_for_location(HIT_LOC_LEG), CRIT_EFFECT_HOBBLED);
+    CHECK_INT(crit_effects_for_location(HIT_LOC_HEAD), CRIT_EFFECT_STAGGERED);
+}
+
+TEST(winded_is_spent_at_once_and_the_rest_last)
+{
+    CritEffectEntry entry = effects_applied(CRIT_EFFECT_WINDED | CRIT_EFFECT_HOBBLED);
+
+    CHECK_INT(entry.effects, CRIT_EFFECT_HOBBLED);
+}
+
+TEST(numbed_and_dazzled_cost_twenty_to_hit_and_do_not_stack)
+{
+    CritEffectEntry entry = effects_applied(CRIT_EFFECT_NUMBED_ARM);
+
+    CHECK_INT(crit_effects_entry_to_hit_penalty(&entry), 20);
+    crit_effects_entry_apply(&entry, CRIT_EFFECT_DAZZLED, 1500);
+    CHECK_INT(crit_effects_entry_to_hit_penalty(&entry), 20);
+}
+
+TEST(hobbled_doubles_moving_in_turn_based_only)
+{
+    CritEffectEntry entry = effects_applied(CRIT_EFFECT_HOBBLED);
+
+    CHECK_INT(crit_effects_entry_move_multiplier(&entry, true), 2);
+    CHECK_INT(crit_effects_entry_move_multiplier(&entry, false), 1);
+}
+
+TEST(staggered_halves_the_next_turn_only)
+{
+    CritEffectEntry entry = effects_applied(CRIT_EFFECT_STAGGERED);
+
+    // Granted as the turn begins, before the turn counts as started.
+    CHECK_INT(crit_effects_entry_turn_action_points(&entry, 9), 4);
+    crit_effects_entry_turn_started(&entry);
+    CHECK_INT(crit_effects_entry_turn_action_points(&entry, 9), 9);
+    CHECK(crit_effects_entry_turn_ended(&entry));
+}
+
+TEST(effects_last_until_the_end_of_the_next_turn_or_r_in_real_time)
+{
+    CritEffectEntry entry = effects_applied(CRIT_EFFECT_NUMBED_ARM);
+
+    // Not before a turn of theirs has begun.
+    CHECK(!crit_effects_entry_turn_ended(&entry));
+    // Real time: one turn length from when it was dealt.
+    CHECK(!crit_effects_entry_lapsed(&entry, false, 1000 + R - 1, R));
+    CHECK(crit_effects_entry_lapsed(&entry, false, 1000 + R, R));
+    CHECK(!crit_effects_entry_lapsed(&entry, true, 1000 + 60000, R));
+    // A new effect refreshes the record.
+    crit_effects_entry_turn_started(&entry);
+    crit_effects_entry_apply(&entry, CRIT_EFFECT_HOBBLED, 5000);
+    CHECK(!crit_effects_entry_turn_ended(&entry));
+    CHECK_INT(entry.effects, CRIT_EFFECT_NUMBED_ARM | CRIT_EFFECT_HOBBLED);
+}
+
+TEST(effects_are_named_for_the_observer)
+{
+    char names[64];
+
+    crit_effects_names(CRIT_EFFECT_WINDED | CRIT_EFFECT_STAGGERED, names, (int)sizeof(names));
+    CHECK_STR(names, "\"winded\",\"staggered\"");
+}
+
 void test_crit_guard_suite(void)
 {
     RUN(protection_starts_on_recovery);
@@ -161,4 +243,11 @@ void test_crit_guard_suite(void)
     RUN(time_does_not_end_protection_in_turn_based_or_while_down);
     RUN(the_clock_may_wrap);
     RUN(more_criticals_lift_a_firearm_to_a_floor_then_add_five);
+    RUN(a_critical_leaves_the_effect_of_where_it_struck);
+    RUN(winded_is_spent_at_once_and_the_rest_last);
+    RUN(numbed_and_dazzled_cost_twenty_to_hit_and_do_not_stack);
+    RUN(hobbled_doubles_moving_in_turn_based_only);
+    RUN(staggered_halves_the_next_turn_only);
+    RUN(effects_last_until_the_end_of_the_next_turn_or_r_in_real_time);
+    RUN(effects_are_named_for_the_observer);
 }

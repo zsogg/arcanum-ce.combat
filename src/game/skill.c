@@ -3,7 +3,9 @@
 #include "game/ai.h"
 #include "game/anim.h"
 #include "game/background.h"
+#include "game/combat.h"
 #include "game/combat_observer.h"
+#include "game/crit_effects.h"
 #include "game/crit_guard.h"
 #include "game/critter.h"
 #include "game/effect.h"
@@ -30,6 +32,14 @@ static int basic_skill_vs(int64_t obj, int skill, int64_t other_obj);
 int max_skill_for_stat_level(int stat_level);
 int skill_gambling_random_roll(void);
 static bool skill_invocation_check_crit_hit(int roll, int effectiveness, SkillInvocation* skill_invocation);
+static bool skill_is_attack(int skill);
+static bool skill_opening_shot(SkillInvocation* skill_invocation);
+
+// CE (criticals, milestone CR-2): a firearm's opening shot, under `opening
+// shot`: easier by this many difficulty points, and this many points more
+// likely to be critical.
+#define SKILL_OPENING_SHOT_TO_HIT 20
+#define SKILL_OPENING_SHOT_CRITICAL 10
 static bool skill_invocation_check_crit_miss(int roll, int effectiveness, SkillInvocation* skill_invocation);
 
 // CE (criticals, milestone CR-0): the chance the last critical roll was
@@ -2152,6 +2162,12 @@ bool skill_invocation_check_crit_hit(int roll, int effectiveness, SkillInvocatio
         chance = skill_more_criticals(skill_invocation->skill, chance);
     }
 
+    // CE (criticals, milestone CR-2): a firearm's opening shot is also more
+    // likely to be critical, under `opening shot`.
+    if (skill_opening_shot(skill_invocation)) {
+        chance += SKILL_OPENING_SHOT_CRITICAL;
+    }
+
     // CE (criticals, milestone CR-1): a test instrument. Under `debug
     // criticals` an attack that lands, by or on the player as its value
     // says, is critical, so the effects that follow can be measured; Dodge
@@ -2169,6 +2185,30 @@ bool skill_invocation_check_crit_hit(int roll, int effectiveness, SkillInvocatio
     // Compare the roll (1-100) to the final critical hit chance to determine if
     // a critical hit occurs.
     return roll <= chance;
+}
+
+// CE (criticals, milestone CR-2): the attack skills - Dodge and the rest are
+// not attacks.
+static bool skill_is_attack(int skill)
+{
+    return skill == SKILL_BOW
+        || skill == SKILL_MELEE
+        || skill == SKILL_THROWING
+        || skill == SKILL_FIREARMS;
+}
+
+// CE (criticals, milestone CR-2): under `opening shot`, a firearm's shot at a
+// critter not yet in combat is easier and more likely critical (zsogg,
+// 2026-10-05: ambushes favour gunners). Once shot at, it is in combat.
+static bool skill_opening_shot(SkillInvocation* skill_invocation)
+{
+    int64_t target_obj = skill_invocation->target.obj;
+
+    return feature_enabled(FEATURE_OPENING_SHOT)
+        && skill_invocation->skill == SKILL_FIREARMS
+        && target_obj != OBJ_HANDLE_NULL
+        && obj_type_is_critter(obj_field_int32_get(target_obj, OBJ_F_TYPE))
+        && !combat_critter_is_combat_mode_active(target_obj);
 }
 
 // CE (criticals, milestone CR-2): the critical chance of an attack under
@@ -2680,6 +2720,16 @@ int skill_invocation_difficulty(SkillInvocation* skill_invocation)
         int chance = effectiveness - difficulty;
         if (accuracy != 100 && chance > 0) {
             difficulty += chance - chance * accuracy / 100;
+        }
+    }
+
+    // CE (criticals, milestone CR-2): an attack by a Numbed or Dazzled
+    // critter is harder, under `critical effects`; a firearm's opening shot
+    // easier, under `opening shot`.
+    if (skill_is_attack(skill)) {
+        difficulty += crit_effects_to_hit_penalty(source_obj);
+        if (skill_opening_shot(skill_invocation)) {
+            difficulty -= SKILL_OPENING_SHOT_TO_HIT;
         }
     }
 

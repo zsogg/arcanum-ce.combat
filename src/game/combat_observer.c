@@ -8,6 +8,7 @@
 #include <tig/tig.h>
 
 #include "game/combat.h"
+#include "game/crit_effects.h"
 #include "game/damage_type.h"
 #include "game/obj_id.h"
 #include "game/obj_pool.h"
@@ -806,27 +807,30 @@ static void combat_observer_critical_effect_names(unsigned int flags, char* list
 void combat_observer_critical_rolled(const char* attacker, const char* target,
     bool hit, int hit_location, int effect_bonus, bool aimed,
     bool player_spared, int weapon_chart, int body_chart,
-    unsigned int effects, unsigned int resisted, bool target_down)
+    unsigned int effects, unsigned int resisted, bool target_down,
+    unsigned int temporary)
 {
     char line[1280];
     char action[32];
     char list[512];
     char resisted_list[128];
+    char temporary_list[128];
 
     if (!combat_observer_begin_semantic()) return;
 
     combat_observer_critical_effect_names(effects, list, sizeof(list));
     combat_observer_critical_effect_names(resisted, resisted_list, sizeof(resisted_list));
+    crit_effects_names(temporary, temporary_list, (int)sizeof(temporary_list));
 
     snprintf(line, sizeof(line),
-        "{\"schema\":%d,\"sequence\":%u,\"event\":\"critical.rolled\",\"turn\":%u,\"action_id\":%s,\"attacker\":\"%s\",\"target\":\"%s\",\"kind\":\"%s\",\"hit_location\":%d,\"effect_bonus\":%d,\"aimed\":%s,\"player_spared\":%s,\"weapon_chart\":%d,\"body_chart\":%d,\"effects\":[%s],\"resisted\":[%s],\"target_down\":%s}",
+        "{\"schema\":%d,\"sequence\":%u,\"event\":\"critical.rolled\",\"turn\":%u,\"action_id\":%s,\"attacker\":\"%s\",\"target\":\"%s\",\"kind\":\"%s\",\"hit_location\":%d,\"effect_bonus\":%d,\"aimed\":%s,\"player_spared\":%s,\"weapon_chart\":%d,\"body_chart\":%d,\"effects\":[%s],\"resisted\":[%s],\"target_down\":%s,\"temporary\":[%s]}",
         COMBAT_OBSERVER_SCHEMA,
         combat_observer_sequence++, combat_observer_turn,
         combat_observer_action_json(action, sizeof(action)), attacker, target,
         hit ? "hit" : "miss", hit_location, effect_bonus,
         aimed ? "true" : "false", player_spared ? "true" : "false",
         weapon_chart, body_chart, list, resisted_list,
-        target_down ? "true" : "false");
+        target_down ? "true" : "false", temporary_list);
     combat_observer_write(line);
 }
 

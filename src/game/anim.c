@@ -5,6 +5,7 @@
 #include "game/ai.h"
 #include "game/animfx.h"
 #include "game/combat_observer.h"
+#include "game/crit_effects.h"
 #include "game/critter.h"
 #include "game/descriptions.h"
 #include "game/gamelib.h"
@@ -12134,6 +12135,10 @@ int anim_spend_move_cost(AnimRunInfo* run_info)
             run_info->flags &= ~0x40;
         }
     }
+
+    // CE (criticals, milestone CR-2): a Hobbled critter pays double for each
+    // step in turn-based.
+    action_points *= crit_effects_move_multiplier(obj);
 
     if (!combat_consume_action_points(obj, action_points)) {
         anim_float_offset_y = 0;

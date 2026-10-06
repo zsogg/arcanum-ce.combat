@@ -5,6 +5,7 @@
 #include "game/ai.h"
 #include "game/anim.h"
 #include "game/combat.h"
+#include "game/crit_effects.h"
 #include "game/crit_guard.h"
 #include "game/critter.h"
 #include "game/gfade.h"
@@ -897,6 +898,8 @@ void timeevent_ping(tig_timestamp_t timestamp)
             // CE (criticals, milestone CR-1): protection's clock, on the same
             // terms.
             crit_guard_tick((int)delta);
+            // CE (criticals, milestone CR-2): temporary effects, likewise.
+            crit_effects_tick((int)delta);
             // CE (reload prototype session 4): loading outside combat.
             reload_prep_tick((int)delta);
         }
