@@ -121,6 +121,20 @@ typedef enum ReplayKind {
     REPLAY_KIND_DROP,
     REPLAY_KIND_PICKUP,
     REPLAY_KIND_WEAR,
+    // Criticals milestone CR-2 (2026-10-05): a starting character, for the
+    // early-game benchmark.
+    //
+    //   skill-level <skill> <points>
+    //       the player's skill set to that many points (0-5; the level is four
+    //       times the points), through `basic_skill_points_set` or
+    //       `tech_skill_points_set` and the key-stat cap they apply. Training
+    //       is unchanged. Script-only, like `raise`.
+    //   stat-level <stat> <value>
+    //       a primary stat (0 Strength ... 7 Charisma) of the player's set to
+    //       that base value (1-20) through `stat_base_set`, so a starting
+    //       character's Perception decides the range penalty.
+    REPLAY_KIND_SKILL_LEVEL,
+    REPLAY_KIND_STAT_LEVEL,
 } ReplayKind;
 
 // A cast's target, which is a third shape: the caster, an object or a tile.
@@ -534,6 +548,28 @@ static bool replay_parse_line(const char* text, ReplayCommand* command)
         return index == count;
     }
 
+    if (strcmp(kind, "stat-level") == 0) {
+        command->kind = REPLAY_KIND_STAT_LEVEL;
+        if (!replay_parse_int(tokens[index++], &(command->stat))
+            || command->stat < STAT_STRENGTH || command->stat > STAT_CHARISMA || index >= count
+            || !replay_parse_int(tokens[index++], &(command->count))
+            || command->count < 1 || command->count > 20) {
+            return false;
+        }
+        return index == count;
+    }
+
+    if (strcmp(kind, "skill-level") == 0) {
+        command->kind = REPLAY_KIND_SKILL_LEVEL;
+        if (!replay_parse_int(tokens[index++], &(command->skill))
+            || command->skill < 0 || command->skill >= SKILL_COUNT || index >= count
+            || !replay_parse_int(tokens[index++], &(command->count))
+            || command->count < 0 || command->count > 5) {
+            return false;
+        }
+        return index == count;
+    }
+
     if (strcmp(kind, "skill") == 0) {
         command->kind = REPLAY_KIND_SKILL;
         if (!replay_parse_int(tokens[index++], &(command->skill))
@@ -599,7 +635,7 @@ int replay_ui_count(void)
 bool replay_ui_describe(int index, char* buffer, size_t size)
 {
     const ReplayCommand* command;
-    static const char* kinds[] = { "object", "location", "key", "cast", "wield", "wait", "learn", "give", "throw", "skill", "raise", "prowl", "panel", "save", "inspect", "transfer", "take", "drop", "pickup", "wear" };
+    static const char* kinds[] = { "object", "location", "key", "cast", "wield", "wait", "learn", "give", "throw", "skill", "raise", "prowl", "panel", "save", "inspect", "transfer", "take", "drop", "pickup", "wear", "skill-level", "stat-level" };
     int written;
     static const char* casts[] = { "self", "object", "location" };
 
@@ -624,6 +660,14 @@ bool replay_ui_describe(int index, char* buffer, size_t size)
     }
     if (command->kind == REPLAY_KIND_SKILL && written >= 0 && (size_t)written < size) {
         snprintf(buffer + written, size - (size_t)written, " skill=%d", command->skill);
+    }
+    if (command->kind == REPLAY_KIND_SKILL_LEVEL && written >= 0 && (size_t)written < size) {
+        snprintf(buffer + written, size - (size_t)written, " skill=%d points=%d",
+            command->skill, command->count);
+    }
+    if (command->kind == REPLAY_KIND_STAT_LEVEL && written >= 0 && (size_t)written < size) {
+        snprintf(buffer + written, size - (size_t)written, " stat=%d value=%d",
+            command->stat, command->count);
     }
     if (command->kind == REPLAY_KIND_RAISE && written >= 0 && (size_t)written < size) {
         snprintf(buffer + written, size - (size_t)written, " stat=%d", command->stat);
@@ -1007,6 +1051,35 @@ void replay_ui_tick(void)
         }
         stat_base_set(pc_obj, command->stat, value);
         stat_base_set(pc_obj, STAT_UNSPENT_POINTS, unspent - cost);
+        return;
+    }
+
+    if (command->kind == REPLAY_KIND_STAT_LEVEL) {
+        replay_stall_reported = false;
+        replay_next++;
+        stat_base_set(pc_obj, command->stat, command->count);
+        tig_debug_printf("Replay: command %d set stat %d to %d; its level is %d\n",
+            replay_next - 1, command->stat, command->count,
+            stat_level_get(pc_obj, command->stat));
+        return;
+    }
+
+    if (command->kind == REPLAY_KIND_SKILL_LEVEL) {
+        int set;
+
+        replay_stall_reported = false;
+        replay_next++;
+        if (IS_TECH_SKILL(command->skill)) {
+            set = tech_skill_points_set(pc_obj, GET_TECH_SKILL(command->skill), command->count);
+        } else {
+            set = basic_skill_points_set(pc_obj, GET_BASIC_SKILL(command->skill), command->count);
+        }
+        tig_debug_printf("Replay: command %d set skill %d to %d point(s)%s; its level is %d\n",
+            replay_next - 1, command->skill, set,
+            set == command->count ? "" : " (refused by its key stat)",
+            IS_TECH_SKILL(command->skill)
+                ? tech_skill_level(pc_obj, GET_TECH_SKILL(command->skill))
+                : basic_skill_level(pc_obj, GET_BASIC_SKILL(command->skill)));
         return;
     }
 
