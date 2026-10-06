@@ -184,6 +184,19 @@ bool crit_guard_debug_forces(int64_t attacker, int64_t target)
         || ((mode & 2) != 0 && player_is_local_pc_obj(target));
 }
 
+bool crit_guard_debug_fumbles(int64_t attacker, int64_t target)
+{
+    int mode;
+
+    if (!feature_enabled(FEATURE_DEBUG_FUMBLES) || attacker == target) {
+        return false;
+    }
+
+    mode = settings_get_value(&settings, feature_key(FEATURE_DEBUG_FUMBLES));
+    return ((mode & 1) != 0 && player_is_local_pc_obj(attacker))
+        || ((mode & 2) != 0 && player_is_local_pc_obj(target));
+}
+
 void crit_guard_reset(void)
 {
     memset(crit_guard_entries, 0, sizeof(crit_guard_entries));

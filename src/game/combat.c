@@ -2596,10 +2596,11 @@ int combat_hit_loc_penalty(int hit_loc)
 // CE (criticals, milestone CR-0): `critical.rolled` for one critical, with the
 // effects this roll added. A fumble writes its miss and then the hit it deals
 // its own wielder, so a hit reports only what its own pass set. `resisted` is
-// what CR-1's protection skipped, and `temporary` CR-2's effects.
+// what CR-1's protection skipped, `temporary` CR-2's effects, and `outcome`
+// what a miss did (CR-4.0; NULL for a hit).
 static void combat_observe_critical(CombatContext* combat, bool hit, int effect_bonus,
     bool player_spared, int weapon_chart, int body_chart, unsigned int effects,
-    unsigned int resisted, unsigned int temporary)
+    unsigned int resisted, unsigned int temporary, const char* outcome)
 {
     char attacker[COMBAT_OBSERVER_IDENTITY_SIZE];
     char target[COMBAT_OBSERVER_IDENTITY_SIZE];
@@ -2615,7 +2616,7 @@ static void combat_observe_critical(CombatContext* combat, bool hit, int effect_
         weapon_chart, body_chart, effects, resisted,
         obj_type_is_critter(obj_field_int32_get(combat->target_obj, OBJ_F_TYPE))
             && crit_guard_is_down(combat->target_obj),
-        temporary);
+        temporary, outcome);
 }
 
 // 0x4B5F40
@@ -2860,7 +2861,7 @@ void combat_process_crit_hit(CombatContext* combat)
 
     combat_observe_critical(combat, true, chance, npc_attacks_pc,
         crit_hit_type, crit_body_type, combat->dam_flags & ~flags_before, resisted,
-        temporary);
+        temporary, NULL);
 }
 
 // 0x4B6410
@@ -2923,11 +2924,12 @@ void combat_process_crit_miss(CombatContext* combat)
         // CE (criticals, milestone CR-0): the miss, then the hit it deals
         // its own wielder.
         combat_observe_critical(combat, false, chance, false, crit_miss_type, -1,
-            combat->dam_flags, 0, 0);
+            combat->dam_flags, 0, 0, "self_hit");
         combat_process_crit_hit(combat);
     } else {
         // CE (criticals, milestone CR-0): a critical miss that does nothing.
-        combat_observe_critical(combat, false, chance, false, crit_miss_type, -1, 0, 0, 0);
+        combat_observe_critical(combat, false, chance, false, crit_miss_type, -1, 0, 0, 0,
+            "nothing");
     }
 }
 

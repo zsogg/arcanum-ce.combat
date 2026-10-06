@@ -74,4 +74,10 @@ bool crit_guard_is_down(int64_t obj);
 // oneself.
 bool crit_guard_debug_forces(int64_t attacker, int64_t target);
 
+// The test instrument `debug fumbles` (criticals, milestone CR-4.0), default
+// off: true when an attack by `attacker` on `target` is forced to miss
+// critically. The setting's value says whose attacks, as `debug criticals`':
+// 1 the player's, 2 those against the player, 3 both.
+bool crit_guard_debug_fumbles(int64_t attacker, int64_t target);
+
 #endif /* ARCANUM_GAME_CRIT_GUARD_H_ */

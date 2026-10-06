@@ -50,5 +50,6 @@ FEATURE(DEBUG_CRITICALS, "debug criticals", false)
 FEATURE(MORE_CRITICALS, "more criticals", false)
 FEATURE(CRITICAL_EFFECTS, "critical effects", false)
 FEATURE(OPENING_SHOT, "opening shot", false)
+FEATURE(DEBUG_FUMBLES, "debug fumbles", false)
 
 // clang-format on

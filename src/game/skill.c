@@ -1642,6 +1642,15 @@ bool skill_invocation_run(SkillInvocation* skill_invocation)
         }
     }
 
+    // CE (criticals, milestone CR-4.0): a test instrument. Under `debug
+    // fumbles` an attack by or on the player, as its value says, misses
+    // critically, so what a fumble does can be measured. Dodge and other
+    // skills are untouched.
+    if (skill_is_attack(skill) && crit_guard_debug_fumbles(source_obj, target_obj)) {
+        is_success = false;
+        is_critical = true;
+    }
+
     // Process skill-specific mechanics.
     switch (skill) {
     case SKILL_DODGE:

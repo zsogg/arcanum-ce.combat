@@ -298,12 +298,14 @@ void combat_observer_skill_roll(const char* source, const char* target,
 // `resisted` (milestone CR-1) the incapacitations protection skipped, which
 // are not among `effects`; `target_down` whether the target was already
 // stunned, unconscious or lying down when the critical struck; `temporary`
-// (milestone CR-2) the temporary effects it left, by name.
+// (milestone CR-2) the temporary effects it left, by name. `outcome`
+// (milestone CR-4.0) is what a critical miss did - "self_hit" or "nothing" -
+// and NULL, written as null, for a hit.
 void combat_observer_critical_rolled(const char* attacker, const char* target,
     bool hit, int hit_location, int effect_bonus, bool aimed,
     bool player_spared, int weapon_chart, int body_chart,
     unsigned int effects, unsigned int resisted, bool target_down,
-    unsigned int temporary);
+    unsigned int temporary, const char* outcome);
 void combat_observer_damage_committed(const char* attacker,
     const char* target, const int* components, unsigned int damage_flags,
     int hp_amount, int hp_before, int hp_after, int fatigue_before,
