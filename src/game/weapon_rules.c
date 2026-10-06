@@ -346,12 +346,17 @@ int weapon_rules_range(int64_t weapon_obj, int stock)
     return rule != NULL && rule->range != WEAPON_RULE_UNSET ? rule->range : stock;
 }
 
-int weapon_rules_crit_effect(int64_t weapon_obj, int stock)
+int weapon_rules_crit_effect_for(int64_t weapon_obj, int64_t owner_obj)
 {
     const WeaponRule* rule;
 
     rule = weapon_rules_active_for(weapon_obj);
-    return rule != NULL && rule->crit_effect != WEAPON_RULE_UNSET ? rule->crit_effect : stock;
+    if (rule != NULL && rule->crit_effect != WEAPON_RULE_UNSET) {
+        return rule->crit_effect;
+    }
+
+    return item_adjust_magic(weapon_obj, owner_obj,
+        obj_field_int32_get(weapon_obj, OBJ_F_WEAPON_MAGIC_CRIT_HIT_EFFECT));
 }
 
 int weapon_rules_worth(int64_t weapon_obj, int stock)

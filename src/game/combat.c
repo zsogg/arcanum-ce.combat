@@ -2653,11 +2653,11 @@ void combat_process_crit_hit(CombatContext* combat)
         crit_hit_type = obj_field_int32_get(combat->weapon_obj, OBJ_F_WEAPON_CRIT_HIT_CHART);
         if ((combat->flags & 0x20000) == 0) {
             // CE (turn-based rebalance): a weapon's `rules/weapons.mes`
-            // CritEffect replaces its critical-effect bonus.
-            chance = item_adjust_magic(combat->weapon_obj,
-                combat->attacker_obj,
-                weapon_rules_crit_effect(combat->weapon_obj,
-                    obj_field_int32_get(combat->weapon_obj, OBJ_F_WEAPON_MAGIC_CRIT_HIT_EFFECT)));
+            // CritEffect replaces its critical-effect bonus, unscaled by
+            // the wielder's aptitude (zsogg, 2026-10-05); without one, the
+            // stock bonus as stock scales it.
+            chance = weapon_rules_crit_effect_for(combat->weapon_obj,
+                combat->attacker_obj);
         }
     } else {
         crit_hit_type = CRIT_HIT_TYPE_CRUSHING;
@@ -3242,10 +3242,8 @@ static int combat_armor_resolve(CombatContext* combat)
         if (combat->weapon_obj != OBJ_HANDLE_NULL
             && obj_field_int32_get(combat->weapon_obj, OBJ_F_TYPE) == OBJ_TYPE_WEAPON
             && (combat->flags & 0x20000) == 0) {
-            crit_bonus = item_adjust_magic(combat->weapon_obj,
-                combat->attacker_obj,
-                weapon_rules_crit_effect(combat->weapon_obj,
-                    obj_field_int32_get(combat->weapon_obj, OBJ_F_WEAPON_MAGIC_CRIT_HIT_EFFECT)));
+            crit_bonus = weapon_rules_crit_effect_for(combat->weapon_obj,
+                combat->attacker_obj);
         }
         hit.gap = random_between(1, 100)
             <= penetration_gap_chance(crit_bonus, combat->hit_loc, (combat->flags & CF_AIM) != 0);

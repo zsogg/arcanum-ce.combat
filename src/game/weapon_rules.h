@@ -132,7 +132,11 @@ bool weapon_rules_trained(int64_t critter_obj, int64_t weapon_obj);
 // switch is off, the weapon is not listed, or its entry does not name the stat.
 int weapon_rules_damage(int64_t weapon_obj, int damage_type, bool upper, int stock);
 int weapon_rules_range(int64_t weapon_obj, int stock);
-int weapon_rules_crit_effect(int64_t weapon_obj, int stock);
+// The critical-effect bonus `owner_obj` gets from `weapon_obj`. A table
+// CritEffect applies as written: it is the weapon's design, like its Damage,
+// not an enchantment (zsogg, 2026-10-05). Otherwise the stock magick bonus,
+// scaled by the wielder's aptitude in `item_adjust_magic` as stock scales it.
+int weapon_rules_crit_effect_for(int64_t weapon_obj, int64_t owner_obj);
 int weapon_rules_worth(int64_t weapon_obj, int stock);
 // Accuracy as a percentage of the ordinary chance to hit; 100 when the entry
 // does not name it.
