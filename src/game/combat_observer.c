@@ -865,11 +865,13 @@ void combat_observer_ai_decided(const char* actor, const char* target,
 
 void combat_observer_ai_weapon_chosen(const char* actor, const char* target,
     const char* previous, const char* chosen, bool kept,
-    const int candidates[][3], int candidate_count)
+    const int candidates[][3], int candidate_count,
+    const int unaffordable[][2], int unaffordable_count)
 {
     char line[2048];
     char action_id[32];
     char list[640];
+    char passed[320];
     size_t used = 0;
     int index;
 
@@ -885,12 +887,23 @@ void combat_observer_ai_weapon_chosen(const char* actor, const char* target,
         used += (size_t)written;
     }
 
+    passed[0] = '\0';
+    used = 0;
+    for (index = 0; index < unaffordable_count && index < COMBAT_OBSERVER_AI_WEAPONS_MAX; index++) {
+        int written = snprintf(passed + used, sizeof(passed) - used, "%s[%d,%d]",
+            index > 0 ? "," : "", unaffordable[index][0], unaffordable[index][1]);
+        if (written < 0 || (size_t)written >= sizeof(passed) - used) {
+            break;
+        }
+        used += (size_t)written;
+    }
+
     snprintf(line, sizeof(line),
-        "{\"schema\":%d,\"sequence\":%u,\"event\":\"ai.weapon_chosen\",\"turn\":%u,\"action_id\":%s,\"actor\":\"%s\",\"target\":\"%s\",\"previous\":\"%s\",\"chosen\":\"%s\",\"kept\":%s,\"candidates\":[%s]}",
+        "{\"schema\":%d,\"sequence\":%u,\"event\":\"ai.weapon_chosen\",\"turn\":%u,\"action_id\":%s,\"actor\":\"%s\",\"target\":\"%s\",\"previous\":\"%s\",\"chosen\":\"%s\",\"kept\":%s,\"candidates\":[%s],\"unaffordable\":[%s]}",
         COMBAT_OBSERVER_SCHEMA,
         combat_observer_sequence++, combat_observer_turn,
         combat_observer_action_json(action_id, sizeof(action_id)), actor, target,
-        previous, chosen, kept ? "true" : "false", list);
+        previous, chosen, kept ? "true" : "false", list, passed);
     combat_observer_write(line);
 }
 

@@ -2937,6 +2937,9 @@ void item_wield_best(int64_t critter_obj, int inventory_location, int64_t target
     bool kept = false;
     int weighed[COMBAT_OBSERVER_AI_WEAPONS_MAX][3];
     int weighed_count = 0;
+    // CE (combat AI, 2026-10-05): weapons passed over for their cost.
+    int unaffordable[COMBAT_OBSERVER_AI_WEAPONS_MAX][2];
+    int unaffordable_count = 0;
 
     cnt = obj_field_int32_get(critter_obj, OBJ_F_CRITTER_INVENTORY_NUM);
     equipped_item_obj = item_wield_get(critter_obj, inventory_location);
@@ -2990,6 +2993,25 @@ void item_wield_best(int64_t critter_obj, int inventory_location, int64_t target
                     || (reload_applies(critter_obj, item_obj) && reload_loaded_get(item_obj) > 0)) {
                     int total_dam = 0;
                     int skill = item_weapon_skill(item_obj);
+
+                    // CE (combat AI, zsogg 2026-10-05): under `ai armor aware`,
+                    // in turn-based, a weapon whose attack costs more than a
+                    // whole turn grants is never chosen. An NPC short of AP
+                    // loses its turn, so it would stand there every turn - a
+                    // speed-5 guard with an untrained Quality Axe (6 AP) did.
+                    // With none affordable it fights unarmed, which costs 5,
+                    // the least a turn grants.
+                    if (armor_aware && combat_turn_based_is_active()) {
+                        int cost = combat_weapon_attack_cost(critter_obj, item_obj);
+                        if (cost > combat_action_points_per_turn(critter_obj)) {
+                            if (unaffordable_count < COMBAT_OBSERVER_AI_WEAPONS_MAX) {
+                                unaffordable[unaffordable_count][0] = obj_field_int32_get(item_obj, OBJ_F_DESCRIPTION);
+                                unaffordable[unaffordable_count][1] = cost;
+                                unaffordable_count++;
+                            }
+                            continue;
+                        }
+                    }
                     // CE (combat AI, milestone AI-1): the normal damage at the
                     // share expected through the target's armor.
                     int expected = armor_aware ? combat_armor_expected_permille(item_obj, target_obj) : -1;
@@ -3116,7 +3138,8 @@ void item_wield_best(int64_t critter_obj, int inventory_location, int64_t target
         combat_observer_object_id(held_obj, previous);
         combat_observer_object_id(best_item_obj, chosen);
         combat_observer_ai_weapon_chosen(actor, target, previous, chosen, kept,
-            (const int (*)[3])weighed, weighed_count);
+            (const int (*)[3])weighed, weighed_count,
+            (const int (*)[2])unaffordable, unaffordable_count);
     }
 
     if (best_item_obj == OBJ_HANDLE_NULL) {

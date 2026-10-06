@@ -142,6 +142,7 @@ bool combat_check_cast_spell(int64_t source_obj);
 bool combat_check_use_skill(int64_t source_obj);
 int combat_required_action_points_get(void);
 int combat_attack_cost(int64_t obj);
+int combat_weapon_attack_cost(int64_t obj, int64_t weapon_obj);
 int combat_throw_cost(int64_t obj);
 int combat_cast_cost(int64_t obj, int spell);
 int combat_skill_cost(int64_t obj, int skill);

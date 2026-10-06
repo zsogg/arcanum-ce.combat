@@ -4190,11 +4190,18 @@ int combat_required_action_points_get(void)
 // 0x4B7C30
 int combat_attack_cost(int64_t obj)
 {
-    int64_t weapon_obj;
+    // CE (combat AI, the get-up fix's follow-up): the body is
+    // `combat_weapon_attack_cost`, so the AI can price a weapon it is not
+    // holding. Same rule for the weapon in hand.
+    return combat_weapon_attack_cost(obj, item_wield_get(obj, ITEM_INV_LOC_WEAPON));
+}
+
+// CE: what an attack with `weapon_obj` (OBJ_HANDLE_NULL for unarmed) costs
+// `obj`, the rule `combat_attack_cost` applies to the weapon in hand.
+int combat_weapon_attack_cost(int64_t obj, int64_t weapon_obj)
+{
     int speed;
     int action_points;
-
-    weapon_obj = item_wield_get(obj, ITEM_INV_LOC_WEAPON);
 
     // CE (turn-based rebalance): a weapon's `rules/weapons.mes` FireAP, under
     // `weapon rules`, replaces the cost its speed gives. zsogg chose the rules

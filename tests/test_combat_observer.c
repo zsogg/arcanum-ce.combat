@@ -148,23 +148,27 @@ TEST(an_armor_aware_weapon_choice_lists_its_candidates)
 {
     char trace[TRACE_SIZE];
     const int candidates[][3] = { { 6074, 168, 746 }, { 6057, 136, 355 } };
+    const int unaffordable[][2] = { { 6067, 6 } };
 
     // Combat AI milestone AI-1: each weapon weighed, with its score and the
     // share expected through the target's armor.
     clean();
     CHECK(combat_observer_open(TRACE_FILE));
     combat_observer_ai_weapon_chosen("guard", "fighter", "G_SWORD", "G_HAMMER", false,
-        candidates, 2);
+        candidates, 2, unaffordable, 1);
     combat_observer_ai_weapon_chosen("guard", "fighter", "G_HAMMER", "G_HAMMER", true,
-        candidates, 2);
+        candidates, 2, unaffordable, 0);
     combat_observer_close();
 
     CHECK(read_trace(trace, sizeof(trace)));
     CHECK(strstr(trace, "\"event\":\"ai.weapon_chosen\",") != NULL);
     CHECK(strstr(trace, "\"previous\":\"G_SWORD\",\"chosen\":\"G_HAMMER\",\"kept\":false,"
-                        "\"candidates\":[[6074,168,746],[6057,136,355]]}")
+                        "\"candidates\":[[6074,168,746],[6057,136,355]],"
+                        "\"unaffordable\":[[6067,6]]}")
         != NULL);
     CHECK(strstr(trace, "\"kept\":true,") != NULL);
+    // 2026-10-05: a weapon the NPC cannot swing in one turn, with its cost.
+    CHECK(strstr(trace, "\"unaffordable\":[]}") != NULL);
 }
 
 TEST(every_event_carries_the_clock_the_baseline_needs)

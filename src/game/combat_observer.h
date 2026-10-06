@@ -328,11 +328,14 @@ void combat_observer_ai_decided(const char* actor, const char* target,
 // expected_permille]: the score is its average damage times skill
 // effectiveness with the normal part at the share expected through the
 // target's armor; `kept` is true when the weapon already in hand stayed for
-// commitment though another scored higher.
+// commitment though another scored higher. `unaffordable` (2026-10-05) lists
+// the weapons passed over in turn-based because an attack with them costs
+// more than a whole turn grants, as [description, attack cost].
 #define COMBAT_OBSERVER_AI_WEAPONS_MAX 8
 void combat_observer_ai_weapon_chosen(const char* actor, const char* target,
     const char* previous, const char* chosen, bool kept,
-    const int candidates[][3], int candidate_count);
+    const int candidates[][3], int candidate_count,
+    const int unaffordable[][2], int unaffordable_count);
 
 // CE (armor milestone 3): one weapon hit's normal damage resolved against
 // armor under `armor penetration`. `worn` is the location's worn protection
