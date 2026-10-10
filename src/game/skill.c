@@ -38,9 +38,9 @@ static bool skill_opening_shot(SkillInvocation* skill_invocation);
 
 // CE (criticals, milestone CR-2): a firearm's opening shot, under `opening
 // shot`: easier by this many difficulty points, and this many points more
-// likely to be critical.
-#define SKILL_OPENING_SHOT_TO_HIT 20
-#define SKILL_OPENING_SHOT_CRITICAL 10
+// likely to be critical (zsogg, 2026-10-10: from 20 and 10).
+#define SKILL_OPENING_SHOT_TO_HIT 35
+#define SKILL_OPENING_SHOT_CRITICAL 17
 static bool skill_invocation_check_crit_miss(int roll, int effectiveness, SkillInvocation* skill_invocation);
 
 // CE (criticals, milestone CR-0): the chance the last critical roll was

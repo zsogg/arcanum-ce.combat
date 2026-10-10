@@ -17,7 +17,7 @@
 //
 // A stock crippling or blinding critical leaves the matching temporary effect
 // instead (blinding, Dazzled: -20 to hit); the permanent injury stays only on
-// a second roll of 25%, and a stock scar likewise. A fumble's hit on its
+// a second roll of 20%, and a stock scar likewise. A fumble's hit on its
 // wielder rolls its effects once rather than twice (MODDING-NOTES quirk 58)
 // and never scars.
 //
@@ -35,8 +35,8 @@
 // The to-hit penalty of Numbed arm and Dazzled, in difficulty points.
 #define CRIT_EFFECT_TO_HIT_PENALTY 20
 
-// A permanent injury's second roll, in percent.
-#define CRIT_EFFECT_PERMANENT_CHANCE 25
+// A permanent injury's second roll, in percent (zsogg, 2026-10-10: from 25).
+#define CRIT_EFFECT_PERMANENT_CHANCE 20
 
 typedef struct CritEffectEntry {
     int64_t obj;
