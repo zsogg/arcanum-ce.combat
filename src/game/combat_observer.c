@@ -808,7 +808,8 @@ void combat_observer_critical_rolled(const char* attacker, const char* target,
     bool hit, int hit_location, int effect_bonus, bool aimed,
     bool player_spared, int weapon_chart, int body_chart,
     unsigned int effects, unsigned int resisted, bool target_down,
-    unsigned int temporary, const char* outcome)
+    unsigned int temporary, const char* outcome, int winded_fatigue,
+    int winded_from)
 {
     char line[1280];
     char outcome_json[32];
@@ -829,14 +830,15 @@ void combat_observer_critical_rolled(const char* attacker, const char* target,
     }
 
     snprintf(line, sizeof(line),
-        "{\"schema\":%d,\"sequence\":%u,\"event\":\"critical.rolled\",\"turn\":%u,\"action_id\":%s,\"attacker\":\"%s\",\"target\":\"%s\",\"kind\":\"%s\",\"hit_location\":%d,\"effect_bonus\":%d,\"aimed\":%s,\"player_spared\":%s,\"weapon_chart\":%d,\"body_chart\":%d,\"effects\":[%s],\"resisted\":[%s],\"target_down\":%s,\"temporary\":[%s],\"outcome\":%s}",
+        "{\"schema\":%d,\"sequence\":%u,\"event\":\"critical.rolled\",\"turn\":%u,\"action_id\":%s,\"attacker\":\"%s\",\"target\":\"%s\",\"kind\":\"%s\",\"hit_location\":%d,\"effect_bonus\":%d,\"aimed\":%s,\"player_spared\":%s,\"weapon_chart\":%d,\"body_chart\":%d,\"effects\":[%s],\"resisted\":[%s],\"target_down\":%s,\"temporary\":[%s],\"outcome\":%s,\"winded_fatigue\":%d,\"winded_from\":%d}",
         COMBAT_OBSERVER_SCHEMA,
         combat_observer_sequence++, combat_observer_turn,
         combat_observer_action_json(action, sizeof(action)), attacker, target,
         hit ? "hit" : "miss", hit_location, effect_bonus,
         aimed ? "true" : "false", player_spared ? "true" : "false",
         weapon_chart, body_chart, list, resisted_list,
-        target_down ? "true" : "false", temporary_list, outcome_json);
+        target_down ? "true" : "false", temporary_list, outcome_json,
+        winded_fatigue, winded_from);
     combat_observer_write(line);
 }
 

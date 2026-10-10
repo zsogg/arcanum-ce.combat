@@ -91,10 +91,10 @@ TEST(a_complete_trace_has_ordered_control_and_semantic_events)
         55, 0, 40, 99, 2, true, false);
     combat_observer_critical_rolled("fighter", "opponent", true, 1, 10,
         true, false, 0, 0, CDF_BONUS_DAM_100 | CDF_STUN, CDF_KNOCKDOWN, true,
-        CRIT_EFFECT_STAGGERED, NULL);
+        CRIT_EFFECT_STAGGERED, NULL, 7, 14);
     // Milestone CR-4.0: a fumble says what it did.
     combat_observer_critical_rolled("fighter", "fighter", false, 0, 0,
-        false, false, 2, -1, 0, 0, false, 0, "self_hit");
+        false, false, 2, -1, 0, 0, false, 0, "self_hit", 0, 0);
     combat_observer_damage_committed("fighter", "opponent", damage,
         0, 4, 0, 4, 0, 2, false, false);
     combat_observer_attack_resolved(action, "fighter", "opponent",
@@ -112,9 +112,9 @@ TEST(a_complete_trace_has_ordered_control_and_semantic_events)
     // Criticals, milestone CR-0: the effects by name, in their flags' order.
     CHECK(strstr(trace, "\"event\":\"critical.rolled\"") != NULL);
     CHECK(strstr(trace, "\"kind\":\"hit\",\"hit_location\":1,\"effect_bonus\":10,\"aimed\":true,\"player_spared\":false") != NULL);
-    CHECK(strstr(trace, "\"effects\":[\"bonus_100\",\"stun\"],\"resisted\":[\"knockdown\"],\"target_down\":true,\"temporary\":[\"staggered\"],\"outcome\":null") != NULL);
+    CHECK(strstr(trace, "\"effects\":[\"bonus_100\",\"stun\"],\"resisted\":[\"knockdown\"],\"target_down\":true,\"temporary\":[\"staggered\"],\"outcome\":null,\"winded_fatigue\":7,\"winded_from\":14}") != NULL);
     CHECK(strstr(trace, "\"kind\":\"miss\"") != NULL);
-    CHECK(strstr(trace, "\"outcome\":\"self_hit\"}") != NULL);
+    CHECK(strstr(trace, "\"outcome\":\"self_hit\",\"winded_fatigue\":0,\"winded_from\":0}") != NULL);
     CHECK(strstr(trace, "\"normal\":4,\"fatigue\":2") != NULL);
     CHECK(strstr(trace, "\"hp_before\":0,\"hp_after\":4") != NULL);
     CHECK(strstr(trace, "\"event\":\"run.ended\"") != NULL);
@@ -832,6 +832,19 @@ TEST(the_persistence_rows_load_into_what_they_say)
     CHECK(!load_script("0 inspect everything\n"));
     CHECK(!load_script("0 transfer 6065\n")); // to whom
     CHECK(!load_script("0 drop flintlock\n"));
+}
+
+TEST(the_jam_row_loads_alone)
+{
+    // Criticals CR-4 (2026-10-10): a test row that jams the wielded gun,
+    // `jam gun` as `inspect guns`.
+    CHECK(load_script("0 jam gun\n1 jam gun\n"));
+    CHECK_INT(replay_ui_count(), 2);
+    CHECK(row_is(0, "turn=0 now=0 kind=jam target= loc=0 aim=0 spell=0 cast=- wait=0"));
+    CHECK(row_is(1, "turn=1 now=0 kind=jam target= loc=0 aim=0 spell=0 cast=- wait=0"));
+    CHECK(!load_script("0 jam\n"));
+    CHECK(!load_script("0 jam 6100\n"));
+    CHECK(!load_script("0 jam gun now\n"));
 }
 
 TEST(the_wear_row_loads_with_or_without_a_wearer)
@@ -1800,6 +1813,7 @@ void test_combat_observer_suite(void)
     RUN(the_throw_rows_load_into_what_they_say);
     RUN(the_called_shot_rows_load_into_what_they_say);
     RUN(the_persistence_rows_load_into_what_they_say);
+    RUN(the_jam_row_loads_alone);
     RUN(the_wear_row_loads_with_or_without_a_wearer);
     RUN(a_row_the_parser_cannot_read_refuses_the_whole_file);
     RUN(a_tile_step_a_cast_request_and_a_weapon_change_are_each_recorded);

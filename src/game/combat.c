@@ -2598,6 +2598,12 @@ int combat_hit_loc_penalty(int hit_loc)
     return hit_loc_penalties[hit_loc];
 }
 
+// CE (criticals, milestone CR-3): what the critical being processed added as
+// Winded, and the normal damage that was taken from, for `critical.rolled`;
+// 0 and 0 for none. Set in `combat_process_crit_hit`.
+static int combat_observe_winded_fatigue;
+static int combat_observe_winded_from;
+
 // CE (criticals, milestone CR-0): `critical.rolled` for one critical, with the
 // effects this roll added. A fumble writes its miss and then the hit it deals
 // its own wielder, so a hit reports only what its own pass set. `resisted` is
@@ -2621,7 +2627,9 @@ static void combat_observe_critical(CombatContext* combat, bool hit, int effect_
         weapon_chart, body_chart, effects, resisted,
         obj_type_is_critter(obj_field_int32_get(combat->target_obj, OBJ_F_TYPE))
             && crit_guard_is_down(combat->target_obj),
-        temporary, outcome);
+        temporary, outcome,
+        hit ? combat_observe_winded_fatigue : 0,
+        hit ? combat_observe_winded_from : 0);
 }
 
 // 0x4B5F40
@@ -2663,6 +2671,9 @@ void combat_process_crit_hit(CombatContext* combat)
     // CE (criticals, milestone CR-0): what was already set, so the event
     // reports only this pass's effects.
     flags_before = combat->dam_flags;
+    // CE (criticals, milestone CR-3): and no Winded until this pass adds one.
+    combat_observe_winded_fatigue = 0;
+    combat_observe_winded_from = 0;
 
     crit_body_type = obj_field_int32_get(combat->target_obj, OBJ_F_CRITTER_CRIT_HIT_CHART);
 
@@ -2855,9 +2866,11 @@ void combat_process_crit_hit(CombatContext* combat)
             && (obj_field_int32_get(combat->target_obj, OBJ_F_CRITTER_FLAGS) & OCF_FATIGUE_IMMUNE) == 0) {
             // CE (criticals, milestone CR-3): an Impact weapon's Winded takes
             // the hit's whole damage as fatigue, under `firearm criticals`.
-            combat->dam[DAMAGE_TYPE_FATIGUE] += weapon_rules_crit_style(combat->weapon_obj) == WEAPON_CRIT_STYLE_IMPACT
+            combat_observe_winded_from = combat->dam[DAMAGE_TYPE_NORMAL];
+            combat_observe_winded_fatigue = weapon_rules_crit_style(combat->weapon_obj) == WEAPON_CRIT_STYLE_IMPACT
                 ? combat->dam[DAMAGE_TYPE_NORMAL]
                 : combat->dam[DAMAGE_TYPE_NORMAL] / 2;
+            combat->dam[DAMAGE_TYPE_FATIGUE] += combat_observe_winded_fatigue;
         } else {
             temporary &= ~CRIT_EFFECT_WINDED;
         }

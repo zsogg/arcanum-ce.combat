@@ -301,12 +301,16 @@ void combat_observer_skill_roll(const char* source, const char* target,
 // (milestone CR-2) the temporary effects it left, by name. `outcome`
 // (milestone CR-4.0) is what a critical miss did - "critical_self_hit" or
 // "self_hit", since every stock fumble hits its wielder (MODDING-NOTES quirk
-// 59) - and NULL, written as null, for a hit.
+// 59) - and NULL, written as null, for a hit. `winded_fatigue` (milestone
+// CR-3) is the fatigue Winded added and `winded_from` the normal damage it
+// was taken from - half of it, or all of it for an Impact weapon; 0 and 0
+// without Winded.
 void combat_observer_critical_rolled(const char* attacker, const char* target,
     bool hit, int hit_location, int effect_bonus, bool aimed,
     bool player_spared, int weapon_chart, int body_chart,
     unsigned int effects, unsigned int resisted, bool target_down,
-    unsigned int temporary, const char* outcome);
+    unsigned int temporary, const char* outcome, int winded_fatigue,
+    int winded_from);
 void combat_observer_damage_committed(const char* attacker,
     const char* target, const int* components, unsigned int damage_flags,
     int hp_amount, int hp_before, int hp_after, int fatigue_before,

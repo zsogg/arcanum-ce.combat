@@ -133,8 +133,14 @@ typedef enum ReplayKind {
     //       a primary stat (0 Strength ... 7 Charisma) of the player's set to
     //       that base value (1-20) through `stat_base_set`, so a starting
     //       character's Perception decides the range penalty.
+    //   jam gun
+    //       the player's wielded gun jammed, as a fumble under `firearm
+    //       fumbles` jams it (`reload_jam`), so clearing - in combat or
+    //       outside it - can be tested without waiting for a fumble
+    //       (criticals CR-4, 2026-10-10). A test row: nothing else jams a gun.
     REPLAY_KIND_SKILL_LEVEL,
     REPLAY_KIND_STAT_LEVEL,
+    REPLAY_KIND_JAM,
 } ReplayKind;
 
 // A cast's target, which is a third shape: the caster, an object or a tile.
@@ -317,10 +323,12 @@ static void replay_inspect_one(int64_t item_obj, const char* where)
     }
     // The weight is the engine's (`item_weight`, which the weapon table's
     // Weight overrides): the figure encumbrance sums.
-    tig_debug_printf("Replay: inspect %d loaded %d progress %d weight %d %s%s\n",
+    // Criticals CR-4: `jammed` 1 while a jam holds under `firearm fumbles`.
+    tig_debug_printf("Replay: inspect %d loaded %d progress %d jammed %d weight %d %s%s\n",
         obj_field_int32_get(item_obj, OBJ_F_DESCRIPTION) + 20,
         obj_field_int32_get(item_obj, OBJ_F_WEAPON_PAD_I_1),
         reload_progress_get(item_obj),
+        reload_jammed(item_obj) ? 1 : 0,
         item_weight(item_obj, OBJ_HANDLE_NULL),
         where,
         IS_WEAR_INV_LOC(item_inventory_location_get(item_obj)) ? " (wielded)" : "");
@@ -500,6 +508,14 @@ static bool replay_parse_line(const char* text, ReplayCommand* command)
         return index == count;
     }
 
+    if (strcmp(kind, "jam") == 0) {
+        command->kind = REPLAY_KIND_JAM;
+        if (strcmp(tokens[index++], "gun") != 0) {
+            return false;
+        }
+        return index == count;
+    }
+
     if (strcmp(kind, "inspect") == 0) {
         command->kind = REPLAY_KIND_INSPECT;
         if (strcmp(tokens[index++], "guns") != 0) {
@@ -635,7 +651,7 @@ int replay_ui_count(void)
 bool replay_ui_describe(int index, char* buffer, size_t size)
 {
     const ReplayCommand* command;
-    static const char* kinds[] = { "object", "location", "key", "cast", "wield", "wait", "learn", "give", "throw", "skill", "raise", "prowl", "panel", "save", "inspect", "transfer", "take", "drop", "pickup", "wear", "skill-level", "stat-level" };
+    static const char* kinds[] = { "object", "location", "key", "cast", "wield", "wait", "learn", "give", "throw", "skill", "raise", "prowl", "panel", "save", "inspect", "transfer", "take", "drop", "pickup", "wear", "skill-level", "stat-level", "jam" };
     int written;
     static const char* casts[] = { "self", "object", "location" };
 
@@ -907,6 +923,22 @@ void replay_ui_tick(void)
         replay_stall_reported = false;
         replay_next++;
         replay_inspect_guns(pc_obj);
+        return;
+    }
+
+    if (command->kind == REPLAY_KIND_JAM) {
+        int64_t weapon_obj;
+
+        replay_stall_reported = false;
+        replay_next++;
+        weapon_obj = item_wield_get(pc_obj, ITEM_INV_LOC_WEAPON);
+        if (!reload_jams_apply(pc_obj, weapon_obj)) {
+            tig_debug_printf("Replay: command %d could not jam: no gun under `firearm fumbles` wielded\n",
+                replay_next - 1);
+            return;
+        }
+        reload_jam(pc_obj, weapon_obj);
+        tig_debug_printf("Replay: command %d jammed the wielded gun\n", replay_next - 1);
         return;
     }
 
