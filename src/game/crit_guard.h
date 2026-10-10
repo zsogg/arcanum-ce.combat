@@ -77,6 +77,18 @@ bool crit_guard_debug_forces(int64_t attacker, int64_t target);
 // True when `debug criticals` forces this attack and boosts its effects.
 bool crit_guard_debug_boosts(int64_t attacker, int64_t target);
 
+// The opening shot's memory (criticals, a CR-2 repair, 2026-10-10): the
+// critters attacked in the current fight. zsogg's rule is "once shot at, it is
+// in combat"; the stock combat-mode flag the opening shot first read is set
+// only while an NPC attacks and cleared whenever its AI does anything else,
+// so in his natural-frequency playtest 20 of 26 revolver hits took the bonus.
+// Any attack roll against a critter engages it, under `opening shot`; the
+// list clears when the player leaves combat mode, and is not saved. A full
+// list treats everyone as engaged.
+void crit_guard_engage(int64_t obj);
+bool crit_guard_is_engaged(int64_t obj);
+void crit_guard_engaged_clear(void);
+
 // The test instrument `debug fumbles` (criticals, milestone CR-4.0), default
 // off: true when an attack by `attacker` on `target` is forced to miss
 // critically. The setting's value says whose attacks, as `debug criticals`':

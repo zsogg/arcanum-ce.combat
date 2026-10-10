@@ -26,6 +26,13 @@
 static CritGuardEntry crit_guard_entries[CRIT_GUARD_MAX_ENTRIES];
 static unsigned int crit_guard_clock_ms;
 
+// The critters attacked in the current fight (`crit_guard_engage`).
+#define CRIT_GUARD_ENGAGED_MAX 64
+
+static int64_t crit_guard_engaged[CRIT_GUARD_ENGAGED_MAX];
+static int crit_guard_engaged_count;
+static bool crit_guard_engaged_full;
+
 // ---------------------------------------------------------------------------
 // The rules, on one record. Pure: no engine state is read here.
 // ---------------------------------------------------------------------------
@@ -208,6 +215,51 @@ void crit_guard_reset(void)
 {
     memset(crit_guard_entries, 0, sizeof(crit_guard_entries));
     crit_guard_clock_ms = 0;
+    crit_guard_engaged_clear();
+}
+
+void crit_guard_engage(int64_t obj)
+{
+    int index;
+
+    if (obj == OBJ_HANDLE_NULL) {
+        return;
+    }
+
+    for (index = 0; index < crit_guard_engaged_count; index++) {
+        if (crit_guard_engaged[index] == obj) {
+            return;
+        }
+    }
+
+    if (crit_guard_engaged_count < CRIT_GUARD_ENGAGED_MAX) {
+        crit_guard_engaged[crit_guard_engaged_count++] = obj;
+    } else {
+        crit_guard_engaged_full = true;
+    }
+}
+
+bool crit_guard_is_engaged(int64_t obj)
+{
+    int index;
+
+    if (crit_guard_engaged_full) {
+        return true;
+    }
+
+    for (index = 0; index < crit_guard_engaged_count; index++) {
+        if (crit_guard_engaged[index] == obj) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+void crit_guard_engaged_clear(void)
+{
+    crit_guard_engaged_count = 0;
+    crit_guard_engaged_full = false;
 }
 
 bool crit_guard_is_protected(int64_t obj)

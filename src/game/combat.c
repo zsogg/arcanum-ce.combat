@@ -1517,6 +1517,10 @@ void combat_critter_toggle_combat_mode(int64_t obj)
                 combat_turn_based_end();
             }
             gsound_stop_combat_music(obj);
+
+            // CE (criticals, a CR-2 repair): the fight is over for the
+            // player, so the opening shot's memory clears.
+            crit_guard_engaged_clear();
         }
 
         if ((obj_field_int32_get(obj, OBJ_F_SPELL_FLAGS) & OSF_INVISIBLE) != 0

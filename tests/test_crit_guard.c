@@ -231,6 +231,34 @@ TEST(effects_are_named_for_the_observer)
     CHECK_STR(names, "\"winded\",\"staggered\"");
 }
 
+// A CR-2 repair (2026-10-10): the opening shot's memory. Engaging is once per
+// critter, clearing forgets all, and a full list treats everyone as engaged
+// rather than giving anyone a second opening shot.
+TEST(an_engaged_critter_stays_engaged_until_the_fight_ends)
+{
+    int64_t obj;
+
+    crit_guard_engaged_clear();
+    CHECK(!crit_guard_is_engaged(101));
+    crit_guard_engage(101);
+    crit_guard_engage(101);
+    CHECK(crit_guard_is_engaged(101));
+    CHECK(!crit_guard_is_engaged(102));
+    crit_guard_engage(OBJ_HANDLE_NULL);
+    CHECK(!crit_guard_is_engaged(OBJ_HANDLE_NULL));
+    crit_guard_engaged_clear();
+    CHECK(!crit_guard_is_engaged(101));
+
+    for (obj = 1000; obj < 1000 + 64; obj++) {
+        crit_guard_engage(obj);
+    }
+    CHECK(!crit_guard_is_engaged(5));
+    crit_guard_engage(5000);
+    CHECK(crit_guard_is_engaged(5));
+    crit_guard_engaged_clear();
+    CHECK(!crit_guard_is_engaged(5));
+}
+
 void test_crit_guard_suite(void)
 {
     RUN(protection_starts_on_recovery);
@@ -250,4 +278,5 @@ void test_crit_guard_suite(void)
     RUN(staggered_halves_the_next_turn_only);
     RUN(effects_last_until_the_end_of_the_next_turn_or_r_in_real_time);
     RUN(effects_are_named_for_the_observer);
+    RUN(an_engaged_critter_stays_engaged_until_the_fight_ends);
 }

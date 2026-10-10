@@ -1657,6 +1657,17 @@ bool skill_invocation_run(SkillInvocation* skill_invocation)
         is_critical = true;
     }
 
+    // CE (criticals, a CR-2 repair, 2026-10-10): an attack roll against a
+    // critter engages it for the rest of the fight, so its next shot is no
+    // opening shot (`crit_guard_engage`). After both the difficulty and the
+    // critical chance have read `skill_opening_shot`.
+    if (feature_enabled(FEATURE_OPENING_SHOT)
+        && skill_is_attack(skill)
+        && target_obj != OBJ_HANDLE_NULL
+        && obj_type_is_critter(obj_field_int32_get(target_obj, OBJ_F_TYPE))) {
+        crit_guard_engage(target_obj);
+    }
+
     // Process skill-specific mechanics.
     switch (skill) {
     case SKILL_DODGE:
@@ -2230,7 +2241,8 @@ static bool skill_opening_shot(SkillInvocation* skill_invocation)
         && skill_invocation->skill == SKILL_FIREARMS
         && target_obj != OBJ_HANDLE_NULL
         && obj_type_is_critter(obj_field_int32_get(target_obj, OBJ_F_TYPE))
-        && !combat_critter_is_combat_mode_active(target_obj);
+        && !combat_critter_is_combat_mode_active(target_obj)
+        && !crit_guard_is_engaged(target_obj);
 }
 
 // CE (criticals, milestone CR-2): the critical chance of an attack under
