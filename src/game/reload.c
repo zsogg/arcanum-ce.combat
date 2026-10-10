@@ -195,7 +195,7 @@ static void reload_say(int64_t critter_obj, const char* text)
 // Session 4: an NPC the player can see says "Reloading" when it spends time
 // loading - agreed 2026-09-20. Never one that is prowling or invisible: the
 // word must not give away where a hidden gunner is.
-static void reload_bark(int64_t critter_obj)
+static void reload_bark_text(int64_t critter_obj, const char* text)
 {
     if (player_is_local_pc_obj(critter_obj)
         || critter_is_concealed(critter_obj)
@@ -203,7 +203,12 @@ static void reload_bark(int64_t critter_obj)
         return;
     }
 
-    tf_add(critter_obj, TF_TYPE_WHITE, "Reloading");
+    tf_add(critter_obj, TF_TYPE_WHITE, text);
+}
+
+static void reload_bark(int64_t critter_obj)
+{
+    reload_bark_text(critter_obj, "Reloading");
 }
 
 bool reload_fire(int64_t critter_obj, int64_t weapon_obj)
@@ -353,7 +358,6 @@ ReloadFumble reload_fumble_outcome(int roll, int training)
 bool reload_jams_apply(int64_t critter_obj, int64_t weapon_obj)
 {
     return feature_enabled(FEATURE_FIREARM_FUMBLES)
-        && player_is_local_pc_obj(critter_obj)
         && weapon_obj != OBJ_HANDLE_NULL
         && obj_field_int32_get(weapon_obj, OBJ_F_TYPE) == OBJ_TYPE_WEAPON
         && item_weapon_skill(weapon_obj) == SKILL_FIREARMS
@@ -402,17 +406,22 @@ void reload_jam(int64_t critter_obj, int64_t weapon_obj)
         obj_field_int32_get(weapon_obj, OBJ_F_WEAPON_PAD_I_2) | RELOAD_JAMMED);
     reload_clear_progress_set(weapon_obj, 0);
     reload_say(critter_obj, "Jammed!");
+    // Criticals CR-4.2: over an NPC the player can see, as "Reloading" is.
+    reload_bark_text(critter_obj, "Jammed!");
     tig_debug_printf("reload: jammed; %d loaded\n", reload_loaded_get(weapon_obj));
     ui_refresh_counters();
 }
 
-// The jam is cleared: the gun fires again, with what it had loaded.
-static void reload_unjam(int64_t critter_obj, int64_t weapon_obj)
+// The jam is cleared: the gun fires again, with what it had loaded. Quiet
+// outside combat, as loading there is.
+static void reload_unjam(int64_t critter_obj, int64_t weapon_obj, bool quiet)
 {
     reload_clear_progress_set(weapon_obj, 0);
     obj_field_int32_set(weapon_obj, OBJ_F_WEAPON_PAD_I_2,
         obj_field_int32_get(weapon_obj, OBJ_F_WEAPON_PAD_I_2) & ~RELOAD_JAMMED);
-    reload_say(critter_obj, "Jam cleared");
+    if (!quiet) {
+        reload_say(critter_obj, "Jam cleared");
+    }
     tig_debug_printf("reload: jam cleared; %d loaded\n", reload_loaded_get(weapon_obj));
     ui_refresh_counters();
 }
@@ -443,6 +452,7 @@ static bool reload_clear_command(int64_t critter_obj, int64_t weapon_obj)
         if (work.spent > 0 && !combat_consume_action_points(critter_obj, work.spent)) {
             return false;
         }
+        reload_bark_text(critter_obj, "Clearing a jam");
         if (!work.completed) {
             reload_clear_progress_set(weapon_obj, work.progress);
             snprintf(text, sizeof(text), "Clearing %d/%d", work.progress, cost);
@@ -451,7 +461,7 @@ static bool reload_clear_command(int64_t critter_obj, int64_t weapon_obj)
                 work.progress, cost);
             return true;
         }
-        reload_unjam(critter_obj, weapon_obj);
+        reload_unjam(critter_obj, weapon_obj, false);
         return true;
     }
 
@@ -466,11 +476,12 @@ static bool reload_clear_command(int64_t critter_obj, int64_t weapon_obj)
             return false;
         }
         reload_say(critter_obj, "Clearing the jam");
+        reload_bark_text(critter_obj, "Clearing a jam");
         tig_debug_printf("reload: clearing, %d AP, standing\n", cost - progress);
         return true;
     }
 
-    reload_unjam(critter_obj, weapon_obj);
+    reload_unjam(critter_obj, weapon_obj, false);
     return true;
 }
 
@@ -566,7 +577,7 @@ void reload_standing_done(int64_t critter_obj, bool completed)
 
     // Criticals CR-4.1: the time a jam's clearing takes has passed.
     if (reload_wielded_is_jammed(critter_obj)) {
-        reload_unjam(critter_obj, weapon_obj);
+        reload_unjam(critter_obj, weapon_obj, false);
         return;
     }
 
@@ -624,6 +635,28 @@ bool reload_ai_act(int64_t critter_obj, int64_t enemy_obj)
     // Real time: a standing reload under way is waited for, not cancelled by
     // the next order.
     if (rt_budget_standing_action_pending(critter_obj)) {
+        return true;
+    }
+
+    // Criticals CR-4.2: a jammed gun is cleared, by the Reload command, as an
+    // empty one is loaded - or, with an enemy right beside it, traded for a
+    // melee backup if the NPC carries one. Clearing needs no ammunition, so
+    // it never sends the NPC for another weapon.
+    if (reload_jammed(weapon_obj)) {
+        if (enemy_obj != OBJ_HANDLE_NULL
+            && object_dist(critter_obj, enemy_obj) <= 1) {
+            melee_obj = reload_melee_backup(critter_obj);
+            if (melee_obj != OBJ_HANDLE_NULL && item_wield_set(melee_obj, ITEM_INV_LOC_WEAPON)) {
+                tig_debug_printf("reload: an NPC with a jammed gun takes a melee backup\n");
+                return false; // attack with it now
+            }
+        }
+        if (!reload_command(critter_obj)
+            && combat_turn_based_is_active()
+            && combat_turn_based_whos_turn_get() == critter_obj) {
+            // No AP left for the work: the turn is over.
+            combat_turn_based_end_critter_turn(critter_obj);
+        }
         return true;
     }
 
@@ -691,6 +724,7 @@ static struct {
 static void reload_prep_one(int64_t critter_obj, int delta_ms)
 {
     int64_t weapon_obj;
+    bool jammed;
     int index;
     int free_index = -1;
     int duration_ms;
@@ -705,9 +739,11 @@ static void reload_prep_one(int64_t critter_obj, int delta_ms)
     }
 
     weapon_obj = item_wield_get(critter_obj, ITEM_INV_LOC_WEAPON);
+    // Criticals CR-4.2: a jammed gun is cleared first, in its clearing time.
+    jammed = reload_applies(critter_obj, weapon_obj) && reload_jammed(weapon_obj);
     if (combat_critter_is_combat_mode_active(critter_obj)
         || !reload_applies(critter_obj, weapon_obj)
-        || reload_loaded_get(weapon_obj) >= reload_rule_for(weapon_obj)->capacity) {
+        || (!jammed && reload_loaded_get(weapon_obj) >= reload_rule_for(weapon_obj)->capacity)) {
         // Nothing to do, or not safe: start again from zero next time.
         if (index < RELOAD_PREP_MAX) {
             reload_prep[index].obj = OBJ_HANDLE_NULL;
@@ -727,13 +763,20 @@ static void reload_prep_one(int64_t critter_obj, int delta_ms)
 
     reload_prep[index].elapsed_ms += delta_ms;
     duration_ms = rt_budget_duration_ms(rt_budget_pace_ms_now(),
-        combat_reload_cost(critter_obj, weapon_obj) - reload_progress_get(weapon_obj),
+        jammed
+            ? combat_jam_clear_cost(critter_obj, weapon_obj) - reload_clear_progress_get(weapon_obj)
+            : combat_reload_cost(critter_obj, weapon_obj) - reload_progress_get(weapon_obj),
         combat_action_points_per_turn(critter_obj));
     if (reload_prep[index].elapsed_ms < duration_ms) {
         return;
     }
 
     reload_prep[index].elapsed_ms = 0;
+    if (jammed) {
+        reload_unjam(critter_obj, weapon_obj, true);
+        tig_debug_printf("reload: jam cleared outside combat\n");
+        return;
+    }
     if (reload_can_load_quiet(critter_obj, weapon_obj)) {
         reload_load_one(critter_obj, weapon_obj, true);
         tig_debug_printf("reload: loaded outside combat\n");

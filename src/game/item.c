@@ -2979,11 +2979,13 @@ void item_wield_best(int64_t critter_obj, int inventory_location, int64_t target
                 // whatever the pack holds. An empty one with an enemy beside
                 // the wielder is only the last resort, so the melee backup
                 // `reload_ai_act` takes is not swapped straight back.
+                // Criticals CR-4.2: a jammed gun likewise, and it can always
+                // be cleared.
                 if (target_obj != OBJ_HANDLE_NULL
                     && dist <= 1
                     && reload_applies(critter_obj, item_obj)
-                    && reload_loaded_get(item_obj) <= 0) {
-                    if (reload_can_load_quiet(critter_obj, item_obj)) {
+                    && (reload_loaded_get(item_obj) <= 0 || reload_jammed(item_obj))) {
+                    if (reload_jammed(item_obj) || reload_can_load_quiet(critter_obj, item_obj)) {
                         empty_gun_obj = item_obj;
                     }
                     continue;

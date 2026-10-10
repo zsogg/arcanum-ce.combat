@@ -96,8 +96,11 @@ void reload_standing_done(int64_t critter_obj, bool completed);
 // reads neither. With the switch off the bit is ignored, as reloading ignores
 // loaded shots when it is off.
 //
-// In this first build it governs the player's fumbles only: an NPC keeps the
-// stock fumble until the AI can clear a jam (milestone CR-4.2).
+// It governs everyone's fumbles with a governed gun (milestone CR-4.2; the
+// player's alone in CR-4.1). An NPC clears a jam as it loads
+// (`reload_ai_act`), "Jammed!" floating over one the player can see; and a
+// wielded gun of the player's or a follower's clears itself outside combat,
+// in its clearing time (`reload_prep_tick`).
 // ---------------------------------------------------------------------------
 
 typedef enum ReloadFumble {
@@ -112,8 +115,8 @@ typedef enum ReloadFumble {
 ReloadFumble reload_fumble_outcome(int roll, int training);
 
 // True when `firearm fumbles` governs this critter's fumble with this
-// weapon: the switch is on, reloading governs the gun, and (CR-4.1) the
-// critter is the player.
+// weapon: the switch is on, the weapon is a firearm, and reloading governs
+// it for this critter.
 bool reload_jams_apply(int64_t critter_obj, int64_t weapon_obj);
 // True when the gun is jammed and the switch is on.
 bool reload_jammed(int64_t weapon_obj);

@@ -193,7 +193,8 @@ bool crit_guard_debug_fumbles(int64_t attacker, int64_t target)
     }
 
     mode = settings_get_value(&settings, feature_key(FEATURE_DEBUG_FUMBLES));
-    return ((mode & 1) != 0 && player_is_local_pc_obj(attacker))
+    return (mode & 4) != 0
+        || ((mode & 1) != 0 && player_is_local_pc_obj(attacker))
         || ((mode & 2) != 0 && player_is_local_pc_obj(target));
 }
 

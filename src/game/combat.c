@@ -2892,11 +2892,12 @@ void combat_process_crit_miss(CombatContext* combat)
 
     chance = effect_adjust_crit_fail_effect(combat->attacker_obj, chance);
 
-    // CE (criticals, milestone CR-4.1): under `firearm fumbles` the player's
-    // firearm fumble jams the gun half the time and does nothing 30% of the
-    // time; either way the attack is an ordinary miss. The remaining fifth
-    // hits its wielder below, tamed (zsogg, 2026-10-06). Stock turns every
-    // fumble on its wielder (MODDING-NOTES quirk 59).
+    // CE (criticals, milestones CR-4.1 and CR-4.2): under `firearm fumbles`
+    // anyone's fumble with a gun reloading governs jams the gun half the time
+    // and does nothing 30% of the time; either way the attack is an ordinary
+    // miss. The remaining fifth hits its wielder below, tamed (zsogg,
+    // 2026-10-06). Stock turns every fumble on its wielder (MODDING-NOTES
+    // quirk 59).
     bool firearm_fumble = reload_jams_apply(combat->attacker_obj, combat->weapon_obj);
     if (firearm_fumble) {
         ReloadFumble fumble = reload_fumble_outcome(random_between(1, 100),
@@ -2937,7 +2938,7 @@ void combat_process_crit_miss(CombatContext* combat)
         if (item_weapon_ammo_type(combat->weapon_obj) != 10000) {
             if (random_between(1, 100) <= chance + 1) {
                 // CE (criticals, milestone CR-4.1): under `firearm fumbles`
-                // the player's fumble loses 5 shots, never all the spare
+                // such a fumble loses 5 shots, never all the spare
                 // ammunition (zsogg, 2026-10-06).
                 combat->dam_flags |= firearm_fumble ? CDF_LOST_AMMO : CDF_DESTROY_AMMO;
             } else if (random_between(1, 100) <= chance + 11) {
@@ -3091,8 +3092,8 @@ void combat_calc_dmg(CombatContext* combat)
         }
     }
 
-    // CE (criticals, milestone CR-4.1): under `firearm fumbles` the player's
-    // firearm fumble that hits its wielder (0x8) deals half its damage,
+    // CE (criticals, milestone CR-4.1): under `firearm fumbles` a firearm
+    // fumble that hits its wielder (0x8) deals half its damage,
     // critical or not (zsogg, 2026-10-06).
     if ((combat->flags & 0x8) != 0
         && combat->target_obj == combat->attacker_obj
