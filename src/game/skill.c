@@ -2177,6 +2177,13 @@ bool skill_invocation_check_crit_hit(int roll, int effectiveness, SkillInvocatio
         chance = skill_more_criticals(skill_invocation->skill, chance);
     }
 
+    // CE (criticals, milestone CR-3): under `firearm criticals` a firearm
+    // adds its weapon table `CritChance`, as written (zsogg, 2026-10-10:
+    // pistols +11, muzzle-loaders +7, some specials).
+    if (skill_invocation->skill == SKILL_FIREARMS && skill_invocation->item.obj != OBJ_HANDLE_NULL) {
+        chance += weapon_rules_crit_chance(skill_invocation->item.obj);
+    }
+
     // CE (criticals, milestone CR-2): a firearm's opening shot is also more
     // likely to be critical, under `opening shot`.
     if (skill_opening_shot(skill_invocation)) {

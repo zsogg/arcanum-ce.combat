@@ -2682,8 +2682,9 @@ void combat_process_crit_hit(CombatContext* combat)
 
     // CE (criticals, milestone CR-1): the test instrument's other half. Under
     // `debug criticals` a forced critical also rolls its effects 60 points
-    // more easily, so incapacitations happen often enough to measure.
-    if (crit_guard_debug_forces(combat->attacker_obj, combat->target_obj)) {
+    // more easily, so incapacitations happen often enough to measure - unless
+    // its value adds 4 (CR-3.0), which compares weapons' own bonuses.
+    if (crit_guard_debug_boosts(combat->attacker_obj, combat->target_obj)) {
         chance += 60;
     }
 
@@ -2786,6 +2787,12 @@ void combat_process_crit_hit(CombatContext* combat)
                 difficulty += 10;
             }
 
+            // CE (criticals, milestone CR-3): an Impact weapon's critical
+            // knocks down more easily, under `firearm criticals`.
+            if (weapon_rules_crit_style(combat->weapon_obj) == WEAPON_CRIT_STYLE_IMPACT) {
+                difficulty += 10;
+            }
+
             if (random_between(1, 100) <= difficulty) {
                 combat->dam_flags |= CDF_KNOCKDOWN;
             }
@@ -2842,7 +2849,11 @@ void combat_process_crit_hit(CombatContext* combat)
         }
         if ((temporary & CRIT_EFFECT_WINDED) != 0
             && (obj_field_int32_get(combat->target_obj, OBJ_F_CRITTER_FLAGS) & OCF_FATIGUE_IMMUNE) == 0) {
-            combat->dam[DAMAGE_TYPE_FATIGUE] += combat->dam[DAMAGE_TYPE_NORMAL] / 2;
+            // CE (criticals, milestone CR-3): an Impact weapon's Winded takes
+            // the hit's whole damage as fatigue, under `firearm criticals`.
+            combat->dam[DAMAGE_TYPE_FATIGUE] += weapon_rules_crit_style(combat->weapon_obj) == WEAPON_CRIT_STYLE_IMPACT
+                ? combat->dam[DAMAGE_TYPE_NORMAL]
+                : combat->dam[DAMAGE_TYPE_NORMAL] / 2;
         } else {
             temporary &= ~CRIT_EFFECT_WINDED;
         }
@@ -3342,6 +3353,11 @@ static int combat_armor_resolve(CombatContext* combat)
         }
         hit.gap = random_between(1, 100)
             <= penetration_gap_chance(crit_bonus, combat->hit_loc, (combat->flags & CF_AIM) != 0);
+        // CE (criticals, milestone CR-3): a Precise weapon's critical always
+        // finds the gap, under `firearm criticals`. The roll is still drawn.
+        if (weapon_rules_crit_style(combat->weapon_obj) == WEAPON_CRIT_STYLE_PRECISE) {
+            hit.gap = true;
+        }
     }
 
     hit.variation_percent = random_between(PENETRATION_VARIATION_MIN, PENETRATION_VARIATION_MAX);

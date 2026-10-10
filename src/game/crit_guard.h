@@ -71,8 +71,11 @@ bool crit_guard_is_down(int64_t obj);
 // `attacker` on `target` is forced critical, with its effects rolled 60
 // points more easily. The setting's value says whose attacks: 1 the
 // player's, 2 those against the player, 3 both. Never a fumble's hit on
-// oneself.
+// oneself. Adding 4 (criticals CR-3.0) forces the critical without the 60,
+// so weapons' own critical-effect bonuses can be compared.
 bool crit_guard_debug_forces(int64_t attacker, int64_t target);
+// True when `debug criticals` forces this attack and boosts its effects.
+bool crit_guard_debug_boosts(int64_t attacker, int64_t target);
 
 // The test instrument `debug fumbles` (criticals, milestone CR-4.0), default
 // off: true when an attack by `attacker` on `target` is forced to miss

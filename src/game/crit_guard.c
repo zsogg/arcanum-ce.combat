@@ -184,6 +184,12 @@ bool crit_guard_debug_forces(int64_t attacker, int64_t target)
         || ((mode & 2) != 0 && player_is_local_pc_obj(target));
 }
 
+bool crit_guard_debug_boosts(int64_t attacker, int64_t target)
+{
+    return crit_guard_debug_forces(attacker, target)
+        && (settings_get_value(&settings, feature_key(FEATURE_DEBUG_CRITICALS)) & 4) == 0;
+}
+
 bool crit_guard_debug_fumbles(int64_t attacker, int64_t target)
 {
     int mode;

@@ -52,5 +52,6 @@ FEATURE(CRITICAL_EFFECTS, "critical effects", false)
 FEATURE(OPENING_SHOT, "opening shot", false)
 FEATURE(DEBUG_FUMBLES, "debug fumbles", false)
 FEATURE(FIREARM_FUMBLES, "firearm fumbles", false)
+FEATURE(FIREARM_CRITICALS, "firearm criticals", false)
 
 // clang-format on

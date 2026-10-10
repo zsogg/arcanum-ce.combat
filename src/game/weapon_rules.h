@@ -31,6 +31,16 @@
 // "Not set": the weapon's own value stands.
 #define WEAPON_RULE_UNSET (-1)
 
+// A firearm's critical style (`firearm criticals`, criticals CR-3; zsogg,
+// 2026-10-10): what its critical hits do besides the stock rolls.
+typedef enum WeaponCritStyle {
+    WEAPON_CRIT_STYLE_NONE,
+    // A critical always finds a gap in armor (`armor penetration`).
+    WEAPON_CRIT_STYLE_PRECISE,
+    // Winded takes the hit's whole damage as fatigue, and knockdown is +10.
+    WEAPON_CRIT_STYLE_IMPACT,
+} WeaponCritStyle;
+
 typedef struct WeaponRule {
     int prototype;
     // Reloading (`firearm reloading`). Capacity and LoadAP come as a pair.
@@ -43,6 +53,11 @@ typedef struct WeaponRule {
     // Tesla Rod, the Tesla Gun, the Charged Accelerator Gun and the Flame
     // Thrower). Needs a Capacity.
     int whole_magazine;
+    // Criticals CR-3 (`firearm criticals`; zsogg, 2026-10-10): points added
+    // to the critical chance of a hit, as written, and the critical style -
+    // `CritStyle: Precise`, `Impact` or `None`.
+    int crit_chance;
+    int crit_style;
     // AP to clear a jam (`firearm fumbles`, criticals CR-4.1; zsogg,
     // 2026-10-06): the class's in the generated table - muzzle-loader 7,
     // pistol 4, rifle and repeater 5, heavy 6. Unset: the gun's LoadAP, one
@@ -114,6 +129,8 @@ typedef struct WeaponRule {
 #define WEAPON_RULE_DODGEABLE_MIN 0
 #define WEAPON_RULE_DODGEABLE_MAX 1
 #define WEAPON_RULE_PENETRATION_MAX 1000
+#define WEAPON_RULE_CRIT_CHANCE_MIN (-100)
+#define WEAPON_RULE_CRIT_CHANCE_MAX 100
 
 // Pure: reads one entry's text into `rule`. False, with `rule` untouched, for
 // anything malformed - an unknown key, a value that is not a number or a
@@ -132,6 +149,10 @@ const WeaponRule* weapon_rule_for(int64_t weapon_obj);
 // Apprentice training or better in the weapon's skill - the test that gives an
 // attack its +5 speed in `item_weapon_magic_speed`.
 bool weapon_rules_trained(int64_t critter_obj, int64_t weapon_obj);
+// Criticals CR-3, under `firearm criticals`: the weapon's critical-chance
+// points (0 unlisted or off) and its critical style (none unlisted or off).
+int weapon_rules_crit_chance(int64_t weapon_obj);
+WeaponCritStyle weapon_rules_crit_style(int64_t weapon_obj);
 
 // The stat overrides, under `weapon rules`: each returns `stock` when the
 // switch is off, the weapon is not listed, or its entry does not name the stat.

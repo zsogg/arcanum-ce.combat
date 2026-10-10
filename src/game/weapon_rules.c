@@ -108,6 +108,8 @@ bool weapon_rule_parse(int prototype, const char* str, WeaponRule* rule)
     parsed.dodgeable = WEAPON_RULE_UNSET;
     parsed.whole_magazine = WEAPON_RULE_UNSET;
     parsed.clear_ap = WEAPON_RULE_UNSET;
+    parsed.crit_chance = WEAPON_RULE_UNSET;
+    parsed.crit_style = WEAPON_RULE_UNSET;
     parsed.penetration = WEAPON_RULE_UNSET;
 
     for (part = strtok_r(buffer, ",", &save); part != NULL; part = strtok_r(NULL, ",", &save)) {
@@ -156,6 +158,27 @@ bool weapon_rule_parse(int prototype, const char* str, WeaponRule* rule)
             continue;
         }
 
+        // Criticals CR-3: the one key whose value is a word.
+        if (strcmp(key, "CritStyle") == 0) {
+            const char* word = colon + 1 + strspn(colon + 1, " \t");
+            size_t length = strcspn(word, " \t");
+
+            if (word[length + strspn(word + length, " \t")] != '\0') {
+                return false;
+            }
+            if (length == 7 && strncmp(word, "Precise", 7) == 0) {
+                parsed.crit_style = WEAPON_CRIT_STYLE_PRECISE;
+            } else if (length == 6 && strncmp(word, "Impact", 6) == 0) {
+                parsed.crit_style = WEAPON_CRIT_STYLE_IMPACT;
+            } else if (length == 4 && strncmp(word, "None", 4) == 0) {
+                parsed.crit_style = WEAPON_CRIT_STYLE_NONE;
+            } else {
+                return false;
+            }
+            keys++;
+            continue;
+        }
+
         if (!ce_parse_int(colon + 1, &value)) {
             return false;
         }
@@ -188,6 +211,8 @@ bool weapon_rule_parse(int prototype, const char* str, WeaponRule* rule)
             parsed.ammo_per_shot = weapon_rule_clamp(value, WEAPON_RULE_AMMO_PER_SHOT_MIN, WEAPON_RULE_AMMO_PER_SHOT_MAX);
         } else if (strcmp(key, "Penetration") == 0) {
             parsed.penetration = weapon_rule_clamp(value, 0, WEAPON_RULE_PENETRATION_MAX);
+        } else if (strcmp(key, "CritChance") == 0) {
+            parsed.crit_chance = weapon_rule_clamp(value, WEAPON_RULE_CRIT_CHANCE_MIN, WEAPON_RULE_CRIT_CHANCE_MAX);
         } else if (strcmp(key, "ClearAP") == 0) {
             parsed.clear_ap = weapon_rule_clamp(value, WEAPON_RULE_AP_MIN, WEAPON_RULE_AP_MAX);
         } else if (strcmp(key, "WholeMagazine") == 0) {
@@ -361,6 +386,32 @@ int weapon_rules_crit_effect_for(int64_t weapon_obj, int64_t owner_obj)
 
     return item_adjust_magic(weapon_obj, owner_obj,
         obj_field_int32_get(weapon_obj, OBJ_F_WEAPON_MAGIC_CRIT_HIT_EFFECT));
+}
+
+int weapon_rules_crit_chance(int64_t weapon_obj)
+{
+    const WeaponRule* rule;
+
+    if (!feature_enabled(FEATURE_FIREARM_CRITICALS)) {
+        return 0;
+    }
+
+    rule = weapon_rule_for(weapon_obj);
+    return rule != NULL && rule->crit_chance != WEAPON_RULE_UNSET ? rule->crit_chance : 0;
+}
+
+WeaponCritStyle weapon_rules_crit_style(int64_t weapon_obj)
+{
+    const WeaponRule* rule;
+
+    if (!feature_enabled(FEATURE_FIREARM_CRITICALS)) {
+        return WEAPON_CRIT_STYLE_NONE;
+    }
+
+    rule = weapon_rule_for(weapon_obj);
+    return rule != NULL && rule->crit_style != WEAPON_RULE_UNSET
+        ? (WeaponCritStyle)rule->crit_style
+        : WEAPON_CRIT_STYLE_NONE;
 }
 
 int weapon_rules_worth(int64_t weapon_obj, int stock)

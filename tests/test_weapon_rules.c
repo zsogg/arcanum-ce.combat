@@ -184,6 +184,33 @@ TEST(clear_ap_is_read_clamped_and_needs_a_capacity)
     CHECK(!weapon_rule_parse(6100, "Damage: 3-10, ClearAP: 4", &rule));
 }
 
+TEST(critical_chance_and_style_are_read)
+{
+    WeaponRule rule;
+
+    // Criticals CR-3, zsogg 2026-10-10: the pistols +11; the rifles Precise,
+    // the muzzle-loaders and heavy guns Impact.
+    CHECK(weapon_rule_parse(6053, "CritChance: 11, CritEffect: 4", &rule));
+    CHECK_INT(rule.crit_chance, 11);
+    CHECK_INT(rule.crit_style, WEAPON_RULE_UNSET);
+    CHECK(weapon_rule_parse(6128, "CritEffect: 25, CritStyle: Precise", &rule));
+    CHECK_INT(rule.crit_style, WEAPON_CRIT_STYLE_PRECISE);
+    CHECK_INT(rule.crit_chance, WEAPON_RULE_UNSET);
+    CHECK(weapon_rule_parse(6101, "CritStyle:  Impact ", &rule));
+    CHECK_INT(rule.crit_style, WEAPON_CRIT_STYLE_IMPACT);
+    CHECK(weapon_rule_parse(6060, "CritStyle: None", &rule));
+    CHECK_INT(rule.crit_style, WEAPON_CRIT_STYLE_NONE);
+    CHECK(weapon_rule_parse(6053, "CritChance: 500", &rule));
+    CHECK_INT(rule.crit_chance, WEAPON_RULE_CRIT_CHANCE_MAX);
+    CHECK(weapon_rule_parse(6053, "CritChance: -500", &rule));
+    CHECK_INT(rule.crit_chance, WEAPON_RULE_CRIT_CHANCE_MIN);
+    // A style the engine does not know, or two words, is refused whole.
+    CHECK(!weapon_rule_parse(6053, "CritStyle: precise", &rule));
+    CHECK(!weapon_rule_parse(6053, "CritStyle: Impact Precise", &rule));
+    CHECK(!weapon_rule_parse(6053, "CritStyle: 1", &rule));
+    CHECK(!weapon_rule_parse(6053, "CritChance: many", &rule));
+}
+
 TEST(dodgeable_is_read_and_clamped)
 {
     WeaponRule rule;
@@ -265,6 +292,7 @@ void test_weapon_rules_suite(void)
     RUN(penetration_is_read_and_clamped);
     RUN(whole_magazine_is_read_and_needs_a_capacity);
     RUN(clear_ap_is_read_clamped_and_needs_a_capacity);
+    RUN(critical_chance_and_style_are_read);
     RUN(dodgeable_is_read_and_clamped);
     RUN(armor_damage_is_read_and_clamped);
     RUN(elemental_damage_and_ammunition_per_shot_are_read);
