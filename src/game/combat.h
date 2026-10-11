@@ -145,6 +145,14 @@ int combat_attack_cost(int64_t obj);
 int combat_weapon_attack_cost(int64_t obj, int64_t weapon_obj);
 int combat_throw_cost(int64_t obj);
 int combat_cast_cost(int64_t obj, int spell);
+// CE (magic, milestone MG-1): the stock cast cost, the item cost, and a
+// complete college's floor; the rule on a listed cost, pure for the suite.
+#define COMBAT_STOCK_CAST_COST 4
+#define COMBAT_ITEM_CAST_COST 4
+#define COMBAT_COMPLETE_COLLEGE_MIN 3
+int combat_spell_ap_rule(int listed_ap, bool complete_college);
+int combat_spell_cast_cost(int64_t caster_obj, int spell, int64_t source_obj);
+bool combat_check_cast_spell_for(int64_t source_obj, int spell, int64_t item_obj);
 int combat_skill_cost(int64_t obj, int skill);
 int combat_use_object_cost(int64_t obj, int64_t target_obj);
 // CE: a restorative's AP under `restorative cost` (combat AI milestone AI-4).

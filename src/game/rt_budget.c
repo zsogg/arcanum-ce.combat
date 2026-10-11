@@ -237,7 +237,7 @@ static bool rt_budget_goal_category(AnimRunInfo* run_info,
 }
 
 static int rt_budget_action_points(int64_t obj, RtBudgetCategory category, int spell,
-    int skill)
+    int skill, int64_t spell_source_obj)
 {
     // The costs turn-based charges: `combat_attack_cost` in AGbeginAnimAttack,
     // `combat_throw_cost` in the throw goal's last node (session C, zsogg's
@@ -252,7 +252,8 @@ static int rt_budget_action_points(int64_t obj, RtBudgetCategory category, int s
     case RT_BUDGET_SKILL:
         return combat_skill_cost(obj, skill);
     default:
-        return combat_cast_cost(obj, spell);
+        // CE (magic, milestone MG-1): an item that casts pays the item cost.
+        return combat_spell_cast_cost(obj, spell, spell_source_obj);
     }
 }
 
@@ -459,18 +460,22 @@ static void rt_budget_accept(int64_t obj, RtBudgetEntry* entry,
     int pace_ms;
     int action_points;
     int spell;
+    int64_t spell_source_obj;
     MagicTechRunInfo* mt_run_info;
 
     pace_ms = rt_budget_configured_pace_ms();
     spell = -1;
+    spell_source_obj = OBJ_HANDLE_NULL;
     if (category == RT_BUDGET_CAST
         && magictech_id_to_run_info(run_info->cur_stack_data->params[AGDATA_SPELL_DATA].data, &mt_run_info)) {
         spell = mt_run_info->spell;
+        spell_source_obj = mt_run_info->source_obj.obj;
     }
     action_points = rt_budget_action_points(obj, category, spell,
         category == RT_BUDGET_SKILL
             ? run_info->cur_stack_data->params[AGDATA_SKILL_DATA].data
-            : -1);
+            : -1,
+        spell_source_obj);
     // Rule 9: Speed is read now, and the action keeps it. Divided by what a
     // turn grants, through the rule turn-based uses at each turn's start.
     rt_budget_entry_accept(entry, category, run_info->id, action_points,

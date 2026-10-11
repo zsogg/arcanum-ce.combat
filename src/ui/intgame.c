@@ -5457,7 +5457,9 @@ bool intgame_mode_set(IntgameMode mode)
             v1 = true;
             v17 = true;
             spell_ui_cancel();
-            combat_check_cast_spell(player_get_local_pc_obj());
+            // CE (magic, milestone MG-1): the selected spell's own cost.
+            combat_check_cast_spell_for(player_get_local_pc_obj(), spell_ui_selected_spell(),
+                spell_ui_selected_source() != player_get_local_pc_obj() ? spell_ui_selected_source() : OBJ_HANDLE_NULL);
             break;
         case INTGAME_MODE_SKILL:
             v1 = true;
@@ -8977,7 +8979,9 @@ void intgame_target_interact(int64_t source_obj, int64_t target_obj)
         }
         break;
     case INTGAME_MODE_SPELL:
-        combat_check_cast_spell(source_obj);
+        // CE (magic, milestone MG-1): the selected spell's own cost.
+        combat_check_cast_spell_for(source_obj, spell_ui_selected_spell(),
+            spell_ui_selected_source() != source_obj ? spell_ui_selected_source() : OBJ_HANDLE_NULL);
         break;
     case INTGAME_MODE_SKILL:
         combat_check_use_skill(source_obj);

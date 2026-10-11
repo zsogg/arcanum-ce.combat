@@ -602,7 +602,7 @@ void combat_observer_projectile_ended(const char* source, const char* target,
 }
 
 void combat_observer_spell_cast(const char* caster, const char* source,
-    const char* target, int spell, bool free)
+    const char* target, int spell, bool free, int ap_cost)
 {
     char line[384];
 
@@ -614,9 +614,9 @@ void combat_observer_spell_cast(const char* caster, const char* source,
         "{\"schema\":%d,\"sequence\":%u,\"event\":\"spell.cast\","
         "\"turn\":null,\"action_id\":null,\"caster\":\"%s\","
         "\"source\":\"%s\",\"target\":\"%s\",\"spell\":%d,"
-        "\"free\":%s}",
+        "\"free\":%s,\"ap_cost\":%d}",
         COMBAT_OBSERVER_SCHEMA, combat_observer_sequence++, caster, source,
-        target, spell, free ? "true" : "false");
+        target, spell, free ? "true" : "false", ap_cost);
     combat_observer_write(line);
 }
 

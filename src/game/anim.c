@@ -7410,10 +7410,12 @@ bool anim_pay_spell_cost(AnimRunInfo* run_info)
     {
         MagicTechRunInfo* mt_run_info;
         int spell = -1;
+        int64_t source_obj = OBJ_HANDLE_NULL;
         bool on_hit = false;
 
         if (magictech_id_to_run_info(run_info->cur_stack_data->params[AGDATA_SPELL_DATA].data, &mt_run_info)) {
             spell = mt_run_info->spell;
+            source_obj = mt_run_info->source_obj.obj;
             on_hit = (mt_run_info->flags & MAGICTECH_RUN_CE_ON_HIT) != 0;
         }
 
@@ -7424,7 +7426,8 @@ bool anim_pay_spell_cost(AnimRunInfo* run_info)
         // a bug in the original game. Off by default, so CE matches the
         // original unless a player opts in. The mark is set only while the
         // feature is on.
-        if (!on_hit && !combat_consume_action_points(obj, combat_cast_cost(obj, spell))) {
+        // CE (magic, milestone MG-1): an item that casts pays the item cost.
+        if (!on_hit && !combat_consume_action_points(obj, combat_spell_cast_cost(obj, spell, source_obj))) {
             return false;
         }
     }

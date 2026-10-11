@@ -203,7 +203,9 @@ SpellUiActivate spell_ui_activate(int64_t obj, int spl)
         return SPELL_UI_ACTIVATE_ERR;
     }
 
-    if (!combat_check_cast_spell(qword_683500)) {
+    // CE (magic, milestone MG-1): the preview prices this spell, or the item
+    // cost when an item casts it.
+    if (!combat_check_cast_spell_for(qword_683500, spl, obj != qword_683500 ? obj : OBJ_HANDLE_NULL)) {
         dword_683508 = false;
         return false;
     }
@@ -498,6 +500,19 @@ void spell_ui_maintain_refresh(void)
 bool spell_ui_maintain_has(int slot)
 {
     return spell_ui_maintain_slots[slot].field_4 != 0;
+}
+
+// CE (magic, milestone MG-1): the spell the bar has selected, and what casts
+// it - the caster or an item it carries - for the interface's AP preview.
+// 10000 and OBJ_HANDLE_NULL when none.
+int spell_ui_selected_spell(void)
+{
+    return dword_5CB3A0;
+}
+
+int64_t spell_ui_selected_source(void)
+{
+    return qword_6834F8;
 }
 
 // 0x57C540

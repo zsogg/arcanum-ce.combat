@@ -355,10 +355,10 @@ TEST(a_cast_is_identified_by_its_spell_not_by_its_cost)
     clean();
     CHECK(combat_observer_open(TRACE_FILE));
     combat_observer_resource_charged("mage", "fatigue", 55, 5, 0, 5);
-    combat_observer_spell_cast("mage", "mage", "opponent", 55, false);
+    combat_observer_spell_cast("mage", "mage", "opponent", 55, false, 4);
     combat_observer_resource_charged("mage", "fatigue", 60, 5, 5, 10);
-    combat_observer_spell_cast("mage", "mage", "mage", 60, false);
-    combat_observer_spell_cast("fighter", "grenade", "NULL", 175, true);
+    combat_observer_spell_cast("mage", "mage", "mage", 60, false, 3);
+    combat_observer_spell_cast("fighter", "grenade", "NULL", 175, true, 0);
     combat_observer_close();
 
     CHECK(read_trace(trace, sizeof(trace)));
@@ -366,7 +366,10 @@ TEST(a_cast_is_identified_by_its_spell_not_by_its_cost)
     CHECK(strstr(trace, "\"target\":\"opponent\",\"spell\":55,\"free\":false") != NULL);
     CHECK(strstr(trace, "\"target\":\"mage\",\"spell\":60,\"free\":false") != NULL);
     CHECK(strstr(trace, "\"caster\":\"fighter\",\"source\":\"grenade\"") != NULL);
-    CHECK(strstr(trace, "\"spell\":175,\"free\":true") != NULL);
+    CHECK(strstr(trace, "\"spell\":175,\"free\":true,\"ap_cost\":0}") != NULL);
+    // Magic milestone MG-1: the AP each cast was priced at.
+    CHECK(strstr(trace, "\"spell\":55,\"free\":false,\"ap_cost\":4}") != NULL);
+    CHECK(strstr(trace, "\"spell\":60,\"free\":false,\"ap_cost\":3}") != NULL);
 }
 
 TEST(an_unreadable_frame_is_reported_as_unknown_not_as_a_number)

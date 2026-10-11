@@ -4916,7 +4916,8 @@ int ai_check_use_skill(int64_t source_obj, int64_t target_obj, int64_t item_obj,
 // The codes are left as bare integers deliberately. Reading the branches gives
 // 1 unknown spell, 2 not enough fatigue or no stored mana, 3 intelligence,
 // 4 not the college's highest under ONF_CAST_HIGHEST, 5 no line of fire,
-// 6 an aptitude restriction, 7 willpower, 8 failure chance at or above 38% -
+// 6 an aptitude restriction, 7 willpower, 8 failure chance at or above 38%, and
+// CE's 9 (magic, milestone MG-1) not enough AP for it this turn -
 // but those are inferred from the code rather than attested anywhere, and
 // CE's single caller only tests `== 0`, so naming them would dress up a guess
 // as a fact for no benefit.
@@ -4929,6 +4930,17 @@ int ai_check_use_spell(int64_t attacker_obj, int64_t item_obj, int64_t target_ob
 {
     const AiFatigueConfig* fatigue_cfg = ai_fatigue_config_get();
     int attacker_obj_type = obj_field_int32_get(attacker_obj, OBJ_F_TYPE);
+
+    // CE (magic, milestone MG-1): under `spell costs` a spell can cost up to
+    // 10 AP, so in its turn-based turn an NPC passes over one it cannot pay
+    // for now - as AI-1 made it pass over a weapon it cannot swing (quirk 57).
+    // Stock never needed this: every cast cost 4.
+    if (feature_enabled(FEATURE_SPELL_COSTS)
+        && combat_turn_based_is_active()
+        && combat_turn_based_whos_turn_get() == attacker_obj
+        && combat_spell_cast_cost(attacker_obj, spell, item_obj) > combat_action_points_get()) {
+        return 9;
+    }
 
     if (item_obj != OBJ_HANDLE_NULL) {
         if (attacker_obj_type == OBJ_TYPE_NPC

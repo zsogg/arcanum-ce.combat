@@ -53,5 +53,6 @@ FEATURE(OPENING_SHOT, "opening shot", false)
 FEATURE(DEBUG_FUMBLES, "debug fumbles", false)
 FEATURE(FIREARM_FUMBLES, "firearm fumbles", false)
 FEATURE(FIREARM_CRITICALS, "firearm criticals", false)
+FEATURE(SPELL_COSTS, "spell costs", false)
 
 // clang-format on

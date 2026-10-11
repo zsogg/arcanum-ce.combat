@@ -31,4 +31,8 @@ bool spell_ui_maintain_has(int slot);
 void spell_ui_add(int64_t obj, int spell);
 void spell_ui_remove(int64_t obj, int spell);
 
+// CE (magic, milestone MG-1): the selected spell and what casts it.
+int spell_ui_selected_spell(void);
+int64_t spell_ui_selected_source(void);
+
 #endif /* ARCANUM_UI_SPELL_UI_H_ */

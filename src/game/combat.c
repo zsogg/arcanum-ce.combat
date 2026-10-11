@@ -42,6 +42,8 @@
 #include "game/script.h"
 #include "game/sfx.h"
 #include "game/skill.h"
+#include "game/spell.h"
+#include "game/spell_rules.h"
 #include "game/stat.h"
 #include "game/tf.h"
 #include "game/trap.h"
@@ -255,6 +257,7 @@ bool combat_init(GameInitInfo* init_info)
     // CE (turn-based rebalance): the listed weapons' rules, and the armor
     // table (armor milestone 2).
     weapon_rules_init();
+    spell_rules_init();
     armor_rules_init();
     settings_register(&settings, COMBAT_TAUNTS_KEY, "0", NULL);
 
@@ -266,6 +269,7 @@ void combat_exit(void)
 {
     mes_unload(combat_mes_file);
     weapon_rules_exit();
+    spell_rules_exit();
     armor_rules_exit();
     combat_turn_based_end();
     if (!combat_editor) {
@@ -4282,6 +4286,18 @@ bool combat_check_cast_spell(int64_t source_obj)
     return combat_check_action_points(source_obj, combat_cast_cost(source_obj, -1));
 }
 
+// CE (magic, milestone MG-1): the preview for a known spell, cast by
+// `source_obj` or by an item it carries (`item_obj`, or none).
+bool combat_check_cast_spell_for(int64_t source_obj, int spell, int64_t item_obj)
+{
+    if (!combat_turn_based_active) {
+        return combat_check_action_points(source_obj, 0);
+    }
+
+    return combat_check_action_points(source_obj,
+        combat_spell_cast_cost(source_obj, spell, item_obj));
+}
+
 // 0x4B7AE0
 bool combat_check_use_skill(int64_t source_obj)
 {
@@ -4396,12 +4412,54 @@ int combat_action_points_for_speed(int speed)
 // budget. `spell` is passed although today's cost ignores it - the rebalance
 // plans spell costs that vary, and this is where they would go. -1 when the
 // caller cannot say which spell.
+//
+// CE (magic, milestone MG-1): under `spell costs` a spell costs its AP in the
+// spell table (`spell_rules.h`), 4 or more; a caster who knows all five
+// spells of its college pays 1 less, never below 3 (zsogg, 2026-10-10: "Magic
+// is generally too strong in Arcanum"). Unlisted, or with the switch off, the
+// stock 4. An item that casts pays `COMBAT_ITEM_CAST_COST` instead
+// (`combat_spell_cast_cost`).
 int combat_cast_cost(int64_t obj, int spell)
 {
-    (void)obj;
-    (void)spell;
+    int listed;
+    bool complete_college;
 
-    return 4;
+    if (!feature_enabled(FEATURE_SPELL_COSTS)) {
+        return COMBAT_STOCK_CAST_COST;
+    }
+
+    listed = spell_rules_ap(spell);
+    if (listed < SPELL_RULE_AP_MIN) {
+        return COMBAT_STOCK_CAST_COST;
+    }
+
+    complete_college = obj != OBJ_HANDLE_NULL
+        && obj_type_is_critter(obj_field_int32_get(obj, OBJ_F_TYPE))
+        && spell_college_level_get(obj, COLLEGE_FROM_SPELL(spell)) >= 5;
+    return combat_spell_ap_rule(listed, complete_college);
+}
+
+int combat_spell_ap_rule(int listed_ap, bool complete_college)
+{
+    if (!complete_college) {
+        return listed_ap;
+    }
+
+    return listed_ap - 1 > COMBAT_COMPLETE_COLLEGE_MIN ? listed_ap - 1 : COMBAT_COMPLETE_COLLEGE_MIN;
+}
+
+// CE (magic, milestone MG-1): what a cast costs the critter that pays for it.
+// An item - a scroll, a wand, a remedy - casts for 4 whatever the spell (zsogg,
+// 2026-10-10); a caster pays `combat_cast_cost`.
+int combat_spell_cast_cost(int64_t caster_obj, int spell, int64_t source_obj)
+{
+    if (source_obj != OBJ_HANDLE_NULL
+        && source_obj != caster_obj
+        && obj_type_is_item(obj_field_int32_get(source_obj, OBJ_F_TYPE))) {
+        return COMBAT_ITEM_CAST_COST;
+    }
+
+    return combat_cast_cost(caster_obj, spell);
 }
 
 // CE (real-time session C): the three other literal costs, lifted the same way

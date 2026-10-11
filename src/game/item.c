@@ -1485,9 +1485,11 @@ void item_use_on_obj(int64_t source_obj, int64_t item_obj, int64_t target_obj)
         // the item. The rest of a restorative's cost is charged here, so the
         // whole is the same 6 a drunk potion costs.
         if (feature_enabled(FEATURE_RESTORATIVE_COST) && item_type == OBJ_TYPE_FOOD) {
+            // CE (magic, milestone MG-1): the cast is an item's, so it pays
+            // the item cost, and the whole stays the restorative cost.
             combat_consume_action_points(source_obj,
                 combat_use_item_cost(source_obj, item_obj)
-                    - combat_cast_cost(source_obj, mt_item_spell(item_obj, 0)));
+                    - combat_spell_cast_cost(source_obj, mt_item_spell(item_obj, 0), item_obj));
         }
 
         target_descriptor_set_obj(&td, target_obj);

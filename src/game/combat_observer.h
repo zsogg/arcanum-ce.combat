@@ -233,8 +233,10 @@ void combat_observer_projectile_ended(const char* source, const char* target,
 // passed. `caster` is the critter the spell is attributed to and `source` what
 // cast it - the same critter, or an item such as a grenade or a scroll.
 // `free` is `MAGICTECH_RUN_FREE`: no fatigue was asked of the caster.
+// `ap_cost` (magic, milestone MG-1) is the AP the cast is priced at - the
+// spell's under `spell costs`, an item's 4, 0 for a weapon's on-hit spell.
 void combat_observer_spell_cast(const char* caster, const char* source,
-    const char* target, int spell, bool free);
+    const char* target, int spell, bool free, int ap_cost);
 
 // Ammunition and fatigue, the two things an ordinary action spends outside
 // turn-based AP. One event with a `resource` field rather than two events,

@@ -2199,7 +2199,12 @@ void magictech_process(void)
         combat_observer_object_id(magictech_cur_run_info->target_obj.obj, target);
         combat_observer_spell_cast(caster, source, target,
             magictech_cur_run_info->spell,
-            (magictech_cur_run_info->flags & MAGICTECH_RUN_FREE) != 0);
+            (magictech_cur_run_info->flags & MAGICTECH_RUN_FREE) != 0,
+            (magictech_cur_run_info->flags & MAGICTECH_RUN_CE_ON_HIT) != 0
+                ? 0
+                : combat_spell_cast_cost(magictech_cur_run_info->parent_obj.obj,
+                      magictech_cur_run_info->spell,
+                      magictech_cur_run_info->source_obj.obj));
     }
 
     magictech_cur_target_ctx_init();
