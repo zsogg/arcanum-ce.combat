@@ -87,6 +87,9 @@ static void sort_combat_list(void);
 static bool combat_critter_list_holds(int64_t obj);
 static void combat_order_summons(void);
 static void combat_summons_round_began(void);
+static bool combat_opening_holds(int64_t obj);
+static void combat_opening_player_reached(void);
+static void combat_opening_end(void);
 static void pc_switch_weapon(int64_t pc_obj, int64_t target_obj);
 
 // CE (reload prototype session 2): the weapon that last left the player's
@@ -174,6 +177,16 @@ static int combat_turn_based_active;
 
 // 0x5FC230
 static int combat_turn_based_turn;
+// CE (opening safeguard, zsogg 2026-10-11): the first turn-based round of a
+// fight, until the player's turn begins, and the one enemy that may act
+// before it.
+static bool combat_opening_active;
+static int64_t combat_opening_enemy;
+// The enemies whose turns came before the player's and were held back, in
+// the order they came.
+#define COMBAT_OPENING_HELD_MAX 64
+static int64_t combat_opening_held[COMBAT_OPENING_HELD_MAX];
+static int combat_opening_held_count;
 
 // 0x5FC234
 static int combat_action_points;
@@ -3695,6 +3708,12 @@ void combat_turn_based_whos_turn_set(int64_t obj)
 
     combat_debug(obj, "Whos Turn Set");
 
+    // CE (opening safeguard): the player handed the turn - entering combat
+    // mode does - is the player's turn come round.
+    if (player_is_local_pc_obj(obj)) {
+        combat_opening_player_reached();
+    }
+
     if (!player_is_local_pc_obj(combat_whos_turn_obj)) {
         anim_interrupt_all_goals_of_obj(combat_whos_turn_obj, 3, 0, 1);
     }
@@ -3866,6 +3885,9 @@ bool combat_turn_based_start(void)
     }
 
     combat_turn_based_turn = 0;
+    // CE (opening safeguard): a fight's first turn-based round.
+    combat_opening_end();
+    combat_opening_active = feature_enabled(FEATURE_OPENING_SAFEGUARD);
 
     if (!anim_goal_interrupt_all_for_tb_combat()) {
         tig_debug_printf("Combat: TB_Start: Anim-Goal-Interrupt FAILED!\n");
@@ -3953,6 +3975,10 @@ bool combat_turn_based_begin_turn(void)
 
     sort_combat_list();
     combat_summons_round_began();
+    // CE (opening safeguard): the opening is the first round only.
+    if (combat_turn_based_turn > 1) {
+        combat_opening_end();
+    }
 
     combat_turn_index = 0;
     combat_whos_turn_node = combat_critter_list.head;
@@ -3991,6 +4017,14 @@ bool combat_turn_based_begin_turn(void)
 bool combat_turn_based_critter_skip(ObjectNode* object_node)
 {
     if (combat_whos_turn_node == NULL) {
+        return true;
+    }
+
+    // CE (opening safeguard): an enemy held back until the player's turn;
+    // the player's own turn coming round releases them, behind it.
+    if (player_is_local_pc_obj(object_node->obj)) {
+        combat_opening_player_reached();
+    } else if (combat_opening_holds(object_node->obj)) {
         return true;
     }
 
@@ -4992,6 +5026,131 @@ static void combat_summons_round_began(void)
             magictech_summon_ready(node->obj, "caster_gone");
         }
     }
+}
+
+// CE (opening safeguard): whether `obj` is the player, a follower of the
+// player or a creature one of them summoned.
+static bool combat_in_party(int64_t obj)
+{
+    int64_t pc_obj = player_get_local_pc_obj();
+    int64_t summoner;
+
+    if (obj == pc_obj || critter_pc_leader_get(obj) == pc_obj) {
+        return true;
+    }
+
+    summoner = magictech_summon_summoner(obj, NULL);
+    return summoner != OBJ_HANDLE_NULL
+        && summoner != obj
+        && (summoner == pc_obj || critter_pc_leader_get(summoner) == pc_obj);
+}
+
+// CE (opening safeguard): an NPC fighting the party - its AI fighting, with
+// the party or no one in its sights - or a creature such an NPC summoned.
+static bool combat_hostile_to_party(int64_t obj)
+{
+    int64_t focus_obj;
+    int64_t summoner;
+
+    if (obj_field_int32_get(obj, OBJ_F_TYPE) != OBJ_TYPE_NPC || combat_in_party(obj)) {
+        return false;
+    }
+
+    if ((obj_field_int32_get(obj, OBJ_F_NPC_FLAGS) & ONF_FIGHTING) != 0) {
+        focus_obj = obj_field_handle_get(obj, OBJ_F_NPC_COMBAT_FOCUS);
+        if (focus_obj == OBJ_HANDLE_NULL || combat_in_party(focus_obj)) {
+            return true;
+        }
+    }
+
+    summoner = magictech_summon_summoner(obj, NULL);
+    return summoner != OBJ_HANDLE_NULL
+        && summoner != obj
+        && obj_field_int32_get(summoner, OBJ_F_TYPE) == OBJ_TYPE_NPC
+        && !combat_in_party(summoner)
+        && (obj_field_int32_get(summoner, OBJ_F_NPC_FLAGS) & ONF_FIGHTING) != 0;
+}
+
+// CE (opening safeguard, under `opening safeguard`; zsogg 2026-09-18 and
+// 2026-10-11): in a fight's first turn-based round - begun turn-based or
+// switched from real time - at most one enemy acts before the player's own
+// first turn. Stock puts the player last in every round, so a fight switched
+// to turn-based gave the whole enemy side its turns first; entering combat
+// mode hands the player the first turn already, and there nothing changes.
+// As the round reaches each critter before the player's turn: the first
+// enemy that can act takes its turn; any other critter hostile to the party
+// is held back, and when the player's turn comes round - taken or skipped -
+// the held ones take theirs straight after it, in the order they came.
+static bool combat_opening_holds(int64_t obj)
+{
+    if (!combat_opening_active
+        || player_is_local_pc_obj(obj)
+        || !critter_is_active(player_get_local_pc_obj())
+        || !critter_is_active(obj)
+        || magictech_summon_is_sick(obj)
+        || !combat_hostile_to_party(obj)) {
+        return false;
+    }
+
+    if (combat_opening_enemy == OBJ_HANDLE_NULL) {
+        combat_opening_enemy = obj;
+    }
+    if (obj == combat_opening_enemy || combat_opening_held_count == COMBAT_OPENING_HELD_MAX) {
+        return false;
+    }
+
+    combat_opening_held[combat_opening_held_count++] = obj;
+    return true;
+}
+
+static void combat_opening_player_reached(void)
+{
+    int64_t pc_obj = player_get_local_pc_obj();
+    ObjectNode* pc_node;
+    ObjectNode* tail;
+    ObjectNode* prev;
+    ObjectNode* node;
+    int index;
+
+    if (!combat_opening_active) {
+        return;
+    }
+
+    for (pc_node = combat_critter_list.head; pc_node != NULL && pc_node->obj != pc_obj; pc_node = pc_node->next) {
+    }
+
+    tail = pc_node;
+    for (index = 0; pc_node != NULL && index < combat_opening_held_count; index++) {
+        prev = NULL;
+        for (node = combat_critter_list.head; node != NULL && node->obj != combat_opening_held[index]; node = node->next) {
+            prev = node;
+        }
+        if (node == NULL || node == pc_node) {
+            continue;
+        }
+
+        if (prev != NULL) {
+            prev->next = node->next;
+        } else {
+            combat_critter_list.head = node->next;
+        }
+        node->next = tail->next;
+        tail->next = node;
+        tail = node;
+    }
+
+    if (combat_opening_held_count != 0) {
+        tig_debug_printf("Combat: opening safeguard: %d enemy turn(s) after the player's\n",
+            combat_opening_held_count);
+    }
+    combat_opening_end();
+}
+
+static void combat_opening_end(void)
+{
+    combat_opening_active = false;
+    combat_opening_enemy = OBJ_HANDLE_NULL;
+    combat_opening_held_count = 0;
 }
 
 // 0x4B7EB0
