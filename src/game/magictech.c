@@ -6975,6 +6975,9 @@ static struct {
     unsigned int seq;
     bool sick;
     unsigned int made_ms;
+    // The turn-based round it was made in, -1 before turn-based began: its
+    // caster's turn cures it only in a later round (zsogg, 2026-10-11).
+    int round;
 } magictech_summons[MAGICTECH_SUMMONS_MAX];
 static int magictech_summons_next;
 static unsigned int magictech_summons_seq;
@@ -7026,6 +7029,7 @@ static void magictech_summons_record(int64_t summoner_obj, int64_t summon_obj)
     magictech_summons[slot].seq = ++magictech_summons_seq;
     magictech_summons[slot].sick = false;
     magictech_summons[slot].made_ms = magictech_summons_clock_ms;
+    magictech_summons[slot].round = combat_turn_based_is_active() ? combat_turn_based_turn_get() : -1;
 
     // CE (magic, milestone MG-3): a summon made in combat - including its
     // opening - cannot act until its caster's next turn has come round, or in
@@ -7109,8 +7113,30 @@ void magictech_summons_turn_reached(int64_t caster_obj)
     for (slot = 0; slot < MAGICTECH_SUMMONS_MAX; slot++) {
         if (magictech_summons[slot].sick
             && magictech_summons[slot].summoner == caster_obj
+            && magictech_summons[slot].round != -1
+            && combat_turn_based_turn_get() > magictech_summons[slot].round
             && magictech_summon_lives(magictech_summons[slot].summon)) {
             magictech_summon_cured(slot, "caster_turn");
+        }
+    }
+}
+
+void magictech_summons_round_began(void)
+{
+    int slot;
+
+    if (!feature_enabled(FEATURE_SUMMONING_SICKNESS)) {
+        return;
+    }
+
+    // A summon made in real time and still sick when turn-based begins sits
+    // out the whole first round: its caster's turn in that round may well
+    // come first, before anyone has had a turn against it (zsogg's playtest,
+    // 2026-10-11: Joachim's turn opened the round and cured an elemental
+    // made 1.9 seconds before).
+    for (slot = 0; slot < MAGICTECH_SUMMONS_MAX; slot++) {
+        if (magictech_summons[slot].sick && magictech_summons[slot].round == -1) {
+            magictech_summons[slot].round = combat_turn_based_turn_get();
         }
     }
 }

@@ -415,13 +415,18 @@ int magictech_summons_alive(int64_t caster_obj);
 // CE (magic, milestone MG-3): summoning sickness, under `summoning sickness`
 // (zsogg, 2026-09-18 and 2026-10-11). A creature summoned in combat - its
 // opening included - cannot act until its caster's next turn has come round,
-// skipped or not; in real time, for 2 seconds. One made before the fight
-// enters it ready. In turn-based a summon takes its turn straight after its
-// caster's (`sort_combat_list`).
+// skipped or not, in a later round than its own; in real time, for 2
+// seconds. One still sick when turn-based begins sits out its first round.
+// One made before the fight enters it ready. In turn-based a summon takes its
+// turn straight after its caster's (`sort_combat_list`).
 #define MAGICTECH_SUMMONING_SICKNESS_MS 2000
 bool magictech_summon_is_sick(int64_t obj);
-// `caster_obj`'s turn has come round: its summons are ready.
+// `caster_obj`'s turn has come round: its summons made in an earlier
+// turn-based round are ready.
 void magictech_summons_turn_reached(int64_t caster_obj);
+// A turn-based round has begun: a summon still sick from real time counts as
+// made in it, so it sits the round out (zsogg, 2026-10-11).
+void magictech_summons_round_began(void);
 // One summon is ready - its caster is gone from the fight.
 void magictech_summon_ready(int64_t summon_obj, const char* reason);
 // The caster of a living recorded summon, and the order it was made in;

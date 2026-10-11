@@ -4977,6 +4977,8 @@ static void combat_summons_round_began(void)
         return;
     }
 
+    magictech_summons_round_began();
+
     for (node = combat_critter_list.head; node != NULL; node = node->next) {
         if (!magictech_summon_is_sick(node->obj)) {
             continue;
