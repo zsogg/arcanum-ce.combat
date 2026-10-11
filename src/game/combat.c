@@ -84,6 +84,9 @@ static void combat_turn_based_end_turn(void);
 static int combat_move_cost(int64_t source_obj, int64_t target_loc, bool adjacent);
 static bool combat_turn_based_critter_is_dontdraw(int64_t obj);
 static void sort_combat_list(void);
+static bool combat_critter_list_holds(int64_t obj);
+static void combat_order_summons(void);
+static void combat_summons_round_began(void);
 static void pc_switch_weapon(int64_t pc_obj, int64_t target_obj);
 
 // CE (reload prototype session 2): the weapon that last left the player's
@@ -3949,6 +3952,7 @@ bool combat_turn_based_begin_turn(void)
     object_list_destroy(&objects);
 
     sort_combat_list();
+    combat_summons_round_began();
 
     combat_turn_index = 0;
     combat_whos_turn_node = combat_critter_list.head;
@@ -3990,12 +3994,22 @@ bool combat_turn_based_critter_skip(ObjectNode* object_node)
         return true;
     }
 
+    // CE (magic, milestone MG-3): this critter's turn has come round, taken
+    // or skipped, so the creatures it summoned are ready.
+    magictech_summons_turn_reached(object_node->obj);
+
     if (!critter_is_active(object_node->obj)) {
         anim_advance_stun_goal(object_node->obj);
         return true;
     }
 
     if (combat_turn_based_critter_is_dontdraw(object_node->obj)) {
+        return true;
+    }
+
+    // CE (magic, milestone MG-3): summoning sickness - no turn until its
+    // caster's next one has come round.
+    if (magictech_summon_is_sick(object_node->obj)) {
         return true;
     }
 
@@ -4858,6 +4872,126 @@ void combat_turn_based_add_critter(int64_t obj)
     sort_combat_list();
 }
 
+static bool combat_critter_list_holds(int64_t obj)
+{
+    ObjectNode* node;
+
+    for (node = combat_critter_list.head; node != NULL; node = node->next) {
+        if (node->obj == obj) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+// CE (magic, milestone MG-3): under `summoning sickness` a summon takes its
+// turn straight after its caster's - several in the order they were made -
+// rather than wherever the round's list happens to put it (stock put the
+// player's summon first, before the player). One whose caster is not in the
+// fight keeps its own place. Only summons move, and the nodes themselves, so
+// the turn in progress stays where it is.
+static void combat_order_summons(void)
+{
+    ObjectNode* prev = NULL;
+    ObjectNode* node;
+    ObjectNode* next;
+    ObjectNode* moved = NULL;
+    ObjectNode** link;
+    int64_t summoner;
+    unsigned int seq;
+    unsigned int other_seq;
+
+    if (!feature_enabled(FEATURE_SUMMONING_SICKNESS)) {
+        return;
+    }
+
+    // Take out every summon whose caster is in the list, in the order made.
+    for (node = combat_critter_list.head; node != NULL; node = next) {
+        next = node->next;
+        summoner = magictech_summon_summoner(node->obj, &seq);
+        if (summoner == OBJ_HANDLE_NULL
+            || summoner == node->obj
+            || !combat_critter_list_holds(summoner)) {
+            prev = node;
+            continue;
+        }
+
+        if (prev != NULL) {
+            prev->next = next;
+        } else {
+            combat_critter_list.head = next;
+        }
+
+        link = &moved;
+        while (*link != NULL) {
+            magictech_summon_summoner((*link)->obj, &other_seq);
+            if (other_seq > seq) {
+                break;
+            }
+            link = &((*link)->next);
+        }
+        node->next = *link;
+        *link = node;
+    }
+
+    // Put each back after its caster, behind that caster's earlier summons.
+    while (moved != NULL) {
+        node = moved;
+        moved = moved->next;
+        summoner = magictech_summon_summoner(node->obj, NULL);
+
+        for (prev = combat_critter_list.head; prev != NULL && prev->obj != summoner; prev = prev->next) {
+        }
+
+        if (prev == NULL) {
+            // Its caster was itself a summon still waiting to go back.
+            for (prev = combat_critter_list.head; prev != NULL && prev->next != NULL; prev = prev->next) {
+            }
+        } else {
+            while (prev->next != NULL
+                && magictech_summon_summoner(prev->next->obj, NULL) == summoner) {
+                prev = prev->next;
+            }
+        }
+
+        if (prev != NULL) {
+            node->next = prev->next;
+            prev->next = node;
+        } else {
+            node->next = NULL;
+            combat_critter_list.head = node;
+        }
+    }
+}
+
+// CE (magic, milestone MG-3): a sick summon whose caster is dead or out of
+// the fight would wait for a turn that never comes; it is ready from this
+// round.
+static void combat_summons_round_began(void)
+{
+    ObjectNode* node;
+    int64_t summoner;
+
+    if (!feature_enabled(FEATURE_SUMMONING_SICKNESS)) {
+        return;
+    }
+
+    for (node = combat_critter_list.head; node != NULL; node = node->next) {
+        if (!magictech_summon_is_sick(node->obj)) {
+            continue;
+        }
+
+        summoner = magictech_summon_summoner(node->obj, NULL);
+        if (summoner == OBJ_HANDLE_NULL
+            || !obj_handle_is_valid(summoner)
+            || critter_is_dead(summoner)
+            || !combat_critter_list_holds(summoner)) {
+            magictech_summon_ready(node->obj, "caster_gone");
+        }
+    }
+}
+
 // 0x4B7EB0
 void sort_combat_list(void)
 {
@@ -4923,6 +5057,8 @@ void sort_combat_list(void)
             }
         }
     }
+
+    combat_order_summons();
 
     node = combat_critter_list.head;
     while (node != NULL) {

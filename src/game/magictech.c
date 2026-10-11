@@ -6969,8 +6969,18 @@ bool magictech_find_by_spell(int64_t obj, int spell, int* index_ptr)
 static struct {
     int64_t summoner;
     int64_t summon;
+    // CE (magic, milestone MG-3): the order summons were made in, and
+    // summoning sickness - set when one is made in combat, cleared when its
+    // caster's turn comes round (turn-based) or 2 seconds after (real time).
+    unsigned int seq;
+    bool sick;
+    unsigned int made_ms;
 } magictech_summons[MAGICTECH_SUMMONS_MAX];
 static int magictech_summons_next;
+static unsigned int magictech_summons_seq;
+// MG-3: real milliseconds while the game is not paused, as critical
+// protection's clock.
+static unsigned int magictech_summons_clock_ms;
 
 static bool magictech_summon_lives(int64_t obj)
 {
@@ -6997,12 +7007,133 @@ static void magictech_summons_record(int64_t summoner_obj, int64_t summon_obj)
     }
     magictech_summons[slot].summoner = summoner_obj;
     magictech_summons[slot].summon = summon_obj;
+    magictech_summons[slot].seq = ++magictech_summons_seq;
+    magictech_summons[slot].sick = false;
+    magictech_summons[slot].made_ms = magictech_summons_clock_ms;
+
+    // CE (magic, milestone MG-3): a summon made in combat - including its
+    // opening - cannot act until its caster's next turn has come round, or in
+    // real time for 2 seconds (zsogg, 2026-09-18 and 2026-10-11). One made
+    // before the fight enters it ready.
+    if (feature_enabled(FEATURE_SUMMONING_SICKNESS)
+        && (combat_turn_based_is_active() || combat_critter_is_combat_mode_active(summoner_obj))) {
+        magictech_summons[slot].sick = true;
+        tf_add(summon_obj, TF_TYPE_WHITE, "Summoning sickness");
+        if (combat_observer_is_enabled()) {
+            char summoner[COMBAT_OBSERVER_IDENTITY_SIZE];
+            char summon[COMBAT_OBSERVER_IDENTITY_SIZE];
+
+            combat_observer_object_id(summoner_obj, summoner);
+            combat_observer_object_id(summon_obj, summon);
+            combat_observer_summon_sick(summoner, summon, combat_turn_based_is_active());
+        }
+    }
+}
+
+static void magictech_summon_cured(int slot, const char* reason)
+{
+    magictech_summons[slot].sick = false;
+    if (combat_observer_is_enabled()) {
+        char summon[COMBAT_OBSERVER_IDENTITY_SIZE];
+
+        combat_observer_object_id(magictech_summons[slot].summon, summon);
+        combat_observer_summon_ready(summon, reason);
+    }
+}
+
+static int magictech_summons_find(int64_t summon_obj)
+{
+    int slot;
+
+    if (summon_obj == OBJ_HANDLE_NULL) {
+        return -1;
+    }
+
+    for (slot = 0; slot < MAGICTECH_SUMMONS_MAX; slot++) {
+        if (magictech_summons[slot].summon == summon_obj) {
+            return slot;
+        }
+    }
+
+    return -1;
+}
+
+bool magictech_summon_is_sick(int64_t obj)
+{
+    int slot;
+
+    if (!feature_enabled(FEATURE_SUMMONING_SICKNESS)) {
+        return false;
+    }
+
+    slot = magictech_summons_find(obj);
+    if (slot == -1 || !magictech_summons[slot].sick) {
+        return false;
+    }
+
+    // In real time it passes with the clock; in turn-based only its caster's
+    // turn ends it.
+    if (!combat_turn_based_is_active()
+        && magictech_summons_clock_ms - magictech_summons[slot].made_ms >= MAGICTECH_SUMMONING_SICKNESS_MS) {
+        magictech_summon_cured(slot, "time");
+        return false;
+    }
+
+    return true;
+}
+
+void magictech_summons_turn_reached(int64_t caster_obj)
+{
+    int slot;
+
+    if (!feature_enabled(FEATURE_SUMMONING_SICKNESS) || caster_obj == OBJ_HANDLE_NULL) {
+        return;
+    }
+
+    for (slot = 0; slot < MAGICTECH_SUMMONS_MAX; slot++) {
+        if (magictech_summons[slot].sick
+            && magictech_summons[slot].summoner == caster_obj
+            && magictech_summon_lives(magictech_summons[slot].summon)) {
+            magictech_summon_cured(slot, "caster_turn");
+        }
+    }
+}
+
+void magictech_summon_ready(int64_t summon_obj, const char* reason)
+{
+    int slot = magictech_summons_find(summon_obj);
+
+    if (slot != -1 && magictech_summons[slot].sick) {
+        magictech_summon_cured(slot, reason);
+    }
+}
+
+int64_t magictech_summon_summoner(int64_t summon_obj, unsigned int* seq)
+{
+    int slot = magictech_summons_find(summon_obj);
+
+    if (slot == -1 || !magictech_summon_lives(summon_obj)) {
+        return OBJ_HANDLE_NULL;
+    }
+
+    if (seq != NULL) {
+        *seq = magictech_summons[slot].seq;
+    }
+    return magictech_summons[slot].summoner;
+}
+
+void magictech_summons_tick(int delta_ms)
+{
+    if (delta_ms > 0) {
+        magictech_summons_clock_ms += (unsigned int)delta_ms;
+    }
 }
 
 static void magictech_summons_clear(void)
 {
     memset(magictech_summons, 0, sizeof(magictech_summons));
     magictech_summons_next = 0;
+    magictech_summons_seq = 0;
 }
 
 int magictech_summons_alive(int64_t caster_obj)

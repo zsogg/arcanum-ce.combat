@@ -245,6 +245,12 @@ void combat_observer_spell_cast(const char* caster, const char* source,
 void combat_observer_spell_critical(const char* caster, const char* target,
     int spell, const char* critical, int bonus, int chance, int roll);
 
+// CE (magic, milestone MG-3): a creature summoned in combat is sick - it
+// cannot act until its caster's next turn (`turn_based`) or for 2 seconds -
+// and when that ends: `reason` "caster_turn", "time" or "caster_gone".
+void combat_observer_summon_sick(const char* summoner, const char* summon, bool turn_based);
+void combat_observer_summon_ready(const char* summon, const char* reason);
+
 // Ammunition and fatigue, the two things an ordinary action spends outside
 // turn-based AP. One event with a `resource` field rather than two events,
 // because the question asked of both is the same - was this charged once per

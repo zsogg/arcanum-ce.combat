@@ -638,6 +638,37 @@ void combat_observer_spell_critical(const char* caster, const char* target,
     combat_observer_write(line);
 }
 
+void combat_observer_summon_sick(const char* summoner, const char* summon, bool turn_based)
+{
+    char line[320];
+    char action[32];
+
+    if (!combat_observer_begin_semantic()) return;
+
+    snprintf(line, sizeof(line),
+        "{\"schema\":%d,\"sequence\":%u,\"event\":\"summon.sick\",\"turn\":%u,\"action_id\":%s,"
+        "\"summoner\":\"%s\",\"summon\":\"%s\",\"until\":\"%s\"}",
+        COMBAT_OBSERVER_SCHEMA, combat_observer_sequence++, combat_observer_turn,
+        combat_observer_action_json(action, sizeof(action)), summoner, summon,
+        turn_based ? "caster_turn" : "2000ms");
+    combat_observer_write(line);
+}
+
+void combat_observer_summon_ready(const char* summon, const char* reason)
+{
+    char line[256];
+    char action[32];
+
+    if (!combat_observer_begin_semantic()) return;
+
+    snprintf(line, sizeof(line),
+        "{\"schema\":%d,\"sequence\":%u,\"event\":\"summon.ready\",\"turn\":%u,\"action_id\":%s,"
+        "\"summon\":\"%s\",\"reason\":\"%s\"}",
+        COMBAT_OBSERVER_SCHEMA, combat_observer_sequence++, combat_observer_turn,
+        combat_observer_action_json(action, sizeof(action)), summon, reason);
+    combat_observer_write(line);
+}
+
 void combat_observer_resource_charged(const char* actor, const char* resource,
     int spell, int cost, int before, int after)
 {

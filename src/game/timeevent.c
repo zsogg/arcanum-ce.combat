@@ -900,6 +900,8 @@ void timeevent_ping(tig_timestamp_t timestamp)
             crit_guard_tick((int)delta);
             // CE (criticals, milestone CR-2): temporary effects, likewise.
             crit_effects_tick((int)delta);
+            // CE (magic, milestone MG-3): summoning sickness, likewise.
+            magictech_summons_tick((int)delta);
             // CE (reload prototype session 4): loading outside combat.
             reload_prep_tick((int)delta);
         }

@@ -380,6 +380,19 @@ TEST(a_cast_is_identified_by_its_spell_not_by_its_cost)
     CHECK(strstr(trace, "\"event\":\"spell.critical\"") != NULL);
     CHECK(strstr(trace, "\"caster\":\"mage\",\"target\":\"opponent\",\"spell\":33,\"critical\":\"long_stun\",\"bonus\":25,\"chance\":13,\"roll\":7}") != NULL);
     CHECK(strstr(trace, "\"critical\":\"refund\",\"bonus\":0,\"chance\":7,\"roll\":0}") != NULL);
+    // Magic milestone MG-3: summoning sickness, and its end.
+    clean();
+    CHECK(combat_observer_open(TRACE_FILE));
+    combat_observer_summon_sick("mage", "skeleton", true);
+    combat_observer_summon_sick("mage", "ogre", false);
+    combat_observer_summon_ready("skeleton", "caster_turn");
+    combat_observer_close();
+    CHECK(read_trace(trace, sizeof(trace)));
+    CHECK_INT(count_events(trace, "\"event\":\"summon.sick\""), 2);
+    CHECK(strstr(trace, "\"summoner\":\"mage\",\"summon\":\"skeleton\",\"until\":\"caster_turn\"}") != NULL);
+    CHECK(strstr(trace, "\"summon\":\"ogre\",\"until\":\"2000ms\"}") != NULL);
+    CHECK(strstr(trace, "\"event\":\"summon.ready\"") != NULL);
+    CHECK(strstr(trace, "\"summon\":\"skeleton\",\"reason\":\"caster_turn\"}") != NULL);
 }
 
 TEST(an_unreadable_frame_is_reported_as_unknown_not_as_a_number)

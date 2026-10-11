@@ -57,5 +57,6 @@ FEATURE(SPELL_COSTS, "spell costs", false)
 FEATURE(SPELL_APTITUDE_DAMAGE, "spell aptitude damage", false)
 FEATURE(SPELL_CRITICALS, "spell criticals", false)
 FEATURE(SPELL_NO_STACKING, "spell no stacking", false)
+FEATURE(SUMMONING_SICKNESS, "summoning sickness", false)
 
 // clang-format on

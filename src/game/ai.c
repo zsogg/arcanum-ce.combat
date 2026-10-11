@@ -526,6 +526,12 @@ void ai_process(int64_t obj)
         return;
     }
 
+    // CE (magic, milestone MG-3): a creature with summoning sickness does
+    // nothing yet - in real time for 2 seconds; in turn-based it has no turn.
+    if (magictech_summon_is_sick(obj)) {
+        return;
+    }
+
     ai_setup(&ai, obj);
 
     if (!ai_prepare_to_act(&ai)) {
