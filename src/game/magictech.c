@@ -689,6 +689,9 @@ static bool magictech_cur_is_fate_maximized;
 static bool magictech_cur_critical;
 static SpellCritical magictech_cur_critical_kind;
 static int magictech_cur_critical_bonus;
+// The listed target the critical was rolled for: a component can move the
+// current target to the caster, and the critical stays with this one.
+static int64_t magictech_cur_critical_target;
 
 // CE (magic, milestone MG-2): the last fatigue a cast took from a critter, so
 // a Refund critical returns exactly what was paid - after any mana store, a
@@ -2171,10 +2174,9 @@ void magictech_process_run_info(MagicTechRunInfo* run_info)
 // after its resistance, for everyone - the player is spared nothing. A spell
 // the table gives no critical is never critical. `debug criticals` forces it
 // as it forces a weapon's.
-static bool magictech_roll_critical(void)
+static bool magictech_roll_critical(int64_t target_obj)
 {
     int64_t caster_obj = magictech_cur_run_info->parent_obj.obj;
-    int64_t target_obj = magictech_cur_target_ctx.target_obj;
     int chance;
     int roll;
     char caster[COMBAT_OBSERVER_IDENTITY_SIZE];
@@ -2183,6 +2185,7 @@ static bool magictech_roll_critical(void)
     magictech_cur_critical = false;
     magictech_cur_critical_kind = SPELL_CRITICAL_NONE;
     magictech_cur_critical_bonus = 0;
+    magictech_cur_critical_target = target_obj;
 
     if (!feature_enabled(FEATURE_SPELL_CRITICALS)
         || magictech_cur_run_info->action != MAGICTECH_ACTION_BEGIN
@@ -2227,7 +2230,7 @@ static bool magictech_roll_critical(void)
 static void magictech_apply_critical(bool* refunded)
 {
     int64_t caster_obj = magictech_cur_run_info->parent_obj.obj;
-    int64_t target_obj = magictech_cur_target_ctx.target_obj;
+    int64_t target_obj = magictech_cur_critical_target;
     unsigned int effect = 0;
 
     switch (magictech_cur_critical_kind) {
@@ -2374,8 +2377,12 @@ void magictech_process(void)
             if (magictech_target_shield_check(&magictech_cur_target_ctx, magictech_cur_run_info)) {
                 if (magictech_resistance_roll()) {
                     // CE (magic, milestone MG-2): one roll per target, after
-                    // its resistance - a resisted spell is never critical.
-                    magictech_roll_critical();
+                    // its resistance - a resisted spell is never critical -
+                    // and only for a target one of its components reaches:
+                    // the list can hold objects none of them affects.
+                    bool critical_rolled = false;
+
+                    magictech_cur_critical = false;
 
                     for (comp = 0; comp < magictech_cur_component_list->cnt; comp++) {
                         magictech_cur_component = &(magictech_cur_component_list->entries[comp]);
@@ -2391,6 +2398,10 @@ void magictech_process(void)
                                         || (magictech_cur_run_info->trigger & 0x100) != 0))) {
                                 dword_5E75DC = 1;
                                 magictech_register_cur_attack();
+                                if (!critical_rolled) {
+                                    magictech_roll_critical(magictech_cur_targets.entries[idx].obj);
+                                    critical_rolled = true;
+                                }
                                 magictech_procs[magictech_cur_component->type]();
 
                                 if (magictech_branch_pending) {
@@ -2614,6 +2625,7 @@ void MTComponentDamage_ProcFunc(void)
     // or long stun, which a target just recovered from a critical's
     // incapacitation resists under `critical protection` (CR-1).
     if (magictech_cur_critical
+        && combat.target_obj == magictech_cur_critical_target
         && (magictech_cur_critical_kind == SPELL_CRITICAL_STUN
             || magictech_cur_critical_kind == SPELL_CRITICAL_KNOCKDOWN
             || magictech_cur_critical_kind == SPELL_CRITICAL_LONG_STUN)) {
@@ -2624,9 +2636,12 @@ void MTComponentDamage_ProcFunc(void)
 
         combat.dam[type] = combat.dam[type] * (100 + magictech_cur_critical_bonus) / 100;
         flags = magictech_cur_critical_kind == SPELL_CRITICAL_KNOCKDOWN ? CDF_KNOCKDOWN : CDF_STUN;
-        flags = crit_guard_filter(magictech_cur_target_ctx.target_obj, flags);
+        flags &= ~crit_guard_filter(magictech_cur_target_ctx.target_obj, flags);
         combat.dam_flags |= flags;
-        if ((flags & CDF_STUN) != 0 && magictech_cur_critical_kind == SPELL_CRITICAL_LONG_STUN) {
+        // `combat_dmg` starts no new stun on a critter already stunned.
+        if ((flags & CDF_STUN) != 0
+            && magictech_cur_critical_kind == SPELL_CRITICAL_LONG_STUN
+            && (obj_field_int32_get(magictech_cur_target_ctx.target_obj, OBJ_F_CRITTER_FLAGS) & OCF_STUNNED) == 0) {
             crit_effects_mark_long_stun(magictech_cur_target_ctx.target_obj);
         }
     }

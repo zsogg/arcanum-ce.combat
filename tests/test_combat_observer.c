@@ -860,6 +860,19 @@ TEST(the_jam_row_loads_alone)
     CHECK(!load_script("0 jam gun now\n"));
 }
 
+TEST(the_afflict_row_names_a_debuff_critical)
+{
+    // Magic MG-2 (2026-10-11): a test row that gives the player a debuff
+    // critical's effect - the effect's bit is carried as the proto.
+    CHECK(load_script("0 afflict unfocused\n1 afflict exposed\n"));
+    CHECK_INT(replay_ui_count(), 2);
+    CHECK(row_is(0, "turn=0 now=0 kind=afflict target= loc=0 aim=0 spell=0 cast=- wait=0 proto=64 count=0"));
+    CHECK(row_is(1, "turn=1 now=0 kind=afflict target= loc=0 aim=0 spell=0 cast=- wait=0 proto=32 count=0"));
+    CHECK(!load_script("0 afflict\n"));
+    CHECK(!load_script("0 afflict winded\n"));
+    CHECK(!load_script("0 afflict unfocused now\n"));
+}
+
 TEST(the_wear_row_loads_with_or_without_a_wearer)
 {
     // Armor milestone 3 (2026-10-03): armor on the player, or on a critter.
@@ -1831,6 +1844,7 @@ void test_combat_observer_suite(void)
     RUN(the_called_shot_rows_load_into_what_they_say);
     RUN(the_persistence_rows_load_into_what_they_say);
     RUN(the_jam_row_loads_alone);
+    RUN(the_afflict_row_names_a_debuff_critical);
     RUN(the_wear_row_loads_with_or_without_a_wearer);
     RUN(a_row_the_parser_cannot_read_refuses_the_whole_file);
     RUN(a_tile_step_a_cast_request_and_a_weapon_change_are_each_recorded);

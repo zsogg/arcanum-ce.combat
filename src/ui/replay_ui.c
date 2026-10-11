@@ -10,6 +10,7 @@
 
 #include "game/anim.h"
 #include "game/combat.h"
+#include "game/crit_effects.h"
 #include "game/critter.h"
 #include "game/gamelib.h"
 #include "game/item.h"
@@ -23,6 +24,7 @@
 #include "game/reload.h"
 #include "game/skill.h"
 #include "game/spell.h"
+#include "game/spell_rules.h"
 #include "game/stat.h"
 #include "game/target.h"
 #include "game/weapon_rules.h"
@@ -139,9 +141,15 @@ typedef enum ReplayKind {
     //       fumbles` jams it (`reload_jam`), so clearing - in combat or
     //       outside it - can be tested without waiting for a fumble
     //       (criticals CR-4, 2026-10-10). A test row: nothing else jams a gun.
+    //   afflict <exposed|unfocused|dazzled|hobbled>
+    //       the player given that effect for two of their turns, as a
+    //       debuff's spell critical gives it (magic MG-2, 2026-10-11), so an
+    //       Unfocused caster's refusal can be seen without an enemy mage.
+    //       A test row.
     REPLAY_KIND_SKILL_LEVEL,
     REPLAY_KIND_STAT_LEVEL,
     REPLAY_KIND_JAM,
+    REPLAY_KIND_AFFLICT,
 } ReplayKind;
 
 // A cast's target, which is a third shape: the caster, an object or a tile.
@@ -525,6 +533,29 @@ static bool replay_parse_line(const char* text, ReplayCommand* command)
         return index == count;
     }
 
+    if (strcmp(kind, "afflict") == 0) {
+        static const struct {
+            const char* name;
+            unsigned int effect;
+        } afflictions[] = {
+            { "exposed", CRIT_EFFECT_EXPOSED },
+            { "unfocused", CRIT_EFFECT_UNFOCUSED },
+            { "dazzled", CRIT_EFFECT_DAZZLED },
+            { "hobbled", CRIT_EFFECT_HOBBLED },
+        };
+        size_t affliction;
+
+        command->kind = REPLAY_KIND_AFFLICT;
+        for (affliction = 0; affliction < sizeof(afflictions) / sizeof(afflictions[0]); affliction++) {
+            if (strcmp(tokens[index], afflictions[affliction].name) == 0) {
+                command->proto = (int)afflictions[affliction].effect;
+                break;
+            }
+        }
+        index++;
+        return command->proto != 0 && index == count;
+    }
+
     if (strcmp(kind, "inspect") == 0) {
         command->kind = REPLAY_KIND_INSPECT;
         if (strcmp(tokens[index++], "guns") != 0) {
@@ -660,7 +691,7 @@ int replay_ui_count(void)
 bool replay_ui_describe(int index, char* buffer, size_t size)
 {
     const ReplayCommand* command;
-    static const char* kinds[] = { "object", "location", "key", "cast", "wield", "wait", "learn", "give", "throw", "skill", "raise", "prowl", "panel", "save", "inspect", "transfer", "take", "drop", "pickup", "wear", "skill-level", "stat-level", "jam" };
+    static const char* kinds[] = { "object", "location", "key", "cast", "wield", "wait", "learn", "give", "throw", "skill", "raise", "prowl", "panel", "save", "inspect", "transfer", "take", "drop", "pickup", "wear", "skill-level", "stat-level", "jam", "afflict" };
     int written;
     static const char* casts[] = { "self", "object", "location" };
 
@@ -678,7 +709,7 @@ bool replay_ui_describe(int index, char* buffer, size_t size)
     if ((command->kind == REPLAY_KIND_GIVE || command->kind == REPLAY_KIND_THROW
             || command->kind == REPLAY_KIND_TRANSFER || command->kind == REPLAY_KIND_TAKE
             || command->kind == REPLAY_KIND_DROP || command->kind == REPLAY_KIND_PICKUP
-            || command->kind == REPLAY_KIND_WEAR)
+            || command->kind == REPLAY_KIND_WEAR || command->kind == REPLAY_KIND_AFFLICT)
         && written >= 0 && (size_t)written < size) {
         snprintf(buffer + written, size - (size_t)written, " proto=%d count=%d",
             command->proto, command->count);
@@ -953,6 +984,15 @@ void replay_ui_tick(void)
         }
         reload_jam(pc_obj, weapon_obj);
         tig_debug_printf("Replay: command %d jammed the wielded gun\n", replay_next - 1);
+        return;
+    }
+
+    if (command->kind == REPLAY_KIND_AFFLICT) {
+        replay_stall_reported = false;
+        replay_next++;
+        crit_effects_apply_for(pc_obj, (unsigned int)command->proto, SPELL_CRITICAL_EFFECT_TURNS);
+        tig_debug_printf("Replay: command %d afflicted the player (effect 0x%x)\n",
+            replay_next - 1, (unsigned int)command->proto);
         return;
     }
 
