@@ -2762,6 +2762,11 @@ int skill_invocation_difficulty(SkillInvocation* skill_invocation)
     // easier, under `opening shot`.
     if (skill_is_attack(skill)) {
         difficulty += crit_effects_to_hit_penalty(source_obj);
+        // CE (magic, milestone MG-2): an attack on an Exposed critter is
+        // easier, under `spell criticals`.
+        if (target_obj != OBJ_HANDLE_NULL) {
+            difficulty -= crit_effects_to_be_hit_bonus(target_obj);
+        }
         if (skill_opening_shot(skill_invocation)) {
             difficulty -= SKILL_OPENING_SHOT_TO_HIT;
         }

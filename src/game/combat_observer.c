@@ -620,6 +620,24 @@ void combat_observer_spell_cast(const char* caster, const char* source,
     combat_observer_write(line);
 }
 
+void combat_observer_spell_critical(const char* caster, const char* target,
+    int spell, const char* critical, int bonus, int chance, int roll)
+{
+    char line[384];
+    char action[32];
+
+    if (!combat_observer_begin_semantic()) return;
+
+    snprintf(line, sizeof(line),
+        "{\"schema\":%d,\"sequence\":%u,\"event\":\"spell.critical\",\"turn\":%u,\"action_id\":%s,"
+        "\"caster\":\"%s\",\"target\":\"%s\",\"spell\":%d,\"critical\":\"%s\","
+        "\"bonus\":%d,\"chance\":%d,\"roll\":%d}",
+        COMBAT_OBSERVER_SCHEMA, combat_observer_sequence++, combat_observer_turn,
+        combat_observer_action_json(action, sizeof(action)), caster, target, spell,
+        critical, bonus, chance, roll);
+    combat_observer_write(line);
+}
+
 void combat_observer_resource_charged(const char* actor, const char* resource,
     int spell, int cost, int before, int after)
 {

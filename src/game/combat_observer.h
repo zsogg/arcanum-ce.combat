@@ -238,6 +238,13 @@ void combat_observer_projectile_ended(const char* source, const char* target,
 void combat_observer_spell_cast(const char* caster, const char* source,
     const char* target, int spell, bool free, int ap_cost);
 
+// CE (magic, milestone MG-2): a spell's critical on one target. `critical`
+// is what it did - "stun", "knockdown", "long_stun", "refund", "exposed",
+// "unfocused", "dazzled", "hobbled"; `bonus` the damage percent, `chance` and
+// `roll` the critical roll (roll 0 when `debug criticals` forced it).
+void combat_observer_spell_critical(const char* caster, const char* target,
+    int spell, const char* critical, int bonus, int chance, int roll);
+
 // Ammunition and fatigue, the two things an ordinary action spends outside
 // turn-based AP. One event with a `resource` field rather than two events,
 // because the question asked of both is the same - was this charged once per

@@ -10,6 +10,8 @@
 #include "game/area.h"
 #include "game/combat.h"
 #include "game/combat_observer.h"
+#include "game/crit_effects.h"
+#include "game/crit_guard.h"
 #include "game/critter.h"
 #include "game/descriptions.h"
 #include "game/effect.h"
@@ -42,6 +44,7 @@
 #include "game/stat.h"
 #include "game/target.h"
 #include "game/teleport.h"
+#include "game/tf.h"
 #include "game/tile.h"
 #include "game/tile_script.h"
 #include "game/timeevent.h"
@@ -680,6 +683,19 @@ static int dword_5E75A0;
 
 // 0x5E75A8
 static bool magictech_cur_is_fate_maximized;
+
+// CE (magic, milestone MG-2): this target's roll of the spell being begun -
+// whether it is critical, what that does, and its damage bonus.
+static bool magictech_cur_critical;
+static SpellCritical magictech_cur_critical_kind;
+static int magictech_cur_critical_bonus;
+
+// CE (magic, milestone MG-2): the last fatigue a cast took from a critter, so
+// a Refund critical returns exactly what was paid - after any mana store, a
+// dwarf's double and fatigue limiting.
+static int64_t magictech_last_charge_obj;
+static int magictech_last_charge_spell = -1;
+static int magictech_last_charge_cost;
 
 // 0x5E75AC
 static int magictech_cur_target_obj_type;
@@ -1782,6 +1798,11 @@ bool magictech_charge_fatigue(int64_t obj, int cost, bool a3, int magictech)
                 // the nested 34 -> 39 had already landed. Each event now
                 // accounts for its own five points; the nested one is its own
                 // event, written first because it finishes first.
+                // CE (magic, milestone MG-2): what this cast took, for a Refund.
+                magictech_last_charge_obj = obj;
+                magictech_last_charge_spell = magictech;
+                magictech_last_charge_cost = cost;
+
                 if (combat_observer_is_enabled()) {
                     char caster[COMBAT_OBSERVER_IDENTITY_SIZE];
                     combat_observer_object_id(obj, caster);
@@ -2144,10 +2165,116 @@ void magictech_process_run_info(MagicTechRunInfo* run_info)
 }
 
 // 0x4510F0
+// CE (magic, milestone MG-2): under `spell criticals`, whether the spell now
+// beginning is critical on the current target: 5% + 2% per spell the caster
+// knows in its college (zsogg, 2026-10-11, option A), rolled once per target
+// after its resistance, for everyone - the player is spared nothing. A spell
+// the table gives no critical is never critical. `debug criticals` forces it
+// as it forces a weapon's.
+static bool magictech_roll_critical(void)
+{
+    int64_t caster_obj = magictech_cur_run_info->parent_obj.obj;
+    int64_t target_obj = magictech_cur_target_ctx.target_obj;
+    int chance;
+    int roll;
+    char caster[COMBAT_OBSERVER_IDENTITY_SIZE];
+    char target[COMBAT_OBSERVER_IDENTITY_SIZE];
+
+    magictech_cur_critical = false;
+    magictech_cur_critical_kind = SPELL_CRITICAL_NONE;
+    magictech_cur_critical_bonus = 0;
+
+    if (!feature_enabled(FEATURE_SPELL_CRITICALS)
+        || magictech_cur_run_info->action != MAGICTECH_ACTION_BEGIN
+        || caster_obj == OBJ_HANDLE_NULL
+        || !obj_type_is_critter(obj_field_int32_get(caster_obj, OBJ_F_TYPE))) {
+        return false;
+    }
+
+    magictech_cur_critical_kind = spell_rules_critical(magictech_cur_run_info->spell,
+        &magictech_cur_critical_bonus);
+    if (magictech_cur_critical_kind == SPELL_CRITICAL_NONE) {
+        return false;
+    }
+
+    chance = SPELL_CRITICAL_BASE_CHANCE
+        + SPELL_CRITICAL_PER_SPELL_KNOWN
+            * spell_college_level_get(caster_obj, COLLEGE_FROM_SPELL(magictech_cur_run_info->spell));
+    if (crit_guard_debug_forces(caster_obj, target_obj)) {
+        roll = 0;
+    } else {
+        roll = random_between(1, 100);
+        if (roll > chance) {
+            return false;
+        }
+    }
+
+    magictech_cur_critical = true;
+    if (combat_observer_is_enabled()) {
+        combat_observer_object_id(caster_obj, caster);
+        combat_observer_object_id(target_obj, target);
+        combat_observer_spell_critical(caster, target, magictech_cur_run_info->spell,
+            spell_rules_critical_name(magictech_cur_critical_kind),
+            magictech_cur_critical_bonus, chance, roll);
+    }
+    return true;
+}
+
+// CE (magic, milestone MG-2): what a critical does once the spell's
+// components have run on its target - a debuff's two-turn effect, or the
+// casting fatigue returned, once a cast. The damage criticals act in
+// `MTComponentDamage_ProcFunc`.
+static void magictech_apply_critical(bool* refunded)
+{
+    int64_t caster_obj = magictech_cur_run_info->parent_obj.obj;
+    int64_t target_obj = magictech_cur_target_ctx.target_obj;
+    unsigned int effect = 0;
+
+    switch (magictech_cur_critical_kind) {
+    case SPELL_CRITICAL_REFUND:
+        if (!*refunded
+            && magictech_last_charge_obj == caster_obj
+            && magictech_last_charge_spell == magictech_cur_run_info->spell
+            && magictech_last_charge_cost > 0) {
+            critter_fatigue_damage_set(caster_obj,
+                critter_fatigue_damage_get(caster_obj) - magictech_last_charge_cost > 0
+                    ? critter_fatigue_damage_get(caster_obj) - magictech_last_charge_cost
+                    : 0);
+            tf_add(caster_obj, TF_TYPE_WHITE, "Critical: fatigue returned");
+            magictech_last_charge_cost = 0;
+            *refunded = true;
+        }
+        return;
+    case SPELL_CRITICAL_EXPOSED:
+        effect = CRIT_EFFECT_EXPOSED;
+        break;
+    case SPELL_CRITICAL_UNFOCUSED:
+        effect = CRIT_EFFECT_UNFOCUSED;
+        break;
+    case SPELL_CRITICAL_DAZZLED:
+        effect = CRIT_EFFECT_DAZZLED;
+        break;
+    case SPELL_CRITICAL_HOBBLED:
+        effect = CRIT_EFFECT_HOBBLED;
+        break;
+    default:
+        return;
+    }
+
+    // zsogg: one full turn beyond the end of the victim's next turn.
+    if (target_obj != OBJ_HANDLE_NULL
+        && obj_type_is_critter(obj_field_int32_get(target_obj, OBJ_F_TYPE))
+        && !critter_is_dead(target_obj)) {
+        crit_effects_apply_for(target_obj, effect, SPELL_CRITICAL_EFFECT_TURNS);
+    }
+}
+
 void magictech_process(void)
 {
     int idx;
     int comp;
+    // CE (magic, milestone MG-2): a Refund returns the fatigue once a cast.
+    bool refunded = false;
 
     if (magictech_cur_run_info->id == -1) {
         return;
@@ -2246,6 +2373,10 @@ void magictech_process(void)
 
             if (magictech_target_shield_check(&magictech_cur_target_ctx, magictech_cur_run_info)) {
                 if (magictech_resistance_roll()) {
+                    // CE (magic, milestone MG-2): one roll per target, after
+                    // its resistance - a resisted spell is never critical.
+                    magictech_roll_critical();
+
                     for (comp = 0; comp < magictech_cur_component_list->cnt; comp++) {
                         magictech_cur_component = &(magictech_cur_component_list->entries[comp]);
                         magictech_cur_target_ctx.params = &(magictech_cur_component->aoe);
@@ -2268,6 +2399,11 @@ void magictech_process(void)
                                 }
                             }
                         }
+                    }
+
+                    if (magictech_cur_critical) {
+                        magictech_apply_critical(&refunded);
+                        magictech_cur_critical = false;
                     }
 
                     if (magictech_cur_run_info->source_obj.obj != magictech_cur_source_obj) {
@@ -2472,6 +2608,28 @@ void MTComponentDamage_ProcFunc(void)
     }
 
     combat.flags |= 0x200 | 0x80;
+
+    // CE (magic, milestone MG-2): a damage critical - its bonus on the damage
+    // rolled, before any resistance takes its share, and its stun, knockdown
+    // or long stun, which a target just recovered from a critical's
+    // incapacitation resists under `critical protection` (CR-1).
+    if (magictech_cur_critical
+        && (magictech_cur_critical_kind == SPELL_CRITICAL_STUN
+            || magictech_cur_critical_kind == SPELL_CRITICAL_KNOCKDOWN
+            || magictech_cur_critical_kind == SPELL_CRITICAL_LONG_STUN)) {
+        unsigned int flags;
+        int type = magictech_cur_component->data.damage.damage_type < DAMAGE_TYPE_COUNT
+            ? magictech_cur_component->data.damage.damage_type
+            : DAMAGE_TYPE_NORMAL;
+
+        combat.dam[type] = combat.dam[type] * (100 + magictech_cur_critical_bonus) / 100;
+        flags = magictech_cur_critical_kind == SPELL_CRITICAL_KNOCKDOWN ? CDF_KNOCKDOWN : CDF_STUN;
+        flags = crit_guard_filter(magictech_cur_target_ctx.target_obj, flags);
+        combat.dam_flags |= flags;
+        if ((flags & CDF_STUN) != 0 && magictech_cur_critical_kind == SPELL_CRITICAL_LONG_STUN) {
+            crit_effects_mark_long_stun(magictech_cur_target_ctx.target_obj);
+        }
+    }
 
     if (magictech_cur_component->data.damage.damage_type < DAMAGE_TYPE_COUNT) {
         if (magictech_cur_run_info->field_144 != 0) {

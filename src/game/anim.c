@@ -7426,6 +7426,14 @@ bool anim_pay_spell_cost(AnimRunInfo* run_info)
         // a bug in the original game. Off by default, so CE matches the
         // original unless a player opts in. The mark is set only while the
         // feature is on.
+        // CE (magic, milestone MG-2): an Unfocused caster cannot cast its own
+        // spells; an item still works for it.
+        if (!on_hit && crit_effects_unfocused(obj)
+            && (source_obj == OBJ_HANDLE_NULL || source_obj == obj)) {
+            tf_add(obj, TF_TYPE_WHITE, "Unfocused");
+            return false;
+        }
+
         // CE (magic, milestone MG-1): an item that casts pays the item cost.
         if (!on_hit && !combat_consume_action_points(obj, combat_spell_cast_cost(obj, spell, source_obj))) {
             return false;
@@ -15012,6 +15020,11 @@ bool anim_goal_animate_stunned(int64_t obj)
     combat_turn_based_end_critter_turn(obj);
 
     goal_data.params[AGDATA_SCRATCH_VAL5].data = (20 - stat_level_get(obj, STAT_CONSTITUTION)) / 2;
+    // CE (magic, milestone MG-2): a spell critical's long stun - one more
+    // skipped turn (zsogg, 2026-10-11). Each skipped turn takes 3 off.
+    if (crit_effects_take_long_stun(obj)) {
+        goal_data.params[AGDATA_SCRATCH_VAL5].data += 3;
+    }
 
     if (!anim_goal_add(&goal_data, &anim_scratch_goal_id)) {
         return false;

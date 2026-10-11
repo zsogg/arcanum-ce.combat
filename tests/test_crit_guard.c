@@ -231,6 +231,45 @@ TEST(effects_are_named_for_the_observer)
     CHECK_STR(names, "\"winded\",\"staggered\"");
 }
 
+// Magic MG-2 (zsogg, 2026-10-11): a debuff's critical lasts one full turn of
+// the victim's beyond the end of its next turn; Exposed and Unfocused.
+TEST(a_two_turn_effect_outlives_the_first_turn_and_ends_with_the_second)
+{
+    CritEffectEntry entry;
+
+    memset(&entry, 0, sizeof(entry));
+    entry.obj = 1;
+    crit_effects_entry_apply_for(&entry, CRIT_EFFECT_EXPOSED | CRIT_EFFECT_UNFOCUSED, 2, 1000);
+    CHECK_INT(crit_effects_entry_to_be_hit_bonus(&entry), 20);
+    CHECK(crit_effects_entry_unfocused(&entry));
+    CHECK_INT(crit_effects_entry_to_hit_penalty(&entry), 0);
+
+    // A turn that ends before one of theirs began counts for nothing.
+    CHECK(!crit_effects_entry_turn_ended(&entry));
+    crit_effects_entry_turn_started(&entry);
+    CHECK(!crit_effects_entry_turn_ended(&entry));
+    crit_effects_entry_turn_started(&entry);
+    CHECK(crit_effects_entry_turn_ended(&entry));
+
+    // In real time, two turn lengths.
+    memset(&entry, 0, sizeof(entry));
+    crit_effects_entry_apply_for(&entry, CRIT_EFFECT_DAZZLED, 2, 1000);
+    CHECK(!crit_effects_entry_lapsed(&entry, false, 1000 + 3999, 2000));
+    CHECK(crit_effects_entry_lapsed(&entry, false, 1000 + 4000, 2000));
+}
+
+TEST(a_one_turn_refresh_never_shortens_a_two_turn_effect)
+{
+    CritEffectEntry entry;
+
+    memset(&entry, 0, sizeof(entry));
+    crit_effects_entry_apply_for(&entry, CRIT_EFFECT_HOBBLED, 2, 1000);
+    crit_effects_entry_apply(&entry, CRIT_EFFECT_NUMBED_ARM, 1200);
+    CHECK_INT(entry.turns, 2);
+    crit_effects_entry_turn_started(&entry);
+    CHECK(!crit_effects_entry_turn_ended(&entry));
+}
+
 // A CR-2 repair (2026-10-10): the opening shot's memory. Engaging is once per
 // critter, clearing forgets all, and a full list treats everyone as engaged
 // rather than giving anyone a second opening shot.
@@ -279,4 +318,6 @@ void test_crit_guard_suite(void)
     RUN(effects_last_until_the_end_of_the_next_turn_or_r_in_real_time);
     RUN(effects_are_named_for_the_observer);
     RUN(an_engaged_critter_stays_engaged_until_the_fight_ends);
+    RUN(a_two_turn_effect_outlives_the_first_turn_and_ends_with_the_second);
+    RUN(a_one_turn_refresh_never_shortens_a_two_turn_effect);
 }

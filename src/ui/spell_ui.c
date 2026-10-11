@@ -1,6 +1,7 @@
 #include "ui/spell_ui.h"
 
 #include "game/combat_observer.h"
+#include "game/crit_effects.h"
 #include "game/critter.h"
 #include "game/item.h"
 #include "game/magictech.h"
@@ -10,6 +11,7 @@
 #include "game/spell.h"
 #include "game/stat.h"
 #include "game/target.h"
+#include "game/tf.h"
 #include "game/ui.h"
 #include "ui/charedit_ui.h"
 #include "ui/hotkey_ui.h"
@@ -159,6 +161,14 @@ SpellUiActivate spell_ui_activate(int64_t obj, int spl)
     }
 
     if (!magictech_is_enabled(spl)) {
+        dword_683508 = false;
+        return SPELL_UI_ACTIVATE_ERR;
+    }
+
+    // CE (magic, milestone MG-2): an Unfocused caster cannot cast its own
+    // spells, saying so; an item still works.
+    if (obj == qword_683500 && crit_effects_unfocused(qword_683500)) {
+        tf_add(qword_683500, TF_TYPE_WHITE, "Unfocused");
         dword_683508 = false;
         return SPELL_UI_ACTIVATE_ERR;
     }

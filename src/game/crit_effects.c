@@ -30,7 +30,15 @@ static const struct {
     { CRIT_EFFECT_HOBBLED, "hobbled", "Hobbled" },
     { CRIT_EFFECT_STAGGERED, "staggered", "Staggered" },
     { CRIT_EFFECT_DAZZLED, "dazzled", "Dazzled" },
+    { CRIT_EFFECT_EXPOSED, "exposed", "Exposed" },
+    { CRIT_EFFECT_UNFOCUSED, "unfocused", "Unfocused" },
 };
+
+// MG-2: what attacks against an Exposed critter are made easier by.
+#define CRIT_EFFECT_EXPOSED_BONUS 20
+
+// MG-2: the critter whose next stun is long, if any.
+static int64_t crit_effects_long_stun_obj;
 
 // ---------------------------------------------------------------------------
 // The rules, on one record. Pure: no engine state is read here.
@@ -52,11 +60,32 @@ unsigned int crit_effects_for_location(int hit_loc)
 
 void crit_effects_entry_apply(CritEffectEntry* entry, unsigned int effects, unsigned int clock_ms)
 {
+    crit_effects_entry_apply_for(entry, effects, 1, clock_ms);
+}
+
+void crit_effects_entry_apply_for(CritEffectEntry* entry, unsigned int effects, int turns,
+    unsigned int clock_ms)
+{
     // Winded is spent when it lands; the rest last. A new effect refreshes
-    // the record, so everything it holds runs to the end of the next turn.
+    // the record, so everything it holds runs to the end of the next turn -
+    // or, for a debuff's critical (MG-2), the one after; a refresh never
+    // shortens what is left.
+    if (entry->effects == 0 || entry->turn_started || entry->turns < turns) {
+        entry->turns = turns;
+    }
     entry->effects |= effects & ~CRIT_EFFECT_WINDED;
     entry->turn_started = false;
     entry->applied_ms = clock_ms;
+}
+
+int crit_effects_entry_to_be_hit_bonus(const CritEffectEntry* entry)
+{
+    return (entry->effects & CRIT_EFFECT_EXPOSED) != 0 ? CRIT_EFFECT_EXPOSED_BONUS : 0;
+}
+
+bool crit_effects_entry_unfocused(const CritEffectEntry* entry)
+{
+    return (entry->effects & CRIT_EFFECT_UNFOCUSED) != 0;
 }
 
 int crit_effects_entry_to_hit_penalty(const CritEffectEntry* entry)
@@ -86,15 +115,28 @@ void crit_effects_entry_turn_started(CritEffectEntry* entry)
     entry->turn_started = true;
 }
 
-bool crit_effects_entry_turn_ended(const CritEffectEntry* entry)
+bool crit_effects_entry_turn_ended(CritEffectEntry* entry)
 {
-    return entry->turn_started;
+    if (!entry->turn_started) {
+        return false;
+    }
+
+    // MG-2: a two-turn record outlives the first turn that ends.
+    if (entry->turns > 1) {
+        entry->turns--;
+        entry->turn_started = false;
+        return false;
+    }
+
+    return true;
 }
 
 bool crit_effects_entry_lapsed(const CritEffectEntry* entry, bool turn_based,
     unsigned int clock_ms, int window_ms)
 {
-    return !turn_based && clock_ms - entry->applied_ms >= (unsigned int)window_ms;
+    int turns = entry->turns > 1 ? entry->turns : 1;
+
+    return !turn_based && clock_ms - entry->applied_ms >= (unsigned int)(window_ms * turns);
 }
 
 // ---------------------------------------------------------------------------
@@ -159,20 +201,31 @@ int crit_effects_names(unsigned int effects, char* buffer, int size)
     return used;
 }
 
+bool crit_effects_enabled(void)
+{
+    return feature_enabled(FEATURE_CRITICAL_EFFECTS) || feature_enabled(FEATURE_SPELL_CRITICALS);
+}
+
 void crit_effects_reset(void)
 {
     memset(crit_effects_entries, 0, sizeof(crit_effects_entries));
     crit_effects_clock_ms = 0;
+    crit_effects_long_stun_obj = OBJ_HANDLE_NULL;
 }
 
 // Floats each effect over its victim and keeps the lasting ones.
 void crit_effects_apply(int64_t obj, unsigned int effects)
 {
+    crit_effects_apply_for(obj, effects, 1);
+}
+
+void crit_effects_apply_for(int64_t obj, unsigned int effects, int turns)
+{
     CritEffectEntry* entry;
     int tf_type;
     size_t index;
 
-    if (!feature_enabled(FEATURE_CRITICAL_EFFECTS) || effects == 0) {
+    if (!crit_effects_enabled() || effects == 0) {
         return;
     }
 
@@ -198,14 +251,53 @@ void crit_effects_apply(int64_t obj, unsigned int effects)
     if (entry == NULL) {
         entry = crit_effects_add(obj);
     }
-    crit_effects_entry_apply(entry, effects, crit_effects_clock_ms);
+    crit_effects_entry_apply_for(entry, effects, turns, crit_effects_clock_ms);
+}
+
+int crit_effects_to_be_hit_bonus(int64_t obj)
+{
+    CritEffectEntry* entry;
+
+    if (!crit_effects_enabled()) {
+        return 0;
+    }
+
+    entry = crit_effects_find(obj);
+    return entry != NULL ? crit_effects_entry_to_be_hit_bonus(entry) : 0;
+}
+
+bool crit_effects_unfocused(int64_t obj)
+{
+    CritEffectEntry* entry;
+
+    if (!crit_effects_enabled()) {
+        return false;
+    }
+
+    entry = crit_effects_find(obj);
+    return entry != NULL && crit_effects_entry_unfocused(entry);
+}
+
+void crit_effects_mark_long_stun(int64_t obj)
+{
+    crit_effects_long_stun_obj = obj;
+}
+
+bool crit_effects_take_long_stun(int64_t obj)
+{
+    if (obj == OBJ_HANDLE_NULL || crit_effects_long_stun_obj != obj) {
+        return false;
+    }
+
+    crit_effects_long_stun_obj = OBJ_HANDLE_NULL;
+    return true;
 }
 
 int crit_effects_to_hit_penalty(int64_t obj)
 {
     CritEffectEntry* entry;
 
-    if (!feature_enabled(FEATURE_CRITICAL_EFFECTS)) {
+    if (!crit_effects_enabled()) {
         return 0;
     }
 
@@ -217,7 +309,7 @@ int crit_effects_move_multiplier(int64_t obj)
 {
     CritEffectEntry* entry;
 
-    if (!feature_enabled(FEATURE_CRITICAL_EFFECTS)) {
+    if (!crit_effects_enabled()) {
         return 1;
     }
 
@@ -231,7 +323,7 @@ int crit_effects_turn_action_points(int64_t obj, int action_points)
 {
     CritEffectEntry* entry;
 
-    if (!feature_enabled(FEATURE_CRITICAL_EFFECTS)) {
+    if (!crit_effects_enabled()) {
         return action_points;
     }
 
@@ -245,7 +337,7 @@ void crit_effects_turn_started(int64_t obj)
 {
     CritEffectEntry* entry;
 
-    if (!feature_enabled(FEATURE_CRITICAL_EFFECTS)) {
+    if (!crit_effects_enabled()) {
         return;
     }
 
@@ -259,7 +351,7 @@ void crit_effects_turn_ended(int64_t obj)
 {
     CritEffectEntry* entry;
 
-    if (!feature_enabled(FEATURE_CRITICAL_EFFECTS)) {
+    if (!crit_effects_enabled()) {
         return;
     }
 
@@ -276,7 +368,7 @@ void crit_effects_tick(int delta_ms)
     int window_ms;
     int index;
 
-    if (!feature_enabled(FEATURE_CRITICAL_EFFECTS)) {
+    if (!crit_effects_enabled()) {
         return;
     }
 

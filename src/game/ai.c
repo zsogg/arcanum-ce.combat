@@ -11,6 +11,7 @@
 #include "game/ce_parse.h"
 #include "game/combat.h"
 #include "game/combat_observer.h"
+#include "game/crit_effects.h"
 #include "game/critter.h"
 #include "game/descriptions.h"
 #include "game/dialog.h"
@@ -4917,7 +4918,8 @@ int ai_check_use_skill(int64_t source_obj, int64_t target_obj, int64_t item_obj,
 // 1 unknown spell, 2 not enough fatigue or no stored mana, 3 intelligence,
 // 4 not the college's highest under ONF_CAST_HIGHEST, 5 no line of fire,
 // 6 an aptitude restriction, 7 willpower, 8 failure chance at or above 38%, and
-// CE's 9 (magic, milestone MG-1) not enough AP for it this turn -
+// CE's 9 (magic, milestone MG-1) not enough AP for it this turn, 10 (MG-2)
+// Unfocused -
 // but those are inferred from the code rather than attested anywhere, and
 // CE's single caller only tests `== 0`, so naming them would dress up a guess
 // as a fact for no benefit.
@@ -4935,6 +4937,12 @@ int ai_check_use_spell(int64_t attacker_obj, int64_t item_obj, int64_t target_ob
     // 10 AP, so in its turn-based turn an NPC passes over one it cannot pay
     // for now - as AI-1 made it pass over a weapon it cannot swing (quirk 57).
     // Stock never needed this: every cast cost 4.
+    // CE (magic, milestone MG-2): an Unfocused NPC casts nothing of its own
+    // (code 10); its items still work.
+    if (item_obj == OBJ_HANDLE_NULL && crit_effects_unfocused(attacker_obj)) {
+        return 10;
+    }
+
     if (feature_enabled(FEATURE_SPELL_COSTS)
         && combat_turn_based_is_active()
         && combat_turn_based_whos_turn_get() == attacker_obj

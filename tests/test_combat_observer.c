@@ -370,6 +370,16 @@ TEST(a_cast_is_identified_by_its_spell_not_by_its_cost)
     // Magic milestone MG-1: the AP each cast was priced at.
     CHECK(strstr(trace, "\"spell\":55,\"free\":false,\"ap_cost\":4}") != NULL);
     CHECK(strstr(trace, "\"spell\":60,\"free\":false,\"ap_cost\":3}") != NULL);
+    // Magic milestone MG-2: a spell's critical on one target.
+    clean();
+    CHECK(combat_observer_open(TRACE_FILE));
+    combat_observer_spell_critical("mage", "opponent", 33, "long_stun", 25, 13, 7);
+    combat_observer_spell_critical("mage", "mage", 10, "refund", 0, 7, 0);
+    combat_observer_close();
+    CHECK(read_trace(trace, sizeof(trace)));
+    CHECK(strstr(trace, "\"event\":\"spell.critical\"") != NULL);
+    CHECK(strstr(trace, "\"caster\":\"mage\",\"target\":\"opponent\",\"spell\":33,\"critical\":\"long_stun\",\"bonus\":25,\"chance\":13,\"roll\":7}") != NULL);
+    CHECK(strstr(trace, "\"critical\":\"refund\",\"bonus\":0,\"chance\":7,\"roll\":0}") != NULL);
 }
 
 TEST(an_unreadable_frame_is_reported_as_unknown_not_as_a_number)
