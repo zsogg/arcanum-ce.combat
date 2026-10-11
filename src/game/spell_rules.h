@@ -32,4 +32,15 @@ void spell_rules_load(void);
 // The spell's listed AP cost, or -1 when the table does not list it.
 int spell_rules_ap(int spell);
 
+// CE (magic, zsogg 2026-10-11): under `spell aptitude damage`, the part of a
+// `Scaled` spell's damage that the caster's magickal aptitude adds above the
+// minimum is 30% smaller - this percent of stock. A full mage's Harm, 3-40,
+// deals 28 instead of 40; a caster at aptitude 0 or below keeps the minimum.
+#define SPELL_APTITUDE_DAMAGE_PERCENT 70
+
+// Pure: the damage a `Scaled` spell deals, the engine's rule - `min` plus
+// aptitude percent of the range, the minimum at aptitude 0 or below - with
+// the aptitude part at `percent` of stock (100: stock).
+int spell_rules_scaled_damage(int min, int max, int aptitude, int percent);
+
 #endif /* ARCANUM_GAME_SPELL_RULES_H_ */

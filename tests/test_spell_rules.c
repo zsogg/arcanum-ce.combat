@@ -45,9 +45,23 @@ TEST(a_complete_college_casts_for_one_less_never_below_3)
     CHECK_INT(COMBAT_ITEM_CAST_COST, 4);
 }
 
+TEST(the_aptitude_part_of_scaled_damage_is_30_percent_smaller)
+{
+    // zsogg, 2026-10-11. Harm is 3-40: stock gives a full mage 40.
+    CHECK_INT(spell_rules_scaled_damage(3, 40, 100, 100), 40);
+    CHECK_INT(spell_rules_scaled_damage(3, 40, 100, SPELL_APTITUDE_DAMAGE_PERCENT), 28);
+    CHECK_INT(spell_rules_scaled_damage(3, 40, 60, SPELL_APTITUDE_DAMAGE_PERCENT), 18);
+    CHECK_INT(spell_rules_scaled_damage(20, 70, 100, SPELL_APTITUDE_DAMAGE_PERCENT), 55);
+    CHECK_INT(spell_rules_scaled_damage(50, 100, 100, SPELL_APTITUDE_DAMAGE_PERCENT), 85);
+    // At aptitude 0 or below, the minimum, as stock.
+    CHECK_INT(spell_rules_scaled_damage(3, 40, 0, SPELL_APTITUDE_DAMAGE_PERCENT), 3);
+    CHECK_INT(spell_rules_scaled_damage(3, 40, -40, SPELL_APTITUDE_DAMAGE_PERCENT), 3);
+}
+
 void test_spell_rules_suite(void)
 {
     RUN(an_entry_reads_its_ap_cost);
     RUN(a_cost_below_4_or_anything_else_is_refused_whole);
     RUN(a_complete_college_casts_for_one_less_never_below_3);
+    RUN(the_aptitude_part_of_scaled_damage_is_30_percent_smaller);
 }

@@ -14,6 +14,7 @@
 #include "game/descriptions.h"
 #include "game/effect.h"
 #include "game/fate.h"
+#include "game/feature.h"
 #include "game/gsound.h"
 #include "game/item.h"
 #include "game/light_scheme.h"
@@ -37,6 +38,7 @@
 #include "game/script.h"
 #include "game/sector.h"
 #include "game/spell.h"
+#include "game/spell_rules.h"
 #include "game/stat.h"
 #include "game/target.h"
 #include "game/teleport.h"
@@ -2438,7 +2440,14 @@ void MTComponentDamage_ProcFunc(void)
     if ((combat.dam_flags & CDF_SCALE) != 0) {
         if (obj_type_is_critter(magictech_cur_run_info->parent_obj.type)) {
             int aptitude = magictech_cur_run_info->parent_obj.aptitude;
-            if (aptitude > 0) {
+            // CE (magic, zsogg 2026-10-11): under `spell aptitude damage` the
+            // aptitude's part is 30% smaller (`spell_rules_scaled_damage`). A
+            // fate point's spell at maximum stays at the true maximum.
+            if (feature_enabled(FEATURE_SPELL_APTITUDE_DAMAGE) && !magictech_cur_is_fate_maximized) {
+                dam_max = spell_rules_scaled_damage(dam_min, dam_max, aptitude,
+                    SPELL_APTITUDE_DAMAGE_PERCENT);
+                dam_min = dam_max;
+            } else if (aptitude > 0) {
                 dam_max = dam_min + aptitude * (dam_max - dam_min) / 100;
                 dam_min = dam_max;
             } else {

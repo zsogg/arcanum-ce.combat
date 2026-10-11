@@ -98,6 +98,15 @@ void spell_rules_load(void)
     tig_debug_printf("spell rules: %d spell(s) listed\n", listed);
 }
 
+int spell_rules_scaled_damage(int min, int max, int aptitude, int percent)
+{
+    if (aptitude <= 0) {
+        return min;
+    }
+
+    return min + aptitude * (max - min) / 100 * percent / 100;
+}
+
 int spell_rules_ap(int spell)
 {
     if (spell < 0 || spell >= SPELL_RULES_COUNT) {

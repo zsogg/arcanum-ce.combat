@@ -54,5 +54,6 @@ FEATURE(DEBUG_FUMBLES, "debug fumbles", false)
 FEATURE(FIREARM_FUMBLES, "firearm fumbles", false)
 FEATURE(FIREARM_CRITICALS, "firearm criticals", false)
 FEATURE(SPELL_COSTS, "spell costs", false)
+FEATURE(SPELL_APTITUDE_DAMAGE, "spell aptitude damage", false)
 
 // clang-format on
