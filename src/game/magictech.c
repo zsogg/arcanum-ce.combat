@@ -6991,6 +6991,22 @@ static bool magictech_summon_lives(int64_t obj)
         && !critter_is_dead(obj);
 }
 
+// CE (magic, milestone MG-3): whether a summon made now is made in combat.
+// In real time the player's side shows it by combat mode; an NPC fighting
+// there need not be in combat mode, so its AI's own state counts too
+// (measured 2026-10-11: Joachim's fire elementals, called as zsogg's attack
+// opened the fight, were neither).
+static bool magictech_summoner_in_combat(int64_t summoner_obj)
+{
+    if (combat_turn_based_is_active() || combat_critter_is_combat_mode_active(summoner_obj)) {
+        return true;
+    }
+
+    return obj_field_int32_get(summoner_obj, OBJ_F_TYPE) == OBJ_TYPE_NPC
+        && ((obj_field_int32_get(summoner_obj, OBJ_F_NPC_FLAGS) & ONF_FIGHTING) != 0
+            || (obj_field_int32_get(summoner_obj, OBJ_F_CRITTER_FLAGS) & OCF_FLEEING) != 0);
+}
+
 static void magictech_summons_record(int64_t summoner_obj, int64_t summon_obj)
 {
     int slot;
@@ -7016,7 +7032,7 @@ static void magictech_summons_record(int64_t summoner_obj, int64_t summon_obj)
     // real time for 2 seconds (zsogg, 2026-09-18 and 2026-10-11). One made
     // before the fight enters it ready.
     if (feature_enabled(FEATURE_SUMMONING_SICKNESS)
-        && (combat_turn_based_is_active() || combat_critter_is_combat_mode_active(summoner_obj))) {
+        && magictech_summoner_in_combat(summoner_obj)) {
         magictech_summons[slot].sick = true;
         tf_add(summon_obj, TF_TYPE_WHITE, "Summoning sickness");
         if (combat_observer_is_enabled()) {
