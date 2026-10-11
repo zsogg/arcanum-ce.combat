@@ -266,6 +266,10 @@ typedef unsigned int MagicTechRunFlags;
 // `Parent_Dmgs_Opponent_W_Item` - or a spell such a run cast. Set only while
 // the feature is on; `anim_pay_spell_cost` charges it no action points.
 #define MAGICTECH_RUN_CE_ON_HIT 0x00010000u
+// CE (magic, milestone MG-3): a cast refused before anything was paid -
+// Unfocused, or a second copy under `spell no stacking`. Its release charges
+// no fatigue, as stock charges an interrupted cast's.
+#define MAGICTECH_RUN_CE_REFUSED 0x00020000u
 #define MAGICTECH_RUN_DISPELLED 0x80000000u
 
 typedef struct MagicTechRunInfo {
@@ -407,6 +411,15 @@ bool magictech_is_under_influence_of(int64_t obj, int magictech);
 // them - and a summon spell's run ends once its creature appears, so CE keeps
 // its own record of who summoned whom (not saved).
 int magictech_summons_alive(int64_t caster_obj);
+
+// CE (magic, milestone MG-3): under `spell no stacking`, whether a cast of
+// `spell` by `caster_obj` at `target_obj` (or at the caster, when null) is
+// refused because the spells table marks it `NoStack` and a copy of it is
+// already on that target - or, for such a spell, because the target's state
+// forbids it (a Body spell on a body already changed). `mt_id` is the cast's
+// own run, -1 before there is one. zsogg, 2026-10-11: refused before anything
+// is paid.
+bool magictech_recast_refused(int64_t caster_obj, int spell, int64_t target_obj, int mt_id);
 bool magictech_stop_spell(int64_t obj, int magictech);
 bool magictech_timeevent_process(TimeEvent* timeevent);
 bool magictech_reschedule_run(int index);

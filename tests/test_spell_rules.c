@@ -77,6 +77,24 @@ TEST(a_malformed_critical_is_refused_whole)
     CHECK(strcmp(spell_rules_critical_name(SPELL_CRITICAL_LONG_STUN), "long_stun") == 0);
 }
 
+TEST(an_entry_reads_no_stacking)
+{
+    SpellRule rule;
+
+    // Magic MG-3, zsogg 2026-10-11: no buff stacks, nor Drain Will.
+    CHECK(spell_rule_parse("APCost: 4, Critical: Refund, NoStack: 1", &rule));
+    CHECK(rule.no_stack);
+    CHECK_INT(rule.critical, SPELL_CRITICAL_REFUND);
+    CHECK(spell_rule_parse("APCost: 4, Critical: Stun 20", &rule));
+    CHECK(!rule.no_stack);
+    CHECK(spell_rule_parse("NoStack: 0", &rule));
+    CHECK(!rule.no_stack);
+    rule.ap = 6;
+    CHECK(!spell_rule_parse("APCost: 4, NoStack: 2", &rule));
+    CHECK(!spell_rule_parse("APCost: 4, NoStack: yes", &rule));
+    CHECK_INT(rule.ap, 6);
+}
+
 TEST(a_complete_college_casts_for_one_less_never_below_3)
 {
     // zsogg, 2026-10-10: all five of a college known - 1 AP less, never below 3.
@@ -107,6 +125,7 @@ void test_spell_rules_suite(void)
     RUN(a_cost_below_4_or_anything_else_is_refused_whole);
     RUN(an_entry_reads_its_critical);
     RUN(a_malformed_critical_is_refused_whole);
+    RUN(an_entry_reads_no_stacking);
     RUN(a_complete_college_casts_for_one_less_never_below_3);
     RUN(the_aptitude_part_of_scaled_damage_is_30_percent_smaller);
 }

@@ -100,6 +100,7 @@ bool spell_rule_parse(const char* str, SpellRule* rule)
     parsed.ap = -1;
     parsed.critical = SPELL_CRITICAL_NONE;
     parsed.critical_bonus = 0;
+    parsed.no_stack = false;
 
     for (part = strtok_r(buffer, ",", &save); part != NULL; part = strtok_r(NULL, ",", &save)) {
         colon = strchr(part, ':');
@@ -121,6 +122,11 @@ bool spell_rule_parse(const char* str, SpellRule* rule)
             if (!spell_rule_parse_critical(colon + 1, &parsed.critical, &parsed.critical_bonus)) {
                 return false;
             }
+        } else if (strcmp(key, "NoStack") == 0) {
+            if (!ce_parse_int(colon + 1, &value) || (value != 0 && value != 1)) {
+                return false;
+            }
+            parsed.no_stack = value == 1;
         } else {
             return false;
         }
@@ -148,6 +154,7 @@ void spell_rules_exit(void)
         spell_rules_table[index].ap = -1;
         spell_rules_table[index].critical = SPELL_CRITICAL_NONE;
         spell_rules_table[index].critical_bonus = 0;
+        spell_rules_table[index].no_stack = false;
     }
 }
 
@@ -207,6 +214,11 @@ SpellCritical spell_rules_critical(int spell, int* bonus)
 
     *bonus = spell_rules_table[spell].critical_bonus;
     return spell_rules_table[spell].critical;
+}
+
+bool spell_rules_no_stack(int spell)
+{
+    return spell >= 0 && spell < SPELL_RULES_COUNT && spell_rules_table[spell].no_stack;
 }
 
 const char* spell_rules_critical_name(SpellCritical critical)

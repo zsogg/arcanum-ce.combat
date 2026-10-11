@@ -3482,7 +3482,13 @@ bool magictech_process_upkeep(void)
         }
 
         if (magictech_scratch_obj != OBJ_HANDLE_NULL) {
-            if (magictech_cur_spell_info->no_stack) {
+            // CE (magic, milestone MG-3): under `spell no stacking` the
+            // table's `NoStack` spells are refused here too, for a cast that
+            // reached this point some other way than a critter's own casting
+            // (which `anim_pay_spell_cost` refuses before paying).
+            if (magictech_cur_spell_info->no_stack
+                || (feature_enabled(FEATURE_SPELL_NO_STACKING)
+                    && spell_rules_no_stack(magictech_cur_run_info->spell))) {
                 int other_mt_id;
                 if (magictech_run_duplicate_find(magictech_cur_run_info->id, magictech_cur_run_info->spell, magictech_scratch_obj, &other_mt_id)
                     && magictech_cur_run_info->id != other_mt_id) {
@@ -3624,6 +3630,23 @@ bool magictech_run_duplicate_find(int mt_id, int spell, int64_t obj, int* other_
     }
 
     return false;
+}
+
+bool magictech_recast_refused(int64_t caster_obj, int spell, int64_t target_obj, int mt_id)
+{
+    int64_t obj;
+
+    if (!feature_enabled(FEATURE_SPELL_NO_STACKING)
+        || !spell_rules_no_stack(spell)
+        || caster_obj == OBJ_HANDLE_NULL) {
+        return false;
+    }
+
+    // As the stock duplicate check reads it: the target, or the caster.
+    obj = target_obj != OBJ_HANDLE_NULL ? target_obj : caster_obj;
+
+    return magictech_run_duplicate_find(mt_id, spell, obj, NULL)
+        || !magictech_disallowed_flags_check(caster_obj, target_obj, &(magictech_spells[spell]));
 }
 
 // 0x4534E0
@@ -5728,7 +5751,8 @@ void magictech_release(int mt_id, unsigned int flags)
     if (mt_id != -1
         && (!tig_net_is_active()
             || tig_net_is_host())) {
-        if ((flags & 0x1) != 0) {
+        if ((flags & 0x1) != 0
+            && (magictech_run_info[mt_id].flags & MAGICTECH_RUN_CE_REFUSED) == 0) {
             magictech_charge_spell_fatigue(magictech_run_info[mt_id].source_obj.obj,
                 magictech_run_info[mt_id].spell);
         }

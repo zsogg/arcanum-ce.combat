@@ -4919,7 +4919,7 @@ int ai_check_use_skill(int64_t source_obj, int64_t target_obj, int64_t item_obj,
 // 4 not the college's highest under ONF_CAST_HIGHEST, 5 no line of fire,
 // 6 an aptitude restriction, 7 willpower, 8 failure chance at or above 38%, and
 // CE's 9 (magic, milestone MG-1) not enough AP for it this turn, 10 (MG-2)
-// Unfocused -
+// Unfocused, 11 (MG-3) a copy already on the target under `spell no stacking` -
 // but those are inferred from the code rather than attested anywhere, and
 // CE's single caller only tests `== 0`, so naming them would dress up a guess
 // as a fact for no benefit.
@@ -4941,6 +4941,12 @@ int ai_check_use_spell(int64_t attacker_obj, int64_t item_obj, int64_t target_ob
     // (code 10); its items still work.
     if (item_obj == OBJ_HANDLE_NULL && crit_effects_unfocused(attacker_obj)) {
         return 10;
+    }
+
+    // CE (magic, milestone MG-3): a buff, or Drain Will, already on the
+    // target under `spell no stacking` - the cast would be refused.
+    if (magictech_recast_refused(attacker_obj, spell, target_obj, -1)) {
+        return 11;
     }
 
     if (feature_enabled(FEATURE_SPELL_COSTS)

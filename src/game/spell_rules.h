@@ -19,6 +19,9 @@
 // `LongStun N` (N% more damage, and that incapacitation), `Refund` (the
 // casting fatigue is returned), or a debuff's two-turn effect: `Exposed`,
 // `Unfocused`, `Dazzled`, `Hobbled`. A spell without one is never critical.
+// `NoStack: 1`, read under `spell no stacking` (magic, milestone MG-3; zsogg,
+// 2026-10-11): a second copy of the spell on the same target is refused before
+// its caster pays anything. The sheet marks every buff, and Drain Will.
 // Like the weapon table, it changes no game data.
 
 // The spells the table may list: the 16 colleges' 80.
@@ -45,9 +48,12 @@ typedef struct SpellRule {
     SpellCritical critical;
     // The damage bonus of a Stun, Knockdown or LongStun critical, percent.
     int critical_bonus;
+    // MG-3: `NoStack: 1`.
+    bool no_stack;
 } SpellRule;
 
-// Pure: reads one entry's text - `APCost` and `Critical`, either or both.
+// Pure: reads one entry's text - `APCost`, `Critical` and `NoStack`, any of them.
+// `NoStack` takes 0 or 1.
 // False, with `rule` untouched, for anything else, an AP below 4 or above 10,
 // a damage critical without its bonus or another critical with one - so a bad
 // entry changes nothing rather than a guessed rule.
@@ -69,6 +75,8 @@ int spell_rules_ap(int spell);
 
 // MG-2: the spell's critical, and its damage bonus in percent.
 SpellCritical spell_rules_critical(int spell, int* bonus);
+// MG-3: whether the table refuses a second copy of the spell on a target.
+bool spell_rules_no_stack(int spell);
 // MG-2: a critical's name for `spell.critical` - "stun", "refund" ...
 const char* spell_rules_critical_name(SpellCritical critical);
 

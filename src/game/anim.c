@@ -7408,14 +7408,18 @@ bool anim_pay_spell_cost(AnimRunInfo* run_info)
     // CE (real-time session C): the shared cast cost, which the real-time
     // budget reads too - the original's flat 4 today.
     {
-        MagicTechRunInfo* mt_run_info;
+        MagicTechRunInfo* mt_run_info = NULL;
         int spell = -1;
         int64_t source_obj = OBJ_HANDLE_NULL;
+        int64_t target_obj = OBJ_HANDLE_NULL;
+        int mt_id = -1;
         bool on_hit = false;
 
         if (magictech_id_to_run_info(run_info->cur_stack_data->params[AGDATA_SPELL_DATA].data, &mt_run_info)) {
             spell = mt_run_info->spell;
             source_obj = mt_run_info->source_obj.obj;
+            target_obj = mt_run_info->target_obj.obj;
+            mt_id = mt_run_info->id;
             on_hit = (mt_run_info->flags & MAGICTECH_RUN_CE_ON_HIT) != 0;
         }
 
@@ -7431,6 +7435,18 @@ bool anim_pay_spell_cost(AnimRunInfo* run_info)
         if (!on_hit && crit_effects_unfocused(obj)
             && (source_obj == OBJ_HANDLE_NULL || source_obj == obj)) {
             tf_add(obj, TF_TYPE_WHITE, "Unfocused");
+            if (mt_run_info != NULL) {
+                mt_run_info->flags |= MAGICTECH_RUN_CE_REFUSED;
+            }
+            return false;
+        }
+
+        // CE (magic, milestone MG-3): under `spell no stacking` a second
+        // copy of a buff, or of Drain Will, is refused before anything is
+        // paid (zsogg, 2026-10-11).
+        if (!on_hit && spell != -1 && magictech_recast_refused(obj, spell, target_obj, mt_id)) {
+            tf_add(obj, TF_TYPE_WHITE, "Already in effect");
+            mt_run_info->flags |= MAGICTECH_RUN_CE_REFUSED;
             return false;
         }
 
