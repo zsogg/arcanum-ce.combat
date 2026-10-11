@@ -879,6 +879,10 @@ TEST(a_row_the_parser_cannot_read_refuses_the_whole_file)
     CHECK(!load_script("zero key combat-mode\n"));
     CHECK(!load_script("0 learn\n"));
     CHECK(!load_script("0 learn harm\n"));
+    // Magic MG-1: `force` is the only word that may follow.
+    CHECK(load_script("0 learn 59 force\n"));
+    CHECK_INT(replay_ui_count(), 1);
+    CHECK(!load_script("0 learn 59 now\n"));
     CHECK_INT(replay_ui_count(), 0);
 }
 

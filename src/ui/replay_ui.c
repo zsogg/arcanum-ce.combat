@@ -61,7 +61,8 @@ typedef enum ReplayKind {
     // `learn <spell>`: the character screen's learn button, `spell_ui_add`, which
     // spends points and checks level and Intelligence as it does for a player.
     // Script-only, like `key character-points`: they build a test character, and
-    // nothing records them.
+    // nothing records them. `learn <spell> force` (magic MG-1) skips the checks
+    // and the points.
     REPLAY_KIND_LEARN,
     // Real-time session C: the two a throw needs.
     //
@@ -462,6 +463,14 @@ static bool replay_parse_line(const char* text, ReplayCommand* command)
         if (!replay_parse_int(tokens[index++], &(command->spell))
             || command->spell < 0) {
             return false;
+        }
+        // CE (magic, milestone MG-1): `learn <spell> force`, a test row,
+        // adds the spell past the level, Intelligence, Willpower and order
+        // checks and spends no character points, so a probe can give a
+        // level-1 fighter a complete college. `count` carries the flag.
+        if (index < count && strcmp(tokens[index], "force") == 0) {
+            command->count = 1;
+            index++;
         }
         return index == count;
     }
@@ -871,6 +880,11 @@ void replay_ui_tick(void)
     if (command->kind == REPLAY_KIND_LEARN) {
         replay_stall_reported = false;
         replay_next++;
+        if (command->count == 1) {
+            tig_debug_printf("Replay: command %d learn %d force: %s\n", replay_next - 1,
+                command->spell, spell_add(pc_obj, command->spell, true) ? "known" : "REFUSED");
+            return;
+        }
         spell_ui_add(pc_obj, command->spell);
         // The character screen refuses on screen - level, Intelligence,
         // Willpower, the college's order - which a script never sees. Said
