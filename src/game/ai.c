@@ -1441,6 +1441,13 @@ void ai_attack(int64_t source_obj, int64_t target_obj, int loudness, unsigned in
                 v1 = target_obj;
             }
 
+            // CE (`prowl followers need skill`; zsogg, 2026-10-12): a follower
+            // attacked is revealed alone - its leader, and the rest of the
+            // party, keep prowling. Stock revealed the whole party.
+            if (feature_enabled(FEATURE_PROWL_FOLLOWERS_NEED_SKILL)) {
+                v1 = target_obj;
+            }
+
             if (critter_is_concealed(v1)) {
                 critter_set_concealed(v1, false);
             }

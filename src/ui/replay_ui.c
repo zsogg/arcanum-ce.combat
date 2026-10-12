@@ -366,7 +366,8 @@ static void replay_inspect_critter(int64_t critter_obj, const char* who)
 // of the player - its distance, whether it faces the player, and what
 // `ai_can_see` and `ai_can_hear` return against the player now (0: perceived;
 // otherwise the tiles short; 1000: cannot), with the player's prowling
-// effectiveness against it. Read-only: nothing turns or acts.
+// effectiveness against it, and whether the critter is prowling itself.
+// Read-only: nothing turns or acts.
 static void replay_inspect_awareness(int64_t pc_obj)
 {
     ObjectList objects;
@@ -381,13 +382,14 @@ static void replay_inspect_awareness(int64_t pc_obj)
             continue;
         }
         combat_observer_object_id(node->obj, id);
-        tig_debug_printf("Replay: awareness %s dist %d facing %d see %d hear %d prowling %d\n",
+        tig_debug_printf("Replay: awareness %s dist %d facing %d see %d hear %d prowling %d concealed %d\n",
             id,
             (int)object_dist(node->obj, pc_obj),
             critter_is_facing_to(node->obj, pc_obj) ? 1 : 0,
             ai_can_see(node->obj, pc_obj),
             ai_can_hear(node->obj, pc_obj, concealed ? LOUDNESS_SILENT : LOUDNESS_NORMAL),
-            basic_skill_effectiveness(pc_obj, BASIC_SKILL_PROWLING, node->obj));
+            basic_skill_effectiveness(pc_obj, BASIC_SKILL_PROWLING, node->obj),
+            critter_is_concealed(node->obj) ? 1 : 0);
     }
     object_list_destroy(&objects);
 }

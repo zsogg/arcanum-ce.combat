@@ -1,8 +1,10 @@
 #include "ui/skill_ui.h"
 
 #include "game/anim.h"
+#include "game/combat.h"
 #include "game/critter.h"
 #include "game/dialog.h"
+#include "game/feature.h"
 #include "game/mes.h"
 #include "game/obj.h"
 #include "game/player.h"
@@ -195,6 +197,16 @@ void skill_ui_preprocess(int64_t obj, int type)
 
     switch (type) {
     case 0:
+        // CE (`prowl in combat master only`; zsogg, 2026-10-12): the manual's
+        // Master perk - only a master prowler starts prowling in combat mode.
+        // One already prowling when the fight starts keeps prowling.
+        if (feature_enabled(FEATURE_PROWL_IN_COMBAT_MASTER_ONLY)
+            && !critter_is_concealed(obj)
+            && combat_critter_is_combat_mode_active(obj)
+            && basic_skill_training_get(obj, BASIC_SKILL_PROWLING) < TRAINING_MASTER) {
+            tf_add(obj, TF_TYPE_WHITE, "Only a master prowler hides in a fight");
+            break;
+        }
         critter_set_concealed(obj, !critter_is_concealed(obj));
         break;
     case 1:

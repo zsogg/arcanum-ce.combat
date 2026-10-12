@@ -61,5 +61,7 @@ FEATURE(SUMMONING_SICKNESS, "summoning sickness", false)
 FEATURE(OPENING_SAFEGUARD, "opening safeguard", false)
 FEATURE(POISON_PER_TURN, "poison per turn", false)
 FEATURE(PROWL_ATTACK_REVEALS, "prowl attack reveals", false)
+FEATURE(PROWL_FOLLOWERS_NEED_SKILL, "prowl followers need skill", false)
+FEATURE(PROWL_IN_COMBAT_MASTER_ONLY, "prowl in combat master only", false)
 
 // clang-format on

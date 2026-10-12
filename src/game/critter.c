@@ -5,6 +5,7 @@
 #include "game/background.h"
 #include "game/combat.h"
 #include "game/effect.h"
+#include "game/feature.h"
 #include "game/gamelib.h"
 #include "game/item.h"
 #include "game/light.h"
@@ -918,7 +919,8 @@ bool critter_follow(int64_t follower_obj, int64_t leader_obj, bool force)
     ui_follower_refresh();
 
     // Conceal new follower if leader is concealed.
-    critter_set_concealed(follower_obj, critter_is_concealed(leader_obj));
+    // CE (`prowl followers need skill`): if it has some Prowling.
+    critter_set_concealed(follower_obj, critter_is_concealed(leader_obj) && critter_follower_may_prowl(follower_obj));
 
     // Synchronize spell flags if leader is maintaining Tempus Fugit.
     if ((obj_field_int32_get(leader_obj, OBJ_F_SPELL_FLAGS) & OSF_TEMPUS_FUGIT) != 0) {
@@ -1677,6 +1679,15 @@ bool critter_is_concealed(int64_t obj)
         && (obj_field_int32_get(obj, OBJ_F_CRITTER_FLAGS) & OCF_IS_CONCEALED) != 0;
 }
 
+// CE (`prowl followers need skill`; zsogg, 2026-10-12): whether a follower
+// crouches when its leader prowls. Stock: always, whatever its own skill - so
+// a follower with no Prowling hid badly and, attacked, revealed the party.
+bool critter_follower_may_prowl(int64_t obj)
+{
+    return !feature_enabled(FEATURE_PROWL_FOLLOWERS_NEED_SKILL)
+        || basic_skill_level(obj, BASIC_SKILL_PROWLING) > 0;
+}
+
 /**
  * Sets the concealed state of a critter and its followers.
  *
@@ -1694,7 +1705,12 @@ void critter_set_concealed(int64_t obj, bool concealed)
     object_list_all_followers(obj, &objects);
     node = objects.head;
     while (node != NULL) {
-        critter_set_concealed_internal(node->obj, concealed);
+        // CE (`prowl followers need skill`; zsogg, 2026-10-12): only a follower
+        // with some Prowling crouches with its leader; every follower stands
+        // up with it.
+        if (!concealed || critter_follower_may_prowl(node->obj)) {
+            critter_set_concealed_internal(node->obj, concealed);
+        }
         node = node->next;
     }
     object_list_destroy(&objects);
