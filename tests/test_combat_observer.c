@@ -856,6 +856,9 @@ TEST(the_persistence_rows_load_into_what_they_say)
     CHECK(!load_script("0 save Slot00099\n")); // more than eight characters
     CHECK(!load_script("0 inspect\n"));
     CHECK(!load_script("0 inspect everything\n"));
+    // 2026-10-12: `inspect awareness`, for prowling.
+    CHECK(load_script("0 inspect awareness\n"));
+    CHECK(row_is(0, "turn=0 now=0 kind=inspect target= loc=0 aim=0 spell=0 cast=- wait=0"));
     CHECK(!load_script("0 transfer 6065\n")); // to whom
     CHECK(!load_script("0 drop flintlock\n"));
 }

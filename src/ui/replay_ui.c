@@ -8,8 +8,10 @@
 #include <tig/message.h>
 #include <tig/timer.h>
 
+#include "game/ai.h"
 #include "game/anim.h"
 #include "game/combat.h"
+#include "game/combat_observer.h"
 #include "game/crit_effects.h"
 #include "game/critter.h"
 #include "game/gamelib.h"
@@ -360,6 +362,36 @@ static void replay_inspect_critter(int64_t critter_obj, const char* who)
     }
 }
 
+// `inspect awareness` (2026-10-12): one log line per critter within 15 tiles
+// of the player - its distance, whether it faces the player, and what
+// `ai_can_see` and `ai_can_hear` return against the player now (0: perceived;
+// otherwise the tiles short; 1000: cannot), with the player's prowling
+// effectiveness against it. Read-only: nothing turns or acts.
+static void replay_inspect_awareness(int64_t pc_obj)
+{
+    ObjectList objects;
+    ObjectNode* node;
+    char id[COMBAT_OBSERVER_IDENTITY_SIZE];
+    bool concealed = critter_is_concealed(pc_obj);
+
+    tig_debug_printf("Replay: awareness of the player, %s\n", concealed ? "prowling" : "not prowling");
+    ai_objects_in_radius(pc_obj, 15, &objects, OBJ_TM_CRITTER);
+    for (node = objects.head; node != NULL; node = node->next) {
+        if (node->obj == pc_obj || critter_is_dead(node->obj)) {
+            continue;
+        }
+        combat_observer_object_id(node->obj, id);
+        tig_debug_printf("Replay: awareness %s dist %d facing %d see %d hear %d prowling %d\n",
+            id,
+            (int)object_dist(node->obj, pc_obj),
+            critter_is_facing_to(node->obj, pc_obj) ? 1 : 0,
+            ai_can_see(node->obj, pc_obj),
+            ai_can_hear(node->obj, pc_obj, concealed ? LOUDNESS_SILENT : LOUDNESS_NORMAL),
+            basic_skill_effectiveness(pc_obj, BASIC_SKILL_PROWLING, node->obj));
+    }
+    object_list_destroy(&objects);
+}
+
 static void replay_inspect_guns(int64_t pc_obj)
 {
     ObjectList objects;
@@ -564,9 +596,14 @@ static bool replay_parse_line(const char* text, ReplayCommand* command)
 
     if (strcmp(kind, "inspect") == 0) {
         command->kind = REPLAY_KIND_INSPECT;
-        if (strcmp(tokens[index++], "guns") != 0) {
+        // `inspect awareness` (2026-10-12): what each critter nearby makes of
+        // the player, for prowling. `stat` tells the two apart.
+        if (strcmp(tokens[index], "awareness") == 0) {
+            command->stat = 1;
+        } else if (strcmp(tokens[index], "guns") != 0) {
             return false;
         }
+        index++;
         return index == count;
     }
 
@@ -986,7 +1023,11 @@ void replay_ui_tick(void)
     if (command->kind == REPLAY_KIND_INSPECT) {
         replay_stall_reported = false;
         replay_next++;
-        replay_inspect_guns(pc_obj);
+        if (command->stat == 1) {
+            replay_inspect_awareness(pc_obj);
+        } else {
+            replay_inspect_guns(pc_obj);
+        }
         return;
     }
 
