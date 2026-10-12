@@ -2346,6 +2346,36 @@ bool is_controlled_by_local_pc(int64_t obj)
     return false;
 }
 
+// CE (`prowl darkness helps`; zsogg, 2026-10-12): how much darkness hides a
+// prowler from an observer - 30 in full darkness, scaled down by the light on
+// the prowler and by a light it carries, as stock's lighting branch scales its
+// penalty; nothing against an observer with dark sight.
+static int skill_prowl_darkness_bonus(int64_t prowler_obj, int64_t observer_obj)
+{
+    unsigned int critter_flags = obj_field_int32_get(prowler_obj, OBJ_F_CRITTER_FLAGS);
+    int lum;
+    int bonus;
+
+    if (observer_obj != OBJ_HANDLE_NULL && critter_has_dark_sight(observer_obj)) {
+        return 0;
+    }
+
+    lum = light_obj_grayscale_get(prowler_obj) & 0xFF;
+    bonus = 30 * (255 - lum) / 255;
+
+    if ((critter_flags & OCF_LIGHT_XLARGE) != 0) {
+        bonus /= 4;
+    } else if ((critter_flags & OCF_LIGHT_LARGE) != 0) {
+        bonus /= 3;
+    } else if ((critter_flags & OCF_LIGHT_MEDIUM) != 0) {
+        bonus /= 2;
+    } else if ((critter_flags & OCF_LIGHT_SMALL) != 0) {
+        bonus = 3 * bonus / 4;
+    }
+
+    return bonus;
+}
+
 /**
  * Calculates the difficulty score for performing a skill invocation.
  *
@@ -2673,9 +2703,25 @@ int skill_invocation_difficulty(SkillInvocation* skill_invocation)
             // TODO: Unclear.
             if (training < TRAINING_EXPERT && v6 == 0) {
                 v6 = -50;
+                // CE (`prowl open ground halves`; zsogg, 2026-10-12): in the open
+                // a prowler below Expert counts half its effectiveness, rather
+                // than losing 50 points of it - so effectiveness under 50 still
+                // helps. At 100 it is stock's.
+                if (feature_enabled(FEATURE_PROWL_OPEN_GROUND_HALVES)) {
+                    v6 = -(basic_skill_effectiveness(source_obj, BASIC_SKILL_PROWLING, target_obj) / 2);
+                }
             }
 
             difficulty -= v6;
+
+            // CE (`prowl darkness helps`; zsogg, 2026-10-12): darkness hides any
+            // prowler, trained or not - up to 30 easier in full darkness, less
+            // for a light the prowler carries, nothing against an observer
+            // with dark sight. Stock only charged the untrained up to 30 in
+            // bright light (the lighting branch below), which stays.
+            if (feature_enabled(FEATURE_PROWL_DARKNESS_HELPS)) {
+                difficulty -= skill_prowl_darkness_bonus(source_obj, target_obj);
+            }
         } else if ((skill_invocation->flags & SKILL_INVOCATION_CHECK_HEARING) != 0) {
             // Apply armor-based modifier for silent movement.
             for (int inventory_location = FIRST_WEAR_INV_LOC; inventory_location <= LAST_WEAR_INV_LOC; inventory_location++) {

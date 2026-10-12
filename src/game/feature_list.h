@@ -63,5 +63,7 @@ FEATURE(POISON_PER_TURN, "poison per turn", false)
 FEATURE(PROWL_ATTACK_REVEALS, "prowl attack reveals", false)
 FEATURE(PROWL_FOLLOWERS_NEED_SKILL, "prowl followers need skill", false)
 FEATURE(PROWL_IN_COMBAT_MASTER_ONLY, "prowl in combat master only", false)
+FEATURE(PROWL_DARKNESS_HELPS, "prowl darkness helps", false)
+FEATURE(PROWL_OPEN_GROUND_HALVES, "prowl open ground halves", false)
 
 // clang-format on

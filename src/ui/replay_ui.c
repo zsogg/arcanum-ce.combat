@@ -16,6 +16,7 @@
 #include "game/critter.h"
 #include "game/gamelib.h"
 #include "game/item.h"
+#include "game/light.h"
 #include "game/obj.h"
 #include "game/obj_id.h"
 #include "game/obj_pool.h"
@@ -374,6 +375,7 @@ static void replay_inspect_awareness(int64_t pc_obj)
     ObjectNode* node;
     char id[COMBAT_OBSERVER_IDENTITY_SIZE];
     bool concealed = critter_is_concealed(pc_obj);
+    SkillInvocation sight;
 
     tig_debug_printf("Replay: awareness of the player, %s\n", concealed ? "prowling" : "not prowling");
     ai_objects_in_radius(pc_obj, 15, &objects, OBJ_TM_CRITTER);
@@ -382,13 +384,22 @@ static void replay_inspect_awareness(int64_t pc_obj)
             continue;
         }
         combat_observer_object_id(node->obj, id);
-        tig_debug_printf("Replay: awareness %s dist %d facing %d see %d hear %d prowling %d concealed %d\n",
+        // The difficulty `ai_can_see` subtracts from the prowling
+        // effectiveness - built as it builds it.
+        skill_invocation_init(&sight);
+        object_ref_init(pc_obj, &(sight.source));
+        object_ref_init(node->obj, &(sight.target));
+        sight.flags |= SKILL_INVOCATION_CHECK_SEEING;
+        sight.skill = BASIC_SKILL_PROWLING;
+        tig_debug_printf("Replay: awareness %s dist %d facing %d see %d hear %d prowling %d sight_difficulty %d light %d concealed %d\n",
             id,
             (int)object_dist(node->obj, pc_obj),
             critter_is_facing_to(node->obj, pc_obj) ? 1 : 0,
             ai_can_see(node->obj, pc_obj),
             ai_can_hear(node->obj, pc_obj, concealed ? LOUDNESS_SILENT : LOUDNESS_NORMAL),
             basic_skill_effectiveness(pc_obj, BASIC_SKILL_PROWLING, node->obj),
+            skill_invocation_difficulty(&sight),
+            light_obj_grayscale_get(pc_obj) & 0xFF,
             critter_is_concealed(node->obj) ? 1 : 0);
     }
     object_list_destroy(&objects);
