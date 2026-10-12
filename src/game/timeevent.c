@@ -902,6 +902,8 @@ void timeevent_ping(tig_timestamp_t timestamp)
             crit_effects_tick((int)delta);
             // CE (magic, milestone MG-3): summoning sickness, likewise.
             magictech_summons_tick((int)delta);
+            // CE (poison per turn): poison's real-time combat clock.
+            stat_poison_tick((int)delta);
             // CE (reload prototype session 4): loading outside combat.
             reload_prep_tick((int)delta);
         }

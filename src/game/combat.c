@@ -1207,6 +1207,17 @@ int combat_attack(CombatContext* combat)
         combat_process_melee_attack(combat);
     }
 
+    // CE (prowl attack reveals; zsogg, 2026-09-24): the first attack from prowl
+    // keeps its sneak advantage - the unaware target's, a backstab's damage,
+    // all settled above - and then prowling ends. Stock never revealed an
+    // attacker for attacking.
+    if (feature_enabled(FEATURE_PROWL_ATTACK_REVEALS)
+        && combat->attacker_obj != OBJ_HANDLE_NULL
+        && obj_type_is_critter(obj_field_int32_get(combat->attacker_obj, OBJ_F_TYPE))
+        && critter_is_concealed(combat->attacker_obj)) {
+        critter_set_concealed(combat->attacker_obj, false);
+    }
+
     anim_play_weapon_fx(combat, combat->attacker_obj, combat->attacker_obj, ANIM_WEAPON_EYE_CANDY_TYPE_FIRE);
 
     if (is_melee) {
@@ -4028,6 +4039,10 @@ bool combat_turn_based_critter_skip(ObjectNode* object_node)
         return true;
     }
 
+    // CE (poison per turn): poison ticks on every second turn that comes
+    // round, taken or skipped.
+    stat_poison_turn_reached(object_node->obj);
+
     // CE (magic, milestone MG-3): this critter's turn has come round, taken
     // or skipped, so the creatures it summoned are ready.
     magictech_summons_turn_reached(object_node->obj);
@@ -4917,6 +4932,11 @@ static bool combat_critter_list_holds(int64_t obj)
     }
 
     return false;
+}
+
+bool combat_turn_based_holds(int64_t obj)
+{
+    return combat_turn_based_active && combat_critter_list_holds(obj);
 }
 
 // CE (magic, milestone MG-3): under `summoning sickness` a summon takes its

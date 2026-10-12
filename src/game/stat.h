@@ -78,4 +78,20 @@ int stat_level_max(int64_t obj, int stat);
 bool stat_level_set(int64_t obj, int stat, int value);
 bool stat_poison_timeevent_process(TimeEvent* timeevent);
 
+// CE (poison per turn; zsogg, 2026-09-24): under `poison per turn`, poison
+// ticks on the poisoned critter's turns in combat instead of every 15 game
+// seconds - in turn-based on every second turn of theirs, taken or skipped;
+// in real-time combat every two turn lengths (4 s at the stock 2000 ms).
+// Outside combat it keeps the stock clock.
+#define STAT_POISON_TURNS_PER_TICK 2
+#define STAT_POISON_TURN_LENGTHS_PER_TICK 2
+// Pure: a turn of a poisoned critter has come round; true when it ticks.
+bool stat_poison_turn_counts(int* turns);
+// Pure: `delta_ms` of real-time combat passed; how many ticks fall due.
+int stat_poison_time_counts(unsigned int* ms, int delta_ms, int period_ms);
+// The engine side: `obj`'s turn-based turn has come round.
+void stat_poison_turn_reached(int64_t obj);
+// Real milliseconds while the game is not paused.
+void stat_poison_tick(int delta_ms);
+
 #endif /* ARCANUM_GAME_STAT_H_ */

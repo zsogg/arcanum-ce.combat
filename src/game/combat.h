@@ -181,6 +181,8 @@ bool combat_consume_action_points(int64_t obj, int action_points);
 void combat_turn_based_add_critter(int64_t obj);
 bool combat_turn_based_critter_can_fastforward(int64_t obj);
 int combat_turn_based_turn_get(void);
+// CE: whether `obj` is in the running turn-based fight's list.
+bool combat_turn_based_holds(int64_t obj);
 void combat_recalc_reaction(int64_t obj);
 bool combat_set_blinded(int64_t obj);
 bool combat_auto_attack_get(int64_t obj);

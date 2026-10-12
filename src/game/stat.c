@@ -6,6 +6,7 @@
 #include "game/combat.h"
 #include "game/critter.h"
 #include "game/effect.h"
+#include "game/feature.h"
 #include "game/item.h"
 #include "game/level.h"
 #include "game/light.h"
@@ -13,8 +14,10 @@
 #include "game/magictech.h"
 #include "game/mes.h"
 #include "game/obj.h"
+#include "game/obj_pool.h"
 #include "game/object.h"
 #include "game/player.h"
+#include "game/rt_budget.h"
 #include "game/sector.h"
 #include "game/skill.h"
 #include "game/spell.h"
@@ -1026,6 +1029,197 @@ bool stat_level_set(int64_t obj, int stat, int value)
     return value <= stat_level_get(obj, stat);
 }
 
+// ---------------------------------------------------------------------------
+// CE (poison per turn; zsogg, 2026-09-24)
+// ---------------------------------------------------------------------------
+
+#define STAT_POISON_PACE_MAX 64
+
+static struct {
+    int64_t obj;
+    int turns;
+    unsigned int ms;
+} stat_poison_pace[STAT_POISON_PACE_MAX];
+
+bool stat_poison_turn_counts(int* turns)
+{
+    (*turns)++;
+    if (*turns < STAT_POISON_TURNS_PER_TICK) {
+        return false;
+    }
+
+    *turns = 0;
+    return true;
+}
+
+int stat_poison_time_counts(unsigned int* ms, int delta_ms, int period_ms)
+{
+    int ticks = 0;
+
+    if (delta_ms <= 0 || period_ms <= 0) {
+        return 0;
+    }
+
+    *ms += (unsigned int)delta_ms;
+    while (*ms >= (unsigned int)period_ms) {
+        *ms -= (unsigned int)period_ms;
+        ticks++;
+    }
+
+    return ticks;
+}
+
+// In a real-time fight: the player in combat mode, an NPC in combat mode or
+// with its AI fighting.
+static bool stat_poison_in_real_time_combat(int64_t obj)
+{
+    if (combat_critter_is_combat_mode_active(obj)) {
+        return true;
+    }
+
+    return obj_field_int32_get(obj, OBJ_F_TYPE) == OBJ_TYPE_NPC
+        && (obj_field_int32_get(obj, OBJ_F_NPC_FLAGS) & ONF_FIGHTING) != 0;
+}
+
+// Whether `obj`'s poison is paced by combat now rather than by game time.
+static bool stat_poison_paced(int64_t obj)
+{
+    if (!feature_enabled(FEATURE_POISON_PER_TURN)
+        || !obj_type_is_critter(obj_field_int32_get(obj, OBJ_F_TYPE))) {
+        return false;
+    }
+
+    if (combat_turn_based_is_active()) {
+        return combat_turn_based_holds(obj);
+    }
+
+    return stat_poison_in_real_time_combat(obj);
+}
+
+static int stat_poison_pace_find(int64_t obj, bool add)
+{
+    int slot;
+    int free_slot = -1;
+
+    for (slot = 0; slot < STAT_POISON_PACE_MAX; slot++) {
+        if (stat_poison_pace[slot].obj == obj) {
+            return slot;
+        }
+        if (free_slot == -1 && stat_poison_pace[slot].obj == OBJ_HANDLE_NULL) {
+            free_slot = slot;
+        }
+    }
+
+    if (!add || free_slot == -1) {
+        return -1;
+    }
+
+    stat_poison_pace[free_slot].obj = obj;
+    stat_poison_pace[free_slot].turns = 0;
+    stat_poison_pace[free_slot].ms = 0;
+    return free_slot;
+}
+
+// The stock poison event's period in real milliseconds: 15 game seconds, at
+// the 8 game milliseconds a real one advances outside turn-based.
+#define STAT_POISON_STOCK_PERIOD_REAL_MS (15000 / 8)
+
+static void stat_poison_pace_track(int64_t obj)
+{
+    int slot;
+
+    if (stat_poison_pace_find(obj, false) != -1) {
+        return;
+    }
+
+    // Found by the stock event, which has just come due: credit the period
+    // since the one before, so ticks stay two turn lengths apart from the
+    // fight's start rather than from the event that noticed it.
+    slot = stat_poison_pace_find(obj, true);
+    if (slot != -1) {
+        stat_poison_pace[slot].ms = STAT_POISON_STOCK_PERIOD_REAL_MS;
+    }
+}
+
+// One tick of poison damage, as the stock event deals it.
+static void stat_poison_pace_damage(int64_t obj)
+{
+    int poison = stat_base_get(obj, STAT_POISON_LEVEL);
+    CombatContext combat;
+
+    if (poison <= 0 || (obj_field_int32_get(obj, OBJ_F_FLAGS) & OF_OFF) != 0) {
+        return;
+    }
+
+    combat_context_init(OBJ_HANDLE_NULL, obj, &combat);
+    combat.dam[DAMAGE_TYPE_NORMAL] = poison >= 550 ? 3 : (poison >= 200 ? 2 : 1);
+    combat.flags |= 0x80;
+    combat_dmg(&combat);
+
+    if ((combat.dam_flags & CDF_HAVE_DAMAGE) != 0) {
+        anim_play_blood_splotch_fx(combat.target_obj, BLOOD_SPLOTCH_TYPE_POISON, DAMAGE_TYPE_POISON, &combat);
+    }
+
+    if ((obj_field_int32_get(obj, OBJ_F_FLAGS) & OF_OFF) == 0) {
+        ui_refresh_health_bar(obj);
+    }
+}
+
+static bool stat_poison_pace_live(int64_t obj)
+{
+    return obj != OBJ_HANDLE_NULL
+        && obj_handle_is_valid(obj)
+        && (obj_field_int32_get(obj, OBJ_F_FLAGS) & (OF_OFF | OF_DESTROYED)) == 0
+        && !critter_is_dead(obj)
+        && stat_base_get(obj, STAT_POISON_LEVEL) > 0;
+}
+
+void stat_poison_turn_reached(int64_t obj)
+{
+    int slot;
+
+    if (!feature_enabled(FEATURE_POISON_PER_TURN)
+        || obj == OBJ_HANDLE_NULL
+        || !stat_poison_pace_live(obj)) {
+        return;
+    }
+
+    slot = stat_poison_pace_find(obj, true);
+    if (slot != -1 && stat_poison_turn_counts(&(stat_poison_pace[slot].turns))) {
+        stat_poison_pace_damage(obj);
+    }
+}
+
+void stat_poison_tick(int delta_ms)
+{
+    int slot;
+    int ticks;
+    int64_t obj;
+
+    if (!feature_enabled(FEATURE_POISON_PER_TURN) || combat_turn_based_is_active()) {
+        return;
+    }
+
+    for (slot = 0; slot < STAT_POISON_PACE_MAX; slot++) {
+        obj = stat_poison_pace[slot].obj;
+        if (obj == OBJ_HANDLE_NULL) {
+            continue;
+        }
+
+        // Out of the fight, or cured: the stock clock has it again.
+        if (!stat_poison_pace_live(obj) || !stat_poison_in_real_time_combat(obj)) {
+            stat_poison_pace[slot].obj = OBJ_HANDLE_NULL;
+            continue;
+        }
+
+        ticks = stat_poison_time_counts(&(stat_poison_pace[slot].ms), delta_ms,
+            STAT_POISON_TURN_LENGTHS_PER_TICK * rt_budget_pace_ms_now());
+        while (ticks-- > 0) {
+            stat_poison_pace_damage(obj);
+        }
+    }
+}
+
 /**
  * Called when a poison timeevent occurs.
  *
@@ -1047,6 +1241,15 @@ bool stat_poison_timeevent_process(TimeEvent* timeevent)
     poison = stat_base_get(obj, STAT_POISON_LEVEL);
     switch (type) {
     case POISON_EVENT_DAMAGE:
+        // CE (poison per turn): in combat the poisoned critter's turns pace
+        // the damage (`stat_poison_turn_reached`, `stat_poison_tick`); the
+        // game-time event keeps running, so the stock clock resumes the
+        // moment the fight is over.
+        if (poison > 0 && stat_poison_paced(obj)) {
+            stat_poison_pace_track(obj);
+            poison_timeevent_schedule(obj, poison, false);
+            break;
+        }
         if (poison > 0) {
             if ((obj_field_int32_get(obj, OBJ_F_FLAGS) & OF_OFF) == 0) {
                 combat_context_init(OBJ_HANDLE_NULL, obj, &combat);

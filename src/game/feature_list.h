@@ -59,5 +59,7 @@ FEATURE(SPELL_CRITICALS, "spell criticals", false)
 FEATURE(SPELL_NO_STACKING, "spell no stacking", false)
 FEATURE(SUMMONING_SICKNESS, "summoning sickness", false)
 FEATURE(OPENING_SAFEGUARD, "opening safeguard", false)
+FEATURE(POISON_PER_TURN, "poison per turn", false)
+FEATURE(PROWL_ATTACK_REVEALS, "prowl attack reveals", false)
 
 // clang-format on
