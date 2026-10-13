@@ -106,6 +106,21 @@ typedef struct WeaponRule {
     // Against armor's protection, under `armor penetration` (armor milestone
     // 2): the weapon's own; unset takes its kind's default (`armor_rules.h`).
     int penetration;
+    // Under `armor penetration` (zsogg, 2026-10-13): the percentage of the
+    // normal damage armor stops that still lands as fatigue - a blunt
+    // weapon's. Unset: none, as stock.
+    int stopped_fatigue;
+    // Under `armor penetration` (zsogg, 2026-10-13): full penetration out to
+    // PenetrationRange tiles, then PenetrationFalloff percent of it lost per
+    // tile beyond - a pistol's. They come as a pair.
+    int penetration_range;
+    int penetration_falloff;
+    // Under `weapon rules` (zsogg, 2026-10-13): the long-distance to-hit
+    // penalty. AccurateTiles are added to half the shooter's Perception before
+    // it starts; RangePenalty is its points per tile beyond. Unset: 0 and 5,
+    // stock.
+    int accurate_tiles;
+    int range_penalty;
 } WeaponRule;
 
 #define WEAPON_RULE_CAPACITY_MIN 1
@@ -131,6 +146,9 @@ typedef struct WeaponRule {
 #define WEAPON_RULE_PENETRATION_MAX 1000
 #define WEAPON_RULE_CRIT_CHANCE_MIN (-100)
 #define WEAPON_RULE_CRIT_CHANCE_MAX 100
+#define WEAPON_RULE_PERCENT_MAX 100
+#define WEAPON_RULE_TILES_MAX 100
+#define WEAPON_RULE_RANGE_PENALTY_MAX 50
 
 // Pure: reads one entry's text into `rule`. False, with `rule` untouched, for
 // anything malformed - an unknown key, a value that is not a number or a
@@ -138,6 +156,10 @@ typedef struct WeaponRule {
 // so a bad entry changes nothing rather than a guessed weapon. Values outside
 // their range are clamped; a range given high-low is put in order.
 bool weapon_rule_parse(int prototype, const char* str, WeaponRule* rule);
+// Pure: `penetration` at `distance` tiles under the rule's PenetrationRange
+// and PenetrationFalloff, rounded down and never below 0; unchanged within the
+// range, or for a NULL rule or one without them.
+int weapon_rule_penetration_at(const WeaponRule* rule, int distance, int penetration);
 
 void weapon_rules_init(void);
 void weapon_rules_exit(void);
@@ -180,6 +202,17 @@ bool weapon_rules_dodgeable(int64_t weapon_obj);
 // under `armor penetration`, not `weapon rules`: it means nothing without the
 // armor rules.
 bool weapon_rules_penetration(int64_t weapon_obj, int* penetration);
+// Under `armor penetration`: a penetration at `distance` tiles, after the
+// entry's PenetrationRange and PenetrationFalloff; `penetration` unchanged
+// when the entry names none.
+int weapon_rules_penetration_at(int64_t weapon_obj, int distance, int penetration);
+// Under `armor penetration`: the entry's StoppedToFatigue, or
+// WEAPON_RULE_UNSET.
+int weapon_rules_stopped_to_fatigue(int64_t weapon_obj);
+// Under `weapon rules`: the entry's AccurateTiles and RangePenalty, or the
+// stock values given.
+int weapon_rules_accurate_tiles(int64_t weapon_obj, int stock);
+int weapon_rules_range_penalty(int64_t weapon_obj, int stock);
 // True, with `*action_points` set, when the entry names a firing cost.
 bool weapon_rules_fire_ap(int64_t critter_obj, int64_t weapon_obj, int* action_points);
 

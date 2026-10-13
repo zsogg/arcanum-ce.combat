@@ -111,6 +111,11 @@ bool weapon_rule_parse(int prototype, const char* str, WeaponRule* rule)
     parsed.crit_chance = WEAPON_RULE_UNSET;
     parsed.crit_style = WEAPON_RULE_UNSET;
     parsed.penetration = WEAPON_RULE_UNSET;
+    parsed.stopped_fatigue = WEAPON_RULE_UNSET;
+    parsed.penetration_range = WEAPON_RULE_UNSET;
+    parsed.penetration_falloff = WEAPON_RULE_UNSET;
+    parsed.accurate_tiles = WEAPON_RULE_UNSET;
+    parsed.range_penalty = WEAPON_RULE_UNSET;
 
     for (part = strtok_r(buffer, ",", &save); part != NULL; part = strtok_r(NULL, ",", &save)) {
         colon = strchr(part, ':');
@@ -211,6 +216,16 @@ bool weapon_rule_parse(int prototype, const char* str, WeaponRule* rule)
             parsed.ammo_per_shot = weapon_rule_clamp(value, WEAPON_RULE_AMMO_PER_SHOT_MIN, WEAPON_RULE_AMMO_PER_SHOT_MAX);
         } else if (strcmp(key, "Penetration") == 0) {
             parsed.penetration = weapon_rule_clamp(value, 0, WEAPON_RULE_PENETRATION_MAX);
+        } else if (strcmp(key, "StoppedToFatigue") == 0) {
+            parsed.stopped_fatigue = weapon_rule_clamp(value, 0, WEAPON_RULE_PERCENT_MAX);
+        } else if (strcmp(key, "PenetrationRange") == 0) {
+            parsed.penetration_range = weapon_rule_clamp(value, 0, WEAPON_RULE_TILES_MAX);
+        } else if (strcmp(key, "PenetrationFalloff") == 0) {
+            parsed.penetration_falloff = weapon_rule_clamp(value, 0, WEAPON_RULE_PERCENT_MAX);
+        } else if (strcmp(key, "AccurateTiles") == 0) {
+            parsed.accurate_tiles = weapon_rule_clamp(value, 0, WEAPON_RULE_TILES_MAX);
+        } else if (strcmp(key, "RangePenalty") == 0) {
+            parsed.range_penalty = weapon_rule_clamp(value, 0, WEAPON_RULE_RANGE_PENALTY_MAX);
         } else if (strcmp(key, "CritChance") == 0) {
             parsed.crit_chance = weapon_rule_clamp(value, WEAPON_RULE_CRIT_CHANCE_MIN, WEAPON_RULE_CRIT_CHANCE_MAX);
         } else if (strcmp(key, "ClearAP") == 0) {
@@ -232,6 +247,7 @@ bool weapon_rule_parse(int prototype, const char* str, WeaponRule* rule)
         || (parsed.load_ap_apprentice != WEAPON_RULE_UNSET && parsed.load_ap == WEAPON_RULE_UNSET)
         || (parsed.whole_magazine != WEAPON_RULE_UNSET && parsed.capacity == WEAPON_RULE_UNSET)
         || (parsed.clear_ap != WEAPON_RULE_UNSET && parsed.capacity == WEAPON_RULE_UNSET)
+        || (parsed.penetration_range == WEAPON_RULE_UNSET) != (parsed.penetration_falloff == WEAPON_RULE_UNSET)
         || (parsed.fire_ap_apprentice != WEAPON_RULE_UNSET && parsed.fire_ap == WEAPON_RULE_UNSET)) {
         return false;
     }
@@ -456,6 +472,54 @@ bool weapon_rules_penetration(int64_t weapon_obj, int* penetration)
     }
     *penetration = rule->penetration;
     return true;
+}
+
+int weapon_rule_penetration_at(const WeaponRule* rule, int distance, int penetration)
+{
+    int lost;
+
+    if (rule == NULL
+        || rule->penetration_range == WEAPON_RULE_UNSET
+        || distance <= rule->penetration_range) {
+        return penetration;
+    }
+
+    lost = (distance - rule->penetration_range) * rule->penetration_falloff;
+    if (lost >= 100) {
+        return 0;
+    }
+    return penetration * (100 - lost) / 100;
+}
+
+int weapon_rules_penetration_at(int64_t weapon_obj, int distance, int penetration)
+{
+    return weapon_rule_penetration_at(
+        feature_enabled(FEATURE_ARMOR_PENETRATION) ? weapon_rule_for(weapon_obj) : NULL,
+        distance, penetration);
+}
+
+int weapon_rules_stopped_to_fatigue(int64_t weapon_obj)
+{
+    const WeaponRule* rule;
+
+    rule = feature_enabled(FEATURE_ARMOR_PENETRATION) ? weapon_rule_for(weapon_obj) : NULL;
+    return rule != NULL ? rule->stopped_fatigue : WEAPON_RULE_UNSET;
+}
+
+int weapon_rules_accurate_tiles(int64_t weapon_obj, int stock)
+{
+    const WeaponRule* rule;
+
+    rule = weapon_rules_active_for(weapon_obj);
+    return rule != NULL && rule->accurate_tiles != WEAPON_RULE_UNSET ? rule->accurate_tiles : stock;
+}
+
+int weapon_rules_range_penalty(int64_t weapon_obj, int stock)
+{
+    const WeaponRule* rule;
+
+    rule = weapon_rules_active_for(weapon_obj);
+    return rule != NULL && rule->range_penalty != WEAPON_RULE_UNSET ? rule->range_penalty : stock;
 }
 
 bool weapon_rules_dodgeable(int64_t weapon_obj)

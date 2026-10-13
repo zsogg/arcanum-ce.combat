@@ -2541,9 +2541,13 @@ int skill_invocation_difficulty(SkillInvocation* skill_invocation)
                 && basic_skill != BASIC_SKILL_THROWING
                 && tech_skill != TECH_SKILL_FIREARMS)
             || training < TRAINING_MASTER) {
-            int extra_dist = (int)dist - stat_level_get(source_obj, STAT_PERCEPTION) / 2;
+            // CE (zsogg, 2026-10-13): under `weapon rules` a weapon's table
+            // entry may move where the penalty starts and what a tile costs -
+            // a rifle's +4 tiles at 3, a pistol's 6.
+            int extra_dist = (int)dist - stat_level_get(source_obj, STAT_PERCEPTION) / 2
+                - weapon_rules_accurate_tiles(item_obj, 0);
             if (extra_dist > 0) {
-                difficulty += 5 * extra_dist;
+                difficulty += weapon_rules_range_penalty(item_obj, 5) * extra_dist;
                 skill_invocation->flags |= SKILL_INVOCATION_PENALTY_PERCEPTION;
             }
         }

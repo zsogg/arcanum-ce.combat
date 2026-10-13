@@ -109,6 +109,50 @@ TEST(accuracy_is_a_percentage)
     CHECK_INT(rule.accuracy, WEAPON_RULE_ACCURACY_MIN);
 }
 
+TEST(blunt_fatigue_and_range_keys_are_read_and_clamped)
+{
+    WeaponRule rule;
+
+    // zsogg, 2026-10-13: a mace's stopped blow tires at 40%; a rifle is
+    // accurate 4 tiles further, at 3 a tile beyond; a pistol's penetration
+    // falls off past 6 tiles.
+    CHECK(weapon_rule_parse(6052, "Penetration: 46, StoppedToFatigue: 40", &rule));
+    CHECK_INT(rule.stopped_fatigue, 40);
+    CHECK_INT(rule.accurate_tiles, WEAPON_RULE_UNSET);
+    CHECK(weapon_rule_parse(6060, "AccurateTiles: 4, RangePenalty: 3", &rule));
+    CHECK_INT(rule.accurate_tiles, 4);
+    CHECK_INT(rule.range_penalty, 3);
+    CHECK_INT(rule.stopped_fatigue, WEAPON_RULE_UNSET);
+    CHECK(weapon_rule_parse(6053, "RangePenalty: 6, PenetrationRange: 6, PenetrationFalloff: 15", &rule));
+    CHECK_INT(rule.penetration_range, 6);
+    CHECK_INT(rule.penetration_falloff, 15);
+    CHECK(weapon_rule_parse(6052, "StoppedToFatigue: 250, RangePenalty: 90", &rule));
+    CHECK_INT(rule.stopped_fatigue, WEAPON_RULE_PERCENT_MAX);
+    CHECK_INT(rule.range_penalty, WEAPON_RULE_RANGE_PENALTY_MAX);
+
+    // The penetration pair comes together.
+    CHECK(!weapon_rule_parse(6053, "PenetrationRange: 6", &rule));
+    CHECK(!weapon_rule_parse(6053, "PenetrationFalloff: 15", &rule));
+}
+
+TEST(penetration_falls_off_beyond_its_range)
+{
+    WeaponRule rule;
+
+    CHECK(weapon_rule_parse(6053, "Penetration: 24, PenetrationRange: 6, PenetrationFalloff: 15", &rule));
+    CHECK_INT(weapon_rule_penetration_at(&rule, 1, 24), 24);
+    CHECK_INT(weapon_rule_penetration_at(&rule, 6, 24), 24);
+    CHECK_INT(weapon_rule_penetration_at(&rule, 7, 24), 20); // 85%, rounded down
+    CHECK_INT(weapon_rule_penetration_at(&rule, 10, 24), 9); // 40%
+    CHECK_INT(weapon_rule_penetration_at(&rule, 12, 24), 2); // 10%
+    CHECK_INT(weapon_rule_penetration_at(&rule, 13, 24), 0);
+    CHECK_INT(weapon_rule_penetration_at(&rule, 40, 24), 0);
+
+    CHECK(weapon_rule_parse(6060, "Penetration: 39", &rule));
+    CHECK_INT(weapon_rule_penetration_at(&rule, 20, 39), 39);
+    CHECK_INT(weapon_rule_penetration_at(NULL, 20, 39), 39);
+}
+
 TEST(minimum_strength_is_read_and_clamped)
 {
     WeaponRule rule;
@@ -287,6 +331,8 @@ void test_weapon_rules_suite(void)
     RUN(a_single_number_is_both_ends_and_a_reversed_range_is_ordered);
     RUN(a_value_outside_its_range_is_clamped);
     RUN(accuracy_is_a_percentage);
+    RUN(blunt_fatigue_and_range_keys_are_read_and_clamped);
+    RUN(penetration_falls_off_beyond_its_range);
     RUN(minimum_strength_is_read_and_clamped);
     RUN(weight_is_read_and_clamped);
     RUN(penetration_is_read_and_clamped);

@@ -3257,7 +3257,19 @@ static bool combat_armor_weapon_penetration(int64_t weapon_obj, bool thrown, int
 
 static bool combat_armor_penetration(CombatContext* combat, int* penetration)
 {
-    return combat_armor_weapon_penetration(combat->weapon_obj, (combat->flags & 0x40) != 0, penetration);
+    if (!combat_armor_weapon_penetration(combat->weapon_obj, (combat->flags & 0x40) != 0, penetration)) {
+        return false;
+    }
+
+    // CE (zsogg, 2026-10-13): a weapon whose penetration falls off with range -
+    // a pistol's - at the distance between the two.
+    if ((combat->flags & 0x40) == 0
+        && combat->attacker_obj != OBJ_HANDLE_NULL
+        && combat->target_obj != OBJ_HANDLE_NULL) {
+        *penetration = weapon_rules_penetration_at(combat->weapon_obj,
+            (int)object_dist(combat->attacker_obj, combat->target_obj), *penetration);
+    }
+    return true;
 }
 
 // The critter's natural protection: its own normal resistance and innate
@@ -3422,6 +3434,16 @@ static int combat_armor_resolve(CombatContext* combat)
         && (combat->weapon_obj == OBJ_HANDLE_NULL
             || obj_field_int32_get(combat->weapon_obj, OBJ_F_TYPE) != OBJ_TYPE_WEAPON)
         && critter_is_monstrous(combat->attacker_obj)) {
+        fatigue_added = ((damage - result.damage) * stopped_fatigue + 50) / 100;
+        combat->dam[DAMAGE_TYPE_FATIGUE] += fatigue_added;
+    }
+
+    // CE (zsogg, 2026-10-13): a blunt weapon's blow the armor stops still tires
+    // - its weapon-table StoppedToFatigue, a mace's 40%. Swung, not thrown.
+    stopped_fatigue = weapon_rules_stopped_to_fatigue(combat->weapon_obj);
+    if (stopped_fatigue != WEAPON_RULE_UNSET
+        && damage > result.damage
+        && (combat->flags & 0x40) == 0) {
         fatigue_added = ((damage - result.damage) * stopped_fatigue + 50) / 100;
         combat->dam[DAMAGE_TYPE_FATIGUE] += fatigue_added;
     }
