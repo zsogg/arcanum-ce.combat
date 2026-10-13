@@ -924,6 +924,21 @@ TEST(the_use_row_names_a_prototype_and_perhaps_a_target)
     CHECK(!load_script("0 use 10094 G_X extra\n"));
 }
 
+TEST(the_xp_train_and_inspect_xp_rows_load)
+{
+    // Release 1, R1 (2026-10-13): test rows for UAP's level-cap and Educator
+    // add-ons. The amount is carried as the count; the training too.
+    CHECK(load_script("0 xp 2500000\n0 train 3 2\n0 inspect xp\n"));
+    CHECK_INT(replay_ui_count(), 3);
+    CHECK(row_is(0, "turn=0 now=0 kind=xp target= loc=0 aim=0 spell=0 cast=- wait=0 proto=0 count=2500000"));
+    CHECK(!load_script("0 xp\n"));
+    CHECK(!load_script("0 xp 0\n"));
+    CHECK(!load_script("0 train 3\n"));
+    CHECK(!load_script("0 train 12 1\n"));
+    CHECK(!load_script("0 train 3 4\n"));
+    CHECK(!load_script("0 inspect level\n"));
+}
+
 TEST(the_wear_row_loads_with_or_without_a_wearer)
 {
     // Armor milestone 3 (2026-10-03): armor on the player, or on a critter.
@@ -1898,6 +1913,7 @@ void test_combat_observer_suite(void)
     RUN(the_afflict_row_names_a_debuff_critical);
     RUN(the_poison_row_sets_a_level_on_the_player_or_a_critter);
     RUN(the_use_row_names_a_prototype_and_perhaps_a_target);
+    RUN(the_xp_train_and_inspect_xp_rows_load);
     RUN(the_wear_row_loads_with_or_without_a_wearer);
     RUN(a_row_the_parser_cannot_read_refuses_the_whole_file);
     RUN(a_tile_step_a_cast_request_and_a_weapon_change_are_each_recorded);

@@ -3,6 +3,7 @@
 #include <math.h>
 #include <stdio.h>
 
+#include "game/feature.h"
 #include "game/gamelib.h"
 #include "game/hrp.h"
 #include "game/location.h"
@@ -1720,6 +1721,15 @@ void gsound_start_combat_music(int64_t obj)
     char path[TIG_MAX_PATH];
     int type;
 
+    // CE (`uap no combat music`; release 1, R1): UAP's optional NoCombatMusic
+    // add-on writes `ret` over this function's first byte (0x41C4D0).
+    if (feature_enabled(FEATURE_UAP_NO_COMBAT_MUSIC)) {
+        if (!gsound_combat_music_active && obj != OBJ_HANDLE_NULL) {
+            tig_debug_printf("gsound: combat music off (uap no combat music)\n");
+        }
+        return;
+    }
+
     if (gsound_combat_music_active) {
         return;
     }
@@ -1750,6 +1760,8 @@ void gsound_start_combat_music(int64_t obj)
     snprintf(path, sizeof(path), "sound\\music\\combat %d.mp3", random_between(1, GSOUND_COMBAT_MUSIC_TRACKS));
     gsound_combat_tension_handle = gsound_play_music_once(path, 0);
     gsound_combat_music_handle = gsound_play_music_indefinitely("sound\\music\\combatmusic.mp3", 0);
+    // CE (release 1, R1): say so, so a run can show music starting or not.
+    tig_debug_printf("gsound: combat music on (%s)\n", path);
 }
 
 /**

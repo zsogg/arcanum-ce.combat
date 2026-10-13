@@ -981,6 +981,12 @@ int stat_level_max(int64_t obj, int stat)
         break;
     }
 
+    // CE (`uap level cap 100`, R1): UAP's LevelCap100 add-on raises the level
+    // row of the table (0x5B5248) from 51 to 101 (`level.c`).
+    if (stat == STAT_LEVEL && feature_enabled(FEATURE_UAP_LEVEL_CAP_100)) {
+        return 101;
+    }
+
     // UAP (0x5B5258): "Unspent character points no longer cap at 56, you can
     // now store as many as you want." 10000 in place of 56.
     if (uap_fixes_enabled() && stat == STAT_UNSPENT_POINTS) {

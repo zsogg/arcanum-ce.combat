@@ -3,6 +3,7 @@
 #include <stdio.h>
 
 #include "game/effect.h"
+#include "game/feature.h"
 #include "game/item.h"
 #include "game/mes.h"
 #include "game/object.h"
@@ -386,6 +387,45 @@ void background_generate_inventory(int64_t obj)
  *
  * 0x4C2950
  */
+int background_educate_levels(int educator, int follower, bool uap, int* levels, int max)
+{
+    int count = 0;
+    int training;
+
+    if (!uap) {
+        // The original (0x4C29AE-0x4C29E6): only above Apprentice, from one
+        // above the follower's training up to one below the educator's.
+        if (educator <= TRAINING_APPRENTICE) {
+            return 0;
+        }
+        for (training = follower + 1; training < educator && count < max; training++) {
+            levels[count++] = training;
+        }
+        return count;
+    }
+
+    // UAP's MasterEducator (0x4C29B1 `jle` -> `jl`, 0x4C29CD `inc` -> `nop`,
+    // 0x4C29D0 `jge` -> `je`, 0x4C29E6 `jl` -> `je`): from Apprentice up; the
+    // follower's own training is set first, unchanged, and the loop repeats
+    // only while the next level equals the educator's. So a follower exactly
+    // one below is raised to equal the educator, and one further below gains
+    // nothing - the patch's behaviour, ported as it is.
+    if (educator < TRAINING_APPRENTICE) {
+        return 0;
+    }
+    training = follower;
+    if (training == educator) {
+        return 0;
+    }
+    do {
+        if (count < max) {
+            levels[count++] = training;
+        }
+        training++;
+    } while (training == educator);
+    return count;
+}
+
 void background_educate_followers(int64_t obj)
 {
     ObjectList followers;
@@ -394,9 +434,14 @@ void background_educate_followers(int64_t obj)
     int educator_training;
     int follower_training;
 
-    // Validate that the object is a PC with the "Educator" background.
+    // Validate that the object is a PC with the "Educator" background. CE
+    // (`uap master educator`; release 1, R1): UAP's optional MasterEducator
+    // add-on drops the background test (0x4C2982) - "educator background
+    // effect always on" - and changes the basic-skill pass below; the
+    // tech-skill pass it leaves as it is.
     if (obj_field_int32_get(obj, OBJ_F_TYPE) != OBJ_TYPE_PC
-        || background_get(obj) != BACKGROUND_EDUCATOR) {
+        || (background_get(obj) != BACKGROUND_EDUCATOR
+            && !feature_enabled(FEATURE_UAP_MASTER_EDUCATOR))) {
         return;
     }
 
@@ -405,17 +450,23 @@ void background_educate_followers(int64_t obj)
     // Update basic skills for all followers.
     for (skill = 0; skill < BASIC_SKILL_COUNT; skill++) {
         educator_training = basic_skill_training_get(obj, skill);
-        if (educator_training > TRAINING_APPRENTICE) {
-            node = followers.head;
-            while (node != NULL) {
-                // Increment follower training up to the educator's level.
-                follower_training = basic_skill_training_get(node->obj, skill) + 1;
-                while (follower_training < educator_training) {
-                    basic_skill_training_set(node->obj, skill, follower_training);
-                    follower_training++;
-                }
-                node = node->next;
+        node = followers.head;
+        while (node != NULL) {
+            // Increment follower training up to the educator's level.
+            int levels[TRAINING_COUNT + 1];
+            int count;
+            int index;
+
+            follower_training = basic_skill_training_get(node->obj, skill);
+            count = background_educate_levels(educator_training,
+                follower_training,
+                feature_enabled(FEATURE_UAP_MASTER_EDUCATOR),
+                levels,
+                TRAINING_COUNT + 1);
+            for (index = 0; index < count; index++) {
+                basic_skill_training_set(node->obj, skill, levels[index]);
             }
+            node = node->next;
         }
     }
 

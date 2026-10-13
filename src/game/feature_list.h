@@ -67,5 +67,9 @@ FEATURE(PROWL_DARKNESS_HELPS, "prowl darkness helps", false)
 FEATURE(PROWL_OPEN_GROUND_HALVES, "prowl open ground halves", false)
 FEATURE(REAL_TIME_RESTORATIVES, "real time restoratives", false)
 FEATURE(THROWN_WEAPON_TARGET, "thrown weapon target", false)
+FEATURE(UAP_LEVEL_CAP_100, "uap level cap 100", false)
+FEATURE(UAP_MASTER_EDUCATOR, "uap master educator", false)
+FEATURE(UAP_NO_XP_PER_HIT, "uap no xp per hit", false)
+FEATURE(UAP_NO_COMBAT_MUSIC, "uap no combat music", false)
 
 // clang-format on

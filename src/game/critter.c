@@ -702,8 +702,13 @@ void critter_notify_killed(int64_t victim_obj, int64_t killer_obj, int anim)
                 ObjectList followers;
                 ObjectNode* node;
 
-                // 20% of the experience cost for killing.
-                critter_give_xp(pc_killer_obj, 20 * obj_field_int32_get(victim_obj, OBJ_F_NPC_EXPERIENCE_WORTH) / 100);
+                // 20% of the experience cost for killing. CE (`uap no xp per
+                // hit`; release 1, R1): UAP's NoXPPerHit add-on jumps past the
+                // scaling (0x45DB27, 0x45DB3E) and awards the full worth.
+                critter_give_xp(pc_killer_obj,
+                    feature_enabled(FEATURE_UAP_NO_XP_PER_HIT)
+                        ? obj_field_int32_get(victim_obj, OBJ_F_NPC_EXPERIENCE_WORTH)
+                        : 20 * obj_field_int32_get(victim_obj, OBJ_F_NPC_EXPERIENCE_WORTH) / 100);
                 obj_field_int32_set(victim_obj, OBJ_F_NPC_EXPERIENCE_WORTH, 0);
 
                 // Adjust alignment.

@@ -16,6 +16,7 @@
 #include "game/critter.h"
 #include "game/gamelib.h"
 #include "game/item.h"
+#include "game/level.h"
 #include "game/light.h"
 #include "game/obj.h"
 #include "game/obj_id.h"
@@ -158,12 +159,26 @@ typedef enum ReplayKind {
     //       a carried item of that prototype used by the player on themselves,
     //       or on that critter, through `item_use_on_obj` as the inventory
     //       does - a restorative's real-time timing (2026-10-13).
+    // Release 1, R1 (2026-10-13), UAP's four add-ons - test rows:
+    //   xp <amount>
+    //       experience given to the player through `critter_give_xp`, as a
+    //       quest reward gives it (1-10,000,000), so levelling past 51 can be
+    //       reached.
+    //   train <basic skill> <training>
+    //       the player's training in a basic skill (0-11) set to 0-3 through
+    //       `basic_skill_training_set`, as a trainer sets it - which runs the
+    //       Educator's pass over the followers.
+    //   inspect xp
+    //       one log line with the player's level, experience and experience to
+    //       the next level, and one per follower with its basic-skill training.
     REPLAY_KIND_SKILL_LEVEL,
     REPLAY_KIND_STAT_LEVEL,
     REPLAY_KIND_JAM,
     REPLAY_KIND_AFFLICT,
     REPLAY_KIND_POISON,
     REPLAY_KIND_USE,
+    REPLAY_KIND_XP,
+    REPLAY_KIND_TRAIN,
 } ReplayKind;
 
 // A cast's target, which is a third shape: the caster, an object or a tile.
@@ -410,6 +425,43 @@ static void replay_inspect_awareness(int64_t pc_obj)
     object_list_destroy(&objects);
 }
 
+// `inspect xp` (release 1, R1): the player's level and experience, and each
+// party member's basic skills as training/level - for UAP's level-cap and
+// Educator add-ons. Training needs the skill level its tier requires, so the
+// level is shown beside it.
+static void replay_inspect_skills(int64_t obj, const char* who)
+{
+    char line[BASIC_SKILL_COUNT * 8 + 1];
+    int skill;
+    int len = 0;
+
+    line[0] = '\0';
+    for (skill = 0; skill < BASIC_SKILL_COUNT && len < (int)sizeof(line) - 8; skill++) {
+        len += snprintf(line + len, sizeof(line) - (size_t)len, "%d/%d ",
+            basic_skill_training_get(obj, skill), basic_skill_level(obj, skill));
+    }
+    tig_debug_printf("Replay: xp skills %s %s\n", who, line);
+}
+
+static void replay_inspect_xp(int64_t pc_obj)
+{
+    ObjectList followers;
+    ObjectNode* node;
+    char name[MAX_STRING];
+
+    tig_debug_printf("Replay: xp level %d experience %d to_next %d\n",
+        stat_level_get(pc_obj, STAT_LEVEL),
+        stat_level_get(pc_obj, STAT_EXPERIENCE_POINTS),
+        level_experience_points_to_next_level(pc_obj));
+    replay_inspect_skills(pc_obj, "the-player");
+    object_list_followers(pc_obj, &followers);
+    for (node = followers.head; node != NULL; node = node->next) {
+        object_examine(node->obj, node->obj, name);
+        replay_inspect_skills(node->obj, name);
+    }
+    object_list_destroy(&followers);
+}
+
 static void replay_inspect_guns(int64_t pc_obj)
 {
     ObjectList objects;
@@ -618,6 +670,8 @@ static bool replay_parse_line(const char* text, ReplayCommand* command)
         // the player, for prowling. `stat` tells the two apart.
         if (strcmp(tokens[index], "awareness") == 0) {
             command->stat = 1;
+        } else if (strcmp(tokens[index], "xp") == 0) {
+            command->stat = 2;
         } else if (strcmp(tokens[index], "guns") != 0) {
             return false;
         }
@@ -652,6 +706,26 @@ static bool replay_parse_line(const char* text, ReplayCommand* command)
         }
         if (index < count) {
             replay_copy_target(command, tokens[index++]);
+        }
+        return index == count;
+    }
+
+    if (strcmp(kind, "xp") == 0) {
+        command->kind = REPLAY_KIND_XP;
+        if (!replay_parse_int(tokens[index++], &(command->count))
+            || command->count < 1 || command->count > 10000000) {
+            return false;
+        }
+        return index == count;
+    }
+
+    if (strcmp(kind, "train") == 0) {
+        command->kind = REPLAY_KIND_TRAIN;
+        if (!replay_parse_int(tokens[index++], &(command->skill))
+            || command->skill < 0 || command->skill >= BASIC_SKILL_COUNT || index >= count
+            || !replay_parse_int(tokens[index++], &(command->count))
+            || command->count < TRAINING_NONE || command->count > TRAINING_MASTER) {
+            return false;
         }
         return index == count;
     }
@@ -776,7 +850,7 @@ int replay_ui_count(void)
 bool replay_ui_describe(int index, char* buffer, size_t size)
 {
     const ReplayCommand* command;
-    static const char* kinds[] = { "object", "location", "key", "cast", "wield", "wait", "learn", "give", "throw", "skill", "raise", "prowl", "panel", "save", "inspect", "transfer", "take", "drop", "pickup", "wear", "skill-level", "stat-level", "jam", "afflict", "poison", "use" };
+    static const char* kinds[] = { "object", "location", "key", "cast", "wield", "wait", "learn", "give", "throw", "skill", "raise", "prowl", "panel", "save", "inspect", "transfer", "take", "drop", "pickup", "wear", "skill-level", "stat-level", "jam", "afflict", "poison", "use", "xp", "train" };
     int written;
     static const char* casts[] = { "self", "object", "location" };
 
@@ -795,7 +869,8 @@ bool replay_ui_describe(int index, char* buffer, size_t size)
             || command->kind == REPLAY_KIND_TRANSFER || command->kind == REPLAY_KIND_TAKE
             || command->kind == REPLAY_KIND_DROP || command->kind == REPLAY_KIND_PICKUP
             || command->kind == REPLAY_KIND_WEAR || command->kind == REPLAY_KIND_AFFLICT
-            || command->kind == REPLAY_KIND_POISON || command->kind == REPLAY_KIND_USE)
+            || command->kind == REPLAY_KIND_POISON || command->kind == REPLAY_KIND_USE
+            || command->kind == REPLAY_KIND_XP)
         && written >= 0 && (size_t)written < size) {
         snprintf(buffer + written, size - (size_t)written, " proto=%d count=%d",
             command->proto, command->count);
@@ -1055,6 +1130,8 @@ void replay_ui_tick(void)
         replay_next++;
         if (command->stat == 1) {
             replay_inspect_awareness(pc_obj);
+        } else if (command->stat == 2) {
+            replay_inspect_xp(pc_obj);
         } else {
             replay_inspect_guns(pc_obj);
         }
@@ -1115,6 +1192,25 @@ void replay_ui_tick(void)
         stat_base_set(victim_obj, STAT_POISON_LEVEL, command->count);
         tig_debug_printf("Replay: command %d set poison level %d; it reads %d\n",
             replay_next - 1, command->count, stat_base_get(victim_obj, STAT_POISON_LEVEL));
+        return;
+    }
+
+    if (command->kind == REPLAY_KIND_XP) {
+        replay_stall_reported = false;
+        replay_next++;
+        critter_give_xp(pc_obj, command->count);
+        tig_debug_printf("Replay: command %d gave %d experience; level %d\n",
+            replay_next - 1, command->count, stat_level_get(pc_obj, STAT_LEVEL));
+        return;
+    }
+
+    if (command->kind == REPLAY_KIND_TRAIN) {
+        replay_stall_reported = false;
+        replay_next++;
+        basic_skill_training_set(pc_obj, command->skill, command->count);
+        tig_debug_printf("Replay: command %d set basic skill %d training to %d; it reads %d\n",
+            replay_next - 1, command->skill, command->count,
+            basic_skill_training_get(pc_obj, command->skill));
         return;
     }
 

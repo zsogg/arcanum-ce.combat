@@ -30,6 +30,7 @@ add_executable(arcanum-tests
     "test_crit_guard.c"
     "test_rt_budget.c"
     "test_weapon_rules.c"
+    "test_uap_addons.c"
     "test_spell_rules.c"
     "test_poison_pace.c"
     "test_bsearch.c"

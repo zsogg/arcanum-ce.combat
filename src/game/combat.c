@@ -2142,7 +2142,12 @@ void combat_dmg(CombatContext* combat)
                 }
                 obj_field_int32_set(combat->target_obj, OBJ_F_NPC_EXPERIENCE_POOL, remaining_experience - awarded_experience);
 
-                if (obj_field_int32_get(combat->field_30, OBJ_F_TYPE) == OBJ_TYPE_PC) {
+                // CE (`uap no xp per hit`; release 1, R1): UAP's optional
+                // NoXPPerHit add-on makes this test always jump (0x4B52CE):
+                // the target's pool still drains, but nothing is awarded for a
+                // hit. A kill then pays its full worth (`critter_notify_killed`).
+                if (obj_field_int32_get(combat->field_30, OBJ_F_TYPE) == OBJ_TYPE_PC
+                    && !feature_enabled(FEATURE_UAP_NO_XP_PER_HIT)) {
                     critter_give_xp(combat->field_30, awarded_experience);
                 }
             }
