@@ -8,6 +8,7 @@
 #include "game/crit_effects.h"
 #include "game/critter.h"
 #include "game/descriptions.h"
+#include "game/feature.h"
 #include "game/gamelib.h"
 #include "game/gsound.h"
 #include "game/item.h"
@@ -14600,6 +14601,19 @@ bool anim_goal_attack_ex(int64_t attacker_obj, int64_t target_obj, int sound_id)
         && obj_field_int32_get(weapon_obj, OBJ_F_TYPE) == OBJ_TYPE_WEAPON
         && (obj_field_int32_get(weapon_obj, OBJ_F_WEAPON_FLAGS) & OWF_DEFAULT_THROWS) != 0
         && item_check_remove(weapon_obj) == ITEM_CANNOT_OK) {
+        // CE (card X8, `thrown weapon target`; zsogg, 2026-10-13, after an NPC
+        // in his playtest threw his own Throwing Daggers back to no effect):
+        // an NPC's wielded throw keeps its target too, and in turn-based waits
+        // for the AP its throw costs, as `anim_can_start_goal` tests an
+        // attack's. Off, the original: the tile alone, so it injures nobody.
+        if (feature_enabled(FEATURE_THROWN_WEAPON_TARGET)) {
+            if (!anim_can_start_goal(attacker_obj, combat_throw_cost_for(player_is_local_pc_obj(attacker_obj)))) {
+                return false;
+            }
+            item_remove(weapon_obj);
+            return anim_goal_throw_item_at_obj(attacker_obj, weapon_obj, target_obj, HIT_LOC_TORSO);
+        }
+
         item_remove(weapon_obj);
 
         return anim_goal_throw_item(attacker_obj, weapon_obj, obj_field_int64_get(target_obj, OBJ_F_LOCATION));
