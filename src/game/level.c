@@ -4,6 +4,7 @@
 
 #include "game/background.h"
 #include "game/critter.h"
+#include "game/feature.h"
 #include "game/mes.h"
 #include "game/obj.h"
 #include "game/object.h"
@@ -21,6 +22,21 @@
  * and populate `xp_level.mes` accordingly.
  */
 #define LEVEL_MAX 51
+
+// CE (`uap level cap 100`; release 1, R1, 2026-10-13): UAP's optional
+// LevelCap100 add-on (`EnginePatcher/LevelCap100.tp2`) writes 101 over the 51
+// at four sites in this file - the table's size and read loop in `level_init`
+// (0x4A6642, 0x4A66A6) and the two cap tests (0x4A68C8, 0x4A691B) - and in the
+// level row of `stat_max_values` (0x5B5248). It leaves `level_set`'s clamp at
+// 51 (0x4A6F28), and so does CE. UAP's `rules/xp_level.mes` lists levels to
+// 127. The table is always read to 101 here, so the switch can change at run
+// time; with it off only the first 51 entries are ever used, as stock.
+#define LEVEL_MAX_UAP_CAP_100 101
+
+static int level_max(void)
+{
+    return feature_enabled(FEATURE_UAP_LEVEL_CAP_100) ? LEVEL_MAX_UAP_CAP_100 : LEVEL_MAX;
+}
 
 /**
  * The size of log during auto level up.
@@ -276,14 +292,14 @@ bool level_init(GameInitInfo* init_info)
         return false;
     }
 
-    level_xp_tbl = (int*)CALLOC(LEVEL_MAX, sizeof(*level_xp_tbl));
+    level_xp_tbl = (int*)CALLOC(LEVEL_MAX_UAP_CAP_100, sizeof(*level_xp_tbl));
 
     // NOTE: Unclear why log strs have static storage duration, but associated
     // values are dynamically allocated on heap.
     auto_level_log_values = (int*)CALLOC(AUTO_LEVEL_LOG_SIZE, sizeof(*auto_level_log_values));
 
     // Populate experience points table for each level.
-    for (index = 0; index < LEVEL_MAX; index++) {
+    for (index = 0; index < LEVEL_MAX_UAP_CAP_100; index++) {
         msg.num = index + 1;
         if (mes_search(xp_level_mes_file, &msg)) {
             level_xp_tbl[index] = atoi(msg.str);
@@ -376,7 +392,7 @@ int level_experience_points_to_next_level(int64_t obj)
     level = stat_level_get(obj, STAT_LEVEL);
 
     // Clamp at maximum.
-    if (level >= LEVEL_MAX) {
+    if (level >= level_max()) {
         return 999999;
     }
 
@@ -403,7 +419,7 @@ int level_progress_towards_next_level(int64_t obj)
     level = stat_level_get(obj, STAT_LEVEL);
 
     // Clamp at maximum.
-    if (level >= LEVEL_MAX) {
+    if (level >= level_max()) {
         return 0;
     }
 
@@ -499,8 +515,16 @@ void level_recalc(int64_t pc_obj)
         cur_level++;
 
         if (cur_level == max_level) {
-            // Max level reached - cap experience at the maximum level's requirement.
-            stat_base_set(pc_obj, STAT_EXPERIENCE_POINTS, level_xp_tbl[cur_level - 1]);
+            // FIX (porting bug #56): at the cap the original sets experience to
+            // the requirement of the level the character stays at, one below
+            // the cap - `level_xp_tbl[cur_level - 2]` (0x4A6A47 `lea edi,
+            // [esi*4-0x8]`, then `add edi,4` with each `inc esi`; read at
+            // 0x4A6A71). CE took `cur_level - 1`, the cap level's own
+            // requirement, so the level-up check this `stat_base_set`
+            // re-enters found nothing left to earn and capped again, forever:
+            // a stack overflow the moment a character's experience reached the
+            // cap's requirement (measured 2026-10-13, release 1, R1).
+            stat_base_set(pc_obj, STAT_EXPERIENCE_POINTS, level_xp_tbl[cur_level - 2]);
         } else {
             // Update level.
             stat_base_set(pc_obj, STAT_LEVEL, cur_level);
