@@ -85,6 +85,19 @@ bool tig_file_unlock(const char* filename, const void* owner, size_t size);
 bool tig_file_locked_by(const char* filename, const void* owner, size_t size);
 bool tig_file_copy(const char* src, const char* dst);
 
+// CE (release 1, R2): the folder a game path's leading `save` component
+// stands for. NULL or "" (the default) leaves `save` as it is; "SaveCE" sends
+// every relative path whose first component is `save`, in any case, to
+// `SaveCE` instead - every path the public file functions take, so the game's
+// own strings, and the fixed offsets some of them are built with, stay as the
+// original wrote them. Explicit paths (starting `.`, `\`, `/` or a drive) are
+// never changed.
+void tig_file_set_save_dir(const char* name);
+const char* tig_file_save_dir(void);
+// Pure, for the tests: rewrites `path` (a buffer of `size`) under `save_dir`
+// as above; false, unchanged, when the result would not fit.
+bool tig_file_apply_save_dir(char* path, size_t size, const char* save_dir);
+
 SDL_IOStream* tig_file_io_open(const char* path, const char* mode);
 
 #ifdef __cplusplus

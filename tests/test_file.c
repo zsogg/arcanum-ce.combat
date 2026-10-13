@@ -1160,8 +1160,55 @@ TEST(unarchiving_an_absent_archive_fails)
     archive_fixture_remove();
 }
 
+TEST(the_save_folder_redirect_rewrites_only_a_leading_save_component)
+{
+    // Release 1, R2 (2026-10-13): CE's own save folder.
+    char path[TIG_MAX_PATH];
+
+    strcpy(path, "Save\\Current\\data.sav");
+    CHECK(tig_file_apply_save_dir(path, sizeof(path), "SaveCE"));
+    CHECK_STR(path, "SaveCE\\Current\\data.sav");
+
+    strcpy(path, "save\\Slot0001.gsi");
+    CHECK(tig_file_apply_save_dir(path, sizeof(path), "SaveCE"));
+    CHECK_STR(path, "SaveCE\\Slot0001.gsi");
+
+    strcpy(path, "save");
+    CHECK(tig_file_apply_save_dir(path, sizeof(path), "SaveCE"));
+    CHECK_STR(path, "SaveCE");
+
+    strcpy(path, "save/current/maps/x/MT.dat");
+    CHECK(tig_file_apply_save_dir(path, sizeof(path), "SaveCE"));
+    CHECK_STR(path, "SaveCE/current/maps/x/MT.dat");
+
+    // Not a leading `save` component: left alone.
+    strcpy(path, "saves\\x");
+    CHECK(tig_file_apply_save_dir(path, sizeof(path), "SaveCE"));
+    CHECK_STR(path, "saves\\x");
+    strcpy(path, ".\\Modules\\Arcanum\\save\\x.gsi");
+    CHECK(tig_file_apply_save_dir(path, sizeof(path), "SaveCE"));
+    CHECK_STR(path, ".\\Modules\\Arcanum\\save\\x.gsi");
+    strcpy(path, "maps\\save\\x");
+    CHECK(tig_file_apply_save_dir(path, sizeof(path), "SaveCE"));
+    CHECK_STR(path, "maps\\save\\x");
+
+    // Off: nothing changes.
+    strcpy(path, "Save\\Current");
+    CHECK(tig_file_apply_save_dir(path, sizeof(path), ""));
+    CHECK_STR(path, "Save\\Current");
+    CHECK(tig_file_apply_save_dir(path, sizeof(path), NULL));
+    CHECK_STR(path, "Save\\Current");
+
+    // Too long for the buffer: refused, unchanged.
+    char small[10];
+    strcpy(small, "save\\abc");
+    CHECK(!tig_file_apply_save_dir(small, sizeof(small), "SaveCE"));
+    CHECK_STR(small, "save\\abc");
+}
+
 void test_file_suite(void)
 {
+    RUN(the_save_folder_redirect_rewrites_only_a_leading_save_component);
     RUN(the_archive_mounted_last_wins);
     RUN(reversing_the_mount_order_reverses_the_answer);
     RUN(a_directory_mounted_after_an_archive_beats_it);

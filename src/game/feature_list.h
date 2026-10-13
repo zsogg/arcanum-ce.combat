@@ -71,5 +71,6 @@ FEATURE(UAP_LEVEL_CAP_100, "uap level cap 100", false)
 FEATURE(UAP_MASTER_EDUCATOR, "uap master educator", false)
 FEATURE(UAP_NO_XP_PER_HIT, "uap no xp per hit", false)
 FEATURE(UAP_NO_COMBAT_MUSIC, "uap no combat music", false)
+FEATURE(CE_SAVE_FOLDER, "ce save folder", false)
 
 // clang-format on

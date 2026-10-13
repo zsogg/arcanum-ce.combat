@@ -211,6 +211,9 @@ static char gamelib_default_module_name[TIG_MAX_PATH] = "Arcanum";
 // 0x5CFF08
 static char gamelib_mod_dir_path[TIG_MAX_PATH];
 
+// CE (`ce save folder`, release 1, R2): CE's own save folder.
+#define GAMELIB_CE_SAVE_DIR "SaveCE"
+
 // 0x5D000C
 static TigRectListNode* gamelib_pending_dirty_rects_head;
 
@@ -334,6 +337,15 @@ bool gamelib_init(GameInitInfo* init_info)
     // Before any module that attaches a change callback, and after
     // `settings_load` so a value already in the config wins over the default.
     feature_init();
+
+    // CE (`ce save folder`; release 1, R2, zsogg 2026-10-13): CE's saves go to
+    // their own folder, `SaveCE` beside the original's `Save` in the module,
+    // because the original cannot load a save CE wrote (the area count, card
+    // H4). Every relative `save\...` path is redirected in the file layer
+    // (`tig_file_set_save_dir`), so the game's paths stay as written. Read
+    // once, here, before the first save path is touched; changing it takes
+    // effect at the next start.
+    tig_file_set_save_dir(feature_enabled(FEATURE_CE_SAVE_FOLDER) ? GAMELIB_CE_SAVE_DIR : NULL);
 
     uap_init();
 
@@ -675,6 +687,61 @@ void gamelib_modlist_destroy(GameModuleList* module_list)
     module_list->paths = NULL;
 }
 
+// CE (`ce save folder`, R2): the save folder's name for an explicit path.
+static const char* gamelib_save_dir_name(void)
+{
+    const char* name = tig_file_save_dir();
+    return name[0] != '\0' ? name : "save";
+}
+
+// CE (`ce save folder`; release 1, R2): the first time a module is loaded with
+// CE's own save folder and that folder does not exist, the original's saved
+// games are copied into it - one way: CE reads the original's saves, and the
+// original's folder is only ever read. The slot files only; `Current` and
+// CE's transaction folder are working state. Later saves made by the original
+// are not copied again.
+static void gamelib_save_import(void)
+{
+    char ce_dir[TIG_MAX_PATH];
+    char pattern[TIG_MAX_PATH];
+    char src[TIG_MAX_PATH];
+    char dst[TIG_MAX_PATH];
+    TigFileList file_list;
+    unsigned int index;
+    int copied = 0;
+
+    if (tig_file_save_dir()[0] == '\0' || gamelib_mod_dir_path[0] == '\0') {
+        return;
+    }
+
+    snprintf(ce_dir, sizeof(ce_dir), "%s\\%s", gamelib_mod_dir_path, tig_file_save_dir());
+    if (tig_file_is_directory(ce_dir)) {
+        return;
+    }
+    if (!tig_file_mkdir(ce_dir)) {
+        tig_debug_printf("gamelib: could not create %s\n", ce_dir);
+        return;
+    }
+
+    snprintf(pattern, sizeof(pattern), "%s\\save\\slot*.*", gamelib_mod_dir_path);
+    tig_file_list_create(&file_list, pattern);
+    for (index = 0; index < file_list.count; index++) {
+        if ((file_list.entries[index].attributes & TIG_FILE_ATTRIBUTE_SUBDIR) != 0) {
+            continue;
+        }
+        snprintf(src, sizeof(src), "%s\\save\\%s", gamelib_mod_dir_path, file_list.entries[index].path);
+        snprintf(dst, sizeof(dst), "%s\\%s", ce_dir, file_list.entries[index].path);
+        if (tig_file_copy(src, dst)) {
+            copied++;
+        } else {
+            tig_debug_printf("gamelib: could not copy %s into %s\n", src, ce_dir);
+        }
+    }
+    tig_file_list_destroy(&file_list);
+    tig_debug_printf("gamelib: CE's save folder %s created; %d file(s) of the original's saves copied\n",
+        ce_dir, copied);
+}
+
 // 0x402A50
 bool gamelib_mod_load(const char* path)
 {
@@ -693,6 +760,8 @@ bool gamelib_mod_load(const char* path)
     }
 
     dword_5D10C4 = true;
+
+    gamelib_save_import();
 
     if (tig_file_is_directory("Save\\Current")) {
         if (!tig_file_is_empty_directory("Save\\Current")) {
@@ -1423,7 +1492,9 @@ void gamelib_savelist_create_module(const char* module, GameSaveList* save_list)
     save_list->names = NULL;
     save_list->module = STRDUP(module);
 
-    snprintf(path, sizeof(path), ".\\Modules\\%s\\save\\slot*.*", module);
+    // CE (`ce save folder`, R2): this path is explicit, so the file layer
+    // leaves it alone; it names the save folder itself.
+    snprintf(path, sizeof(path), ".\\Modules\\%s\\%s\\slot*.*", module, gamelib_save_dir_name());
     tig_file_list_create(&file_list, path);
 
     for (index = 0; index < file_list.count; index++) {
@@ -1476,8 +1547,9 @@ void gamelib_savelist_sort(GameSaveList* save_list, GameSaveListOrder order, boo
         entries[index].path = save_list->names[index];
         if (save_list->module != NULL) {
             snprintf(path, sizeof(path),
-                ".\\Modules\\%s\\save\\%s.gsi",
+                ".\\Modules\\%s\\%s\\%s.gsi",
                 save_list->module,
+                gamelib_save_dir_name(),
                 save_list->names[index]);
         } else {
             snprintf(path, sizeof(path),

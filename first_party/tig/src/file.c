@@ -2305,11 +2305,59 @@ SDL_IOStream* tig_file_io_open(const char* path, const char* mode)
     return io;
 }
 
+// CE (release 1, R2): see `tig_file_set_save_dir`.
+static char tig_file_save_dir_name[32];
+
+void tig_file_set_save_dir(const char* name)
+{
+    if (name == NULL || SDL_strlen(name) >= sizeof(tig_file_save_dir_name)) {
+        tig_file_save_dir_name[0] = '\0';
+        return;
+    }
+    SDL_strlcpy(tig_file_save_dir_name, name, sizeof(tig_file_save_dir_name));
+}
+
+const char* tig_file_save_dir(void)
+{
+    return tig_file_save_dir_name;
+}
+
+bool tig_file_apply_save_dir(char* path, size_t size, const char* save_dir)
+{
+    size_t dir_length;
+    size_t rest_length;
+
+    if (save_dir == NULL || save_dir[0] == '\0') {
+        return true;
+    }
+    if (SDL_strncasecmp(path, "save", 4) != 0
+        || (path[4] != '\0' && path[4] != '\\' && path[4] != '/')) {
+        return true;
+    }
+
+    dir_length = SDL_strlen(save_dir);
+    rest_length = SDL_strlen(path + 4);
+    if (dir_length + rest_length + 1 > size) {
+        return false;
+    }
+    memmove(path + dir_length, path + 4, rest_length + 1);
+    memcpy(path, save_dir, dir_length);
+    return true;
+}
+
+static void tig_file_save_alias(char* path)
+{
+    if (!tig_file_apply_save_dir(path, TIG_MAX_PATH, tig_file_save_dir_name)) {
+        tig_debug_printf("TIG File: save folder path too long, left unchanged: %s\n", path);
+    }
+}
+
 bool tig_file_mkdir(const char* path)
 {
     char native_path[TIG_MAX_PATH];
 
     strcpy(native_path, path);
+    tig_file_save_alias(native_path);
     compat_windows_path_to_native(native_path);
     compat_resolve_path(native_path);
 
@@ -2321,6 +2369,7 @@ bool tig_file_rmdir(const char* path)
     char native_path[TIG_MAX_PATH];
 
     strcpy(native_path, path);
+    tig_file_save_alias(native_path);
     compat_windows_path_to_native(native_path);
     compat_resolve_path(native_path);
 
@@ -2332,6 +2381,7 @@ bool tig_file_empty_directory(const char* path)
     char native_path[TIG_MAX_PATH];
 
     strcpy(native_path, path);
+    tig_file_save_alias(native_path);
     compat_windows_path_to_native(native_path);
     compat_resolve_path(native_path);
 
@@ -2343,6 +2393,7 @@ bool tig_file_is_empty_directory(const char* path)
     char native_path[TIG_MAX_PATH];
 
     strcpy(native_path, path);
+    tig_file_save_alias(native_path);
     compat_windows_path_to_native(native_path);
     compat_resolve_path(native_path);
 
@@ -2354,6 +2405,7 @@ bool tig_file_is_directory(const char* path)
     char native_path[TIG_MAX_PATH];
 
     strcpy(native_path, path);
+    tig_file_save_alias(native_path);
     compat_windows_path_to_native(native_path);
     compat_resolve_path(native_path);
 
@@ -2366,10 +2418,12 @@ bool tig_file_archive(const char* dst, const char* src)
     char native_src[TIG_MAX_PATH];
 
     strcpy(native_dst, dst);
+    tig_file_save_alias(native_dst);
     compat_windows_path_to_native(native_dst);
     compat_resolve_path(native_dst);
 
     strcpy(native_src, src);
+    tig_file_save_alias(native_src);
     compat_windows_path_to_native(native_src);
     compat_resolve_path(native_src);
 
@@ -2382,10 +2436,12 @@ bool tig_file_unarchive(const char* src, const char* dst)
     char native_dst[TIG_MAX_PATH];
 
     strcpy(native_src, src);
+    tig_file_save_alias(native_src);
     compat_windows_path_to_native(native_src);
     compat_resolve_path(native_src);
 
     strcpy(native_dst, dst);
+    tig_file_save_alias(native_dst);
     compat_windows_path_to_native(native_dst);
     compat_resolve_path(native_dst);
 
@@ -2397,6 +2453,7 @@ bool tig_file_repository_add(const char* path)
     char native_path[TIG_MAX_PATH];
 
     strcpy(native_path, path);
+    tig_file_save_alias(native_path);
     compat_windows_path_to_native(native_path);
     compat_resolve_path(native_path);
 
@@ -2408,6 +2465,7 @@ bool tig_file_repository_remove(const char* path)
     char native_path[TIG_MAX_PATH];
 
     strcpy(native_path, path);
+    tig_file_save_alias(native_path);
     compat_windows_path_to_native(native_path);
     compat_resolve_path(native_path);
 
@@ -2419,6 +2477,7 @@ int tig_file_mkdir_ex(const char* path)
     char native_path[TIG_MAX_PATH];
 
     strcpy(native_path, path);
+    tig_file_save_alias(native_path);
     compat_windows_path_to_native(native_path);
     compat_resolve_path(native_path);
 
@@ -2430,6 +2489,7 @@ int tig_file_rmdir_ex(const char* path)
     char native_path[TIG_MAX_PATH];
 
     strcpy(native_path, path);
+    tig_file_save_alias(native_path);
     compat_windows_path_to_native(native_path);
     compat_resolve_path(native_path);
 
@@ -2441,6 +2501,7 @@ bool tig_file_extract(const char* filename, char* path)
     char native_filename[TIG_MAX_PATH];
 
     strcpy(native_filename, filename);
+    tig_file_save_alias(native_filename);
     compat_windows_path_to_native(native_filename);
     compat_resolve_path(native_filename);
 
@@ -2452,6 +2513,7 @@ void tig_file_list_create(TigFileList* list, const char* pattern)
     char native_pattern[TIG_MAX_PATH];
 
     strcpy(native_pattern, pattern);
+    tig_file_save_alias(native_pattern);
     compat_windows_path_to_native(native_pattern);
     compat_resolve_path(native_pattern);
 
@@ -2463,6 +2525,7 @@ bool tig_file_exists(const char* path, TigFileInfo* info)
     char native_path[TIG_MAX_PATH];
 
     strcpy(native_path, path);
+    tig_file_save_alias(native_path);
     compat_windows_path_to_native(native_path);
     compat_resolve_path(native_path);
 
@@ -2475,10 +2538,12 @@ bool tig_file_exists_in_path(const char* search_path, const char* file_name, Tig
     char native_file_name[TIG_MAX_PATH];
 
     strcpy(native_search_path, search_path);
+    tig_file_save_alias(native_search_path);
     compat_windows_path_to_native(native_search_path);
     compat_resolve_path(native_search_path);
 
     strcpy(native_file_name, file_name);
+    tig_file_save_alias(native_file_name);
     compat_windows_path_to_native(native_file_name);
     compat_resolve_path(native_file_name);
 
@@ -2490,6 +2555,7 @@ int tig_file_remove(const char* path)
     char native_path[TIG_MAX_PATH];
 
     strcpy(native_path, path);
+    tig_file_save_alias(native_path);
     compat_windows_path_to_native(native_path);
     compat_resolve_path(native_path);
 
@@ -2502,10 +2568,12 @@ int tig_file_rename(const char* old_file_name, const char* new_file_name)
     char native_new_file_name[TIG_MAX_PATH];
 
     strcpy(native_old_file_name, old_file_name);
+    tig_file_save_alias(native_old_file_name);
     compat_windows_path_to_native(native_old_file_name);
     compat_resolve_path(native_old_file_name);
 
     strcpy(native_new_file_name, new_file_name);
+    tig_file_save_alias(native_new_file_name);
     compat_windows_path_to_native(native_new_file_name);
     compat_resolve_path(native_new_file_name);
 
@@ -2521,6 +2589,7 @@ TigFile* tig_file_fopen(const char* path, const char* mode)
     }
 
     strcpy(native_path, path);
+    tig_file_save_alias(native_path);
     compat_windows_path_to_native(native_path);
     compat_resolve_path(native_path);
 
@@ -2536,6 +2605,7 @@ TigFile* tig_file_reopen(const char* path, const char* mode, TigFile* stream)
     char native_path[TIG_MAX_PATH];
 
     strcpy(native_path, path);
+    tig_file_save_alias(native_path);
     compat_windows_path_to_native(native_path);
     compat_resolve_path(native_path);
 
@@ -2548,10 +2618,12 @@ bool tig_file_copy(const char* src, const char* dst)
     char native_dst[TIG_MAX_PATH];
 
     strcpy(native_src, src);
+    tig_file_save_alias(native_src);
     compat_windows_path_to_native(native_src);
     compat_resolve_path(native_src);
 
     strcpy(native_dst, dst);
+    tig_file_save_alias(native_dst);
     compat_windows_path_to_native(native_dst);
     compat_resolve_path(native_dst);
 
