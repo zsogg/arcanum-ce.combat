@@ -266,6 +266,8 @@ set(SRCS
     "src/game/trap.c"
     "src/game/trap.h"
     "src/game/ce_mods.c"
+    "src/game/install_check.c"
+    "src/game/install_check.h"
     "src/game/ce_mods.h"
     "src/game/feature.c"
     "src/game/feature.h"

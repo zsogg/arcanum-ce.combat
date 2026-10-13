@@ -26,6 +26,7 @@
 #include "game/gsound.h"
 #include "game/highres_config.h"
 #include "game/hrp.h"
+#include "game/install_check.h"
 #include "game/item.h"
 #include "game/level.h"
 #include "game/light_scheme.h"
@@ -158,6 +159,11 @@ int main(int argc, char** argv)
     // three times. This is the probe the plan asks for: identify the build, or
     // ask it what it supports.
     for (value = 1; value < argc; value++) {
+        // CE (release 1, R5): the install check, before anything starts.
+        if (strcmp(argv[value], "-check-install") == 0
+            || strcmp(argv[value], "-check-install-fix") == 0) {
+            return install_check_run(strcmp(argv[value], "-check-install-fix") == 0);
+        }
         if (strcmp(argv[value], "-features") == 0) {
             printf("schema 1\n");
             for (int index = 0; index < FEATURE_COUNT; index++) {

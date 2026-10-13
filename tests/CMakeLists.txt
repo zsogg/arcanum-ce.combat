@@ -32,6 +32,7 @@ add_executable(arcanum-tests
     "test_weapon_rules.c"
     "test_uap_addons.c"
     "test_ce_mods.c"
+    "test_install_check.c"
     "test_spell_rules.c"
     "test_poison_pace.c"
     "test_bsearch.c"
