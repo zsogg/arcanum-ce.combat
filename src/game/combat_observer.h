@@ -251,6 +251,11 @@ void combat_observer_spell_critical(const char* caster, const char* target,
 void combat_observer_summon_sick(const char* summoner, const char* summon, bool turn_based);
 void combat_observer_summon_ready(const char* summon, const char* reason);
 
+// CE (2026-10-12): a critter starts or stops prowling - with whether it is in
+// combat mode, and the light on it (0 dark - 255 bright), since prowling's
+// sight check reads both.
+void combat_observer_prowl_changed(const char* actor, bool prowling, bool combat_mode, int light);
+
 // Ammunition and fatigue, the two things an ordinary action spends outside
 // turn-based AP. One event with a `resource` field rather than two events,
 // because the question asked of both is the same - was this charged once per

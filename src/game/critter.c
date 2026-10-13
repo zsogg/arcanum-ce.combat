@@ -4,6 +4,7 @@
 #include "game/anim.h"
 #include "game/background.h"
 #include "game/combat.h"
+#include "game/combat_observer.h"
 #include "game/effect.h"
 #include "game/feature.h"
 #include "game/gamelib.h"
@@ -1744,6 +1745,17 @@ void critter_set_concealed_internal(int64_t obj, bool concealed)
 
     // Update concealed flags.
     flags = obj_field_int32_get(obj, OBJ_F_CRITTER_FLAGS);
+
+    // CE (2026-10-12): `prowl.changed`, when the state actually changes.
+    if (combat_observer_is_enabled()
+        && ((flags & OCF_IS_CONCEALED) != 0) != concealed) {
+        char actor[COMBAT_OBSERVER_IDENTITY_SIZE];
+
+        combat_observer_object_id(obj, actor);
+        combat_observer_prowl_changed(actor, concealed, combat_critter_is_combat_mode_active(obj),
+            light_obj_grayscale_get(obj) & 0xFF);
+    }
+
     if (concealed) {
         flags |= OCF_IS_CONCEALED | OCF_MOVING_SILENTLY;
     } else {

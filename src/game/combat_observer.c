@@ -669,6 +669,22 @@ void combat_observer_summon_ready(const char* summon, const char* reason)
     combat_observer_write(line);
 }
 
+void combat_observer_prowl_changed(const char* actor, bool prowling, bool combat_mode, int light)
+{
+    char line[256];
+    char action[32];
+
+    if (!combat_observer_begin_semantic()) return;
+
+    snprintf(line, sizeof(line),
+        "{\"schema\":%d,\"sequence\":%u,\"event\":\"prowl.changed\",\"turn\":%u,\"action_id\":%s,"
+        "\"actor\":\"%s\",\"prowling\":%s,\"combat_mode\":%s,\"light\":%d}",
+        COMBAT_OBSERVER_SCHEMA, combat_observer_sequence++, combat_observer_turn,
+        combat_observer_action_json(action, sizeof(action)), actor,
+        prowling ? "true" : "false", combat_mode ? "true" : "false", light);
+    combat_observer_write(line);
+}
+
 void combat_observer_resource_charged(const char* actor, const char* resource,
     int spell, int cost, int before, int after)
 {

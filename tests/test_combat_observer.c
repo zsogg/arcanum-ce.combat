@@ -393,6 +393,16 @@ TEST(a_cast_is_identified_by_its_spell_not_by_its_cost)
     CHECK(strstr(trace, "\"summon\":\"ogre\",\"until\":\"2000ms\"}") != NULL);
     CHECK(strstr(trace, "\"event\":\"summon.ready\"") != NULL);
     CHECK(strstr(trace, "\"summon\":\"skeleton\",\"reason\":\"caster_turn\"}") != NULL);
+    // 2026-10-12: prowling starts and stops.
+    clean();
+    CHECK(combat_observer_open(TRACE_FILE));
+    combat_observer_prowl_changed("rogue", true, false, 40);
+    combat_observer_prowl_changed("rogue", false, true, 253);
+    combat_observer_close();
+    CHECK(read_trace(trace, sizeof(trace)));
+    CHECK_INT(count_events(trace, "\"event\":\"prowl.changed\""), 2);
+    CHECK(strstr(trace, "\"actor\":\"rogue\",\"prowling\":true,\"combat_mode\":false,\"light\":40}") != NULL);
+    CHECK(strstr(trace, "\"prowling\":false,\"combat_mode\":true,\"light\":253}") != NULL);
 }
 
 TEST(an_unreadable_frame_is_reported_as_unknown_not_as_a_number)
