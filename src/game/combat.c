@@ -313,10 +313,10 @@ void combat_reset(void)
     in_combat_reset = false;
 }
 
-// NOTE: `oid` is deliberately left uninitialized, and the null branch below
-// sets only its `type` before all 24 bytes are written. That leaks
-// uninitialized stack into every turn-based save - and it is faithful. The
-// original does the same at 0x4B1F58:
+// FIX (release 1, work package R0; 2026-10-13): the original leaves `oid`
+// uninitialized, and the null branch below sets only its `type` before all
+// 24 bytes are written. That leaks uninitialized stack into every turn-based
+// save. The original does the same at 0x4B1F58:
 //
 //     4b1f29: mov  eax,ds:0x5fc238          ; qword_5FC238
 //     4b1f38: je   0x4b1f58                 ; ... is null
@@ -330,10 +330,15 @@ void combat_reset(void)
 // difference recorded against `Slot0003 turnbased-mid` in SAVE-MATRIX.md,
 // which was previously filed as live-combat state diverging.
 //
-// Not fixed: zeroing it would be a behaviour change to the save format for
-// no player-visible gain, and CE's rule is to mirror 1.0.7.4 unless a
-// divergence is justified. `combat_load` reads the same 24 bytes and uses
-// only `type`, so the padding is never interpreted.
+// `combat_load` reads the same 24 bytes and uses only `type`, so the padding
+// is never interpreted, by either engine. CE now zeroes the identifier
+// before setting the type. Measured 2026-10-13: two runs of one turn-based
+// save with the RNG and clock pinned wrote different Combat bytes - stack
+// and program addresses, which address randomisation moves - so CE's own
+// saves were not reproducible, and a save a player sends with a bug report
+// carried scraps of process memory. The save format is Compatible
+// (FIDELITY-CONTRACT.md): CE may write what the original would not, and
+// these bytes are read by nothing.
 //
 // 0x4B1EA0
 bool combat_save(TigFile* stream)
@@ -352,6 +357,7 @@ bool combat_save(TigFile* stream)
     if (tig_file_fwrite(&combat_action_points, sizeof(combat_action_points), 1, stream) != 1) return false;
 
     if (qword_5FC238 == OBJ_HANDLE_NULL) {
+        memset(&oid, 0, sizeof(oid));
         oid.type = OID_TYPE_NULL;
     } else {
         oid = obj_get_id(qword_5FC238);
