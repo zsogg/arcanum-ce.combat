@@ -214,6 +214,9 @@ static char gamelib_mod_dir_path[TIG_MAX_PATH];
 // CE (`ce save folder`, release 1, R2): CE's own save folder.
 #define GAMELIB_CE_SAVE_DIR "SaveCE"
 
+// CE (release 1, R3): CE's own loose data layer.
+#define GAMELIB_CE_DATA_DIR "ce-data"
+
 // 0x5D000C
 static TigRectListNode* gamelib_pending_dirty_rects_head;
 
@@ -2049,6 +2052,17 @@ void gamelib_load_data(void)
 
     tig_file_mkdir("data");
     tig_file_repository_add("data");
+
+    // CE (release 1, R3, 2026-10-13): CE's own loose layer, mounted just above
+    // `data` when it exists, so a file a mod installs there is read by CE and
+    // never by the original exe, which mounts `data` and stops. The Combat
+    // Rebalance's rules files go here in a release, leaving the original
+    // playable unchanged from the same installation. Without the folder
+    // nothing changes; CE does not create it.
+    if (tig_file_is_directory(GAMELIB_CE_DATA_DIR)) {
+        tig_file_repository_add(GAMELIB_CE_DATA_DIR);
+        tig_debug_printf("gamelib: CE's own data layer %s mounted above data\n", GAMELIB_CE_DATA_DIR);
+    }
 }
 
 // 0x404C10
