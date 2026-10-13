@@ -12,6 +12,7 @@
 #include "game/bless.h"
 #include "game/brightness.h"
 #include "game/broadcast.h"
+#include "game/ce_mods.h"
 #include "game/ci.h"
 #include "game/critter.h"
 #include "game/curse.h"
@@ -217,6 +218,9 @@ static char gamelib_mod_dir_path[TIG_MAX_PATH];
 // CE (release 1, R3): CE's own loose data layer.
 #define GAMELIB_CE_DATA_DIR "ce-data"
 
+// CE (release 1, R4): CE's own settings file, when present.
+#define GAMELIB_CE_CONFIG "arcanum-ce.cfg"
+
 // 0x5D000C
 static TigRectListNode* gamelib_pending_dirty_rects_head;
 
@@ -329,7 +333,17 @@ bool gamelib_init(GameInitInfo* init_info)
     if (init_info->editor) {
         settings_init(&settings, "worlded.cfg");
     } else {
-        settings_init(&settings, "arcanum.cfg");
+        // CE (release 1, R4, 2026-10-13): a release keeps CE's settings in
+        // their own file, so the original's `arcanum.cfg` is never touched.
+        // Without `arcanum-ce.cfg`, CE reads and writes `arcanum.cfg` as ever.
+        FILE* ce_config = fopen(GAMELIB_CE_CONFIG, "rt");
+        if (ce_config != NULL) {
+            fclose(ce_config);
+            settings_init(&settings, GAMELIB_CE_CONFIG);
+            tig_debug_printf("gamelib: settings from %s\n", GAMELIB_CE_CONFIG);
+        } else {
+            settings_init(&settings, "arcanum.cfg");
+        }
     }
 
     settings_load(&settings);
@@ -340,6 +354,10 @@ bool gamelib_init(GameInitInfo* init_info)
     // Before any module that attaches a change callback, and after
     // `settings_load` so a value already in the config wins over the default.
     feature_init();
+
+    // CE (release 1, R4): enabled mod bundles set their switches for this
+    // session, before anything reads a switch (`ce_mods.h`).
+    ce_mods_init();
 
     // CE (`ce save folder`; release 1, R2, zsogg 2026-10-13): CE's saves go to
     // their own folder, `SaveCE` beside the original's `Save` in the module,
@@ -2063,6 +2081,9 @@ void gamelib_load_data(void)
         tig_file_repository_add(GAMELIB_CE_DATA_DIR);
         tig_debug_printf("gamelib: CE's own data layer %s mounted above data\n", GAMELIB_CE_DATA_DIR);
     }
+
+    // CE (release 1, R4): the enabled mod bundles, above `ce-data`.
+    ce_mods_mount();
 }
 
 // 0x404C10

@@ -201,8 +201,32 @@ TEST(uap_fixes_reads_through_the_registry_after_the_migration)
     settings_exit(&settings);
 }
 
+TEST(an_override_holds_for_the_session_and_does_not_write_the_config)
+{
+    // Release 1, R4 (2026-10-13): an enabled mod bundle sets its switches this
+    // way, so turning the bundle off restores what the config says.
+    settings_init(&settings, "unused");
+    feature_init();
+    CHECK(!feature_enabled(FEATURE_CALLED_SHOT_UI));
+
+    feature_override(FEATURE_CALLED_SHOT_UI, true);
+    CHECK(feature_enabled(FEATURE_CALLED_SHOT_UI));
+    CHECK(feature_overridden(FEATURE_CALLED_SHOT_UI));
+    CHECK_INT(settings_get_value(&settings, feature_key(FEATURE_CALLED_SHOT_UI)), 0);
+
+    // The config changing does not move an overridden feature.
+    settings_set_value(&settings, feature_key(FEATURE_CALLED_SHOT_UI), 0);
+    CHECK(feature_enabled(FEATURE_CALLED_SHOT_UI));
+
+    feature_clear_overrides();
+    CHECK(!feature_overridden(FEATURE_CALLED_SHOT_UI));
+    CHECK(!feature_enabled(FEATURE_CALLED_SHOT_UI));
+    settings_exit(&settings);
+}
+
 void test_feature_suite(void)
 {
+    RUN(an_override_holds_for_the_session_and_does_not_write_the_config);
     RUN(a_flag_reads_its_declared_default_before_any_init);
     RUN(every_declared_feature_has_a_key_and_they_are_distinct);
     RUN(a_value_already_in_the_config_beats_the_default);

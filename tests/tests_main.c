@@ -29,6 +29,7 @@ void test_crit_guard_suite(void);
 void test_rt_budget_suite(void);
 void test_weapon_rules_suite(void);
 void test_uap_addons_suite(void);
+void test_ce_mods_suite(void);
 void test_spell_rules_suite(void);
 void test_poison_pace_suite(void);
 void test_bsearch_suite(void);
@@ -89,6 +90,7 @@ int main(void)
     test_rt_budget_suite();
     test_weapon_rules_suite();
     test_uap_addons_suite();
+    test_ce_mods_suite();
     test_spell_rules_suite();
     test_poison_pace_suite();
     test_bsearch_suite();

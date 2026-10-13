@@ -265,6 +265,8 @@ set(SRCS
     "src/game/townmap.h"
     "src/game/trap.c"
     "src/game/trap.h"
+    "src/game/ce_mods.c"
+    "src/game/ce_mods.h"
     "src/game/feature.c"
     "src/game/feature.h"
     "src/game/feature_list.h"

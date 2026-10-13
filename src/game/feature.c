@@ -12,6 +12,9 @@ typedef struct FeatureEntry {
     bool default_enabled;
     bool enabled;
     FeatureChangedFunc changed;
+    // CE (release 1, R4): set for the session by an enabled mod bundle
+    // (`ce_mods.c`); the config's own value is then not consulted.
+    bool overridden;
 } FeatureEntry;
 
 static void feature_changed(FeatureId id);
@@ -115,6 +118,33 @@ bool feature_default(FeatureId id)
     return features[id].default_enabled;
 }
 
+void feature_override(FeatureId id, bool enabled)
+{
+    if (!feature_id_valid(id)) {
+        return;
+    }
+
+    features[id].overridden = true;
+    features[id].enabled = enabled;
+}
+
+bool feature_overridden(FeatureId id)
+{
+    return feature_id_valid(id) && features[id].overridden;
+}
+
+void feature_clear_overrides(void)
+{
+    int index;
+
+    for (index = 0; index < FEATURE_COUNT; index++) {
+        if (features[index].overridden) {
+            features[index].overridden = false;
+            features[index].enabled = settings_get_value(&settings, features[index].key) != 0;
+        }
+    }
+}
+
 bool feature_find(const char* key, FeatureId* id)
 {
     int index;
@@ -141,7 +171,9 @@ void feature_changed(FeatureId id)
         return;
     }
 
-    features[id].enabled = settings_get_value(&settings, features[id].key) != 0;
+    if (!features[id].overridden) {
+        features[id].enabled = settings_get_value(&settings, features[id].key) != 0;
+    }
 
     if (features[id].changed != NULL) {
         features[id].changed();

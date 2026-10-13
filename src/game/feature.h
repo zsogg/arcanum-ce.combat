@@ -72,4 +72,14 @@ bool feature_default(FeatureId id);
  */
 bool feature_find(const char* key, FeatureId* id);
 
+// CE (release 1, R4): set a feature for this session only, as an enabled mod
+// bundle does (`ce_mods.c`). The config is not written, so turning the bundle
+// off restores what the config says; while overridden, a change to the config
+// value does not move the feature. Call after `feature_init`, before modules
+// attach their callbacks.
+void feature_override(FeatureId id, bool enabled);
+bool feature_overridden(FeatureId id);
+// Every override dropped; each feature reads its config value again.
+void feature_clear_overrides(void);
+
 #endif /* ARCANUM_GAME_FEATURE_H_ */
