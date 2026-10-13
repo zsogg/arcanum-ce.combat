@@ -3039,7 +3039,8 @@ bool ai_may_summon(Ai* ai)
 // willingness: on 40 in 100 it may cast below the floor this turn, so long as
 // the cost can be charged. zsogg, 2026-10-04: 40%, and "I have no objection to
 // casters becoming fatigued during combat". The roll is made only when a
-// refusal is about to happen, and remembered for the rest of the turn.
+// refusal is about to happen, and remembered for the rest of the turn. Only
+// in a fight: turn-based, combat mode, or the NPC's AI fighting.
 #define AI_DESPERATION_CHANCE 40
 #define AI_DESPERATION_MAX 64
 
@@ -3087,6 +3088,15 @@ bool ai_desperate_now(int64_t obj)
 
     if (!feature_enabled(FEATURE_AI_SPELLCASTING)
         || obj_field_int32_get(obj, OBJ_F_TYPE) != OBJ_TYPE_NPC) {
+        return false;
+    }
+
+    // Only in a fight (zsogg, 2026-10-13). Out of combat Virgil, healing his
+    // own poison, cast past his fatigue, fell unconscious and died of it -
+    // a calculated risk in a fight, a trap outside one.
+    if (!combat_turn_based_is_active()
+        && !combat_critter_is_combat_mode_active(obj)
+        && (obj_field_int32_get(obj, OBJ_F_NPC_FLAGS) & ONF_FIGHTING) == 0) {
         return false;
     }
 
