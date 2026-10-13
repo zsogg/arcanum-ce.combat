@@ -42,6 +42,7 @@
 #include "game/target.h"
 #include "game/tc.h"
 #include "game/tech.h"
+#include "game/tf.h"
 #include "game/timeevent.h"
 #include "game/uap.h"
 #include "game/weapon_rules.h"
@@ -4022,6 +4023,30 @@ static void intgame_perform_action_on_target_inner(TargetDescriptor* td)
             && obj_field_int32_get(weapon_obj, OBJ_F_TYPE) == OBJ_TYPE_WEAPON
             && (obj_field_int32_get(weapon_obj, OBJ_F_WEAPON_FLAGS) & OWF_DEFAULT_THROWS) != 0
             && !item_check_remove(weapon_obj)) {
+            // CE (card X8, `thrown weapon target`; zsogg's playtest,
+            // 2026-10-13): in turn-based this route behaves as the attack it
+            // stands in for. The original builds the throw at once, so a click
+            // during a throw's follow-through interrupted it before its last
+            // node, which is where a throw pays - a free throw - and a throw
+            // began with any AP left. Here a click while the player is still
+            // animating is ignored, as the shared route below ignores one, and
+            // a throw that cannot be paid for is refused.
+            if (feature_enabled(FEATURE_THROWN_WEAPON_TARGET)
+                && combat_turn_based_is_active()) {
+                AnimID busy_anim_id;
+                AnimID fidget_anim_id;
+
+                if (anim_is_busy(pc_obj, &busy_anim_id)
+                    && !(anim_is_current_goal_type(pc_obj, AG_ANIM_FIDGET, &fidget_anim_id)
+                        && anim_id_is_equal(&busy_anim_id, &fidget_anim_id))) {
+                    return;
+                }
+                if (!combat_can_pay_action_points(pc_obj, combat_throw_cost_for(true))) {
+                    tf_add(pc_obj, TF_TYPE_WHITE, "Not enough action points");
+                    return;
+                }
+            }
+
             int64_t throwable_instance_obj = item_find_first_matching_prototype(pc_obj, weapon_obj);
             if (throwable_instance_obj == OBJ_HANDLE_NULL) {
                 throwable_instance_obj = weapon_obj;
