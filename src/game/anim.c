@@ -159,6 +159,7 @@ static bool anim_has_ranged_weapon(AnimRunInfo* run_info);
 static bool anim_try_pickup_item(AnimRunInfo* run_info);
 static bool anim_pickup_item(int64_t source_obj, int64_t target_obj);
 static bool anim_throw_item(AnimRunInfo* run_info);
+static bool anim_goal_throw_item_build(int64_t obj, int64_t item_obj, int64_t target_obj, int64_t target_loc, int hit_loc);
 static bool anim_can_talk_to_target(AnimRunInfo* run_info);
 static bool anim_target_in_dialog_range(AnimRunInfo* run_info);
 static bool anim_begin_dialog(AnimRunInfo* run_info);
@@ -14748,6 +14749,27 @@ bool anim_goal_throw_item(int64_t obj, int64_t item_obj, int64_t target_loc)
 // discarded the goal holding it.
 bool anim_goal_throw_item_aimed(int64_t obj, int64_t item_obj, int64_t target_loc, int hit_loc)
 {
+    return anim_goal_throw_item_build(obj, item_obj, OBJ_HANDLE_NULL, target_loc, hit_loc);
+}
+
+// CE (card X8, `thrown weapon target`; zsogg, 2026-10-13): a throw at a
+// critter that keeps it as the target. The original's one caller with a
+// critter in hand - the player attacking with a weapon that throws by default
+// - passed only its tile, so the throw resolved against no one and could not
+// injure anybody (MODDING-NOTES quirk 50). `anim_throw_item` already reads the
+// target slot and hands it to `combat_throw`.
+bool anim_goal_throw_item_at_obj(int64_t obj, int64_t item_obj, int64_t target_obj, int hit_loc)
+{
+    if (target_obj == OBJ_HANDLE_NULL) {
+        return false;
+    }
+
+    return anim_goal_throw_item_build(obj, item_obj, target_obj,
+        obj_field_int64_get(target_obj, OBJ_F_LOCATION), hit_loc);
+}
+
+static bool anim_goal_throw_item_build(int64_t obj, int64_t item_obj, int64_t target_obj, int64_t target_loc, int hit_loc)
+{
     AnimGoalData goal_data;
 
     ASSERT(item_obj != OBJ_HANDLE_NULL); // itemObj != OBJ_HANDLE_NULL
@@ -14766,6 +14788,9 @@ bool anim_goal_throw_item_aimed(int64_t obj, int64_t item_obj, int64_t target_lo
 
     goal_data.params[AGDATA_TARGET_TILE].loc = target_loc;
     goal_data.params[AGDATA_SCRATCH_OBJ].obj = item_obj;
+    if (target_obj != OBJ_HANDLE_NULL) {
+        goal_data.params[AGDATA_TARGET_OBJ].obj = target_obj;
+    }
 
     // Snapshotted here, at command creation, and never re-read: once the throw
     // is accepted it owns its aim, so changing the selection afterwards cannot

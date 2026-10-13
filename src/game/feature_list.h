@@ -66,5 +66,6 @@ FEATURE(PROWL_IN_COMBAT_MASTER_ONLY, "prowl in combat master only", false)
 FEATURE(PROWL_DARKNESS_HELPS, "prowl darkness helps", false)
 FEATURE(PROWL_OPEN_GROUND_HALVES, "prowl open ground halves", false)
 FEATURE(REAL_TIME_RESTORATIVES, "real time restoratives", false)
+FEATURE(THROWN_WEAPON_TARGET, "thrown weapon target", false)
 
 // clang-format on

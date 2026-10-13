@@ -4044,9 +4044,18 @@ static void intgame_perform_action_on_target_inner(TargetDescriptor* td)
             // not have. With `called shot throws` off the aim is `HIT_LOC_TORSO`
             // whatever the panel shows or the keyboard holds, which is the
             // shipped behaviour exactly.
-            anim_goal_throw_item_aimed(pc_obj, throwable_instance_obj,
-                obj_field_int64_get(td->obj, OBJ_F_LOCATION),
-                called_shot_throw_aim(goal_data.params[AGDATA_SCRATCH_VAL3].data));
+            //
+            // CE (card X8, `thrown weapon target`): the critter clicked stays
+            // the target, so the throw can injure it. Off, its tile alone, as
+            // shipped (MODDING-NOTES quirk 50).
+            if (feature_enabled(FEATURE_THROWN_WEAPON_TARGET)) {
+                anim_goal_throw_item_at_obj(pc_obj, throwable_instance_obj, td->obj,
+                    called_shot_throw_aim(goal_data.params[AGDATA_SCRATCH_VAL3].data));
+            } else {
+                anim_goal_throw_item_aimed(pc_obj, throwable_instance_obj,
+                    obj_field_int64_get(td->obj, OBJ_F_LOCATION),
+                    called_shot_throw_aim(goal_data.params[AGDATA_SCRATCH_VAL3].data));
+            }
             return;
         }
     }
