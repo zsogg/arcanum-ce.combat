@@ -4023,14 +4023,24 @@ static void intgame_perform_action_on_target_inner(TargetDescriptor* td)
             && obj_field_int32_get(weapon_obj, OBJ_F_TYPE) == OBJ_TYPE_WEAPON
             && (obj_field_int32_get(weapon_obj, OBJ_F_WEAPON_FLAGS) & OWF_DEFAULT_THROWS) != 0
             && !item_check_remove(weapon_obj)) {
-            // CE (card X8, `thrown weapon target`; zsogg's playtest,
-            // 2026-10-13): in turn-based this route behaves as the attack it
-            // stands in for. The original builds the throw at once, so a click
-            // during a throw's follow-through interrupted it before its last
-            // node, which is where a throw pays - a free throw - and a throw
-            // began with any AP left. Here a click while the player is still
-            // animating is ignored, as the shared route below ignores one, and
-            // a throw that cannot be paid for is refused.
+            // CE (card X8, `thrown weapon target`; zsogg's playtests,
+            // 2026-10-13): this route behaves as the attack it stands in for.
+            // The original builds the throw at once, with another dagger, so
+            // each click interrupted the throw under way: in real time it
+            // restarted the wind-up, and in turn-based it cut the
+            // follow-through short before the last node, which is where a
+            // throw pays - a free throw - and a throw began with any AP left.
+            // Here a throw under way plays out, as a second click on an attack
+            // under way is ignored; in turn-based any click while the player is
+            // still animating is ignored, as the shared route below ignores
+            // one, and a throw that cannot be paid for is refused.
+            if (feature_enabled(FEATURE_THROWN_WEAPON_TARGET)) {
+                AnimID throw_anim_id;
+
+                if (anim_is_current_goal_type(pc_obj, AG_THROW_ITEM, &throw_anim_id)) {
+                    return;
+                }
+            }
             if (feature_enabled(FEATURE_THROWN_WEAPON_TARGET)
                 && combat_turn_based_is_active()) {
                 AnimID busy_anim_id;
