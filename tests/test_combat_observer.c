@@ -912,6 +912,18 @@ TEST(the_poison_row_sets_a_level_on_the_player_or_a_critter)
     CHECK(!load_script("0 poison 1001\n"));
 }
 
+TEST(the_use_row_names_a_prototype_and_perhaps_a_target)
+{
+    // 2026-10-13: a restorative used by the player, on themselves or another.
+    CHECK(load_script("0 use 10094\n1 use 10079 G_00000084_1104_4040_8000_000000000411\n"));
+    CHECK_INT(replay_ui_count(), 2);
+    CHECK(row_is(0, "turn=0 now=0 kind=use target= loc=0 aim=0 spell=0 cast=- wait=0 proto=10094 count=0"));
+    CHECK(row_is(1, "turn=1 now=0 kind=use target=G_00000084_1104_4040_8000_000000000411 loc=0 aim=0 spell=0 cast=- wait=0 proto=10079 count=0"));
+    CHECK(!load_script("0 use\n"));
+    CHECK(!load_script("0 use potion\n"));
+    CHECK(!load_script("0 use 10094 G_X extra\n"));
+}
+
 TEST(the_wear_row_loads_with_or_without_a_wearer)
 {
     // Armor milestone 3 (2026-10-03): armor on the player, or on a critter.
@@ -1885,6 +1897,7 @@ void test_combat_observer_suite(void)
     RUN(the_jam_row_loads_alone);
     RUN(the_afflict_row_names_a_debuff_critical);
     RUN(the_poison_row_sets_a_level_on_the_player_or_a_critter);
+    RUN(the_use_row_names_a_prototype_and_perhaps_a_target);
     RUN(the_wear_row_loads_with_or_without_a_wearer);
     RUN(a_row_the_parser_cannot_read_refuses_the_whole_file);
     RUN(a_tile_step_a_cast_request_and_a_weapon_change_are_each_recorded);

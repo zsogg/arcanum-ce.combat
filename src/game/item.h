@@ -83,6 +83,16 @@ int item_count_items_matching_prototype(int64_t obj, int64_t a2);
 int item_check_usable(int64_t a1, int64_t a2);
 void item_use_on_obj(int64_t source_obj, int64_t item_obj, int64_t target_obj);
 void item_use_on_loc(int64_t obj, int64_t item_obj, int64_t target_loc);
+
+// CE (`real time restoratives`; zsogg, 2026-10-13): in real time a restorative
+// is drunk or applied standing still for its turn-based cost, and takes effect
+// when that time has passed. One used while the critter is still recovering
+// waits, and starts the moment it is ready. A step, or turn-based beginning,
+// cancels it and the item is kept. The real-time budget calls these.
+bool item_restorative_pending(int64_t obj);
+void item_restorative_ready(int64_t obj);
+void item_restorative_done(int64_t obj, bool completed);
+void item_restorative_forget_all(void);
 int item_get_keys(int64_t obj, int* key_ids);
 bool item_party_has_key(int64_t obj, int key_id);
 bool item_junk_pile_collapse(int64_t container_obj);

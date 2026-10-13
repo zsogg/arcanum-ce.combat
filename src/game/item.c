@@ -24,6 +24,7 @@
 #include "game/reaction.h"
 #include "game/reload.h"
 #include "game/resistance.h"
+#include "game/rt_budget.h"
 #include "game/script.h"
 #include "game/skill.h"
 #include "game/spell.h"
@@ -1421,6 +1422,173 @@ int item_check_usable(int64_t a1, int64_t a2)
     return ITEM_CANNOT_OK;
 }
 
+// CE (`real time restoratives`): the restoratives under way or waiting, one a
+// critter.
+#define ITEM_RESTORATIVE_MAX 16
+
+static struct {
+    int64_t source_obj;
+    int64_t item_obj;
+    int64_t target_obj;
+    bool started;
+} item_restoratives[ITEM_RESTORATIVE_MAX];
+
+// Set while a restorative whose time has passed is used for real.
+static bool item_restorative_completing;
+
+static int item_restorative_find(int64_t obj)
+{
+    int index;
+
+    if (obj == OBJ_HANDLE_NULL) {
+        return -1;
+    }
+
+    for (index = 0; index < ITEM_RESTORATIVE_MAX; index++) {
+        if (item_restoratives[index].source_obj == obj) {
+            return index;
+        }
+    }
+
+    return -1;
+}
+
+static void item_restorative_say(int64_t obj, const char* text)
+{
+    if (player_is_local_pc_obj(obj)) {
+        tf_add(obj, TF_TYPE_WHITE, text);
+    }
+}
+
+static void item_restorative_start(int index)
+{
+    int64_t source_obj = item_restoratives[index].source_obj;
+    int64_t item_obj = item_restoratives[index].item_obj;
+
+    if (rt_budget_begin_standing_action(source_obj, RT_BUDGET_ITEM,
+            combat_use_item_cost(source_obj, item_obj))) {
+        item_restoratives[index].started = true;
+        tig_debug_printf("item: a restorative under way, %d AP, standing\n",
+            combat_use_item_cost(source_obj, item_obj));
+    }
+}
+
+static void item_restorative_begin(int64_t source_obj, int64_t item_obj, int64_t target_obj)
+{
+    int index;
+
+    if (item_restorative_find(source_obj) != -1) {
+        item_restorative_say(source_obj, "Already using a restorative");
+        return;
+    }
+
+    if (rt_budget_is_moving_now(source_obj)) {
+        item_restorative_say(source_obj, "Stand still to use it");
+        return;
+    }
+
+    for (index = 0; index < ITEM_RESTORATIVE_MAX; index++) {
+        // A slot is free, or left by a critter gone or dead.
+        if (item_restoratives[index].source_obj == OBJ_HANDLE_NULL
+            || !obj_handle_is_valid(item_restoratives[index].source_obj)
+            || critter_is_dead(item_restoratives[index].source_obj)) {
+            break;
+        }
+    }
+    if (index == ITEM_RESTORATIVE_MAX) {
+        return;
+    }
+
+    item_restoratives[index].source_obj = source_obj;
+    item_restoratives[index].item_obj = item_obj;
+    item_restoratives[index].target_obj = target_obj;
+    item_restoratives[index].started = false;
+
+    // Refused while still recovering: it waits, and starts when ready.
+    item_restorative_start(index);
+    if (!item_restoratives[index].started) {
+        tig_debug_printf("item: a restorative waits for its user to be ready\n");
+    }
+}
+
+bool item_restorative_pending(int64_t obj)
+{
+    return item_restorative_find(obj) != -1;
+}
+
+void item_restorative_ready(int64_t obj)
+{
+    int index;
+
+    index = item_restorative_find(obj);
+    if (index == -1 || item_restoratives[index].started) {
+        return;
+    }
+
+    if (!obj_handle_is_valid(obj) || critter_is_dead(obj)) {
+        item_restoratives[index].source_obj = OBJ_HANDLE_NULL;
+        return;
+    }
+
+    // Waiting for readiness, the critter walked off: it is cancelled as a
+    // step cancels one under way.
+    if (rt_budget_is_moving_now(obj)) {
+        item_restoratives[index].source_obj = OBJ_HANDLE_NULL;
+        item_restorative_say(obj, "Restorative interrupted");
+        tig_debug_printf("item: a waiting restorative cancelled; its user moved\n");
+        return;
+    }
+
+    item_restorative_start(index);
+}
+
+void item_restorative_done(int64_t obj, bool completed)
+{
+    int index;
+    int64_t item_obj;
+    int64_t target_obj;
+    int64_t parent_obj;
+
+    index = item_restorative_find(obj);
+    if (index == -1) {
+        return;
+    }
+
+    item_obj = item_restoratives[index].item_obj;
+    target_obj = item_restoratives[index].target_obj;
+    item_restoratives[index].source_obj = OBJ_HANDLE_NULL;
+
+    if (!completed) {
+        item_restorative_say(obj, "Restorative interrupted");
+        tig_debug_printf("item: a restorative interrupted; the item is kept\n");
+        return;
+    }
+
+    // Checked again: it may have been dropped or given away, or its target
+    // may have died, while the critter stood.
+    if (!obj_handle_is_valid(item_obj)
+        || !item_parent(item_obj, &parent_obj)
+        || parent_obj != obj) {
+        return;
+    }
+    if (target_obj != OBJ_HANDLE_NULL
+        && (!obj_handle_is_valid(target_obj)
+            || (obj_type_is_critter(obj_field_int32_get(target_obj, OBJ_F_TYPE))
+                && critter_is_dead(target_obj)))) {
+        return;
+    }
+
+    tig_debug_printf("item: a restorative's time has passed; it takes effect\n");
+    item_restorative_completing = true;
+    item_use_on_obj(obj, item_obj, target_obj);
+    item_restorative_completing = false;
+}
+
+void item_restorative_forget_all(void)
+{
+    memset(item_restoratives, 0, sizeof(item_restoratives));
+}
+
 // 0x462CC0
 void item_use_on_obj(int64_t source_obj, int64_t item_obj, int64_t target_obj)
 {
@@ -1462,6 +1630,18 @@ void item_use_on_obj(int64_t source_obj, int64_t item_obj, int64_t target_obj)
         if (player_is_local_pc_obj(source_obj)) {
             tf_add(source_obj, TF_TYPE_WHITE, "Not enough action points");
         }
+        return;
+    }
+
+    // CE (`real time restoratives`; zsogg, 2026-10-13): in real time a
+    // restorative takes its cost in time, as a reload does, and its effect
+    // comes at the end (`item_restorative_begin`). Stock (and the real-time
+    // budget alone) drank instantly.
+    if (feature_enabled(FEATURE_REAL_TIME_RESTORATIVES)
+        && item_type == OBJ_TYPE_FOOD
+        && rt_budget_active()
+        && !item_restorative_completing) {
+        item_restorative_begin(source_obj, item_obj, target_obj);
         return;
     }
 

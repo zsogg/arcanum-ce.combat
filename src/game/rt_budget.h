@@ -69,6 +69,10 @@ typedef enum RtBudgetCategory {
     // (`reload.c`). It has no animation to hold; it is timed standing still
     // (`rt_budget_begin_standing_action`).
     RT_BUDGET_RELOAD,
+    // A restorative drunk or applied, under `real time restoratives` (zsogg,
+    // 2026-10-13): no animation to hold, so it is timed standing still at its
+    // turn-based cost (`combat_use_item_cost`).
+    RT_BUDGET_ITEM,
 } RtBudgetCategory;
 
 typedef enum RtBudgetState {

@@ -706,6 +706,13 @@ bool ai_restorative_refused(int64_t obj, int64_t item_obj)
         return true;
     }
 
+    // Under `real time restoratives` one is under way or waiting already: the
+    // NPC goes on with the pass rather than reach for another.
+    if (feature_enabled(FEATURE_REAL_TIME_RESTORATIVES)
+        && item_restorative_pending(obj)) {
+        return true;
+    }
+
     if (!ai_restorative_capped(obj)) {
         return false;
     }

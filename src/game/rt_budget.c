@@ -268,6 +268,8 @@ static const char* rt_budget_category_name(RtBudgetCategory category)
         return "skill";
     case RT_BUDGET_RELOAD:
         return "reload";
+    case RT_BUDGET_ITEM:
+        return "restorative";
     default:
         return "cast";
     }
@@ -489,6 +491,21 @@ static void rt_budget_accept(int64_t obj, RtBudgetEntry* entry,
 }
 
 static bool rt_budget_is_moving(int64_t obj);
+
+// The actions with no animation, timed while the actor stands.
+static bool rt_budget_category_is_standing(RtBudgetCategory category)
+{
+    return category == RT_BUDGET_RELOAD || category == RT_BUDGET_ITEM;
+}
+
+static void rt_budget_standing_done(int64_t obj, RtBudgetCategory category, bool completed)
+{
+    if (category == RT_BUDGET_ITEM) {
+        item_restorative_done(obj, completed);
+    } else {
+        reload_standing_done(obj, completed);
+    }
+}
 
 bool rt_budget_begin_standing_action(int64_t obj, RtBudgetCategory category, int action_points)
 {
@@ -731,7 +748,7 @@ bool rt_budget_standing_action_pending(int64_t obj)
 
     entry = rt_budget_find(obj);
     return entry != NULL
-        && entry->category == RT_BUDGET_RELOAD
+        && rt_budget_category_is_standing(entry->category)
         && entry->state == RT_BUDGET_ACCEPTED;
 }
 
@@ -792,11 +809,12 @@ void rt_budget_tick(int delta_ms)
             if (entry->obj != OBJ_HANDLE_NULL
                 && rt_budget_entry_turn_based_began(entry)) {
                 rt_budget_observe("action.cancelled", entry->obj, entry, "turn_based");
-                if (entry->category == RT_BUDGET_RELOAD) {
-                    reload_standing_done(entry->obj, false);
+                if (rt_budget_category_is_standing(entry->category)) {
+                    rt_budget_standing_done(entry->obj, entry->category, false);
                 }
             }
         }
+        item_restorative_forget_all();
     }
     rt_budget_was_turn_based = turn_based;
     if (turn_based) {
@@ -807,7 +825,14 @@ void rt_budget_tick(int delta_ms)
 
     for (index = 0; index < RT_BUDGET_MAX_ENTRIES; index++) {
         entry = &(rt_budget_entries[index]);
-        if (entry->obj == OBJ_HANDLE_NULL || entry->state == RT_BUDGET_READY) {
+        if (entry->obj == OBJ_HANDLE_NULL) {
+            continue;
+        }
+
+        // A restorative waiting for its drinker to be ready starts as soon as
+        // it is, before the next swing takes the readiness.
+        if (entry->state == RT_BUDGET_READY) {
+            item_restorative_ready(entry->obj);
             continue;
         }
 
@@ -817,15 +842,15 @@ void rt_budget_tick(int delta_ms)
             continue;
         }
 
-        // A standing action (a reload): its time runs while the actor stands,
-        // whatever the movement setting, and a step cancels it. When the time
-        // is up the action is done and the actor ready at once - the time was
-        // the action.
-        if (entry->category == RT_BUDGET_RELOAD && entry->state == RT_BUDGET_ACCEPTED) {
+        // A standing action (a reload, a restorative): its time runs while the
+        // actor stands, whatever the movement setting, and a step cancels it.
+        // When the time is up the action is done and the actor ready at once -
+        // the time was the action.
+        if (rt_budget_category_is_standing(entry->category) && entry->state == RT_BUDGET_ACCEPTED) {
             if (rt_budget_is_moving(entry->obj)) {
                 entry->state = RT_BUDGET_READY;
                 rt_budget_observe("action.cancelled", entry->obj, entry, "moved");
-                reload_standing_done(entry->obj, false);
+                rt_budget_standing_done(entry->obj, entry->category, false);
                 continue;
             }
             if (delta_ms > 0) {
@@ -835,7 +860,7 @@ void rt_budget_tick(int delta_ms)
                 entry->elapsed_ms = entry->duration_ms;
                 entry->state = RT_BUDGET_READY;
                 rt_budget_observe("actor.ready", entry->obj, entry, NULL);
-                reload_standing_done(entry->obj, true);
+                rt_budget_standing_done(entry->obj, entry->category, true);
             }
             continue;
         }
@@ -852,6 +877,7 @@ void rt_budget_tick(int delta_ms)
         counts = !(pause_while_moving && rt_budget_is_moving(entry->obj));
         if (rt_budget_entry_tick(entry, delta_ms, counts)) {
             rt_budget_observe("actor.ready", entry->obj, entry, NULL);
+            item_restorative_ready(entry->obj);
         }
     }
 }

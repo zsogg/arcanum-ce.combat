@@ -154,11 +154,16 @@ typedef enum ReplayKind {
     //       (1-1000) through `stat_base_set`, as a poisoned hit raises it,
     //       so poison's pace can be measured without a poisoned weapon (2026-10-12).
     //       A test row.
+    //   use <prototype> [<id>]
+    //       a carried item of that prototype used by the player on themselves,
+    //       or on that critter, through `item_use_on_obj` as the inventory
+    //       does - a restorative's real-time timing (2026-10-13).
     REPLAY_KIND_SKILL_LEVEL,
     REPLAY_KIND_STAT_LEVEL,
     REPLAY_KIND_JAM,
     REPLAY_KIND_AFFLICT,
     REPLAY_KIND_POISON,
+    REPLAY_KIND_USE,
 } ReplayKind;
 
 // A cast's target, which is a third shape: the caster, an object or a tile.
@@ -651,6 +656,18 @@ static bool replay_parse_line(const char* text, ReplayCommand* command)
         return index == count;
     }
 
+    if (strcmp(kind, "use") == 0) {
+        command->kind = REPLAY_KIND_USE;
+        if (!replay_parse_int(tokens[index++], &(command->proto))
+            || command->proto <= 0) {
+            return false;
+        }
+        if (index < count) {
+            replay_copy_target(command, tokens[index++]);
+        }
+        return index == count;
+    }
+
     if (strcmp(kind, "wear") == 0) {
         command->kind = REPLAY_KIND_WEAR;
         if (!replay_parse_int(tokens[index++], &(command->proto))
@@ -759,7 +776,7 @@ int replay_ui_count(void)
 bool replay_ui_describe(int index, char* buffer, size_t size)
 {
     const ReplayCommand* command;
-    static const char* kinds[] = { "object", "location", "key", "cast", "wield", "wait", "learn", "give", "throw", "skill", "raise", "prowl", "panel", "save", "inspect", "transfer", "take", "drop", "pickup", "wear", "skill-level", "stat-level", "jam", "afflict", "poison" };
+    static const char* kinds[] = { "object", "location", "key", "cast", "wield", "wait", "learn", "give", "throw", "skill", "raise", "prowl", "panel", "save", "inspect", "transfer", "take", "drop", "pickup", "wear", "skill-level", "stat-level", "jam", "afflict", "poison", "use" };
     int written;
     static const char* casts[] = { "self", "object", "location" };
 
@@ -778,7 +795,7 @@ bool replay_ui_describe(int index, char* buffer, size_t size)
             || command->kind == REPLAY_KIND_TRANSFER || command->kind == REPLAY_KIND_TAKE
             || command->kind == REPLAY_KIND_DROP || command->kind == REPLAY_KIND_PICKUP
             || command->kind == REPLAY_KIND_WEAR || command->kind == REPLAY_KIND_AFFLICT
-            || command->kind == REPLAY_KIND_POISON)
+            || command->kind == REPLAY_KIND_POISON || command->kind == REPLAY_KIND_USE)
         && written >= 0 && (size_t)written < size) {
         snprintf(buffer + written, size - (size_t)written, " proto=%d count=%d",
             command->proto, command->count);
@@ -1098,6 +1115,27 @@ void replay_ui_tick(void)
         stat_base_set(victim_obj, STAT_POISON_LEVEL, command->count);
         tig_debug_printf("Replay: command %d set poison level %d; it reads %d\n",
             replay_next - 1, command->count, stat_base_get(victim_obj, STAT_POISON_LEVEL));
+        return;
+    }
+
+    if (command->kind == REPLAY_KIND_USE) {
+        int64_t item_obj;
+        int64_t target_obj = pc_obj;
+
+        replay_stall_reported = false;
+        replay_next++;
+        if (command->target[0] != '\0' && !replay_resolve(command, &target_obj)) {
+            return;
+        }
+        item_obj = replay_find_carried(pc_obj, command->proto, false);
+        if (item_obj == OBJ_HANDLE_NULL) {
+            tig_debug_printf("Replay: command %d carries no prototype %d to use\n",
+                replay_next - 1, command->proto);
+            return;
+        }
+        tig_debug_printf("Replay: command %d uses prototype %d\n",
+            replay_next - 1, command->proto);
+        item_use_on_obj(pc_obj, item_obj, target_obj);
         return;
     }
 
