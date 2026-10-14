@@ -159,7 +159,11 @@ static void script_state_begin(ScriptState* state,
 
 static bool validate_one(ScriptCondition* condition, ScriptOperandError* error)
 {
-    ScriptFile file;
+    // Static, not local: the error records `script_name` as a pointer to the
+    // file's description, as the engine does for a file that lives in the
+    // script cache, and the caller reads it after this returns. A local was a
+    // use after scope that only the release-optimized ASan tree (R6) caught.
+    static ScriptFile file;
     memset(&file, 0, sizeof(file));
     file.num_entries = 1;
     file.max_entries = 1;
