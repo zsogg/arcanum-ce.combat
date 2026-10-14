@@ -159,9 +159,9 @@ file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/artobj")
 
 add_custom_command(
     OUTPUT "${EMUDIFF_ART_OBJ}"
-    COMMAND "${CMAKE_AR}" x "$<TARGET_FILE:tig>" art.c.o
-    COMMAND "${CMAKE_OBJCOPY}" ${_globalize_args} art.c.o "${EMUDIFF_ART_OBJ}"
-    COMMAND "${CMAKE_COMMAND}" -E rm -f art.c.o
+    COMMAND "${CMAKE_AR}" x "$<TARGET_FILE:tig>" art.c${CMAKE_C_OUTPUT_EXTENSION}
+    COMMAND "${CMAKE_OBJCOPY}" ${_globalize_args} art.c${CMAKE_C_OUTPUT_EXTENSION} "${EMUDIFF_ART_OBJ}"
+    COMMAND "${CMAKE_COMMAND}" -E rm -f art.c${CMAKE_C_OUTPUT_EXTENSION}
     # VERIFY: every requested symbol must actually be global in the result.
     # Without this, a typo or a renamed function silently produces an object
     # that links but omits the case, and the oracle would report "not
@@ -206,9 +206,9 @@ file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/combatobj")
 
 add_custom_command(
     OUTPUT "${EMUDIFF_COMBAT_OBJ}"
-    COMMAND "${CMAKE_AR}" x "$<TARGET_FILE:arcanum-game>" combat.c.o
-    COMMAND "${CMAKE_OBJCOPY}" ${_combat_globalize_args} combat.c.o "${EMUDIFF_COMBAT_OBJ}"
-    COMMAND "${CMAKE_COMMAND}" -E rm -f combat.c.o
+    COMMAND "${CMAKE_AR}" x "$<TARGET_FILE:arcanum-game>" combat.c${CMAKE_C_OUTPUT_EXTENSION}
+    COMMAND "${CMAKE_OBJCOPY}" ${_combat_globalize_args} combat.c${CMAKE_C_OUTPUT_EXTENSION} "${EMUDIFF_COMBAT_OBJ}"
+    COMMAND "${CMAKE_COMMAND}" -E rm -f combat.c${CMAKE_C_OUTPUT_EXTENSION}
     COMMAND "${CMAKE_COMMAND}"
         "-DOBJ=${EMUDIFF_COMBAT_OBJ}"
         "-DSYMS=${EMUDIFF_COMBAT_STATICS}"
@@ -242,9 +242,9 @@ file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/objectobj")
 
 add_custom_command(
     OUTPUT "${EMUDIFF_OBJECT_OBJ}"
-    COMMAND "${CMAKE_AR}" x "$<TARGET_FILE:arcanum-game>" object.c.o
-    COMMAND "${CMAKE_OBJCOPY}" ${_object_globalize_args} object.c.o "${EMUDIFF_OBJECT_OBJ}"
-    COMMAND "${CMAKE_COMMAND}" -E rm -f object.c.o
+    COMMAND "${CMAKE_AR}" x "$<TARGET_FILE:arcanum-game>" object.c${CMAKE_C_OUTPUT_EXTENSION}
+    COMMAND "${CMAKE_OBJCOPY}" ${_object_globalize_args} object.c${CMAKE_C_OUTPUT_EXTENSION} "${EMUDIFF_OBJECT_OBJ}"
+    COMMAND "${CMAKE_COMMAND}" -E rm -f object.c${CMAKE_C_OUTPUT_EXTENSION}
     COMMAND "${CMAKE_COMMAND}"
         "-DOBJ=${EMUDIFF_OBJECT_OBJ}"
         "-DSYMS=${EMUDIFF_OBJECT_STATICS}"
@@ -271,9 +271,9 @@ file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/magictechobj")
 
 add_custom_command(
     OUTPUT "${EMUDIFF_MAGICTECH_OBJ}"
-    COMMAND "${CMAKE_AR}" x "$<TARGET_FILE:arcanum-game>" magictech.c.o
-    COMMAND "${CMAKE_OBJCOPY}" ${_magictech_globalize_args} magictech.c.o "${EMUDIFF_MAGICTECH_OBJ}"
-    COMMAND "${CMAKE_COMMAND}" -E rm -f magictech.c.o
+    COMMAND "${CMAKE_AR}" x "$<TARGET_FILE:arcanum-game>" magictech.c${CMAKE_C_OUTPUT_EXTENSION}
+    COMMAND "${CMAKE_OBJCOPY}" ${_magictech_globalize_args} magictech.c${CMAKE_C_OUTPUT_EXTENSION} "${EMUDIFF_MAGICTECH_OBJ}"
+    COMMAND "${CMAKE_COMMAND}" -E rm -f magictech.c${CMAKE_C_OUTPUT_EXTENSION}
     COMMAND "${CMAKE_COMMAND}"
         "-DOBJ=${EMUDIFF_MAGICTECH_OBJ}"
         "-DSYMS=${EMUDIFF_MAGICTECH_STATICS}"
@@ -309,9 +309,9 @@ file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/reactionobj")
 
 add_custom_command(
     OUTPUT "${EMUDIFF_REACTION_OBJ}"
-    COMMAND "${CMAKE_AR}" x "$<TARGET_FILE:arcanum-game>" reaction.c.o
-    COMMAND "${CMAKE_OBJCOPY}" ${_reaction_globalize_args} reaction.c.o "${EMUDIFF_REACTION_OBJ}"
-    COMMAND "${CMAKE_COMMAND}" -E rm -f reaction.c.o
+    COMMAND "${CMAKE_AR}" x "$<TARGET_FILE:arcanum-game>" reaction.c${CMAKE_C_OUTPUT_EXTENSION}
+    COMMAND "${CMAKE_OBJCOPY}" ${_reaction_globalize_args} reaction.c${CMAKE_C_OUTPUT_EXTENSION} "${EMUDIFF_REACTION_OBJ}"
+    COMMAND "${CMAKE_COMMAND}" -E rm -f reaction.c${CMAKE_C_OUTPUT_EXTENSION}
     COMMAND "${CMAKE_COMMAND}"
         "-DOBJ=${EMUDIFF_REACTION_OBJ}"
         "-DSYMS=${EMUDIFF_REACTION_STATICS}"
@@ -338,9 +338,9 @@ file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/skilluiobj")
 
 add_custom_command(
     OUTPUT "${EMUDIFF_SKILL_UI_OBJ}"
-    COMMAND "${CMAKE_AR}" x "$<TARGET_FILE:arcanum-game>" skill_ui.c.o
-    COMMAND "${CMAKE_OBJCOPY}" ${_skill_ui_globalize_args} skill_ui.c.o "${EMUDIFF_SKILL_UI_OBJ}"
-    COMMAND "${CMAKE_COMMAND}" -E rm -f skill_ui.c.o
+    COMMAND "${CMAKE_AR}" x "$<TARGET_FILE:arcanum-game>" skill_ui.c${CMAKE_C_OUTPUT_EXTENSION}
+    COMMAND "${CMAKE_OBJCOPY}" ${_skill_ui_globalize_args} skill_ui.c${CMAKE_C_OUTPUT_EXTENSION} "${EMUDIFF_SKILL_UI_OBJ}"
+    COMMAND "${CMAKE_COMMAND}" -E rm -f skill_ui.c${CMAKE_C_OUTPUT_EXTENSION}
     COMMAND "${CMAKE_COMMAND}"
         "-DOBJ=${EMUDIFF_SKILL_UI_OBJ}"
         "-DSYMS=${EMUDIFF_SKILL_UI_STATICS}"
@@ -372,9 +372,9 @@ file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/targetobj")
 
 add_custom_command(
     OUTPUT "${EMUDIFF_TARGET_OBJ}"
-    COMMAND "${CMAKE_AR}" x "$<TARGET_FILE:arcanum-game>" target.c.o
-    COMMAND "${CMAKE_OBJCOPY}" ${_target_globalize_args} target.c.o "${EMUDIFF_TARGET_OBJ}"
-    COMMAND "${CMAKE_COMMAND}" -E rm -f target.c.o
+    COMMAND "${CMAKE_AR}" x "$<TARGET_FILE:arcanum-game>" target.c${CMAKE_C_OUTPUT_EXTENSION}
+    COMMAND "${CMAKE_OBJCOPY}" ${_target_globalize_args} target.c${CMAKE_C_OUTPUT_EXTENSION} "${EMUDIFF_TARGET_OBJ}"
+    COMMAND "${CMAKE_COMMAND}" -E rm -f target.c${CMAKE_C_OUTPUT_EXTENSION}
     COMMAND "${CMAKE_COMMAND}"
         "-DOBJ=${EMUDIFF_TARGET_OBJ}"
         "-DSYMS=${EMUDIFF_TARGET_STATICS}"
@@ -423,9 +423,9 @@ file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/mtaiobj")
 
 add_custom_command(
     OUTPUT "${EMUDIFF_MT_AI_OBJ}"
-    COMMAND "${CMAKE_AR}" x "$<TARGET_FILE:arcanum-game>" mt_ai.c.o
-    COMMAND "${CMAKE_OBJCOPY}" ${_mt_ai_globalize_args} mt_ai.c.o "${EMUDIFF_MT_AI_OBJ}"
-    COMMAND "${CMAKE_COMMAND}" -E rm -f mt_ai.c.o
+    COMMAND "${CMAKE_AR}" x "$<TARGET_FILE:arcanum-game>" mt_ai.c${CMAKE_C_OUTPUT_EXTENSION}
+    COMMAND "${CMAKE_OBJCOPY}" ${_mt_ai_globalize_args} mt_ai.c${CMAKE_C_OUTPUT_EXTENSION} "${EMUDIFF_MT_AI_OBJ}"
+    COMMAND "${CMAKE_COMMAND}" -E rm -f mt_ai.c${CMAKE_C_OUTPUT_EXTENSION}
     COMMAND "${CMAKE_COMMAND}"
         "-DOBJ=${EMUDIFF_MT_AI_OBJ}"
         "-DSYMS=${EMUDIFF_MT_AI_STATICS}"
@@ -480,9 +480,9 @@ file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/animobj")
 
 add_custom_command(
     OUTPUT "${ANIM_TEST_OBJ}"
-    COMMAND "${CMAKE_AR}" x "$<TARGET_FILE:arcanum-game>" anim.c.o
-    COMMAND "${CMAKE_OBJCOPY}" ${_anim_globalize_args} anim.c.o "${ANIM_TEST_OBJ}"
-    COMMAND "${CMAKE_COMMAND}" -E rm -f anim.c.o
+    COMMAND "${CMAKE_AR}" x "$<TARGET_FILE:arcanum-game>" anim.c${CMAKE_C_OUTPUT_EXTENSION}
+    COMMAND "${CMAKE_OBJCOPY}" ${_anim_globalize_args} anim.c${CMAKE_C_OUTPUT_EXTENSION} "${ANIM_TEST_OBJ}"
+    COMMAND "${CMAKE_COMMAND}" -E rm -f anim.c${CMAKE_C_OUTPUT_EXTENSION}
     COMMAND "${CMAKE_COMMAND}"
         "-DOBJ=${ANIM_TEST_OBJ}"
         "-DSYMS=${ANIM_TEST_STATICS}"
@@ -547,9 +547,9 @@ file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/dialogobj")
 
 add_custom_command(
     OUTPUT "${DIALOG_TEST_OBJ}"
-    COMMAND "${CMAKE_AR}" x "$<TARGET_FILE:arcanum-game>" dialog.c.o
-    COMMAND "${CMAKE_OBJCOPY}" ${_dialog_globalize_args} dialog.c.o "${DIALOG_TEST_OBJ}"
-    COMMAND "${CMAKE_COMMAND}" -E rm -f dialog.c.o
+    COMMAND "${CMAKE_AR}" x "$<TARGET_FILE:arcanum-game>" dialog.c${CMAKE_C_OUTPUT_EXTENSION}
+    COMMAND "${CMAKE_OBJCOPY}" ${_dialog_globalize_args} dialog.c${CMAKE_C_OUTPUT_EXTENSION} "${DIALOG_TEST_OBJ}"
+    COMMAND "${CMAKE_COMMAND}" -E rm -f dialog.c${CMAKE_C_OUTPUT_EXTENSION}
     COMMAND "${CMAKE_COMMAND}"
         "-DOBJ=${DIALOG_TEST_OBJ}"
         "-DSYMS=${DIALOG_TEST_STATICS}"
@@ -609,9 +609,9 @@ file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/scriptobj")
 
 add_custom_command(
     OUTPUT "${SCRIPT_TEST_OBJ}"
-    COMMAND "${CMAKE_AR}" x "$<TARGET_FILE:arcanum-game>" script.c.o
-    COMMAND "${CMAKE_OBJCOPY}" ${_script_globalize_args} script.c.o "${SCRIPT_TEST_OBJ}"
-    COMMAND "${CMAKE_COMMAND}" -E rm -f script.c.o
+    COMMAND "${CMAKE_AR}" x "$<TARGET_FILE:arcanum-game>" script.c${CMAKE_C_OUTPUT_EXTENSION}
+    COMMAND "${CMAKE_OBJCOPY}" ${_script_globalize_args} script.c${CMAKE_C_OUTPUT_EXTENSION} "${SCRIPT_TEST_OBJ}"
+    COMMAND "${CMAKE_COMMAND}" -E rm -f script.c${CMAKE_C_OUTPUT_EXTENSION}
     COMMAND "${CMAKE_COMMAND}"
         "-DOBJ=${SCRIPT_TEST_OBJ}"
         "-DSYMS=${SCRIPT_TEST_STATICS}"

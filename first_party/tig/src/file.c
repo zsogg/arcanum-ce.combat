@@ -875,10 +875,23 @@ bool tig_file_repository_remove_all(void)
 // 0x52F0A0
 bool tig_file_repository_guid(const char* path, TigGuid* guid)
 {
+    // FIX (porting bug #57): the archives' paths are stored as the engine
+    // opened them, in native form, and the caller's - `gamelib`'s
+    // `modules\Arcanum.dat` - was compared as written. On Windows both are
+    // backslashed and the original (0x52F0A0, a case-insensitive compare of
+    // the two) finds the module's GUID; on Linux they never matched and the
+    // GUID stayed zero, so `map_preprocess_mobile` reused a map's mobile
+    // cache whatever module wrote it. Compared in native form, as every other
+    // public function here takes its path.
+    char native_path[TIG_MAX_PATH];
     TigFileRepository* curr = tig_file_repositories_head;
+
+    SDL_strlcpy(native_path, path, sizeof(native_path));
+    compat_windows_path_to_native(native_path);
+
     while (curr != NULL) {
         if ((curr->type & TIG_FILE_DATABASE) != 0) {
-            if (SDL_strcasecmp(curr->database->path, path) == 0) {
+            if (SDL_strcasecmp(curr->database->path, native_path) == 0) {
                 *guid = curr->database->guid;
                 return true;
             }

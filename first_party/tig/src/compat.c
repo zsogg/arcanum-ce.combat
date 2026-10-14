@@ -8,17 +8,24 @@
 
 void compat_windows_path_to_native(char* path)
 {
-#ifdef _WIN32
-    (void)path;
-#else
+    // Release 1, R6 (2026-10-13): one separator per platform, both ways. On
+    // Windows `/` used to pass through; Win32 accepts it, but the code that
+    // splits a path at `PATH_SEPARATOR` - the directory walk the save archive
+    // and the file list use - did not, so a `/` path found nothing there. The
+    // Linux port has always converted every `\` to `/`; this is its mirror.
     char* pch = path;
     while (*pch != '\0') {
+#ifdef _WIN32
+        if (*pch == '/') {
+            *pch = '\\';
+        }
+#else
         if (*pch == '\\') {
             *pch = '/';
         }
+#endif
         pch++;
     }
-#endif
 }
 
 void compat_resolve_path(char* path)

@@ -1,6 +1,7 @@
 #include "game/anim.h"
 
 #include <stdio.h>
+#include <string.h>
 
 #include "game/ai.h"
 #include "game/animfx.h"
@@ -3069,6 +3070,16 @@ bool anim_goal_data_save(AnimGoalData* goal_data, TigFile* stream)
 
     // Special case - sound handle is volatile, it's not intended to be
     // serialized.
+    //
+    // FIX: the parameter goes out as 8 bytes and `data` sets only the low 4;
+    // the original wrote whatever its stack held in the other 4, and so did
+    // CE - the top of an address, different on Linux and Windows (release 1,
+    // R6: the Windows build's `Slot0003` save differed from the Linux one in
+    // exactly these bytes, once per running animation). The load reads 8 and
+    // overwrites `data` with -1, so nothing ever reads them; the save format
+    // is Compatible (FIDELITY-CONTRACT.md), so CE may write zeros, as R0 did
+    // for `combat_save`'s null identifier.
+    memset(&param, 0, sizeof(param));
     param.data = -1;
     if (!anim_run_info_param_save(&param, NULL, anim_goal_data_param_types[AGDATA_SOUND_HANDLE], stream)) {
         return false;

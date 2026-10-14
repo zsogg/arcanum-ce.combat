@@ -8,11 +8,20 @@
 #include <signal.h>
 #include <stdlib.h>
 #include <sys/stat.h>
+#ifndef _WIN32
+// The two kill cases fork a child and SIGKILL it at every I/O boundary; the
+// Windows build of the suite (release 1, R6, under Wine) has neither, so it
+// compiles them out and says so. The failure-injection halves still run.
 #include <sys/wait.h>
+#endif
 #include <unistd.h>
 
 #include "test_harness.h"
 #include "tig/file.h"
+
+#ifdef _WIN32
+#define mkdir(path, mode) mkdir(path)
+#endif
 
 #define REPO "./arcanum_test_slot_repo"
 #define TXN REPO "/Save/ce-save-transaction"
@@ -51,10 +60,12 @@ static bool fault(void)
 
 static void crash(void)
 {
+#ifndef _WIN32
     if (armed && kill_at != 0 && events == kill_at) {
         kill(getpid(), SIGKILL);
         _exit(99);
     }
+#endif
 }
 
 int __wrap_tig_file_rename(const char* src, const char* dst)
@@ -334,7 +345,12 @@ TEST(metadata_and_thumbnail_failures_do_not_touch_the_old_slot)
     strcpy(info.description, "description");
     strcpy(info.module_name, "Arcanum");
     strcpy(info.pc_name, "Player");
+    // The fourth kind writes through /dev/full, which Windows has not.
+#ifndef _WIN32
     for (kind = 0; kind < 4; kind++) {
+#else
+    for (kind = 0; kind < 3; kind++) {
+#endif
         begin(true);
         fake_bmp = kind == 0 ? 2 : 1;
         if (kind == 1) {
@@ -344,7 +360,9 @@ TEST(metadata_and_thumbnail_failures_do_not_touch_the_old_slot)
         } else if (kind == 3) {
             // Actual buffered write failure, not just an injected return code.
             unlink(TXN "/new.gsi");
+#ifndef _WIN32
             CHECK_INT(symlink("/dev/full", TXN "/new.gsi"), 0);
+#endif
         }
         CHECK(!gamelib_saveinfo_save(&info));
         reset_faults();
@@ -382,6 +400,7 @@ TEST(every_commit_io_failure_recovers_a_whole_generation)
     }
 }
 
+#ifndef _WIN32
 TEST(killing_the_real_commit_at_every_io_boundary_is_recoverable)
 {
     int limit;
@@ -424,6 +443,7 @@ TEST(killing_the_real_commit_at_every_io_boundary_is_recoverable)
         }
     }
 }
+#endif /* !_WIN32 */
 
 // A second failure or SIGKILL DURING rollback must leave enough information
 // for a third attempt. This exercises restoration copies and settled cleanup.
@@ -448,8 +468,10 @@ TEST(recovery_itself_survives_every_io_failure_and_interruption)
     reset_faults();
     end();
     for (point = 1; point <= limit; point++) {
+#ifndef _WIN32
         pid_t child;
         int status;
+#endif
         leave_pending();
         armed = true;
         fail_at = point;
@@ -461,6 +483,7 @@ TEST(recovery_itself_survives_every_io_failure_and_interruption)
         check_generation(false, true);
         end();
 
+#ifndef _WIN32
         leave_pending();
         fflush(NULL);
         child = fork();
@@ -478,6 +501,7 @@ TEST(recovery_itself_survives_every_io_failure_and_interruption)
             check_generation(false, true);
         }
         end();
+#endif
     }
 }
 
@@ -524,7 +548,11 @@ void test_save_slot_suite(void)
     RUN(failed_restore_retains_all_backups_and_blocks_readers);
     RUN(metadata_and_thumbnail_failures_do_not_touch_the_old_slot);
     RUN(every_commit_io_failure_recovers_a_whole_generation);
+#ifndef _WIN32
     RUN(killing_the_real_commit_at_every_io_boundary_is_recoverable);
+#else
+    printf("save slot: not run on Windows - the kill cases need fork and SIGKILL\n");
+#endif
     RUN(recovery_itself_survives_every_io_failure_and_interruption);
     RUN(legacy_backups_and_corrupt_records_are_preserved_not_guessed_at);
     RUN(a_blocked_recovery_is_still_reportable_after_the_list_is_refused);

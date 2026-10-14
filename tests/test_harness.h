@@ -28,6 +28,21 @@
 #include <stdio.h>
 #include <string.h>
 
+// Fixture cleanup removes directories with `remove`, which POSIX defines to
+// do and Windows does not. Under the Windows build of the suite (release 1,
+// R6, run under Wine) a directory one case made - an archive's data file
+// made a directory so its open fails - then outlived the case and failed
+// every later one. `stdio.h` is already in, so the macro cannot reach its
+// declaration.
+#ifdef _WIN32
+#include <direct.h>
+static inline int test_remove_path(const char* path)
+{
+    return (remove(path) == 0 || _rmdir(path) == 0) ? 0 : -1;
+}
+#define remove(path) test_remove_path(path)
+#endif
+
 extern int test_checks_run;
 extern int test_checks_failed;
 extern int test_cases_run;

@@ -40,8 +40,11 @@
 //
 // **Requires a debug build.** `tig_memory_stats`/`_reset_stats`/
 // `_validate_memory_leaks` are upstream's own test hooks behind `#ifndef
-// NDEBUG`. Tests are only ever built with `linux-x64-debug` and
-// `linux-x64-asan`, both of which are `CMAKE_BUILD_TYPE=Debug`.
+// NDEBUG`. Tests were built with `linux-x64-debug` and `linux-x64-asan`,
+// both `CMAKE_BUILD_TYPE=Debug`; since release 1's R6 (2026-10-13) the suite
+// is also built at the release's optimization (`linux-x64-release-tests`,
+// `NDEBUG` defined), where the debug allocator these test is compiled out, so
+// the suite says so and runs nothing.
 
 #include <setjmp.h>
 #include <stdio.h>
@@ -50,6 +53,8 @@
 #include "tig/memory.h"
 
 #include "test_harness.h"
+
+#ifndef NDEBUG
 
 // ---------------------------------------------------------------------------
 // Capturing what the module prints.
@@ -1090,3 +1095,12 @@ void test_memory_suite(void)
     MEM_RUN(validate_memory_leaks_misses_an_outstanding_zero_byte_block);
     MEM_RUN(get_system_status_answers_the_same_figure_for_both);
 }
+
+#else /* NDEBUG */
+
+void test_memory_suite(void)
+{
+    printf("memory: not run - the debug allocator is compiled out under NDEBUG\n");
+}
+
+#endif /* NDEBUG */

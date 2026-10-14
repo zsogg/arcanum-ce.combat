@@ -78,6 +78,20 @@
             }
         },
         {
+            "name": "linux-x64-asan-release",
+            "displayName": "Linux x64 Release + ASan/UBSan",
+            "description": "The release's optimization (-O3 -DNDEBUG) with the ASan preset's sanitizers, for release 1's R6: what the shipped binary's compiler does with the code, instrumented. Keeps static functions and data out of line so the tests' globalized copies exist.",
+            "inherits": [
+                "linux-base"
+            ],
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Release",
+                "ARCANUM_BUILD_TESTS": "ON",
+                "CMAKE_C_FLAGS": "-fsanitize=address,undefined -fno-omit-frame-pointer -fno-sanitize-recover=undefined -fkeep-static-functions -fno-ipa-reference-addressable",
+                "CMAKE_EXE_LINKER_FLAGS": "-fsanitize=address,undefined"
+            }
+        },
+        {
             "name": "windows-x64-mingw",
             "displayName": "Windows x64 (cross-compiled from Linux with mingw-w64)",
             "description": "Produces a self-contained arcanum-ce.exe from a Linux host. CE's own windows-* presets need a Windows host and Visual Studio; this is the cross path. Requires: sudo apt install mingw-w64",
@@ -96,12 +110,36 @@
             }
         },
         {
+            "name": "windows-x64-mingw-tests",
+            "displayName": "Windows x64 (MinGW) Release, unit tests",
+            "description": "The Windows release's optimization with the C suite, for release 1's R6, run under Wine. The shipped tree, windows-x64-mingw, carries no test code; this sibling keeps static functions and data out of line for the tests' globalized copies.",
+            "inherits": [
+                "windows-x64-mingw"
+            ],
+            "cacheVariables": {
+                "ARCANUM_BUILD_TESTS": "ON",
+                "CMAKE_C_FLAGS": "-fkeep-static-functions -fno-ipa-reference-addressable"
+            }
+        },
+        {
             "name": "linux-x64-release",
             "inherits": [
                 "linux-base"
             ],
             "cacheVariables": {
                 "CMAKE_BUILD_TYPE": "Release"
+            }
+        },
+        {
+            "name": "linux-x64-release-tests",
+            "displayName": "Linux x64 Release, unit tests",
+            "description": "The shipped preset's optimization (-O3 -DNDEBUG) with the C suite and emudiff oracle, for release 1's R6. The shipped tree, linux-x64-release, carries no test code; this sibling keeps static functions and data out of line (-fkeep-static-functions, -fno-ipa-reference-addressable), which the tests' globalized copies need.",
+            "inherits": [
+                "linux-x64-release"
+            ],
+            "cacheVariables": {
+                "ARCANUM_BUILD_TESTS": "ON",
+                "CMAKE_C_FLAGS": "-fkeep-static-functions -fno-ipa-reference-addressable"
             }
         },
         {
@@ -209,12 +247,24 @@
             "configurePreset": "linux-x64-asan"
         },
         {
+            "name": "linux-x64-asan-release",
+            "configurePreset": "linux-x64-asan-release"
+        },
+        {
             "name": "windows-x64-mingw",
             "configurePreset": "windows-x64-mingw"
         },
         {
+            "name": "windows-x64-mingw-tests",
+            "configurePreset": "windows-x64-mingw-tests"
+        },
+        {
             "name": "linux-x64-release",
             "configurePreset": "linux-x64-release"
+        },
+        {
+            "name": "linux-x64-release-tests",
+            "configurePreset": "linux-x64-release-tests"
         },
         {
             "name": "linux-arm64-debug",

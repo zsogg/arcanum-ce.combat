@@ -14,6 +14,19 @@ add_subdirectory("third_party/sdl3" EXCLUDE_FROM_ALL)
 add_subdirectory("third_party/sdl3_mixer" EXCLUDE_FROM_ALL)
 add_subdirectory("third_party/zlib" EXCLUDE_FROM_ALL)
 
+# CE (release 1, R6, 2026-10-13): the original's arithmetic, at any
+# optimization. The code is transcribed from the original's machine code,
+# where a signed overflow wraps and any pointer may alias any other; the
+# debug build every check measures never assumed otherwise. An optimizing
+# GCC assumes both away: at -O3 `-x > 0` became `x < 0`, and emudiff caught
+# `item_weapon_skill` calling a weapon of complexity INT_MIN a firearm, which
+# the original and the debug build do not. Every first-party target below
+# (tig, the game, the executable, the tests) gets the original's semantics;
+# the third-party libraries above keep their own flags.
+if(NOT MSVC)
+    add_compile_options(-fwrapv -fno-strict-aliasing)
+endif()
+
 add_subdirectory("first_party/bink_compat" EXCLUDE_FROM_ALL)
 add_subdirectory("first_party/mss_compat" EXCLUDE_FROM_ALL)
 add_subdirectory("first_party/tig" EXCLUDE_FROM_ALL)

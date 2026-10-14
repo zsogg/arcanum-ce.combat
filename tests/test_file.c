@@ -28,9 +28,14 @@
 // Card R2's two F2 reproductions drive a write to failure with
 // RLIMIT_FSIZE, in a child so neither the limit nor the SIGXFSZ
 // disposition escapes into the rest of the suite.
+//
+// POSIX only: the Windows build of the suite (release 1, R6, run under Wine)
+// compiles that case out and says so.
 #include <signal.h>
+#ifndef _WIN32
 #include <sys/resource.h>
 #include <sys/wait.h>
+#endif
 #include <unistd.h>
 
 #include "tig/file.h"
@@ -184,6 +189,28 @@ TEST(the_archive_mounted_last_wins)
         "only in base");
     CHECK_STR(read_path("rules\\mod-only.txt", buffer, sizeof(buffer)),
         "only in mod");
+
+    remove_fixtures();
+}
+
+// Porting bug #57: `gamelib` asks for the module archive's GUID by its
+// Windows spelling, and the archive was mounted - and its path stored - in
+// native form. On Linux the two never compared equal, so the GUID was never
+// found. Either spelling now finds the archive, and the same GUID.
+TEST(an_archive_guid_is_found_by_either_spelling_of_its_path)
+{
+    TigGuid backslashed;
+    TigGuid native;
+
+    write_fixtures();
+    CHECK(tig_file_repository_add(BASE_PATH));
+
+    memset(&backslashed, 0xAA, sizeof(backslashed));
+    memset(&native, 0x55, sizeof(native));
+    CHECK(tig_file_repository_guid(".\\arcanum_test_repo_base.dat", &backslashed));
+    CHECK(tig_file_repository_guid(BASE_PATH, &native));
+    CHECK(memcmp(&backslashed, &native, sizeof(native)) == 0);
+    CHECK(!tig_file_repository_guid(".\\arcanum_test_repo_absent.dat", &native));
 
     remove_fixtures();
 }
@@ -1014,6 +1041,7 @@ TEST(a_failed_replacement_leaves_the_previous_archive_loadable)
 // process, so it is ignored for the duration. The child keeps both the limit
 // and the signal disposition away from the rest of the suite, and carries
 // what `tig_file_archive` claimed out through its exit status.
+#ifndef _WIN32
 TEST(a_failure_during_the_write_is_not_reported_as_a_successful_save)
 {
     struct rlimit saved;
@@ -1067,6 +1095,7 @@ TEST(a_failure_during_the_write_is_not_reported_as_a_successful_save)
 
     archive_fixture_remove();
 }
+#endif /* !_WIN32 */
 
 // The game's path shape, which the cases above do NOT exercise.
 //
@@ -1210,6 +1239,7 @@ void test_file_suite(void)
 {
     RUN(the_save_folder_redirect_rewrites_only_a_leading_save_component);
     RUN(the_archive_mounted_last_wins);
+    RUN(an_archive_guid_is_found_by_either_spelling_of_its_path);
     RUN(reversing_the_mount_order_reverses_the_answer);
     RUN(a_directory_mounted_after_an_archive_beats_it);
     RUN(a_directory_is_not_a_file);
@@ -1230,6 +1260,10 @@ void test_file_suite(void)
     RUN(an_index_truncated_before_the_end_record_fails);
     RUN(archiving_to_a_repository_relative_path_lands_on_the_real_name);
     RUN(a_failed_replacement_leaves_the_previous_archive_loadable);
+#ifndef _WIN32
     RUN(a_failure_during_the_write_is_not_reported_as_a_successful_save);
+#else
+    printf("file: not run on Windows - the failing-write case needs fork and RLIMIT_FSIZE\n");
+#endif
     RUN(unarchiving_an_absent_archive_fails);
 }
