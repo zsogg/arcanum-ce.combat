@@ -88,6 +88,10 @@ static int dword_5CFF00;
 static bool harness_autoload;
 static bool harness_autoload_exact;
 static char harness_autoload_slot[TIG_MAX_PATH];
+// CE (release 1, R7): `-newgame[:N]` starts a new game with pregenerated
+// character N (default 1) instead of showing the menu - the release check's
+// "a fresh install starts a new game" with no input at all.
+static int harness_newgame;
 static int harness_run_frames;
 static int harness_frames_run;
 
@@ -279,6 +283,14 @@ int main(int argc, char** argv)
             }
             memcpy(harness_autoload_slot, slot, slot_len);
             harness_autoload_slot[slot_len] = '\0';
+        }
+    }
+
+    pch = strstr(lpCmdLine, "-newgame");
+    if (pch != NULL) {
+        harness_newgame = 1;
+        if (pch[strlen("-newgame")] == ':') {
+            harness_newgame = atoi(pch + strlen("-newgame:"));
         }
     }
 
@@ -655,6 +667,7 @@ int main(int argc, char** argv)
     if (harness_autoload_exact) {
         mainmenu_ui_autoload_slot_set(harness_autoload_slot);
     }
+    mainmenu_ui_newgame_set(harness_newgame);
 
     // 2026-08-21: headless savegame round-trip (SAVE-ROUNDTRIP.md in
     // arcanum-work). No-op unless `-roundtrip:` was given. Runs at the exact

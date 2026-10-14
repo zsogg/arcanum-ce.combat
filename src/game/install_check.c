@@ -73,9 +73,15 @@ static bool install_check_find(const char* dir, const char* name, char* out, siz
     return found;
 }
 
+// Optional items read "absent" rather than "MISSING": a fresh install has no
+// `ce-data` and no `SaveCE` yet, and the setup scripts print this report to
+// players (release 1, R7).
 static void install_check_report(const char* what, bool present, const char* note)
 {
-    printf("  %-34s %s%s%s\n", what, present ? "present" : "MISSING",
+    bool optional = note != NULL && strstr(note, "optional") != NULL;
+    const char* state = present ? "present" : (optional ? "absent" : "MISSING");
+
+    printf("  %-34s %s%s%s\n", what, state,
         note != NULL ? "  - " : "", note != NULL ? note : "");
 }
 
@@ -245,12 +251,12 @@ int install_check_run(bool fix)
 
     printf("\nArcanum CE's own files\n");
     install_check_report("arcanum-ce.cfg", install_check_exists("arcanum-ce.cfg"),
-        "without it CE uses arcanum.cfg");
+        "optional; without it CE uses arcanum.cfg");
     install_check_report("ce-data/ (CE's own layer)", install_check_is_dir("ce-data"), "optional");
     install_check_report("ce-mods/ (optional mod bundles)", install_check_is_dir("ce-mods"), "optional");
     snprintf(path, sizeof(path), "modules/Arcanum/SaveCE");
     install_check_report("modules/Arcanum/SaveCE", install_check_is_dir(path),
-        "created on CE's first start with `ce save folder`");
+        "optional; created on CE's first start with `ce save folder`");
 
     printf("\nLoose prototypes that hide the archives' versions (data/proto)\n");
     if (!install_check_find(".", "data", path, sizeof(path))

@@ -116,6 +116,14 @@ bool mainmenu_ui_quick_load(void);
  */
 void mainmenu_ui_autoload_set(bool enabled);
 void mainmenu_ui_autoload_slot_set(const char* slot);
+
+/**
+ * CE (release 1, R7): arms the harness's new game. `pregen` > 0 starts a new
+ * game with that pregenerated character (1 is the first on the pregen
+ * screen) at the point `-autoload` would load, as if the player had chosen
+ * Single Player, then the character, then Play. 0, the default, is off.
+ */
+void mainmenu_ui_newgame_set(int pregen);
 void mainmenu_ui_create_window(void);
 void mainmenu_ui_create_window_func(bool should_display);
 bool mainmenu_ui_process_callback(TimeEvent* timeevent);

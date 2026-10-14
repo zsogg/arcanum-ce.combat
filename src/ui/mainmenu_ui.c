@@ -2153,6 +2153,15 @@ void mainmenu_ui_autoload_set(bool enabled)
     mainmenu_ui_autoload = enabled;
 }
 
+// CE: release 1, R7's harness new game; not in the original.
+static int mainmenu_ui_newgame_pregen;
+
+// CE: not in the original - see mainmenu_ui.h.
+void mainmenu_ui_newgame_set(int pregen)
+{
+    mainmenu_ui_newgame_pregen = pregen;
+}
+
 // CE: an exact slot supplied by `-autoload:SLOT`. Empty preserves the older
 // newest-save harness contract. `main` has already bounded the argument, and
 // gamelib_save_name_resolve validates the slot syntax and its unique .gsi.
@@ -2249,6 +2258,25 @@ bool mainmenu_ui_handle(void)
                 exit(24);
             }
         }
+    }
+
+    // CE (release 1, R7): the harness's new game - Single Player, the
+    // pregenerated character, Play - with no input. The pregen screen's own
+    // execute function does the work, from the state the screen starts in.
+    if (mainmenu_ui_newgame_pregen > 0) {
+        int pregen = mainmenu_ui_newgame_pregen;
+
+        mainmenu_ui_newgame_pregen = 0;
+        if (pregen > mainmenu_ui_pregen_char_cnt) {
+            tig_debug_printf("Harness: newgame FAILED: no pregenerated character %d of %d\n",
+                pregen, mainmenu_ui_pregen_char_cnt);
+            exit(25);
+        }
+        mainmenu_ui_charedit_mode = CHAREDIT_MODE_CREATE;
+        mainmenu_ui_pregen_char_idx = pregen;
+        mainmenu_ui_pregen_char_execute(0);
+        tig_debug_printf("Harness: newgame ok (pregenerated character %d)\n", pregen);
+        determinism_ready_report("newgame");
     }
 
     while (mainmenu_ui_active) {
