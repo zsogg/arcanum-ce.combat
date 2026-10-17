@@ -221,6 +221,9 @@ static char gamelib_mod_dir_path[TIG_MAX_PATH];
 // CE (release 1, R4): CE's own settings file, when present.
 #define GAMELIB_CE_CONFIG "arcanum-ce.cfg"
 
+// CE (release 1, R9): the log file `log file` writes, in the game folder.
+#define GAMELIB_LOG_FILE "arcanum-ce.log"
+
 // 0x5D000C
 static TigRectListNode* gamelib_pending_dirty_rects_head;
 
@@ -358,6 +361,17 @@ bool gamelib_init(GameInitInfo* init_info)
     // CE (release 1, R4): enabled mod bundles set their switches for this
     // session, before anything reads a switch (`ce_mods.h`).
     ce_mods_init();
+
+    // CE (`log file`; release 1, R9): the log a player attaches to a bug
+    // report, `arcanum-ce.log` in the game folder, fresh each start. tig has
+    // kept every line so far, so it starts at the first one.
+    if (feature_enabled(FEATURE_LOG_FILE)) {
+        if (!tig_debug_log_file_open(GAMELIB_LOG_FILE)) {
+            tig_debug_printf("gamelib: cannot write the log file %s\n", GAMELIB_LOG_FILE);
+        }
+    } else {
+        tig_debug_log_file_discard_early();
+    }
 
     // CE (`ce save folder`; release 1, R2, zsogg 2026-10-13): CE's saves go to
     // their own folder, `SaveCE` beside the original's `Save` in the module,

@@ -1,8 +1,69 @@
 #include "tig/debug.h"
 
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 #include <time.h>
 
 #include "tig/memory.h"
+
+// CE (release 1, R9): the log file. Until the game decides whether to write
+// one, lines are kept here (up to a cap), so a log opened after settings are
+// read still starts at the first line.
+#define TIG_DEBUG_EARLY_CAP (256 * 1024)
+
+static FILE* tig_debug_log_stream;
+static char* tig_debug_early;
+static size_t tig_debug_early_len;
+static bool tig_debug_early_done;
+
+static void tig_debug_sink(const char* line)
+{
+    size_t len;
+    char* grown;
+
+    if (tig_debug_log_stream != NULL) {
+        fputs(line, tig_debug_log_stream);
+        fflush(tig_debug_log_stream); // a crash keeps every line written
+        return;
+    }
+    if (tig_debug_early_done) {
+        return;
+    }
+    len = strlen(line);
+    if (tig_debug_early_len + len + 1 > TIG_DEBUG_EARLY_CAP) {
+        return;
+    }
+    grown = (char*)realloc(tig_debug_early, tig_debug_early_len + len + 1);
+    if (grown == NULL) {
+        return;
+    }
+    tig_debug_early = grown;
+    memcpy(tig_debug_early + tig_debug_early_len, line, len + 1);
+    tig_debug_early_len += len;
+}
+
+bool tig_debug_log_file_open(const char* path)
+{
+    FILE* stream;
+
+    stream = fopen(path, "w");
+    if (stream != NULL && tig_debug_early != NULL) {
+        fwrite(tig_debug_early, 1, tig_debug_early_len, stream);
+        fflush(stream);
+    }
+    tig_debug_log_file_discard_early();
+    tig_debug_log_stream = stream;
+    return stream != NULL;
+}
+
+void tig_debug_log_file_discard_early(void)
+{
+    free(tig_debug_early);
+    tig_debug_early = NULL;
+    tig_debug_early_len = 0;
+    tig_debug_early_done = true;
+}
 
 // 0x4FEB10
 int tig_debug_init(TigInitInfo* init_info)
@@ -10,6 +71,9 @@ int tig_debug_init(TigInitInfo* init_info)
     time_t now;
 
     (void)init_info;
+
+    // CE: a session keeps its lines until the log file is decided (R9).
+    tig_debug_early_done = false;
 
     tig_memory_set_output_func(tig_debug_println);
     tig_debug_println("\n");
@@ -23,6 +87,12 @@ int tig_debug_init(TigInitInfo* init_info)
 // 0x4FEB60
 void tig_debug_exit(void)
 {
+    // CE: close the log file and drop anything still kept (release 1, R9).
+    if (tig_debug_log_stream != NULL) {
+        fclose(tig_debug_log_stream);
+        tig_debug_log_stream = NULL;
+    }
+    tig_debug_log_file_discard_early();
 }
 
 // 0x4FEB70
@@ -72,6 +142,7 @@ void tig_debug_printf(const char* format, ...)
     len = SDL_strlen(buffer);
     if (len != 0 && (len == sizeof(buffer) - 1 || buffer[len - 1] == '\n')) {
         SDL_Log("%s", buffer);
+        tig_debug_sink(buffer);
         buffer[0] = '\0';
     }
 

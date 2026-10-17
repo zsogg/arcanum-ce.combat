@@ -21,6 +21,7 @@
 // working around, seen from the other side, and it is why the expectations
 // below carry no trailing newline while interior ones survive.
 
+#include <stdio.h>
 #include <string.h>
 
 #include "tig/debug.h"
@@ -258,6 +259,95 @@ TEST(init_installs_the_memory_output_func_and_logs_a_banner)
     dbg_end();
 }
 
+// Release 1, R9: the log file a player attaches to a bug report.
+#define DBG_LOG "./arcanum_test_debug.log"
+
+static long dbg_file_text(char* out, size_t size)
+{
+    FILE* stream = fopen(DBG_LOG, "rb");
+    long length;
+
+    out[0] = '\0';
+    if (stream == NULL) {
+        return -1;
+    }
+    length = (long)fread(out, 1, size - 1, stream);
+    out[length] = '\0';
+    fclose(stream);
+    return length;
+}
+
+TEST(the_log_file_starts_at_the_first_line_and_keeps_every_later_one)
+{
+    static char text[4096];
+
+    dbg_begin();
+    CHECK_INT(tig_debug_init(NULL), 0);
+    tig_debug_printf("before settings\n");
+    CHECK(tig_debug_log_file_open(DBG_LOG));
+    tig_debug_printf("after %d\n", 2);
+    // Flushed per line: the text is on disk before the file is closed.
+    CHECK(dbg_file_text(text, sizeof(text)) > 0);
+    CHECK(strstr(text, "before settings\n") != NULL);
+    CHECK(strstr(text, "after 2\n") != NULL);
+    tig_debug_exit();
+    tig_memory_set_output_func(NULL);
+    dbg_end();
+    remove(DBG_LOG);
+}
+
+TEST(lines_discarded_before_the_file_opens_are_not_in_it)
+{
+    static char text[4096];
+
+    dbg_begin();
+    CHECK_INT(tig_debug_init(NULL), 0);
+    tig_debug_printf("kept only in memory\n");
+    tig_debug_log_file_discard_early();
+    tig_debug_printf("not kept either\n");
+    CHECK(tig_debug_log_file_open(DBG_LOG));
+    tig_debug_printf("written\n");
+    dbg_file_text(text, sizeof(text));
+    CHECK(strstr(text, "kept only in memory") == NULL);
+    CHECK(strstr(text, "not kept either") == NULL);
+    CHECK(strstr(text, "written\n") != NULL);
+    tig_debug_exit();
+    tig_memory_set_output_func(NULL);
+    dbg_end();
+    remove(DBG_LOG);
+}
+
+TEST(the_early_lines_are_capped_rather_than_grown_without_end)
+{
+    static char line[1000];
+    FILE* stream;
+    long size;
+    int index;
+
+    dbg_begin();
+    CHECK_INT(tig_debug_init(NULL), 0);
+    memset(line, 'x', sizeof(line) - 2);
+    line[sizeof(line) - 2] = '\n';
+    line[sizeof(line) - 1] = '\0';
+    for (index = 0; index < 400; index++) { // ~400 KB, past the 256 KB cap
+        tig_debug_printf("%s", line);
+    }
+    CHECK(tig_debug_log_file_open(DBG_LOG));
+    stream = fopen(DBG_LOG, "rb");
+    CHECK(stream != NULL);
+    if (stream != NULL) {
+        fseek(stream, 0, SEEK_END);
+        size = ftell(stream);
+        fclose(stream);
+        CHECK(size > 200 * 1024);
+        CHECK(size <= 256 * 1024);
+    }
+    tig_debug_exit();
+    tig_memory_set_output_func(NULL);
+    dbg_end();
+    remove(DBG_LOG);
+}
+
 void test_debug_suite(void)
 {
     RUN(a_message_ending_in_a_newline_is_emitted_immediately);
@@ -270,4 +360,7 @@ void test_debug_suite(void)
     RUN(a_single_oversized_message_does_not_wedge_the_log);
     RUN(an_empty_message_emits_nothing);
     RUN(init_installs_the_memory_output_func_and_logs_a_banner);
+    RUN(the_log_file_starts_at_the_first_line_and_keeps_every_later_one);
+    RUN(lines_discarded_before_the_file_opens_are_not_in_it);
+    RUN(the_early_lines_are_capped_rather_than_grown_without_end);
 }

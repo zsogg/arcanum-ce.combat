@@ -378,7 +378,18 @@ set(SRCS
 # through the `gamelib`/`gameuilib` module tables, so nothing is dropped. The
 # smoke run in verify-build.sh is what proves that, since it starts the real
 # game.
+# CE (release 1, R9): ce_version.h, the build's `git describe`, refreshed at
+# every build and rewritten only when it changes (cmake/ce_version.cmake).
+set(CE_VERSION_HEADER "${CMAKE_CURRENT_BINARY_DIR}/generated/ce_version.h")
+add_custom_target(arcanum-ce-version
+    COMMAND "${CMAKE_COMMAND}" "-DSRC=${CMAKE_CURRENT_SOURCE_DIR}" "-DOUT=${CE_VERSION_HEADER}"
+        -P "${CMAKE_CURRENT_SOURCE_DIR}/cmake/ce_version.cmake"
+    BYPRODUCTS "${CE_VERSION_HEADER}"
+    COMMENT "CE version")
+
 add_library(arcanum-game STATIC)
+add_dependencies(arcanum-game arcanum-ce-version)
+target_include_directories(arcanum-game PUBLIC "${CMAKE_CURRENT_BINARY_DIR}/generated")
 
 # PRIVATE, not PUBLIC. `target_sources(... PUBLIC)` puts the sources on the
 # target's INTERFACE, so every consumer *recompiles* them rather than linking

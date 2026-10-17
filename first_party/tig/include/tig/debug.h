@@ -19,6 +19,17 @@ void tig_debug_exit(void);
 void tig_debug_printf(SDL_PRINTF_FORMAT_STRING const char* format, ...) SDL_PRINTF_VARARG_FUNC(1);
 void tig_debug_println(const char* string);
 
+/**
+ * CE (release 1, R9): a log file beside SDL's log, so a player can attach one
+ * to a bug report. Lines are kept in memory from the first one until the
+ * caller decides, once settings are read: `tig_debug_log_file_open` writes
+ * what was kept and every later line to `path` (truncated, flushed per
+ * line); `tig_debug_log_file_discard_early` drops what was kept and keeps no
+ * more. Returns false if the file cannot be opened.
+ */
+bool tig_debug_log_file_open(const char* path);
+void tig_debug_log_file_discard_early(void);
+
 #ifdef __cplusplus
 }
 #endif

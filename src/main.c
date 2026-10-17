@@ -12,6 +12,7 @@
 
 #include <tig/tig.h>
 
+#include "ce_version.h"
 #include "game/ai.h"
 #include "game/anim.h"
 #include "game/combat.h"
@@ -177,6 +178,10 @@ int main(int argc, char** argv)
             return EXIT_SUCCESS;
         }
     }
+
+    // CE (release 1, R9): the log's first line names the build, so a log
+    // attached to a bug report says what wrote it (`log file`).
+    tig_debug_printf("Arcanum CE %s\n", ARCANUM_CE_VERSION);
 
     // CE: the private observatory passes an absolute per-run output path.
     // Read argv directly so the legacy lower-casing of lpCmdLine below cannot
