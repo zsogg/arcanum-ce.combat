@@ -5,6 +5,18 @@ project(arcanum LANGUAGES C)
 set(CMAKE_C_STANDARD 17)
 set(CMAKE_C_STANDARD_REQUIRED YES)
 
+# CE (release 1, R10, 2026-10-18): no build machine's paths in the binaries.
+# __FILE__ reaches log and assert messages, in CE's code and SDL's, so a
+# released binary carried the builder's home folder and username. Each file
+# is named relative to the source or build tree instead. Only the macro form:
+# debug info and coverage data keep their full paths, which the trace gate and
+# sanitizer reports read, and the packaged binaries are stripped anyway. Set
+# before the dependencies so SDL's files are covered too.
+if(NOT MSVC)
+    add_compile_options("-fmacro-prefix-map=${CMAKE_SOURCE_DIR}/="
+                        "-fmacro-prefix-map=${CMAKE_BINARY_DIR}/=")
+endif()
+
 # ------------------------------------------------------------------------------
 # DEPENDENCIES
 # ------------------------------------------------------------------------------
