@@ -1,137 +1,114 @@
-# Arcanum Community Edition
+# Arcanum CE
+
+> No pretensions to any originality in this work. My grateful acknowledgement
+> to Messrs. Tim Cain, Leonard Boyarsky and Tim Anderson, Troika Games, Mr.
+> Drog Black Tooth, Alex Batalov, and Kababji - who introduced this lonely
+> schoolboy to Arcanum all those years ago.
 
 > [!IMPORTANT]
-> This is a beta, technology preview, or whatever other label you have in mind for a pre-release software.
+> **This is a modified version of [Arcanum Community Edition](https://github.com/alexbatalov/arcanum-ce)
+> by Alexander Batalov.** It has been changed substantially: see
+> [what changes](#what-it-changes) below and the release catalogue,
+> `CHANGES.md`, attached to each [release](https://github.com/OWNER/REPO/releases). Upstream's own
+> README is kept unchanged as [UPSTREAM-README.md](UPSTREAM-README.md).
 
-## Status
+Arcanum CE is a rebuilt engine for *Arcanum: Of Steamworks and Magick
+Obscura*, made from the original program to play the same game. It runs over
+GOG's Arcanum 1.0.7.4 with the Unofficial Arcanum Patch (UAP) 2.0.2, natively
+on Linux and Windows.
 
-The game is ready, but I haven't tested everything - just the speedrun - and that was about three months ago, so things might have changed since then.
+**Release 1 is a beta.** The engine has been checked against the original a
+great deal, but nobody has yet played the whole campaign through on it.
+Please [report](#reporting-a-problem) anything odd.
 
-Regarding the source code, about half of the modules (not half of the code) are in good shape. All APIs have meaningful names, along with brief documentation, annotations, and explanations (see `skill.c` and `quest.c` as examples). The other half may have cryptic names, little to no symbols , and no documentation at all (`anim.c` is extremely large and hard to understand).
+## Playing
 
-## Installation
+You need Arcanum from GOG and the Unofficial Arcanum Patch 2.0.2
+(`UAP2.0.2.exe`). Download the package for your system from
+[Releases](https://github.com/OWNER/REPO/releases); each comes with a README covering installation,
+playing, the optional mods and removal.
 
-You must own the game to play. Purchase your copy on [GOG](https://www.gog.com/game/arcanum_of_steamworks_and_magick_obscura) or [Steam](https://store.steampowered.com/app/500810).
+- **Windows:** install GOG Arcanum and UAP the usual way, unzip the package,
+  and run `setup.bat`. Setup changes nothing outside the game folder.
+- **Linux:** setup builds the game folder from GOG's offline installer and
+  `UAP2.0.2.exe` with `innoextract` and `7z`. No Wine is used.
 
-<details>
-    <summary>Minimum installation</summary>
+The original `Arcanum.exe` stays untouched and playable. Arcanum CE keeps its
+own saves (`modules/Arcanum/SaveCE`) and settings (`arcanum-ce.cfg`).
 
-    ```
-    .
-    ├── arcanum1.dat
-    ├── arcanum2.dat
-    ├── arcanum3.dat
-    ├── arcanum4.dat
-    ├── modules
-    │   ├── Arcanum
-    │   │   ├── movies
-    │   │   │   ├── 00069.bik
-    │   │   │   ├── 01138.bik
-    │   │   │   ├── 02112.bik
-    │   │   │   ├── 50000.bik
-    │   │   │   ├── 51169.bik
-    │   │   │   ├── 91568.bik
-    │   │   │   ├── A0021.bik
-    │   │   │   ├── G0021.bik
-    │   │   │   └── movies.mes
-    │   │   └── sound
-    │   │       └── music
-    │   │           ├── Arcanum.mp3
-    │   │           ├── Caladon.mp3
-    │   │           ├── Caladon_Catacombs.mp3
-    │   │           ├── Cities.mp3
-    │   │           ├── Combat 1.mp3
-    │   │           ├── Combat 2.mp3
-    │   │           ├── Combat 3.mp3
-    │   │           ├── Combat 4.mp3
-    │   │           ├── Combat 5.mp3
-    │   │           ├── Combat 6.mp3
-    │   │           ├── CombatMusic.mp3
-    │   │           ├── Dungeons.mp3
-    │   │           ├── DwarvenMusic.mp3
-    │   │           ├── Interlude.mp3
-    │   │           ├── Isle_of_Despair.mp3
-    │   │           ├── Kerghan.mp3
-    │   │           ├── Mines.mp3
-    │   │           ├── Qintara.mp3
-    │   │           ├── Tarant.mp3
-    │   │           ├── Tarant_Sewers.mp3
-    │   │           ├── Towns.mp3
-    │   │           ├── Tulla.mp3
-    │   │           ├── Vendegoth.mp3
-    │   │           ├── Villages.mp3
-    │   │           ├── Void.mp3
-    │   │           └── Wilderness.mp3
-    │   ├── Arcanum.PATCH0
-    │   ├── Arcanum.dat
-    │   └── Vormantown.dat
-    └── tig.dat
-    ```
-</details>
+## What it changes
 
-### Windows
+Where nothing is said, the game plays as the original does, its quirks
+included, on purpose. In short:
 
-Download and copy `arcanum-ce.exe` to your `Arcanum` folder. It serves as a drop-in replacement for `arcanum.exe`.
+- **Always on:**
+  - bugs of the original fixed (spells, fatigue, walking, crashes, saving,
+    inventory, menus, drawing);
+  - damaged game files refused rather than trusted;
+  - saves written safely, so a failed save no longer damages the old one;
+  - CE's own save folder and settings, and a log for bug reports.
+- **The Unofficial Arcanum Patch's fixes**, all of them, and its four
+  optional extras (levels to 100, Master Educator, no experience per hit,
+  no combat music). CE makes each change itself rather than using UAP's
+  patched executable.
+- **Three optional mods**, off unless turned on:
+  - **Combat Rebalance (preview):** firearm reloading, armor by location and
+    penetration, smarter opponents, criticals, magic costs, poison and
+    prowling;
+  - **Real-Time Pacing:** each real-time action takes the time its action
+    points would take in turn-based combat;
+  - **Called Shots:** a panel for Arcanum's own aimed attacks.
 
-### Linux
-
-- Use the Windows installation as a base - it contains the data assets needed to play. Copy the `Arcanum` folder somewhere, for example `/home/john/Desktop/Arcanum`.
-
-- Alternatively, you can extract the required files from the GOG installer:
-
-```console
-$ sudo apt install innoextract
-$ innoextract ~/Downloads/setup_arcanum.exe -I app
-$ mv app Arcanum
-```
-
-- Download and copy `arcanum-ce` to this folder.
-
-- Run `./arcanum-ce`.
-
-### macOS
-
-> [!NOTE]
-> macOS 10.13 (High Sierra) or higher is required. Runs natively on Intel-based Macs and Apple Silicon.
-
-- Use the Windows installation as a base - it contains the data assets needed to play. Copy the `Arcanum` folder somewhere, for example `/Applications/Arcanum`.
-
-- Alternatively, if you have Homebrew installed, you can extract the required files from the GOG installer:
-
-```console
-$ brew install innoextract
-$ innoextract ~/Downloads/setup_arcanum.exe -I app
-$ mv app /Applications/Arcanum
-```
-
-- Download and copy `Arcanum Community Edition.app` to this folder.
-
-- Run `Arcanum Community Edition.app`.
-
-### Android & iOS
-
-These ports are not currently intended for players. Touch controls are not yet implemented, and window management is subpar. No further instructions will be provided until these issues are resolved (but you can easily figure it out, it's not rocket science).
+Every change, and every quirk of the original kept on purpose, is listed in
+`CHANGES.md` with each release.
 
 ## Building from source
 
-Check [`ci-build.yml`](.github/workflows/ci-build.yml) for details on how the project is compiled.
+The libraries it needs are vendored under `third_party/`. Builds use CMake
+presets:
 
-## Configuration
+```console
+cmake --preset linux-x64-release
+cmake --build --preset linux-x64-release        # out/build/linux-x64-release/arcanum-ce
+```
 
-Several configuration options are available as command-line switches (admittedly not very user-friendly):
+The Windows build is cross-compiled with MinGW-w64
+(`x86_64-w64-mingw32-gcc`):
 
-- `-4637`: Enable cheat level 3
+```console
+cmake --preset windows-x64-mingw
+cmake --build --preset windows-x64-mingw        # out/build/windows-x64-mingw/arcanum-ce.exe
+```
 
-- `-window`: Run in windowed mode (default is fullscreen)
+The unit tests build with `linux-x64-debug` (or `linux-x64-release-tests`)
+and run as `tests/arcanum-tests` in the build folder. macOS, Android, iOS
+and ARM presets come from upstream; they are not built or tested here.
 
-- `-geometry=1280x720`: Set window size (default is 800x600)
+## Reporting a problem
 
-When `HighRes/config.ini` from the Unofficial Arcanum Patch is present in the game directory, Community Edition also imports `Width`, `Height`, `Windowed`, `ShowFPS`, `ScrollFPS`, `ScrollDist`, `Logos`, and `Intro` at startup.
+Open an [issue](https://github.com/OWNER/REPO/issues) with:
 
-## Contributing
-
-Play the game and file bugs if any (there are likely many). Attach a save game for investigation. Suggestions for quality of life improvements are also welcome. The major objective for 25H2 is to clarify remaining functions.
+1. **The log**, `arcanum-ce.log` in the game folder. A new one is written
+   each time the game starts, so copy it right after the problem. Its first
+   line names your build.
+2. **The save**, if the problem is in a game: the four files of its slot in
+   `modules/Arcanum/SaveCE`.
+3. **What happened**, and what you did just before.
 
 ## License
 
-The source code is this repository is available under the [Sustainable Use License](LICENSE.md).
+The source code in this repository is available under the
+[Sustainable Use License](LICENSE.md), the license of the upstream project,
+[Arcanum Community Edition](https://github.com/alexbatalov/arcanum-ce) by
+Alexander Batalov. In upstream's words: "The source code is this repository
+is available under the Sustainable Use License."
+
+- **This is a modified version** of that software, as its license requires
+  this notice to say. The modifications are under the same license.
+- **Free, non-commercial distribution only:** the license permits
+  distributing the software only free of charge, for non-commercial
+  purposes.
+- **Third-party libraries** keep their own licenses, in `third_party/`
+  (SDL3, SDL3_mixer, zlib, fpattern).
+- **Arcanum** is (c) Troika Games and Sierra. Nothing of the game is in this
+  repository or its releases; you need your own copy.
