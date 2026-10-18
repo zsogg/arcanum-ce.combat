@@ -9,7 +9,7 @@
 > **This is a modified version of [Arcanum Community Edition](https://github.com/alexbatalov/arcanum-ce)
 > by Alexander Batalov.** It has been changed substantially: see
 > [what changes](#what-it-changes) below and the release catalogue,
-> `CHANGES.md`, attached to each [release](https://github.com/OWNER/REPO/releases). Upstream's own
+> `CHANGES.md`, attached to each [release](https://github.com/zsogg/arcanum-ce.combat/releases). Upstream's own
 > README is kept unchanged as [UPSTREAM-README.md](UPSTREAM-README.md).
 
 Arcanum CE is a rebuilt engine for *Arcanum: Of Steamworks and Magick
@@ -25,7 +25,7 @@ Please [report](#reporting-a-problem) anything odd.
 
 You need Arcanum from GOG and the Unofficial Arcanum Patch 2.0.2
 (`UAP2.0.2.exe`). Download the package for your system from
-[Releases](https://github.com/OWNER/REPO/releases); each comes with a README covering installation,
+[Releases](https://github.com/zsogg/arcanum-ce.combat/releases); each comes with a README covering installation,
 playing, the optional mods and removal.
 
 - **Windows:** install GOG Arcanum and UAP the usual way, unzip the package,
@@ -86,7 +86,7 @@ and ARM presets come from upstream; they are not built or tested here.
 
 ## Reporting a problem
 
-Open an [issue](https://github.com/OWNER/REPO/issues) with:
+Open an [issue](https://github.com/zsogg/arcanum-ce.combat/issues) with:
 
 1. **The log**, `arcanum-ce.log` in the game folder. A new one is written
    each time the game starts, so copy it right after the problem. Its first
