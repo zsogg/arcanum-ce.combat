@@ -262,9 +262,12 @@ TEST(init_installs_the_memory_output_func_and_logs_a_banner)
 // Release 1, R9: the log file a player attaches to a bug report.
 #define DBG_LOG "./arcanum_test_debug.log"
 
+// Read back in text mode: the log is written in text mode, so on Windows each
+// line ends "\r\n" on disk, as a Windows player's editor expects, and reading
+// it the same way turns that back into "\n" (R8, 2026-10-18).
 static long dbg_file_text(char* out, size_t size)
 {
-    FILE* stream = fopen(DBG_LOG, "rb");
+    FILE* stream = fopen(DBG_LOG, "r");
     long length;
 
     out[0] = '\0';
