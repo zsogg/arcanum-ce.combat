@@ -18,8 +18,7 @@ GOG's Arcanum 1.0.7.4 with the Unofficial Arcanum Patch (UAP) 2.0.2, natively
 on Linux and Windows.
 
 **Release 1 is a beta.** The engine has been checked against the original a
-great deal, but nobody has yet played the whole campaign through on it.
-Please [report](#reporting-a-problem) anything odd.
+great deal. Please [report](#reporting-a-problem) anything odd.
 
 ## Playing
 
