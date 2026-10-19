@@ -4488,23 +4488,36 @@ int ai_check_follow(int64_t npc_obj, int64_t pc_obj, bool ignore_charisma_limits
 
     ai_copy_params(npc_obj, &params);
 
-    if (reaction_get(npc_obj, pc_obj) <= params.field_14) {
+    // CE (`follower reaction joins`, the Followers mod; zsogg, 2026-10-19):
+    // low reaction no longer stops an NPC joining. One that already follows
+    // this leader is re-checking whether to stay, and keeps the stock rule, so
+    // a follower mistreated until its reaction collapses still leaves.
+    if (reaction_get(npc_obj, pc_obj) <= params.field_14
+        && !(feature_enabled(FEATURE_FOLLOWER_REACTION_JOINS)
+            && critter_leader_get(npc_obj) != pc_obj)) {
         return AI_FOLLOW_DISLIKE;
     }
 
-    npc_alignment = stat_level_get(npc_obj, STAT_ALIGNMENT);
-    pc_alignment = stat_level_get(pc_obj, STAT_ALIGNMENT);
-    if (pc_alignment > npc_alignment) {
-        if (pc_alignment - npc_alignment > params.field_18) {
-            return AI_FOLLOW_TOO_GOOD;
-        }
-    } else {
-        if (npc_alignment - pc_alignment > params.field_1C) {
-            return AI_FOLLOW_TOO_BAD;
+    // CE (`follower alignment free`, the Followers mod; zsogg, 2026-10-19):
+    // alignment neither stops an NPC joining nor makes a follower leave.
+    if (!feature_enabled(FEATURE_FOLLOWER_ALIGNMENT_FREE)) {
+        npc_alignment = stat_level_get(npc_obj, STAT_ALIGNMENT);
+        pc_alignment = stat_level_get(pc_obj, STAT_ALIGNMENT);
+        if (pc_alignment > npc_alignment) {
+            if (pc_alignment - npc_alignment > params.field_18) {
+                return AI_FOLLOW_TOO_GOOD;
+            }
+        } else {
+            if (npc_alignment - pc_alignment > params.field_1C) {
+                return AI_FOLLOW_TOO_BAD;
+            }
         }
     }
 
-    if (stat_level_get(npc_obj, STAT_LEVEL) >= stat_level_get(pc_obj, STAT_LEVEL) + params.field_20) {
+    // CE (`follower level free`, the Followers mod; zsogg, 2026-10-19): an
+    // NPC's level neither stops it joining nor makes it leave.
+    if (!feature_enabled(FEATURE_FOLLOWER_LEVEL_FREE)
+        && stat_level_get(npc_obj, STAT_LEVEL) >= stat_level_get(pc_obj, STAT_LEVEL) + params.field_20) {
         return AI_FOLLOW_LOW_LEVEL;
     }
 
@@ -4558,6 +4571,13 @@ int ai_check_leader(int64_t npc_obj, int64_t pc_obj)
     if ((critter_flags2 & OCF2_CHECK_REACTION_BAD) != 0
         && reaction_get(npc_obj, pc_obj) <= params.field_14 + 20) {
         return AI_FOLLOW_DISLIKE;
+    }
+
+    // CE (`follower alignment free`): no alignment warnings either, since
+    // alignment no longer makes a follower leave. The reaction warning above
+    // stays, as low reaction still does.
+    if (feature_enabled(FEATURE_FOLLOWER_ALIGNMENT_FREE)) {
+        return AI_FOLLOW_OK;
     }
 
     npc_alignment = stat_level_get(npc_obj, STAT_ALIGNMENT);

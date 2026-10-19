@@ -73,5 +73,12 @@ FEATURE(UAP_NO_XP_PER_HIT, "uap no xp per hit", false)
 FEATURE(UAP_NO_COMBAT_MUSIC, "uap no combat music", false)
 FEATURE(CE_SAVE_FOLDER, "ce save folder", false)
 FEATURE(LOG_FILE, "log file", false)
+// The Followers mod (card X9; zsogg, 2026-10-19), read by `ai_check_follow`
+// and `ai_check_leader`: alignment and level never stop an NPC joining or make
+// a follower leave, and low reaction no longer stops one joining (a follower
+// whose reaction collapses still leaves).
+FEATURE(FOLLOWER_ALIGNMENT_FREE, "follower alignment free", false)
+FEATURE(FOLLOWER_LEVEL_FREE, "follower level free", false)
+FEATURE(FOLLOWER_REACTION_JOINS, "follower reaction joins", false)
 
 // clang-format on

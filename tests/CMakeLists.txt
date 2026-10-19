@@ -26,6 +26,7 @@ add_executable(arcanum-tests
     "test_armor_rules.c"
     "test_penetration.c"
     "test_ai_targeting.c"
+    "test_followers.c"
     "test_reload.c"
     "test_crit_guard.c"
     "test_rt_budget.c"
