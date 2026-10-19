@@ -52,9 +52,9 @@ included, on purpose. In short:
   no combat music). CE makes each change itself rather than using UAP's
   patched executable.
 - **Three optional mods**, off unless turned on:
-  - **Combat Rebalance (preview):** firearm reloading, armor by location and
-    penetration, smarter opponents, criticals, magic costs, poison and
-    prowling;
+  - **Combat Rebalance (preview):** firearm reloading (**press Q to reload a
+    gun**), armor by location and penetration, smarter opponents, criticals,
+    magic costs, poison and prowling;
   - **Real-Time Pacing:** each real-time action takes the time its action
     points would take in turn-based combat;
   - **Called Shots:** a panel for Arcanum's own aimed attacks.
