@@ -1418,6 +1418,12 @@ void replay_ui_tick(void)
         if (item_obj == OBJ_HANDLE_NULL) {
             return;
         }
+        // As the drag it stands for asks first (`intgame.c`).
+        if (combat_throw_refused(pc_obj)) {
+            tig_debug_printf("Replay: command %d throw refused: not enough action points\n",
+                replay_next - 1);
+            return;
+        }
         if (!anim_goal_throw_item(pc_obj, item_obj, command->loc)) {
             tig_debug_printf("Replay: command %d could not throw prototype %d\n",
                 replay_next - 1, command->proto);

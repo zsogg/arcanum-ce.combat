@@ -177,6 +177,7 @@ int combat_action_points_for_speed(int speed);
 int combat_throw_cost_for(bool local_pc);
 void combat_turn_based_end_critter_turn(int64_t obj);
 bool combat_can_pay_action_points(int64_t obj, int action_points);
+bool combat_throw_refused(int64_t obj);
 bool combat_consume_action_points(int64_t obj, int action_points);
 void combat_turn_based_add_critter(int64_t obj);
 bool combat_turn_based_critter_can_fastforward(int64_t obj);

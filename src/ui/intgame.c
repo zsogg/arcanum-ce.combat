@@ -2930,7 +2930,12 @@ void intgame_process_event(TigMessage* msg)
                                 if (critter_is_active(pc_obj)) {
                                     inven_ui_drag_clear();
                                     intgame_refresh_cursor();
-                                    anim_goal_throw_item(pc_obj, v2, td.loc);
+                                    // CE (`exertion`): a throw that cannot
+                                    // be paid for is refused before it
+                                    // starts; the item stays in the pack.
+                                    if (!combat_throw_refused(pc_obj)) {
+                                        anim_goal_throw_item(pc_obj, v2, td.loc);
+                                    }
                                 } else {
                                     inven_ui_drop_dragged_item();
                                 }

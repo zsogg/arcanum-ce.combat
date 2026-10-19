@@ -209,7 +209,9 @@ void item_ui_apply(TargetDescriptor* td)
             item_use_on_loc(pc_obj, item_obj, td->loc);
         } else if (trap_is_trap_device(item_obj)) {
             anim_goal_use_item_on_loc(pc_obj, td->loc, item_obj, 0);
-        } else {
+        } else if (!combat_throw_refused(pc_obj)) {
+            // CE (`exertion`): refused before it starts when it cannot be
+            // paid for (`combat_throw_refused`).
             anim_goal_throw_item(pc_obj, item_obj, td->loc);
         }
     } else {

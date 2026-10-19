@@ -4789,6 +4789,32 @@ bool combat_can_pay_action_points(int64_t obj, int action_points)
         || (feature_enabled(FEATURE_EXERTION) && combat_exertion_covers(obj, action_points));
 }
 
+// CE (`exertion`; zsogg, 2026-10-19): whether a throw at a tile is refused
+// before it starts, because the thrower cannot pay for it.
+//
+// A throw pays only after it has flown (MODDING-NOTES quirk 51), and a throw
+// dragged from the pack checks nothing first. Under `exertion` a charge that
+// cannot be paid is refused and the AP kept, on the understanding that the
+// action did not happen - but the grenade has already flown, so at 1 or 2 AP
+// a player could throw every one carried, free (weapons bench,
+// `grenade-low-ap.txt`, 2026-10-19). The routes that build such a throw ask
+// here first, as `thrown weapon target` makes the wielded throw do. Off, the
+// original: the throw starts, and an overreach takes the turn's last AP and
+// 2 fatigue.
+bool combat_throw_refused(int64_t obj)
+{
+    if (!feature_enabled(FEATURE_EXERTION)
+        || combat_can_pay_action_points(obj, combat_throw_cost(obj))) {
+        return false;
+    }
+
+    if (player_is_local_pc_obj(obj)) {
+        tf_add(obj, TF_TYPE_WHITE, "Not enough action points");
+    }
+
+    return true;
+}
+
 // 0x4B7CD0
 bool combat_consume_action_points(int64_t obj, int action_points)
 {
