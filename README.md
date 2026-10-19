@@ -6,6 +6,11 @@
 > **My grateful acknowledgement to Messrs. Tim Cain, Leonard Boyarsky and Tim Anderson, Troika Games, Mr.
 > Drog Black Tooth, Alex Batalov, the Terra-Arcanum team, and Kababji - who introduced this lonely
 > schoolboy to Arcanum all those years ago.**
+>
+> This project is aimed at improving the vanilla Arcanum experience, and by design the changes it makes are modest.
+> For a more ambitious and exciting project, may I recommend TechErrorCode's: Arcanum-CE-Restored.
+> I am not in any way affiliated with that team, but there is imaginative and impressive work being done here (Discord Link):
+> https://discord.com/channels/1533612094522658966/1533656825616928869
 
 > [!IMPORTANT]
 > **This is a modified version of [Arcanum Community Edition](https://github.com/alexbatalov/arcanum-ce)
