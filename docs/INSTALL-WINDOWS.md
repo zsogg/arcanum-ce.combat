@@ -1,10 +1,12 @@
 # Arcanum CE for Windows
 <!-- Generated from the project's release documents by sync-public-docs.py; edit those, not this copy. -->
 
-> No pretensions to any originality in this work. My grateful acknowledgement
-> to Messrs. Tim Cain, Leonard Boyarsky and Tim Anderson, Troika Games, Mr.
-> Drog Black Tooth, Alex Batalov, and Kababji - who introduced this lonely
-> schoolboy to Arcanum all those years ago.
+> No pretensions to any originality in this work.
+> Coding was done nearly entirely using LLM tools, Claude, Astra and Deepseek.
+>
+> **My grateful acknowledgement to Messrs. Tim Cain, Leonard Boyarsky and Tim Anderson, Troika Games, Mr.
+> Drog Black Tooth, Alex Batalov, the Terra-Arcanum team, and Kababji - who introduced this lonely
+> schoolboy to Arcanum all those years ago.**
 
 Arcanum CE is a rebuild of *Arcanum: Of Steamworks and Magick
 Obscura*.
