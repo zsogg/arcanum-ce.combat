@@ -31,6 +31,7 @@ add_executable(arcanum-tests
     "test_schematic_cap.c"
     "test_initiative.c"
     "test_awareness.c"
+    "test_wmap_rnd.c"
     "test_reload.c"
     "test_crit_guard.c"
     "test_rt_budget.c"

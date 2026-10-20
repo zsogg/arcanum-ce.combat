@@ -15,5 +15,6 @@ void wmap_rnd_disable(void);
 bool wmap_rnd_timeevent_process(TimeEvent* timeevent);
 void wmap_rnd_schedule(void);
 bool wmap_rnd_force_encounter(int table, int answer);
+bool wmap_rnd_entry_info(int table, int index, int* message_num, int* frequency, int* min_level, int* max_level);
 
 #endif /* ARCANUM_UI_WMAP_RND_H_ */

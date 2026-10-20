@@ -571,6 +571,13 @@ bool wmap_rnd_mod_load(void)
             if (tig_str_parse_named_value(&str, "TriggerCount:", &value)) {
                 entry->max_trigger_cnt = value;
             }
+            // FIX (porting bug #58): the original moves to the table's next
+            // line here (0x558513-0x558522: the line number is incremented and
+            // stored back before the loop repeats). CE never advanced it, so
+            // every entry was parsed from the table's first line - each table
+            // produced only its first encounter, with that line's level range
+            // and quest flag on every copy.
+            mes_file_entry.num++;
         }
     }
 
@@ -1222,6 +1229,9 @@ bool wmap_rnd_encounter_check(void)
     }
 
     table->entries[index].trigger_cnt++;
+    // CE (porting bug #58's check): which line fired.
+    tig_debug_printf("WMap_Rnd: entry %d of table %d fired\n",
+        table->entries[index].message_num, wmap_rnd_encounter);
 
     if (wmap_rnd_encounter_entry_total_monsters(&(table->entries[index])) == 0) {
         tig_debug_println("WmapRnd: Total monsters is zero.");
@@ -1661,8 +1671,27 @@ bool wmap_rnd_force_encounter(int table, int answer)
     wmap_rnd_night = datetime_current_hour() < 6 || datetime_current_hour() >= 18;
     wmap_rnd_encounter = table;
     wmap_rnd_awareness_answer = answer;
+    tig_debug_printf("WMap_Rnd: forced encounter: table %d of %d holds %d entries\n",
+        table, wmap_rnd_num_encounter_tables, wmap_rnd_encounter_tables[table].num_entries);
     fired = wmap_rnd_encounter_check();
     wmap_rnd_awareness_answer = -1;
 
     return fired;
+}
+
+// CE (porting bug #58's test): one loaded entry's line number, weight and
+// level range, for `tests/test_wmap_rnd.c`. False if there is no such entry.
+bool wmap_rnd_entry_info(int table, int index, int* message_num, int* frequency, int* min_level, int* max_level)
+{
+    if (!wmap_rnd_initialized
+        || table < 0 || table >= wmap_rnd_num_encounter_tables
+        || index < 0 || index >= wmap_rnd_encounter_tables[table].num_entries) {
+        return false;
+    }
+
+    *message_num = wmap_rnd_encounter_tables[table].entries[index].message_num;
+    *frequency = wmap_rnd_encounter_tables[table].entries[index].frequency;
+    *min_level = wmap_rnd_encounter_tables[table].entries[index].min_level;
+    *max_level = wmap_rnd_encounter_tables[table].entries[index].max_level;
+    return true;
 }
