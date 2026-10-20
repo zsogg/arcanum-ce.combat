@@ -181,6 +181,11 @@ bool combat_throw_refused(int64_t obj);
 int combat_initiative_score(int dexterity, int roll);
 int combat_initiative_compare(int score_a, bool party_a, int dexterity_a,
     int score_b, bool party_b, int dexterity_b);
+int encounter_awareness_score(int perception, int intelligence);
+int encounter_awareness_difficulty(int base, int power);
+bool encounter_awareness_spots(int best, int roll, int difficulty);
+int combat_ambush_party_slot(const bool* party_able, int count);
+void combat_ambush_mark(void);
 bool combat_consume_action_points(int64_t obj, int action_points);
 void combat_turn_based_add_critter(int64_t obj);
 bool combat_turn_based_critter_can_fastforward(int64_t obj);

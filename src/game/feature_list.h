@@ -96,5 +96,13 @@ FEATURE(SCHEMATIC_SECOND_DISCIPLINE_CAP, "schematic second discipline cap", fals
 // initiative, Dexterity + 1-10 rolled once per fight, ties to the party,
 // instead of the party acting last in every round.
 FEATURE(TURN_ORDER_INITIATIVE, "turn order initiative", false)
+// Initiative and Awareness, milestones 2-3 (card X10): before a random
+// encounter spawns, the party's best Perception + Intelligence + 1-20 against
+// a difficulty rising with the area's encounter power; spotted, avoid it or
+// engage at a distance, unspotted, an ambush close by (`wmap_rnd.c`). The
+// ambush's opening round lets at most one critter act before the party's
+// best-initiative member able to (`combat.c`).
+FEATURE(ENCOUNTER_AWARENESS, "encounter awareness", false)
+FEATURE(AMBUSH_SAFEGUARD, "ambush safeguard", false)
 
 // clang-format on

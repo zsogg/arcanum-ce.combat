@@ -46,6 +46,7 @@
 #include "game/spell_rules.h"
 #include "game/stat.h"
 #include "game/tf.h"
+#include "game/timeevent.h"
 #include "game/trap.h"
 #include "game/uap.h"
 #include "game/ui.h"
@@ -92,6 +93,7 @@ static void combat_opening_player_reached(void);
 static void combat_opening_end(void);
 static void combat_initiative_clear(void);
 static void combat_initiative_sort(void);
+static void combat_ambush_order(void);
 static void pc_switch_weapon(int64_t pc_obj, int64_t target_obj);
 
 // CE (reload prototype session 2): the weapon that last left the player's
@@ -108,6 +110,15 @@ static struct {
     int score;
 } combat_initiative[COMBAT_INITIATIVE_MAX];
 static int combat_initiative_count;
+
+// CE (`ambush safeguard`, card X10): an unspotted random encounter marks an
+// ambush; the next turn-based fight to start within an hour of game time is
+// its opening, and `combat_ambush_opening` holds for that fight's first round.
+#define COMBAT_AMBUSH_WINDOW_MS 3600000
+
+static bool combat_ambush_pending;
+static DateTime combat_ambush_marked;
+static bool combat_ambush_opening;
 
 // 0x5B5798
 static int hit_loc_penalties[HIT_LOC_COUNT] = {
@@ -313,6 +324,9 @@ void combat_reset(void)
     combat_weapon_swap_last = OBJ_HANDLE_NULL;
     // CE (`turn order initiative`): nor any initiative.
     combat_initiative_clear();
+    // CE (`ambush safeguard`): nor an ambush.
+    combat_ambush_pending = false;
+    combat_ambush_opening = false;
 
     // CE (real-time session B): recovery is not saved (rule 3) - a new game or a
     // load starts every actor ready.
@@ -3952,6 +3966,17 @@ bool combat_turn_based_start(void)
     combat_turn_based_turn = 0;
     // CE (`turn order initiative`): a new fight rolls initiative anew.
     combat_initiative_clear();
+    // CE (`ambush safeguard`): an ambush marked lately makes this fight's
+    // opening round an ambush's.
+    combat_ambush_opening = false;
+    if (combat_ambush_pending) {
+        DateTime elapsed = timeevent_game_time_elapsed(&combat_ambush_marked);
+        combat_ambush_opening = feature_enabled(FEATURE_AMBUSH_SAFEGUARD)
+            && !datetime_is_at_least_milliseconds(&elapsed, COMBAT_AMBUSH_WINDOW_MS);
+        combat_ambush_pending = false;
+        tig_debug_printf("Combat: ambush: %s\n",
+            combat_ambush_opening ? "this fight opens as an ambush" : "marked, but not applied");
+    }
     // CE (opening safeguard): a fight's first turn-based round.
     combat_opening_end();
     combat_opening_active = feature_enabled(FEATURE_OPENING_SAFEGUARD);
@@ -5327,6 +5352,9 @@ void sort_combat_list(void)
 
     combat_order_summons();
 
+    // CE (`ambush safeguard`): the ambush's opening round.
+    combat_ambush_order();
+
     node = combat_critter_list.head;
     while (node != NULL) {
         combat_recalc_reaction(node->obj);
@@ -5491,6 +5519,108 @@ static void combat_initiative_sort(void)
     entries[count - 1].node->next = NULL;
 
     FREE(entries);
+}
+
+// CE (encounter awareness, card X10): one party member's awareness,
+// Perception + Intelligence (zsogg, 2026-09-18).
+int encounter_awareness_score(int perception, int intelligence)
+{
+    return perception + intelligence;
+}
+
+// CE (encounter awareness): how hard an encounter is to spot - the setting's
+// base, and 5 more for each step of the area's encounter power (0 none,
+// 1 easy, 2 average, 3 powerful).
+int encounter_awareness_difficulty(int base, int power)
+{
+    return base + 5 * power;
+}
+
+// CE (encounter awareness): whether the party's best awareness, with its roll
+// of 1-20, spots the encounter.
+bool encounter_awareness_spots(int best, int roll, int difficulty)
+{
+    return best + roll >= difficulty;
+}
+
+// CE (`ambush safeguard`, the rule agreed with zsogg on 2026-09-18): given, in
+// turn order, which critters are party members able to act, the one to move
+// to the second place, or -1 to leave the order as it is - the first able
+// party member, unless it already acts first or second. Its own turn, not an
+// extra one; everyone else keeps their order.
+int combat_ambush_party_slot(const bool* party_able, int count)
+{
+    int index;
+
+    for (index = 0; index < count; index++) {
+        if (party_able[index]) {
+            return index > 1 ? index : -1;
+        }
+    }
+
+    return -1;
+}
+
+// CE (`ambush safeguard`): mark the random encounter just spawned unseen as an
+// ambush, for the next turn-based fight to start.
+void combat_ambush_mark(void)
+{
+    combat_ambush_pending = true;
+    combat_ambush_marked = timeevent_current_datetime();
+}
+
+// The opening round of an ambush: at most one critter acts before the party's
+// best-initiative member able to act.
+static void combat_ambush_order(void)
+{
+    ObjectNode* node;
+    ObjectNode* prev;
+    ObjectNode* moved;
+    bool* party_able;
+    int count;
+    int index;
+    int slot;
+
+    if (!combat_ambush_opening) {
+        return;
+    }
+
+    if (combat_turn_based_turn > 1) {
+        combat_ambush_opening = false;
+        return;
+    }
+
+    count = 0;
+    for (node = combat_critter_list.head; node != NULL; node = node->next) {
+        count++;
+    }
+    if (count < 3) {
+        return;
+    }
+
+    party_able = (bool*)MALLOC(sizeof(*party_able) * count);
+    index = 0;
+    for (node = combat_critter_list.head; node != NULL; node = node->next) {
+        party_able[index++] = combat_initiative_is_party(node->obj)
+            && critter_is_active(node->obj);
+    }
+    slot = combat_ambush_party_slot(party_able, count);
+    FREE(party_able);
+
+    if (slot < 0) {
+        return;
+    }
+
+    prev = NULL;
+    moved = combat_critter_list.head;
+    for (index = 0; index < slot; index++) {
+        prev = moved;
+        moved = moved->next;
+    }
+    prev->next = moved->next;
+    moved->next = combat_critter_list.head->next;
+    combat_critter_list.head->next = moved;
+    tig_debug_printf("Combat: ambush: party member at %d moved to second\n", slot);
 }
 
 // 0x4B8040

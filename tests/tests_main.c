@@ -28,6 +28,7 @@ void test_followers_suite(void);
 void test_carried_lights_suite(void);
 void test_schematic_cap_suite(void);
 void test_initiative_suite(void);
+void test_awareness_suite(void);
 void test_reload_suite(void);
 void test_crit_guard_suite(void);
 void test_rt_budget_suite(void);
@@ -94,6 +95,7 @@ int main(void)
     test_carried_lights_suite();
     test_schematic_cap_suite();
     test_initiative_suite();
+    test_awareness_suite();
     test_reload_suite();
     test_crit_guard_suite();
     test_rt_budget_suite();

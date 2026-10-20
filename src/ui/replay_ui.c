@@ -38,6 +38,7 @@
 #include "ui/intgame.h"
 #include "ui/skill_ui.h"
 #include "ui/spell_ui.h"
+#include "ui/wmap_rnd.h"
 
 #define REPLAY_MAX_COMMANDS 256
 #define REPLAY_IDENTITY_SIZE 64
@@ -173,6 +174,11 @@ typedef enum ReplayKind {
     //       the game clock advanced an hour at a time, as resting does, until
     //       it reads that hour - so the lighting scheme darkens or brightens
     //       the map as it would in play (2026-10-19, for lantern screenshots).
+    //   encounter <table> [avoid|engage]
+    //       a random encounter from that table of WMap_Rnd.mes at the player's
+    //       tile, as one fired while travelling would be, awareness included;
+    //       the word answers the avoid-or-engage choice if the party spots it
+    //       (2026-10-20, card X10).
     //   inspect xp
     //       one log line with the player's level, experience and experience to
     //       the next level, and one per follower with its basic-skill training.
@@ -185,6 +191,7 @@ typedef enum ReplayKind {
     REPLAY_KIND_XP,
     REPLAY_KIND_TRAIN,
     REPLAY_KIND_HOUR,
+    REPLAY_KIND_ENCOUNTER,
 } ReplayKind;
 
 // A cast's target, which is a third shape: the caster, an object or a tile.
@@ -725,6 +732,25 @@ static bool replay_parse_line(const char* text, ReplayCommand* command)
         return index == count;
     }
 
+    if (strcmp(kind, "encounter") == 0) {
+        command->kind = REPLAY_KIND_ENCOUNTER;
+        command->aim = -1;
+        if (!replay_parse_int(tokens[index++], &(command->count)) || command->count < 0) {
+            return false;
+        }
+        if (index < count) {
+            if (strcmp(tokens[index], "avoid") == 0) {
+                command->aim = 0;
+            } else if (strcmp(tokens[index], "engage") == 0) {
+                command->aim = 1;
+            } else {
+                return false;
+            }
+            index++;
+        }
+        return index == count;
+    }
+
     if (strcmp(kind, "hour") == 0) {
         command->kind = REPLAY_KIND_HOUR;
         if (!replay_parse_int(tokens[index++], &(command->count))
@@ -865,7 +891,7 @@ int replay_ui_count(void)
 bool replay_ui_describe(int index, char* buffer, size_t size)
 {
     const ReplayCommand* command;
-    static const char* kinds[] = { "object", "location", "key", "cast", "wield", "wait", "learn", "give", "throw", "skill", "raise", "prowl", "panel", "save", "inspect", "transfer", "take", "drop", "pickup", "wear", "skill-level", "stat-level", "jam", "afflict", "poison", "use", "xp", "train", "hour" };
+    static const char* kinds[] = { "object", "location", "key", "cast", "wield", "wait", "learn", "give", "throw", "skill", "raise", "prowl", "panel", "save", "inspect", "transfer", "take", "drop", "pickup", "wear", "skill-level", "stat-level", "jam", "afflict", "poison", "use", "xp", "train", "hour", "encounter" };
     int written;
     static const char* casts[] = { "self", "object", "location" };
 
@@ -1216,6 +1242,15 @@ void replay_ui_tick(void)
         critter_give_xp(pc_obj, command->count);
         tig_debug_printf("Replay: command %d gave %d experience; level %d\n",
             replay_next - 1, command->count, stat_level_get(pc_obj, STAT_LEVEL));
+        return;
+    }
+
+    if (command->kind == REPLAY_KIND_ENCOUNTER) {
+        replay_stall_reported = false;
+        replay_next++;
+        tig_debug_printf("Replay: command %d encounter from table %d: %s\n",
+            replay_next - 1, command->count,
+            wmap_rnd_force_encounter(command->count, command->aim) ? "spawned" : "nothing spawned");
         return;
     }
 

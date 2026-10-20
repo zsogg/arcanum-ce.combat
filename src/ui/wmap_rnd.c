@@ -1,5 +1,15 @@
 #include "ui/wmap_rnd.h"
 
+#include <stdio.h>
+
+#include "game/combat.h"
+#include "game/critter.h"
+#include "game/description.h"
+#include "game/feature.h"
+#include "game/gamelib.h"
+#include "game/hrp.h"
+#include "game/settings.h"
+
 #include "game/area.h"
 #include "game/map.h"
 #include "game/mes.h"
@@ -14,6 +24,7 @@
 #include "game/tile.h"
 #include "game/timeevent.h"
 #include "game/townmap.h"
+#include "tig/window.h"
 #include "ui/sleep_ui.h"
 #include "ui/wmap_ui.h"
 
@@ -122,6 +133,18 @@ static int wmap_rnd_encounter_entry_total_monsters(WmapRndEncounterTableEntry* e
 static void wmap_rnd_encounter_spawn(WmapRndEncounterTableEntry* entry);
 static void wmap_rnd_spawn_position_offset(int a1, int64_t* dx_ptr, int64_t* dy_ptr);
 static void wmap_rnd_encounter_build_object(int name, int64_t loc, int64_t* obj_ptr);
+static bool wmap_rnd_awareness(WmapRndEncounterTableEntry* entry);
+
+// CE (`encounter awareness`, card X10): the settings, and the distance the
+// next spawn uses - the original's 6 tiles unless awareness chose otherwise.
+#define WMAP_RND_AWARENESS_DIFFICULTY_KEY "encounter awareness difficulty"
+#define WMAP_RND_SPOT_DISTANCE_KEY "encounter spot distance"
+#define WMAP_RND_AMBUSH_DISTANCE_KEY "encounter ambush distance"
+#define WMAP_RND_STOCK_DISTANCE 6
+
+static int wmap_rnd_spawn_distance = WMAP_RND_STOCK_DISTANCE;
+// For the replay: -1 asks the player; 0 avoids and 1 engages without asking.
+static int wmap_rnd_awareness_answer = -1;
 
 /**
  * String tokens used to match power tier names when parsing the power chart
@@ -341,6 +364,11 @@ static int wmap_rnd_num_encounter_tables;
 bool wmap_rnd_init(GameInitInfo* init_info)
 {
     (void)init_info;
+
+    // CE (`encounter awareness`): the difficulty's base and the two distances.
+    settings_register(&settings, WMAP_RND_AWARENESS_DIFFICULTY_KEY, "15", NULL);
+    settings_register(&settings, WMAP_RND_SPOT_DISTANCE_KEY, "12", NULL);
+    settings_register(&settings, WMAP_RND_AMBUSH_DISTANCE_KEY, "4", NULL);
 
     // UAP (0x5581B6): the changed bytes are the skill-message icon cave planted
     // in the padding behind this function, not this body (`mov eax, 1; ret` in
@@ -1185,6 +1213,14 @@ bool wmap_rnd_encounter_check(void)
         index = last_eligible;
     }
 
+    // CE (`encounter awareness`): the party may spot it first - and avoid it,
+    // in which case nothing spawns and it does not count as met.
+    wmap_rnd_spawn_distance = WMAP_RND_STOCK_DISTANCE;
+    if (feature_enabled(FEATURE_ENCOUNTER_AWARENESS)
+        && !wmap_rnd_awareness(&(table->entries[index]))) {
+        return false;
+    }
+
     table->entries[index].trigger_cnt++;
 
     if (wmap_rnd_encounter_entry_total_monsters(&(table->entries[index])) == 0) {
@@ -1312,12 +1348,17 @@ void wmap_rnd_encounter_spawn(WmapRndEncounterTableEntry* entry)
     // Randomly choose whether monsters approach from the left or from above.
     if (random_between(1, 100) < 51) {
         // NOTE: Verified against 0x55927C-0x5592AE - original rolls < 51, makes origin (loc_x - 6, loc_y), and sets direction 6.
-        origin = LOCATION_MAKE(wmap_rnd_loc_x - 6, wmap_rnd_loc_y);
+        origin = LOCATION_MAKE(wmap_rnd_loc_x - wmap_rnd_spawn_distance, wmap_rnd_loc_y);
         wmap_rnd_spawn_direction = 6;
     } else {
         // NOTE: Verified against 0x5592B0-0x5592D8 - original makes origin (loc_x, loc_y - 6) and sets direction 2.
-        origin = LOCATION_MAKE(wmap_rnd_loc_x, wmap_rnd_loc_y - 6);
+        origin = LOCATION_MAKE(wmap_rnd_loc_x, wmap_rnd_loc_y - wmap_rnd_spawn_distance);
         wmap_rnd_spawn_direction = 2;
+    }
+
+    // CE (`encounter awareness`): the distance, for the log.
+    if (feature_enabled(FEATURE_ENCOUNTER_AWARENESS)) {
+        tig_debug_printf("WMap_Rnd: spawning %d tiles away\n", wmap_rnd_spawn_distance);
     }
 
     for (index = 0; index < 5; index++) {
@@ -1338,12 +1379,40 @@ void wmap_rnd_encounter_spawn(WmapRndEncounterTableEntry* entry)
             // If the ideal spawn tile is blocked, try to find a nearby clear
             // tile (range 6). Destroy the monster if none can be found.
             if (tile_is_blocking(loc, 0)) {
-                pc_obj = player_get_local_pc_obj();
-                if (!target_find_displacement_loc(pc_obj, 6, &loc) || tile_is_blocking(loc, false)) {
-                    object_destroy(obj);
-                    obj = OBJ_HANDLE_NULL;
-                } else {
-                    object_move_to(obj, loc, 0, 0);
+                // CE (`encounter awareness`, card X10): the original looks for
+                // a clear tile 6 steps from the player, which undoes any
+                // distance awareness chose. First step back towards the party
+                // along the monsters' line, one tile at a time, so the
+                // encounter keeps as much of its distance as the ground allows.
+                bool placed = false;
+                int distance;
+
+                if (feature_enabled(FEATURE_ENCOUNTER_AWARENESS)) {
+                    for (distance = wmap_rnd_spawn_distance - 1; distance >= 1 && !placed; distance--) {
+                        int64_t near_x = wmap_rnd_spawn_direction == 6 ? wmap_rnd_loc_x - distance : wmap_rnd_loc_x;
+                        int64_t near_y = wmap_rnd_spawn_direction == 6 ? wmap_rnd_loc_y : wmap_rnd_loc_y - distance;
+
+                        wmap_rnd_spawn_position_offset(k, &near_x, &near_y);
+                        if (!tile_is_blocking(LOCATION_MAKE(near_x, near_y), false)) {
+                            loc = LOCATION_MAKE(near_x, near_y);
+                            object_move_to(obj, loc, 0, 0);
+                            placed = true;
+                            tig_debug_printf("WMap_Rnd: spawn tile blocked; placed %d tiles away\n", distance);
+                        }
+                    }
+                    if (!placed) {
+                        tig_debug_printf("WMap_Rnd: spawn tile blocked; falling back to the player's surroundings\n");
+                    }
+                }
+
+                if (!placed) {
+                    pc_obj = player_get_local_pc_obj();
+                    if (!target_find_displacement_loc(pc_obj, 6, &loc) || tile_is_blocking(loc, false)) {
+                        object_destroy(obj);
+                        obj = OBJ_HANDLE_NULL;
+                    } else {
+                        object_move_to(obj, loc, 0, 0);
+                    }
                 }
             }
 
@@ -1353,6 +1422,10 @@ void wmap_rnd_encounter_spawn(WmapRndEncounterTableEntry* entry)
             node = objects.head;
             while (node != NULL) {
                 if (node->obj != obj) {
+                    // CE (`encounter awareness`): say so, for the log.
+                    if (feature_enabled(FEATURE_ENCOUNTER_AWARENESS)) {
+                        tig_debug_printf("WMap_Rnd: spawn tile occupied; monster removed\n");
+                    }
                     object_destroy(obj);
                     obj = OBJ_HANDLE_NULL;
                     break;
@@ -1470,4 +1543,126 @@ void wmap_rnd_schedule(void)
     timeevent.type = TIMEEVENT_TYPE_RANDOM_ENCOUNTER;
     datetime_from_milliseconds(&datetime, 60000 * random_between(300, 700));
     timeevent_add_delay(&timeevent, &datetime);
+}
+
+// CE (`encounter awareness`; card X10, zsogg's choices of 2026-10-20): the
+// party's chance to see a random encounter coming. The best Perception +
+// Intelligence among the player and their conscious followers, plus 1-20,
+// against `encounter awareness difficulty` + 5 for each step of the area's
+// encounter power. Spotted, the spotter is named and the player chooses:
+// avoid (returns false: nothing spawns) or engage, the monsters spawning
+// `encounter spot distance` tiles away. Unspotted, they spawn `encounter
+// ambush distance` tiles away and the fight is marked an ambush.
+static bool wmap_rnd_awareness(WmapRndEncounterTableEntry* entry)
+{
+    int64_t pc_obj;
+    int64_t spotter_obj;
+    ObjectList followers;
+    ObjectNode* node;
+    int best;
+    int score;
+    int roll;
+    int difficulty;
+    bool spotted;
+    bool avoid;
+    char spotter[MAX_STRING];
+    char text[MAX_STRING];
+    const char* monster;
+    TigWindowModalDialogInfo modal_info;
+    TigWindowModalDialogChoice choice;
+
+    pc_obj = player_get_local_pc_obj();
+    spotter_obj = OBJ_HANDLE_NULL;
+    best = -1;
+    if (critter_is_active(pc_obj)) {
+        best = encounter_awareness_score(stat_level_get(pc_obj, STAT_PERCEPTION),
+            stat_level_get(pc_obj, STAT_INTELLIGENCE));
+        spotter_obj = pc_obj;
+    }
+    object_list_followers(pc_obj, &followers);
+    for (node = followers.head; node != NULL; node = node->next) {
+        if (!critter_is_active(node->obj)) {
+            continue;
+        }
+        score = encounter_awareness_score(stat_level_get(node->obj, STAT_PERCEPTION),
+            stat_level_get(node->obj, STAT_INTELLIGENCE));
+        if (score > best) {
+            best = score;
+            spotter_obj = node->obj;
+        }
+    }
+    object_list_destroy(&followers);
+
+    roll = random_between(1, 20);
+    difficulty = encounter_awareness_difficulty(
+        settings_get_value(&settings, WMAP_RND_AWARENESS_DIFFICULTY_KEY), wmap_rnd_power);
+    spotted = spotter_obj != OBJ_HANDLE_NULL
+        && encounter_awareness_spots(best, roll, difficulty);
+
+    spotter[0] = '\0';
+    if (spotter_obj != OBJ_HANDLE_NULL) {
+        object_examine(spotter_obj, pc_obj, spotter);
+    }
+    monster = description_get(entry->critter_basic_prototype[0]);
+    tig_debug_printf("WMap_Rnd: awareness: %s %d + %d against %d (power %d): %s\n",
+        spotter, best, roll, difficulty, wmap_rnd_power, spotted ? "spotted" : "ambush");
+
+    if (!spotted) {
+        wmap_rnd_spawn_distance = settings_get_value(&settings, WMAP_RND_AMBUSH_DISTANCE_KEY);
+        combat_ambush_mark();
+        return true;
+    }
+
+    if (wmap_rnd_awareness_answer >= 0) {
+        avoid = wmap_rnd_awareness_answer == 0;
+    } else {
+        snprintf(text, sizeof(text), "%.200s spots %.200s ahead.\n\nAvoid them? (Y avoids, N engages.)",
+            spotter, monster != NULL ? monster : "something");
+        modal_info.keys[TIG_WINDOW_MODAL_DIALOG_CHOICE_OK] = 'y';
+        modal_info.keys[TIG_WINDOW_MODAL_DIALOG_CHOICE_CANCEL] = 'n';
+        modal_info.text = text;
+        modal_info.process = NULL;
+        modal_info.type = TIG_WINDOW_MODAL_DIALOG_TYPE_OK_CANCEL;
+        modal_info.x = 237;
+        modal_info.y = 232;
+        modal_info.redraw = gamelib_redraw;
+        hrp_center(&(modal_info.x), &(modal_info.y));
+        tig_window_modal_dialog(&modal_info, &choice);
+        avoid = choice == TIG_WINDOW_MODAL_DIALOG_CHOICE_OK;
+    }
+
+    tig_debug_printf("WMap_Rnd: awareness: %s\n", avoid ? "avoided" : "engaged at a distance");
+    if (avoid) {
+        return false;
+    }
+
+    wmap_rnd_spawn_distance = settings_get_value(&settings, WMAP_RND_SPOT_DISTANCE_KEY);
+    return true;
+}
+
+// CE (the replay's `encounter` row, card X10): a random encounter from
+// `table` at the player's tile, now, as one fired while travelling would be -
+// the awareness check included. `answer` stands in for the player at the
+// avoid-or-engage choice: 0 avoids, 1 engages, -1 asks.
+bool wmap_rnd_force_encounter(int table, int answer)
+{
+    bool fired;
+
+    if (!wmap_rnd_initialized || table < 0 || table >= wmap_rnd_num_encounter_tables) {
+        return false;
+    }
+
+    wmap_rnd_loc = obj_field_int64_get(player_get_local_pc_obj(), OBJ_F_LOCATION);
+    wmap_rnd_loc_x = LOCATION_GET_X(wmap_rnd_loc);
+    wmap_rnd_loc_y = LOCATION_GET_Y(wmap_rnd_loc);
+    if (!wmap_rnd_encounter_chart_lookup(&wmap_rnd_power_chart, wmap_rnd_loc, &wmap_rnd_power)) {
+        wmap_rnd_power = 2;
+    }
+    wmap_rnd_night = datetime_current_hour() < 6 || datetime_current_hour() >= 18;
+    wmap_rnd_encounter = table;
+    wmap_rnd_awareness_answer = answer;
+    fired = wmap_rnd_encounter_check();
+    wmap_rnd_awareness_answer = -1;
+
+    return fired;
 }
