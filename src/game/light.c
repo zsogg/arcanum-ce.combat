@@ -1,6 +1,7 @@
 #include "game/light.h"
 
 #include "game/critter.h"
+#include "game/feature.h"
 #include "game/gamelib.h"
 #include "game/object.h"
 #include "game/sector.h"
@@ -73,6 +74,7 @@ static void shadow_node_reserve(void);
 static void shadow_node_clear(void);
 static bool light_timeevent_matches(TimeEvent* timeevent);
 static void light_create(LightCreateInfo* create_info, Light** light_ptr);
+static void light_carried_sync(int64_t obj);
 static void light_render_internal(GameDrawInfo* draw_info);
 static void light_rect_expand_to_tiles(TigRect* rect);
 
@@ -693,6 +695,8 @@ void light_create_for_obj(int64_t obj, bool a2)
 
     create_func = a2 ? light_create_and_add : light_create;
 
+    light_carried_sync(obj);
+
     art_id = obj_field_int32_get(obj, OBJ_F_LIGHT_AID);
     light = (Light*)obj_field_ptr_get(obj, OBJ_F_LIGHT_HANDLE);
     if (art_id != TIG_ART_ID_INVALID) {
@@ -760,6 +764,39 @@ void light_create_for_obj(int64_t obj, bool a2)
     }
 
     obj_field_int32_set(obj, OBJ_F_RENDER_FLAGS, render_flags | ORF_80000000);
+}
+
+// CE (`carried lights`; zsogg, 2026-10-19): a critter's carried light - set
+// from the items it wears by `critter_light_get` - is saved with the art and
+// colour it had then (OBJ_F_LIGHT_AID, OBJ_F_LIGHT_COLOR). Before the light is
+// recreated, from a load or otherwise, bring it up to what the critter's light
+// flags make it now, so a save written with the Brighter Lanterns mod loaded
+// without it - whose art 29 is gone - shows the stock light rather than none,
+// and one written without it shows the brighter light. Measured: such a load
+// drew 85 lit pixels before this, against 2,353 for the stock lantern.
+// Off, and with a stock light saved, nothing is read beyond the flags: the
+// stock light is what `critter_light_get` makes, so there is nothing to sync.
+static void light_carried_sync(int64_t obj)
+{
+    tig_art_id_t art_id;
+    tig_color_t color;
+
+    if (!obj_type_is_critter(obj_field_int32_get(obj, OBJ_F_TYPE))
+        || (obj_field_int32_get(obj, OBJ_F_CRITTER_FLAGS) & OCF_LIGHT_ANY) == 0) {
+        return;
+    }
+
+    if (!feature_enabled(FEATURE_CARRIED_LIGHTS)
+        && tig_art_num_get(obj_field_int32_get(obj, OBJ_F_LIGHT_AID)) == 1) {
+        return;
+    }
+
+    art_id = critter_light_get(obj, &color);
+    if (art_id != (tig_art_id_t)obj_field_int32_get(obj, OBJ_F_LIGHT_AID)
+        || color != (tig_color_t)obj_field_int32_get(obj, OBJ_F_LIGHT_COLOR)) {
+        obj_field_int32_set(obj, OBJ_F_LIGHT_AID, art_id);
+        obj_field_int32_set(obj, OBJ_F_LIGHT_COLOR, color);
+    }
 }
 
 // 0x4D9990

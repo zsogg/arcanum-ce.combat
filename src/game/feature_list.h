@@ -82,7 +82,8 @@ FEATURE(FOLLOWER_LEVEL_FREE, "follower level free", false)
 FEATURE(FOLLOWER_REACTION_JOINS, "follower reaction joins", false)
 // Brighter lanterns (zsogg, 2026-10-19), read by `critter_light_get`: a carried
 // light - the Lantern, Electric Light, Helm of Light, Miner's Helmet - draws the
-// light art `carried light art` names instead of the stock Disk2x2, and the
+// light art `carried light art` names (29, the mod's brightened Disk3x3; Disk3x3
+// itself when 29 is not installed) instead of the stock Disk2x2, and the
 // Electric Light's white becomes warm.
 FEATURE(CARRIED_LIGHTS, "carried lights", false)
 

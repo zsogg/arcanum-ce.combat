@@ -25,6 +25,7 @@ void test_armor_rules_suite(void);
 void test_penetration_suite(void);
 void test_ai_targeting_suite(void);
 void test_followers_suite(void);
+void test_carried_lights_suite(void);
 void test_reload_suite(void);
 void test_crit_guard_suite(void);
 void test_rt_budget_suite(void);
@@ -88,6 +89,7 @@ int main(void)
     test_penetration_suite();
     test_ai_targeting_suite();
     test_followers_suite();
+    test_carried_lights_suite();
     test_reload_suite();
     test_crit_guard_suite();
     test_rt_budget_suite();

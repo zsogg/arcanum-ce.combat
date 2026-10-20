@@ -133,8 +133,9 @@ bool critter_init(GameInitInfo* init_info)
     critter_editor = init_info->editor;
 
     // CE (`carried lights`): the light art a carried light draws when the
-    // switch is on. 2 is Disk3x3, the next size up from the stock Disk2x2.
-    settings_register(&settings, CRITTER_CARRIED_LIGHT_ART_KEY, "2", NULL);
+    // switch is on. 29 is the Brighter Lanterns mod's own (a brightened
+    // Disk3x3, zsogg's choice of 2026-10-19), reserved in mods/ID-BUDGETS.md.
+    settings_register(&settings, CRITTER_CARRIED_LIGHT_ART_KEY, "29", NULL);
 
     // Load experience value table (required).
     if (!mes_load("Rules\\xp_critter.mes", &xp_mes_file)) {
@@ -2415,8 +2416,9 @@ tig_art_id_t critter_light_get(int64_t critter_obj, unsigned int* color_ptr)
 }
 
 // CE (`carried lights`): the light art number `carried light art` names, or
-// the stock Disk2x2 (1) when it names no light art `art/light/light.mes`
-// lists - a light whose art cannot be found draws nothing.
+// Disk3x3 (2), the next stock size up, when it names no light art
+// `art/light/light.mes` lists - the switch without the mod's art still widens
+// the light, and a light whose art cannot be found would draw nothing.
 int critter_carried_light_art(void)
 {
     static int reported = -1;
@@ -2432,12 +2434,12 @@ int critter_carried_light_art(void)
     }
 
     if (num != reported) {
-        tig_debug_printf("critter: \"%s\" is %d, which names no light art; using 1\n",
+        tig_debug_printf("critter: \"%s\" is %d, which names no light art; using 2\n",
             CRITTER_CARRIED_LIGHT_ART_KEY, num);
         reported = num;
     }
 
-    return 1;
+    return 2;
 }
 
 /**
