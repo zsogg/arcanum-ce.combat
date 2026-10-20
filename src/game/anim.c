@@ -7151,8 +7151,12 @@ bool anim_can_reach_target(int64_t source_obj, int64_t target_obj)
     ASSERT(source_obj != OBJ_HANDLE_NULL); // 6747, "sourceObj != OBJ_HANDLE_NULL"
     ASSERT(target_obj != OBJ_HANDLE_NULL); // 6748, "targetObj != OBJ_HANDLE_NULL"
 
+    // FIX (porting bug #59): the original tests the source and then the
+    // target (0x42956E, 0x429578: each null handle jumps to the shared
+    // `return false` at 0x4296B4); CE tested the source twice, so a null
+    // target went on to have its flags read.
     if (source_obj == OBJ_HANDLE_NULL
-        || source_obj == OBJ_HANDLE_NULL
+        || target_obj == OBJ_HANDLE_NULL
         || !critter_is_active(source_obj)
         || (obj_field_int32_get(target_obj, OBJ_F_FLAGS) & (OF_DESTROYED | OF_OFF)) != 0) {
         return false;
