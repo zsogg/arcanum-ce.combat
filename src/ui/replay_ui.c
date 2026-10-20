@@ -11,6 +11,7 @@
 #include "game/ai.h"
 #include "game/anim.h"
 #include "game/combat.h"
+#include "game/timeevent.h"
 #include "game/combat_observer.h"
 #include "game/crit_effects.h"
 #include "game/critter.h"
@@ -168,6 +169,10 @@ typedef enum ReplayKind {
     //       the player's training in a basic skill (0-11) set to 0-3 through
     //       `basic_skill_training_set`, as a trainer sets it - which runs the
     //       Educator's pass over the followers.
+    //   hour <0-23>
+    //       the game clock advanced an hour at a time, as resting does, until
+    //       it reads that hour - so the lighting scheme darkens or brightens
+    //       the map as it would in play (2026-10-19, for lantern screenshots).
     //   inspect xp
     //       one log line with the player's level, experience and experience to
     //       the next level, and one per follower with its basic-skill training.
@@ -179,6 +184,7 @@ typedef enum ReplayKind {
     REPLAY_KIND_USE,
     REPLAY_KIND_XP,
     REPLAY_KIND_TRAIN,
+    REPLAY_KIND_HOUR,
 } ReplayKind;
 
 // A cast's target, which is a third shape: the caster, an object or a tile.
@@ -719,6 +725,15 @@ static bool replay_parse_line(const char* text, ReplayCommand* command)
         return index == count;
     }
 
+    if (strcmp(kind, "hour") == 0) {
+        command->kind = REPLAY_KIND_HOUR;
+        if (!replay_parse_int(tokens[index++], &(command->count))
+            || command->count < 0 || command->count > 23) {
+            return false;
+        }
+        return index == count;
+    }
+
     if (strcmp(kind, "train") == 0) {
         command->kind = REPLAY_KIND_TRAIN;
         if (!replay_parse_int(tokens[index++], &(command->skill))
@@ -850,7 +865,7 @@ int replay_ui_count(void)
 bool replay_ui_describe(int index, char* buffer, size_t size)
 {
     const ReplayCommand* command;
-    static const char* kinds[] = { "object", "location", "key", "cast", "wield", "wait", "learn", "give", "throw", "skill", "raise", "prowl", "panel", "save", "inspect", "transfer", "take", "drop", "pickup", "wear", "skill-level", "stat-level", "jam", "afflict", "poison", "use", "xp", "train" };
+    static const char* kinds[] = { "object", "location", "key", "cast", "wield", "wait", "learn", "give", "throw", "skill", "raise", "prowl", "panel", "save", "inspect", "transfer", "take", "drop", "pickup", "wear", "skill-level", "stat-level", "jam", "afflict", "poison", "use", "xp", "train", "hour" };
     int written;
     static const char* casts[] = { "self", "object", "location" };
 
@@ -870,7 +885,7 @@ bool replay_ui_describe(int index, char* buffer, size_t size)
             || command->kind == REPLAY_KIND_DROP || command->kind == REPLAY_KIND_PICKUP
             || command->kind == REPLAY_KIND_WEAR || command->kind == REPLAY_KIND_AFFLICT
             || command->kind == REPLAY_KIND_POISON || command->kind == REPLAY_KIND_USE
-            || command->kind == REPLAY_KIND_XP)
+            || command->kind == REPLAY_KIND_XP || command->kind == REPLAY_KIND_HOUR)
         && written >= 0 && (size_t)written < size) {
         snprintf(buffer + written, size - (size_t)written, " proto=%d count=%d",
             command->proto, command->count);
@@ -1204,6 +1219,21 @@ void replay_ui_tick(void)
         return;
     }
 
+    if (command->kind == REPLAY_KIND_HOUR) {
+        DateTime datetime;
+        int steps;
+
+        replay_stall_reported = false;
+        replay_next++;
+        datetime_from_milliseconds(&datetime, 3600000);
+        for (steps = 0; steps < 24 && datetime_current_hour() != command->count; steps++) {
+            timeevent_inc_datetime(&datetime);
+        }
+        tig_debug_printf("Replay: command %d advanced the clock %d hour(s); it reads hour %d\n",
+            replay_next - 1, steps, datetime_current_hour());
+        return;
+    }
+
     if (command->kind == REPLAY_KIND_TRAIN) {
         replay_stall_reported = false;
         replay_next++;
@@ -1245,8 +1275,12 @@ void replay_ui_tick(void)
             return;
         }
         item_obj = replay_find_carried(wearer_obj, command->proto, false);
+        // Armor, or (2026-10-19) a generic item held in the torch/shield
+        // place - a Lantern - which `item_location_get` places there.
         if (item_obj == OBJ_HANDLE_NULL
-            || obj_field_int32_get(item_obj, OBJ_F_TYPE) != OBJ_TYPE_ARMOR
+            || (obj_field_int32_get(item_obj, OBJ_F_TYPE) != OBJ_TYPE_ARMOR
+                && !(obj_field_int32_get(item_obj, OBJ_F_TYPE) == OBJ_TYPE_GENERIC
+                    && item_location_get(item_obj) == ITEM_INV_LOC_SHIELD))
             || !item_wield_set(item_obj, item_location_get(item_obj))) {
             tig_debug_printf("Replay: command %d could not wear prototype %d\n",
                 replay_next - 1, command->proto);

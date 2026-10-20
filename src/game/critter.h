@@ -106,7 +106,11 @@ const char* critter_encumbrance_level_name(int level);
 int critter_encumbrance_level_ratio(int level);
 int critter_description_get(int64_t a, int64_t b);
 bool critter_can_backstab(int64_t obj, int64_t tgt);
+// CE (`carried lights`): which light art a carried light draws.
+#define CRITTER_CARRIED_LIGHT_ART_KEY "carried light art"
+
 tig_art_id_t critter_light_get(int64_t critter_obj, unsigned int* color_ptr);
+int critter_carried_light_art(void);
 bool critter_has_dark_sight(int64_t obj);
 bool critter_is_dumb(int64_t obj);
 void critter_debug_obj(int64_t obj);

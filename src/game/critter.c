@@ -7,6 +7,7 @@
 #include "game/combat_observer.h"
 #include "game/effect.h"
 #include "game/feature.h"
+#include "game/a_name.h"
 #include "game/gamelib.h"
 #include "game/item.h"
 #include "game/light.h"
@@ -24,6 +25,7 @@
 #include "game/reaction.h"
 #include "game/reputation.h"
 #include "game/script.h"
+#include "game/settings.h"
 #include "game/skill.h"
 #include "game/stat.h"
 #include "game/tf.h"
@@ -129,6 +131,10 @@ bool critter_init(GameInitInfo* init_info)
     MesFileEntry mes_file_entry;
 
     critter_editor = init_info->editor;
+
+    // CE (`carried lights`): the light art a carried light draws when the
+    // switch is on. 2 is Disk3x3, the next size up from the stock Disk2x2.
+    settings_register(&settings, CRITTER_CARRIED_LIGHT_ART_KEY, "2", NULL);
 
     // Load experience value table (required).
     if (!mes_load("Rules\\xp_critter.mes", &xp_mes_file)) {
@@ -2368,23 +2374,36 @@ tig_art_id_t critter_light_get(int64_t critter_obj, unsigned int* color_ptr)
 {
     tig_art_id_t art_id;
     unsigned int critter_flags;
+    int num;
+    bool carried_lights;
+
+    // CE (`carried lights`): every size draws the art `carried light art`
+    // names, and the extra large light is warm. Off, the original: Disk2x2
+    // (light art 1) for every size.
+    carried_lights = feature_enabled(FEATURE_CARRIED_LIGHTS);
+    num = carried_lights ? critter_carried_light_art() : 1;
 
     critter_flags = obj_field_int32_get(critter_obj, OBJ_F_CRITTER_FLAGS);
     if ((critter_flags & OCF_LIGHT_XLARGE) != 0) {
-        // Extra large light (pale aqua).
-        tig_art_light_id_create(1, 0, 0, 0, &art_id);
-        light_build_color(244, 255, 255, color_ptr);
+        // Extra large light (pale aqua); warm under `carried lights`, a step
+        // brighter than the large light's peach.
+        tig_art_light_id_create(num, 0, 0, 0, &art_id);
+        if (carried_lights) {
+            light_build_color(255, 232, 196, color_ptr);
+        } else {
+            light_build_color(244, 255, 255, color_ptr);
+        }
     } else if ((critter_flags & OCF_LIGHT_LARGE) != 0) {
         // Large light (peach puff).
-        tig_art_light_id_create(1, 0, 0, 0, &art_id);
+        tig_art_light_id_create(num, 0, 0, 0, &art_id);
         light_build_color(255, 214, 172, color_ptr);
     } else if ((critter_flags & OCF_LIGHT_MEDIUM) != 0) {
         // Medium light (coral).
-        tig_art_light_id_create(1, 0, 0, 0, &art_id);
+        tig_art_light_id_create(num, 0, 0, 0, &art_id);
         light_build_color(236, 138, 85, color_ptr);
     } else if ((critter_flags & OCF_LIGHT_SMALL) != 0) {
         // Small light (terracotta).
-        tig_art_light_id_create(1, 0, 0, 0, &art_id);
+        tig_art_light_id_create(num, 0, 0, 0, &art_id);
         light_build_color(167, 88, 58, color_ptr);
     } else {
         // No light.
@@ -2393,6 +2412,32 @@ tig_art_id_t critter_light_get(int64_t critter_obj, unsigned int* color_ptr)
     }
 
     return art_id;
+}
+
+// CE (`carried lights`): the light art number `carried light art` names, or
+// the stock Disk2x2 (1) when it names no light art `art/light/light.mes`
+// lists - a light whose art cannot be found draws nothing.
+int critter_carried_light_art(void)
+{
+    static int reported = -1;
+    tig_art_id_t art_id;
+    char fname[TIG_MAX_PATH];
+    int num;
+
+    num = settings_get_value(&settings, CRITTER_CARRIED_LIGHT_ART_KEY);
+    if (num >= 0
+        && tig_art_light_id_create(num, 0, 0, 0, &art_id) == TIG_OK
+        && a_name_light_aid_to_fname(art_id, fname, sizeof(fname))) {
+        return num;
+    }
+
+    if (num != reported) {
+        tig_debug_printf("critter: \"%s\" is %d, which names no light art; using 1\n",
+            CRITTER_CARRIED_LIGHT_ART_KEY, num);
+        reported = num;
+    }
+
+    return 1;
 }
 
 /**
