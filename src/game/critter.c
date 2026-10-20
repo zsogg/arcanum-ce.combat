@@ -1,5 +1,6 @@
 #include "game/critter.h"
 
+#include "game/a_name.h"
 #include "game/ai.h"
 #include "game/anim.h"
 #include "game/background.h"
@@ -7,7 +8,6 @@
 #include "game/combat_observer.h"
 #include "game/effect.h"
 #include "game/feature.h"
-#include "game/a_name.h"
 #include "game/gamelib.h"
 #include "game/item.h"
 #include "game/light.h"
