@@ -90,11 +90,24 @@ static void combat_summons_round_began(void);
 static bool combat_opening_holds(int64_t obj);
 static void combat_opening_player_reached(void);
 static void combat_opening_end(void);
+static void combat_initiative_clear(void);
+static void combat_initiative_sort(void);
 static void pc_switch_weapon(int64_t pc_obj, int64_t target_obj);
 
 // CE (reload prototype session 2): the weapon that last left the player's
 // hand, for `weapon swap cost` - see `combat_weapon_swap_entered`.
 static int64_t combat_weapon_swap_last;
+
+// CE (`turn order initiative`, card X10): each critter's initiative in the
+// fight in progress, rolled the first time it is sorted. A fight's start
+// clears it, and a load starts the fight again, so a load rolls anew.
+#define COMBAT_INITIATIVE_MAX 256
+
+static struct {
+    int64_t obj;
+    int score;
+} combat_initiative[COMBAT_INITIATIVE_MAX];
+static int combat_initiative_count;
 
 // 0x5B5798
 static int hit_loc_penalties[HIT_LOC_COUNT] = {
@@ -298,6 +311,8 @@ void combat_reset(void)
 {
     // CE (reload prototype session 2): a new game or a load has no last weapon.
     combat_weapon_swap_last = OBJ_HANDLE_NULL;
+    // CE (`turn order initiative`): nor any initiative.
+    combat_initiative_clear();
 
     // CE (real-time session B): recovery is not saved (rule 3) - a new game or a
     // load starts every actor ready.
@@ -1578,7 +1593,13 @@ void combat_critter_toggle_combat_mode(int64_t obj)
 
             combat_callbacks.field_4();
 
-            if (combat_turn_based_active) {
+            // CE (`turn order initiative`, card X10): the original hands the
+            // turn to the player who entered combat mode, after at most the
+            // first critter's, so everyone listed between them lost their
+            // opening turn. Under initiative the rolled order stands from the
+            // start - entering combat buys no early turn (agreed 2026-09-18).
+            if (combat_turn_based_active
+                && !feature_enabled(FEATURE_TURN_ORDER_INITIATIVE)) {
                 combat_turn_based_whos_turn_set(obj);
             }
         }
@@ -3929,6 +3950,8 @@ bool combat_turn_based_start(void)
     }
 
     combat_turn_based_turn = 0;
+    // CE (`turn order initiative`): a new fight rolls initiative anew.
+    combat_initiative_clear();
     // CE (opening safeguard): a fight's first turn-based round.
     combat_opening_end();
     combat_opening_active = feature_enabled(FEATURE_OPENING_SAFEGUARD);
@@ -5249,7 +5272,11 @@ void sort_combat_list(void)
     tail = NULL;
     prev = NULL;
     node = combat_critter_list.head;
-    if (node != NULL) {
+    // CE (`turn order initiative`): order by initiative instead of moving
+    // the party to the end; summons still follow their casters below.
+    if (feature_enabled(FEATURE_TURN_ORDER_INITIATIVE)) {
+        combat_initiative_sort();
+    } else if (node != NULL) {
         do {
             process = true;
             if (obj_field_int32_get(node->obj, OBJ_F_TYPE) != OBJ_TYPE_PC) {
@@ -5332,6 +5359,138 @@ void sort_combat_list(void)
         node = node->next;
         index++;
     }
+}
+
+// CE (`turn order initiative`; card X10, zsogg's choices of 2026-10-20): a
+// combatant's initiative, Dexterity plus a roll of 1-10.
+int combat_initiative_score(int dexterity, int roll)
+{
+    return dexterity + roll;
+}
+
+// CE (`turn order initiative`): whether `a` acts before `b` (negative), after
+// (positive) or neither (0, which keeps the list's own order). The higher
+// score first; an exact tie to the party (the forgiving direction agreed on
+// 2026-09-18), then to the higher Dexterity.
+int combat_initiative_compare(int score_a, bool party_a, int dexterity_a,
+    int score_b, bool party_b, int dexterity_b)
+{
+    if (score_a != score_b) {
+        return score_b - score_a;
+    }
+
+    if (party_a != party_b) {
+        return party_a ? -1 : 1;
+    }
+
+    return dexterity_b - dexterity_a;
+}
+
+static void combat_initiative_clear(void)
+{
+    combat_initiative_count = 0;
+}
+
+// The critter's initiative in this fight, rolled the first time it is asked
+// for. A table full beyond any real fight rolls without remembering.
+static int combat_initiative_of(int64_t obj)
+{
+    int index;
+    int roll;
+    int score;
+    char* name = NULL;
+
+    for (index = 0; index < combat_initiative_count; index++) {
+        if (combat_initiative[index].obj == obj) {
+            return combat_initiative[index].score;
+        }
+    }
+
+    roll = random_between(1, 10);
+    score = combat_initiative_score(stat_level_get(obj, STAT_DEXTERITY), roll);
+    if (combat_initiative_count < COMBAT_INITIATIVE_MAX) {
+        combat_initiative[combat_initiative_count].obj = obj;
+        combat_initiative[combat_initiative_count].score = score;
+        combat_initiative_count++;
+    }
+
+    if (player_is_pc_obj(obj)) {
+        obj_field_string_get(obj, OBJ_F_PC_PLAYER_NAME, &name);
+    } else {
+        obj_field_string_get(obj, OBJ_F_NAME, &name);
+    }
+    tig_debug_printf("Combat: initiative: %s: Dexterity %d + %d = %d\n",
+        name != NULL ? name : " ", stat_level_get(obj, STAT_DEXTERITY), roll, score);
+    if (name != NULL) {
+        FREE(name);
+    }
+
+    return score;
+}
+
+// The player and the critters following them, as the stock sort counts them.
+static bool combat_initiative_is_party(int64_t obj)
+{
+    return obj_field_int32_get(obj, OBJ_F_TYPE) == OBJ_TYPE_PC
+        || critter_pc_leader_get(obj) != OBJ_HANDLE_NULL;
+}
+
+// Orders `combat_critter_list` by initiative: a stable insertion sort of the
+// nodes themselves, so equal entries keep the list's own order.
+static void combat_initiative_sort(void)
+{
+    typedef struct CombatInitiativeEntry {
+        ObjectNode* node;
+        int score;
+        bool party;
+        int dexterity;
+    } CombatInitiativeEntry;
+
+    CombatInitiativeEntry* entries;
+    CombatInitiativeEntry entry;
+    ObjectNode* node;
+    int count;
+    int index;
+    int slot;
+
+    count = 0;
+    for (node = combat_critter_list.head; node != NULL; node = node->next) {
+        count++;
+    }
+    if (count < 2) {
+        return;
+    }
+
+    entries = (CombatInitiativeEntry*)MALLOC(sizeof(*entries) * count);
+    index = 0;
+    for (node = combat_critter_list.head; node != NULL; node = node->next) {
+        entries[index].node = node;
+        entries[index].score = combat_initiative_of(node->obj);
+        entries[index].party = combat_initiative_is_party(node->obj);
+        entries[index].dexterity = stat_level_get(node->obj, STAT_DEXTERITY);
+        index++;
+    }
+
+    for (index = 1; index < count; index++) {
+        entry = entries[index];
+        slot = index;
+        while (slot > 0
+            && combat_initiative_compare(entry.score, entry.party, entry.dexterity,
+                   entries[slot - 1].score, entries[slot - 1].party, entries[slot - 1].dexterity)
+                < 0) {
+            entries[slot] = entries[slot - 1];
+            slot--;
+        }
+        entries[slot] = entry;
+    }
+
+    combat_critter_list.head = entries[0].node;
+    for (index = 0; index < count - 1; index++) {
+        entries[index].node->next = entries[index + 1].node;
+    }
+    entries[count - 1].node->next = NULL;
+
+    FREE(entries);
 }
 
 // 0x4B8040

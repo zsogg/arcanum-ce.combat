@@ -91,5 +91,10 @@ FEATURE(CARRIED_LIGHTS, "carried lights", false)
 // needs at most `schematic second discipline level` (35, Associate) in its
 // discipline, not its full complexity; the own discipline is unchanged.
 FEATURE(SCHEMATIC_SECOND_DISCIPLINE_CAP, "schematic second discipline cap", false)
+// Initiative and Awareness (card X10; zsogg, 2026-10-20), read by
+// `sort_combat_list`: a turn-based fight's order follows each critter's
+// initiative, Dexterity + 1-10 rolled once per fight, ties to the party,
+// instead of the party acting last in every round.
+FEATURE(TURN_ORDER_INITIATIVE, "turn order initiative", false)
 
 // clang-format on
