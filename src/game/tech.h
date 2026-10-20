@@ -40,6 +40,10 @@ int tech_degree_dec(int64_t obj, int tech);
 int tech_degree_cost_get(int degree);
 int tech_degree_level_get(int64_t obj, int tech);
 int tech_degree_min_intelligence_get(int degree);
+// CE (`schematic second discipline cap`): the degree level a schematic
+// component needs, and the setting that caps it outside the own discipline.
+#define TECH_SECOND_DISCIPLINE_LEVEL_KEY "schematic second discipline level"
+int tech_component_level_required(int component_tech, int own_tech, int complexity);
 void tech_learn_schematic(int64_t pc_obj, int64_t written_obj);
 bool tech_check_intelligence(int64_t obj, int intelligence);
 int tech_schematic_get(int tech, int schematic);

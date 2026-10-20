@@ -1,10 +1,12 @@
 #include "game/tech.h"
 
 #include "game/effect.h"
+#include "game/feature.h"
 #include "game/gamelib.h"
 #include "game/mes.h"
 #include "game/object.h"
 #include "game/player.h"
+#include "game/settings.h"
 #include "game/stat.h"
 #include "game/ui.h"
 
@@ -105,6 +107,10 @@ bool tech_init(GameInitInfo* init_info)
     int degree;
 
     (void)init_info;
+
+    // CE (`schematic second discipline cap`): the cap, a degree level; 35 is
+    // Associate.
+    settings_register(&settings, TECH_SECOND_DISCIPLINE_LEVEL_KEY, "35", NULL);
 
     // Load the tech message file (required).
     if (!mes_load("mes\\tech.mes", &tech_mes_file)) {
@@ -356,6 +362,30 @@ int tech_degree_level_get(int64_t obj, int tech)
 int tech_degree_min_intelligence_get(int degree)
 {
     return tech_degree_min_intelligence_tbl[degree];
+}
+
+// CE (`schematic second discipline cap`; zsogg, 2026-10-19): the degree level a
+// component of a schematic needs in its own discipline. The original asks for
+// its full complexity whatever the schematic, so a Strong Poison (75) in a
+// grenade needs Chemistry Professor even in an explosives specialist's hands,
+// though Chemistry Novice makes it; 21 found schematics need Professor or
+// Doctorate in a second discipline (docs/SCHEMATICS.md). Under the switch a
+// component outside the schematic's own discipline needs at most
+// `schematic second discipline level`. Off, or inside the own discipline: the
+// full complexity, as the original.
+int tech_component_level_required(int component_tech, int own_tech, int complexity)
+{
+    int cap;
+
+    if (!feature_enabled(FEATURE_SCHEMATIC_SECOND_DISCIPLINE_CAP)
+        || component_tech == own_tech) {
+        return complexity;
+    }
+
+    // No bounds needed: a cap of 100 or more leaves every complexity as it
+    // is, and one of 0 or less is met by any degree.
+    cap = settings_get_value(&settings, TECH_SECOND_DISCIPLINE_LEVEL_KEY);
+    return complexity < cap ? complexity : cap;
 }
 
 /**

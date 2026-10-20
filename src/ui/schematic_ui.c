@@ -1278,6 +1278,11 @@ void schematic_ui_draw_component(int ingr, SchematicInfo* schematic_info, bool* 
     // Check expertise for the component's tech discipline.
     tech = obj_field_int32_get(item_obj, OBJ_F_ITEM_DISCIPLINE);
     complexity = -obj_field_int32_get(item_obj, OBJ_F_ITEM_MAGIC_TECH_COMPLEXITY);
+    // CE (`schematic second discipline cap`): outside the schematic's own
+    // discipline the requirement may be capped; the score drawn below is the
+    // requirement checked.
+    complexity = tech_component_level_required(tech,
+        tech_from_schematic(schematic_ui_current_id()), complexity);
     *have_expertise = tech_degree_level_get(schematic_ui_primary_obj, tech) >= complexity;
 
     // Draw component background based on expertise and item availability.

@@ -28,6 +28,7 @@ add_executable(arcanum-tests
     "test_ai_targeting.c"
     "test_followers.c"
     "test_carried_lights.c"
+    "test_schematic_cap.c"
     "test_reload.c"
     "test_crit_guard.c"
     "test_rt_budget.c"

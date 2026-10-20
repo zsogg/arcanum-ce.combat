@@ -86,5 +86,10 @@ FEATURE(FOLLOWER_REACTION_JOINS, "follower reaction joins", false)
 // itself when 29 is not installed) instead of the stock Disk2x2, and the
 // Electric Light's white becomes warm.
 FEATURE(CARRIED_LIGHTS, "carried lights", false)
+// Tech specialists (zsogg, 2026-10-19), read by `tech_component_level_required`:
+// building a schematic, a component outside the schematic's own discipline
+// needs at most `schematic second discipline level` (35, Associate) in its
+// discipline, not its full complexity; the own discipline is unchanged.
+FEATURE(SCHEMATIC_SECOND_DISCIPLINE_CAP, "schematic second discipline cap", false)
 
 // clang-format on
