@@ -36,7 +36,7 @@ You need Arcanum from GOG and the Unofficial Arcanum Patch 2.0.2
 playing, the optional mods and removal; the same guides are here to read
 first: [Windows](docs/INSTALL-WINDOWS.md) and [Linux](docs/INSTALL-LINUX.md).
 
-- **Windows:** install GOG Arcanum and UAP the usual way, unzip the package,
+- **Windows:** install GOG Arcanum and UAP: Do not install Arcanum into your Program Files directory, as this mod will be unable to write there. After installing Arcanum and the UAP patch, unzip this package - downloads below,
   and run `setup.bat`. Setup changes nothing outside the game folder.
 - **Linux:** setup builds the game folder from GOG's offline installer and
   `UAP2.0.2.exe` with `innoextract` and `7z`. No Wine is used.
