@@ -1904,7 +1904,8 @@ bool magictech_can_charge_spell_fatigue(int64_t obj, int magictech)
     // committing path applies in `magictech_charge_spell_fatigue`. A mastered
     // caster could therefore be shown "Not enough Energy." for a spell the
     // engine would actually cast. Apply the same discount/rounding here so the
-    // affordability check agrees with the real charge.
+    // affordability check agrees with the real charge. Kept by zsogg's
+    // decision (2026-10-21).
     if (magictech >= 0
         && magictech < MT_80
         && spell_mastery_get(obj) == COLLEGE_FROM_SPELL(magictech)) {
@@ -4505,6 +4506,9 @@ void magictech_component_obj_flag(int64_t obj, int64_t a2, int fld, int a4, int 
                         ai_make_peace(obj, a6);
                     } else if (player_is_pc_obj(a6)) {
                         // CE: Bypass effects to make this bonus reversible.
+                        // Kept by zsogg's decision (2026-10-21): a charm must
+                        // leave no permanent change in reaction, which the
+                        // original's asymmetric good/bad modifiers did.
                         reaction_adj_ex(obj, a6, 30, false);
                     }
 
@@ -4586,7 +4590,8 @@ void magictech_component_obj_flag(int64_t obj, int64_t a2, int fld, int a4, int 
                 }
             } else if ((a4 & OSF_CHARMED) != 0) {
                 if (obj_type == OBJ_TYPE_NPC) {
-                    // CE: Reversing charm bonus bypasses effects.
+                    // CE: Reversing charm bonus bypasses effects. Kept by
+                    // zsogg's decision (2026-10-21), as at the cast.
                     reaction_adj_ex(obj, a6, -30, false);
                 }
             }
