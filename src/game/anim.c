@@ -8040,20 +8040,36 @@ bool AGapplyFireDmg(AnimRunInfo* run_info)
             combat.dam[DAMAGE_TYPE_FIRE] = dam;
         }
 
-        if ((parent_obj == OBJ_HANDLE_NULL || parent_obj != node->obj)
-            && critter_pc_leader_get(node->obj) != parent_obj) {
-            ai_attack(parent_obj, node->obj, LOUDNESS_NORMAL, 0);
-
-            if (combat_turn_based_is_active()
-                && run_info->cur_stack_data->params[AGDATA_SCRATCH_VAL6].data != combat_turn_based_turn_get()) {
-                update_turn = true;
-                combat.dam[DAMAGE_TYPE_NORMAL] *= 2;
-                combat.dam[DAMAGE_TYPE_FIRE] *= 2;
-                combat_dmg(&combat);
-            }
-        } else {
-            combat_dmg(&combat);
+        // FIX (porting bug #65): the flames spare their caster and the
+        // caster's followers and burn everyone else. The original
+        // (0x42A84A-0x42A8D9): with a caster, a node that is the caster or
+        // whose leader is the caster goes straight to the next node; every
+        // other node is attacked, then damaged - each tick in real time, and
+        // in turn-based once per turn, doubled. CE had the branches
+        // inverted: the caster and followers burned every tick and enemies
+        // in real time took no flame damage. Wall of Fire, Squall of Ice,
+        // the Explode (Fire) grenade.
+        if (parent_obj != OBJ_HANDLE_NULL
+            && (node->obj == parent_obj
+                || critter_pc_leader_get(node->obj) == parent_obj)) {
+            node = node->next;
+            continue;
         }
+
+        ai_attack(parent_obj, node->obj, LOUDNESS_NORMAL, 0);
+
+        if (combat_turn_based_is_active()) {
+            if (run_info->cur_stack_data->params[AGDATA_SCRATCH_VAL6].data == combat_turn_based_turn_get()) {
+                node = node->next;
+                continue;
+            }
+
+            update_turn = true;
+            combat.dam[DAMAGE_TYPE_NORMAL] *= 2;
+            combat.dam[DAMAGE_TYPE_FIRE] *= 2;
+        }
+
+        combat_dmg(&combat);
 
         node = node->next;
     }

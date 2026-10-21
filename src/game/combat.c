@@ -1966,7 +1966,11 @@ void combat_dmg(CombatContext* combat)
             int64_t shield_obj = item_wield_get(combat->target_obj, ITEM_INV_LOC_SHIELD);
             if (shield_obj != OBJ_HANDLE_NULL
                 && item_check_wield(shield_obj, ITEM_INV_LOC_SHIELD, combat->target_obj)) {
-                item_drop_nearby(weapon_obj);
+                // FIX (porting bug #61): the shield drops. The original keeps
+                // the shield handle and passes it to `item_drop_nearby`
+                // (0x4B4CCE); CE passed the weapon, so the shield stayed on and
+                // a dropped weapon - or none, unarmed - was dropped again.
+                item_drop_nearby(shield_obj);
 
                 mes_file_entry.num = 20; // "Item dropped"
                 mes_get_msg(combat_mes_file, &mes_file_entry);

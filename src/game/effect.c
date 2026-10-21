@@ -474,11 +474,17 @@ static void effect_parse(int num, char* text)
                 effect_info->operators[effect_info->count] = EFFECT_OPERATOR_PERCENT;
             }
         } else if (tok[0] == '*') {
+            // FIX (porting bug #60): the number follows the operator. The
+            // original steps past it before `atoi` for both `*` and `/`
+            // (0x4E9E6D `inc %eax`, then `call 0x589CAD`); CE read the
+            // operator itself, so every `*N` was x0 and every `/N` a
+            // division by zero in `effect_adjust_func` (Flow Reaper's
+            // `resistmagic /2`, rules/effect.mes {218}).
             effect_info->operators[effect_info->count] = EFFECT_OPERATOR_MULTIPLY;
-            effect_info->params[effect_info->count] = atoi(tok);
+            effect_info->params[effect_info->count] = atoi(tok + 1);
         } else if (tok[0] == '/') {
             effect_info->operators[effect_info->count] = EFFECT_OPERATOR_DIVIDE;
-            effect_info->params[effect_info->count] = atoi(tok);
+            effect_info->params[effect_info->count] = atoi(tok + 1);
         } else {
             tig_debug_printf("Effect: ERROR: Invalid symbol: %s.\n", tok);
         }

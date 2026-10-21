@@ -34,7 +34,9 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "game/location.h"
 #include "game/object.h"
+#include "game/sector.h"
 #include "test_harness.h"
 
 // script.c:50. Not exported, so it is pinned here: if the sentinel changes,
@@ -813,8 +815,39 @@ TEST(the_shipped_level_scaling_script_divides_by_five)
     CHECK_INT(run_binary(SAT_DIVIDE, 10, 3), 3);
 }
 
+// Porting bug #63: SAT_GET_HOURS_SINCE_STARTUP fell through into
+// SAT_TOGGLE_SECTOR_BLOCKED, so asking the hour also flipped the saved blocked
+// flag of the sector at (hours, op1). The original's case ends in `ret` at
+// 0x449EFD. Operand 1 is a literal here so the unfixed path reads nothing it
+// cannot; it then blocked the sector this checks.
+TEST(hours_since_startup_does_not_toggle_a_sector)
+{
+    ScriptAction action;
+    int64_t sector_id;
+
+    script_test_begin();
+    sector_block_init();
+    test_global_vars[0] = UNWRITTEN;
+
+    memset(&action, 0, sizeof(action));
+    action.type = SAT_GET_HOURS_SINCE_STARTUP;
+    action.op_type[0] = SVT_GL_VAR;
+    action.op_value[0] = 0;
+    action.op_type[1] = SVT_NUMBER;
+    action.op_value[1] = 0;
+
+    CHECK_INT(script_execute_action(&action, 0, NULL), SCRIPT_NEXT);
+    CHECK(test_global_vars[0] != UNWRITTEN);
+
+    sector_id = sector_id_from_loc(location_make(test_global_vars[0], 0));
+    CHECK(!sector_is_blocked(sector_id));
+
+    sector_block_init();
+}
+
 void test_script_suite(void)
 {
+    RUN(hours_since_startup_does_not_toggle_a_sector);
     RUN(compiled_records_validate_each_fixed_operand_domain);
     RUN(compiled_records_validate_focus_opcode_and_embedded_selector_domains);
     RUN(call_script_in_validates_its_noncontiguous_operands_only);

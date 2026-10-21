@@ -2483,7 +2483,13 @@ int script_execute_action(ScriptAction* action, int line, ScriptState* state)
                 critter_fatigue_damage_set(new_obj, fatigue_damage);
             }
 
-            if (obj_type_is_item(obj_type)) {
+            // FIX (porting bug #64): only into a parent that exists. The
+            // original skips the transfer when the old object had none
+            // (0x4480A6-0x4480AA `or`/`je` past the call at 0x4480BC); CE
+            // called `item_transfer(new_obj, OBJ_HANDLE_NULL)` whenever a
+            // critter became an item - the hopbot and spider-bot `_talk`
+            // scripts - and handle 0 resolves to object pool slot 0.
+            if (obj_type_is_item(obj_type) && parent_obj != OBJ_HANDLE_NULL) {
                 item_transfer(new_obj, parent_obj);
             }
         }
@@ -2554,6 +2560,13 @@ int script_execute_action(ScriptAction* action, int line, ScriptState* state)
             ? tech_skill_level(obj, GET_TECH_SKILL(skill))
             : basic_skill_level(obj, GET_BASIC_SKILL(skill));
         script_set_value(action->op_type[2], action->op_value[2], state, value);
+        // FIX (porting bug #62): the original returns here - its case
+        // (0x448374, through the jump table at 0x44ADBC) ends in `ret` at
+        // 0x4483DC. CE fell through into SAT_CAST_SPELL, casting with the
+        // skill query's operands reread as a caster, a spell and a target;
+        // with no follower, the caster came from an uninitialised stack
+        // slot. 36 shipped uses, every gambler among them.
+        return NEXT;
     }
     case SAT_CAST_SPELL: {
         int64_t source_obj = script_get_obj(action->op_type[0], action->op_value[0], state);
@@ -3173,6 +3186,12 @@ int script_execute_action(ScriptAction* action, int line, ScriptState* state)
         DateTime datetime = timeevent_current_datetime();
         int hours = datetime_get_hour_since_reference_date(&datetime);
         script_set_value(action->op_type[0], action->op_value[0], state, hours);
+        // FIX (porting bug #63): the original returns here - its case
+        // (0x449EC6) ends in `ret` at 0x449EFD. CE fell through into
+        // SAT_TOGGLE_SECTOR_BLOCKED and flipped the saved blocked flag of the
+        // sector at (hours, op1). Every innkeeper and inn bed asks for the
+        // hour (15 shipped uses).
+        return NEXT;
     }
     case SAT_TOGGLE_SECTOR_BLOCKED: {
         int x = script_get_value(action->op_type[0], action->op_value[0], state);

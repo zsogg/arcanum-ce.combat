@@ -72,6 +72,7 @@ add_executable(arcanum-tests
     "test_feature.c"
     "test_obj_id.c"
     "test_reaction.c"
+    "test_effect_parse.c"
     "test_compat.c"
     "test_magitech.c"
     "test_proto.c"
