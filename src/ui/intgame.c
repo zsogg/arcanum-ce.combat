@@ -142,6 +142,8 @@ typedef struct IntgameIsoWindowTypeInfo {
 static bool button_create_flags(UiButtonInfo* button_info, unsigned int flags);
 static bool button_create_no_art(UiButtonInfo* button_info, int width, int height);
 static void intgame_draw_counter(int counter, int value, int digits);
+static void intgame_draw_counter_text(int counter, const char* str, tig_font_handle_t font);
+static void intgame_draw_loaded_counter(int64_t weapon_obj, int capacity, int spare);
 static void intgame_draw_bar_rect(TigRect* rect);
 static void intgame_ammo_icon_refresh(tig_art_id_t art_id);
 static bool iso_interface_message_filter(TigMessage* msg);
@@ -1694,9 +1696,6 @@ void intgame_button_destroy(UiButtonInfo* button_info)
 // 0x54AD00
 void intgame_draw_counter(int counter, int value, int digits)
 {
-    IntgameIsoWindowTypeInfo* info;
-    TigRect rect;
-    TigFont font_desc;
     char format[12];
     char str[80];
     int pos;
@@ -1708,18 +1707,6 @@ void intgame_draw_counter(int counter, int value, int digits)
     if (counter == INTGAME_COUNTER_MANA
         && intgame_iso_window_type != ROTWIN_TYPE_MAGICTECH) {
         return;
-    }
-
-    info = &(intgame_number_boxes[counter]);
-
-    tig_font_push(intgame_cloister18_font);
-
-    if (counter != INTGAME_COUNTER_POISON) {
-        info->rect.height++;
-        tig_window_fill(info->window_handle,
-            &(info->rect),
-            tig_color_make(0, 0, 0));
-        info->rect.height--;
     }
 
     if (value < 0 && (counter == INTGAME_COUNTER_MANA || counter == INTGAME_COUNTER_MONEY)) {
@@ -1737,6 +1724,35 @@ void intgame_draw_counter(int counter, int value, int digits)
     } else {
         snprintf(format, sizeof(format), "%%0%dd", digits);
         snprintf(str, sizeof(str), format, value);
+    }
+
+    intgame_draw_counter_text(counter, str, intgame_cloister18_font);
+}
+
+// CE (the Combat Rebalance displays): the drawing half of
+// `intgame_draw_counter`, split from its number formatting so the ammunition
+// counter can show a loaded gun's text in a smaller font. The stock counters
+// pass Cloister 18 and draw as before.
+static void intgame_draw_counter_text(int counter, const char* str, tig_font_handle_t font)
+{
+    IntgameIsoWindowTypeInfo* info;
+    TigRect rect;
+    TigFont font_desc;
+
+    if (!intgame_iso_interface_created) {
+        return;
+    }
+
+    info = &(intgame_number_boxes[counter]);
+
+    tig_font_push(font);
+
+    if (counter != INTGAME_COUNTER_POISON) {
+        info->rect.height++;
+        tig_window_fill(info->window_handle,
+            &(info->rect),
+            tig_color_make(0, 0, 0));
+        info->rect.height--;
     }
 
     font_desc.str = str;
@@ -1938,9 +1954,12 @@ void intgame_counters_refresh(void)
     int ammo_type;
     tig_art_id_t art_id;
     int mana;
+    int capacity;
 
     qty = 0;
     art_num = 474;
+    item_obj = OBJ_HANDLE_NULL;
+    capacity = 0;
     pc_obj = player_get_local_pc_obj();
 
     if (pc_obj != OBJ_HANDLE_NULL) {
@@ -1950,6 +1969,7 @@ void intgame_counters_refresh(void)
             if (ammo_type != 10000) {
                 qty = item_ammo_quantity_get(pc_obj, ammo_type);
                 art_num = intgame_ammo_art_nums[ammo_type];
+                capacity = reload_display_capacity(item_obj);
             } else {
                 qty = obj_field_int32_get(item_obj, OBJ_F_ITEM_MANA_STORE);
                 if (qty > 0) {
@@ -1963,7 +1983,13 @@ void intgame_counters_refresh(void)
         }
     }
 
-    intgame_draw_counter(INTGAME_COUNTER_MONEY, qty, 6);
+    // CE (the Combat Rebalance displays): a gun under `firearm reloading`
+    // shows what it has loaded beside the spare rounds.
+    if (capacity > 0) {
+        intgame_draw_loaded_counter(item_obj, capacity, qty);
+    } else {
+        intgame_draw_counter(INTGAME_COUNTER_MONEY, qty, 6);
+    }
     tig_art_interface_id_create(art_num, 0, 0, 0, &art_id);
     intgame_ammo_icon_refresh(art_id);
 
@@ -1980,6 +2006,49 @@ void intgame_counters_refresh(void)
             intgame_draw_counter(INTGAME_COUNTER_MANA, -2, 3);
         }
     }
+}
+
+// CE (the Combat Rebalance displays; zsogg, 2026-10-21): the ammunition
+// counter for a gun under `firearm reloading` - its loaded shots over its
+// capacity, then the spare rounds, "3/7 24", or "JAM 24" while it is jammed.
+// Drawn in Flare 14 when the box holds it, else Flare 12, and the loaded part
+// alone when neither does.
+static void intgame_draw_loaded_counter(int64_t weapon_obj, int capacity, int spare)
+{
+    tig_font_handle_t fonts[2];
+    char loaded[16];
+    char str[48];
+    TigFont font_desc;
+    int font;
+
+    if (!intgame_iso_interface_created) {
+        return;
+    }
+
+    fonts[0] = intgame_flare14_white_font;
+    fonts[1] = intgame_flare12_white_font;
+
+    if (reload_jammed(weapon_obj)) {
+        snprintf(loaded, sizeof(loaded), "JAM");
+    } else {
+        snprintf(loaded, sizeof(loaded), "%d/%d", reload_loaded_get(weapon_obj), capacity);
+    }
+    snprintf(str, sizeof(str), "%s %d", loaded, spare);
+
+    for (font = 0; font < 2; font++) {
+        tig_font_push(fonts[font]);
+        font_desc.str = str;
+        font_desc.width = 0;
+        tig_font_measure(&font_desc);
+        tig_font_pop();
+
+        if (font_desc.width < intgame_number_boxes[INTGAME_COUNTER_MONEY].rect.width) {
+            intgame_draw_counter_text(INTGAME_COUNTER_MONEY, str, fonts[font]);
+            return;
+        }
+    }
+
+    intgame_draw_counter_text(INTGAME_COUNTER_MONEY, loaded, fonts[1]);
 }
 
 // 0x54B500

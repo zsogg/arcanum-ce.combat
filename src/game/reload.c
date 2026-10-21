@@ -137,6 +137,20 @@ int reload_progress_get(int64_t weapon_obj)
     return obj_field_int32_get(weapon_obj, OBJ_F_WEAPON_PAD_I_2) & RELOAD_PROGRESS_MASK;
 }
 
+int reload_display_capacity(int64_t weapon_obj)
+{
+    const WeaponRule* rule;
+
+    if (!feature_enabled(FEATURE_FIREARM_RELOADING)
+        || weapon_obj == OBJ_HANDLE_NULL
+        || obj_field_int32_get(weapon_obj, OBJ_F_TYPE) != OBJ_TYPE_WEAPON) {
+        return 0;
+    }
+
+    rule = reload_rule_for(weapon_obj);
+    return rule != NULL ? rule->capacity : 0;
+}
+
 bool reload_wielded_is_empty(int64_t critter_obj)
 {
     int64_t weapon_obj;
@@ -228,7 +242,12 @@ bool reload_fire(int64_t critter_obj, int64_t weapon_obj)
 
     obj_field_int32_set(weapon_obj, OBJ_F_WEAPON_PAD_I_1, loaded - 1);
     tig_debug_printf("reload: fired; %d loaded\n", loaded - 1);
-    (void)critter_obj;
+
+    // The Combat Rebalance displays: the ammunition counter shows the
+    // player's loaded shots.
+    if (player_is_local_pc_obj(critter_obj)) {
+        ui_refresh_counters();
+    }
     return true;
 }
 

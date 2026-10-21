@@ -7,6 +7,7 @@
 #include <tig/debug.h>
 #include <tig/message.h>
 #include <tig/timer.h>
+#include <tig/video.h>
 
 #include "game/ai.h"
 #include "game/anim.h"
@@ -182,6 +183,16 @@ typedef enum ReplayKind {
     //   inspect xp
     //       one log line with the player's level, experience and experience to
     //       the next level, and one per follower with its basic-skill training.
+    //   hover <id>
+    //       what the pointer resting on that object does in turn-based: the
+    //       attack's AP checked through `combat_check_attack`, so the AP bar
+    //       previews it, and one log line with the cost, the AP left and the
+    //       fatigue exertion would spend (2026-10-21, the Combat Rebalance
+    //       displays).
+    //   screenshot <label>
+    //       a screenshot now, through the shipped F12 path, as `-screenshot=N`
+    //       takes one at a frame: of the state the rows before it set up. The
+    //       label goes in the log beside it, to say which shot is which.
     REPLAY_KIND_SKILL_LEVEL,
     REPLAY_KIND_STAT_LEVEL,
     REPLAY_KIND_JAM,
@@ -192,6 +203,8 @@ typedef enum ReplayKind {
     REPLAY_KIND_TRAIN,
     REPLAY_KIND_HOUR,
     REPLAY_KIND_ENCOUNTER,
+    REPLAY_KIND_HOVER,
+    REPLAY_KIND_SCREENSHOT,
 } ReplayKind;
 
 // A cast's target, which is a third shape: the caster, an object or a tile.
@@ -751,6 +764,24 @@ static bool replay_parse_line(const char* text, ReplayCommand* command)
         return index == count;
     }
 
+    if (strcmp(kind, "screenshot") == 0) {
+        command->kind = REPLAY_KIND_SCREENSHOT;
+        if (index >= count) {
+            return false;
+        }
+        replay_copy_target(command, tokens[index++]);
+        return index == count;
+    }
+
+    if (strcmp(kind, "hover") == 0) {
+        command->kind = REPLAY_KIND_HOVER;
+        if (index >= count) {
+            return false;
+        }
+        replay_copy_target(command, tokens[index++]);
+        return index == count;
+    }
+
     if (strcmp(kind, "hour") == 0) {
         command->kind = REPLAY_KIND_HOUR;
         if (!replay_parse_int(tokens[index++], &(command->count))
@@ -891,7 +922,7 @@ int replay_ui_count(void)
 bool replay_ui_describe(int index, char* buffer, size_t size)
 {
     const ReplayCommand* command;
-    static const char* kinds[] = { "object", "location", "key", "cast", "wield", "wait", "learn", "give", "throw", "skill", "raise", "prowl", "panel", "save", "inspect", "transfer", "take", "drop", "pickup", "wear", "skill-level", "stat-level", "jam", "afflict", "poison", "use", "xp", "train", "hour", "encounter" };
+    static const char* kinds[] = { "object", "location", "key", "cast", "wield", "wait", "learn", "give", "throw", "skill", "raise", "prowl", "panel", "save", "inspect", "transfer", "take", "drop", "pickup", "wear", "skill-level", "stat-level", "jam", "afflict", "poison", "use", "xp", "train", "hour", "encounter", "hover", "screenshot" };
     int written;
     static const char* casts[] = { "self", "object", "location" };
 
@@ -1266,6 +1297,32 @@ void replay_ui_tick(void)
         }
         tig_debug_printf("Replay: command %d advanced the clock %d hour(s); it reads hour %d\n",
             replay_next - 1, steps, datetime_current_hour());
+        return;
+    }
+
+    if (command->kind == REPLAY_KIND_SCREENSHOT) {
+        replay_stall_reported = false;
+        replay_next++;
+        tig_debug_printf("Replay: command %d takes screenshot '%s'\n",
+            replay_next - 1, command->target);
+        tig_video_screenshot_make();
+        return;
+    }
+
+    if (command->kind == REPLAY_KIND_HOVER) {
+        int64_t hover_obj;
+        bool accepted;
+
+        replay_stall_reported = false;
+        replay_next++;
+        if (!replay_resolve(command, &hover_obj)) {
+            return;
+        }
+        accepted = combat_check_attack(pc_obj, hover_obj);
+        tig_debug_printf("Replay: command %d hovers: cost %d, %d AP left, %s, exertion fatigue %d\n",
+            replay_next - 1, combat_required_action_points_get(),
+            combat_turn_based_is_active() ? combat_action_points_get() : -1,
+            accepted ? "accepted" : "refused", combat_exertion_preview_fatigue());
         return;
     }
 

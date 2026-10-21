@@ -67,6 +67,12 @@ bool reload_can_load_quiet(int64_t critter_obj, int64_t weapon_obj);
 int reload_loaded_get(int64_t weapon_obj);
 int reload_progress_get(int64_t weapon_obj);
 
+// The ammunition counter's view (the Combat Rebalance displays; zsogg,
+// 2026-10-21): the gun's capacity when `firearm reloading` is on and its rule
+// names one, else 0. Only reads: unlike `reload_applies` it never settles how
+// a gun starts, so showing a gun cannot change whose it is.
+int reload_display_capacity(int64_t weapon_obj);
+
 // Fires: uses one loaded shot. False, changing nothing, when none is loaded.
 bool reload_fire(int64_t critter_obj, int64_t weapon_obj);
 

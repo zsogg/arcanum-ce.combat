@@ -1,8 +1,11 @@
 #include "ui/combat_ui.h"
 
+#include <stdio.h>
+
 #include "game/anim.h"
 #include "game/combat.h"
 #include "game/combat_observer.h"
+#include "game/feature.h"
 #include "game/hrp.h"
 #include "game/obj.h"
 #include "game/player.h"
@@ -33,6 +36,9 @@ static void combat_ui_draw_ap_bar_segment(tig_window_handle_t window_handle, Tig
 static void combat_ui_draw_ap_bar(int action_points);
 static void combat_ui_draw_compact_npc_turn_indicator(void);
 static void combat_ui_turn_notify(int64_t obj);
+static void combat_ui_exertion_label_create(int normal_width);
+static void combat_ui_exertion_label_destroy(void);
+static void combat_ui_exertion_label_draw(tig_window_handle_t window_handle, TigRect* frame, int fatigue, int x);
 static bool combat_ui_message_filter(TigMessage* msg);
 
 // 0x5CAA20
@@ -96,6 +102,19 @@ static bool combat_ui_created;
 // 0x680EC0
 static TigRect combat_ui_ap_bar_loading_indicator_frame;
 
+// CE (the Combat Rebalance displays; zsogg, 2026-10-21): under `exertion`
+// the AP bar previews an action exertion will pay for. The one knob it covers
+// - the only red knob, exactly 1 AP short - is drawn yellow, the red knob with
+// the green one added over it, and "+2 fatigue" stands just above the bar
+// over that knob. Two or more red knobs stay red: refused. Each layout's bar
+// has its own label window, shown and hidden with the bar, and neither exists
+// with the switch off.
+static TigRect combat_ui_exertion_frame;
+static TigRect combat_ui_compact_exertion_frame;
+static tig_window_handle_t combat_ui_exertion_window_handle = TIG_WINDOW_HANDLE_INVALID;
+static tig_window_handle_t combat_ui_compact_exertion_window_handle = TIG_WINDOW_HANDLE_INVALID;
+static tig_font_handle_t combat_ui_exertion_font = TIG_FONT_HANDLE_INVALID;
+
 // 0x56EA90
 bool combat_ui_init(GameInitInfo* init_info)
 {
@@ -143,6 +162,18 @@ bool combat_ui_init(GameInitInfo* init_info)
     combat_ui_ap_bar_loading_indicator_frame.width = art_frame_data.width;
     combat_ui_ap_bar_loading_indicator_frame.height = art_frame_data.height;
 
+    // CE (the Combat Rebalance displays): the exertion label's font, Flare 12
+    // in yellow, the colour of the knob it explains.
+    if (feature_enabled(FEATURE_EXERTION)) {
+        TigFont font;
+
+        font.flags = 0;
+        tig_art_interface_id_create(229, 0, 0, 0, &(font.art_id));
+        font.str = NULL;
+        font.color = tig_color_make(255, 255, 0);
+        tig_font_create(&font, &combat_ui_exertion_font);
+    }
+
     combat_ui_initialized = true;
 
     return true;
@@ -151,6 +182,12 @@ bool combat_ui_init(GameInitInfo* init_info)
 // 0x56EBE0
 void combat_ui_exit(void)
 {
+    // CE (the Combat Rebalance displays).
+    if (combat_ui_exertion_font != TIG_FONT_HANDLE_INVALID) {
+        tig_font_destroy(combat_ui_exertion_font);
+        combat_ui_exertion_font = TIG_FONT_HANDLE_INVALID;
+    }
+
     combat_ui_initialized = false;
 }
 
@@ -188,6 +225,17 @@ void combat_ui_resize(GameResizeInfo* resize_info)
                 tig_window_show(combat_ui_compact_ap_bar_window_handle);
             } else {
                 tig_window_hide(combat_ui_compact_ap_bar_window_handle);
+            }
+        }
+
+        // CE (the Combat Rebalance displays): each label goes with its bar.
+        if (combat_ui_exertion_window_handle != TIG_WINDOW_HANDLE_INVALID) {
+            if (intgame_is_compact_interface()) {
+                tig_window_hide(combat_ui_exertion_window_handle);
+                tig_window_show(combat_ui_compact_exertion_window_handle);
+            } else {
+                tig_window_show(combat_ui_exertion_window_handle);
+                tig_window_hide(combat_ui_compact_exertion_window_handle);
             }
         }
     }
@@ -315,6 +363,9 @@ void combat_ui_create(void)
     if (!intgame_is_compact_interface()) {
         tig_window_hide(combat_ui_compact_ap_bar_window_handle);
     }
+
+    // CE (the Combat Rebalance displays).
+    combat_ui_exertion_label_create(art_frame_data.width);
 }
 
 // 0x56EF40
@@ -345,6 +396,9 @@ void combat_ui_destroy(void)
         combat_ui_compact_ap_bar_window_handle = TIG_WINDOW_HANDLE_INVALID;
     }
 
+    // CE (the Combat Rebalance displays).
+    combat_ui_exertion_label_destroy();
+
     combat_ui_created = false;
 }
 
@@ -355,6 +409,7 @@ void combat_ui_draw_compact_ap_bar(int available_ap)
     int orange_ap;
     int green_ap;
     TigRect rect;
+    int exertion;
 
     if (combat_ui_compact_ap_bar_window_handle == TIG_WINDOW_HANDLE_INVALID) {
         return;
@@ -421,13 +476,22 @@ void combat_ui_draw_compact_ap_bar(int available_ap)
             tig_color_make(255, 128, 0));
     }
 
+    // CE (the Combat Rebalance displays): the segment exertion covers is
+    // yellow, as the full bar's knob is.
+    exertion = red_ap == 1 ? combat_exertion_preview_fatigue() : 0;
+
     rect.x += rect.width;
     rect.width = 120 * red_ap / 25;
     if (rect.width > 0) {
         combat_ui_draw_ap_bar_segment(combat_ui_compact_ap_bar_window_handle,
             &rect,
-            tig_color_make(255, 0, 0));
+            exertion > 0 ? tig_color_make(255, 255, 0) : tig_color_make(255, 0, 0));
     }
+
+    combat_ui_exertion_label_draw(combat_ui_compact_exertion_window_handle,
+        &combat_ui_compact_exertion_frame,
+        exertion,
+        rect.x);
 }
 
 // 0x56F2F0
@@ -487,6 +551,7 @@ void combat_ui_draw_ap_bar(int ap_total)
     int orange = 0;
     int red = 0;
     int knob = 0;
+    int exertion = 0;
 
     if (!combat_ui_created) {
         return;
@@ -530,6 +595,11 @@ void combat_ui_draw_ap_bar(int ap_total)
         if (red + orange + green > TWENTY) {
             red = TWENTY - orange - green;
         }
+
+        // CE (the Combat Rebalance displays): one red knob exertion covers.
+        if (red == 1) {
+            exertion = combat_exertion_preview_fatigue();
+        }
     }
 
     if (tig_art_frame_data(art_id, &art_frame_data) == TIG_OK) {
@@ -567,10 +637,146 @@ void combat_ui_draw_ap_bar(int ap_total)
         while (red > 0) {
             dst_rect.x = combat_ui_knob_x[knob];
             tig_window_blit_art(combat_ui_ap_bar_window_handle, &art_blit_info);
+
+            // CE (the Combat Rebalance displays): red and green added make
+            // the covered knob yellow.
+            if (exertion > 0) {
+                art_blit_info.flags = TIG_ART_BLT_BLEND_ADD;
+                art_blit_info.art_id = combat_ui_ap_icon_art_ids[AP_COLOR_GREEN];
+                tig_window_blit_art(combat_ui_ap_bar_window_handle, &art_blit_info);
+                art_blit_info.flags = 0;
+                art_blit_info.art_id = combat_ui_ap_icon_art_ids[AP_COLOR_RED];
+            }
+
             red--;
             knob++;
         }
     }
+
+    // CE (the Combat Rebalance displays): the label stands over the knob.
+    combat_ui_exertion_label_draw(combat_ui_exertion_window_handle,
+        &combat_ui_exertion_frame,
+        exertion,
+        exertion > 0 ? combat_ui_knob_x[knob - 1] : 0);
+}
+
+// CE (the Combat Rebalance displays): the two exertion label windows, one
+// above each layout's bar, authored in the 800x600 design space and mapped
+// by `hrp_apply` as the bars are. Transparent but for the label itself.
+void combat_ui_exertion_label_create(int normal_width)
+{
+    TigWindowData window_data;
+    TigFont font_desc;
+    int height;
+
+    if (combat_ui_exertion_font == TIG_FONT_HANDLE_INVALID) {
+        return;
+    }
+
+    // As tall as the font draws the label, and a pixel either side of it.
+    tig_font_push(combat_ui_exertion_font);
+    font_desc.str = "+2 fatigue";
+    font_desc.width = 0;
+    tig_font_measure(&font_desc);
+    tig_font_pop();
+    height = font_desc.height + 2;
+
+    combat_ui_exertion_frame.x = 222;
+    combat_ui_exertion_frame.y = (uap_fixes_enabled() ? 411 : 412) - height;
+    combat_ui_exertion_frame.width = normal_width;
+    combat_ui_exertion_frame.height = height;
+
+    combat_ui_compact_exertion_frame = combat_ui_compact_ap_bar_frame;
+    combat_ui_compact_exertion_frame.y -= height;
+    combat_ui_compact_exertion_frame.height = height;
+
+    window_data.flags = TIG_WINDOW_TRANSPARENT;
+    window_data.background_color = tig_color_make(0, 0, 255);
+    window_data.color_key = tig_color_make(0, 0, 255);
+
+    window_data.rect = combat_ui_exertion_frame;
+    hrp_apply(&(window_data.rect), GRAVITY_CENTER_HORIZONTAL | GRAVITY_BOTTOM);
+    if (tig_window_create(&window_data, &combat_ui_exertion_window_handle) != TIG_OK) {
+        return;
+    }
+
+    window_data.rect = combat_ui_compact_exertion_frame;
+    hrp_apply(&(window_data.rect), GRAVITY_CENTER_HORIZONTAL | GRAVITY_BOTTOM);
+    if (tig_window_create(&window_data, &combat_ui_compact_exertion_window_handle) != TIG_OK) {
+        combat_ui_exertion_label_destroy();
+        return;
+    }
+
+    combat_ui_exertion_label_draw(combat_ui_exertion_window_handle, &combat_ui_exertion_frame, 0, 0);
+    combat_ui_exertion_label_draw(combat_ui_compact_exertion_window_handle, &combat_ui_compact_exertion_frame, 0, 0);
+
+    if (intgame_is_compact_interface()) {
+        tig_window_hide(combat_ui_exertion_window_handle);
+    } else {
+        tig_window_hide(combat_ui_compact_exertion_window_handle);
+    }
+}
+
+void combat_ui_exertion_label_destroy(void)
+{
+    if (combat_ui_exertion_window_handle != TIG_WINDOW_HANDLE_INVALID) {
+        tig_window_destroy(combat_ui_exertion_window_handle);
+        combat_ui_exertion_window_handle = TIG_WINDOW_HANDLE_INVALID;
+    }
+
+    if (combat_ui_compact_exertion_window_handle != TIG_WINDOW_HANDLE_INVALID) {
+        tig_window_destroy(combat_ui_compact_exertion_window_handle);
+        combat_ui_compact_exertion_window_handle = TIG_WINDOW_HANDLE_INVALID;
+    }
+}
+
+// Clears the label, then writes "+N fatigue" on black from `x`, the knob's
+// position in the bar, kept inside the window.
+void combat_ui_exertion_label_draw(tig_window_handle_t window_handle, TigRect* frame, int fatigue, int x)
+{
+    TigRect rect;
+    TigFont font_desc;
+    char str[32];
+
+    if (window_handle == TIG_WINDOW_HANDLE_INVALID) {
+        return;
+    }
+
+    rect.x = 0;
+    rect.y = 0;
+    rect.width = frame->width;
+    rect.height = frame->height;
+    tig_window_fill(window_handle, &rect, tig_color_make(0, 0, 255));
+
+    if (fatigue <= 0) {
+        return;
+    }
+
+    snprintf(str, sizeof(str), "+%d fatigue", fatigue);
+
+    tig_font_push(combat_ui_exertion_font);
+    font_desc.str = str;
+    font_desc.width = 0;
+    tig_font_measure(&font_desc);
+
+    rect.width = font_desc.width + 4;
+    rect.height = frame->height;
+    rect.x = x;
+    if (rect.x + rect.width > frame->width) {
+        rect.x = frame->width - rect.width;
+    }
+    if (rect.x < 0) {
+        rect.x = 0;
+    }
+    rect.y = 0;
+    tig_window_fill(window_handle, &rect, tig_color_make(0, 0, 0));
+
+    rect.x += 2;
+    rect.y = (frame->height - font_desc.height) / 2;
+    rect.width = font_desc.width;
+    rect.height = font_desc.height;
+    tig_window_text_write(window_handle, str, &rect);
+    tig_font_pop();
 }
 
 // 0x56F660

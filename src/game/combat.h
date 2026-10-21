@@ -141,6 +141,9 @@ bool combat_check_pick_item(int64_t source_obj, int64_t target_obj);
 bool combat_check_cast_spell(int64_t source_obj);
 bool combat_check_use_skill(int64_t source_obj);
 int combat_required_action_points_get(void);
+// CE (the Combat Rebalance displays): the fatigue exertion would spend on the
+// action the player's AP bar previews, or 0 when it would not step in.
+int combat_exertion_preview_fatigue(void);
 int combat_attack_cost(int64_t obj);
 int combat_weapon_attack_cost(int64_t obj, int64_t weapon_obj);
 int combat_throw_cost(int64_t obj);

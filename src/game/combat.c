@@ -4309,6 +4309,29 @@ static bool combat_exertion_covers(int64_t obj, int required_action_points)
         && critter_fatigue_current(obj) >= COMBAT_EXERTION_MIN_FATIGUE;
 }
 
+// The Combat Rebalance displays (zsogg, 2026-10-21): the AP bar previews an
+// action exertion will pay for. The fatigue it would spend when the action
+// last checked - `combat_required_action_points` - is exactly 1 AP beyond the
+// player's turn and exertion covers it, else 0.
+int combat_exertion_preview_fatigue(void)
+{
+    int64_t obj;
+
+    if (!feature_enabled(FEATURE_EXERTION)
+        || !combat_turn_based_active
+        || combat_whos_turn_node == NULL) {
+        return 0;
+    }
+
+    obj = combat_whos_turn_node->obj;
+    if (combat_action_points >= combat_required_action_points
+        || !combat_exertion_covers(obj, combat_required_action_points)) {
+        return 0;
+    }
+
+    return COMBAT_EXERTION_FATIGUE;
+}
+
 // 0x4B7790
 bool combat_check_action_points(int64_t obj, int required_action_points)
 {
