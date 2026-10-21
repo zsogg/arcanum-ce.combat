@@ -1924,6 +1924,15 @@ bool skill_invocation_run(SkillInvocation* skill_invocation)
     case SKILL_REPAIR: {
         int durability_dam_by_training[3];
 
+        // FIX (porting bug #89): a repair succeeds unless it repairs nothing.
+        // The original stores 1 into `is_success` on entering the case
+        // (0x4C7BCE `mov $1,%eax`, 0x4C7BDC `mov %eax,0x10(%esp)`), and only
+        // the no-repair test below clears it; the skill roll sets how much is
+        // repaired, through `effectiveness`. CE kept the roll's result, so a
+        // failed roll repaired but reported failure, and a Master's critical
+        // failure cost durability the original never charges.
+        is_success = true;
+
         // Initialize durability damage table. Master of repair is a special
         // case and is handled differently (see below).
         durability_dam_by_training[TRAINING_NONE] = 10;
@@ -2754,6 +2763,12 @@ int skill_invocation_difficulty(SkillInvocation* skill_invocation)
             && obj_field_int32_get(item_obj, OBJ_F_TYPE) == OBJ_TYPE_GENERIC
             && (obj_field_int32_get(item_obj, OBJ_F_GENERIC_FLAGS) & OGF_IS_HEALING_ITEM) != 0) {
             difficulty -= obj_field_int32_get(item_obj, OBJ_F_GENERIC_USAGE_BONUS);
+        } else {
+            // FIX (porting bug #90): Heal needs a healing item. Every miss of
+            // the original's test - no item, not generic, no healing flag -
+            // jumps to `add $0xf4240` (0x4C8D20/0x4C8D34/0x4C8D47 ->
+            // 0x4C8D72); CE let Heal be used without a kit.
+            difficulty += 1000000;
         }
         break;
     case SKILL_PICK_LOCKS:

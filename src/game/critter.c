@@ -788,18 +788,24 @@ void critter_alignment_adjust(int64_t source_obj, int64_t target_obj, bool full_
     int alignment;
 
     if (!magictech_find_effect_caster(target_obj, OSF_SUMMONED, &summoner_obj) || summoner_obj != source_obj) {
+        // FIX (porting bug #93): the bound is taken from the target's
+        // alignment before it is negated. The original: `-100 - a2` for a
+        // target at or above 0 (0x45DCE4 `mov $-100,%esi`, 0x45DCEB
+        // `sub %edi,%esi`), `100 - a2` for one below the source (0x45DD01,
+        // 0x45DD08). CE negated first, so killing or robbing a good target
+        // could not take the killer below -100 + a2.
         alignment2 = stat_level_get(target_obj, STAT_ALIGNMENT);
         if (alignment2 < 0) {
             alignment1 = stat_level_get(source_obj, STAT_ALIGNMENT);
             if (alignment1 > alignment2) {
-                alignment2 = -alignment2;
                 adj = 100 - alignment2;
+                alignment2 = -alignment2;
             } else {
                 adj = alignment2 - 100;
             }
         } else {
-            alignment2 = -alignment2;
             adj = -100 - alignment2;
+            alignment2 = -alignment2;
         }
 
         v1 = alignment2 / 20;
@@ -2330,8 +2336,11 @@ bool critter_can_backstab(int64_t source_obj, int64_t target_obj)
     int64_t weapon_obj;
     int weapon_type;
 
-    // At least one level of training in Backstab is required.
-    if (basic_skill_training_get(source_obj, BASIC_SKILL_BACKSTAB) == 0) {
+    // FIX (porting bug #94): any Backstab skill, not a training tier. The
+    // original's first test is the skill's level (0x45F9DF
+    // `call 0x4C5EB0`, basic_skill_level, returning false at 0); CE tested
+    // training, so Backstab points without Apprentice never backstabbed.
+    if (basic_skill_level(source_obj, BASIC_SKILL_BACKSTAB) == 0) {
         return false;
     }
 

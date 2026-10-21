@@ -16,6 +16,7 @@
 #include "game/obj_flags.h"
 #include "game/reaction.h"
 #include "game/settings.h"
+#include "game/skill.h"
 #include "game/stat.h"
 #include "obj_harness.h"
 #include "test_harness.h"
@@ -184,6 +185,39 @@ TEST(the_charisma_follower_limit_stays)
     followers_end();
 }
 
+// Porting bug #82: a Master persuader skips the reaction, alignment, level and
+// rival-leader tests, but the original still applies the Charisma cap
+// (0x4AD9C9 `jge 0x4ADAF7`). CE returned AI_FOLLOW_OK before reaching it.
+TEST(a_master_persuader_is_still_held_to_the_charisma_limit)
+{
+    int64_t existing;
+
+    CHECK(followers_begin());
+    existing = obj_harness_create_proto(OBJ_TYPE_NPC);
+    obj_field_int32_set(existing, OBJ_F_NPC_FLAGS, 0);
+    // Master training (tier 3) written directly: the setter enforces one tier
+    // at a time. Mastery also adds a follower, so Charisma 1 allows one.
+    obj_arrayfield_int32_set(followers_pc, OBJ_F_CRITTER_BASIC_SKILL_IDX,
+        BASIC_SKILL_PERSUATION, TRAINING_MASTER << 6);
+    stat_base_set(followers_pc, STAT_CHARISMA, 1);
+    CHECK_INT(basic_skill_training_get(followers_pc, BASIC_SKILL_PERSUATION), TRAINING_MASTER);
+    CHECK_INT(stat_level_get(followers_pc, STAT_MAX_FOLLOWERS), 1);
+
+    // A strict packet's refusals are skipped for a Master...
+    stat_base_set(followers_npc, STAT_ALIGNMENT, 80);
+    stat_base_set(followers_pc, STAT_ALIGNMENT, -80);
+    CHECK_INT(ai_check_follow(followers_npc, followers_pc, false), AI_FOLLOW_OK);
+
+    // ...the cap is not.
+    obj_arrayfield_obj_set(followers_pc, OBJ_F_CRITTER_FOLLOWER_IDX, 0, existing);
+    CHECK_INT(ai_check_follow(followers_npc, followers_pc, false), AI_FOLLOW_LIMIT_REACHED);
+    // And the caller that waives it still may.
+    CHECK_INT(ai_check_follow(followers_npc, followers_pc, true), AI_FOLLOW_OK);
+
+    obj_harness_destroy(existing);
+    followers_end();
+}
+
 void test_followers_suite(void)
 {
     RUN(the_strict_packet_lets_a_matching_npc_join);
@@ -193,4 +227,5 @@ void test_followers_suite(void)
     RUN(low_reaction_no_longer_stops_joining_under_follower_reaction_joins);
     RUN(a_follower_whose_reaction_collapses_still_leaves);
     RUN(the_charisma_follower_limit_stays);
+    RUN(a_master_persuader_is_still_held_to_the_charisma_limit);
 }

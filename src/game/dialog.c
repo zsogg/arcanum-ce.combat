@@ -1664,8 +1664,13 @@ bool dialog_check_conditions(DialogState* a1, char* a2)
                 node = node->next;
             }
             object_list_destroy(&followers);
+            // FIX (porting bug #66): `$$ -N` passes while the party holds at
+            // most N gold. The original fails it when `-value < gold` (case
+            // 10 of 0x4150D0); CE compared the gold with the still negative
+            // value, so the test always failed and every "can't afford it" option
+            // (1,097 shipped uses in 69 dialogs) stayed hidden.
             if (value < 0) {
-                if (gold > value) {
+                if (gold > -value) {
                     return false;
                 }
             } else {
@@ -1806,12 +1811,17 @@ bool dialog_check_conditions(DialogState* a1, char* a2)
             }
             break;
         case DIALOG_COND_LE:
+            // FIX (porting bug #67): the PC's level, not its negation. The
+            // original's case 0x14 loads STAT_LEVEL (0x11) into the shared
+            // positive/negative compare at 0x4156E2; CE negated it, copying
+            // the `ta` (negative aptitude) case, so `le N` always failed and
+            // `le -N` always passed (01607, the Boil guard).
             if (value < 0) {
-                if (-stat_level_get(a1->pc_obj, STAT_LEVEL) > -value) {
+                if (stat_level_get(a1->pc_obj, STAT_LEVEL) > -value) {
                     return false;
                 }
             } else {
-                if (-stat_level_get(a1->pc_obj, STAT_LEVEL) < value) {
+                if (stat_level_get(a1->pc_obj, STAT_LEVEL) < value) {
                     return false;
                 }
             }
@@ -2081,6 +2091,13 @@ bool dialog_perform_actions(DialogState* a1, char* a2, int a3)
 
                         total_gold = item_gold_get(node->obj);
                         item_gold_transfer(node->obj, a1->npc_obj, value, OBJ_HANDLE_NULL);
+
+                        // FIX (porting bug #75): what this follower held comes
+                        // off the remainder before the next is asked, as the
+                        // original's loop does (`iVar7 -= iVar6` in its
+                        // increment); CE asked every follower for the full
+                        // remainder.
+                        value -= total_gold;
 
                         node = node->next;
                     }
@@ -2542,7 +2559,11 @@ void dialog_substitute_names(char* dst, char* src, DialogState* a3)
         if (SDL_strcasecmp(start + 1, "pcname") == 0) {
             object_examine(a3->pc_obj, OBJ_HANDLE_NULL, dst + strlen(dst));
         } else if (SDL_strcasecmp(start + 1, "npcname") == 0) {
-            object_examine(a3->pc_obj, a3->npc_obj, dst + strlen(dst));
+            // FIX (porting bug #69): the NPC describes itself. The original
+            // pushes the NPC handle for both arguments (0x416BB8-0x416BBC);
+            // CE described the PC, so every `@npcname@` printed the player's
+            // own name (125 shipped uses, gd_npc_*.mes among them).
+            object_examine(a3->npc_obj, a3->npc_obj, dst + strlen(dst));
         }
 
         *start = '@';
@@ -3152,6 +3173,13 @@ int dialog_parse_params(int* values, char* str)
             *dash = '\0';
             start = atoi(str);
             end = atoi(dash + 1);
+            // FIX (porting bug #68): put the dash back, as the comma is put
+            // back below. The original restores it (0x417FD9
+            // `movb $0x2d,(%esi)`); CE left the NUL in the cached dialog
+            // string, so after an `r:` range was read once it read as its
+            // first number for the rest of the session - an NPC offered only
+            // the first rumour of each range (366 shipped lines).
+            *dash = '-';
             while (start <= end && cnt < 100) {
                 values[cnt++] = start;
                 start++;
@@ -4435,10 +4463,14 @@ void dialog_copy_npc_story_msg(char* buffer, DialogState* state)
         return;
     }
 
+    // FIX (porting bug #74): a male NPC uses m2m to a male PC and m2f to a
+    // female one. The original computes `(pc_gender != male) + 28`
+    // (0x41A49A-0x41A4A1; 28 is GD_STO_M2M); CE had the pair swapped. The
+    // female branch was right.
     if (stat_level_get(state->npc_obj, STAT_GENDER) == GENDER_MALE) {
         gd = stat_level_get(state->pc_obj, STAT_GENDER) == GENDER_MALE
-            ? GD_STO_M2F
-            : GD_STO_M2M;
+            ? GD_STO_M2M
+            : GD_STO_M2F;
     } else {
         gd = stat_level_get(state->pc_obj, STAT_GENDER) == GENDER_MALE
             ? GD_STO_F2M
@@ -4601,6 +4633,11 @@ void dialog_buy_newspaper(int newspaper, int a2, int a3, DialogState* state)
     dialog_copy_pc_class_specific_msg(state->options[0], state, 1000);
     state->option_response_types[0] = a2;
     state->option_response_nums[0] = a3;
+
+    // FIX (porting bug #76): one option. The original stores it (0x41A90B
+    // `movl $0x1,0x45c(%esi)`); CE left the price question's count, so its
+    // stale decline line stayed on screen after buying.
+    state->num_options = 1;
 
     state->actions[0] = NULL;
 }

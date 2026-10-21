@@ -2847,7 +2847,10 @@ bool object_is_busted(int64_t obj)
     case OBJ_TYPE_GENERIC:
         return tig_art_item_id_destroyed_get(obj_field_int32_get(obj, OBJ_F_CURRENT_AID)) != 0;
     case OBJ_TYPE_TRAP:
-        return (obj_field_int32_get(obj, OBJ_F_TRAP_FLAGS) & OTF_BUSTED) != 0;
+        // FIX (porting bug #118): bit 0x2, the bit `object_bust` sets for a
+        // trap above. The original tests it (0x43F6BD `and $0x2`); CE tested
+        // OTF_BUSTED (0x1), which nothing sets.
+        return (obj_field_int32_get(obj, OBJ_F_TRAP_FLAGS) & 0x2) != 0;
     }
 
     return false;

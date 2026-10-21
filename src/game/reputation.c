@@ -205,6 +205,14 @@ bool reputation_parse(const char* path, int start, int end)
 
             tok = strtok(str, ",");
 
+            // FIX (porting bug #96): a number's sign is skipped with its
+            // digits. All four of the original's skip loops accept `-` and
+            // `+` (0x4C183F/0x4C1843, 0x4C18AD/0x4C18B1, 0x4C195C/0x4C1960,
+            // 0x4C19E6/0x4C19EA); CE skipped digits only. Every shipped
+            // effect in rules/gamerep.mes is signed (" +15 0 11"), so CE read
+            // the adjustment as the origin and the faction too, and
+            // reputations stopped changing how NPCs react.
+
             // Parse three faction numbers from the first token.
             err = true;
             do {
@@ -215,7 +223,7 @@ bool reputation_parse(const char* path, int start, int end)
                     tok++;
                 }
 
-                while (SDL_isdigit(*tok)) {
+                while (SDL_isdigit(*tok) || *tok == '-' || *tok == '+') {
                     tok++;
                 }
 
@@ -228,7 +236,7 @@ bool reputation_parse(const char* path, int start, int end)
                     tok++;
                 }
 
-                while (SDL_isdigit(*tok)) {
+                while (SDL_isdigit(*tok) || *tok == '-' || *tok == '+') {
                     tok++;
                 }
 
@@ -252,7 +260,6 @@ bool reputation_parse(const char* path, int start, int end)
 
             tok = strtok(NULL, ",");
 
-            // NOTE: Original code is different, but the same thing.
             for (effect = 0; effect < 5; effect++) {
                 if (tok == NULL) {
                     break;
@@ -265,7 +272,7 @@ bool reputation_parse(const char* path, int start, int end)
                         tok++;
                     }
 
-                    while (SDL_isdigit(*tok)) {
+                    while (SDL_isdigit(*tok) || *tok == '-' || *tok == '+') {
                         tok++;
                     }
 
@@ -278,7 +285,7 @@ bool reputation_parse(const char* path, int start, int end)
                         tok++;
                     }
 
-                    while (SDL_isdigit(*tok)) {
+                    while (SDL_isdigit(*tok) || *tok == '-' || *tok == '+') {
                         tok++;
                     }
 
@@ -569,7 +576,12 @@ int reputation_pick(int64_t pc_obj, int64_t npc_obj)
                 // hatred, positive adjustment - love, amiable, courteous).
                 if ((effect->adj < 0 && reaction_type > REACTION_NEUTRAL)
                     || (effect->adj > 0 && reaction_type < REACTION_NEUTRAL)) {
-                    dword_5FC8B8[selected_cnt++] = idx;
+                    // FIX (porting bug #97): the list holds the reputation,
+                    // `rep - 1000` (0x4C203F), turned back into a number on
+                    // the way out (0x4C20DC); CE stored the position in the
+                    // PC's reputation array, so an NPC greeted with
+                    // whichever reputation had that number.
+                    dword_5FC8B8[selected_cnt++] = i;
                     break;
                 }
             }

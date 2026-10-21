@@ -983,11 +983,18 @@ AutoLevelError auto_level_stat(int64_t obj, int stat, int value)
     int unspent_points;
     int new_value;
 
+    // FIX (porting bug #91): the loop runs on the stat's BASE value, and the
+    // points are read with `stat_base_get` too. The original advances on
+    // `stat_base_get` (0x4A763F) and reads unspent points from the base
+    // (0x4A7615 `push $0x15`, 0x4A761D); `stat_level_get` serves only the
+    // log line (0x4A7666). CE continued from the stat's level, so any
+    // modifier - race, background, an effect - stopped a scheme early or
+    // pushed it past its target.
     current_value = stat_base_get(obj, stat);
     while (current_value < value) {
         // Calculate cost to increment the stat.
         cost = stat_cost(current_value + 1);
-        unspent_points = stat_level_get(obj, STAT_UNSPENT_POINTS);
+        unspent_points = stat_base_get(obj, STAT_UNSPENT_POINTS);
         if (cost > unspent_points) {
             return AUTO_LEVEL_INSUFFIICIENT_POINTS;
         }
@@ -1002,7 +1009,7 @@ AutoLevelError auto_level_stat(int64_t obj, int stat, int value)
         // Consume character points.
         stat_base_set(obj, STAT_UNSPENT_POINTS, unspent_points - cost);
 
-        current_value = stat_level_get(obj, stat);
+        current_value = new_value;
 
         // Log change.
         record_attribute_change(stat_name(stat), stat_level_get(obj, stat));
@@ -1130,6 +1137,12 @@ AutoLevelError auto_level_spell(int64_t obj, int college, int score)
         if (spell_add(obj, spl, false)) {
             // Consume character points.
             stat_base_set(obj, STAT_UNSPENT_POINTS, unspent_points - cost);
+
+            // FIX (porting bug #92): the learned spell goes into the
+            // level-up message, as the original records it (0x4A797C
+            // `spell_name`, 0x4A7985 `record_attribute_change(name, 0)`).
+            record_attribute_change(spell_name(spl), 0);
+
             current_value++;
         } else {
             // Check if level requirements are unmet.

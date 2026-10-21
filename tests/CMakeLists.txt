@@ -73,6 +73,8 @@ add_executable(arcanum-tests
     "test_obj_id.c"
     "test_reaction.c"
     "test_effect_parse.c"
+    "test_dialog_conditions.c"
+    "test_rules_fixes.c"
     "test_compat.c"
     "test_magitech.c"
     "test_proto.c"
@@ -543,6 +545,7 @@ add_dependencies(arcanum-emudiff-oracle
 # of the oracle's link.
 set(DIALOG_TEST_STATICS
     dialog_collect_pc_options
+    dialog_parse_params
 )
 set(DIALOG_TEST_OBJ "${CMAKE_CURRENT_BINARY_DIR}/dialog_globalized.o")
 set(_dialog_globalize_args "")

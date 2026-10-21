@@ -833,12 +833,19 @@ bool ai_prepare_to_act(Ai* ai)
         obj_field_int32_set(ai->obj, OBJ_F_CRITTER_FLAGS, critter_flags);
     }
 
+    // FIX (porting bug #77): a stunned critter does not act. The original
+    // returns 0 whenever the flag is set, clearing it once the stun animation
+    // has ended (0x4A874A `test $0x20`; both paths reach the `xor %eax` at
+    // 0x4A8781). CE returned only on the clearing tick, so while the stun
+    // played the AI went on to heal, flee or attack - the stun goal is
+    // priority 1, below the busy gate, and anything the AI started outranked
+    // it.
     if ((critter_flags & OCF_STUNNED) != 0) {
         if (!anim_is_current_goal_type(ai->obj, AG_ANIMATE_STUNNED, NULL)) {
             critter_flags &= ~OCF_STUNNED;
             obj_field_int32_set(ai->obj, OBJ_F_CRITTER_FLAGS, critter_flags);
-            return false;
         }
+        return false;
     }
 
     if (critter_is_unconscious(ai->obj)) {
@@ -853,8 +860,11 @@ bool ai_prepare_to_act(Ai* ai)
     if ((npc_flags & ONF_CHECK_WIELD) != 0) {
         item_wield_best_all(ai->obj, ai->danger_source);
 
+        // FIX (porting bug #78): a full re-wield settles the weapon too. The
+        // original clears both flags (`and $0xffffff3f`); CE kept
+        // ONF_CHECK_WEAPON, so a redundant weapon re-wield followed.
         npc_flags = obj_field_int32_get(ai->obj, OBJ_F_NPC_FLAGS);
-        npc_flags &= ~ONF_CHECK_WIELD;
+        npc_flags &= ~(ONF_CHECK_WIELD | ONF_CHECK_WEAPON);
         obj_field_int32_set(ai->obj, OBJ_F_NPC_FLAGS, npc_flags);
     } else if ((npc_flags & ONF_CHECK_WEAPON) != 0) {
         item_wield_best(ai->obj, ITEM_INV_LOC_WEAPON, ai->danger_source);
@@ -1171,8 +1181,11 @@ bool ai_look_for_item_func(int64_t obj, unsigned int flags)
             && !item_is_worthless(node->obj)
             && item_check_insert(node->obj, obj, NULL) == ITEM_CANNOT_OK) {
             dist = object_dist(obj, node->obj);
+            // FIX (porting bug #79): the nearest. The original replaces its
+            // pick only for a smaller distance (0x4A905C-0x4A9068: `jg`/`jae`
+            // past the store); CE kept the farthest item in range.
             if (nearest_obj == OBJ_HANDLE_NULL
-                || nearest_dist < dist) {
+                || dist < nearest_dist) {
                 nearest_obj = node->obj;
                 nearest_dist = dist;
             }
@@ -1370,8 +1383,12 @@ void ai_redirect_perform(AiRedirect* ai_redirect)
         if (!critter_is_dead(node->obj)
             && node->obj != ai_redirect->source_obj
             && node->obj != ai_redirect->target_obj
+            // FIX (porting bug #87): the target's intelligence. The original
+            // reads stat 4 of the redirect's target (`param_1[2..3]`); CE
+            // passed `min_iq` as the object handle. Shipped AIRedirect
+            // entries carry no MinIQ, so -1 skipped the test.
             && (ai_redirect->min_iq <= 0
-                || stat_level_get(ai_redirect->min_iq, STAT_INTELLIGENCE) <= ai_redirect->min_iq)
+                || stat_level_get(ai_redirect->target_obj, STAT_INTELLIGENCE) <= ai_redirect->min_iq)
             && (ai_redirect->critter_flags == 0
                 || (obj_field_int32_get(node->obj, OBJ_F_CRITTER_FLAGS) & ai_redirect->critter_flags) != 0)) {
             ai_redirect_func(ai_redirect->source_obj, node->obj);
@@ -2058,7 +2075,11 @@ void ai_npc_wait(int64_t obj)
 
     wait = obj_field_int32_get(obj, OBJ_F_NPC_WAIT);
     leader_obj = critter_leader_get(obj);
-    if (stat_is_extraordinary(leader_obj, STAT_CHARISMA)
+    // FIX (porting bug #80): a follower told to wait gives up on an ordinary
+    // leader; extraordinary Charisma, or mind control, keeps it waiting. The
+    // original skips the timeout when `stat_is_extraordinary` answers
+    // (0x4AA816 `test`, 0x4AA818 `jne`); CE scheduled it only then.
+    if (!stat_is_extraordinary(leader_obj, STAT_CHARISMA)
         && (obj_field_int32_get(obj, OBJ_F_SPELL_FLAGS) & OSF_MIND_CONTROLLED) == 0) {
         if (basic_skill_training_get(leader_obj, BASIC_SKILL_PERSUATION) != TRAINING_NONE) {
             wait++;
@@ -3456,15 +3477,20 @@ bool ai_is_stronger(int64_t attacker_obj, int64_t target_obj)
     target_level = stat_level_get(target_obj, STAT_LEVEL);
     attacker_level = stat_level_get(attacker_obj, STAT_LEVEL);
 
-    if (target_level < 20 && target_level >= attacker_level + 10) {
-        return true;
-    } else if (target_level < 40 && target_level >= attacker_level + 5) {
-        return true;
-    } else if (target_level >= attacker_level) {
-        return true;
+    // FIX (porting bug #81): one band per level, no fall-through. The
+    // original (0x4ABED8-0x4ABEFE): below 20 a target is stronger at ten
+    // levels up, below 40 at five, from 40 at any level up. CE's chain fell
+    // through to the last test, so below 40 any target at or above the
+    // attacker's level counted - followers cast against equals.
+    if (target_level < 20) {
+        return target_level >= attacker_level + 10;
     }
 
-    return false;
+    if (target_level < 40) {
+        return target_level >= attacker_level + 5;
+    }
+
+    return target_level >= attacker_level;
 }
 
 // 0x4ABF10
@@ -3663,8 +3689,12 @@ void ai_action_perform_non_combat(Ai* ai)
                 npc_flags |= ONF_JILTED;
                 obj_field_int32_set(ai->obj, OBJ_F_NPC_FLAGS, npc_flags);
 
+                // FIX (porting bug #83): a follower that leaves says it won't
+                // follow (0x4AC49B `call 0x413A90`,
+                // dialog_copy_npc_wont_follow_msg); CE floated the warning
+                // line, which belongs to the leader check below (0x414290).
                 if (ai_float_line_func != NULL && critter_is_active(ai->obj)) {
-                    dialog_copy_npc_warning_follow_msg(ai->obj, ai->leader_obj, rc, str, &speech_id);
+                    dialog_copy_npc_wont_follow_msg(ai->obj, ai->leader_obj, rc, str, &speech_id);
                     ai_float_line_func(ai->obj, ai->leader_obj, str, speech_id);
                 }
             } else if ((npc_flags & ONF_CHECK_LEADER) != 0) {
@@ -3729,6 +3759,10 @@ void ai_action_perform_combat(Ai* ai)
         npc_flags |= ONF_CHECK_GRENADE;
         obj_field_int32_set(ai->obj, OBJ_F_NPC_FLAGS, npc_flags);
         ai_observe_decision(ai, "back_off");
+        // FIX (porting bug #84): the back-off starts now. The original calls
+        // it straight after setting the flags (0x4AC768 `call 0x4AC7B0`); CE
+        // waited for the next AI pass, which in turn-based is the next turn.
+        ai_action_perform_baking_off(ai);
     } else if (ai_use_grenade(ai, distance)) {
         ai_observe_decision(ai, "grenade");
     } else {
@@ -4471,8 +4505,12 @@ int ai_check_follow(int64_t npc_obj, int64_t pc_obj, bool ignore_charisma_limits
         }
     }
 
+    // FIX (porting bug #82): a Master persuader skips the reaction,
+    // alignment, level and rival-leader tests, not the Charisma cap. The
+    // original jumps to the cap (0x4AD9C9 `jge 0x4ADAF7`); CE returned
+    // AI_FOLLOW_OK, so a Master recruited past it.
     if (basic_skill_training_get(pc_obj, BASIC_SKILL_PERSUATION) >= TRAINING_MASTER) {
-        return AI_FOLLOW_OK;
+        goto charisma_limits;
     }
 
     leader_obj = critter_leader_get(npc_obj);
@@ -4521,6 +4559,7 @@ int ai_check_follow(int64_t npc_obj, int64_t pc_obj, bool ignore_charisma_limits
         return AI_FOLLOW_LOW_LEVEL;
     }
 
+charisma_limits:
     if (!ignore_charisma_limits) {
         pc_max_followers = stat_level_get(pc_obj, STAT_MAX_FOLLOWERS);
         if (pc_max_followers == 0) {
@@ -4916,9 +4955,15 @@ int ai_check_use_skill(int64_t source_obj, int64_t target_obj, int64_t item_obj,
             return AI_USE_SKILL_BAD_SOURCE;
         }
 
+        // FIX (porting bug #85): an undead or mechanical HEALER cannot use
+        // Heal. The original reads the source's critter flags here
+        // (0x4AE6C5-0x4AE6DC, `[esp+0xc]`/`[esp+0x10]`, `test $0x20000004`);
+        // CE read the target's. The null test is CE's: the original reads the
+        // source unguarded.
         if (target_obj == OBJ_HANDLE_NULL
             || !obj_type_is_critter(obj_field_int32_get(target_obj, OBJ_F_TYPE))
-            || (obj_field_int32_get(target_obj, OBJ_F_CRITTER_FLAGS) & (OCF_UNDEAD | OCF_MECHANICAL)) != 0) {
+            || (source_obj != OBJ_HANDLE_NULL
+                && (obj_field_int32_get(source_obj, OBJ_F_CRITTER_FLAGS) & (OCF_UNDEAD | OCF_MECHANICAL)) != 0)) {
             return AI_USE_SKILL_BAD_TARGET;
         }
 
@@ -4930,7 +4975,11 @@ int ai_check_use_skill(int64_t source_obj, int64_t target_obj, int64_t item_obj,
         }
 
         return AI_USE_SKILL_OK;
-    case SKILL_DISARM_TRAPS:
+    // FIX (porting bug #86): the lock-picking case is Pick Locks. The
+    // original's third case is skill 14 (0x4AE57F/0x4AE588: `sub $0xa`,
+    // `sub $0x2`, `sub $0x2`); CE labelled its lockpick test with Disarm Traps
+    // (15). Reached through dialogue's `u:N`; shipped dialogue uses 10 and 12.
+    case SKILL_PICK_LOCKS:
         if (item_obj != OBJ_HANDLE_NULL) {
             if (obj_field_int32_get(item_obj, OBJ_F_TYPE) != OBJ_TYPE_GENERIC
                 || (obj_field_int32_get(item_obj, OBJ_F_GENERIC_FLAGS) & OGF_IS_LOCKPICK) == 0) {

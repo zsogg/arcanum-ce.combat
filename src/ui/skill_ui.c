@@ -157,11 +157,16 @@ void skill_ui_begin(int64_t obj, int type)
             || critter_is_unconscious(pc_obj)) {
             return;
         }
+    }
 
-        if (critter_is_dead(obj)
-            || critter_is_unconscious(obj)) {
-            return;
-        }
+    // FIX (porting bug #98): the actor itself is tested whoever it is. The
+    // original checks `obj` after the PC block, unconditionally
+    // (0x579FE8-0x57A006); CE nested it inside `pc_obj != obj`, so for the
+    // player - every skill button - an unconscious PC could still start a
+    // skill.
+    if (critter_is_dead(obj)
+        || critter_is_unconscious(obj)) {
+        return;
     }
 
     if (intgame_mode_get() == INTGAME_MODE_SKILL) {
@@ -695,10 +700,16 @@ void skill_ui_adjust_skill(int64_t obj, int skill, int action)
 // 0x57AC90
 void skill_ui_set_training(int64_t obj, int skill, int training)
 {
-    if (IS_TECH_SKILL(skill)) {
-        basic_skill_training_set(obj, GET_TECH_SKILL(skill), training);
+    // FIX (porting bug #99): tech skills to the tech setter. The original
+    // sends `skill > 12` to tech_skill_training_set(skill - 12) and the rest
+    // to basic_skill_training_set (0x57AC98 `cmp $0xc`/`jle`); CE had the
+    // setters swapped. The original's own test leaves 12 (Repair) to the
+    // basic setter, which refuses it - kept, since only multiplayer calls
+    // this.
+    if (skill > 12) {
+        tech_skill_training_set(obj, skill - 12, training);
     } else {
-        tech_skill_training_set(obj, GET_BASIC_SKILL(skill), training);
+        basic_skill_training_set(obj, skill, training);
     }
 }
 

@@ -226,7 +226,11 @@ int reaction_get_ex(int64_t npc_obj, int64_t pc_obj, unsigned int flags)
     }
 
     value = reaction_modifiers_get(npc_obj, pc_obj, flags) + reaction_stored_get(npc_obj, pc_obj);
-    value = effect_adjust_reaction(npc_obj, value);
+    // FIX (porting bug #95): the PC's effects adjust the reaction the PC
+    // gets. The original passes the PC handle (0x4C0D89-0x4C0D8B
+    // `push %edi`/`push %esi`, then `call 0x4EAA80`); CE passed the NPC's, so
+    // Nice Clothes (effect 190, reaction +20) did nothing.
+    value = effect_adjust_reaction(pc_obj, value);
 
     if (value < 50
         && magictech_find_effect_caster(npc_obj, OSF_MIND_CONTROLLED, &mind_controlled_by_obj)

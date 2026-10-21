@@ -1050,7 +1050,11 @@ int script_local_counter_get(int64_t obj, int index, int counter)
 
     obj_arrayfield_script_get(obj, OBJ_F_SCRIPTS_IDX, index, &scr);
 
-    return scr.num != 0 ? (scr.hdr.counters >> (8 * counter)) : 0;
+    // FIX (porting bug #70): one byte per counter. The original masks the
+    // shifted word (0x44500C `and $0xff,%eax`); CE returned every higher
+    // counter with it, so `lc 2 N` failed whenever counter 3 was set - the
+    // dice game's roll options never appeared (01620, 01952, 02017, 02098).
+    return scr.num != 0 ? (scr.hdr.counters >> (8 * counter)) & 0xFF : 0;
 }
 
 // 0x445020
@@ -2125,7 +2129,11 @@ int script_execute_action(ScriptAction* action, int line, ScriptState* state)
 
             if (scr.hdr.flags != state->invocation->script->hdr.flags
                 || scr.hdr.counters != state->invocation->script->hdr.counters) {
-                scr.hdr.flags = state->invocation->script->hdr.counters;
+                // FIX (porting bug #72): flags to flags. The original copies
+                // the two header words one to one (0x4472F1-0x4472FA); CE
+                // wrote the counters word into the stored flags, which the
+                // first dialog screen then tested.
+                scr.hdr.flags = state->invocation->script->hdr.flags;
                 scr.hdr.counters = state->invocation->script->hdr.counters;
                 obj_arrayfield_script_set(state->invocation->attachee_obj, OBJ_F_SCRIPTS_IDX, state->invocation->attachment_point, &scr);
             }
@@ -2364,7 +2372,10 @@ int script_execute_action(ScriptAction* action, int line, ScriptState* state)
     case SAT_SET_REACTION: {
         int64_t npc_obj = script_get_obj(action->op_type[0], action->op_value[0], state);
         int64_t pc_obj = script_get_obj(action->op_type[1], action->op_value[1], state);
-        int reaction = script_get_value(action->op_type[2], action->op_value[1], state);
+        // FIX (porting bug #71): the third operand's own value. The original
+        // pairs type byte 6 with op_value[2] (0x447AE3-0x447AEB); CE read
+        // op_value[1], the PC operand's index (18 shipped uses).
+        int reaction = script_get_value(action->op_type[2], action->op_value[2], state);
         reaction_adj(npc_obj, pc_obj, reaction - reaction_get(npc_obj, pc_obj));
         return NEXT;
     }
@@ -2790,7 +2801,10 @@ int script_execute_action(ScriptAction* action, int line, ScriptState* state)
         int64_t obj = script_get_obj(action->op_type[0], action->op_value[0], state);
         int64_t weapon_obj = item_wield_get(obj, ITEM_INV_LOC_WEAPON);
         int weapon_type = weapon_obj != OBJ_HANDLE_NULL
-            ? tig_art_item_id_subtype_get(obj_field_int32_get(weapon_obj, OBJ_F_ITEM_INV_AID))
+            // FIX (porting bug #73): the use-art fragment, field 0x5F (0x448DEE
+            // `push $0x5f`), as every other weapon-type read does; CE read the
+            // inventory art (OBJ_F_ITEM_INV_AID, 93).
+            ? tig_art_item_id_subtype_get(obj_field_int32_get(weapon_obj, OBJ_F_ITEM_USE_AID_FRAGMENT))
             : TIG_ART_WEAPON_TYPE_UNARMED;
         script_set_value(action->op_type[1], action->op_value[1], state, weapon_type);
         return NEXT;

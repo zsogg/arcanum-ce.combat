@@ -1478,7 +1478,10 @@ bool schematic_ui_process(int schematic, int64_t primary_obj, int64_t secondary_
         item_ammo_transfer(primary_obj,
             OBJ_HANDLE_NULL,
             1,
-            obj_field_int32_get(ingridient1_obj, OBJ_F_AMMO_QUANTITY),
+            // FIX (porting bug #121): the ammunition TYPE (0x56E86B
+            // `push $0x8f`, field 143); CE passed the quantity field. Read only
+            // when ammunition goes to an object, so it had no effect here.
+            obj_field_int32_get(ingridient1_obj, OBJ_F_AMMO_TYPE),
             ingridient1_obj);
     } else {
         object_destroy(ingridient1_obj);
@@ -1489,7 +1492,8 @@ bool schematic_ui_process(int schematic, int64_t primary_obj, int64_t secondary_
         item_ammo_transfer(primary_obj,
             OBJ_HANDLE_NULL,
             1,
-            obj_field_int32_get(ingridient2_obj, OBJ_F_AMMO_QUANTITY),
+            // FIX (porting bug #121): as for the first component.
+            obj_field_int32_get(ingridient2_obj, OBJ_F_AMMO_TYPE),
             ingridient2_obj);
     } else {
         object_destroy(ingridient2_obj);

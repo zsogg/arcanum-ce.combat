@@ -70,6 +70,8 @@ void test_feature_suite(void);
 void test_obj_id_suite(void);
 void test_reaction_suite(void);
 void test_effect_parse_suite(void);
+void test_dialog_conditions_suite(void);
+void test_rules_fixes_suite(void);
 void test_compat_suite(void);
 void test_magitech_suite(void);
 void test_determinism_suite(void);
@@ -146,6 +148,8 @@ int main(void)
     test_obj_id_suite();
     test_reaction_suite();
     test_effect_parse_suite();
+    test_dialog_conditions_suite();
+    test_rules_fixes_suite();
     test_compat_suite();
     test_magitech_suite();
     test_determinism_suite();

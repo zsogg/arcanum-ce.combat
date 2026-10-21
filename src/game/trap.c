@@ -17,6 +17,7 @@
 #include "game/script.h"
 #include "game/skill.h"
 #include "game/stat.h"
+#include "game/tf.h"
 #include "game/ui.h"
 
 typedef enum TrapEyeCandyType {
@@ -616,6 +617,17 @@ bool trap_script_execute(ScriptInvocation* invocation)
         ai_objects_in_radius(invocation->attachee_obj, radius, &critters, OBJ_TM_PC | OBJ_TM_NPC);
     }
 
+    // FIX (porting bug #112): "Trap!" floats over whoever set it off. The
+    // original reads trap.mes 1 (0x4BCC2C) and adds it, type 1, over the
+    // triggerer (0x4BCC3F `call 0x4D5450`); CE never showed it.
+    {
+        MesFileEntry mes_file_entry;
+
+        mes_file_entry.num = 1;
+        mes_get_msg(trap_mes_file, &mes_file_entry);
+        tf_add(invocation->triggerer_obj, TF_TYPE_RED, mes_file_entry.str);
+    }
+
     if (invocation->script->num >= TRAP_SCRIPT_FIRST && invocation->script->num < TRAP_SCRIPT_COUNT) {
         base = TRAP_EYE_CANDY_TYPE_COUNT * (invocation->script->num - TRAP_SCRIPT_FIRST);
     } else {
@@ -702,7 +714,11 @@ void trigger_trap(int64_t obj, ScriptInvocation* invocation)
         combat_dmg(&combat);
         break;
     case TRAP_SCRIPT_ARROW:
-        trap_source_obj = find_trap_source(invocation->attachee_obj, (invocation->script->hdr.counters >> 16) & 0xFF);
+        // FIX (porting bug #113): the shooter is looked for around whoever
+        // set the trap off - the original passes the invocation's triggerer
+        // (0x4BCE9F-0x4BCEA8, +0x8/+0xC, then `call 0x4BD150`); CE searched
+        // around the trap.
+        trap_source_obj = find_trap_source(invocation->triggerer_obj, (invocation->script->hdr.counters >> 16) & 0xFF);
         if (trap_source_obj != OBJ_HANDLE_NULL) {
             combat_context_init(trap_source_obj, obj, &combat);
             combat.field_30 = trap_credit_obj_get(invocation->attachee_obj);

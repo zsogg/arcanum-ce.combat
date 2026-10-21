@@ -388,7 +388,11 @@ int item_weight(int64_t item_obj, int64_t owner_obj)
     }
 
     if (item_stack_fields_get(item_obj, &quantity_fld) != -1) {
-        weight *= obj_field_int32_get(item_obj, quantity_fld) / 4;
+        // FIX (porting bug #107): the stack's weight is quarter of the
+        // product, `(weight * qty) / 4` (0x4613ED `imul`, then the signed
+        // shift by 2); CE divided the quantity first. Equal for stock ammo,
+        // which weighs 1.
+        weight = weight * obj_field_int32_get(item_obj, quantity_fld) / 4;
     }
 
     return weight;
@@ -792,6 +796,24 @@ bool item_transfer_to_critter(int64_t item_obj, int64_t critter_obj, int invento
     }
 
     if (!object_script_execute(parent_obj, critter_obj, item_obj, SAP_TRANSFER, 0)) {
+        return false;
+    }
+
+    // FIX (porting bug #108): an item that may not leave its holder does not.
+    // The original asks `item_check_remove` here (0x461D31) and refuses with
+    // the reason shown to whichever side is the PC (0x461D4B-0x461D88); CE
+    // dropped the check, so steals, scripts, AI and barter moved no-drop
+    // items.
+    rc = item_check_remove(item_obj);
+    if (rc != ITEM_CANNOT_OK) {
+        if (obj_field_int32_get(parent_obj, OBJ_F_TYPE) == OBJ_TYPE_PC) {
+            item_error_msg(parent_obj, rc);
+        }
+
+        if (obj_field_int32_get(critter_obj, OBJ_F_TYPE) == OBJ_TYPE_PC) {
+            item_error_msg(critter_obj, rc);
+        }
+
         return false;
     }
 
@@ -1724,10 +1746,13 @@ void item_use_on_obj(int64_t source_obj, int64_t item_obj, int64_t target_obj)
             ui_message.type = UI_MSG_TYPE_EXCLAMATION;
             ui_message.str = mes_file_entry.str;
             ui_display_msg(&ui_message);
-
-            magictech_clear_source_refs(item_obj);
-            object_destroy(item_obj);
         }
+
+        // FIX (porting bug #110): used up whoever used it. The original
+        // shows the message to a PC and then destroys the item for any user
+        // (0x462F53 `jmp 0x462F9C`); CE destroyed it only for the PC.
+        magictech_clear_source_refs(item_obj);
+        object_destroy(item_obj);
 
         return;
     }
@@ -2017,6 +2042,18 @@ void item_inventory_mark_summoned(int64_t obj)
     int64_t item_obj;
     unsigned int flags;
 
+    // FIX (porting bug #109): a spawn-once container is stocked before its
+    // contents are touched. All four of the original's inventory walks -
+    // drop all (0x463730), drop all but summoned, drop invulnerable and mark
+    // summoned - restock a container carrying OCOF_INVEN_SPAWN_ONCE first;
+    // CE replaced their type test with `inventory_fields_from_obj_type` and
+    // lost the call, so smashing or destroying an unopened spawn-once chest
+    // left nothing.
+    if (obj_field_int32_get(obj, OBJ_F_TYPE) == OBJ_TYPE_CONTAINER
+        && (obj_field_int32_get(obj, OBJ_F_CONTAINER_FLAGS) & OCOF_INVEN_SPAWN_ONCE) != 0) {
+        item_inventory_restock_contents(obj);
+    }
+
     if (!inventory_fields_from_obj_type(obj_field_int32_get(obj, OBJ_F_TYPE), &inventory_num_fld, &inventory_list_fld)) {
         return;
     }
@@ -2055,6 +2092,19 @@ void item_inventory_drop_all(int64_t obj, bool a2)
     int idx;
     int64_t loc;
     int64_t item_obj;
+
+    // FIX (porting bug #109): a spawn-once container is stocked before its
+    // contents are touched. All four of the original's inventory walks -
+    // drop all (0x463730), drop all but summoned, drop invulnerable and mark
+    // summoned - restock a container carrying OCOF_INVEN_SPAWN_ONCE first;
+    // CE replaced their type test with `inventory_fields_from_obj_type` and
+    // lost the call, so smashing or destroying an unopened spawn-once chest
+    // left nothing.
+    if (obj_field_int32_get(obj, OBJ_F_TYPE) == OBJ_TYPE_CONTAINER
+        && !item_editor
+        && (obj_field_int32_get(obj, OBJ_F_CONTAINER_FLAGS) & OCOF_INVEN_SPAWN_ONCE) != 0) {
+        item_inventory_restock_contents(obj);
+    }
 
     if (!inventory_fields_from_obj_type(obj_field_int32_get(obj, OBJ_F_TYPE), &inventory_num_fld, &inventory_list_fld)) {
         return;
@@ -2097,6 +2147,18 @@ void item_inventory_drop_all_except_summoned(int64_t obj, bool a2)
     int64_t item_obj;
     unsigned int spell_flags;
     unsigned int item_flags;
+
+    // FIX (porting bug #109): a spawn-once container is stocked before its
+    // contents are touched. All four of the original's inventory walks -
+    // drop all (0x463730), drop all but summoned, drop invulnerable and mark
+    // summoned - restock a container carrying OCOF_INVEN_SPAWN_ONCE first;
+    // CE replaced their type test with `inventory_fields_from_obj_type` and
+    // lost the call, so smashing or destroying an unopened spawn-once chest
+    // left nothing.
+    if (obj_field_int32_get(obj, OBJ_F_TYPE) == OBJ_TYPE_CONTAINER
+        && (obj_field_int32_get(obj, OBJ_F_CONTAINER_FLAGS) & OCOF_INVEN_SPAWN_ONCE) != 0) {
+        item_inventory_restock_contents(obj);
+    }
 
     if (!inventory_fields_from_obj_type(obj_field_int32_get(obj, OBJ_F_TYPE), &inventory_num_fld, &inventory_list_fld)) {
         return;
@@ -2149,6 +2211,18 @@ void item_inventory_drop_invulnerable(int64_t obj, bool a2)
 
     if (proto_get_description(obj) == BP_JUNK_PILE) {
         return;
+    }
+
+    // FIX (porting bug #109): a spawn-once container is stocked before its
+    // contents are touched. All four of the original's inventory walks -
+    // drop all (0x463730), drop all but summoned, drop invulnerable and mark
+    // summoned - restock a container carrying OCOF_INVEN_SPAWN_ONCE first;
+    // CE replaced their type test with `inventory_fields_from_obj_type` and
+    // lost the call, so smashing or destroying an unopened spawn-once chest
+    // left nothing.
+    if (obj_field_int32_get(obj, OBJ_F_TYPE) == OBJ_TYPE_CONTAINER
+        && (obj_field_int32_get(obj, OBJ_F_CONTAINER_FLAGS) & OCOF_INVEN_SPAWN_ONCE) != 0) {
+        item_inventory_restock_contents(obj);
     }
 
     if (!inventory_fields_from_obj_type(obj_field_int32_get(obj, OBJ_F_TYPE), &inventory_num_fld, &inventory_list_fld)) {
@@ -2953,7 +3027,11 @@ int item_check_wield(int64_t item_obj, int inventory_location, int64_t critter_o
             }
         }
 
-        if ((obj_field_int32_get(critter_obj, OBJ_F_CRITTER_FLAGS) & OCF_CRIPPLED_ARMS_BOTH) != 0) {
+        // FIX (porting bug #111): a shield needs both arms. The original
+        // refuses one crippled arm as well (0x464F0A `test $0x3,%ah`,
+        // OCF_CRIPPLED_ARMS_ONE | OCF_CRIPPLED_ARMS_BOTH); CE tested both
+        // arms only.
+        if ((obj_field_int32_get(critter_obj, OBJ_F_CRITTER_FLAGS) & (OCF_CRIPPLED_ARMS_ONE | OCF_CRIPPLED_ARMS_BOTH)) != 0) {
             return ITEM_CANNOT_CRIPPLED;
         }
 

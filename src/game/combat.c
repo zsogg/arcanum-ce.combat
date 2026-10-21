@@ -1829,7 +1829,19 @@ void combat_dmg(CombatContext* combat)
                 item_obj = item_wield_get(combat->target_obj, inventory_location);
                 if (item_obj != OBJ_HANDLE_NULL
                     && obj_field_int32_get(item_obj, OBJ_F_TYPE) == OBJ_TYPE_ARMOR) {
-                    object_script_execute(combat->attacker_obj, item_obj, combat->target_obj, SAP_TAKING_DAMAGE, 0);
+                    // FIX (porting bug #100): worn armour runs its critical
+                    // scripts - SAP_CRITICAL_HIT for a hit, SAP_CRITICAL_MISS
+                    // otherwise. The original computes the point as
+                    // `((~flags & CF_HIT) | 0x44) >> 1` (0x4B479A-0x4B47AE,
+                    // 34 or 35) and passes it at 0x4B47F8; CE passed
+                    // SAP_TAKING_DAMAGE (23), so an armour's critical scripts
+                    // never ran and its taking-damage script ran on every
+                    // critical.
+                    object_script_execute(combat->attacker_obj,
+                        item_obj,
+                        combat->target_obj,
+                        (combat->flags & CF_HIT) != 0 ? SAP_CRITICAL_HIT : SAP_CRITICAL_MISS,
+                        0);
                 }
             }
         }
@@ -2111,10 +2123,13 @@ void combat_dmg(CombatContext* combat)
         // "HT 0" over its head - with nothing written here, the `str[0]`
         // guard below suppresses the message. A hit that only cost fatigue
         // still floats its "FT" part, which the fatigue block appends.
+        // FIX (porting bug #104): the number first, "12 HT". The original
+        // formats a critter's damage with "%d %s" (0x4B5092 `push $0x5B5920`);
+        // "%s %d" (0x5B5928) is the format for objects. UAP keeps it.
         if (!uap_fixes_enabled() || dam > 0) {
             mes_file_entry.num = 1; // "HT"
             mes_get_msg(combat_mes_file, &mes_file_entry);
-            snprintf(str, sizeof(str), "%s %d", mes_file_entry.str, dam);
+            snprintf(str, sizeof(str), "%d %s", dam, mes_file_entry.str);
         }
 
         combat->total_dam = dam;
@@ -2139,10 +2154,21 @@ void combat_dmg(CombatContext* combat)
                 mes_file_entry.num = 10;
                 mes_get_msg(combat_mes_file, &mes_file_entry);
 
-                snprintf(&(str[strlen(str)]), sizeof(str) - strlen(str),
+                // FIX (porting bug #104): a blow that did no HP damage writes
+                // its fatigue part over the "0 HT" rather than after it - the
+                // original's offset is 0 unless `dam > 0` (0x4B5129-0x4B513D).
+                // (Under UAP the HP part is not written, and both agree.)
+                size_t pos = dam > 0 ? strlen(str) : 0;
+                snprintf(&(str[pos]), sizeof(str) - pos,
                     " %d %s",
                     combat->dam[DAMAGE_TYPE_FATIGUE],
                     mes_file_entry.str);
+
+                // FIX (porting bug #105): fatigue damage marks the target
+                // damaged, as the original does (0x4B515D
+                // `or $0x200000,%eax`); without it a fatigue-only hit wore
+                // no weapon and played no hit effects.
+                combat->dam_flags |= CDF_HAVE_DAMAGE;
 
                 critter_fatigue_damage_set(combat->target_obj,
                     critter_fatigue_damage_get(combat->target_obj) + combat->dam[DAMAGE_TYPE_FATIGUE]);
@@ -2578,9 +2604,13 @@ void combat_heal(CombatContext* combat)
             critter_flags &= ~(OCF_CRIPPLED_ARMS_ONE | OCF_CRIPPLED_ARMS_BOTH);
             obj_field_int32_set(combat->target_obj, OBJ_F_CRITTER_FLAGS, critter_flags);
         }
+        // FIX (porting bug #101): a leg-curing heal cures the legs. The
+        // original clears OCF_CRIPPLED_LEGS_BOTH here (0x4B5D2D, 0x4B5D32,
+        // 0x4B5D3D `and $0xfb,%bh`); CE cleared OCF_BLINDED, leaving the legs
+        // crippled and curing blindness instead.
         if ((combat->dam_flags & CDF_CRIPPLE_LEG) != 0
             && (critter_flags & OCF_CRIPPLED_LEGS_BOTH) != 0) {
-            critter_flags &= ~OCF_BLINDED;
+            critter_flags &= ~OCF_CRIPPLED_LEGS_BOTH;
             obj_field_int32_set(combat->target_obj, OBJ_F_CRITTER_FLAGS, critter_flags);
         }
     }
@@ -2820,7 +2850,11 @@ void combat_process_crit_hit(CombatContext* combat)
 
                 if (target_obj_type != OBJ_TYPE_PC
                     && (critter_flags & OCF_FATIGUE_IMMUNE) == 0
-                    && random_between(1, 100) < difficulty
+                    // FIX (porting bug #102): `<=`, as for the stun above. The
+                    // original knocks out unless the roll exceeds the
+                    // difficulty (0x4B61A7 `cmp %edi,%eax`, `jg` past);
+                    // CE's `<` was a point short.
+                    && random_between(1, 100) <= difficulty
                     && !critter_check_stat(combat->target_obj, STAT_CONSTITUTION, -5)) {
                     combat->dam_flags |= CDF_KNOCKOUT;
                 }
@@ -2847,12 +2881,18 @@ void combat_process_crit_hit(CombatContext* combat)
                 }
 
                 if (combat->hit_loc == HIT_LOC_HEAD) {
+                    // FIX (porting bug #103): a crushing blow to the head can
+                    // knock the helmet off and cannot blind. The original's
+                    // crushing arm ends the block whether or not the helmet
+                    // goes (0x4B6279; no helmet 0x4B6283 and a failed roll
+                    // 0x4B6299 both jump to 0x4B62EF); the blinding roll at
+                    // 0x4B62A5 is the other arm. CE fell through to it.
                     if (crit_hit_type == CRIT_HIT_TYPE_CRUSHING) {
                         if (helmet_obj != OBJ_HANDLE_NULL
                             && random_between(1, 100) <= chance + 5) {
                             combat->dam_flags |= CDF_DROP_HELMET;
-                            break;
                         }
+                        break;
                     }
 
                     if (!npc_attacks_pc
@@ -5309,9 +5349,15 @@ void sort_combat_list(void)
         do {
             process = true;
             if (obj_field_int32_get(node->obj, OBJ_F_TYPE) != OBJ_TYPE_PC) {
+                // FIX (porting bug #106): the LEADER must be a PC. The
+                // original reads the type of the object
+                // `critter_pc_leader_get` returned (0x4B7EF5, then
+                // 0x4B7F03-0x4B7F0A `push $0x14f`); CE read the node's own
+                // type again, which is never PC on this path, so the party's
+                // followers acted among the NPCs instead of last.
                 leader_obj = critter_pc_leader_get(node->obj);
                 if (leader_obj == OBJ_HANDLE_NULL
-                    || (obj_field_int32_get(node->obj, OBJ_F_TYPE) != OBJ_TYPE_PC)) {
+                    || (obj_field_int32_get(leader_obj, OBJ_F_TYPE) != OBJ_TYPE_PC)) {
                     process = false;
                 }
             }

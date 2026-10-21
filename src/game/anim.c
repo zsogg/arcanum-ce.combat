@@ -7355,7 +7355,9 @@ bool anim_target_in_weapon_range_of(int64_t source_obj, int64_t target_obj)
         range = 1;
     } else {
         range = item_weapon_range(weapon_obj, source_obj);
-        if (range < 0) {
+        // FIX (porting bug #119): a range below 1 is 1 (0x429A42-0x429A4F);
+        // CE's `< 0` left a range of 0 reaching nothing beyond its own tile.
+        if (range < 1) {
             range = 1;
         }
     }
@@ -8124,7 +8126,10 @@ bool anim_try_pickup_item(AnimRunInfo* run_info)
         return false;
     }
 
-    if ((obj_field_int32_get(source_obj, OBJ_F_FLAGS) & (OF_DESTROYED | OF_OFF)) != 0) {
+    // FIX (porting bug #120): the ITEM may not be destroyed or off. The
+    // original reads the flags of the goal's target (0x42AA33-0x42AA37,
+    // 0xD08/0xD0C); CE read the picker's.
+    if ((obj_field_int32_get(target_obj, OBJ_F_FLAGS) & (OF_DESTROYED | OF_OFF)) != 0) {
         return false;
     }
 

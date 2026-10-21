@@ -771,6 +771,13 @@ int stat_base_set(int64_t obj, int stat, int value)
         // Update UI.
         ui_refresh_interface();
         break;
+    case STAT_FATE_POINTS:
+        // FIX (porting bug #88): fate points refresh the interface too. The
+        // original's second switch sends stat 20 to the alignment case's
+        // `ui_refresh_interface` call (byte table 0x4B0EBC[20] = 5, jump
+        // table 0x4B0E90[5] = 0x4B0E3B); CE had no case for it.
+        ui_refresh_interface();
+        break;
     case STAT_MAGICK_POINTS:
     case STAT_TECH_POINTS:
         // Recalc item effects affected by magic/tech aptitude.

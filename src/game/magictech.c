@@ -1868,10 +1868,11 @@ bool magictech_charge_spell_fatigue(int64_t obj, int magictech)
     cost = magictech_spells[magictech].cost;
     if (magictech >= 0 && magictech < MT_80
         && spell_mastery_get(obj) == COLLEGE_FROM_SPELL(magictech)) {
-        cost /= 2;
-        if ((cost & 1) != 0) {
-            cost++;
-        }
+        // FIX (porting bug #114): half, rounded up on the ORIGINAL cost's
+        // parity (0x45082B-0x450832: `cost / 2`, then `test $0x1,%bl` on the
+        // cost before halving); CE tested the halved cost, so a mastered
+        // spell costing 1 was free and 5 cost 2.
+        cost = cost / 2 + (cost & 1);
     }
 
     if (magictech_cheat_mode) {
@@ -1907,10 +1908,11 @@ bool magictech_can_charge_spell_fatigue(int64_t obj, int magictech)
     if (magictech >= 0
         && magictech < MT_80
         && spell_mastery_get(obj) == COLLEGE_FROM_SPELL(magictech)) {
-        cost /= 2;
-        if ((cost & 1) != 0) {
-            cost++;
-        }
+        // FIX (porting bug #114): half, rounded up on the ORIGINAL cost's
+        // parity (0x45082B-0x450832: `cost / 2`, then `test $0x1,%bl` on the
+        // cost before halving); CE tested the halved cost, so a mastered
+        // spell costing 1 was free and 5 cost 2.
+        cost = cost / 2 + (cost & 1);
     }
 
     if (magictech_cheat_mode) {
@@ -2811,6 +2813,11 @@ void magictech_component_dispel_internal(int mt_id, int64_t obj)
         if ((flags & OSF_STONED) != 0) {
             flags &= ~OSF_STONED;
             obj_field_int32_set(obj, OBJ_F_SPELL_FLAGS, flags);
+            // FIX (porting bug #115): and the object flag that greys it out,
+            // as the original does (0x451E47 `push $0x80000`, 0x451E4E
+            // `call 0x43D280`, object_flags_unset); a dispelled stone critter
+            // stayed grey in CE.
+            object_flags_unset(obj, OF_STONED);
         }
         if ((flags & OSF_SUMMONED) != 0) {
             object_destroy(obj);
@@ -4697,7 +4704,10 @@ bool magictech_can_unlock(int64_t a1, int64_t a2, int64_t a3)
             return false;
         }
 
-        if (lock_difficulty >= 0 && magictech_cur_run_info->parent_obj.aptitude < lock_difficulty) {
+        // FIX (porting bug #116): only a lock of difficulty 20 or more can
+        // resist (0x455223 `cmp $0x14`, `jl` to success); CE tested `>= 0`,
+        // so easy locks resisted low-aptitude casters.
+        if (lock_difficulty >= 20 && magictech_cur_run_info->parent_obj.aptitude < lock_difficulty) {
             return false;
         }
     }
@@ -4967,6 +4977,14 @@ bool magictech_run_info_validate(MagicTechRunInfo* run_info)
     }
 
     if (!object_locator_validate(&(run_info->parent_obj.obj), &(run_info->parent_obj.field_8))) {
+        success = false;
+    }
+
+    // FIX (porting bug #117): the target is validated too (0x455858-0x455866,
+    // `lea 0xa8`/`lea 0xa0`, the third call to 0x444020); CE skipped it, so a
+    // run whose target was destroyed kept going, and a target handle left
+    // stale by a load was never re-resolved.
+    if (!object_locator_validate(&(run_info->target_obj.obj), &(run_info->target_obj.field_8))) {
         success = false;
     }
 
