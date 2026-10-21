@@ -3778,7 +3778,9 @@ bool magictech_resistance_roll(void)
             magictech_cur_run_info->field_144 = 10;
         } else {
             // CE: The original code does not account for magic resistance
-            // adjustments from equipped items.
+            // adjustments from equipped items. Kept, unswitched, by zsogg's
+            // decision (2026-10-21): worn armour's magic resistance counts
+            // against spells.
             int resistance = object_get_resistance(magictech_cur_target_ctx.target_obj, RESISTANCE_TYPE_MAGIC, false);
             if (!magictech_cur_is_fate_maximized) {
                 int aptitude = stat_level_get(magictech_cur_target_ctx.target_obj, STAT_MAGICK_TECH_APTITUDE);
@@ -3873,7 +3875,9 @@ int magictech_cast_spell_fail_chance(int64_t attacker_obj, int64_t target_obj, i
             // base chance for a spell to fail.
 
             // CE: The original code does not account for magic resistance
-            // adjustments from equipped items.
+            // adjustments from equipped items. Kept, unswitched, by zsogg's
+            // decision (2026-10-21): worn armour's magic resistance counts
+            // against spells.
             resistance = object_get_resistance(target_obj, RESISTANCE_TYPE_MAGIC, false);
 
             if (!magictech_cur_is_fate_maximized) {
@@ -7616,7 +7620,9 @@ bool magictech_effect_resist_check(int64_t obj, int mt_id)
         && (obj_field_int32_get(obj, OBJ_F_TYPE) != OBJ_TYPE_PC
             || !fate_resolve(obj, FATE_SAVE_AGAINST_MAGICK))) {
         // CE: The original code does not account for magic resistance
-        // adjustments from equipped items.
+        // adjustments from equipped items. Kept, unswitched, by zsogg's
+        // decision (2026-10-21): worn armour's magic resistance counts
+        // against spells.
         resistance = object_get_resistance(obj, RESISTANCE_TYPE_MAGIC, false);
         if (!magictech_cur_is_fate_maximized) {
             int aptitude = stat_level_get(obj, STAT_MAGICK_TECH_APTITUDE);

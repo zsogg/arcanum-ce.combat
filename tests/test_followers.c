@@ -218,6 +218,39 @@ TEST(a_master_persuader_is_still_held_to_the_charisma_limit)
     followers_end();
 }
 
+// Porting bug #85 and the `heal living patients` switch. Stock follows the
+// original: an undead or mechanical HEALER cannot use Heal, and a living one
+// may heal anyone (0x4AE6C5-0x4AE6DC reads the healer's flags). The switch is
+// the rule CE had before: anyone may heal, but not an undead or mechanical
+// patient.
+TEST(heal_refuses_by_the_healer_stock_and_by_the_patient_under_the_switch)
+{
+    int64_t kit;
+    int64_t robot;
+
+    CHECK(followers_begin());
+    kit = obj_harness_create_proto(OBJ_TYPE_GENERIC);
+    robot = obj_harness_create_proto(OBJ_TYPE_NPC);
+    obj_field_int32_set(kit, OBJ_F_GENERIC_FLAGS,
+        obj_field_int32_get(kit, OBJ_F_GENERIC_FLAGS) | OGF_IS_HEALING_ITEM);
+    obj_field_int32_set(robot, OBJ_F_CRITTER_FLAGS,
+        obj_field_int32_get(robot, OBJ_F_CRITTER_FLAGS) | OCF_MECHANICAL);
+
+    // A living healer and a mechanical patient.
+    CHECK_INT(ai_check_use_skill(followers_npc, robot, kit, SKILL_HEAL), AI_USE_SKILL_OK);
+    // A mechanical healer and a living patient.
+    CHECK_INT(ai_check_use_skill(robot, followers_pc, kit, SKILL_HEAL), AI_USE_SKILL_BAD_TARGET);
+
+    followers_switch(FEATURE_HEAL_LIVING_PATIENTS, true);
+    CHECK_INT(ai_check_use_skill(followers_npc, robot, kit, SKILL_HEAL), AI_USE_SKILL_BAD_TARGET);
+    CHECK_INT(ai_check_use_skill(robot, followers_pc, kit, SKILL_HEAL), AI_USE_SKILL_OK);
+    followers_switch(FEATURE_HEAL_LIVING_PATIENTS, false);
+
+    obj_harness_destroy(robot);
+    obj_harness_destroy(kit);
+    followers_end();
+}
+
 void test_followers_suite(void)
 {
     RUN(the_strict_packet_lets_a_matching_npc_join);
@@ -228,4 +261,5 @@ void test_followers_suite(void)
     RUN(a_follower_whose_reaction_collapses_still_leaves);
     RUN(the_charisma_follower_limit_stays);
     RUN(a_master_persuader_is_still_held_to_the_charisma_limit);
+    RUN(heal_refuses_by_the_healer_stock_and_by_the_patient_under_the_switch);
 }

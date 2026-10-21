@@ -4955,16 +4955,29 @@ int ai_check_use_skill(int64_t source_obj, int64_t target_obj, int64_t item_obj,
             return AI_USE_SKILL_BAD_SOURCE;
         }
 
-        // FIX (porting bug #85): an undead or mechanical HEALER cannot use
-        // Heal. The original reads the source's critter flags here
-        // (0x4AE6C5-0x4AE6DC, `[esp+0xc]`/`[esp+0x10]`, `test $0x20000004`);
-        // CE read the target's. The null test is CE's: the original reads the
-        // source unguarded.
         if (target_obj == OBJ_HANDLE_NULL
-            || !obj_type_is_critter(obj_field_int32_get(target_obj, OBJ_F_TYPE))
-            || (source_obj != OBJ_HANDLE_NULL
-                && (obj_field_int32_get(source_obj, OBJ_F_CRITTER_FLAGS) & (OCF_UNDEAD | OCF_MECHANICAL)) != 0)) {
+            || !obj_type_is_critter(obj_field_int32_get(target_obj, OBJ_F_TYPE))) {
             return AI_USE_SKILL_BAD_TARGET;
+        }
+
+        if (feature_enabled(FEATURE_HEAL_LIVING_PATIENTS)) {
+            // CE (`heal living patients`; zsogg, 2026-10-21): the patient
+            // must be living, and anyone may heal - the rule CE had until
+            // the fix below restored the original's, kept as an option at
+            // zsogg's request.
+            if ((obj_field_int32_get(target_obj, OBJ_F_CRITTER_FLAGS) & (OCF_UNDEAD | OCF_MECHANICAL)) != 0) {
+                return AI_USE_SKILL_BAD_TARGET;
+            }
+        } else {
+            // FIX (porting bug #85): an undead or mechanical HEALER cannot
+            // use Heal. The original reads the source's critter flags here
+            // (0x4AE6C5-0x4AE6DC, `[esp+0xc]`/`[esp+0x10]`,
+            // `test $0x20000004`); CE read the target's. The null test is
+            // CE's: the original reads the source unguarded.
+            if (source_obj != OBJ_HANDLE_NULL
+                && (obj_field_int32_get(source_obj, OBJ_F_CRITTER_FLAGS) & (OCF_UNDEAD | OCF_MECHANICAL)) != 0) {
+                return AI_USE_SKILL_BAD_TARGET;
+            }
         }
 
         return AI_USE_SKILL_OK;

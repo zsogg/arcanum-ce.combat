@@ -104,5 +104,11 @@ FEATURE(TURN_ORDER_INITIATIVE, "turn order initiative", false)
 // best-initiative member able to (`combat.c`).
 FEATURE(ENCOUNTER_AWARENESS, "encounter awareness", false)
 FEATURE(AMBUSH_SAFEGUARD, "ambush safeguard", false)
+// Heal living patients (zsogg, 2026-10-21), read by `ai_check_use_skill`: an
+// NPC will not use Heal on an undead or mechanical patient, and its own
+// nature does not stop it healing - the rule CE had before porting bug #85
+// restored the original's (the healer, not the patient, may not be undead or
+// mechanical). zsogg's preference, as an option.
+FEATURE(HEAL_LIVING_PATIENTS, "heal living patients", false)
 
 // clang-format on
