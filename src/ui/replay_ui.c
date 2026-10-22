@@ -13,6 +13,7 @@
 #include "game/anim.h"
 #include "game/combat.h"
 #include "game/combat_observer.h"
+#include "game/creature_rules.h"
 #include "game/crit_effects.h"
 #include "game/critter.h"
 #include "game/gamelib.h"
@@ -40,6 +41,7 @@
 #include "ui/intgame.h"
 #include "ui/skill_ui.h"
 #include "ui/spell_ui.h"
+#include "ui/tb_ui.h"
 #include "ui/wmap_rnd.h"
 
 #define REPLAY_MAX_COMMANDS 256
@@ -220,6 +222,12 @@ typedef enum ReplayKind {
     //       in seconds). Never the player. Before a fight starts: nothing
     //       takes a destroyed critter off a running turn-based encounter's
     //       list. A test row.
+    //   examine <id>
+    //       what the pointer resting on that object shows in the message
+    //       window, as the examine path builds it - the critter panel's
+    //       name, portrait and rows - and one log line with its text and,
+    //       for a phantom, the line in place of its reaction (2026-10-22,
+    //       creature profiles). A `screenshot` row after it shoots the panel.
     REPLAY_KIND_SKILL_LEVEL,
     REPLAY_KIND_STAT_LEVEL,
     REPLAY_KIND_JAM,
@@ -236,6 +244,7 @@ typedef enum ReplayKind {
     REPLAY_KIND_INVULNERABLE,
     REPLAY_KIND_AWAIT_DEATH,
     REPLAY_KIND_REMOVE,
+    REPLAY_KIND_EXAMINE,
 } ReplayKind;
 
 // A cast's target, which is a third shape: the caster, an object or a tile.
@@ -831,6 +840,12 @@ static bool replay_parse_line(const char* text, ReplayCommand* command)
         return index == count;
     }
 
+    if (strcmp(kind, "examine") == 0) {
+        command->kind = REPLAY_KIND_EXAMINE;
+        replay_copy_target(command, tokens[index++]);
+        return index == count;
+    }
+
     if (strcmp(kind, "invulnerable") == 0) {
         command->kind = REPLAY_KIND_INVULNERABLE;
         if (strcmp(tokens[index++], "on") != 0) {
@@ -1002,7 +1017,7 @@ int replay_ui_count(void)
 bool replay_ui_describe(int index, char* buffer, size_t size)
 {
     const ReplayCommand* command;
-    static const char* kinds[] = { "object", "location", "key", "cast", "wield", "wait", "learn", "give", "throw", "skill", "raise", "prowl", "panel", "save", "inspect", "transfer", "take", "drop", "pickup", "wear", "skill-level", "stat-level", "jam", "afflict", "poison", "use", "xp", "train", "hour", "encounter", "hover", "screenshot", "spawn", "invulnerable", "await-death", "remove" };
+    static const char* kinds[] = { "object", "location", "key", "cast", "wield", "wait", "learn", "give", "throw", "skill", "raise", "prowl", "panel", "save", "inspect", "transfer", "take", "drop", "pickup", "wear", "skill-level", "stat-level", "jam", "afflict", "poison", "use", "xp", "train", "hour", "encounter", "hover", "screenshot", "spawn", "invulnerable", "await-death", "remove", "examine" };
     int written;
     static const char* casts[] = { "self", "object", "location" };
 
@@ -1393,6 +1408,27 @@ void replay_ui_tick(void)
         }
         object_destroy(target_obj);
         tig_debug_printf("Replay: command %d removed '%s'\n", replay_next - 1, command->target);
+        return;
+    }
+
+    if (command->kind == REPLAY_KIND_EXAMINE) {
+        char text[2000];
+        const char* hint;
+
+        replay_stall_reported = false;
+        replay_next++;
+        if (!replay_resolve(command, &target_obj)) {
+            return;
+        }
+        if (!tb_ui_build_examine_text(pc_obj, target_obj, text)) {
+            tig_debug_printf("Replay: command %d: '%s' refuses to be examined\n",
+                replay_next - 1, command->target);
+            return;
+        }
+        intgame_examine_object(pc_obj, target_obj, text);
+        hint = creature_profile_examine_hint(creature_rules_profile(target_obj));
+        tig_debug_printf("Replay: command %d examines '%s': %s; in place of its reaction: %s\n",
+            replay_next - 1, command->target, text, hint != NULL ? hint : "-");
         return;
     }
 

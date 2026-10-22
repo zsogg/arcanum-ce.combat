@@ -235,6 +235,14 @@ const char* creature_profile_name(CreatureProfile profile)
     return creature_profile_names[profile];
 }
 
+const char* creature_profile_examine_hint(CreatureProfile profile)
+{
+    if (profile == CREATURE_PROFILE_PHANTOM) {
+        return "Only criticals, magic or explosives hurt it";
+    }
+    return NULL;
+}
+
 // ---------------------------------------------------------------------------
 // The engine side.
 // ---------------------------------------------------------------------------

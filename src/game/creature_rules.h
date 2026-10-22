@@ -90,6 +90,9 @@ unsigned int creature_profile_temporary(CreatureProfile profile, int hit_loc,
     int crit_hit_type);
 // Pure: the profile's name as the file spells it, or NULL.
 const char* creature_profile_name(CreatureProfile profile);
+// Pure: the line examining a creature of this profile shows in place of its
+// reaction, or NULL: a phantom's says what hurts it (2026-10-22).
+const char* creature_profile_examine_hint(CreatureProfile profile);
 
 void creature_rules_init(void);
 void creature_rules_exit(void);

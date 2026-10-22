@@ -55,6 +55,20 @@ TEST(every_profile_and_chart_has_its_name)
     }
 }
 
+TEST(only_a_phantom_says_what_hurts_it_when_examined)
+{
+    int index;
+
+    // 2026-10-22: the examine panel's line in place of the reaction.
+    CHECK_STR(creature_profile_examine_hint(CREATURE_PROFILE_PHANTOM),
+        "Only criticals, magic or explosives hurt it");
+    for (index = CREATURE_PROFILE_NONE; index < CREATURE_PROFILE_COUNT; index++) {
+        if (index != CREATURE_PROFILE_PHANTOM) {
+            CHECK(creature_profile_examine_hint((CreatureProfile)index) == NULL);
+        }
+    }
+}
+
 TEST(malformed_entries_are_refused_and_change_nothing)
 {
     CreatureRule rule = { 7, 1, 2, 3, 4 };
@@ -197,6 +211,7 @@ void test_creature_rules_suite(void)
 {
     RUN(an_entry_takes_any_of_its_keys);
     RUN(every_profile_and_chart_has_its_name);
+    RUN(only_a_phantom_says_what_hurts_it_when_examined);
     RUN(malformed_entries_are_refused_and_change_nothing);
     RUN(values_are_clamped);
     RUN(an_unlisted_creature_takes_the_profile_its_flags_give);

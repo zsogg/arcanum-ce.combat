@@ -9,6 +9,7 @@
 #include "game/broadcast.h"
 #include "game/combat.h"
 #include "game/combat_observer.h"
+#include "game/creature_rules.h"
 #include "game/critter.h"
 #include "game/curse.h"
 #include "game/damage_type.h"
@@ -7212,6 +7213,13 @@ void intgame_examine_critter(int64_t pc_obj, int64_t critter_obj, char* str)
                     "%s: %d",
                     mes_file_entry.str,
                     alignment / 10);
+            } else if (creature_profile_examine_hint(creature_rules_profile(critter_obj)) != NULL) {
+                // CE (creature profiles; zsogg, 2026-10-22): a phantom's line
+                // says what hurts it, in place of its reaction - the one
+                // thing a player needs to know before fighting it.
+                snprintf(buffer, sizeof(buffer),
+                    "%s",
+                    creature_profile_examine_hint(creature_rules_profile(critter_obj)));
             } else {
                 int reaction_value = reaction_get(critter_obj, pc_obj);
                 int reaction_level = reaction_translate(reaction_value);
