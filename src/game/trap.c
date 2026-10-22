@@ -53,6 +53,7 @@ static bool get_disarm_item_name(int64_t obj, int* name_ptr);
 void trigger_trap(int64_t obj, ScriptInvocation* invocation);
 static int64_t find_trap_source(int64_t obj, uint8_t id);
 static int64_t trap_credit_obj_get(int64_t obj);
+static void trap_log_describe(int64_t obj, char* buffer, size_t size);
 
 // 0x5B5F60
 static int trap_name_mes_nums[8] = {
@@ -113,6 +114,26 @@ void trap_exit(void)
 {
     animfx_list_exit(&trap_eye_candies);
     mes_unload(trap_mes_file);
+}
+
+// CE (trap spotting, 2026-10-22): an object as a log line names it - its
+// name as the player knows it, and its tile - so a playtest's log says which
+// trap was seen or set off, and by whom. Logging only.
+static void trap_log_describe(int64_t obj, char* buffer, size_t size)
+{
+    char name[256];
+    int64_t loc;
+
+    if (obj == OBJ_HANDLE_NULL) {
+        snprintf(buffer, size, "nobody");
+        return;
+    }
+    object_examine(obj, player_get_local_pc_obj(), name);
+    loc = obj_field_int64_get(obj, OBJ_F_LOCATION);
+    snprintf(buffer, size, "%s (%d,%d)",
+        name[0] != '\0' ? name : "?",
+        (int)LOCATION_GET_X(loc),
+        (int)LOCATION_GET_Y(loc));
 }
 
 // 0x4BBDD0
@@ -277,6 +298,15 @@ void trap_mark_known(int64_t pc_obj, int64_t trap_obj, int reason)
     }
 
     object_flags_set(trap_obj, OF_TRAP_SPOTTED);
+
+    if (reason == TRAP_KNOWN_SPOTTED) {
+        char trap_text[300];
+        char spotter_text[300];
+
+        trap_log_describe(trap_obj, trap_text, sizeof(trap_text));
+        trap_log_describe(pc_obj, spotter_text, sizeof(spotter_text));
+        tig_debug_printf("trap: %s spotted by %s\n", trap_text, spotter_text);
+    }
 
     if (obj_field_int32_get(trap_obj, OBJ_F_TYPE) == OBJ_TYPE_TRAP) {
         object_flags_unset(trap_obj, OF_DONTDRAW);
@@ -470,6 +500,8 @@ bool trap_party_spot_ahead(int64_t mover_obj, const int64_t* locs, int count)
     ObjectNode* node;
     int64_t spotter_obj;
     bool spotted = false;
+    char trap_text[300];
+    char mover_text[300];
 
     for (index = 0; index < count && !spotted; index++) {
         object_list_location(locs[index], OBJ_TM_TRAP, &traps);
@@ -480,13 +512,17 @@ bool trap_party_spot_ahead(int64_t mover_obj, const int64_t* locs, int count)
                 continue;
             }
             spotter_obj = trap_party_spotter(mover_obj, node->obj);
+            trap_log_describe(node->obj, trap_text, sizeof(trap_text));
+            trap_log_describe(mover_obj, mover_text, sizeof(mover_text));
             if (trap_attempt_spot(spotter_obj, node->obj)) {
-                tig_debug_printf("trap spotting: a trap %d tile(s) ahead spotted%s\n",
-                    index + 1, spotter_obj == mover_obj ? " by the mover" : " for the mover");
+                tig_debug_printf("trap spotting: %s, %d tile(s) ahead of %s, spotted%s\n",
+                    trap_text, index + 1, mover_text,
+                    spotter_obj == mover_obj ? " by the mover" : " for the mover");
                 spotted = true;
                 break;
             }
-            tig_debug_printf("trap spotting: a trap %d tile(s) ahead missed\n", index + 1);
+            tig_debug_printf("trap spotting: %s, %d tile(s) ahead of %s, missed\n",
+                trap_text, index + 1, mover_text);
             trap_missed_add(node->obj);
         }
         object_list_destroy(&traps);
@@ -832,6 +868,14 @@ bool trap_script_execute(ScriptInvocation* invocation)
         mes_file_entry.num = 1;
         mes_get_msg(trap_mes_file, &mes_file_entry);
         tf_add(invocation->triggerer_obj, TF_TYPE_RED, mes_file_entry.str);
+    }
+    {
+        char trap_text[300];
+        char triggerer_text[300];
+
+        trap_log_describe(invocation->attachee_obj, trap_text, sizeof(trap_text));
+        trap_log_describe(invocation->triggerer_obj, triggerer_text, sizeof(triggerer_text));
+        tig_debug_printf("trap: %s set off by %s\n", trap_text, triggerer_text);
     }
 
     if (invocation->script->num >= TRAP_SCRIPT_FIRST && invocation->script->num < TRAP_SCRIPT_COUNT) {
