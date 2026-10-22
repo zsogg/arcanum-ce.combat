@@ -199,11 +199,19 @@ typedef enum ReplayKind {
     //       player, which later rows name `@<name>` wherever they take an
     //       object's identity; the log gives its own (2026-10-21, creature
     //       profiles: a bench meets any creature, not only the map's). A test
-    //       row.
+    //       row. Since 2026-10-22 it ignores its turn, and joins a running
+    //       turn-based encounter.
     //   invulnerable on
     //       the player takes no damage (`OF_INVULNERABLE`, which `combat_dmg`
     //       honours), so a bench can measure what its blows do to a creature
     //       that could kill the fighter (2026-10-21). A test row.
+    //   await-death <id>
+    //       hold the rows after it until that critter - usually a spawned
+    //       one, `@<name>` - is dead or gone, in either mode and whatever its
+    //       turn says, as `wait` holds for a time (2026-10-22, creature
+    //       profiles: a playtest's next creature comes when the last has
+    //       died, not when an encounter ends, which switching turn-based off
+    //       and on did early). A test row.
     REPLAY_KIND_SKILL_LEVEL,
     REPLAY_KIND_STAT_LEVEL,
     REPLAY_KIND_JAM,
@@ -218,6 +226,7 @@ typedef enum ReplayKind {
     REPLAY_KIND_SCREENSHOT,
     REPLAY_KIND_SPAWN,
     REPLAY_KIND_INVULNERABLE,
+    REPLAY_KIND_AWAIT_DEATH,
 } ReplayKind;
 
 // A cast's target, which is a third shape: the caster, an object or a tile.
@@ -801,6 +810,12 @@ static bool replay_parse_line(const char* text, ReplayCommand* command)
         return index == count;
     }
 
+    if (strcmp(kind, "await-death") == 0) {
+        command->kind = REPLAY_KIND_AWAIT_DEATH;
+        replay_copy_target(command, tokens[index++]);
+        return index == count;
+    }
+
     if (strcmp(kind, "invulnerable") == 0) {
         command->kind = REPLAY_KIND_INVULNERABLE;
         if (strcmp(tokens[index++], "on") != 0) {
@@ -972,7 +987,7 @@ int replay_ui_count(void)
 bool replay_ui_describe(int index, char* buffer, size_t size)
 {
     const ReplayCommand* command;
-    static const char* kinds[] = { "object", "location", "key", "cast", "wield", "wait", "learn", "give", "throw", "skill", "raise", "prowl", "panel", "save", "inspect", "transfer", "take", "drop", "pickup", "wear", "skill-level", "stat-level", "jam", "afflict", "poison", "use", "xp", "train", "hour", "encounter", "hover", "screenshot", "spawn", "invulnerable" };
+    static const char* kinds[] = { "object", "location", "key", "cast", "wield", "wait", "learn", "give", "throw", "skill", "raise", "prowl", "panel", "save", "inspect", "transfer", "take", "drop", "pickup", "wear", "skill-level", "stat-level", "jam", "afflict", "poison", "use", "xp", "train", "hour", "encounter", "hover", "screenshot", "spawn", "invulnerable", "await-death" };
     int written;
     static const char* casts[] = { "self", "object", "location" };
 
@@ -1150,6 +1165,24 @@ void replay_ui_tick(void)
         return;
     }
 
+    // Creature profiles (2026-10-22): a hold too, until its critter is dead.
+    // A destroyed or freed critter counts as dead - a corpse can decay.
+    if (command->kind == REPLAY_KIND_AWAIT_DEATH) {
+        if (!replay_resolve(command, &target_obj)) {
+            replay_next++;
+            return;
+        }
+        if (obj_handle_is_valid(target_obj)
+            && (obj_field_int32_get(target_obj, OBJ_F_FLAGS) & OF_DESTROYED) == 0
+            && !critter_is_dead(target_obj)) {
+            return;
+        }
+        replay_stall_reported = false;
+        replay_next++;
+        tig_debug_printf("Replay: command %d: '%s' is dead\n", replay_next - 1, command->target);
+        return;
+    }
+
     // One command at a time, and only while the actor is free. A command
     // submitted over a running goal would be refused or would replace it, and
     // either way the replay would stop matching what it is reproducing.
@@ -1177,7 +1210,12 @@ void replay_ui_tick(void)
         return;
     }
 
-    if (!replay_mode_matches(command)) {
+    // Creature profiles (2026-10-22): a spawn is a test row, not a click, so
+    // there is no other action the mode could turn it into, and it ignores
+    // its turn as `wait` and `await-death` do. Held to its turn, a
+    // playtest's next creature waited for the encounter to end, which the
+    // range's own wolves, fleeing the player, never let happen.
+    if (command->kind != REPLAY_KIND_SPAWN && !replay_mode_matches(command)) {
         // Say it once - the flag is cleared only when a command is actually
         // submitted, not on the way past this gate. It used to be cleared here,
         // which meant a stall the *next* check caught reported itself every
@@ -1316,6 +1354,12 @@ void replay_ui_tick(void)
             sizeof(replay_spawned[replay_spawned_count].name), "%s", command->target);
         replay_spawned[replay_spawned_count].obj = spawned_obj;
         replay_spawned_count++;
+        // Into a running encounter's turn order, as a critter that reacts to
+        // danger joins it (`ai.c`); otherwise it stands idle until something
+        // draws it in (measured 2026-10-22).
+        if (combat_turn_based_is_active()) {
+            combat_turn_based_add_critter(spawned_obj);
+        }
         combat_observer_object_id(spawned_obj, identity);
         tig_debug_printf("Replay: command %d spawned '%s' (prototype %d) as %s\n",
             replay_next - 1, command->target, command->proto, identity);

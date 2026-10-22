@@ -913,6 +913,17 @@ TEST(the_display_and_creature_rows_load_into_what_they_say)
     CHECK(!load_script("0 invulnerable on now\n"));
 }
 
+TEST(the_await_death_row_names_the_critter_it_waits_for)
+{
+    // Creature profiles (2026-10-22): a hold until a critter is dead, so a
+    // playtest's next creature comes when the last has died.
+    CHECK(load_script("0 spawn 28341 3 -2 skeleton\n1 await-death @skeleton\n"));
+    CHECK_INT(replay_ui_count(), 2);
+    CHECK(row_is(1, "turn=1 now=0 kind=await-death target=@skeleton loc=0 aim=0 spell=0 cast=- wait=0"));
+    CHECK(!load_script("0 await-death\n"));
+    CHECK(!load_script("0 await-death @skeleton now\n"));
+}
+
 TEST(the_afflict_row_names_a_debuff_critical)
 {
     // Magic MG-2 (2026-10-11): a test row that gives the player a debuff
@@ -1938,6 +1949,7 @@ void test_combat_observer_suite(void)
     RUN(the_persistence_rows_load_into_what_they_say);
     RUN(the_jam_row_loads_alone);
     RUN(the_display_and_creature_rows_load_into_what_they_say);
+    RUN(the_await_death_row_names_the_critter_it_waits_for);
     RUN(the_afflict_row_names_a_debuff_critical);
     RUN(the_poison_row_sets_a_level_on_the_player_or_a_critter);
     RUN(the_use_row_names_a_prototype_and_perhaps_a_target);
