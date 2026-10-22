@@ -32,6 +32,9 @@ static const struct {
     { CRIT_EFFECT_DAZZLED, "dazzled", "Dazzled" },
     { CRIT_EFFECT_EXPOSED, "exposed", "Exposed" },
     { CRIT_EFFECT_UNFOCUSED, "unfocused", "Unfocused" },
+    { CRIT_EFFECT_MALFUNCTION, "malfunction", "Malfunction" },
+    { CRIT_EFFECT_DISRUPTED, "disrupted", "Disrupted" },
+    { CRIT_EFFECT_JAMMED_ARM, "jammed_arm", "Jammed arm" },
 };
 
 // MG-2: what attacks against an Exposed critter are made easier by.
@@ -90,7 +93,7 @@ bool crit_effects_entry_unfocused(const CritEffectEntry* entry)
 
 int crit_effects_entry_to_hit_penalty(const CritEffectEntry* entry)
 {
-    return (entry->effects & (CRIT_EFFECT_NUMBED_ARM | CRIT_EFFECT_DAZZLED)) != 0
+    return (entry->effects & (CRIT_EFFECT_NUMBED_ARM | CRIT_EFFECT_DAZZLED | CRIT_EFFECT_JAMMED_ARM)) != 0
         ? CRIT_EFFECT_TO_HIT_PENALTY
         : 0;
 }
@@ -103,7 +106,8 @@ int crit_effects_entry_move_multiplier(const CritEffectEntry* entry, bool turn_b
 int crit_effects_entry_turn_action_points(const CritEffectEntry* entry, int action_points)
 {
     // Only the turn that begins after it was dealt is halved.
-    if (!entry->turn_started && (entry->effects & CRIT_EFFECT_STAGGERED) != 0) {
+    if (!entry->turn_started
+        && (entry->effects & (CRIT_EFFECT_STAGGERED | CRIT_EFFECT_MALFUNCTION | CRIT_EFFECT_DISRUPTED)) != 0) {
         return action_points / 2;
     }
 

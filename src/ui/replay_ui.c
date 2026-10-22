@@ -19,6 +19,7 @@
 #include "game/item.h"
 #include "game/level.h"
 #include "game/light.h"
+#include "game/location.h"
 #include "game/obj.h"
 #include "game/obj_id.h"
 #include "game/obj_pool.h"
@@ -193,6 +194,16 @@ typedef enum ReplayKind {
     //       a screenshot now, through the shipped F12 path, as `-screenshot=N`
     //       takes one at a frame: of the state the rows before it set up. The
     //       label goes in the log beside it, to say which shot is which.
+    //   spawn <prototype> <dx> <dy> <name>
+    //       a new critter of that prototype, `dx` and `dy` tiles from the
+    //       player, which later rows name `@<name>` wherever they take an
+    //       object's identity; the log gives its own (2026-10-21, creature
+    //       profiles: a bench meets any creature, not only the map's). A test
+    //       row.
+    //   invulnerable on
+    //       the player takes no damage (`OF_INVULNERABLE`, which `combat_dmg`
+    //       honours), so a bench can measure what its blows do to a creature
+    //       that could kill the fighter (2026-10-21). A test row.
     REPLAY_KIND_SKILL_LEVEL,
     REPLAY_KIND_STAT_LEVEL,
     REPLAY_KIND_JAM,
@@ -205,6 +216,8 @@ typedef enum ReplayKind {
     REPLAY_KIND_ENCOUNTER,
     REPLAY_KIND_HOVER,
     REPLAY_KIND_SCREENSHOT,
+    REPLAY_KIND_SPAWN,
+    REPLAY_KIND_INVULNERABLE,
 } ReplayKind;
 
 // A cast's target, which is a third shape: the caster, an object or a tile.
@@ -237,7 +250,19 @@ typedef struct ReplayCommand {
     int stat;
     // `prowl`: 1 on, 0 off.
     int prowl;
+    // `spawn`: the tiles from the player.
+    int dx;
+    int dy;
 } ReplayCommand;
+
+// `spawn`'s critters, by the name later rows give them after `@`.
+#define REPLAY_MAX_SPAWNED 16
+
+static struct {
+    char name[REPLAY_IDENTITY_SIZE];
+    int64_t obj;
+} replay_spawned[REPLAY_MAX_SPAWNED];
+static int replay_spawned_count;
 
 static ReplayCommand replay_commands[REPLAY_MAX_COMMANDS];
 static int replay_count;
@@ -764,6 +789,26 @@ static bool replay_parse_line(const char* text, ReplayCommand* command)
         return index == count;
     }
 
+    if (strcmp(kind, "spawn") == 0) {
+        command->kind = REPLAY_KIND_SPAWN;
+        if (!replay_parse_int(tokens[index++], &(command->proto))
+            || command->proto <= 20 || index + 2 >= count
+            || !replay_parse_int(tokens[index++], &(command->dx))
+            || !replay_parse_int(tokens[index++], &(command->dy))) {
+            return false;
+        }
+        replay_copy_target(command, tokens[index++]);
+        return index == count;
+    }
+
+    if (strcmp(kind, "invulnerable") == 0) {
+        command->kind = REPLAY_KIND_INVULNERABLE;
+        if (strcmp(tokens[index++], "on") != 0) {
+            return false;
+        }
+        return index == count;
+    }
+
     if (strcmp(kind, "screenshot") == 0) {
         command->kind = REPLAY_KIND_SCREENSHOT;
         if (index >= count) {
@@ -873,6 +918,11 @@ static bool replay_parse_line(const char* text, ReplayCommand* command)
             || command->proto <= 0 || index >= count) {
             return false;
         }
+        // Creature profiles (2026-10-21): or at a spawned critter's tile.
+        if (tokens[index][0] == '@') {
+            replay_copy_target(command, tokens[index++]);
+            return index == count;
+        }
         command->loc = (int64_t)strtoll(tokens[index++], NULL, 10);
         return index == count && command->loc != 0;
     }
@@ -922,7 +972,7 @@ int replay_ui_count(void)
 bool replay_ui_describe(int index, char* buffer, size_t size)
 {
     const ReplayCommand* command;
-    static const char* kinds[] = { "object", "location", "key", "cast", "wield", "wait", "learn", "give", "throw", "skill", "raise", "prowl", "panel", "save", "inspect", "transfer", "take", "drop", "pickup", "wear", "skill-level", "stat-level", "jam", "afflict", "poison", "use", "xp", "train", "hour", "encounter", "hover", "screenshot" };
+    static const char* kinds[] = { "object", "location", "key", "cast", "wield", "wait", "learn", "give", "throw", "skill", "raise", "prowl", "panel", "save", "inspect", "transfer", "take", "drop", "pickup", "wear", "skill-level", "stat-level", "jam", "afflict", "poison", "use", "xp", "train", "hour", "encounter", "hover", "screenshot", "spawn", "invulnerable" };
     int written;
     static const char* casts[] = { "self", "object", "location" };
 
@@ -964,6 +1014,10 @@ bool replay_ui_describe(int index, char* buffer, size_t size)
     if (command->kind == REPLAY_KIND_PROWL && written >= 0 && (size_t)written < size) {
         snprintf(buffer + written, size - (size_t)written, " prowl=%d", command->prowl);
     }
+    if (command->kind == REPLAY_KIND_SPAWN && written >= 0 && (size_t)written < size) {
+        snprintf(buffer + written, size - (size_t)written, " proto=%d dx=%d dy=%d",
+            command->proto, command->dx, command->dy);
+    }
     return true;
 }
 
@@ -976,6 +1030,7 @@ bool replay_ui_load(const char* path)
     replay_next = 0;
     replay_loaded = false;
     replay_stall_reported = false;
+    replay_spawned_count = 0;
     replay_waiting = false;
 
     stream = fopen(path, "rb");
@@ -1029,6 +1084,20 @@ int replay_ui_remaining(void)
 static bool replay_resolve(const ReplayCommand* command, int64_t* obj_ptr)
 {
     ObjectID oid;
+    int index;
+
+    // A critter a `spawn` row made, by its name.
+    if (command->target[0] == '@') {
+        for (index = 0; index < replay_spawned_count; index++) {
+            if (strcmp(replay_spawned[index].name, command->target + 1) == 0) {
+                *obj_ptr = replay_spawned[index].obj;
+                return true;
+            }
+        }
+        tig_debug_printf("Replay: command %d names '%s', which no spawn row made\n",
+            replay_next, command->target);
+        return false;
+    }
 
     if (!objid_id_from_str(&oid, command->target)) {
         tig_debug_printf("Replay: command %d names an unreadable target '%s'\n",
@@ -1050,7 +1119,6 @@ void replay_ui_tick(void)
 {
     ReplayCommand* command;
     TargetDescriptor td;
-    ObjectID oid;
     int64_t pc_obj;
     int64_t target_obj;
 
@@ -1223,6 +1291,43 @@ void replay_ui_tick(void)
         }
         reload_jam(pc_obj, weapon_obj);
         tig_debug_printf("Replay: command %d jammed the wielded gun\n", replay_next - 1);
+        return;
+    }
+
+    if (command->kind == REPLAY_KIND_SPAWN) {
+        int64_t proto_obj;
+        int64_t loc;
+        int64_t spawned_obj;
+        char identity[COMBAT_OBSERVER_IDENTITY_SIZE];
+
+        replay_stall_reported = false;
+        replay_next++;
+        proto_obj = proto_get_by_description(command->proto - 20);
+        loc = obj_field_int64_get(pc_obj, OBJ_F_LOCATION);
+        loc = location_make(LOCATION_GET_X(loc) + command->dx, LOCATION_GET_Y(loc) + command->dy);
+        if (proto_obj == OBJ_HANDLE_NULL
+            || replay_spawned_count >= REPLAY_MAX_SPAWNED
+            || !object_create(proto_obj, loc, &spawned_obj)) {
+            tig_debug_printf("Replay: command %d could not spawn prototype %d\n",
+                replay_next - 1, command->proto);
+            return;
+        }
+        snprintf(replay_spawned[replay_spawned_count].name,
+            sizeof(replay_spawned[replay_spawned_count].name), "%s", command->target);
+        replay_spawned[replay_spawned_count].obj = spawned_obj;
+        replay_spawned_count++;
+        combat_observer_object_id(spawned_obj, identity);
+        tig_debug_printf("Replay: command %d spawned '%s' (prototype %d) as %s\n",
+            replay_next - 1, command->target, command->proto, identity);
+        return;
+    }
+
+    if (command->kind == REPLAY_KIND_INVULNERABLE) {
+        replay_stall_reported = false;
+        replay_next++;
+        obj_field_int32_set(pc_obj, OBJ_F_FLAGS,
+            obj_field_int32_get(pc_obj, OBJ_F_FLAGS) | OF_INVULNERABLE);
+        tig_debug_printf("Replay: command %d made the player invulnerable\n", replay_next - 1);
         return;
     }
 
@@ -1536,9 +1641,16 @@ void replay_ui_tick(void)
 
     if (command->kind == REPLAY_KIND_THROW) {
         int64_t item_obj;
+        int64_t throw_loc = command->loc;
 
         replay_stall_reported = false;
         replay_next++;
+        if (command->target[0] == '@') {
+            if (!replay_resolve(command, &target_obj)) {
+                return;
+            }
+            throw_loc = obj_field_int64_get(target_obj, OBJ_F_LOCATION);
+        }
         // A thrown item comes from the pack, not the hands.
         item_obj = replay_find_carried(pc_obj, command->proto, true);
         if (item_obj == OBJ_HANDLE_NULL) {
@@ -1550,7 +1662,7 @@ void replay_ui_tick(void)
                 replay_next - 1);
             return;
         }
-        if (!anim_goal_throw_item(pc_obj, item_obj, command->loc)) {
+        if (!anim_goal_throw_item(pc_obj, item_obj, throw_loc)) {
             tig_debug_printf("Replay: command %d could not throw prototype %d\n",
                 replay_next - 1, command->proto);
         }
@@ -1635,20 +1747,11 @@ void replay_ui_tick(void)
     }
 
     memset(&td, 0, sizeof(td));
-    if (!objid_id_from_str(&oid, command->target)) {
-        tig_debug_printf("Replay: command %d names an unreadable target '%s'\n",
-            replay_next, command->target);
-        replay_next++;
-        return;
-    }
-
-    target_obj = obj_pool_perm_lookup(oid);
-    if (target_obj == OBJ_HANDLE_NULL) {
-        // The recorded object is not in this run. That is a real
-        // divergence - a replay cannot act on something absent - so say so
-        // and move on rather than silently skipping to a different target.
-        tig_debug_printf("Replay: command %d targets '%s', absent from this run\n",
-            replay_next, command->target);
+    // An unreadable identity, or a recorded object not in this run, is a real
+    // divergence - a replay cannot act on something absent - so
+    // `replay_resolve` says so and the replay moves on rather than silently
+    // skipping to a different target. A spawned critter's name resolves too.
+    if (!replay_resolve(command, &target_obj)) {
         replay_next++;
         return;
     }

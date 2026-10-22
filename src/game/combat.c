@@ -13,6 +13,7 @@
 #include "game/animfx.h"
 #include "game/armor_rules.h"
 #include "game/ci.h"
+#include "game/creature_rules.h"
 #include "game/criticals.h"
 #include "game/critter.h"
 #include "game/descriptions.h"
@@ -71,6 +72,8 @@ static bool combat_consume_ammo(int64_t weapon_obj, int64_t critter_obj, int cnt
 static void combat_calc_dmg(CombatContext* combat);
 static void combat_apply_resistance(CombatContext* combat);
 static int combat_armor_resolve(CombatContext* combat);
+static bool combat_phantom_ward(CombatContext* combat);
+static int combat_creature_firearm_scale(CombatContext* combat);
 static int combat_play_hit_fx(CombatContext* combat);
 static void combat_process_taunts(CombatContext* combat);
 static void combat_turn_based_anims_complete(void);
@@ -299,6 +302,8 @@ bool combat_init(GameInitInfo* init_info)
     weapon_rules_init();
     spell_rules_init();
     armor_rules_init();
+    // CE (creature profiles): the creature sheet.
+    creature_rules_init();
     settings_register(&settings, COMBAT_TAUNTS_KEY, "0", NULL);
 
     return true;
@@ -311,6 +316,7 @@ void combat_exit(void)
     weapon_rules_exit();
     spell_rules_exit();
     armor_rules_exit();
+    creature_rules_exit();
     combat_turn_based_end();
     if (!combat_editor) {
         animfx_list_exit(&combat_eye_candies);
@@ -919,6 +925,7 @@ void combat_process_attack_result(CombatContext* combat)
         }
 
         combat_calc_dmg(combat);
+        combat_phantom_ward(combat);
         combat_dmg(combat);
 
         if ((combat->flags & CF_CRITICAL) != 0) {
@@ -1291,6 +1298,7 @@ void combat_process_melee_attack(CombatContext* combat)
         }
 
         combat_calc_dmg(combat);
+        combat_phantom_ward(combat);
         combat_dmg(combat);
 
         if ((combat->flags & CF_CRITICAL) != 0) {
@@ -1761,6 +1769,20 @@ void combat_dmg(CombatContext* combat)
     int armor_normal = combat_armor_resolve(combat);
     if (armor_normal >= 0) {
         combat->dam[DAMAGE_TYPE_NORMAL] = 0;
+    }
+
+    // CE (creature profiles): a creature the sheet gives a FirearmScale takes
+    // that share of a firearm hit, after its armor, to the nearest point.
+    int firearm_scale = combat_creature_firearm_scale(combat);
+    if (firearm_scale != 100) {
+        if (armor_normal > 0) {
+            armor_normal = (armor_normal * firearm_scale + 50) / 100;
+        }
+        for (int type = 0; type < DAMAGE_TYPE_COUNT; type++) {
+            if (combat->dam[type] > 0) {
+                combat->dam[type] = (combat->dam[type] * firearm_scale + 50) / 100;
+            }
+        }
     }
 
     combat_apply_resistance(combat);
@@ -2758,6 +2780,9 @@ void combat_process_crit_hit(CombatContext* combat)
     unsigned int flags_before;
     unsigned int resisted;
     unsigned int temporary = 0;
+    CreatureProfile profile;
+    bool bodily_allowed;
+    bool knockdown_allowed;
 
     if (combat->target_obj == OBJ_HANDLE_NULL) {
         return;
@@ -2786,7 +2811,21 @@ void combat_process_crit_hit(CombatContext* combat)
     combat_observe_winded_fatigue = 0;
     combat_observe_winded_from = 0;
 
-    crit_body_type = obj_field_int32_get(combat->target_obj, OBJ_F_CRITTER_CRIT_HIT_CHART);
+    // CE (creature profiles): the creature sheet's chart, if it lists one.
+    crit_body_type = creature_rules_body_chart(combat->target_obj);
+
+    // CE (creature profiles): which bodily effects the target's body can
+    // suffer. Stock: none for an amorphous creature, and of the rest only
+    // knockdown for the undead. Under `creature profiles`, by its profile.
+    profile = creature_rules_profile(combat->target_obj);
+    if (profile == CREATURE_PROFILE_NONE) {
+        knockdown_allowed = crit_body_type != CRIT_BODY_TYPE_AMORPHOUS;
+        bodily_allowed = knockdown_allowed
+            && (obj_field_int32_get(combat->target_obj, OBJ_F_CRITTER_FLAGS) & OCF_UNDEAD) == 0;
+    } else {
+        knockdown_allowed = creature_profile_knockdown(profile);
+        bodily_allowed = creature_profile_bodily(profile);
+    }
 
     if (combat->weapon_obj != OBJ_HANDLE_NULL
         && obj_field_int32_get(combat->weapon_obj, OBJ_F_TYPE) == OBJ_TYPE_WEAPON) {
@@ -2828,9 +2867,9 @@ void combat_process_crit_hit(CombatContext* combat)
         }
     }
 
-    if (crit_body_type != CRIT_BODY_TYPE_AMORPHOUS) {
+    if (knockdown_allowed || bodily_allowed) {
         critter_flags = obj_field_int32_get(combat->target_obj, OBJ_F_CRITTER_FLAGS);
-        if ((critter_flags & OCF_UNDEAD) == 0) {
+        if (bodily_allowed) {
             helmet_obj = item_wield_get(combat->target_obj, ITEM_INV_LOC_HELMET);
 
             difficulty = chance + 5;
@@ -2871,7 +2910,9 @@ void combat_process_crit_hit(CombatContext* combat)
                         break;
                     }
 
-                    if (combat->hit_loc == HIT_LOC_LEG) {
+                    // CE (creature profiles): nor a bird's legs.
+                    if (combat->hit_loc == HIT_LOC_LEG
+                        && !(profile != CREATURE_PROFILE_NONE && crit_body_type == CRIT_BODY_TYPE_AVIAN)) {
                         if (random_between(1, 100) <= chance + 1
                             && !critter_check_stat(combat->target_obj, STAT_CONSTITUTION, -5)) {
                             combat->dam_flags |= CDF_CRIPPLE_LEG;
@@ -2912,12 +2953,15 @@ void combat_process_crit_hit(CombatContext* combat)
             }
         }
 
-        if (crit_body_type == CRIT_BODY_TYPE_BIPED) {
+        if (knockdown_allowed && crit_body_type == CRIT_BODY_TYPE_BIPED) {
             difficulty = chance + 5;
 
             if (crit_hit_type == CRIT_HIT_TYPE_CRUSHING) {
                 difficulty += 5;
             }
+
+            // CE (creature profiles): a crushing blow on bone, 10 more.
+            difficulty += creature_profile_knockdown_bonus(profile, crit_hit_type);
 
             if (combat->hit_loc == HIT_LOC_LEG) {
                 difficulty += 10;
@@ -2956,13 +3000,15 @@ void combat_process_crit_hit(CombatContext* combat)
     // made mostly temporary: a crippling or blinding leaves its temporary
     // version and stays permanent only on a second roll, a scar likewise, and
     // a fumble's hit on its wielder (0x8) never scars. Undead and amorphous
-    // creatures are spared, as from the stock bodily effects.
+    // creatures are spared, as from the stock bodily effects - unless
+    // `creature profiles` gives their bodies effects of their own.
     if (feature_enabled(FEATURE_CRITICAL_EFFECTS)
-        && crit_body_type != CRIT_BODY_TYPE_AMORPHOUS
-        && (obj_field_int32_get(combat->target_obj, OBJ_F_CRITTER_FLAGS) & OCF_UNDEAD) == 0) {
+        && (profile != CREATURE_PROFILE_NONE || bodily_allowed)) {
         unsigned int added = combat->dam_flags & ~flags_before;
 
-        temporary = crit_effects_for_location(combat->hit_loc);
+        temporary = profile != CREATURE_PROFILE_NONE
+            ? creature_profile_temporary(profile, combat->hit_loc, crit_hit_type)
+            : crit_effects_for_location(combat->hit_loc);
         if ((added & CDF_CRIPPLE_ARM) != 0
             && random_between(1, 100) > CRIT_EFFECT_PERMANENT_CHANCE) {
             combat->dam_flags &= ~CDF_CRIPPLE_ARM;
@@ -3371,6 +3417,12 @@ static int combat_armor_natural(int64_t critter_obj)
     int natural;
     int undead_scale;
 
+    // CE (creature profiles): the creature sheet's natural protection, if it
+    // lists one, in place of all of this.
+    if (creature_rules_natural(critter_obj, &natural)) {
+        return natural;
+    }
+
     effect_resistance_split(critter_obj, RESISTANCE_TYPE_NORMAL, &innate, &unused);
     natural = obj_arrayfield_int32_get(critter_obj, OBJ_F_RESISTANCE_IDX, RESISTANCE_TYPE_NORMAL) + innate;
     // The undead keep a share of it (zsogg, 2026-10-03), to the nearest point.
@@ -3403,6 +3455,11 @@ int combat_armor_expected_permille(int64_t weapon_obj, int64_t target_obj)
     if (!combat_armor_weapon_penetration(weapon_obj, false, &penetration)) {
         return -1;
     }
+    // CE (creature profiles): a phantom takes nothing from an ordinary blow,
+    // so an NPC that has spells or another answer looks for it.
+    if (creature_rules_profile(target_obj) == CREATURE_PROFILE_PHANTOM) {
+        return 0;
+    }
 
     hit.worn.helmet = combat_armor_piece(target_obj, ITEM_INV_LOC_HELMET);
     hit.worn.body = combat_armor_piece(target_obj, ITEM_INV_LOC_ARMOR);
@@ -3420,7 +3477,51 @@ int combat_armor_expected_permille(int64_t weapon_obj, int64_t target_obj)
         block_chance = 0;
     }
 
+    // CE (creature profiles): and a firearm's share the sheet gives it.
+    if (weapon_obj != OBJ_HANDLE_NULL
+        && obj_field_int32_get(weapon_obj, OBJ_F_TYPE) == OBJ_TYPE_WEAPON
+        && item_weapon_skill(weapon_obj) == SKILL_FIREARMS) {
+        return penetration_expected_permille(&hit, block_chance)
+            * creature_rules_firearm_scale(target_obj) / 100;
+    }
+
     return penetration_expected_permille(&hit, block_chance);
+}
+
+// CE (creature profiles): a phantom is hurt by no weapon blow but a critical
+// one. Called where a weapon hit's damage is worked out, so a spell, an
+// explosion or a trap never meets it; the blow still lands, and a weapon's
+// on-hit spell still goes off. True when the blow was turned.
+static bool combat_phantom_ward(CombatContext* combat)
+{
+    int type;
+
+    if ((combat->flags & CF_CRITICAL) != 0
+        || creature_rules_profile(combat->target_obj) != CREATURE_PROFILE_PHANTOM) {
+        return false;
+    }
+
+    for (type = 0; type < DAMAGE_TYPE_COUNT; type++) {
+        combat->dam[type] = 0;
+    }
+    tf_add(combat->target_obj, TF_TYPE_WHITE, "No effect");
+    tig_debug_printf("creature profiles: a phantom is unharmed by an ordinary blow\n");
+    return true;
+}
+
+// CE (creature profiles): the share of a weapon hit's damage the target takes
+// under the creature sheet's FirearmScale - a fired shot only, not a thrown
+// weapon, a trap or a spell - or 100.
+static int combat_creature_firearm_scale(CombatContext* combat)
+{
+    if ((combat->flags & CF_HIT) == 0
+        || (combat->flags & (0x40 | 0x80 | 0x100 | CF_TRAP)) != 0
+        || combat->weapon_obj == OBJ_HANDLE_NULL
+        || obj_field_int32_get(combat->weapon_obj, OBJ_F_TYPE) != OBJ_TYPE_WEAPON
+        || item_weapon_skill(combat->weapon_obj) != SKILL_FIREARMS) {
+        return 100;
+    }
+    return creature_rules_firearm_scale(combat->target_obj);
 }
 
 static int combat_armor_resolve(CombatContext* combat)
@@ -3506,6 +3607,11 @@ static int combat_armor_resolve(CombatContext* combat)
         // CE (criticals, milestone CR-3): a Precise weapon's critical always
         // finds the gap, under `firearm criticals`. The roll is still drawn.
         if (weapon_rules_crit_style(combat->weapon_obj) == WEAPON_CRIT_STYLE_PRECISE) {
+            hit.gap = true;
+        }
+        // CE (creature profiles): so does every critical on a phantom - the
+        // only blow that hurts it lands solidly.
+        if (creature_rules_profile(combat->target_obj) == CREATURE_PROFILE_PHANTOM) {
             hit.gap = true;
         }
     }

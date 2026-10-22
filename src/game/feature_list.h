@@ -110,5 +110,12 @@ FEATURE(AMBUSH_SAFEGUARD, "ambush safeguard", false)
 // restored the original's (the healer, not the patient, may not be undead or
 // mechanical). zsogg's preference, as an option.
 FEATURE(HEAL_LIVING_PATIENTS, "heal living patients", false)
+// Creature profiles (zsogg, 2026-10-21), `creature_rules.c`: a critical hit
+// does what suits the creature's body - living, skeletal or fleshy undead,
+// mechanical, spirit or phantom - and the creature sheet
+// (`rules/creatures.mes`) can set a creature's body chart, its natural
+// protection and the share of a firearm hit it takes. A phantom is hurt only
+// by a critical hit (which always finds the gap), magic or an explosive.
+FEATURE(CREATURE_PROFILES, "creature profiles", false)
 
 // clang-format on

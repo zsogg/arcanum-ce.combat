@@ -886,6 +886,33 @@ TEST(the_jam_row_loads_alone)
     CHECK(!load_script("0 jam gun now\n"));
 }
 
+TEST(the_display_and_creature_rows_load_into_what_they_say)
+{
+    // The Combat Rebalance displays (2026-10-21): hover and screenshot; and
+    // creature profiles (2026-10-21): a critter from its prototype, named for
+    // later rows, and an invulnerable player.
+    CHECK(load_script(
+        "1 hover G_00000084_1104_4040_8000_000000000411\n"
+        "1 screenshot hover-full-turn\n"
+        "0 spawn 28341 3 -2 skeleton\n"
+        "1 object @skeleton 2\n"
+        "0 invulnerable on\n"
+        "1 throw 15152 @skeleton\n"));
+    CHECK_INT(replay_ui_count(), 6);
+    CHECK(row_is(0, "turn=1 now=0 kind=hover target=G_00000084_1104_4040_8000_000000000411 loc=0 aim=0 spell=0 cast=- wait=0"));
+    CHECK(row_is(1, "turn=1 now=0 kind=screenshot target=hover-full-turn loc=0 aim=0 spell=0 cast=- wait=0"));
+    CHECK(row_is(2, "turn=0 now=0 kind=spawn target=skeleton loc=0 aim=0 spell=0 cast=- wait=0 proto=28341 dx=3 dy=-2"));
+    CHECK(row_is(3, "turn=1 now=0 kind=object target=@skeleton loc=0 aim=2 spell=0 cast=- wait=0"));
+    CHECK(row_is(4, "turn=0 now=0 kind=invulnerable target= loc=0 aim=0 spell=0 cast=- wait=0"));
+    CHECK(row_is(5, "turn=1 now=0 kind=throw target=@skeleton loc=0 aim=0 spell=0 cast=- wait=0 proto=15152 count=0"));
+    CHECK(!load_script("0 hover\n"));
+    CHECK(!load_script("0 spawn 28341 3 skeleton\n"));
+    CHECK(!load_script("0 spawn 11 0 0 nothing\n"));
+    CHECK(!load_script("0 spawn 28341 3 -2 skeleton extra\n"));
+    CHECK(!load_script("0 invulnerable off\n"));
+    CHECK(!load_script("0 invulnerable on now\n"));
+}
+
 TEST(the_afflict_row_names_a_debuff_critical)
 {
     // Magic MG-2 (2026-10-11): a test row that gives the player a debuff
@@ -1910,6 +1937,7 @@ void test_combat_observer_suite(void)
     RUN(the_called_shot_rows_load_into_what_they_say);
     RUN(the_persistence_rows_load_into_what_they_say);
     RUN(the_jam_row_loads_alone);
+    RUN(the_display_and_creature_rows_load_into_what_they_say);
     RUN(the_afflict_row_names_a_debuff_critical);
     RUN(the_poison_row_sets_a_level_on_the_player_or_a_critter);
     RUN(the_use_row_names_a_prototype_and_perhaps_a_target);

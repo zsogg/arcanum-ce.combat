@@ -24,7 +24,8 @@
 // An effect lasts until the end of the victim's next turn, or `R` in real
 // time, and a new one refreshes rather than stacks. Hobbled and Staggered are
 // turn-based only. Undead and amorphous creatures are spared, as from the
-// stock bodily effects. Nothing is saved.
+// stock bodily effects, unless `creature profiles` gives them effects of
+// their own (`creature_rules.h`). Nothing is saved.
 
 #define CRIT_EFFECT_WINDED 0x01u
 #define CRIT_EFFECT_NUMBED_ARM 0x02u
@@ -35,6 +36,12 @@
 // Exposed: attacks against it are 20 easier. Unfocused: it cannot cast.
 #define CRIT_EFFECT_EXPOSED 0x20u
 #define CRIT_EFFECT_UNFOCUSED 0x40u
+// Creature profiles (zsogg, 2026-10-21): a critical on a body that is not
+// living. Malfunction (a machine) and Disrupted (a spirit or a phantom) halve
+// the next turn's AP, as Staggered; a jammed arm is -20 to hit, as Numbed arm.
+#define CRIT_EFFECT_MALFUNCTION 0x80u
+#define CRIT_EFFECT_DISRUPTED 0x100u
+#define CRIT_EFFECT_JAMMED_ARM 0x200u
 
 // The to-hit penalty of Numbed arm and Dazzled, in difficulty points.
 #define CRIT_EFFECT_TO_HIT_PENALTY 20
