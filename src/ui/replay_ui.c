@@ -137,13 +137,14 @@ typedef enum ReplayKind {
     // Criticals milestone CR-2 (2026-10-05): a starting character, for the
     // early-game benchmark.
     //
-    //   skill-level <skill> <points>
-    //       the player's skill set to that many points (0-5; the level is four
+    //   skill-level <skill> <points> [id]
+    //       the player's (or, since 2026-10-22, that critter's) skill set to that many points (0-5; the level is four
     //       times the points), through `basic_skill_points_set` or
     //       `tech_skill_points_set` and the key-stat cap they apply. Training
     //       is unchanged. Script-only, like `raise`.
-    //   stat-level <stat> <value>
-    //       a primary stat (0 Strength ... 7 Charisma) of the player's set to
+    //   stat-level <stat> <value> [id]
+    //       a primary stat (0 Strength ... 7 Charisma) of the player's (or,
+    //       since 2026-10-22, that critter's) set to
     //       that base value (1-20) through `stat_base_set`, so a starting
     //       character's Perception decides the range penalty.
     //   jam gun
@@ -170,8 +171,8 @@ typedef enum ReplayKind {
     //       experience given to the player through `critter_give_xp`, as a
     //       quest reward gives it (1-10,000,000), so levelling past 51 can be
     //       reached.
-    //   train <basic skill> <training>
-    //       the player's training in a basic skill (0-11) set to 0-3 through
+    //   train <basic skill> <training> [id]
+    //       the player's (or, since 2026-10-22, that critter's) training in a basic skill (0-11) set to 0-3 through
     //       `basic_skill_training_set`, as a trainer sets it - which runs the
     //       Educator's pass over the followers.
     //   hour <0-23>
@@ -889,6 +890,10 @@ static bool replay_parse_line(const char* text, ReplayCommand* command)
             || command->count < TRAINING_NONE || command->count > TRAINING_MASTER) {
             return false;
         }
+        // Since 2026-10-22: an optional critter, the player when absent.
+        if (index < count) {
+            replay_copy_target(command, tokens[index++]);
+        }
         return index == count;
     }
 
@@ -933,6 +938,10 @@ static bool replay_parse_line(const char* text, ReplayCommand* command)
             || command->count < 1 || command->count > 20) {
             return false;
         }
+        // Since 2026-10-22: an optional critter, the player when absent.
+        if (index < count) {
+            replay_copy_target(command, tokens[index++]);
+        }
         return index == count;
     }
 
@@ -943,6 +952,10 @@ static bool replay_parse_line(const char* text, ReplayCommand* command)
             || !replay_parse_int(tokens[index++], &(command->count))
             || command->count < 0 || command->count > 5) {
             return false;
+        }
+        // Since 2026-10-22: an optional critter, the player when absent.
+        if (index < count) {
+            replay_copy_target(command, tokens[index++]);
         }
         return index == count;
     }
@@ -1542,12 +1555,17 @@ void replay_ui_tick(void)
     }
 
     if (command->kind == REPLAY_KIND_TRAIN) {
+        int64_t who_obj = pc_obj;
+
         replay_stall_reported = false;
         replay_next++;
-        basic_skill_training_set(pc_obj, command->skill, command->count);
+        if (command->target[0] != '\0' && !replay_resolve(command, &who_obj)) {
+            return;
+        }
+        basic_skill_training_set(who_obj, command->skill, command->count);
         tig_debug_printf("Replay: command %d set basic skill %d training to %d; it reads %d\n",
             replay_next - 1, command->skill, command->count,
-            basic_skill_training_get(pc_obj, command->skill));
+            basic_skill_training_get(who_obj, command->skill));
         return;
     }
 
@@ -1703,36 +1721,45 @@ void replay_ui_tick(void)
     }
 
     if (command->kind == REPLAY_KIND_STAT_LEVEL) {
+        int64_t who_obj = pc_obj;
+
         replay_stall_reported = false;
         replay_next++;
+        if (command->target[0] != '\0' && !replay_resolve(command, &who_obj)) {
+            return;
+        }
         // `stat_base_set` refuses to lower a stat below what the character's
         // skills, spells or technologies need: lower those first.
-        stat_base_set(pc_obj, command->stat, command->count);
+        stat_base_set(who_obj, command->stat, command->count);
         tig_debug_printf("Replay: command %d set stat %d to %d%s; its level is %d\n",
-            replay_next - 1, command->stat, stat_base_get(pc_obj, command->stat),
-            stat_base_get(pc_obj, command->stat) == command->count
+            replay_next - 1, command->stat, stat_base_get(who_obj, command->stat),
+            stat_base_get(who_obj, command->stat) == command->count
                 ? ""
                 : " (refused: a skill, spell or technology needs more)",
-            stat_level_get(pc_obj, command->stat));
+            stat_level_get(who_obj, command->stat));
         return;
     }
 
     if (command->kind == REPLAY_KIND_SKILL_LEVEL) {
         int set;
+        int64_t who_obj = pc_obj;
 
         replay_stall_reported = false;
         replay_next++;
+        if (command->target[0] != '\0' && !replay_resolve(command, &who_obj)) {
+            return;
+        }
         if (IS_TECH_SKILL(command->skill)) {
-            set = tech_skill_points_set(pc_obj, GET_TECH_SKILL(command->skill), command->count);
+            set = tech_skill_points_set(who_obj, GET_TECH_SKILL(command->skill), command->count);
         } else {
-            set = basic_skill_points_set(pc_obj, GET_BASIC_SKILL(command->skill), command->count);
+            set = basic_skill_points_set(who_obj, GET_BASIC_SKILL(command->skill), command->count);
         }
         tig_debug_printf("Replay: command %d set skill %d to %d point(s)%s; its level is %d\n",
             replay_next - 1, command->skill, set,
             set == command->count ? "" : " (refused by its key stat)",
             IS_TECH_SKILL(command->skill)
-                ? tech_skill_level(pc_obj, GET_TECH_SKILL(command->skill))
-                : basic_skill_level(pc_obj, GET_BASIC_SKILL(command->skill)));
+                ? tech_skill_level(who_obj, GET_TECH_SKILL(command->skill))
+                : basic_skill_level(who_obj, GET_BASIC_SKILL(command->skill)));
         return;
     }
 

@@ -5817,6 +5817,27 @@ bool anim_check_next_step(AnimRunInfo* run_info, int64_t obj, int64_t loc)
     }
 
     if (run_info->path.curr < run_info->path.max) {
+        // CE (`trap spotting`; zsogg, 2026-10-22): for the player and its
+        // followers the party's best spotter checks the next 3 tiles of the
+        // path, once per trap, in place of the mover's own roll for the next.
+        if (trap_party_spots_path(obj)) {
+            int64_t ahead[3];
+            int count = 0;
+            int step;
+            int64_t step_loc = adjacent_loc;
+
+            ahead[count++] = adjacent_loc;
+            if ((run_info->path.flags & 0x01) == 0) {
+                for (step = run_info->path.curr + 1; step < run_info->path.max && count < 3; step++) {
+                    if (!location_in_dir(step_loc, run_info->path.rotations[step], &step_loc)) {
+                        break;
+                    }
+                    ahead[count++] = step_loc;
+                }
+            }
+            return trap_party_spot_ahead(obj, ahead, count);
+        }
+
         object_list_location(adjacent_loc, OBJ_TM_TRAP, &objects);
         node = objects.head;
         while (node != NULL) {

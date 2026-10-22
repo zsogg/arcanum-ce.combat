@@ -117,5 +117,11 @@ FEATURE(HEAL_LIVING_PATIENTS, "heal living patients", false)
 // protection and the share of a firearm hit it takes. A phantom is hurt only
 // by a critical hit (which always finds the gap), magic or an explosive.
 FEATURE(CREATURE_PROFILES, "creature profiles", false)
+// Trap spotting (zsogg, 2026-10-22), `trap.c`: Spot Trap is 5 x points + 25
+// less the trap's difficulty, an Apprentice spots every non-magical trap of
+// difficulty 0 without a roll (an Expert magical ones too), and the party's
+// best spotter checks the next 3 tiles of a party member's path, once per
+// trap, naming who saw it. arcanum-work `docs/TRAPS.md`.
+FEATURE(TRAP_SPOTTING, "trap spotting", false)
 
 // clang-format on

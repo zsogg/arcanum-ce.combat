@@ -5,10 +5,14 @@
 #include "game/combat.h"
 #include "game/critter.h"
 #include "game/descriptions.h"
+#include "game/feature.h"
 #include "game/item.h"
+#include "game/location.h"
 #include "game/magictech.h"
+#include "game/map.h"
 #include "game/mes.h"
 #include "game/obj.h"
+#include "game/obj_id.h"
 #include "game/obj_private.h"
 #include "game/object.h"
 #include "game/player.h"
@@ -176,6 +180,16 @@ bool trap_attempt_spot(int64_t pc_obj, int64_t trap_obj)
         return true;
     }
 
+    // CE (`trap spotting`; zsogg, 2026-10-22): a trained spotter sees an easy
+    // trap without a roll.
+    if (feature_enabled(FEATURE_TRAP_SPOTTING)
+        && trap_spot_certain(basic_skill_training_get(pc_obj, BASIC_SKILL_SPOT_TRAP),
+            trap_type_from_scr(&scr) == TRAP_TYPE_MAGICAL,
+            trap_spot_difficulty(trap_obj))) {
+        trap_mark_known(pc_obj, trap_obj, TRAP_KNOWN_SPOTTED);
+        return true;
+    }
+
     if (!magictech_check_env_sf(OSF_DETECTING_TRAPS)) {
         skill_invocation_init(&skill_invocation);
         object_ref_init(pc_obj, &(skill_invocation.source));
@@ -286,7 +300,199 @@ void trap_mark_known(int64_t pc_obj, int64_t trap_obj, int reason)
         ui_message.type = UI_MSG_TYPE_EXCLAMATION;
         ui_message.str = mes_file_entry.str;
         ui_display_msg(&ui_message);
+    } else if (reason == TRAP_KNOWN_SPOTTED
+        && type == OBJ_TYPE_NPC
+        && feature_enabled(FEATURE_TRAP_SPOTTING)) {
+        // CE (`trap spotting`; zsogg, 2026-10-22): a follower's spot is
+        // named too; stock, it passes in silence. Static: the message
+        // window may keep the pointer.
+        static char message[200];
+        char name[128];
+
+        object_examine(pc_obj, player_get_local_pc_obj(), name);
+        snprintf(message, sizeof(message), "%s has spotted a trap!", name);
+        ui_message.type = UI_MSG_TYPE_EXCLAMATION;
+        ui_message.str = message;
+        ui_display_msg(&ui_message);
     }
+}
+
+// ---------------------------------------------------------------------------
+// CE (`trap spotting`; zsogg, 2026-10-22; arcanum-work `docs/TRAPS.md`): the
+// party spots for itself, 3 tiles ahead, once per trap.
+// ---------------------------------------------------------------------------
+
+// How far from the mover a party member may be to spot for it, in tiles.
+#define TRAP_SPOTTER_REACH 10
+#define TRAP_MISSED_MAX 128
+
+typedef struct TrapMissed {
+    ObjectID id;
+    int map;
+} TrapMissed;
+
+// The traps rolled for and missed on this map: each is rolled for once.
+static TrapMissed trap_missed[TRAP_MISSED_MAX];
+static int trap_missed_count;
+
+bool trap_spot_certain(int training, bool magical, int difficulty)
+{
+    if (difficulty != 0) {
+        return false;
+    }
+    return magical ? training >= TRAINING_EXPERT : training >= TRAINING_APPRENTICE;
+}
+
+int trap_spot_difficulty(int64_t trap_obj)
+{
+    return obj_field_int32_get(trap_obj, OBJ_F_TYPE) == OBJ_TYPE_TRAP
+        ? obj_field_int32_get(trap_obj, OBJ_F_TRAP_DIFFICULTY)
+        : 0;
+}
+
+static bool trap_in_party(int64_t obj)
+{
+    int64_t pc_obj = player_get_local_pc_obj();
+
+    return pc_obj != OBJ_HANDLE_NULL
+        && (obj == pc_obj
+            || (obj_field_int32_get(obj, OBJ_F_TYPE) == OBJ_TYPE_NPC
+                && critter_pc_leader_get(obj) == pc_obj));
+}
+
+bool trap_party_spots_path(int64_t mover_obj)
+{
+    return feature_enabled(FEATURE_TRAP_SPOTTING)
+        && mover_obj != OBJ_HANDLE_NULL
+        && trap_in_party(mover_obj);
+}
+
+// How well a party member would spot this trap: -1 when it cannot (a
+// magical trap needs an Expert), 1000 when it is certain, else its Spot
+// Trap effectiveness.
+static int trap_spot_score(int64_t obj, int64_t trap_obj)
+{
+    int training = basic_skill_training_get(obj, BASIC_SKILL_SPOT_TRAP);
+    bool magical = trap_type(trap_obj) == TRAP_TYPE_MAGICAL;
+
+    if (magical && training < TRAINING_EXPERT) {
+        return -1;
+    }
+    if (trap_spot_certain(training, magical, trap_spot_difficulty(trap_obj))) {
+        return 1000;
+    }
+    return basic_skill_effectiveness(obj, BASIC_SKILL_SPOT_TRAP, trap_obj);
+}
+
+int64_t trap_party_spotter(int64_t mover_obj, int64_t trap_obj)
+{
+    int64_t pc_obj;
+    int64_t mover_loc;
+    int64_t best_obj;
+    int best_score;
+    int score;
+    ObjectList followers;
+    ObjectNode* node;
+
+    if (!trap_party_spots_path(mover_obj)) {
+        return mover_obj;
+    }
+
+    pc_obj = player_get_local_pc_obj();
+    mover_loc = obj_field_int64_get(mover_obj, OBJ_F_LOCATION);
+    best_obj = mover_obj;
+    best_score = trap_spot_score(mover_obj, trap_obj);
+
+    if (pc_obj != mover_obj
+        && !critter_is_dead(pc_obj)
+        && !critter_is_unconscious(pc_obj)
+        && location_dist(mover_loc, obj_field_int64_get(pc_obj, OBJ_F_LOCATION)) <= TRAP_SPOTTER_REACH) {
+        score = trap_spot_score(pc_obj, trap_obj);
+        if (score > best_score) {
+            best_obj = pc_obj;
+            best_score = score;
+        }
+    }
+
+    object_list_all_followers(pc_obj, &followers);
+    for (node = followers.head; node != NULL; node = node->next) {
+        if (node->obj == mover_obj
+            || critter_is_dead(node->obj)
+            || critter_is_unconscious(node->obj)
+            || location_dist(mover_loc, obj_field_int64_get(node->obj, OBJ_F_LOCATION)) > TRAP_SPOTTER_REACH) {
+            continue;
+        }
+        score = trap_spot_score(node->obj, trap_obj);
+        if (score > best_score) {
+            best_obj = node->obj;
+            best_score = score;
+        }
+    }
+    object_list_destroy(&followers);
+
+    return best_obj;
+}
+
+static bool trap_missed_has(int64_t trap_obj)
+{
+    ObjectID id = obj_get_id(trap_obj);
+    int map = map_current_map();
+    int index;
+
+    for (index = 0; index < trap_missed_count; index++) {
+        if (trap_missed[index].map == map && objid_is_equal(trap_missed[index].id, id)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+static void trap_missed_add(int64_t trap_obj)
+{
+    int map = map_current_map();
+
+    // A new map forgets the last one's.
+    if (trap_missed_count > 0 && trap_missed[0].map != map) {
+        trap_missed_count = 0;
+    }
+    if (trap_missed_count >= TRAP_MISSED_MAX) {
+        trap_missed_count = 0;
+    }
+    trap_missed[trap_missed_count].id = obj_get_id(trap_obj);
+    trap_missed[trap_missed_count].map = map;
+    trap_missed_count++;
+}
+
+bool trap_party_spot_ahead(int64_t mover_obj, const int64_t* locs, int count)
+{
+    int index;
+    ObjectList traps;
+    ObjectNode* node;
+    int64_t spotter_obj;
+    bool spotted = false;
+
+    for (index = 0; index < count && !spotted; index++) {
+        object_list_location(locs[index], OBJ_TM_TRAP, &traps);
+        for (node = traps.head; node != NULL; node = node->next) {
+            if (trap_is_spotted(mover_obj, node->obj)
+                || trap_type(node->obj) == TRAP_TYPE_INVALID
+                || trap_missed_has(node->obj)) {
+                continue;
+            }
+            spotter_obj = trap_party_spotter(mover_obj, node->obj);
+            if (trap_attempt_spot(spotter_obj, node->obj)) {
+                tig_debug_printf("trap spotting: a trap %d tile(s) ahead spotted%s\n",
+                    index + 1, spotter_obj == mover_obj ? " by the mover" : " for the mover");
+                spotted = true;
+                break;
+            }
+            tig_debug_printf("trap spotting: a trap %d tile(s) ahead missed\n", index + 1);
+            trap_missed_add(node->obj);
+        }
+        object_list_destroy(&traps);
+    }
+
+    return spotted;
 }
 
 // 0x4BC220

@@ -4012,9 +4012,11 @@ bool object_script_execute(int64_t triggerer_obj, int64_t attachee_obj, int64_t 
         return true;
     }
 
+    // CE (`trap spotting`; zsogg, 2026-10-22): the party's best spotter
+    // checks a trapped object for a party member; off, the user itself.
     if (attachment_point == SAP_USE
         && !trap_is_spotted(triggerer_obj, attachee_obj)
-        && trap_attempt_spot(triggerer_obj, attachee_obj)) {
+        && trap_attempt_spot(trap_party_spotter(triggerer_obj, attachee_obj), attachee_obj)) {
         return false;
     }
 

@@ -25,6 +25,7 @@ add_executable(arcanum-tests
     "test_combat_observer.c"
     "test_armor_rules.c"
     "test_creature_rules.c"
+    "test_trap_spotting.c"
     "test_penetration.c"
     "test_ai_targeting.c"
     "test_followers.c"

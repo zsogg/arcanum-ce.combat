@@ -935,6 +935,18 @@ TEST(the_remove_row_names_the_object_it_takes_off_the_map)
     CHECK(!load_script("0 remove G_00000084_0006_4040_8000_000000000600 now\n"));
 }
 
+TEST(the_skill_stat_and_training_rows_take_an_optional_critter)
+{
+    // Traps T1 (2026-10-22): a bench gives a follower its Spot Trap, so the
+    // party's best spotter can be someone other than the player.
+    CHECK(load_script("0 skill-level 7 5 @virgil\n0 stat-level 5 20 @virgil\n0 train 7 1 @virgil\n"));
+    CHECK_INT(replay_ui_count(), 3);
+    CHECK(row_is(0, "turn=0 now=0 kind=skill-level target=@virgil loc=0 aim=0 spell=0 cast=- wait=0 skill=7 points=5"));
+    CHECK(row_is(1, "turn=0 now=0 kind=stat-level target=@virgil loc=0 aim=0 spell=0 cast=- wait=0 stat=5 value=20"));
+    CHECK(!load_script("0 skill-level 7 5 @virgil now\n"));
+    CHECK(!load_script("0 train 7 1 @virgil now\n"));
+}
+
 TEST(the_examine_row_names_the_object_it_shows)
 {
     // Creature profiles (2026-10-22): the examine panel a pointer resting on
@@ -1973,6 +1985,7 @@ void test_combat_observer_suite(void)
     RUN(the_display_and_creature_rows_load_into_what_they_say);
     RUN(the_await_death_row_names_the_critter_it_waits_for);
     RUN(the_remove_row_names_the_object_it_takes_off_the_map);
+    RUN(the_skill_stat_and_training_rows_take_an_optional_critter);
     RUN(the_examine_row_names_the_object_it_shows);
     RUN(the_afflict_row_names_a_debuff_critical);
     RUN(the_poison_row_sets_a_level_on_the_player_or_a_critter);

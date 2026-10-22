@@ -825,7 +825,9 @@ int basic_skill_effectiveness(int64_t obj, int bs, int64_t target_obj)
             }
             break;
         case BASIC_SKILL_SPOT_TRAP:
-            value = 4 * level;
+            // CE (`trap spotting`; zsogg, 2026-10-22): the curve Melee and
+            // Bow have, 75% at 10 points where stock gives 40%.
+            value = feature_enabled(FEATURE_TRAP_SPOTTING) ? 5 * level + 25 : 4 * level;
             break;
         case BASIC_SKILL_HAGGLE:
             value = 4 * level + 10;
@@ -2803,6 +2805,15 @@ int skill_invocation_difficulty(SkillInvocation* skill_invocation)
     case SKILL_DISARM_TRAPS:
         // Apply trap difficulty.
         if (target_obj != OBJ_HANDLE_NULL
+            && target_type == OBJ_TYPE_TRAP) {
+            difficulty += obj_field_int32_get(target_obj, OBJ_F_TRAP_DIFFICULTY);
+        }
+        break;
+    case SKILL_SPOT_TRAP:
+        // CE (`trap spotting`; zsogg, 2026-10-22): a trap object's difficulty
+        // counts against spotting it too; stock, only against disarming.
+        if (feature_enabled(FEATURE_TRAP_SPOTTING)
+            && target_obj != OBJ_HANDLE_NULL
             && target_type == OBJ_TYPE_TRAP) {
             difficulty += obj_field_int32_get(target_obj, OBJ_F_TRAP_DIFFICULTY);
         }
