@@ -212,6 +212,14 @@ typedef enum ReplayKind {
     //       profiles: a playtest's next creature comes when the last has
     //       died, not when an encounter ends, which switching turn-based off
     //       and on did early). A test row.
+    //   remove <id>
+    //       take that object off the map through `object_destroy`, which a
+    //       script's destroy calls too and which takes a critter out of its
+    //       group first (2026-10-22, creature profiles: the range's Garricks
+    //       and officers joined every fight and killed a playtest's creatures
+    //       in seconds). Never the player. Before a fight starts: nothing
+    //       takes a destroyed critter off a running turn-based encounter's
+    //       list. A test row.
     REPLAY_KIND_SKILL_LEVEL,
     REPLAY_KIND_STAT_LEVEL,
     REPLAY_KIND_JAM,
@@ -227,6 +235,7 @@ typedef enum ReplayKind {
     REPLAY_KIND_SPAWN,
     REPLAY_KIND_INVULNERABLE,
     REPLAY_KIND_AWAIT_DEATH,
+    REPLAY_KIND_REMOVE,
 } ReplayKind;
 
 // A cast's target, which is a third shape: the caster, an object or a tile.
@@ -816,6 +825,12 @@ static bool replay_parse_line(const char* text, ReplayCommand* command)
         return index == count;
     }
 
+    if (strcmp(kind, "remove") == 0) {
+        command->kind = REPLAY_KIND_REMOVE;
+        replay_copy_target(command, tokens[index++]);
+        return index == count;
+    }
+
     if (strcmp(kind, "invulnerable") == 0) {
         command->kind = REPLAY_KIND_INVULNERABLE;
         if (strcmp(tokens[index++], "on") != 0) {
@@ -987,7 +1002,7 @@ int replay_ui_count(void)
 bool replay_ui_describe(int index, char* buffer, size_t size)
 {
     const ReplayCommand* command;
-    static const char* kinds[] = { "object", "location", "key", "cast", "wield", "wait", "learn", "give", "throw", "skill", "raise", "prowl", "panel", "save", "inspect", "transfer", "take", "drop", "pickup", "wear", "skill-level", "stat-level", "jam", "afflict", "poison", "use", "xp", "train", "hour", "encounter", "hover", "screenshot", "spawn", "invulnerable", "await-death" };
+    static const char* kinds[] = { "object", "location", "key", "cast", "wield", "wait", "learn", "give", "throw", "skill", "raise", "prowl", "panel", "save", "inspect", "transfer", "take", "drop", "pickup", "wear", "skill-level", "stat-level", "jam", "afflict", "poison", "use", "xp", "train", "hour", "encounter", "hover", "screenshot", "spawn", "invulnerable", "await-death", "remove" };
     int written;
     static const char* casts[] = { "self", "object", "location" };
 
@@ -1363,6 +1378,21 @@ void replay_ui_tick(void)
         combat_observer_object_id(spawned_obj, identity);
         tig_debug_printf("Replay: command %d spawned '%s' (prototype %d) as %s\n",
             replay_next - 1, command->target, command->proto, identity);
+        return;
+    }
+
+    if (command->kind == REPLAY_KIND_REMOVE) {
+        replay_stall_reported = false;
+        replay_next++;
+        if (!replay_resolve(command, &target_obj)) {
+            return;
+        }
+        if (target_obj == pc_obj) {
+            tig_debug_printf("Replay: command %d will not remove the player\n", replay_next - 1);
+            return;
+        }
+        object_destroy(target_obj);
+        tig_debug_printf("Replay: command %d removed '%s'\n", replay_next - 1, command->target);
         return;
     }
 

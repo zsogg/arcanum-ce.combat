@@ -924,6 +924,17 @@ TEST(the_await_death_row_names_the_critter_it_waits_for)
     CHECK(!load_script("0 await-death @skeleton now\n"));
 }
 
+TEST(the_remove_row_names_the_object_it_takes_off_the_map)
+{
+    // Creature profiles (2026-10-22): a playtest clears the range's
+    // bystanders, so each creature is fought alone.
+    CHECK(load_script("0 remove G_00000084_0006_4040_8000_000000000600\n"));
+    CHECK_INT(replay_ui_count(), 1);
+    CHECK(row_is(0, "turn=0 now=0 kind=remove target=G_00000084_0006_4040_8000_000000000600 loc=0 aim=0 spell=0 cast=- wait=0"));
+    CHECK(!load_script("0 remove\n"));
+    CHECK(!load_script("0 remove G_00000084_0006_4040_8000_000000000600 now\n"));
+}
+
 TEST(the_afflict_row_names_a_debuff_critical)
 {
     // Magic MG-2 (2026-10-11): a test row that gives the player a debuff
@@ -1950,6 +1961,7 @@ void test_combat_observer_suite(void)
     RUN(the_jam_row_loads_alone);
     RUN(the_display_and_creature_rows_load_into_what_they_say);
     RUN(the_await_death_row_names_the_critter_it_waits_for);
+    RUN(the_remove_row_names_the_object_it_takes_off_the_map);
     RUN(the_afflict_row_names_a_debuff_critical);
     RUN(the_poison_row_sets_a_level_on_the_player_or_a_critter);
     RUN(the_use_row_names_a_prototype_and_perhaps_a_target);
