@@ -105,6 +105,13 @@ bool walkmask_read_hdr(TigFile* stream, int* cnt, int* width, int* height, int* 
     if (tig_file_fread(cnt, sizeof(*cnt), 1, stream) != 1) return false;
     if (*cnt > 1024) return false;
 
+    // FIX: the grid's dimensions size the array `walkmask_allocate` fills;
+    // only the entry count was bounded, so a facade file claiming a huge or
+    // negative grid overflowed the product or the allocation (review
+    // 2026-10-22, finding 4). A facade is a handful of tiles; 1024 a side is
+    // the entry count's own ceiling.
+    if (*width <= 0 || *height <= 0 || *width > 1024 || *height > 1024) return false;
+
     return true;
 }
 

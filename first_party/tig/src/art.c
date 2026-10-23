@@ -6113,9 +6113,21 @@ int tig_art_file_read(tig_art_id_t art_id, const char* filename, TigArtHeader* h
         art_size_t total_size;
 
         // Calculate total size of pixels data.
+        //
+        // FIX: a frame's dimensions come out of the file; a negative one, or a
+        // product past `int`, sized the allocation wrongly for the decoder
+        // below (review 2026-10-22, finding 4).
         total_size = 0;
         for (frame = 0; frame < hdr->num_frames; ++frame) {
-            total_size += hdr->frames_tbl[index][frame].width * hdr->frames_tbl[index][frame].height;
+            int width = hdr->frames_tbl[index][frame].width;
+            int height = hdr->frames_tbl[index][frame].height;
+            if (width < 0 || height < 0
+                || (width != 0 && height > INT_MAX / width)
+                || total_size > INT_MAX - width * height) {
+                tig_art_load_cleanup(stream, hdr, palette_tbl);
+                return TIG_ERR_GENERIC;
+            }
+            total_size += width * height;
         }
 
         // Allocate appropriate memory.
@@ -6141,6 +6153,11 @@ int tig_art_file_read(tig_art_id_t art_id, const char* filename, TigArtHeader* h
                 uint8_t color;
                 int len;
                 int cnt = 0;
+                // FIX: the frame's pixel area bounds every run. The loop was
+                // bounded by `data_size` alone - the number of encoded bytes -
+                // so a run that overshot the frame wrote past the allocation
+                // (review 2026-10-22, finding 4).
+                const uint8_t* frame_end = bytes + hdr->frames_tbl[index][frame].width * hdr->frames_tbl[index][frame].height;
 
                 while (cnt < hdr->frames_tbl[index][frame].data_size) {
                     if (tig_file_fread(&value, 1, 1, stream) != 1) {
@@ -6149,6 +6166,10 @@ int tig_art_file_read(tig_art_id_t art_id, const char* filename, TigArtHeader* h
                     }
 
                     len = value & 0x7F;
+                    if (len > frame_end - bytes) {
+                        tig_art_load_cleanup(stream, hdr, palette_tbl);
+                        return TIG_ERR_GENERIC;
+                    }
                     if ((value & 0x80) != 0) {
                         if (tig_file_fread(bytes, 1, len, stream) != (size_t)len) {
                             tig_art_load_cleanup(stream, hdr, palette_tbl);

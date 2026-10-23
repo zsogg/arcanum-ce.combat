@@ -2414,6 +2414,15 @@ bool sector_block_load_internal(const char* base_map_name, const char* current_m
         return false;
     }
 
+    // FIX: the count sizes the allocation and came out of the file unchecked;
+    // it is bounded by the ids the file actually holds (review 2026-10-22,
+    // finding 4).
+    if (sector_blocked_sectors_cnt < 0
+        || sector_blocked_sectors_cnt > (tig_file_filelength(stream) - (int)sizeof(sector_blocked_sectors_cnt)) / (int)sizeof(*sector_blocked_sectors)) {
+        tig_file_fclose(stream);
+        return false;
+    }
+
     sector_blocked_sectors = (int64_t*)MALLOC(sizeof(*sector_blocked_sectors) * sector_blocked_sectors_cnt);
     if (tig_file_fread(sector_blocked_sectors, sizeof(*sector_blocked_sectors), sector_blocked_sectors_cnt, stream) != sector_blocked_sectors_cnt) {
         tig_file_fclose(stream);

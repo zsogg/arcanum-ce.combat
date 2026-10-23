@@ -87,6 +87,7 @@ add_executable(arcanum-tests
     "test_script.c"
     "test_save_slot.c"
     "test_save_bounds.c"
+    "test_mod_format_bounds.c"
     "obj_harness.c"
     "obj_harness.h"
     "tests_main.c"

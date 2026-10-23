@@ -181,6 +181,20 @@ TigDatabase* tig_database_open(const char* path)
         return NULL;
     }
 
+    // FIX: the footer's sizes sized two allocations unchecked; a negative
+    // one, or more entries than the entry table's own extent could hold at
+    // 24 bytes each (a length, an empty name, four skipped bytes, four
+    // fields), is refused (review 2026-10-22, finding 4). `entry_table_size`
+    // is, despite its name, the payload's size: `offset` above is where the
+    // payload starts, which is 0 in every dbmaker archive measured.
+    if (name_table_size < 0 || entry_table_size < 0
+        || (long)entry_table_size > size
+        || database->entries_count > (unsigned int)entry_table_offset / 24) {
+        FREE(database);
+        fclose(stream);
+        return NULL;
+    }
+
     database->guid = guid;
     database->path = STRDUP(path);
     database->entries = (TigDatabaseEntry*)MALLOC(sizeof(TigDatabaseEntry) * database->entries_count);
@@ -193,7 +207,22 @@ TigDatabase* tig_database_open(const char* path)
             break;
         }
 
+        // FIX: every name must fit what is left of the name table; nothing
+        // checked the running total against `name_table_size`, so an index
+        // whose names summed past it wrote past the table (review
+        // 2026-10-22, finding 4).
+        if (name_size < 0 || name_size > name_table_size - (int)(name - database->name_table)) {
+            break;
+        }
+
         if (fread(name, name_size, 1, stream) != 1) {
+            break;
+        }
+
+        // FIX: the name is walked as a C string below and by every lookup;
+        // dbmaker always writes its terminator, and a name without one read
+        // past the table (found by the suite's own first fixture under ASan).
+        if (name_size == 0 || name[name_size - 1] != '\0') {
             break;
         }
 

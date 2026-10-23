@@ -246,6 +246,17 @@ bool terrain_open(const char* base_path, const char* save_path)
         return false;
     }
 
+    // FIX: the dimensions size the row cache and, in the editor, the tile
+    // array; only the version was checked, so a header claiming a huge or
+    // negative map allocated accordingly (review 2026-10-22, finding 4).
+    // 32768 a side keeps the tile count inside an `int`.
+    if (terrain_header.width <= 0 || terrain_header.height <= 0
+        || terrain_header.width > 32768 || terrain_header.height > 32768) {
+        tig_debug_println("Implausible terrain dimensions");
+        tig_file_fclose(stream);
+        return false;
+    }
+
     terrain_tiles_size = tig_file_filelength(stream) - sizeof(terrain_header);
 
     if ((terrain_header.flags & 0x1) != 0) {
@@ -978,10 +989,15 @@ void terrain_row_inflate(void* dst, void* src, int size)
     strm.next_in = src;
     strm.avail_in = 0;
 
+    // FIX: a row that will not inflate is zero-filled and logged. The
+    // original (and CE until 2026-10-22) called `exit()` here, so one corrupt
+    // row in a mod's terrain file ended the process mid-game (review
+    // 2026-10-22, finding 4).
     rc = inflateInit(&strm);
     if (rc != Z_OK) {
         tig_debug_printf("Error decompressing terrain data\n");
-        exit(EXIT_FAILURE);
+        memset(dst, 0, 2 * (size_t)terrain_header.width);
+        return;
     }
 
     strm.next_out = dst;
@@ -992,7 +1008,7 @@ void terrain_row_inflate(void* dst, void* src, int size)
     rc = inflate(&strm, Z_FINISH);
     if (rc != Z_OK && rc != Z_STREAM_END) {
         tig_debug_printf("Error decompressing terrain data\n");
-        exit(EXIT_FAILURE);
+        memset(dst, 0, 2 * (size_t)terrain_header.width);
     }
 
     inflateEnd(&strm);
