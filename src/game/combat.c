@@ -78,6 +78,7 @@ static int combat_play_hit_fx(CombatContext* combat);
 static void combat_process_taunts(CombatContext* combat);
 static void combat_turn_based_anims_complete(void);
 static bool combat_turn_based_start(void);
+static bool combat_shortfall_accepted(int64_t obj, int required_action_points);
 static void combat_turn_based_end(void);
 static bool combat_turn_based_begin_turn(void);
 static void combat_recalc_perception_range(void);
@@ -4478,15 +4479,8 @@ bool combat_check_action_points(int64_t obj, int required_action_points)
         combat_callbacks.field_C(combat_action_points);
     }
 
-    accepted = combat_action_points >= required_action_points;
-    if (!accepted && feature_enabled(FEATURE_EXERTION)) {
-        accepted = combat_exertion_covers(obj, required_action_points);
-    } else if (!accepted
-        && combat_action_points > 0
-        && is_pc
-        && critter_fatigue_current(obj) > 1) {
-        accepted = true;
-    }
+    accepted = combat_action_points >= required_action_points
+        || combat_shortfall_accepted(obj, required_action_points);
 
     if (combat_observer_is_enabled()) {
         char actor[COMBAT_OBSERVER_IDENTITY_SIZE];
@@ -5007,7 +5001,27 @@ bool combat_can_pay_action_points(int64_t obj, int action_points)
     }
 
     return combat_action_points >= action_points
-        || (feature_enabled(FEATURE_EXERTION) && combat_exertion_covers(obj, action_points));
+        || combat_shortfall_accepted(obj, action_points);
+}
+
+// Whether a shortfall of action points is accepted anyway: under `exertion`
+// when fatigue covers it, otherwise by the stock rule that the local PC may
+// overreach once while it has fatigue.
+//
+// FIX: one rule for the preview and the refusal. `combat_can_pay_action_points`
+// knew exertion but not the stock overreach `combat_check_action_points`
+// keeps when exertion is off, so with `restorative cost` on and `exertion`
+// off the UI accepted a 6 AP potion at 5 AP and the drink was then refused
+// (review 2026-10-22, finding 7).
+static bool combat_shortfall_accepted(int64_t obj, int required_action_points)
+{
+    if (feature_enabled(FEATURE_EXERTION)) {
+        return combat_exertion_covers(obj, required_action_points);
+    }
+
+    return combat_action_points > 0
+        && player_is_local_pc_obj(obj)
+        && critter_fatigue_current(obj) > 1;
 }
 
 // CE (`exertion`; zsogg, 2026-10-19): whether a throw at a tile is refused
