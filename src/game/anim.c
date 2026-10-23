@@ -3579,7 +3579,21 @@ bool anim_is_busy(int64_t obj, AnimID* anim_id)
     AnimGoalNode* goal_node;
 
     slot = anim_find_first(obj);
-    while (slot != -1 && slot != prev) {
+    while (true) {
+        if (slot == -1) {
+            if (anim_id != NULL) {
+                anim_id_init(anim_id);
+            }
+            return false;
+        }
+
+        // FIX (porting bug #139): when the walk returns the slot it is on,
+        // the original leaves `anim_id` as it was (its loop breaks to a bare
+        // `return 0`); only the end of the list initialises it. CE
+        // initialised on both exits. Nothing is known to reach the second.
+        if (slot == prev) {
+            break;
+        }
         prev = slot;
 
         goal_node = anim_goal_nodes[anim_run_info[slot].goals[0].type];
@@ -3593,10 +3607,6 @@ bool anim_is_busy(int64_t obj, AnimID* anim_id)
         }
 
         slot = anim_find_next(slot, obj);
-    }
-
-    if (anim_id != NULL) {
-        anim_id_init(anim_id);
     }
 
     return false;
@@ -3816,14 +3826,14 @@ bool anim_timeevent_process(TimeEvent* timeevent)
                 err = true;
             }
 
-            // NOTE: The two pops here are on top of the one below, which this
-            // pattern also matches - `ANIM_FLOW_POP_3_GOALS` pops three goals.
+            // FIX (porting bug #141): the 0x38000000 pattern pops TWO goals and
+            // skips the single pop (0x423830 and 0x42384A, then 0x423852 `jmp`
+            // over the 0x30000000 test at 0x423856-0x423862). CE let both
+            // tests fire and popped three; the enum's name describes that.
             if ((state_change & ANIM_FLOW_POP_3_GOALS) == ANIM_FLOW_POP_3_GOALS) {
                 anim_pop_goal(run_info, &state_change, &goal_node, &goal_data, &err);
                 anim_pop_goal(run_info, &state_change, &goal_node, &goal_data, &err);
-            }
-
-            if ((state_change & ANIM_FLOW_POP_GOAL) == ANIM_FLOW_POP_GOAL) {
+            } else if ((state_change & ANIM_FLOW_POP_GOAL) == ANIM_FLOW_POP_GOAL) {
                 anim_pop_goal(run_info, &state_change, &goal_node, &goal_data, &err);
             }
 
@@ -4623,7 +4633,10 @@ bool anim_pick_step_aside_tile(AnimRunInfo* run_info)
     for (idx = rot; idx < 8; idx++) {
         if (location_in_dir(source_loc, idx, &(adjacent_locs[idx]))) {
             adjacent_objs[idx] = OBJ_HANDLE_NULL;
-            if (!anim_tile_is_blocked(source_obj, source_loc, adjacent_locs[idx], rot)) {
+            // FIX (porting bug #138): the direction tested is the loop's, as
+            // in the second loop (the original passes the index on both);
+            // CE passed the starting rotation for every tile of the first.
+            if (!anim_tile_is_blocked(source_obj, source_loc, adjacent_locs[idx], idx)) {
                 run_info->cur_stack_data->params[AGDATA_TARGET_TILE].loc = adjacent_locs[idx];
                 return true;
             }
@@ -4722,7 +4735,10 @@ bool anim_tile_in_range(AnimRunInfo* run_info)
         return false;
     }
 
-    if (target_loc == 0) {
+    // FIX (porting bug #131): a target of -1 is refused as well as 0
+    // (0x42694E tests the halves for zero, then their AND against
+    // 0xFFFFFFFF), as anim_create_straight_path does. CE tested 0 only.
+    if (target_loc == 0 || target_loc == -1) {
         return false;
     }
 
@@ -4881,7 +4897,10 @@ bool anim_finish_move_near_combat(AnimRunInfo* run_info)
     run_info->path.flags &= ~0x04;
     run_info->path.flags |= 0x01;
 
-    run_info->path.flags &= ~0x30;
+    // FIX (porting bug #125): the run's own flags lose 0x30 here, as in
+    // anim_finish_move_near (0x425704 `and dword [esi+0xC],0xFFFFFFCF`);
+    // CE cleared them on the path.
+    run_info->flags &= ~0x30;
 
     if ((run_info->path.flags & 0x08) != 0
         && (!tig_net_is_active()
@@ -5298,7 +5317,10 @@ int anim_path_calc_max_length(AnimPath* anim_path, int64_t from, int64_t to, int
     }
 
     if (anim_path->maxPathLength != 0) {
-        anim_path->maxPathLength = anim_path->absMaxPathLength + 5;
+        // FIX (porting bug #140): the caller's limit grows by 5, not the
+        // absolute one (0x42636F reads +0xE0, 0x42642F `add eax,5`, 0x426434
+        // writes +0xE0). CE wrote absMaxPathLength + 5 into it.
+        anim_path->maxPathLength += 5;
         if (anim_path->maxPathLength > anim_path->absMaxPathLength) {
             if (anim_path->absMaxPathLength > 0) {
                 anim_path->maxPathLength = anim_path->absMaxPathLength;
@@ -5608,7 +5630,10 @@ bool anim_create_path_away_from_obj(AnimRunInfo* run_info)
     }
 
     rot = location_rot(target_loc, source_loc);
-    for (dist = 0; dist < range; dist++) {
+    // FIX (porting bug #142): the tile is stepped away range + 1 times
+    // (0x426BAB `inc eax` on the range right after location_rot, then the
+    // loop runs to it). CE stepped range times.
+    for (dist = 0; dist <= range; dist++) {
         if (!location_in_dir(target_loc, rot, &target_loc)) {
             ASSERT(0); // 4812, "0"
             exit(EXIT_FAILURE);
@@ -5838,6 +5863,14 @@ bool anim_check_next_step(AnimRunInfo* run_info, int64_t obj, int64_t loc)
             node = node->next;
         }
         object_list_destroy(&objects);
+
+        // FIX (porting bug #130): a living critter on the next tile near the
+        // path's end ends the step as blocked at once (0x42722C stores it,
+        // 0x427242 frees the list, 0x42724A `mov eax,1; ret`). CE went on to
+        // the blocker and trap checks and returned false unless one fired.
+        if (node != NULL) {
+            return true;
+        }
     }
 
     if ((run_info->flags & 0x400) != 0
@@ -6230,7 +6263,10 @@ bool anim_create_path_near_obj(AnimRunInfo* run_info)
         path_create_info.flags &= ~PATH_FLAG_0x0001;
     }
 
-    if (anim_set_path_flags(&path_create_info, false)) {
+    // FIX (porting bug #145): every anim_set_path_flags call here passes 1
+    // (0x427B9E, 0x427CA2, 0x427E8D, 0x427F82 `push 1`); CE's first passed
+    // 0, the combat sibling's value.
+    if (anim_set_path_flags(&path_create_info, true)) {
         run_info->path.max = path_make(&path_create_info);
     } else {
         run_info->path.max = 0;
@@ -6279,14 +6315,18 @@ bool anim_create_path_near_obj(AnimRunInfo* run_info)
                     return false;
                 }
             }
-        }
 
-        if (v1) {
-            object_flags_unset(target_obj, OF_OFF);
-            run_info->path.max--;
-        }
+            // FIX (porting bug #145): only a path long enough returns here;
+            // a short one falls through to the third attempt below, as the
+            // original's `if (iStack_58 < iVar8)` block does. CE returned
+            // true with the short path and never tried again.
+            if (v1) {
+                object_flags_unset(target_obj, OF_OFF);
+                run_info->path.max--;
+            }
 
-        return true;
+            return true;
+        }
     }
 
     if (v1) {
@@ -9303,13 +9343,16 @@ bool AGperformRotateAnim(AnimRunInfo* run_info)
         next_rot = new_rot;
         rc = false;
     } else {
-        // NOTE: Original code is probably different.
+        // FIX (porting bug #147): a positive delta up to and including 4 turns
+        // by +7 (0x42C593 `cmp eax,4; jle` to the +7 step); CE turned +1 at
+        // exactly 4, so a half turn went the other way. The negative side
+        // (0x42C5A4 `cmp eax,-4; jge` to +1) was right.
         delta = rot - new_rot;
 
         if (delta <= 0) {
             next_rot = delta >= -4 ? rot + 1 : rot + 7;
         } else {
-            next_rot = delta < 4 ? rot + 7 : rot + 1;
+            next_rot = delta <= 4 ? rot + 7 : rot + 1;
         }
 
         if (next_rot < 0) {
@@ -10160,12 +10203,11 @@ bool AGbeginAnimJump(AnimRunInfo* run_info)
         }
     }
 
-    art_id = obj_field_int32_get(obj, OBJ_F_CURRENT_AID);
-    if (tig_art_anim_data(art_id, &art_anim_data) != TIG_OK) {
-        run_info->flags &= ~0x10;
-        return false;
-    }
-
+    // FIX (porting bug #137): the art set is the goal's AGDATA_ANIM_ID, or the
+    // current aid rewound to frame 0, computed above (0x42D8AC passes it to
+    // object_set_current_aid; one tig_art_anim_data follows, at 0x42D8B7, for
+    // the fps only). CE re-read the current aid over it and returned early
+    // when its anim data was missing, so the jump never rewound or retargeted.
     object_set_current_aid(obj, art_id);
 
     if (tig_art_anim_data(art_id, &art_anim_data) == TIG_OK) {
@@ -10271,7 +10313,10 @@ bool AGbeginAnimLoopAnim(AnimRunInfo* run_info)
 
     if (obj_type_is_critter(obj_field_int32_get(obj, OBJ_F_TYPE))
         && (obj_field_int32_get(obj, OBJ_F_CRITTER_FLAGS) & (OCF_PARALYZED | OCF_STUNNED)) != 0) {
-        art_id = obj_field_int32_get(obj, OBJ_F_CURRENT_AID);
+        // FIX (porting bug #144): the art tested, and then set, is the one
+        // in hand - the goal's, or the current aid rewound to frame 0
+        // (0x42DAC5 keeps it in ebx; 0x42DB0C and 0x42DB2E push ebx). CE
+        // re-read the current aid here and carried it on.
         anim = tig_art_id_anim_get(art_id);
         if (!IS_BLOODY_DEATH_ANIM(anim)) {
             return false;
@@ -10313,7 +10358,9 @@ bool AGbeginAnimLoopAnim(AnimRunInfo* run_info)
             run_info->cur_stack_data->params[AGDATA_SOUND_HANDLE].data = TIG_SOUND_HANDLE_INVALID;
         }
     } else if (sound_handle == TIG_SOUND_HANDLE_INVALID) {
-        sound_handle = gsound_play_sfx_on_obj(sound_id, 1, obj);
+        // FIX (porting bug #144): the looping sound is played with a zero
+        // second argument (0x42DC80 `push 0`); CE passed 1.
+        sound_handle = gsound_play_sfx_on_obj(sound_id, 0, obj);
         if (sound_handle != TIG_SOUND_HANDLE_INVALID) {
             run_info->goals[0].params[AGDATA_SOUND_HANDLE].data = sound_handle;
         } else {
@@ -10338,10 +10385,9 @@ bool anim_loop_is_near_pc(AnimRunInfo* run_info)
         return false;
     }
 
-    if ((obj_field_int32_get(obj, OBJ_F_SPELL_FLAGS) & OSF_STONED) != 0) {
-        return false;
-    }
-
+    // FIX (porting bug #146): the original has no spell-flag test here -
+    // 0x42DCF0-0x42DDE0 never calls obj_field_int32_get - so a stoned
+    // looping object keeps counting. CE returned false for it.
     run_info->cur_stack_data->params[AGDATA_SCRATCH_VAL5].data++;
     if (run_info->cur_stack_data->params[AGDATA_SCRATCH_VAL5].data < 3) {
         return run_info->cur_stack_data->params[AGDATA_SCRATCH_VAL4].data;
@@ -11526,11 +11572,16 @@ bool anim_knockback_path_blocked(AnimRunInfo* run_info, int64_t obj, AnimPath* p
     ObjectList objects;
     ObjectNode* node;
 
+    // FIX (porting bug #129): a path with bit 0x1 set is blocked outright
+    // (0x42FD7B `test byte [esi],1; jne 0x42FE87` -> `mov eax,1; ret`), and
+    // the checks below run only when it is clear, ending in `return 0`. CE
+    // had the test inverted: every knockback path, which anim_create_knockback_path
+    // leaves with bit 0x1 clear, was reported blocked on its first step.
     if ((path->flags & 0x01) != 0) {
-        if (!location_in_dir(from, path->baseRot, &to)) {
-            return false;
-        }
+        return true;
+    }
 
+    if (location_in_dir(from, path->baseRot, &to)) {
         if (path->curr > path->max - 2) {
             object_list_location(to, OBJ_TM_CRITTER, &objects);
             node = objects.head;
@@ -11551,13 +11602,13 @@ bool anim_knockback_path_blocked(AnimRunInfo* run_info, int64_t obj, AnimPath* p
         // NOTE: Verified against 0x42FE20 - original calls obj_field_int32_get(obj, OBJ_F_SPELL_FLAGS) and discards the result; transcription faithful.
         obj_field_int32_get(obj, OBJ_F_SPELL_FLAGS);
 
-        if (!tile_is_blocking(to, false)
-            && !object_traversal_is_blocked(obj, from, path->baseRot, 0x03, NULL)) {
-            return false;
+        if (tile_is_blocking(to, false)
+            || object_traversal_is_blocked(obj, from, path->baseRot, 0x03, NULL)) {
+            return true;
         }
     }
 
-    return true;
+    return false;
 }
 
 // 0x42FEA0
@@ -12468,7 +12519,10 @@ bool AGupdateAnimEyeCandy(AnimRunInfo* run_info)
             }
         }
     } else {
-        if (overlay_light != -1) {
+        // FIX (porting bug #132): with no overlay art, a MISSING light ends the
+        // goal and a present one steps its frame (0x431340 `if (light == -1) return 0`,
+        // then the light frame call before LAB_00431527). CE had the test inverted.
+        if (overlay_light == -1) {
             return false;
         }
     }
@@ -13215,7 +13269,10 @@ bool AGupdateAnimEyeCandyFireDmg(AnimRunInfo* run_info)
             }
         }
     } else {
-        if (overlay_light != -1) {
+        // FIX (porting bug #133): with no overlay art, a MISSING light ends the
+        // goal and a present one steps its frame (0x4322A0 `if (light == -1) return 0`,
+        // then the light frame call before LAB_004324A5). CE had the test inverted.
+        if (overlay_light == -1) {
             return false;
         }
     }
@@ -13262,7 +13319,9 @@ bool AGupdateAnimEyeCandyReverseFireDmg(AnimRunInfo* run_info)
                 }
 
                 if (tig_art_anim_data(art_id, &art_anim_data) != TIG_OK) {
-                    return true;
+                    // FIX (porting bug #134): missing anim data ends the goal, as in
+                    // AGupdateAnimEyeCandyReverse; the forward variants return 1 here.
+                    return false;
                 }
 
                 frame = tig_art_id_frame_get(art_id);
@@ -13289,7 +13348,9 @@ bool AGupdateAnimEyeCandyReverseFireDmg(AnimRunInfo* run_info)
                 }
 
                 if (tig_art_anim_data(art_id, &art_anim_data) != TIG_OK) {
-                    return true;
+                    // FIX (porting bug #134): missing anim data ends the goal, as in
+                    // AGupdateAnimEyeCandyReverse; the forward variants return 1 here.
+                    return false;
                 }
 
                 frame = tig_art_id_frame_get(art_id);
@@ -13307,7 +13368,9 @@ bool AGupdateAnimEyeCandyReverseFireDmg(AnimRunInfo* run_info)
             }
 
             if (tig_art_anim_data(art_id, &art_anim_data) != TIG_OK) {
-                return true;
+                // FIX (porting bug #134): missing anim data ends the goal, as in
+                // AGupdateAnimEyeCandyReverse; the forward variants return 1 here.
+                return false;
             }
 
             frame = tig_art_id_frame_get(art_id);
@@ -13322,7 +13385,10 @@ bool AGupdateAnimEyeCandyReverseFireDmg(AnimRunInfo* run_info)
             }
         }
     } else {
-        if (overlay_light != -1) {
+        // FIX (porting bug #134): with no overlay art, a MISSING light ends the
+        // goal and a present one steps its frame (0x4324D0 `if (light == -1) return 0`,
+        // then the light frame call before LAB_004326D8). CE had the test inverted.
+        if (overlay_light == -1) {
             return false;
         }
     }
@@ -13443,8 +13509,11 @@ bool AGbeginAnimAttack(AnimRunInfo* run_info)
     }
     run_info->pause_time.milliseconds = delay;
 
+    // FIX (porting bug #143): an invisible attacker is revealed unless it is
+    // the local PC (0x4328E6 player_is_local_pc_obj, 0x4328F0 `jne` past the
+    // unset). CE had the test inverted: it revealed the PC and nobody else.
     if ((obj_field_int32_get(source_obj, OBJ_F_SPELL_FLAGS) & OSF_INVISIBLE) != 0
-        && player_is_local_pc_obj(source_obj)) {
+        && !player_is_local_pc_obj(source_obj)) {
         object_flags_unset(source_obj, OF_INVISIBLE);
     }
 
@@ -13700,17 +13769,23 @@ void anim_create_blood_splat(int64_t obj)
     offset_x = obj_field_int32_get(obj, OBJ_F_OFFSET_X);
     offset_y = obj_field_int32_get(obj, OBJ_F_OFFSET_Y);
     object_create(proto_get_by_description(BP_POOL_OF_BLOOD), loc, &blood_obj);
+    // FIX (porting bug #135): the pool takes the critter's offset within the
+    // tile (0x432E94 object_set_offset right after object_create at
+    // 0x432E7B); CE read the offsets and never applied them. In the editor
+    // the pool's own art is read and set to its last frame (the blood handle
+    // at 0x432EA8 and 0x432ECx); CE used the critter's.
+    object_set_offset(blood_obj, offset_x, offset_y);
     blood_art_id = obj_field_int32_get(blood_obj, OBJ_F_CURRENT_AID);
 
     // NOTE: Verified against 0x432EB5-0x432EBB - original calls tig_art_critter_id_size_get on the object's current aid and discards the result; transcription faithful.
     tig_art_critter_id_size_get(obj_field_int32_get(obj, OBJ_F_CURRENT_AID));
 
     if (anim_editor) {
-        obj_art_id = obj_field_int32_get(obj, OBJ_F_CURRENT_AID);
+        obj_art_id = obj_field_int32_get(blood_obj, OBJ_F_CURRENT_AID);
         if (tig_art_anim_data(obj_art_id, &art_anim_data) == TIG_OK) {
             obj_art_id = tig_art_id_frame_set(obj_art_id, art_anim_data.num_frames - 1);
         }
-        object_set_current_aid(obj, obj_art_id);
+        object_set_current_aid(blood_obj, obj_art_id);
         return;
     }
 
@@ -14777,6 +14852,13 @@ bool anim_goal_get_up(int64_t obj)
         return false;
     }
 
+    // FIX (porting bug #126): the goal is refused unless the critter can
+    // start one - active, and in turn-based on its own turn (0x434DF7-0x434E05
+    // calls anim_can_start_goal(obj, 0) first). CE skipped the guard.
+    if (!anim_can_start_goal(obj, 0)) {
+        return false;
+    }
+
     art_id = obj_field_int32_get(obj, OBJ_F_CURRENT_AID);
     if (tig_art_id_anim_get(art_id) != TIG_ART_ANIM_FALL_DOWN) {
         return false;
@@ -14985,7 +15067,10 @@ bool anim_goal_use_item_on_obj_with_skill(int64_t obj, int64_t item_obj, int64_t
 {
     AnimGoalData goal_data;
 
-    if (obj == OBJ_HANDLE_NULL) {
+    // FIX (porting bug #127): the original refuses a null TARGET here
+    // (0x4352D6-0x4352DC tests the third handle); a null `obj` is refused by
+    // anim_can_start_goal below. CE tested `obj` and never the target.
+    if (target_obj == OBJ_HANDLE_NULL) {
         return false;
     }
 
@@ -15332,7 +15417,10 @@ bool anim_goal_fidget(int64_t critter_obj)
 
     ASSERT(obj_type_is_critter(obj_type)); // 16405, "obj_type_is_critter(objType)"
 
-    if (obj_type != OBJ_TYPE_NPC) {
+    // FIX (porting bug #124): a PC fidgets too - 0x435C1A `cmp ebx,0xF; je`
+    // goes straight to anim_can_start_goal; only a non-critter is refused.
+    // CE refused everything but an NPC.
+    if (!obj_type_is_critter(obj_type)) {
         return false;
     }
 
@@ -15401,7 +15489,10 @@ bool anim_goal_unconceal(int64_t critter_obj)
 
     ASSERT(obj_type_is_critter(obj_type)); // 16478, "obj_type_is_critter(objType)"
 
-    if (obj_type != OBJ_TYPE_NPC) {
+    // FIX (porting bug #136): a PC is let through as well - 0x435DCB
+    // `cmp esi,0xF; je` to the critter_is_active call; only a non-critter is
+    // refused. CE refused everything but an NPC.
+    if (!obj_type_is_critter(obj_type)) {
         return false;
     }
 
@@ -15570,10 +15661,13 @@ bool anim_goal_please_move(int64_t obj, int64_t target_obj)
         return false;
     }
 
+    // FIX (porting bug #122): an NPC `obj` swaps on its type alone; the
+    // handle comparison decides only otherwise (0x436445 `cmp eax,0x10; je`
+    // to the swap, then 0x43644A-0x436452 compare the handles). CE had `&&`.
     if (obj != OBJ_HANDLE_NULL
         && obj_field_int32_get(target_obj, OBJ_F_TYPE) == OBJ_TYPE_PC
         && (obj_field_int32_get(obj, OBJ_F_TYPE) == OBJ_TYPE_NPC
-            && obj > target_obj)) {
+            || obj > target_obj)) {
         tmp_obj = target_obj;
         target_obj = obj;
         obj = tmp_obj;
@@ -15904,11 +15998,13 @@ void anim_scratch_goal_turn_on_stand_in_place(void)
 // NOTE: Passes AnimID by value.
 //
 // 0x436CB0
-// Marks a moving goal to stop at the next blocked tile. Only sent in
-// networked games; local single-player movement handles blockers elsewhere.
+// Marks a moving goal to stop at the next blocked tile.
 void anim_goal_turn_on_stop_at_blockers(AnimID anim_id)
 {
-    if (tig_net_is_active()) {
+    // FIX (porting bug #128): the flag is set when the game is NOT networked
+    // (0x436CB0 `test byte [0x62AC6C],1; jne ret`); CE had the test inverted,
+    // so a single-player move never stopped at a blocker.
+    if (!tig_net_is_active()) {
         turn_on_flags(anim_id, 0x400, 0);
     }
 }
@@ -16318,7 +16414,12 @@ int anim_get_animation_fps(int64_t obj, tig_art_id_t art_id, int speed)
     if (v12 != -1) {
         if (speed < 8) {
             fps = v13 + speed * (v12 - v13) / 8;
-        } else if (speed > 8) {
+        } else if (speed == 8) {
+            // FIX (porting bug #123): speed 8 is the table's middle value
+            // (0x437A5C `cmp edx,8; jne`, then `mov ebx,ecx; ret`). CE fell
+            // through and kept the art's own fps.
+            fps = v12;
+        } else {
             if (speed < 30) {
                 fps = v12 + speed * (v14 - v12) / 30;
             } else {
