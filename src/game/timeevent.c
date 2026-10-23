@@ -779,6 +779,15 @@ bool timeevent_load_node(TimeEvent* timeevent, TigFile* stream)
         return false;
     }
 
+    // FIX: the type indexes `timeevent_type_info` on the next line and the
+    // list heads after it; the stream's value was not checked before either,
+    // and the later `>= COUNT` checks were signed, so a negative type passed
+    // them (review 2026-10-22, finding 2).
+    if (timeevent->type < 0 || timeevent->type >= TIMEEVENT_TYPE_COUNT) {
+        tig_debug_printf("TimeEvent: timeevent_load_node: refusing type %d\n", timeevent->type);
+        return false;
+    }
+
     for (index = 0; index < TIMEEVENT_PARAM_COUNT; index++) {
         if ((timeevent_param_type_flags[index][TIMEEVENT_PARAM_TYPE_INTEGER] & timeevent_type_info[timeevent->type].flags) != 0) {
             if (tig_file_fread(&(timeevent->params[index].integer_value), sizeof(timeevent->params[index].integer_value), 1, stream) != 1) {
@@ -1135,7 +1144,7 @@ bool timeevent_add_base_at_func(TimeEvent* timeevent, DateTime* base, DateTime* 
         return false;
     }
 
-    if (timeevent->type >= TIMEEVENT_TYPE_COUNT) {
+    if (timeevent->type < 0 || timeevent->type >= TIMEEVENT_TYPE_COUNT) {
         return false;
     }
 
@@ -1201,7 +1210,7 @@ bool timeevent_add_delay_base_at(TimeEvent* timeevent, DateTime* delay, DateTime
         return false;
     }
 
-    if (timeevent->type >= TIMEEVENT_TYPE_COUNT) {
+    if (timeevent->type < 0 || timeevent->type >= TIMEEVENT_TYPE_COUNT) {
         return false;
     }
 
@@ -1241,7 +1250,7 @@ bool timeevent_add_loaded(TimeEvent* timeevent)
         return false;
     }
 
-    if (timeevent->type >= TIMEEVENT_TYPE_COUNT) {
+    if (timeevent->type < 0 || timeevent->type >= TIMEEVENT_TYPE_COUNT) {
         return false;
     }
 

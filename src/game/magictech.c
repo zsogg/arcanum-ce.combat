@@ -866,6 +866,9 @@ MagicTechInfo* magictech_spells;
 static int magictech_active_run_count;
 
 // 0x6876E0
+// The table's capacity, which the save loader bounds its count by.
+#define MAGICTECH_RUN_INFO_COUNT 512
+
 MagicTechRunInfo* magictech_run_info;
 
 // 0x44EF50
@@ -877,7 +880,7 @@ bool magictech_init(GameInitInfo* init_info)
     magictech_invalidate_rect = init_info->invalidate_rect_func;
     magictech_editor = init_info->editor;
     magictech_component_names = (const char**)CALLOC(25, sizeof(const char*));
-    magictech_run_info = (MagicTechRunInfo*)CALLOC(512, sizeof(MagicTechRunInfo));
+    magictech_run_info = (MagicTechRunInfo*)CALLOC(MAGICTECH_RUN_INFO_COUNT, sizeof(MagicTechRunInfo));
     magictech_run_info_clear_all();
 
     if (!mes_load("Rules\\magictech.mes", &magictech_mes_file)) {
@@ -1092,6 +1095,13 @@ bool magictech_post_load(GameLoadInfo* load_info)
         return false;
     }
 
+    // FIX: the count and every extent are bounded by the 512-entry array
+    // they index, as in anim_load (review 2026-10-22, finding 2).
+    if (cnt < 0 || cnt > MAGICTECH_RUN_INFO_COUNT) {
+        tig_debug_printf("MagicTech: magictech_post_load: refusing implausible run count %d\n", cnt);
+        return false;
+    }
+
     index = 0;
     while (index < cnt) {
         if (tig_file_fread(&extent, sizeof(extent), 1, load_info->stream) != 1) {
@@ -1100,6 +1110,9 @@ bool magictech_post_load(GameLoadInfo* load_info)
 
         if (extent > 0) {
             for (j = 0; j < extent; j++) {
+                if (index >= cnt) {
+                    return false;
+                }
                 if (!magictech_run_info_load(&(magictech_run_info[index]), load_info->stream)) {
                     return false;
                 }
@@ -1107,6 +1120,9 @@ bool magictech_post_load(GameLoadInfo* load_info)
                 index++;
             }
         } else if (extent < 0) {
+            if (-extent > cnt - index) {
+                return false;
+            }
             index += -extent;
         }
     }

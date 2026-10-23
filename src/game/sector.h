@@ -65,7 +65,7 @@ bool sector_loaded(int64_t id);
 bool sector_lock(int64_t id, Sector** sector_ptr);
 bool sector_unlock(int64_t id);
 void sector_cache_reset(void);
-void sector_flush(unsigned int flags);
+bool sector_flush(unsigned int flags);
 bool sector_check_demo_limits(int64_t id);
 void sector_art_cache_register(tig_art_id_t art_id);
 bool sector_is_blocked(int64_t sec);

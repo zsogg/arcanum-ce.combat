@@ -400,7 +400,8 @@ extern int anim_next_unique_id;
 extern int dword_739E40;
 extern int dword_739E44;
 
-extern AnimRunInfo anim_run_info[216];
+#define ANIM_RUN_INFO_COUNT 216
+extern AnimRunInfo anim_run_info[ANIM_RUN_INFO_COUNT];
 
 void anim_active_goal_count_increment(AnimRunInfo* run_info, AnimGoalNode* goal_node);
 bool anim_goal_is_endless(AnimRunInfo* run_info);

@@ -437,20 +437,27 @@ bool tig_file_unarchive_native(const char* src, const char* dst)
                 break;
             }
 
+            // FIX: `size` came out of the index and is bounded by nothing in
+            // the original before it is used as both a read length into
+            // `path1` and the index of the terminator: at 0x52E677 it passes
+            // the unchecked value to `tig_file_fread` (0x530640) and writes
+            // the terminator with `mov BYTE PTR [esp+ecx*1+0x28],0x0` at
+            // 0x52E695. The writer only ever emits `strlen` of a real path,
+            // so only a hand-edited, copied or corrupt save reaches a name
+            // longer than TIG_MAX_PATH - and it overran the stack. Settled
+            // FAITHFUL on 2026-08-25 (P5.4), two weeks before the fidelity
+            // contract's reader exception; refused since 2026-10-22 under it
+            // (review finding 2, zsogg's decision). The archive pair is the
+            // save format, which is Compatible: nothing the game wrote is
+            // refused.
+            if (size < 0 || size >= TIG_MAX_PATH) {
+                break;
+            }
+
             if (tig_file_fread(path1, size, 1, index_stream) != 1) {
                 break;
             }
 
-            // NOTE: `size` came out of the index and is bounded by nothing
-            // before it is used as both a read length into `path1` and the
-            // index of this terminator - a `.tfai` claiming a name longer than
-            // TIG_MAX_PATH overruns the stack. FAITHFUL: the original at
-            // 0x52E677 passes the same unchecked value to `tig_file_fread`
-            // (0x530640) and writes the terminator with
-            // `mov BYTE PTR [esp+ecx*1+0x28],0x0` at 0x52E695, ecx being that
-            // same field. It bounds the reader by the writer, which only ever
-            // emits `strlen` of a real path - so a hand-edited or truncated
-            // save is the only way to reach it. Settled 2026-08-25 (P5.4).
             path1[size] = '\0';
 
             if (tig_file_fread(&size, sizeof(size), 1, index_stream) != 1) {
@@ -471,6 +478,11 @@ bool tig_file_unarchive_native(const char* src, const char* dst)
             tig_file_fclose(tmp_stream);
         } else if (type == 1) {
             if (tig_file_fread(&size, sizeof(size), 1, index_stream) != 1) {
+                break;
+            }
+
+            // FIX: the directory record's name, bounded like the file's above.
+            if (size < 0 || size >= TIG_MAX_PATH) {
                 break;
             }
 

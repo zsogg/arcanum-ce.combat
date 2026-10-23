@@ -372,7 +372,13 @@ bool map_save(TigFile* stream)
 
     tig_debug_printf("map_save: flushing map...");
     tig_timer_now(&start);
-    map_flush(1);
+    // FIX: a sector or dynamic file that failed to write fails the save here,
+    // before the stream is staged, instead of committing a slot whose maps
+    // folder holds the previous save's files (review 2026-10-22, finding 1).
+    if (!map_flush(1)) {
+        tig_debug_printf("map_save(): error flushing map.\n");
+        return false;
+    }
     tig_debug_printf("done.  Time (ms): %d\n", tig_timer_elapsed(start));
 
     tig_debug_printf("map_save: saving map names...");
@@ -969,33 +975,47 @@ bool map_is_clearing_objects(void)
 }
 
 // 0x410070
-void map_flush(unsigned int flags)
+//
+// FIX: returns whether everything flushed was written. The original is `void`
+// and only logs, so `map_save` could not fail on a bad `.dif` or dynamic
+// file and the four-file save transaction committed a slot holding stale
+// sectors (review 2026-10-22, finding 1). Every step still runs; only the
+// verdict is new, and only `map_save` acts on it.
+bool map_flush(unsigned int flags)
 {
     char path[TIG_MAX_PATH];
     TigFile* stream;
+    bool ok = true;
 
     wallcheck_flush();
 
     if (!map_save_preprocess()) {
         tig_debug_println("Error: map_save_preprocess failed in map_flush.");
+        ok = false;
     }
 
     if (map_editor) {
         if (!map_save_objects()) {
             tig_debug_println("Error: map_save_objects failed in map_flush.");
+            ok = false;
         }
     } else {
         if (!map_save_difs()) {
             tig_debug_println("Error: map_save_difs failed in map_flush.");
+            ok = false;
         }
 
         if (!map_save_dynamic()) {
             tig_debug_println("Error: map_save_dynamic failed in map_flush.");
+            ok = false;
         }
     }
 
     map_load_postprocess();
-    sector_flush(flags);
+    if (!sector_flush(flags)) {
+        tig_debug_println("Error: sector_flush failed in map_flush.");
+        ok = false;
+    }
     jumppoint_flush();
     terrain_flush();
     townmap_flush();
@@ -1016,6 +1036,8 @@ void map_flush(unsigned int flags)
             tig_file_remove(path);
         }
     }
+
+    return ok;
 }
 
 // 0x4101D0

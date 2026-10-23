@@ -1823,8 +1823,14 @@ bool gamelib_saveinfo_load(const char* name, GameSaveInfo* save_info)
         if (tig_file_fread(save_info->module_name, size, 1, stream) != 1) break;
         save_info->module_name[size] = '\0';
 
+        // FIX: the two strings after module_name take the same bound it
+        // already has; a .gsi claiming a longer name overflowed the struct at
+        // the load screen, before any save was chosen (review 2026-10-22,
+        // finding 3).
         if (tig_file_fread(&size, sizeof(size), 1, stream) != 1) break;
+        if (size < 0 || (size_t)size >= sizeof(save_info->pc_name)) break;
         if (tig_file_fread(save_info->pc_name, size, 1, stream) != 1) break;
+        save_info->pc_name[size] = '\0';
 
         if (tig_file_fread(&(save_info->map), sizeof(save_info->map), 1, stream) != 1) break;
         if (tig_file_fread(&(save_info->datetime), sizeof(save_info->datetime), 1, stream) != 1) break;
@@ -1834,7 +1840,9 @@ bool gamelib_saveinfo_load(const char* name, GameSaveInfo* save_info)
         if (tig_file_fread(&(save_info->story_state), sizeof(save_info->story_state), 1, stream) != 1) break;
 
         if (tig_file_fread(&size, sizeof(size), 1, stream) != 1) break;
+        if (size < 0 || (size_t)size >= sizeof(save_info->description)) break;
         if (size != 0 && tig_file_fread(save_info->description, size, 1, stream) != 1) break;
+        save_info->description[size] = '\0';
 
         success = true;
     } while (0);

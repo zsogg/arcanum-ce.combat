@@ -3165,6 +3165,16 @@ bool anim_load_internal(GameLoadInfo* load_info)
     if (tig_file_fread(&dword_5DE6C0, 4, 1, load_info->stream) != 1) return false;
     if (tig_file_fread(&cnt, 4, 1, load_info->stream) != 1) return false;
 
+    // FIX: the count and every extent are bounded by the array they index.
+    // The stream said how many slots to fill and nothing checked it against
+    // the 216 there are, so a corrupt save wrote past `anim_run_info` into
+    // whatever follows it (review 2026-10-22, finding 2). A save the game
+    // wrote never exceeds its own array, so nothing valid is refused.
+    if (cnt < 0 || cnt > ANIM_RUN_INFO_COUNT) {
+        tig_debug_printf("Anim: anim_load: refusing implausible run count %d\n", cnt);
+        return false;
+    }
+
     idx = 0;
     while (idx < cnt) {
         if (tig_file_fread(&extent_size, sizeof(extent_size), 1, load_info->stream) != 1) {
@@ -3173,6 +3183,9 @@ bool anim_load_internal(GameLoadInfo* load_info)
 
         if (extent_size > 0) {
             while (extent_size > 0) {
+                if (idx >= cnt) {
+                    return false;
+                }
                 if (!anim_run_info_load(&(anim_run_info[idx]), load_info->stream)) {
                     return false;
                 }
@@ -3180,6 +3193,9 @@ bool anim_load_internal(GameLoadInfo* load_info)
                 extent_size--;
             }
         } else if (extent_size < 0) {
+            if (-extent_size > cnt - idx) {
+                return false;
+            }
             idx += -extent_size;
         }
     }
@@ -3205,6 +3221,12 @@ bool anim_run_info_load(AnimRunInfo* run_info, TigFile* stream)
     if (!object_load_obj_handle_safe(&(run_info->anim_obj), 0, stream)) return false;
     if (tig_file_fread(&(run_info->extra_target_tile), 8, 1, stream) != 1) return false;
     if (tig_file_fread(&(run_info->current_goal), 4, 1, stream) != 1) return false;
+
+    // FIX: a goal index past the eight-entry stack is refused rather than
+    // read into `cur_stack_data` and `path` (review 2026-10-22, finding 2).
+    if (run_info->current_goal >= (int)(sizeof(run_info->goals) / sizeof(run_info->goals[0]))) {
+        return false;
+    }
 
     for (index = 0; index <= run_info->current_goal; index++) {
         if (!anim_goal_data_load(&(run_info->goals[index]), stream)) {
@@ -3508,6 +3530,13 @@ void anim_load_nodes_from_map(const char* map)
 
     for (idx = 0; idx < cnt; idx++) {
         if (!anim_run_info_load(&run_info, stream)) {
+            break;
+        }
+
+        // FIX: the slot number came out of the map's file and indexes a
+        // 216-entry array (review 2026-10-22, finding 2).
+        if (run_info.id.slot_num < 0 || run_info.id.slot_num >= ANIM_RUN_INFO_COUNT) {
+            tig_debug_printf("Anim: anim_load_nodes_from_map: ERROR: slot %d out of range\n", run_info.id.slot_num);
             break;
         }
 

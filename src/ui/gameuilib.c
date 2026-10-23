@@ -341,9 +341,12 @@ bool gameuilib_save(void)
         }
     }
 
-    tig_file_fclose(stream);
+    // FIX: the buffered data2.sav flush is part of staging, as gamelib_save
+    // already treats data.sav's; a full disk fails here, not at fwrite
+    // (review 2026-10-22, finding 1).
+    int close_result = tig_file_fclose(stream);
 
-    if (index < MODULE_COUNT) {
+    if (index < MODULE_COUNT || close_result != 0) {
         // One of the module failed to write data, remove malformed data file.
         tig_file_remove(SAVE_CURRENT_DATA2_SAV);
         return false;

@@ -1044,15 +1044,24 @@ void sector_cache_reset(void)
 }
 
 // 0x4D0BC0
-void sector_flush(unsigned int flags)
+//
+// FIX: returns whether every sector was written. The original is `void` and
+// drops `sector_save_func`'s result, so a `.dif` that failed to write left
+// `map_save`, and the player, told the save had worked while the slot held
+// the previous `.dif` (review 2026-10-22, finding 1). Every sector is still
+// attempted and evicted as before; only the verdict is new.
+bool sector_flush(unsigned int flags)
 {
     unsigned int index;
     SectorCacheEntry* cache_entry;
+    bool ok = true;
 
     for (index = 0; index < sector_cache_size; index++) {
         cache_entry = &(sector_cache_entries[sector_cache_indexes[index]]);
         if (cache_entry->refcount == 0) {
-            sector_save_func(&(cache_entry->sector));
+            if (!sector_save_func(&(cache_entry->sector))) {
+                ok = false;
+            }
             if ((flags & 0x1) == 0) {
                 sector_cache_evict(&(cache_entry->sector));
                 cache_entry->used = false;
@@ -1066,6 +1075,7 @@ void sector_flush(unsigned int flags)
     }
 
     sector_block_save_internal();
+    return ok;
 }
 
 // 0x4D0DE0
@@ -2126,7 +2136,13 @@ bool sector_save_game(Sector* sector)
         return false;
     }
 
-    tig_file_fclose(stream);
+    // FIX: the buffered flush at close is part of the write; a full disk
+    // fails here, not at fwrite (review 2026-10-22, finding 1).
+    if (tig_file_fclose(stream) != 0) {
+        tig_debug_printf("Error closing differences file %s\n", path);
+        tig_file_remove(path);
+        return false;
+    }
     sector_validate_game("sector post-save");
 
     return true;

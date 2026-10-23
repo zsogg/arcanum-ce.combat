@@ -415,7 +415,10 @@ static TigRect wmap_ui_compass_base_bounds;
 static PcLens wmap_ui_pc_lens;
 
 // 0x64FBD8
-static WmapNote wmap_ui_world_notes[200];
+// Both note arrays; the save loader bounds its count by this.
+#define WMAP_UI_NOTES_MAX 200
+
+static WmapNote wmap_ui_world_notes[WMAP_UI_NOTES_MAX];
 
 // 0x65E968
 static int dword_65E968;
@@ -434,7 +437,7 @@ static tig_color_t dword_65E970;
 static tig_color_t wmap_ui_route_color;
 
 // 0x65E978
-static WmapNote wmap_ui_town_notes[200];
+static WmapNote wmap_ui_town_notes[WMAP_UI_NOTES_MAX];
 
 // 0x66D6F8
 static int dword_66D6F8;
@@ -1067,6 +1070,13 @@ bool wmap_ui_load(GameLoadInfo* load_info)
 
             tig_debug_printf("WMapUI: Reading Saved Notes: %d.\n", cnt);
 
+            // FIX: the count indexes a 200-entry array and came out of the
+            // stream unchecked (review 2026-10-22, finding 2).
+            if (cnt < 0 || cnt > WMAP_UI_NOTES_MAX) {
+                tig_debug_printf("WMapUI: Load: refusing implausible note count %d.\n", cnt);
+                return false;
+            }
+
             if (wmap_ui_mode_info[mode].num_notes == NULL) {
                 tig_debug_printf("WMapUI: Load: ERROR: Note Data Doesn't Match!\n");
                 exit(EXIT_FAILURE);
@@ -1105,6 +1115,10 @@ bool wmap_ui_town_note_load(WmapNote* note, TigFile* stream)
     if (!wmap_ui_rect_read(&(note->field_18), stream)) return false;
     if (tig_file_fread(&(note->type), sizeof(note->type), 1, stream) != 1) return false;
     if (tig_file_fread(&size, sizeof(size), 1, stream) != 1) return false;
+
+    // FIX: the length is bounded by the 250-byte field it fills (review
+    // 2026-10-22, finding 2).
+    if (size < 0 || (size_t)size >= sizeof(note->str)) return false;
 
     memset(note->str, 0, sizeof(note->str));
     if (tig_file_fread(note->str, 1, size, stream) != size) return false;
