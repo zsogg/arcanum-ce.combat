@@ -90,6 +90,7 @@ add_executable(arcanum-tests
     "test_mod_format_bounds.c"
     "test_module_paths.c"
     "test_ai_memo.c"
+    "test_combat_order.c"
     "obj_harness.c"
     "obj_harness.h"
     "tests_main.c"
@@ -618,6 +619,79 @@ add_custom_command(
 add_custom_target(arcanum-ai-test-obj DEPENDS "${AI_TEST_OBJ}")
 target_link_libraries(arcanum-tests PRIVATE "${AI_TEST_OBJ}")
 add_dependencies(arcanum-tests arcanum-ai-test-obj)
+
+# The same trick for the summon ordering (review 2026-10-22, finding 20):
+# `combat_order_summons` re-links the fight's critter list, which is the
+# riskiest pointer surgery behind a feature flag and had no test that failed
+# when it broke. The list is a `static` global and the recorder of who
+# summoned whom is `static` in magictech.c, so both objects are globalized
+# for the suite; the oracle keeps its own copies above.
+set(COMBAT_TEST_STATICS
+    combat_order_summons
+)
+set(COMBAT_TEST_DATA
+    combat_critter_list
+)
+set(COMBAT_TEST_OBJ "${CMAKE_CURRENT_BINARY_DIR}/combat_test_globalized.o")
+set(_combat_test_globalize_args "")
+foreach(sym ${COMBAT_TEST_STATICS} ${COMBAT_TEST_DATA})
+    list(APPEND _combat_test_globalize_args "--globalize-symbol=${sym}")
+endforeach()
+
+file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/combattestobj")
+
+add_custom_command(
+    OUTPUT "${COMBAT_TEST_OBJ}"
+    COMMAND "${CMAKE_AR}" x "$<TARGET_FILE:arcanum-game>" combat.c${CMAKE_C_OUTPUT_EXTENSION}
+    COMMAND "${CMAKE_OBJCOPY}" ${_combat_test_globalize_args} combat.c${CMAKE_C_OUTPUT_EXTENSION} "${COMBAT_TEST_OBJ}"
+    COMMAND "${CMAKE_COMMAND}" -E rm -f combat.c${CMAKE_C_OUTPUT_EXTENSION}
+    COMMAND "${CMAKE_COMMAND}"
+        "-DOBJ=${COMBAT_TEST_OBJ}"
+        "-DSYMS=${COMBAT_TEST_STATICS}"
+        "-DDATA_SYMS=${COMBAT_TEST_DATA}"
+        "-DNM=${CMAKE_NM}"
+        -P "${CMAKE_CURRENT_SOURCE_DIR}/verify_globalized.cmake"
+    WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/combattestobj"
+    DEPENDS arcanum-game
+    COMMENT "tests: globalizing combat.c list statics (no source change)"
+    VERBATIM
+)
+
+add_custom_target(arcanum-combat-test-obj DEPENDS "${COMBAT_TEST_OBJ}")
+target_link_libraries(arcanum-tests PRIVATE "${COMBAT_TEST_OBJ}")
+add_dependencies(arcanum-tests arcanum-combat-test-obj)
+
+set(MAGICTECH_TEST_STATICS
+    magictech_summons_record
+)
+set(MAGICTECH_TEST_OBJ "${CMAKE_CURRENT_BINARY_DIR}/magictech_test_globalized.o")
+set(_magictech_test_globalize_args "")
+foreach(sym ${MAGICTECH_TEST_STATICS})
+    list(APPEND _magictech_test_globalize_args "--globalize-symbol=${sym}")
+endforeach()
+
+file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/magictechtestobj")
+
+add_custom_command(
+    OUTPUT "${MAGICTECH_TEST_OBJ}"
+    COMMAND "${CMAKE_AR}" x "$<TARGET_FILE:arcanum-game>" magictech.c${CMAKE_C_OUTPUT_EXTENSION}
+    COMMAND "${CMAKE_OBJCOPY}" ${_magictech_test_globalize_args} magictech.c${CMAKE_C_OUTPUT_EXTENSION} "${MAGICTECH_TEST_OBJ}"
+    COMMAND "${CMAKE_COMMAND}" -E rm -f magictech.c${CMAKE_C_OUTPUT_EXTENSION}
+    COMMAND "${CMAKE_COMMAND}"
+        "-DOBJ=${MAGICTECH_TEST_OBJ}"
+        "-DSYMS=${MAGICTECH_TEST_STATICS}"
+        "-DDATA_SYMS="
+        "-DNM=${CMAKE_NM}"
+        -P "${CMAKE_CURRENT_SOURCE_DIR}/verify_globalized.cmake"
+    WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/magictechtestobj"
+    DEPENDS arcanum-game
+    COMMENT "tests: globalizing magictech.c summon recorder (no source change)"
+    VERBATIM
+)
+
+add_custom_target(arcanum-magictech-test-obj DEPENDS "${MAGICTECH_TEST_OBJ}")
+target_link_libraries(arcanum-tests PRIVATE "${MAGICTECH_TEST_OBJ}")
+add_dependencies(arcanum-tests arcanum-magictech-test-obj)
 
 
 target_link_libraries(arcanum-tests PRIVATE "${ANIM_TEST_OBJ}")
