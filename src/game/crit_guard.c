@@ -235,6 +235,13 @@ void crit_guard_engage(int64_t obj)
     if (crit_guard_engaged_count < CRIT_GUARD_ENGAGED_MAX) {
         crit_guard_engaged[crit_guard_engaged_count++] = obj;
     } else {
+        // FIX: said once; a saturated table means every critter reads as
+        // engaged and no shot is an opening shot until combat mode is left,
+        // which used to happen silently (review 2026-10-22, finding 6).
+        if (!crit_guard_engaged_full) {
+            tig_debug_printf("crit_guard: %d critters engaged this fight; the opening shot is off until combat ends\n",
+                CRIT_GUARD_ENGAGED_MAX);
+        }
         crit_guard_engaged_full = true;
     }
 }

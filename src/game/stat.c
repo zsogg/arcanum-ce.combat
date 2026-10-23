@@ -1109,6 +1109,8 @@ static bool stat_poison_paced(int64_t obj)
     return stat_poison_in_real_time_combat(obj);
 }
 
+static bool stat_poison_pace_live(int64_t obj);
+
 static int stat_poison_pace_find(int64_t obj, bool add)
 {
     int slot;
@@ -1118,7 +1120,10 @@ static int stat_poison_pace_find(int64_t obj, bool add)
         if (stat_poison_pace[slot].obj == obj) {
             return slot;
         }
-        if (free_slot == -1 && stat_poison_pace[slot].obj == OBJ_HANDLE_NULL) {
+        // FIX: an entry whose critter is dead, gone or cured is free; only
+        // the real-time tick released entries, so a long turn-based fight
+        // could fill the table for good (review 2026-10-22, finding 6).
+        if (free_slot == -1 && !stat_poison_pace_live(stat_poison_pace[slot].obj)) {
             free_slot = slot;
         }
     }
@@ -1137,21 +1142,26 @@ static int stat_poison_pace_find(int64_t obj, bool add)
 // the 8 game milliseconds a real one advances outside turn-based.
 #define STAT_POISON_STOCK_PERIOD_REAL_MS (15000 / 8)
 
-static void stat_poison_pace_track(int64_t obj)
+// Whether `obj` is paced, taking a slot if it has none. False when the table
+// is full: the caller then lets the stock event deal the damage instead of
+// pacing nothing (finding 6: a full table silently stopped the poison).
+static bool stat_poison_pace_track(int64_t obj)
 {
     int slot;
 
     if (stat_poison_pace_find(obj, false) != -1) {
-        return;
+        return true;
     }
 
     // Found by the stock event, which has just come due: credit the period
     // since the one before, so ticks stay two turn lengths apart from the
     // fight's start rather than from the event that noticed it.
     slot = stat_poison_pace_find(obj, true);
-    if (slot != -1) {
-        stat_poison_pace[slot].ms = STAT_POISON_STOCK_PERIOD_REAL_MS;
+    if (slot == -1) {
+        return false;
     }
+    stat_poison_pace[slot].ms = STAT_POISON_STOCK_PERIOD_REAL_MS;
+    return true;
 }
 
 // One tick of poison damage, as the stock event deals it.
@@ -1258,8 +1268,7 @@ bool stat_poison_timeevent_process(TimeEvent* timeevent)
         // the damage (`stat_poison_turn_reached`, `stat_poison_tick`); the
         // game-time event keeps running, so the stock clock resumes the
         // moment the fight is over.
-        if (poison > 0 && stat_poison_paced(obj)) {
-            stat_poison_pace_track(obj);
+        if (poison > 0 && stat_poison_paced(obj) && stat_poison_pace_track(obj)) {
             poison_timeevent_schedule(obj, poison, false);
             break;
         }

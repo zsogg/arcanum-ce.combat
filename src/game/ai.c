@@ -25,6 +25,7 @@
 #include "game/mt_ai.h"
 #include "game/mt_item.h"
 #include "game/obj.h"
+#include "game/obj_pool.h"
 #include "game/object.h"
 #include "game/object_node.h"
 #include "game/path.h"
@@ -156,6 +157,7 @@ static bool ai_restorative_refused(int64_t obj, int64_t item_obj);
 static bool ai_heal_choosing;
 static void ai_restorative_note_used(int64_t obj, int64_t item_obj);
 static void ai_restorative_forget(int64_t obj);
+static bool ai_memo_entry_free(int64_t obj);
 static bool ai_use_grenade(Ai* ai, int64_t a2);
 static bool ai_waypoints_process(int64_t obj, bool a2);
 static bool ai_is_day(void);
@@ -743,8 +745,20 @@ void ai_restorative_note_used(int64_t obj, int64_t item_obj)
 
     slot = ai_restorative_slot(obj);
     if (slot < 0) {
-        slot = ai_restorative_next;
-        ai_restorative_next = (ai_restorative_next + 1) % AI_RESTORATIVES_MAX;
+        int candidate;
+
+        // A dead drinker's entry first; the ring only when every entry is a
+        // live one (finding 6: the ring overwrote a live NPC's count).
+        for (candidate = 0; candidate < AI_RESTORATIVES_MAX; candidate++) {
+            if (ai_memo_entry_free(ai_restorative_users[candidate].obj)) {
+                slot = candidate;
+                break;
+            }
+        }
+        if (slot < 0) {
+            slot = ai_restorative_next;
+            ai_restorative_next = (ai_restorative_next + 1) % AI_RESTORATIVES_MAX;
+        }
         ai_restorative_users[slot].obj = obj;
         ai_restorative_users[slot].count = 0;
     }
@@ -3093,6 +3107,19 @@ static int ai_desperation_key(void)
     return -1 - (int)(now / (pace > 0 ? pace : RT_BUDGET_DEFAULT_PACE_MS));
 }
 
+// FIX: a memo entry whose critter is gone is free. The three per-fight
+// tables below (desperation, armour-aware targets, restoratives) never
+// forgot a dead or unloaded critter, so after 64 distinct NPCs in a session
+// they were full for good and every later NPC shared slot 0 - two casters
+// past their fatigue floor then re-rolled "40% once per turn" on every AI
+// pass (review 2026-10-22, finding 6).
+static bool ai_memo_entry_free(int64_t obj)
+{
+    return obj == OBJ_HANDLE_NULL
+        || !obj_handle_is_valid(obj)
+        || critter_is_dead(obj);
+}
+
 static int ai_desperation_slot(int64_t obj)
 {
     int slot;
@@ -3102,7 +3129,7 @@ static int ai_desperation_slot(int64_t obj)
         if (ai_desperation[slot].obj == obj) {
             return slot;
         }
-        if (free_slot < 0 && ai_desperation[slot].obj == OBJ_HANDLE_NULL) {
+        if (free_slot < 0 && ai_memo_entry_free(ai_desperation[slot].obj)) {
             free_slot = slot;
         }
     }
@@ -3806,7 +3833,7 @@ static void ai_armor_rewield(Ai* ai)
         if (ai_armor_targets[slot].obj == ai->obj) {
             break;
         }
-        if (free_slot < 0 && ai_armor_targets[slot].obj == OBJ_HANDLE_NULL) {
+        if (free_slot < 0 && ai_memo_entry_free(ai_armor_targets[slot].obj)) {
             free_slot = slot;
         }
     }

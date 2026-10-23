@@ -89,6 +89,7 @@ add_executable(arcanum-tests
     "test_save_bounds.c"
     "test_mod_format_bounds.c"
     "test_module_paths.c"
+    "test_ai_memo.c"
     "obj_harness.c"
     "obj_harness.h"
     "tests_main.c"
@@ -581,6 +582,42 @@ add_custom_command(
 add_custom_target(arcanum-dialog-test-obj DEPENDS "${DIALOG_TEST_OBJ}")
 target_link_libraries(arcanum-tests PRIVATE "${DIALOG_TEST_OBJ}")
 add_dependencies(arcanum-tests arcanum-dialog-test-obj)
+
+# The same trick for `ai.c`: the per-fight memo tables (review 2026-10-22,
+# finding 6) are reached only through these two `static` entry points, which
+# the combat observer reads by name inside the engine.
+set(AI_TEST_STATICS
+    ai_desperate_now
+    ai_desperation_rolled
+)
+set(AI_TEST_OBJ "${CMAKE_CURRENT_BINARY_DIR}/ai_globalized.o")
+set(_ai_globalize_args "")
+foreach(sym ${AI_TEST_STATICS})
+    list(APPEND _ai_globalize_args "--globalize-symbol=${sym}")
+endforeach()
+
+file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/aiobj")
+
+add_custom_command(
+    OUTPUT "${AI_TEST_OBJ}"
+    COMMAND "${CMAKE_AR}" x "$<TARGET_FILE:arcanum-game>" ai.c${CMAKE_C_OUTPUT_EXTENSION}
+    COMMAND "${CMAKE_OBJCOPY}" ${_ai_globalize_args} ai.c${CMAKE_C_OUTPUT_EXTENSION} "${AI_TEST_OBJ}"
+    COMMAND "${CMAKE_COMMAND}" -E rm -f ai.c${CMAKE_C_OUTPUT_EXTENSION}
+    COMMAND "${CMAKE_COMMAND}"
+        "-DOBJ=${AI_TEST_OBJ}"
+        "-DSYMS=${AI_TEST_STATICS}"
+        "-DDATA_SYMS="
+        "-DNM=${CMAKE_NM}"
+        -P "${CMAKE_CURRENT_SOURCE_DIR}/verify_globalized.cmake"
+    WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/aiobj"
+    DEPENDS arcanum-game
+    COMMENT "tests: globalizing ai.c statics (no source change)"
+    VERBATIM
+)
+
+add_custom_target(arcanum-ai-test-obj DEPENDS "${AI_TEST_OBJ}")
+target_link_libraries(arcanum-tests PRIVATE "${AI_TEST_OBJ}")
+add_dependencies(arcanum-tests arcanum-ai-test-obj)
 
 
 target_link_libraries(arcanum-tests PRIVATE "${ANIM_TEST_OBJ}")
