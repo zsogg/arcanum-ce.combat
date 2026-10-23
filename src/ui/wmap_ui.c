@@ -414,10 +414,10 @@ static TigRect wmap_ui_compass_base_bounds;
 // 0x64FBC8
 static PcLens wmap_ui_pc_lens;
 
-// 0x64FBD8
 // Both note arrays; the save loader bounds its count by this.
 #define WMAP_UI_NOTES_MAX 200
 
+// 0x64FBD8
 static WmapNote wmap_ui_world_notes[WMAP_UI_NOTES_MAX];
 
 // 0x65E968

@@ -865,10 +865,10 @@ MagicTechInfo* magictech_spells;
 // 0x6876DC
 static int magictech_active_run_count;
 
-// 0x6876E0
 // The table's capacity, which the save loader bounds its count by.
 #define MAGICTECH_RUN_INFO_COUNT 512
 
+// 0x6876E0
 MagicTechRunInfo* magictech_run_info;
 
 // 0x44EF50
