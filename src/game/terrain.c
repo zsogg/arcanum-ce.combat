@@ -444,8 +444,10 @@ void terrain_sector_path(int64_t sector_id, char* path)
             tig_debug_printf("Error: terrain_base_name failed in terrain_sector_path\n  tid: %d  base: $d\n", tid);
         }
 
-        strcpy(path, "terrain\\");
-        strcat(path, to);
+        // FIX: bounded writes; every caller passes a TIG_MAX_PATH buffer, and
+        // the terrain names come from terrain.mes (review 2026-10-22,
+        // finding 5).
+        snprintf(path, TIG_MAX_PATH, "terrain\\%s", to);
     } else {
         v4 = terrain_transition_codes[v2];
         if (v4 != -1) {
@@ -457,15 +459,10 @@ void terrain_sector_path(int64_t sector_id, char* path)
             v4 = terrain_transition_codes[15 - v2];
         }
 
-        strcpy(path, "terrain\\");
-        strcat(path, from);
-        strcat(path, " to ");
-        strcat(path, to);
+        snprintf(path, TIG_MAX_PATH, "terrain\\%s to %s", from, to);
     }
 
-    strcat(path, "\\");
-    SDL_lltoa(v4, &(path[strlen(path)]), 10);
-    strcat(path, ".sec");
+    snprintf(path + strlen(path), TIG_MAX_PATH - strlen(path), "\\%lld.sec", (long long)v4);
 }
 
 // 0x4E86F0

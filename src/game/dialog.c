@@ -2555,6 +2555,14 @@ void dialog_substitute_names(char* dst, char* src, DialogState* a3)
         *start = '\0';
         strcat(dst, remainder);
         end = strchr(start + 1, '@');
+        // FIX: a line with an odd number of `@` has no closing one; the rest
+        // of the line is kept as written instead of dereferencing NULL
+        // (review 2026-10-22, finding 5).
+        if (end == NULL) {
+            *start = '@';
+            remainder = start;
+            break;
+        }
         *end = '\0';
         if (SDL_strcasecmp(start + 1, "pcname") == 0) {
             object_examine(a3->pc_obj, OBJ_HANDLE_NULL, dst + strlen(dst));

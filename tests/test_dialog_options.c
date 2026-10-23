@@ -33,6 +33,7 @@
 // Globalized out of dialog.c by the build; not in any header, because it is
 // `static` in the shipped engine and this suite does not change that.
 int dialog_collect_pc_options(DialogState* state, int* out);
+bool dialog_build_pc_option(int entry_num, int slot, DialogState* state);
 
 #define DLG_DIR "./arcanum_test_dialog"
 
@@ -71,6 +72,9 @@ static void dlg_remove(void)
 // The PC object is a real critter from the object harness, because the engine
 // reads STAT_GENDER and STAT_INTELLIGENCE off it and `critter_is_dumb` looks at
 // its stats too - a fake would be testing the fake.
+// The first collected option's text, as `dialog_substitute_names` left it.
+static char first_option[1000];
+
 static int collect(const char* body, int node, int* out)
 {
     DialogState state;
@@ -88,6 +92,14 @@ static int collect(const char* body, int node, int* out)
     state.pc_obj = obj_harness_create_proto(OBJ_TYPE_PC);
 
     count = dialog_collect_pc_options(&state, out);
+    // The collector stores entry numbers; the text is built one slot at a
+    // time by `dialog_build_pc_option`, which is where `@...@` substitution
+    // happens.
+    first_option[0] = '\0';
+    if (count > 0) {
+        dialog_build_pc_option(out[0], 0, &state);
+        strcpy(first_option, state.options[0]);
+    }
 
     obj_harness_destroy(state.pc_obj);
     dialog_unload(dlg);
@@ -260,6 +272,32 @@ TEST(a_file_without_markers_behaves_as_before)
 
 // A node that is not in the file at all yields nothing, rather than reading past
 // the array. The bsearch returning NULL is the guard.
+// `dialog_substitute_names` walks `@...@` pairs in an option's text. Until
+// 2026-10-22 a line with an odd number of `@` dereferenced the NULL that
+// `strchr` returned for the missing closing one (review finding 5).
+TEST(a_lone_at_sign_in_an_option_keeps_the_text_and_does_not_crash)
+{
+    int out[5];
+
+    CHECK_INT(collect("{100}{Well?}{}{}{}{0}{}\r\n"
+                      "{101}{Ask @pcname about it}{}{1}{}{0}{}\r\n",
+                  100, out),
+        1);
+    CHECK_STR(first_option, "Ask @pcname about it");
+}
+
+TEST(a_paired_unknown_token_is_still_dropped)
+{
+    int out[5];
+
+    // Faithful: an unrecognised `@word@` contributes nothing.
+    CHECK_INT(collect("{100}{Well?}{}{}{}{0}{}\r\n"
+                      "{101}{x @foo@ y}{}{1}{}{0}{}\r\n",
+                  100, out),
+        1);
+    CHECK_STR(first_option, "x  y");
+}
+
 TEST(an_unknown_node_offers_nothing)
 {
     int out[8];
@@ -278,4 +316,6 @@ void test_dialog_options_suite(void)
     RUN(the_marker_is_stripped_and_the_conditions_still_apply);
     RUN(a_file_without_markers_behaves_as_before);
     RUN(an_unknown_node_offers_nothing);
+    RUN(a_lone_at_sign_in_an_option_keeps_the_text_and_does_not_crash);
+    RUN(a_paired_unknown_token_is_still_dropped);
 }

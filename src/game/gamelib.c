@@ -620,7 +620,9 @@ void gamelib_resize(GameResizeInfo* resize_info)
 // 0x402780
 void gamelib_default_module_name_set(const char* name)
 {
-    strcpy(gamelib_default_module_name, name);
+    // FIX: bounded; `-mod:` hands this up to 254 bytes of command line and
+    // the copy was unchecked (review 2026-10-22, finding 5).
+    SDL_strlcpy(gamelib_default_module_name, name, sizeof(gamelib_default_module_name));
 }
 
 // 0x4027B0
@@ -680,11 +682,11 @@ void gamelib_modlist_create(GameModuleList* module_list, int type)
             }
 
             if (!found) {
-                strcpy(path, "Modules\\");
-                strcat(path, file_list.entries[file_index].path);
-                if (is_file) {
-                    strcat(path, ".dat");
-                }
+                // FIX: one bounded write; a 255-byte entry name overflowed the
+                // chain of copies (review 2026-10-22, finding 5).
+                snprintf(path, sizeof(path), "Modules\\%s%s",
+                    file_list.entries[file_index].path,
+                    is_file ? ".dat" : "");
 
                 tig_file_repository_add(path);
                 have_mp = tig_file_exists_in_path(path, "mp.txt", NULL);
@@ -2116,13 +2118,17 @@ bool gamelib_load_module_data(const char* module_name)
     size_t end;
     int index;
 
-    if (module_name[0] == '\\' || module_name[0] == '.' || module_name[1] == ':') {
-        path1[0] = '\0';
-    } else {
-        strcpy(path1, ".\\Modules\\");
+    // FIX: the module name comes from a save's .gsi (up to 255 bytes) or the
+    // command line, and the chain of copies into `path1` was unbounded. One
+    // write, refused when the name and its `.patchN` suffix would not fit,
+    // before any directory is made (review 2026-10-22, finding 5).
+    int written = snprintf(path1, sizeof(path1), "%s%s",
+        (module_name[0] == '\\' || module_name[0] == '.' || module_name[1] == ':') ? "" : ".\\Modules\\",
+        module_name);
+    if (written < 0 || (size_t)written + 8 >= sizeof(path1)) {
+        tig_debug_printf("gamelib_load_module_data: module name too long\n");
+        return false;
     }
-
-    strcat(path1, module_name);
     end = strlen(path1);
 
     strcat(path1, ".dat");

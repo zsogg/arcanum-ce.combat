@@ -88,6 +88,7 @@ add_executable(arcanum-tests
     "test_save_slot.c"
     "test_save_bounds.c"
     "test_mod_format_bounds.c"
+    "test_module_paths.c"
     "obj_harness.c"
     "obj_harness.h"
     "tests_main.c"
@@ -550,6 +551,7 @@ add_dependencies(arcanum-emudiff-oracle
 set(DIALOG_TEST_STATICS
     dialog_collect_pc_options
     dialog_parse_params
+    dialog_build_pc_option
 )
 set(DIALOG_TEST_OBJ "${CMAKE_CURRENT_BINARY_DIR}/dialog_globalized.o")
 set(_dialog_globalize_args "")

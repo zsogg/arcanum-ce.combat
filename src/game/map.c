@@ -1111,8 +1111,9 @@ bool map_preprocess_mobile(const char* name)
         return true;
     }
 
-    strcpy(path, "maps\\");
-    strcat(path, name);
+    // FIX: one bounded write; the map name comes from the module's own data
+    // (review 2026-10-22, finding 5).
+    snprintf(path, sizeof(path), "maps\\%s", name);
     map_obfuscate_name(&(path[5]));
 
     if (tig_file_exists(path, NULL)) {
@@ -1151,17 +1152,17 @@ bool map_preprocess_mobile(const char* name)
         return false;
     }
 
-    strcpy(path, "maps\\");
-    strcat(path, name);
-    strcat(path, "\\");
+    // FIX: bounded, and each listed file name is copied into what is left of
+    // the buffer (review 2026-10-22, finding 5).
+    snprintf(path, sizeof(path), "maps\\%s\\", name);
 
     pch = &(path[strlen(path)]);
-    strcpy(pch, "*.mob");
+    SDL_strlcpy(pch, "*.mob", sizeof(path) - (pch - path));
 
     tig_file_list_create(&file_list, path);
 
     for (index = 0; index < file_list.count; index++) {
-        strcpy(pch, file_list.entries[index].path);
+        SDL_strlcpy(pch, file_list.entries[index].path, sizeof(path) - (pch - path));
         if (!objf_solitary_read(&obj, path)) {
             // NOTE: Verified against 0x410678 - original destroys the file
             // list but returns false without fclose; original leak.
@@ -1456,11 +1457,11 @@ bool map_load_mobile(const char* base_path, const char* save_path)
         }
     }
 
-    strcpy(path2, base_path);
+    // FIX: bounded (review 2026-10-22, finding 5).
+    snprintf(path2, sizeof(path2), "%s", base_path);
     map_obfuscate_name(&(path2[5]));
 
-    strcpy(path3, save_path);
-    strcat(path3, "\\");
+    snprintf(path3, sizeof(path3), "%s\\", save_path);
     fname = &(path3[strlen(path3)]);
 
     stream = tig_file_fopen(path2, "rb");
@@ -1652,8 +1653,8 @@ void map_load_extension(const char* base_path)
     int music_scheme_idx;
     int ambient_scheme_idx;
 
-    strcpy(tmp, base_path);
-    strcat(tmp, "\\mapinfo.txt");
+    // FIX: bounded (review 2026-10-22, finding 5).
+    snprintf(tmp, sizeof(tmp), "%s\\mapinfo.txt", base_path);
 
     stream = tig_file_fopen(tmp, "rt");
     if (stream == NULL) {

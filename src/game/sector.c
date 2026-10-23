@@ -1368,16 +1368,12 @@ bool sector_load_editor(int64_t id, Sector* sector)
     int placeholder;
 
     if (sector_check_demo_limits(id)) {
-        strcpy(path, sector_save_path);
-        strcat(path, "\\");
-        SDL_ulltoa(id, &path[strlen(path)], 10);
-        strcat(path, ".sec");
+        // FIX: one bounded write per path; the chains of copies after a long
+        // module path overran the buffer (review 2026-10-22, finding 5).
+        snprintf(path, sizeof(path), "%s\\%" PRIu64 ".sec", sector_save_path, (uint64_t)id);
 
         if (!tig_file_exists(path, NULL)) {
-            strcpy(path, sector_base_path);
-            strcat(path, "\\");
-            SDL_ulltoa(id, &path[strlen(path)], 10);
-            strcat(path, ".sec");
+            snprintf(path, sizeof(path), "%s\\%" PRIu64 ".sec", sector_base_path, (uint64_t)id);
 
             if (!tig_file_exists(path, NULL)) {
                 terrain_sector_path(id, path);
@@ -1514,10 +1510,8 @@ bool sector_load_game(int64_t id, Sector* sector)
     int placeholder;
 
     if (sector_check_demo_limits(id)) {
-        strcpy(sec_path, sector_base_path);
-        strcat(sec_path, "\\");
-        SDL_ulltoa(id, &sec_path[strlen(sec_path)], 10);
-        strcat(sec_path, ".sec");
+        // FIX: bounded, as above (review 2026-10-22, finding 5).
+        snprintf(sec_path, sizeof(sec_path), "%s\\%" PRIu64 ".sec", sector_base_path, (uint64_t)id);
 
         if (!tig_file_exists(sec_path, NULL)) {
             terrain_sector_path(id, sec_path);
@@ -1550,10 +1544,7 @@ bool sector_load_game(int64_t id, Sector* sector)
             tig_debug_printf("Error opening sector file %s\n", sec_path);
         }
 
-        strcpy(dif_path, sector_save_path);
-        strcat(dif_path, "\\");
-        SDL_ulltoa(id, &dif_path[strlen(dif_path)], 10);
-        strcat(dif_path, ".dif");
+        snprintf(dif_path, sizeof(dif_path), "%s\\%" PRIu64 ".dif", sector_save_path, (uint64_t)id);
 
         if (tig_file_exists(dif_path, NULL)) {
             dif_stream = tig_file_fopen(dif_path, "rb");
@@ -1834,9 +1825,8 @@ bool sector_save_editor(Sector* sector)
         return true;
     }
 
-    strcpy(path, sector_save_path);
-    strcat(path, "\\");
-    SDL_ulltoa(sector->id, &(path[strlen(path)]), 10);
+    // FIX: bounded (review 2026-10-22, finding 5).
+    snprintf(path, sizeof(path), "%s\\%" PRIu64, sector_save_path, (uint64_t)sector->id);
 
     return sector_save_editor_internal(sector, path);
 }
@@ -2027,10 +2017,8 @@ bool sector_save_game(Sector* sector)
         return true;
     }
 
-    strcpy(path, sector_save_path);
-    strcat(path, "\\");
-    SDL_ulltoa(sector->id, &(path[strlen(path)]), 10);
-    strcat(path, ".dif");
+    // FIX: bounded (review 2026-10-22, finding 5).
+    snprintf(path, sizeof(path), "%s\\%" PRIu64 ".dif", sector_save_path, (uint64_t)sector->id);
 
     stream = tig_file_fopen(path, "wb");
     if (stream == NULL) {
