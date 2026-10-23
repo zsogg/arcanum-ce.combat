@@ -306,6 +306,9 @@ void terrain_map_close(void)
     if ((terrain_header.flags & 0x1) != 0) {
         for (index = 0; index < 4; index++) {
             FREE(terrain_row_cache[index]);
+            // FIX (porting bug #189): the freed row is forgotten (0x4E7E9B
+            // stores 0 after the free); CE left the pointer dangling.
+            terrain_row_cache[index] = NULL;
         }
     }
 
@@ -639,8 +642,10 @@ void terrain_tid_pack(int a1, int a2, int a3, int a4, uint16_t* value)
     a3 = SDL_clamp(a3, 0, 15);
     a4 = SDL_clamp(a4, 0, 3);
 
-    // The layout matches the four terrain_tid_* decoders exactly.
-    *value = (uint16_t)(a4 | (a3 << 2) | (a2 << 4) | (a1 << 11));
+    // FIX (porting bug #187): the "from" type sits at bit 6 (0x4E8D45
+    // `shl 5; or; shl 4; or; shl 2; or` = a1<<11 | a2<<6 | a3<<2 | a4), where
+    // terrain_tid_from reads it; CE packed it at bit 4, over the transition.
+    *value = (uint16_t)(a4 | (a3 << 2) | (a2 << 6) | (a1 << 11));
 }
 
 // 0x4E8D60
@@ -667,7 +672,10 @@ uint16_t terrain_tid_random(int base, int from, int transition)
         tile = random_between(0, terrain_sector_count[base] - 1);
     }
 
-    terrain_tid_pack(base, from, transition, tile, &value);
+    // FIX (porting bug #188): the random variant is packed with NO
+    // transition (0x4E8D91 `xor edi,edi` before the pack at 0x4E8DAC); CE
+    // passed the caller's code through, 15 for the editor's new map.
+    terrain_tid_pack(base, from, 0, tile, &value);
     return value;
 }
 

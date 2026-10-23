@@ -382,7 +382,10 @@ void sector_draw(GameDrawInfo* draw_info)
             color = sector_default_color;
         }
 
-        location = location_make(sector_x + 63, sector_y);
+        // FIX (porting bug #191): the grid is drawn at the sector's tile
+        // origin (0x4CF4BF multiplies the index by 64, 0x4CF4C4 adds 63,
+        // 0x4CF4CC shifts y by 6); CE drew it at the index itself.
+        location = location_make(sector_x * 64 + 63, sector_y * 64);
         location_xy(location, &location_x, &location_y);
 
         x = location_x & 0xFFFFFFFF;
@@ -1065,9 +1068,13 @@ bool sector_flush(unsigned int flags)
             if ((flags & 0x1) == 0) {
                 sector_cache_evict(&(cache_entry->sector));
                 cache_entry->used = false;
+                // FIX (porting bug #190): the tail moved is the live entries
+                // after this one (0x4D0C79 `(size - index - 1) * 4`); CE moved
+                // `size - 1` whatever the index, reading and writing past the
+                // live tail and, late in a full cache, past the allocation.
                 memmove(&(sector_cache_indexes[index]),
                     &(sector_cache_indexes[index + 1]),
-                    sizeof(*sector_cache_indexes) * (sector_cache_size - 1));
+                    sizeof(*sector_cache_indexes) * (sector_cache_size - index - 1));
                 index--;
                 sector_cache_size--;
             }
@@ -1180,6 +1187,10 @@ void sector_enumerate(SectorEnumerateFunc func)
 
     for (index = 0; index < sector_cache_size; index++) {
         if (!func(&(sector_cache_entries[sector_cache_indexes[index]].sector))) {
+            // FIX: a callback that stops the walk returns straight out of the
+            // original (0x4D10A6 `je` past the flag's clear at 0x4D10B2), so
+            // in_sector_enumerate stays set and every later sector_lock fails;
+            // CE breaks and clears it.
             break;
         }
     }
@@ -1363,6 +1374,11 @@ void sector_cache_evict(Sector* sector)
 bool sector_load_editor(int64_t id, Sector* sector)
 {
     bool generated = false;
+    // FIX (porting bug #192): the loaders rebase by the id only when the
+    // sector came from the terrain path (0x4D1548 starts the pair at -1,
+    // 0x4D1738 sets it there), as sector_load_game has it; CE passed the
+    // id on every path, rebasing and clearing difs for a saved sector.
+    int64_t loader_id = -1;
     char path[TIG_MAX_PATH];
     TigFile* stream;
     int placeholder;
@@ -1377,6 +1393,7 @@ bool sector_load_editor(int64_t id, Sector* sector)
 
             if (!tig_file_exists(path, NULL)) {
                 terrain_sector_path(id, path);
+                loader_id = id;
                 if (!tig_file_exists(path, NULL)) {
                     terrain_fill(sector);
                     generated = true;
@@ -1385,6 +1402,7 @@ bool sector_load_editor(int64_t id, Sector* sector)
         }
     } else {
         terrain_sector_path(id, path);
+        loader_id = id;
         if (!tig_file_exists(path, NULL)) {
             terrain_fill(sector);
             generated = true;
@@ -1400,7 +1418,7 @@ bool sector_load_editor(int64_t id, Sector* sector)
             return false;
         }
 
-        if (!sector_light_list_load(&(sector->lights), stream, id)) {
+        if (!sector_light_list_load(&(sector->lights), stream, loader_id)) {
             tig_debug_printf("Error loading lights from sector file %s\n", path);
             tig_file_fclose(stream);
             return false;
@@ -1477,7 +1495,7 @@ bool sector_load_editor(int64_t id, Sector* sector)
             }
         }
 
-        if (!objlist_load(&(sector->objects), stream, id)) {
+        if (!objlist_load(&(sector->objects), stream, loader_id)) {
             tig_debug_printf("Error loading objects from sector file %s\n", path);
             tig_file_fclose(stream);
             return false;
@@ -2014,6 +2032,10 @@ bool sector_save_game(Sector* sector)
     }
 
     if (dif_flags == 0) {
+        // FIX (porting bug #193): the post-save validation runs whether or
+        // not anything was written (0x4D2750 calls it outside the flags
+        // block); CE returned before it.
+        sector_validate_game("sector post-save");
         return true;
     }
 

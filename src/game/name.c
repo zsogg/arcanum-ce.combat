@@ -506,7 +506,10 @@ void name_missing_art_init(void)
                     missing_unique_npc_art[num] |= name_check_bits[idx];
 
                     mes_file_entry.num = num;
-                    mes_get_msg(name_monster_mes_file, &mes_file_entry);
+                    // FIX (porting bug #164): a unique NPC's name comes from its
+                    // own file (0x41CE60's third mes_get_msg); CE printed the
+                    // monster of the same number.
+                    mes_get_msg(name_unique_npc_mes_file, &mes_file_entry);
 
                     tig_debug_printf("Missing art for unique npc %d (%s) using animation %d (%c%c)\n",
                         num,
@@ -558,7 +561,10 @@ bool name_missing_art_load(void)
         return false;
     }
 
-    if (tig_file_fread(missing_unique_npc_art, sizeof(*missing_unique_npc_art), num_unique_npc_art, stream) < (size_t)num_monster_art) {
+    // FIX (porting bug #167): the unique-NPC read is held to its own count
+    // (0x41D1F0 `num_unique_npc_art <= read`); CE compared it with the
+    // monster count.
+    if (tig_file_fread(missing_unique_npc_art, sizeof(*missing_unique_npc_art), num_unique_npc_art, stream) < (size_t)num_unique_npc_art) {
         tig_file_fclose(stream);
         return false;
     }
@@ -703,7 +709,10 @@ tig_art_id_t name_normalize_aid(tig_art_id_t aid)
             armor = 0;
             shield = 0;
             weapon = 0;
-            gender = 0;
+            // FIX (porting bug #163): the exploding critter is drawn MALE
+            // (0x41D510's critter branch sets the gender to 1 with the rest);
+            // CE set 0.
+            gender = 1;
         } else if (anim == TIG_ART_ANIM_STUNNED) {
             weapon = 1;
             shield = 0;
@@ -996,9 +1005,9 @@ int name_resolve_path(tig_art_id_t aid, char* path, size_t maxlen)
         }
         return TIG_OK;
     case TIG_ART_TYPE_FACADE:
-        if (!a_name_facade_aid_to_fname(aid, path, maxlen)) {
-            return TIG_ERR_GENERIC;
-        }
+        // FIX (porting bug #165): the facade's result is not consulted
+        // (0x41DAE0, the only list type whose call is void); CE refused.
+        a_name_facade_aid_to_fname(aid, path, maxlen);
         return TIG_OK;
     case TIG_ART_TYPE_MONSTER:
         mes_file_entry.num = tig_art_monster_id_specie_get(aid);
@@ -1755,6 +1764,9 @@ bool name_art_browser_message_filter(TigMessage* msg)
 {
     int v1;
 
+    // FIX: the original steps the browser on a key's release as well
+    // (0x41F190 tests only the message type and the key); CE acts on the
+    // press alone, once per key.
     if (msg->type == TIG_MESSAGE_KEYBOARD
         && msg->data.keyboard.pressed) {
         switch (msg->data.keyboard.key) {
@@ -1811,10 +1823,15 @@ void name_art_browser_refresh(void)
             src_rect.height = art_frame_data.height;
 
             if (art_frame_data.width > 80 || art_frame_data.height > 80) {
+                // FIX (porting bug #166): the scaled size is the blit's
+                // destination (0x41F240 sets both to 80 and one to the scaled
+                // value); CE scaled a dead local and blitted into 80x80.
+                dst_rect.width = 80;
+                dst_rect.height = 80;
                 if (80.0 / (double)art_frame_data.height < 80.0 / (double)art_frame_data.width) {
-                    art_frame_data.width = (int)((double)art_frame_data.width * (80.0 / (double)art_frame_data.height));
+                    dst_rect.width = (int)((double)art_frame_data.width * (80.0 / (double)art_frame_data.height));
                 } else {
-                    art_frame_data.height = (int)((double)art_frame_data.height * (80.0 / (double)art_frame_data.width));
+                    dst_rect.height = (int)((double)art_frame_data.height * (80.0 / (double)art_frame_data.width));
                 }
             } else {
                 dst_rect.width = art_frame_data.width;

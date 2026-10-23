@@ -684,7 +684,12 @@ void object_draw(GameDrawInfo* draw_info)
                                                                             ? scale * object_scale_percents[scale_type] / 100
                                                                             : scale;
 
-                                                                        if (scale_type != 100) {
+                                                                        // FIX (porting bug #179): the rescale is skipped when the
+                                                                        // overlay's own scale is 100 (0x43B8D3 compares the computed
+                                                                        // scale), as the second site below has it; CE tested the
+                                                                        // scale TYPE, which is never 100, so every overlay went
+                                                                        // through the float division.
+                                                                        if (overlay_scale != 100) {
                                                                             src_rect.x = (int)((float)src_rect.x / (float)overlay_scale * 100.0f);
                                                                             src_rect.y = (int)((float)src_rect.y / (float)overlay_scale * 100.0f);
                                                                             src_rect.width = (int)((float)src_rect.width / (float)overlay_scale * 100.0f);
@@ -821,6 +826,10 @@ void object_draw(GameDrawInfo* draw_info)
                                                                 src_rect.height = dst_rect.height;
 
                                                                 if (scale != 100) {
+                                                                    // FIX (porting bug #182): the scaled wading band invalidates its
+                                                                    // rect first, as the full sprite below does (0x43BE91 `cmp eax,0x64`,
+                                                                    // 0x43BE9E the call); CE had dropped the call here.
+                                                                    object_iso_invalidate_rect(&eye_candy_rect);
                                                                     src_rect.x = (int)((float)src_rect.x / (float)scale * 100.0f);
                                                                     src_rect.y = (int)((float)src_rect.y / (float)scale * 100.0f);
                                                                     src_rect.width = (int)((float)src_rect.width / (float)scale * 100.0f);
@@ -2990,6 +2999,10 @@ void object_eye_candy_aid_dec(int64_t obj, int fld, int index)
     if ((obj_field_int32_get(obj, OBJ_F_FLAGS) & OF_DESTROYED) == 0) {
         object_get_rect(obj, 0x7, &dirty_rect);
         current_aid = obj_arrayfield_uint32_get(obj, fld, index);
+        // FIX: at frame 0 the original writes the FIELD ID into the overlay
+        // array as the "previous" art (0x43FB0C loads the third argument,
+        // stored by 0x43FB1E) and invalidates; CE leaves the art alone, so a
+        // frame-0 overlay is a no-op rather than a corrupt id.
         prev_aid = tig_art_id_frame_get(current_aid) > 0
             ? tig_art_id_frame_dec(current_aid)
             : current_aid;
@@ -3810,6 +3823,11 @@ void object_list_all_followers(int64_t obj, ObjectList* objects)
 
             *parent_ptr = new_node;
             parent_ptr = &((*parent_ptr)->next);
+            // FIX (porting bug #177): the copy walks the follower's own list
+            // (0x441260's inner `for` steps to the next node), as object_list_team
+            // does; CE never advanced it and looped forever on a follower with
+            // followers of its own.
+            tmp_node = tmp_node->next;
         }
 
         object_list_destroy(&tmp_list);
@@ -4572,7 +4590,11 @@ void object_render_flags_update(int64_t obj)
             }
         }
 
-        if ((new_render_flags & (TIG_ART_BLT_BLEND_ALPHA_STIPPLE_D | TIG_ART_BLT_BLEND_ALPHA_STIPPLE_S | TIG_ART_BLT_BLEND_ALPHA_LERP_BOTH | TIG_ART_BLT_BLEND_ALPHA_LERP_Y | TIG_ART_BLT_BLEND_ALPHA_LERP_X | TIG_ART_BLT_BLEND_ALPHA_SRC | TIG_ART_BLT_BLEND_ALPHA_CONST | TIG_ART_BLT_BLEND_ALPHA_AVG)) != 0
+        if ((new_render_flags & (TIG_ART_BLT_BLEND_ALPHA_STIPPLE_D | TIG_ART_BLT_BLEND_ALPHA_STIPPLE_S | TIG_ART_BLT_BLEND_ALPHA_LERP_BOTH | TIG_ART_BLT_BLEND_ALPHA_LERP_Y | TIG_ART_BLT_BLEND_ALPHA_LERP_X | TIG_ART_BLT_BLEND_ALPHA_SRC | TIG_ART_BLT_BLEND_ALPHA_CONST | TIG_ART_BLT_BLEND_ALPHA_AVG)) == 0
+            // FIX (porting bug #181): the invisible/translucent alpha applies only
+            // when NO alpha blend is set yet (0x4425E8 `test esi,0x19F80; jne`
+            // past it, 0x4425F0 `test ebp,0x240; je` past it); CE had the
+            // first test inverted.
             && (flags & (OF_INVISIBLE | OF_TRANSLUCENT)) != 0) {
             obj_arrayfield_int32_set(obj, OBJ_F_RENDER_ALPHA, 0, 128);
             new_render_flags |= object_blit_flags;
@@ -5578,12 +5600,11 @@ void object_lighting_changed(void)
 {
     int value;
 
+    // FIX (porting bug #178): the setting is stored and clamped to 0..1
+    // (0x444690); CE stored it only when it was out of range, so the flag
+    // stayed at its initial false whatever the setting said.
     value = settings_get_value(&settings, OBJECT_LIGHTING_KEY);
-    if (value < 0) {
-        object_lighting = false;
-    } else if (value > 1) {
-        object_lighting = true;
-    }
+    object_lighting = value > 0;
 
     object_iso_invalidate_rect(NULL);
 }

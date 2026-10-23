@@ -348,9 +348,13 @@ void map_exit(void)
 // 0x40EE20
 void map_ping(unsigned int time)
 {
-    for (int index = 0; index < MAP_MODULE_COUNT; index++) {
-        if (map_modules[index].ping_func != NULL) {
-            map_modules[index].ping_func(time);
+    // FIX (porting bug #158): nothing is pinged before map_init (0x40EE20
+    // tests the initialised flag first); CE pinged regardless.
+    if (map_initialized) {
+        for (int index = 0; index < MAP_MODULE_COUNT; index++) {
+            if (map_modules[index].ping_func != NULL) {
+                map_modules[index].ping_func(time);
+            }
         }
     }
 }
@@ -531,7 +535,10 @@ bool map_load(GameLoadInfo* load_info)
 void map_update_view(ViewOptions* view_options)
 {
     if (map_initialized) {
-        for (int index = MAP_MODULE_COUNT - 1; index >= 0; index--) {
+        // FIX (porting bug #159): the modules are updated in table order
+        // (0x40F320 walks the table upward from scroll to JumpPoint); CE
+        // walked it backwards.
+        for (int index = 0; index < MAP_MODULE_COUNT; index++) {
             if (map_modules[index].update_view_func != NULL) {
                 map_modules[index].update_view_func(view_options);
             }
@@ -923,7 +930,9 @@ int map_current_map(void)
 // 0x40FF50
 int map_by_type(int map_type)
 {
-    if (map_type >= 0 && map_type < MAP_TYPE_COUNT) {
+    // FIX (porting bug #160): type 0 is refused with the rest (0x40FF54
+    // `test eax,eax; jle` to the zero return); CE accepted it.
+    if (map_type > 0 && map_type < MAP_TYPE_COUNT) {
         return map_type_to_map_index[map_type];
     } else {
         return 0;
@@ -1029,6 +1038,9 @@ bool map_flush(unsigned int flags)
                     "%lld\n%lld\n",
                     (long long)LOCATION_GET_X(map_starting_loc),
                     (long long)LOCATION_GET_Y(map_starting_loc));
+                // FIX (porting bug #155): the file is closed (0x410195, right
+                // after the fprintf at 0x41018F); CE leaked the handle.
+                tig_file_fclose(stream);
             } else {
                 tig_debug_printf("Error could not open map start location file for writing %s\n", path);
             }
@@ -1108,7 +1120,9 @@ bool map_preprocess_mobile(const char* name)
 
     if (!gamelib_mod_guid_get(&guid)) {
         tig_debug_printf("Attempt to retrieve mod GUID when no mod is loaded\n");
-        return true;
+        // FIX (porting bug #154): no module, no preprocessing - the original
+        // returns 0 here (0x4102F0, after the print). CE returned true.
+        return false;
     }
 
     // FIX: one bounded write; the map name comes from the module's own data
@@ -1132,8 +1146,16 @@ bool map_preprocess_mobile(const char* name)
 
         tig_file_fclose(stream);
 
+        // FIX (porting bug #154): a matching GUID is final only when it is
+        // not all zeroes - the original tests the sixteen bytes after the
+        // compare and rewrites the file for a zero one. CE's memcmp alone
+        // returned early for it.
         if (tig_guid_is_equal(&file_guid, &guid)) {
-            return true;
+            for (index = 0; index < sizeof(guid); index++) {
+                if (((const uint8_t*)&guid)[index] != 0) {
+                    return true;
+                }
+            }
         }
     }
 
@@ -1235,8 +1257,11 @@ bool map_save_objects(void)
 
     if (obj_inst_first(&obj, &iter)) {
         do {
+            // FIX (porting bug #161): the editor writes the objects WITHOUT
+            // the dynamic flag (0x4107C7 `test ah,0x20; jne` past the write),
+            // as map_save_difs tests it; CE had the test inverted.
             if (!object_is_static(obj)
-                && (obj_field_int32_get(obj, OBJ_F_FLAGS) & OF_DYNAMIC)
+                && (obj_field_int32_get(obj, OBJ_F_FLAGS) & OF_DYNAMIC) == 0
                 && obj_is_modified(obj)) {
                 if (!objf_solitary_write(obj, map_save_path, ".mob")) {
                     return false;
@@ -1455,6 +1480,12 @@ bool map_load_mobile(const char* base_path, const char* save_path)
                 return false;
             }
         }
+        tig_file_list_destroy(&file_list);
+
+        // FIX (porting bug #162): the editor's load ends here; the packed
+        // file below is the game's branch (0x410D10 `if (map_editor == 0)`).
+        // CE fell through and failed on a file the editor never has.
+        return true;
     }
 
     // FIX: bounded (review 2026-10-22, finding 5).
@@ -1605,6 +1636,10 @@ bool map_load_dynamic(const char* name)
         if (tig_file_feof(stream) == 0) {
             tig_file_fclose(stream);
             tig_debug_printf("Error reading mobile dynamic objects from file %s\n", path);
+            // FIX (porting bug #157): a read that stops short of the end
+            // fails the load (0x411450: fclose, print, `return 0`). CE went
+            // on to a second fclose and returned true.
+            return false;
         }
 
         tig_file_fclose(stream);
@@ -2027,7 +2062,9 @@ void map_gender_check(void)
             if (obj_field_int32_get(obj, OBJ_F_TYPE) == OBJ_TYPE_NPC) {
                 const int description = obj_field_int32_get(obj, OBJ_F_DESCRIPTION);
                 if (description >= BP_NPC_BEGIN && description < BP_NPC_END) {
-                    const int actual_gender = stat_base_get(obj, STAT_GENDER);
+                    // FIX (porting bug #156): the original reads the stat's level
+                    // (0x412418 call 0x4B0490, stat_level_get), not its base.
+                    const int actual_gender = stat_level_get(obj, STAT_GENDER);
 
                     // FIX: The description number's parity says which gender the
                     // description is written for, but with the *opposite*
@@ -2058,7 +2095,8 @@ void map_gender_check(void)
 
                 const int unknown_description = obj_field_int32_get(obj, OBJ_F_CRITTER_DESCRIPTION_UNKNOWN);
                 if (unknown_description >= BP_NPC_BEGIN && unknown_description < BP_NPC_END) {
-                    const int actual_gender = stat_base_get(obj, STAT_GENDER);
+                    // FIX (porting bug #156): as above (0x4124F9 call 0x4B0490).
+                    const int actual_gender = stat_level_get(obj, STAT_GENDER);
 
                     // FIX: See the note on the description branch above - same
                     // inverted parity test, same fix.

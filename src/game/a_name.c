@@ -514,9 +514,12 @@ bool load_tile_names(void)
                 return false;
             }
 
-            mes_file_entry.str[3] = '\0';
-
+            // FIX (porting bug #171): the number after the three flag letters
+            // is read before the string is cut (0x4EB499 atoi, then 0x4EB4A1
+            // stores the NUL); CE cut first, so the sound type was always 0.
             sound_type = atoi(mes_file_entry.str + 3);
+
+            mes_file_entry.str[3] = '\0';
         }
 
         if (mes_file_entry.num < 100) {
@@ -599,6 +602,11 @@ bool load_tile_edges(void)
                 FREE(v1);
                 return false;
             }
+
+            // FIX (porting bug #149): the route found is the table's entry
+            // (0x4EB72F loads the table, 0x4EB73A stores it); CE discarded
+            // it, so a_name_transition_tile_aid read the table uninitialised.
+            dword_603AF8[cnt * v2 + v3] = v4;
         }
     }
 
@@ -872,7 +880,10 @@ void a_name_tile_variants_init(void)
                 dword_687660[0][v1 * num_outdoor_flippable_names + index] = a_name_tile_variant_count(index, index, v1, 1, 1, 1);
             }
 
-            for (index = 0; index < num_outdoor_flippable_names; index++) {
+            // FIX (porting bug #169): the non-flippable table is filled to
+            // the non-flippable count (0x4EBCE2 loads it, 0x4EBCE8 compares);
+            // CE used the flippable count, past or short of the buffer.
+            for (index = 0; index < num_outdoor_non_flippable_names; index++) {
                 dword_687660[1][v1 * num_outdoor_non_flippable_names + index] = a_name_tile_variant_count(index, index, v1, 1, 0, 0);
             }
 
@@ -1497,7 +1508,10 @@ void init_wall_structures(void)
         index = num_wall_structures++;
         wall_structures = (WallStructure*)REALLOC(wall_structures, sizeof(WallStructure) * num_wall_structures);
         wall_structures[index].flags = 0;
-        wall_structures[index].interior = 4;
+        // FIX (porting bug #168): the default interior is 0 (0x4ECC91 stores
+        // the zeroed edi); CE wrote 4. parse_wall_structure overwrites it for
+        // every entry that parses.
+        wall_structures[index].interior = 0;
         wall_structures[index].interior_param = 0;
         wall_structures[index].exterior = 0;
         wall_structures[index].exterior_param = 0;
@@ -1641,7 +1655,10 @@ bool build_wall_file_name(const char* name, int piece, int damage, int variation
     if ((damage & 0x400) != 0) {
         index = 1;
     } else if ((damage & 0x80) != 0) {
-        if (piece >= 2 && piece <= 6) {
+        // FIX (porting bug #170): pieces 1..6 take the 'L' file (0x4ECFD8
+        // `cmp ecx,1; jl`, 0x4ECFDD `cmp ecx,6; jg` to the 'R' index); CE
+        // started at 2, so piece 1 took 'R'.
+        if (piece >= 1 && piece <= 6) {
             index = 1;
         } else {
             index = 2;
@@ -1968,6 +1985,10 @@ bool load_roof_data(void)
 
     mes_file_entry.num = 0;
     if (!mes_search(roofname_mes_file, &mes_file_entry)) {
+        // FIX (porting bug #172): the count goes back to 0 before the file
+        // is unloaded (0x4ED440); CE left it, so build_roof_file_name's
+        // bound let an index through to a NULL table.
+        num_roof_file_names = 0;
         mes_unload(roofname_mes_file);
         return false;
     }

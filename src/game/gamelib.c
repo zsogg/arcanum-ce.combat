@@ -434,7 +434,16 @@ bool gamelib_init(GameInitInfo* init_info)
 
     gamelib_view_options.type = VIEW_TYPE_ISOMETRIC;
 
+    // NOTE: the original's partial-install fallback is not carried: 0x404930
+    // reads `installed_mode`/`installed_from` from the registry, and three
+    // sites (here, gamelib_load_data, gamelib_load_module_data) then mount
+    // `<installed_from>\Sierra\Arcanum\...` archives and module directories.
+    // A CD install has no counterpart on this port's platforms.
     for (index = 0; index < MODULE_COUNT; index++) {
+        // FIX (porting bug #194): the platform is pinged before each module's
+        // init (0x402307 calls tig_ping at the top of every iteration); CE
+        // skipped it, so a slow init could starve the window.
+        tig_ping();
         if (gamelib_modules[index].init_func != NULL) {
             if (!gamelib_modules[index].init_func(init_info)) {
                 tig_debug_printf("gamelib_init(): init function %d (%s) failed\n",
@@ -877,6 +886,11 @@ void gamelib_mod_unload(void)
                 gamelib_modules[index].mod_unload_func();
             }
         }
+        // FIX (porting bug #196): the module's data - its directory, .dat and
+        // patch repositories, path and GUID - is unloaded with it (0x402C83
+        // calls gamelib_unload_module_data); CE left them mounted for the
+        // next module.
+        gamelib_unload_module_data();
         gamelib_mod_loaded = false;
     }
 }
@@ -1157,9 +1171,12 @@ bool gamelib_save(const char* name, const char* description)
                 tig_debug_printf("gamelib_save(): ERROR: Sentinel Failed to Save!\n");
                 break;
             }
-
-            ui_progressbar_update(index + 1);
         }
+
+        // FIX (porting bug #197): the bar advances once per module whether or
+        // not it saves (0x40318B jumps a module without a saver straight to
+        // the update); CE advanced only for the savers.
+        ui_progressbar_update(index + 1);
     }
 
     // CE: the buffered data.sav flush is part of staging, too.
@@ -1289,6 +1306,18 @@ bool gamelib_load(const char* name)
 
     if (tig_file_fread(&(load_info.version), sizeof(load_info.version), 1, stream) != 1) {
         tig_debug_printf("gamelib_load(): Error reading version\n");
+        // FIX (porting bug #195): the stream is closed on the way out
+        // (0x403410 fcloses before returning); CE leaked it.
+        tig_file_fclose(stream);
+        in_load = false;
+        return false;
+    }
+
+    // FIX (porting bug #195): a data.sav of another version is refused
+    // (0x40359C `cmp eax,0x19`: print, fclose, `return 0`); CE loaded any.
+    if (load_info.version != 25) {
+        tig_debug_printf("gamelib_load(): Save game version mismatch (expected %d, read %d)\n", 25, load_info.version);
+        tig_file_fclose(stream);
         in_load = false;
         return false;
     }
@@ -1327,9 +1356,11 @@ bool gamelib_load(const char* name)
                 tig_debug_printf("gamelib_load(): ERROR: Load Sentinel Failed to Match!\n");
                 break;
             }
-
-            ui_progressbar_update(index + 1);
         }
+
+        // FIX (porting bug #197): as in gamelib_save, every module advances
+        // the bar (0x403410's LAB_00403687 is reached with or without a loader).
+        ui_progressbar_update(index + 1);
     }
 
     tig_file_fclose(stream);
@@ -1823,6 +1854,8 @@ bool gamelib_saveinfo_load(const char* name, GameSaveInfo* save_info)
         if (tig_file_fread(&size, sizeof(size), 1, stream) != 1) break;
         if (size < 0 || (size_t)size >= sizeof(save_info->module_name)) break;
         if (tig_file_fread(save_info->module_name, size, 1, stream) != 1) break;
+        // FIX: the writer stores the name without its NUL and the original
+        // reader (0x404270) never adds one; CE terminates it.
         save_info->module_name[size] = '\0';
 
         // FIX: the two strings after module_name take the same bound it

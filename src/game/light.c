@@ -516,10 +516,14 @@ bool light_sample_at(int64_t loc, int offset_x, int offset_y, int ambient, tig_c
                         && tig_art_pixel_color_get(light->art_id, lx - tmp_rect.x, ly - tmp_rect.y, &color) == TIG_OK
                         && tig_art_anim_data(light->art_id, &art_anim_data) == TIG_OK
                         && color != art_anim_data.color_key) {
-                        if (((light->flags & LF_INDOOR) != 0
-                                && light->tint_color != indoor_color)
-                            || ((light->flags & LF_OUTDOOR) != 0
-                                && light->tint_color != outdoor_color)) {
+                        // FIX (porting bug #185): an indoor light is judged by the indoor
+                        // colour alone; only one that is not indoor consults the outdoor flag
+                        // (the original nests the tests). CE's `||` let a light carrying both
+                        // flags take either tint.
+                        if ((light->flags & LF_INDOOR) != 0
+                                ? light->tint_color != indoor_color
+                                : ((light->flags & LF_OUTDOOR) != 0
+                                      && light->tint_color != outdoor_color)) {
                             light_palette_update(light);
                             light_invalidate_rect(&tmp_rect, true);
                         }
@@ -977,16 +981,20 @@ bool shadow_apply(int64_t obj)
         sector_list_destroy(head);
 
         if (cnt != 0) {
+            // FIX (porting bug #184): the original's sort is an exchange sort -
+            // each i against every later j, swapped when frames[j] < frames[i]
+            // (0x4D9B20); CE's bubble sort orders equal frames differently, and
+            // the order is the render order written to OBJ_F_SHADOW_HANDLES.
             for (int i = 0; i < cnt - 1; i++) {
-                for (int j = 0; j < cnt - i - 1; j++) {
-                    if (frames[j] > frames[j + 1]) {
-                        int tmp_frame = frames[j];
-                        frames[j] = frames[j + 1];
-                        frames[j + 1] = tmp_frame;
+                for (int j = i + 1; j < cnt; j++) {
+                    if (frames[j] < frames[i]) {
+                        int tmp_frame = frames[i];
+                        frames[i] = frames[j];
+                        frames[j] = tmp_frame;
 
-                        Shadow tmp_shadow = shadows[j];
-                        shadows[j] = shadows[j + 1];
-                        shadows[j + 1] = tmp_shadow;
+                        Shadow tmp_shadow = shadows[i];
+                        shadows[i] = shadows[j];
+                        shadows[j] = tmp_shadow;
                     }
                 }
             }
@@ -1235,10 +1243,14 @@ void light_colors_for_obj(int64_t obj, int* colors, int* cnt_ptr)
                                             && tmp_y < affected_rect.y + affected_rect.height
                                             && tig_art_pixel_color_get(light->art_id, tmp_x - light_rect.x, tmp_y - light_rect.y, &color) == TIG_OK
                                             && color != art_anim_data.color_key) {
-                                            if (((light->flags & LF_INDOOR) != 0
-                                                    && light->tint_color != indoor_color)
-                                                || ((light->flags & LF_OUTDOOR) != 0
-                                                    && light->tint_color != outdoor_color)) {
+                                            // FIX (porting bug #185): an indoor light is judged by the indoor
+                                            // colour alone; only one that is not indoor consults the outdoor flag
+                                            // (the original nests the tests). CE's `||` let a light carrying both
+                                            // flags take either tint.
+                                            if ((light->flags & LF_INDOOR) != 0
+                                                    ? light->tint_color != indoor_color
+                                                    : ((light->flags & LF_OUTDOOR) != 0
+                                                          && light->tint_color != outdoor_color)) {
                                                 light_palette_update(light);
                                                 light_invalidate_rect(&obj_rect, 1);
                                             }
@@ -1762,10 +1774,11 @@ void light_cycle_rotation(Light* light)
     if (light->art_id != art_id) {
         light->art_id = art_id;
         if (tig_art_frame_data(art_id, &art_frame_data) == TIG_OK) {
-            if (art_frame_data.offset_x != 0 || art_frame_data.offset_y != 0) {
-                light->offset_x += art_frame_data.offset_x;
-                light->offset_y += art_frame_data.offset_y;
-            }
+            // FIX (porting bug #183): the frame's offset REPLACES the light's
+            // (0x4DD940 stores both fields unconditionally); CE added it when
+            // non-zero, the form of light_inc_frame, so a rotating light drifted.
+            light->offset_x = art_frame_data.offset_x;
+            light->offset_y = art_frame_data.offset_y;
         }
 
         light->flags |= LF_MODIFIED;
@@ -2509,10 +2522,14 @@ void light_render_internal(GameDrawInfo* draw_info)
                                                     && cx < light_buffer_tiles_x
                                                     && cy >= 0
                                                     && cy < light_buffer_tiles_y) {
-                                                    if (((light->flags & LF_INDOOR) != 0
-                                                            && light->tint_color != indoor_color)
-                                                        || ((light->flags & LF_OUTDOOR) != 0
-                                                            && light->tint_color != outdoor_color)) {
+                                                    // FIX (porting bug #185): an indoor light is judged by the indoor
+                                                    // colour alone; only one that is not indoor consults the outdoor flag
+                                                    // (the original nests the tests). CE's `||` let a light carrying both
+                                                    // flags take either tint.
+                                                    if ((light->flags & LF_INDOOR) != 0
+                                                            ? light->tint_color != indoor_color
+                                                            : ((light->flags & LF_OUTDOOR) != 0
+                                                                  && light->tint_color != outdoor_color)) {
                                                         light_palette_update(light);
                                                         light_invalidate_rect(&tmp_rect, true);
                                                     }

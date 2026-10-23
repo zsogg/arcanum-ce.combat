@@ -411,6 +411,11 @@ bool anim_allocate_new_run_index(AnimID* anim_id)
 
     run_info->anim_obj = 0;
     run_info->cur_stack_data = NULL;
+    // FIX (porting bug #151): a fresh run has no current goal (0x44CD55
+    // `mov dword [eax+0x30],-1`) and its first six params are zeroed
+    // (0x44CD46 from +0x40, 48 bytes), the target tile among them, as
+    // anim_allocate_this_run_index does; CE set neither.
+    run_info->current_goal = -1;
     run_info->next_ping_time.days = 0;
     run_info->next_ping_time.milliseconds = 0;
     run_info->goals[0].params[AGDATA_SELF_OBJ].obj = OBJ_HANDLE_NULL;
@@ -418,6 +423,7 @@ bool anim_allocate_new_run_index(AnimID* anim_id)
     run_info->goals[0].params[AGDATA_BLOCK_OBJ].obj = OBJ_HANDLE_NULL;
     run_info->goals[0].params[AGDATA_SCRATCH_OBJ].obj = OBJ_HANDLE_NULL;
     run_info->goals[0].params[AGDATA_PARENT_OBJ].obj = OBJ_HANDLE_NULL;
+    run_info->goals[0].params[AGDATA_TARGET_TILE].loc = 0;
 
     for (subindex = 0; subindex < 5; subindex++) {
         run_info->goals[0].field_B0[subindex].objid.type = OID_TYPE_NULL;
@@ -458,22 +464,31 @@ bool anim_allocate_this_run_index(AnimID* anim_id)
     }
 
     if (slot == 216) {
-        if (anim_id->slot_num >= 0
-            && anim_id->slot_num < 216
-            && (anim_run_info[anim_id->slot_num].flags & 0x1) != 0) {
-            for (slot = 0; slot < 216; slot++) {
-                run_info = &(anim_run_info[slot]);
-                if ((run_info->flags & 0x1) == 0) {
-                    anim_id->slot_num = slot;
-                    anim_id->field_8 = 0;
-                    break;
+        // FIX (porting bug #152): when no slot carries the unique id, the
+        // requested slot is taken as it is unless it is busy; only then is a
+        // free one searched (the original sets its cursor to the requested
+        // slot before testing bit 0x1). CE went on with `slot` at 216 and
+        // wrote one past the array. A requested slot out of range leaves the
+        // original's cursor on the last slot walked, 215; kept as it is.
+        if (anim_id->slot_num >= 0 && anim_id->slot_num < 216) {
+            slot = anim_id->slot_num;
+            if ((anim_run_info[slot].flags & 0x1) != 0) {
+                for (slot = 0; slot < 216; slot++) {
+                    run_info = &(anim_run_info[slot]);
+                    if ((run_info->flags & 0x1) == 0) {
+                        anim_id->slot_num = slot;
+                        anim_id->field_8 = 0;
+                        break;
+                    }
+                }
+
+                if (slot == 216) {
+                    tig_debug_printf("Anim: anim_allocate_this_run_index: could not allocate a run index, ALL FULL!.\n");
+                    return false;
                 }
             }
-
-            if (slot == 216) {
-                tig_debug_printf("Anim: anim_allocate_this_run_index: could not allocate a run index, ALL FULL!.\n");
-                return false;
-            }
+        } else {
+            slot = 215;
         }
     }
 
@@ -488,6 +503,8 @@ bool anim_allocate_this_run_index(AnimID* anim_id)
     run_info->goals[0].params[AGDATA_BLOCK_OBJ].obj = OBJ_HANDLE_NULL;
     run_info->goals[0].params[AGDATA_SCRATCH_OBJ].obj = OBJ_HANDLE_NULL;
     run_info->goals[0].params[AGDATA_PARENT_OBJ].obj = OBJ_HANDLE_NULL;
+    // FIX (porting bug #152): the target tile is zeroed with the handles.
+    run_info->goals[0].params[AGDATA_TARGET_TILE].loc = 0;
 
     for (idx = 0; idx < 5; idx++) {
         run_info->goals[0].field_B0[idx].objid.type = OID_TYPE_NULL;
@@ -852,6 +869,11 @@ bool anim_subgoal_add_func(AnimID anim_id, AnimGoalData* goal_data)
         object_locator_init(run_info->goals[0].params[idx].obj, &(run_info->goals[0].field_B0[idx]));
     }
 
+    // FIX (porting bug #150): the current stack data follows the pushed
+    // goal (0x44DB60 `lea eax,[ecx+edx*8+0x38]`, 0x44DB64 stored at +0xBF8),
+    // as anim_goal_add_func sets it to goals[0]; CE left it where it was.
+    run_info->cur_stack_data = &(run_info->goals[run_info->current_goal]);
+
     if (run_info->path_attached_to_stack_index != -1) {
         run_info->path_attached_to_stack_index++;
     }
@@ -1169,7 +1191,13 @@ bool anim_interrupt_all_goals_of_type(int64_t obj, int goal_type, int next_goal_
     }
 
     slot = anim_find_first(obj);
-    while (slot != -1 && slot != prev_slot) {
+    while (slot != -1) {
+        // FIX (porting bug #153): the walk returning the slot it is on ends
+        // in failure (`return 0`), only the end of the list in success; CE
+        // returned true for both. Nothing is known to reach the first.
+        if (slot == prev_slot) {
+            return false;
+        }
         prev_slot = slot;
 
         run_info = &(anim_run_info[slot]);

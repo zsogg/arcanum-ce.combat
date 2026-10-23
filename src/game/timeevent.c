@@ -619,6 +619,13 @@ bool timeevent_save(TigFile* stream)
     int pos;
     TimeEventTypeInfo* info;
 
+    // FIX (porting bug #198): a null stream is refused before anything is
+    // written (0x45AED0 `param_1 != 0 &&` the first fwrite), as
+    // timeevent_load refuses it; CE wrote to it.
+    if (stream == NULL) {
+        return false;
+    }
+
     if (tig_file_fwrite(&timeevent_real_time, sizeof(timeevent_real_time), 1, stream) != 1) {
         return false;
     }

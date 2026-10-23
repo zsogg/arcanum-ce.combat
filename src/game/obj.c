@@ -730,8 +730,13 @@ bool obj_validate_system(unsigned int flags)
                 }
 
                 if (inventory_num_fld != -1) {
-                    cnt = obj_field_int32_get(obj, inventory_num_fld);
-                    if (cnt != obj_arrayfield_length_get(obj, inventory_list_fld)) {
+                    // FIX (porting bug #175): the list's length is the truth
+                    // (0x405391 reads it first, 0x4053A5 the count field); on
+                    // a mismatch it is written into the count field and bounds
+                    // the walk below. CE read the count field, wrote it back
+                    // unchanged and walked by it, so the repair never happened.
+                    cnt = obj_arrayfield_length_get(obj, inventory_list_fld);
+                    if (cnt != obj_field_int32_get(obj, inventory_num_fld)) {
                         tig_debug_println("!VS  obj_f_critter_inventory_num doesn't match count for obj_f_critter_inventory_list_idx.");
 
                         object = obj_lock(obj);
@@ -765,6 +770,9 @@ bool obj_validate_system(unsigned int flags)
                                     tig_debug_printf("!VS  Inventory entry is neither a valid handle nor valid id.  a: %" PRIx64 "  b: %" PRIx64 "\n",
                                         oid.d.h,
                                         oid.d.h);
+                                    // FIX (porting bug #175): the validation fails here
+                                    // (0x4056CC, `return 0` after the print); CE went on.
+                                    return false;
                                 }
 
                                 is_id = true;
@@ -1206,6 +1214,11 @@ void obj_inst_dup(int64_t* copy, int64_t obj, ObjectID* oids)
         obj_pool_perm_oid_remove(object->oid);
     }
 
+    // FIX (porting bug #173): the supplied id becomes the object's own
+    // (0x406210 copies six dwords into it before the table is set, at
+    // 0x406250 and again per item at 0x406267); CE only set the table, so
+    // the object kept obj_perm_dup's id while the table mapped the caller's.
+    object->oid = *oids;
     obj_pool_perm_oid_set(*oids++, *copy);
     obj_unlock(*copy);
 
@@ -1217,6 +1230,8 @@ void obj_inst_dup(int64_t* copy, int64_t obj, ObjectID* oids)
             if (object->oid.type != OID_TYPE_NULL) {
                 obj_pool_perm_oid_remove(object->oid);
             }
+            // FIX (porting bug #173): as for the copy itself.
+            object->oid = *oids;
             obj_pool_perm_oid_set(*oids++, item_obj);
             obj_unlock(item_obj);
         }
@@ -1454,6 +1469,7 @@ bool obj_dif_read(TigFile* stream, int64_t obj)
 {
     Object* object;
     unsigned int marker;
+    bool ok;
     ObjectID oid;
     int cnt;
     int idx;
@@ -1515,10 +1531,13 @@ bool obj_dif_read(TigFile* stream, int64_t obj)
     object->modified = true;
 
     object_enum_stream = stream;
-    if (!object_inst_enumerate_available_fields(object, object_field_read_if_dif)) {
+    // FIX (porting bug #180): a field that fails to read is reported, and
+    // the end marker is still read and checked and obj_find_move still runs
+    // before the failure is returned (0x406930 prints and falls through);
+    // CE returned at once, leaving the stream mid-record.
+    ok = object_inst_enumerate_available_fields(object, object_field_read_if_dif);
+    if (!ok) {
         tig_debug_println("Error in obj_dif_read:\n  Unable to read one of the fields.");
-        obj_unlock(obj);
-        return false;
     }
 
     obj_unlock(obj);
@@ -1535,7 +1554,7 @@ bool obj_dif_read(TigFile* stream, int64_t obj)
 
     obj_find_move(obj);
 
-    return true;
+    return ok;
 }
 
 // Forgets which fields differ from the prototype, marking the object clean.
@@ -2736,6 +2755,9 @@ void obj_field_array_length_get(Object* object, int fld, int* length_ptr)
         v1.ptr = &(object->data[obj_field_simple_index(object, fld)]);
         *length_ptr = obj_data_count_idx(&v1);
     } else {
+        // NOTE: Faithful. A transient field's length is computed and then
+        // overwritten by the changed/prototype branch below - the original
+        // (0x408D60) has no `else` here either.
         if (fld > OBJ_F_TRANSIENT_BEGIN && fld < OBJ_F_TRANSIENT_END) {
             v1.ptr = &(object->transient_properties[fld - OBJ_F_TRANSIENT_BEGIN - 1]);
             *length_ptr = obj_data_count_idx(&v1);
@@ -2810,7 +2832,10 @@ bool obj_field_array_locate(Object* object, int fld, SizeableArray*** ptr, int64
         return false;
     }
 
-    if (fld > OBJ_F_TRANSIENT_BEGIN && fld <= OBJ_F_TRANSIENT_END) {
+    // FIX (porting bug #174): the transient range ends before the sentinel
+    // (0x408F40 `0x13A < fld && fld < 0x14E`), as every sibling has it; CE
+    // let the sentinel itself index one past the transient array.
+    if (fld > OBJ_F_TRANSIENT_BEGIN && fld < OBJ_F_TRANSIENT_END) {
         *ptr = (SizeableArray**)(&(object->transient_properties[fld - OBJ_F_TRANSIENT_BEGIN - 1]));
         return false;
     }
@@ -3331,6 +3356,10 @@ bool obj_proto_read_mem(uint8_t* data, int64_t* obj_ptr)
 
     size = sizeof(*object->dif) * obj_type_change_array_len(object->type);
     object->dif = MALLOC(size);
+    // FIX: the original reads the bitmap over the POINTER field, not the
+    // buffer (0x409D82 `lea ebp,[edi+0x4C]`, 0x409D98 passes it), so its
+    // dif pointer, data and transient pointers take the first bitmap words
+    // and the two pointers are reassigned right after. CE reads the buffer.
     mem_read_advance(object->dif, size, &data);
 
     object->field_40 = 0;
@@ -4947,6 +4976,11 @@ bool object_proto_enumerate_fields(Object* object, ObjectProtoEnumerateFieldsCal
             return false;
         }
         break;
+    default:
+        // FIX (porting bug #176): an unknown type enumerates nothing and
+        // fails (0x40C880's default lands on `return 0`); the two instance
+        // enumerators succeed on it, and CE had copied their shape.
+        return false;
     }
 
     return true;
@@ -5540,6 +5574,10 @@ bool obj_version_read_mem(uint8_t** data)
     mem_read_advance(&version, sizeof(version), data);
     if (version != OBJ_FILE_VERSION) {
         tig_debug_printf("Object file format version mismatch: (read: %d, expected: %d).\n", version, OBJ_FILE_VERSION);
+        // FIX (porting bug #148): a mismatch refuses the object (0x40D61D
+        // `xor eax,eax; ret` after the print), as the file variant does;
+        // CE printed and went on to parse it.
+        return false;
     }
 
     return true;

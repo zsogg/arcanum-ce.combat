@@ -619,7 +619,11 @@ void convert_screen_to_world_coords(int64_t sx, int64_t sy, int64_t* wx, int64_t
     int dy;
 
     if (location_view_options.type == VIEW_TYPE_ISOMETRIC) {
-        dx = (int)((sx - location_origin_x) / 2);
+        // FIX (porting bug #186): the halving is an arithmetic shift (0x4B98D7
+        // `mov ecx,1; call __allshr`), rounding toward minus infinity as
+        // location_at's `>> 1` does; CE's division truncated toward zero, one
+        // short for every odd negative offset.
+        dx = (int)((sx - location_origin_x) >> 1);
         dy = (int)(sy - location_origin_y);
         *wx = (dy - dx) / 40;
         *wy = (dy + dx) / 40;
