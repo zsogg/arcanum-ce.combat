@@ -755,6 +755,41 @@ add_custom_target(arcanum-script-test-obj DEPENDS "${SCRIPT_TEST_OBJ}")
 target_link_libraries(arcanum-tests PRIVATE "${SCRIPT_TEST_OBJ}")
 add_dependencies(arcanum-tests arcanum-script-test-obj)
 
+# `proto.c` (card FC1 phase 4). `proto_parse_field` (0x49BB70) is `static`;
+# `test_proto.c` pins its Spell Flag case (porting bug #283), the line the
+# elementals' stats in `rules\monster.txt` depend on.
+set(PROTO_TEST_STATICS
+    proto_parse_field
+)
+set(PROTO_TEST_OBJ "${CMAKE_CURRENT_BINARY_DIR}/proto_globalized.o")
+set(_proto_globalize_args "")
+foreach(sym ${PROTO_TEST_STATICS})
+    list(APPEND _proto_globalize_args "--globalize-symbol=${sym}")
+endforeach()
+
+file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/protoobj")
+
+add_custom_command(
+    OUTPUT "${PROTO_TEST_OBJ}"
+    COMMAND "${CMAKE_AR}" x "$<TARGET_FILE:arcanum-game>" proto.c${CMAKE_C_OUTPUT_EXTENSION}
+    COMMAND "${CMAKE_OBJCOPY}" ${_proto_globalize_args} proto.c${CMAKE_C_OUTPUT_EXTENSION} "${PROTO_TEST_OBJ}"
+    COMMAND "${CMAKE_COMMAND}" -E rm -f proto.c${CMAKE_C_OUTPUT_EXTENSION}
+    COMMAND "${CMAKE_COMMAND}"
+        "-DOBJ=${PROTO_TEST_OBJ}"
+        "-DSYMS=${PROTO_TEST_STATICS}"
+        "-DDATA_SYMS="
+        "-DNM=${CMAKE_NM}"
+        -P "${CMAKE_CURRENT_SOURCE_DIR}/verify_globalized.cmake"
+    WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/protoobj"
+    DEPENDS arcanum-game
+    COMMENT "tests: globalizing proto.c statics (no source change)"
+    VERBATIM
+)
+
+add_custom_target(arcanum-proto-test-obj DEPENDS "${PROTO_TEST_OBJ}")
+target_link_libraries(arcanum-tests PRIVATE "${PROTO_TEST_OBJ}")
+add_dependencies(arcanum-tests arcanum-proto-test-obj)
+
 # A focused executable for the script VM. The full suite deliberately contains
 # subprocess crash specifications whose expected signal changes under UBSan;
 # this target lets the VM's boundary and repeated-invocation cases run cleanly

@@ -19,6 +19,7 @@
 #include "game/feature.h"
 #include "game/gamelib.h"
 #include "game/obj.h"
+#include "game/obj_flags.h"
 #include "game/proto.h"
 #include "game/script.h"
 #include "game/settings.h"
@@ -166,11 +167,35 @@ TEST(script_array_round_trips_through_proto_serialization)
     obj_harness_destroy(obj);
 }
 
+// proto.c's own line parser, reached through `proto_globalized.o`.
+bool proto_parse_field(const char* str, int* fld_ptr, int* a3, int* a4, int* a5);
+
+// PROTO_F_SPELL_FLAG, the eleventh name in `proto_field_names`.
+#define PROTO_FIELD_SPELL_FLAG 10
+
+TEST(spell_flag_lines_parse_by_name)
+{
+    int fld = -1;
+    int a3 = 0;
+    int a4 = 0;
+    int a5 = 0;
+
+    // Porting bug #283: the elementals' `Spell Flag:` lines in monster.txt
+    // are flag names (0x49BB70's case 10); atoi read every one as 0.
+    CHECK(proto_parse_field("Spell Flag: OSF_BODY_OF_AIR", &fld, &a3, &a4, &a5));
+    CHECK_INT(fld, PROTO_FIELD_SPELL_FLAG);
+    CHECK_INT(a3, (int)OSF_BODY_OF_AIR);
+
+    CHECK(proto_parse_field("Spell Flag: OSF_ILLUSION", &fld, &a3, &a4, &a5));
+    CHECK_INT(a3, (int)OSF_ILLUSION);
+}
+
 void test_proto_suite(void)
 {
     RUN(proto_description_ranges_are_half_open);
     RUN(uap_widens_generic_armor_and_monster_ranges);
     RUN(script_array_round_trips_through_proto_serialization);
+    RUN(spell_flag_lines_parse_by_name);
 
     obj_harness_exit();
 }

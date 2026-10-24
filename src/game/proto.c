@@ -1348,7 +1348,11 @@ void proto_init_properties(int64_t obj, int description)
             obj_field_int32_set(obj, OBJ_F_CURRENT_AID, art_id);
             obj_field_int32_set(obj, OBJ_F_MATERIAL, MATERIAL_WOOD);
             obj_field_int32_set(obj, OBJ_F_HP_PTS, 50);
-            obj_field_int32_set(obj, OBJ_F_FLAGS, obj_field_int32_get(obj, OBJ_F_FLAGS) & ~4030);
+            // FIX (porting bug #280): the mask is hex, provides-cover and
+            // shoot- and see-through (0x46ba70 `and eax,0xffffbfcf`); CE wrote
+            // decimal 4030 and cleared ten other flags, click-through among
+            // them, while leaving provides-cover set.
+            obj_field_int32_set(obj, OBJ_F_FLAGS, obj_field_int32_get(obj, OBJ_F_FLAGS) & ~0x4030);
             obj_field_int32_set(obj, OBJ_F_FLAGS, obj_field_int32_get(obj, OBJ_F_FLAGS) | 0x400000);
             obj_field_int32_set(obj, OBJ_F_CATEGORY, 18);
             break;
@@ -14645,6 +14649,12 @@ void proto_init_properties(int64_t obj, int description)
             obj_field_int32_set(obj, OBJ_F_ITEM_SPELL_MANA_STORE, -1);
             obj_field_int32_set(obj, OBJ_F_ITEM_FLAGS, 65664);
             obj_field_int32_set(obj, OBJ_F_GENERIC_FLAGS, 16);
+            // FIX (porting bug #281): each of the eleven grenades has its
+            // worth raised by its complexity, as weapons and armour do
+            // (0x495a29, 0x496698-0x496f3e call 0x49b2e0 at the end of
+            // each case); CE never adjusted them, so a grenade sold for a
+            // fraction of its price (75 for 1,155 here).
+            proto_adjust_worth_by_complexity(obj);
             break;
         case BP_AUTOMATON_NPC:
             tig_art_item_id_create(96, 0, 0, 0, 0, 9, 0, 0, &art_id);
@@ -14892,6 +14902,7 @@ void proto_init_properties(int64_t obj, int description)
             obj_field_int32_set(obj, OBJ_F_ITEM_SPELL_MANA_STORE, -1);
             obj_field_int32_set(obj, OBJ_F_ITEM_FLAGS, 65664);
             obj_field_int32_set(obj, OBJ_F_GENERIC_FLAGS, 16);
+            proto_adjust_worth_by_complexity(obj);
             break;
         case BP_SMOKE_GRENADE:
             tig_art_item_id_create(120, 0, 0, 0, 0, 9, 0, 0, &art_id);
@@ -14909,6 +14920,7 @@ void proto_init_properties(int64_t obj, int description)
             obj_field_int32_set(obj, OBJ_F_ITEM_SPELL_MANA_STORE, -1);
             obj_field_int32_set(obj, OBJ_F_ITEM_FLAGS, 65664);
             obj_field_int32_set(obj, OBJ_F_GENERIC_FLAGS, 16);
+            proto_adjust_worth_by_complexity(obj);
             break;
         case BP_STUN_GRENADE:
             tig_art_item_id_create(121, 0, 0, 0, 0, 9, 0, 0, &art_id);
@@ -14926,6 +14938,7 @@ void proto_init_properties(int64_t obj, int description)
             obj_field_int32_set(obj, OBJ_F_ITEM_SPELL_MANA_STORE, -1);
             obj_field_int32_set(obj, OBJ_F_ITEM_FLAGS, 65664);
             obj_field_int32_set(obj, OBJ_F_GENERIC_FLAGS, 16);
+            proto_adjust_worth_by_complexity(obj);
             break;
         case BP_FIRE_OBSTRUCTION_2:
             tig_art_item_id_create(122, 0, 0, 0, 0, 9, 0, 0, &art_id);
@@ -14943,6 +14956,7 @@ void proto_init_properties(int64_t obj, int description)
             obj_field_int32_set(obj, OBJ_F_ITEM_SPELL_MANA_STORE, -1);
             obj_field_int32_set(obj, OBJ_F_ITEM_FLAGS, 65664);
             obj_field_int32_set(obj, OBJ_F_GENERIC_FLAGS, 16);
+            proto_adjust_worth_by_complexity(obj);
             break;
         case BP_REVOLVER_PARTS:
             tig_art_item_id_create(117, 0, 0, 0, 0, 9, 0, 0, &art_id);
@@ -15051,6 +15065,7 @@ void proto_init_properties(int64_t obj, int description)
             obj_field_int32_set(obj, OBJ_F_ITEM_SPELL_MANA_STORE, -1);
             obj_field_int32_set(obj, OBJ_F_ITEM_FLAGS, 65664);
             obj_field_int32_set(obj, OBJ_F_GENERIC_FLAGS, 16);
+            proto_adjust_worth_by_complexity(obj);
             break;
         case BP_HALLUCINATION_GRENADE:
             tig_art_item_id_create(137, 0, 0, 0, 0, 9, 0, 0, &art_id);
@@ -15068,6 +15083,7 @@ void proto_init_properties(int64_t obj, int description)
             obj_field_int32_set(obj, OBJ_F_ITEM_SPELL_MANA_STORE, -1);
             obj_field_int32_set(obj, OBJ_F_ITEM_FLAGS, 65664);
             obj_field_int32_set(obj, OBJ_F_GENERIC_FLAGS, 16);
+            proto_adjust_worth_by_complexity(obj);
             break;
         case BP_ELECTROCUTION_GRENADE:
             tig_art_item_id_create(138, 0, 0, 0, 0, 9, 0, 0, &art_id);
@@ -15085,6 +15101,7 @@ void proto_init_properties(int64_t obj, int description)
             obj_field_int32_set(obj, OBJ_F_ITEM_SPELL_MANA_STORE, -1);
             obj_field_int32_set(obj, OBJ_F_ITEM_FLAGS, 65664);
             obj_field_int32_set(obj, OBJ_F_GENERIC_FLAGS, 16);
+            proto_adjust_worth_by_complexity(obj);
             break;
         case BP_CONCUSSION_GRENADE:
             tig_art_item_id_create(140, 0, 0, 0, 0, 9, 0, 0, &art_id);
@@ -15102,6 +15119,7 @@ void proto_init_properties(int64_t obj, int description)
             obj_field_int32_set(obj, OBJ_F_ITEM_SPELL_MANA_STORE, -1);
             obj_field_int32_set(obj, OBJ_F_ITEM_FLAGS, 65664);
             obj_field_int32_set(obj, OBJ_F_GENERIC_FLAGS, 16);
+            proto_adjust_worth_by_complexity(obj);
             break;
         case BP_PARALYSIS_GRENADE:
             tig_art_item_id_create(141, 0, 0, 0, 0, 9, 0, 0, &art_id);
@@ -15119,6 +15137,7 @@ void proto_init_properties(int64_t obj, int description)
             obj_field_int32_set(obj, OBJ_F_ITEM_SPELL_MANA_STORE, -1);
             obj_field_int32_set(obj, OBJ_F_ITEM_FLAGS, 65664);
             obj_field_int32_set(obj, OBJ_F_GENERIC_FLAGS, 16);
+            proto_adjust_worth_by_complexity(obj);
             break;
         case BP_MUSTARD_GAS_GRENADE:
             tig_art_item_id_create(142, 0, 0, 0, 0, 9, 0, 0, &art_id);
@@ -15136,6 +15155,7 @@ void proto_init_properties(int64_t obj, int description)
             obj_field_int32_set(obj, OBJ_F_ITEM_SPELL_MANA_STORE, -1);
             obj_field_int32_set(obj, OBJ_F_ITEM_FLAGS, 65664);
             obj_field_int32_set(obj, OBJ_F_GENERIC_FLAGS, 16);
+            proto_adjust_worth_by_complexity(obj);
             break;
         case BP_BOAT_RIGGING:
             tig_art_item_id_create(147, 0, 0, 0, 0, 9, 0, 0, &art_id);
@@ -15808,7 +15828,9 @@ void proto_init_properties(int64_t obj, int description)
         switch (description) {
         case BP_GENERIC_PC:
             object_set_gender_and_race(obj, TIG_ART_CRITTER_BODY_TYPE_HUMAN, GENDER_MALE, RACE_HUMAN);
-            obj_field_string_set(obj, OBJ_F_PC_PLAYER_NAME, "none");
+            // FIX (porting bug #282): the default player name is "None"
+            // (0x4998c2 pushes 0x5b1150); CE lowercased it.
+            obj_field_string_set(obj, OBJ_F_PC_PLAYER_NAME, "None");
             obj_field_int32_set(obj, OBJ_F_CRITTER_PORTRAIT, 1005);
             object_hp_damage_set(obj, 0);
             break;
@@ -16084,7 +16106,12 @@ void proto_init_npc(int64_t obj, int description)
 void proto_init_unique_npc(int64_t obj, int description)
 {
     tig_art_id_t art_id;
-    Script scr;
+    // FIX: the original never initialises this header, so the three scripted
+    // prototypes below store stack residue as their script flags and counters
+    // (the shipped `027331 - NPC.pro` carries counters 0x00468952, an address
+    // inside proto_init_properties). CE stores zeros, as proto_init_properties
+    // does for its own header.
+    Script scr = { 0 };
     int exp;
 
     obj_field_int32_set(obj, OBJ_F_CRITTER_CRIT_HIT_CHART, CRIT_BODY_TYPE_BIPED);
@@ -16510,6 +16537,13 @@ bool proto_parse_field(const char* str, int* fld_ptr, int* a3, int* a4, int* a5)
     case PROTO_F_BLIT_FLAG:
         *a3 = proto_parse_flag(str, proto_blit_flag_names, sizeof(proto_blit_flag_names) / sizeof(proto_blit_flag_names[0]));
         return true;
+    case PROTO_F_SPELL_FLAG:
+        // FIX (porting bug #283): spell flags are parsed by name (case 10,
+        // 0x49bb70's switch: proto_parse_flag over the OSF names, 0x20); CE
+        // read them with atoi, so `Spell Flag: OSF_BODY_OF_AIR` and the
+        // other 18 such lines in monster.txt set nothing.
+        *a3 = proto_parse_flag(str, obj_flags_ofs, OSF_COUNT);
+        return true;
     case PROTO_F_BASIC_STAT:
         for (stat = STAT_STRENGTH; stat <= STAT_CHARISMA; stat++) {
             name = stat_name(stat);
@@ -16545,7 +16579,11 @@ bool proto_parse_field(const char* str, int* fld_ptr, int* a3, int* a4, int* a5)
         return true;
     case PROTO_F_SCRIPT:
         sscanf(str, "%d %d %d %d %d %d", a3, a4, &v1, &v2, &v3, &v4);
-        *a5 = v1 | (v2 << 8) | (v3 << 16) | (v4 << 24);
+        // FIX (porting bug #284): each counter is one byte (the `& 0xff` on
+        // the low three in 0x49bb70's case 0x12); CE let a value over 255
+        // or below 0 spill into the next counter. Latent: every shipped
+        // Script line's counters are 0.
+        *a5 = (v1 & 0xFF) | ((v2 & 0xFF) << 8) | ((v3 & 0xFF) << 16) | (v4 << 24);
         return true;
     case PROTO_F_OBJECT_FLAG:
         *a3 = proto_parse_flag(str, obj_flags_of, OF_COUNT);
@@ -16673,11 +16711,14 @@ void proto_write_critter_stats(int64_t obj, TigFile* stream, int type)
         proto_blit_flag_names,
         sizeof(proto_blit_flag_names) / sizeof(proto_blit_flag_names[0]));
 
+    // FIX (porting bug #285): all 32 spell flags are written (0x49c289 push
+    // 0x20); CE passed OFS_COUNT, the 21-entry flag-field table's size, so
+    // the top eleven were dropped. Latent: nothing calls this writer.
     proto_write_flags(stream,
         proto_field_names[PROTO_F_SPELL_FLAG],
         obj_field_int32_get(obj, OBJ_F_SPELL_FLAGS),
         obj_flags_ofs,
-        OFS_COUNT);
+        OSF_COUNT);
 
     value = obj_field_int32_get(obj, OBJ_F_CRITTER_CRIT_HIT_CHART);
     if (value != CRIT_BODY_TYPE_BIPED) {
@@ -16799,6 +16840,11 @@ void proto_write_critter_stats(int64_t obj, TigFile* stream, int type)
             proto_field_names[PROTO_F_CATEGORY],
             value);
     }
+
+    // FIX (porting bug #286): each record ends with a blank line (0x49c5f6
+    // pushes "\n"); CE ran the next record on. Latent: nothing calls this
+    // writer.
+    tig_file_fprintf(stream, "\n");
 }
 
 // 0x49C610
