@@ -3187,6 +3187,153 @@ static void o_tig_art_cache_entry_blit(const int64_t* a, int64_t* out)
     SDL_DestroySurface(surface);
 }
 
+/* --- the sprite blitter (FC1 phase 5c) -----------------------------------
+ *
+ * `art_blit` (0x505EB0), CE's renderer for every sprite. The fixture is the
+ * worker's above, plus what the blitter takes that the worker does not: the
+ * flags, a source and a destination rect, the colour, the alpha bytes and
+ * the per-column colour array, into a fixed 20x20 destination whose X byte is
+ * zero. The emulator half's comment lists the offsets it read out of
+ * Arcanum.exe for these. */
+#define ARTBLIT_BUF_W 20
+#define ARTBLIT_BUF_H 20
+#define ARTBLIT_PAD 2
+#define ARTBLIT_COLORS 32
+#define ARTBLIT_GUARD 1024
+
+extern int art_blit(int cache_entry_index, TigArtBlitInfo* blit_info);
+
+static uint32_t artblit_dst[(ARTBLIT_BUF_W + ARTBLIT_PAD) * ARTBLIT_BUF_H];
+extern int tig_art_bits_per_pixel;
+
+static uint32_t artblit_dst_at(int seed, int i)
+{
+    return (uint32_t)((((uint64_t)(uint32_t)seed * 2654435761u + (uint64_t)i * 40503u) >> 3) & 0x00FFFFFF);
+}
+
+static uint32_t artblit_color_at(int seed, int i)
+{
+    return (uint32_t)((((uint64_t)(uint32_t)seed * 7919u + (uint64_t)i * 104729u) >> 2) & 0x00FFFFFF);
+}
+
+static void o_art_blit(const int64_t* a, int64_t* out)
+{
+    static OracleArtCacheEntry entry;
+    static OracleArtFrameData frames[ART_MAX_ROTATIONS][ART_MAX_FRAMES];
+    static uint8_t* pixel_ptrs[ART_MAX_ROTATIONS][ART_MAX_FRAMES];
+    /* Each frame inside ARTBLIT_GUARD zero bytes, as the emulator half. */
+    static uint8_t pixels[ART_MAX_ROTATIONS][ART_MAX_FRAMES][2 * ARTBLIT_GUARD + BLIT_MAX_DIM * BLIT_MAX_DIM];
+    static TigPalette palettes[ART_MAX_PALETTES];
+    uint32_t* dst = artblit_dst;
+    static uint32_t colors[ARTBLIT_COLORS];
+    static bool color_ready = false;
+
+    tig_art_id_t art_id = (tig_art_id_t)a[0];
+    int width = (int)a[1];
+    int height = (int)a[2];
+    int seed = (int)a[3];
+    TigRect src_rect = { (int)a[5], (int)a[6], (int)a[7], (int)a[8] };
+    TigRect dst_rect = { (int)a[9], (int)a[10], (int)a[11], (int)a[12] };
+    TigRect lerp_rect;
+    int pitch = (ARTBLIT_BUF_W + ARTBLIT_PAD) * 4;
+    uint32_t alphas = (uint32_t)a[14];
+
+    TigArtBlitInfo blit_info;
+    OracleVideoBuffer video_buffer;
+    SDL_Surface* surface;
+    uint32_t h;
+    const uint8_t* bytes;
+    size_t i;
+    int rot;
+    int frame;
+    int p;
+    int n;
+
+    /* Stretched COLOR_LERP is a recorded difference; see the emulator half. */
+    if ((a[4] & 0x20000) != 0) {
+        dst_rect.width = src_rect.width;
+        dst_rect.height = src_rect.height;
+    }
+    lerp_rect = dst_rect;
+
+    if (!color_ready) {
+        tig_color_set_rgba_settings(0x00FF0000, 0x0000FF00, 0x000000FF, 0);
+        color_ready = true;
+    }
+    tig_art_bits_per_pixel = 32;
+
+    memset(&entry, 0, sizeof(entry));
+    for (rot = 0; rot < ART_MAX_ROTATIONS; rot++) {
+        for (frame = 0; frame < ART_MAX_FRAMES; frame++) {
+            frames[rot][frame].width = width;
+            frames[rot][frame].height = height;
+            frames[rot][frame].data_size = width * height;
+            memset(pixels[rot][frame], 0, sizeof(pixels[rot][frame]));
+            for (n = 0; n < width * height; n++) {
+                pixels[rot][frame][ARTBLIT_GUARD + n] = blit_pixel_at(seed, rot, frame, n);
+            }
+            pixel_ptrs[rot][frame] = &(pixels[rot][frame][ARTBLIT_GUARD]);
+        }
+        entry.hdr.frames_tbl[rot] = frames[rot];
+        entry.pixels_tbl[rot] = pixel_ptrs[rot];
+    }
+    for (p = 0; p < ART_MAX_PALETTES; p++) {
+        for (n = 0; n < 256; n++) {
+            palettes[p].colors[n] = blit_palette_at(p, n);
+        }
+        entry.hdr.palette_tbl[p] = (p == 0 || ((seed >> p) & 1)) ? &palettes[p] : NULL;
+    }
+    tig_art_cache_entries = &entry;
+
+    for (n = 0; n < (ARTBLIT_BUF_W + ARTBLIT_PAD) * ARTBLIT_BUF_H; n++) {
+        dst[n] = artblit_dst_at(seed, n);
+    }
+    for (n = 0; n < ARTBLIT_COLORS; n++) {
+        colors[n] = artblit_color_at(seed, n);
+    }
+
+    surface = SDL_CreateSurfaceFrom(ARTBLIT_BUF_W, ARTBLIT_BUF_H, SDL_PIXELFORMAT_XRGB8888, dst, pitch);
+    if (surface == NULL) {
+        out[0] = -1;
+        out[1] = 0;
+        return;
+    }
+
+    memset(&video_buffer, 0, sizeof(video_buffer));
+    video_buffer.frame.width = ARTBLIT_BUF_W;
+    video_buffer.frame.height = ARTBLIT_BUF_H;
+    video_buffer.surface = surface;
+
+    memset(&blit_info, 0, sizeof(blit_info));
+    blit_info.flags = (TigArtBlitFlags)a[4];
+    blit_info.art_id = art_id;
+    blit_info.src_rect = &src_rect;
+    blit_info.color = (tig_color_t)a[13];
+    blit_info.field_14 = colors;
+    blit_info.lerp_rect = &lerp_rect;
+    memcpy(blit_info.alpha, &alphas, sizeof(blit_info.alpha));
+    blit_info.dst_video_buffer = (TigVideoBuffer*)&video_buffer;
+    blit_info.dst_rect = &dst_rect;
+
+    out[0] = (uint32_t)art_blit(0, &blit_info);
+
+    h = 2166136261u;
+    bytes = (const uint8_t*)dst;
+    for (i = 0; i < sizeof(artblit_dst); i++) {
+        h ^= bytes[i];
+        h *= 16777619u;
+    }
+    out[1] = (int64_t)(uint64_t)h;
+
+    SDL_DestroySurface(surface);
+}
+
+static void o_tig_color_rgb_to_grayscale(const int64_t* a, int64_t* out)
+{
+    tig_color_set_rgba_settings(0x00FF0000, 0x0000FF00, 0x000000FF, 0);
+    out[0] = (uint32_t)tig_color_rgb_to_grayscale((tig_color_t)a[0]);
+}
+
 static void o_sub_502830(const int64_t* a, int64_t* out)
 {
     out[0] = (uint32_t)sub_502830((tig_art_id_t)a[0]);
@@ -3477,6 +3624,8 @@ static const OracleEntry oracle_entries[] = {
     { "tig_art_blt_flags_convert", 2, 2, o_tig_art_blt_flags_convert },
     { "tig_art_build_path", 2, 2, o_tig_art_build_path },
     { "tig_art_cache_entry_blit", 5, 2, o_tig_art_cache_entry_blit },
+    { "tig_color_rgb_to_grayscale", 1, 1, o_tig_color_rgb_to_grayscale },
+    { "art_blit", 15, 2, o_art_blit },
     { "sub_502830", 1, 1, o_sub_502830 },
     { "tig_art_tile_id_num1_get", 1, 1, o_tig_art_tile_id_num1_get },
     { "tig_art_tile_id_num2_get", 1, 1, o_tig_art_tile_id_num2_get },

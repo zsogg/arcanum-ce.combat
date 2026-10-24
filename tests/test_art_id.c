@@ -140,9 +140,24 @@ TEST(eye_candy_accepts_type_three_and_aliases_negatives_onto_it)
     CHECK_INT(rejected, 0xDEADBEEF);
 }
 
+// Porting bug #353: the gender bound is unsigned (0x504005 `cmp ecx,2; jb`),
+// so a negative gender is reset to 0 rather than shifted over the type bits.
+TEST(critter_gender_set_resets_a_negative_gender)
+{
+    tig_art_id_t art_id = 0;
+    tig_art_id_t set;
+
+    CHECK(tig_art_critter_id_create(1, 0, 0, 0, 0, 0, 0, 0, 0, &art_id) == TIG_OK);
+    set = tig_art_critter_id_gender_set(art_id, -1);
+
+    CHECK_INT(tig_art_type(set), TIG_ART_TYPE_CRITTER);
+    CHECK_INT(tig_art_critter_id_gender_get(set), 0);
+}
+
 void test_art_id_suite(void)
 {
     RUN(portal_discards_the_palette_it_is_given);
+    RUN(critter_gender_set_resets_a_negative_gender);
     RUN(portal_sets_flags_and_palette_for_the_odd_cardinal_directions);
     RUN(portal_keeps_the_rotation_it_was_given);
     RUN(portal_round_trips_its_other_fields);

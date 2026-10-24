@@ -93,7 +93,18 @@ tig_color_t tig_color_rgb_to_grayscale(tig_color_t color)
     g = (color & tig_color_green_mask) >> tig_color_green_shift;
     b = (color & tig_color_blue_mask) >> tig_color_blue_shift;
 
-    gray = (r * 77u + g * 150u + b * 28u) / 255u;
+    // FIX (porting bug #347): the gray level is the sum of three separately
+    // truncated weights, value / channel max * 76.5, 150.45 and 28.05 (the
+    // tables 0x52c9b0 builds and 0x52c370 sums); CE rounded one combined
+    // (77r + 150g + 28b) / 255, a level higher for many colours. The tables
+    // are built in single precision: with 3D hardware the original rebuilds
+    // them after creating the Direct3D device (0x524e46), whose cooperative
+    // level (0x8 or 0x11, no FPU-preserve flag) leaves the x87 at 24 bits -
+    // the state CE's float blitter reproduces. At the 53-bit Windows default
+    // green 100 and 200 come out one higher.
+    gray = (unsigned int)((float)r / (float)(tig_color_red_mask >> tig_color_red_shift) * 76.5f)
+        + (unsigned int)((float)g / (float)(tig_color_green_mask >> tig_color_green_shift) * 150.45f)
+        + (unsigned int)((float)b / (float)(tig_color_blue_mask >> tig_color_blue_shift) * 28.05f);
 
     return tig_color_make((int)gray, (int)gray, (int)gray);
 }

@@ -146,11 +146,11 @@ TEST(modify_grayscale_converts_in_place)
     info.dst_palette = palette;
     tig_palette_modify(&info);
 
-    // Pure red greyscales to its luma weight, 77, on all three channels.
-    CHECK_INT(tig_color_get_red(palette->colors[0]), 77);
-    CHECK_INT(tig_color_get_green(palette->colors[0]), 77);
-    CHECK_INT(tig_color_get_blue(palette->colors[0]), 77);
-    CHECK_INT(tig_color_get_red(palette->colors[255]), 77);
+    // Pure red greyscales to its luma weight, 76, on all three channels.
+    CHECK_INT(tig_color_get_red(palette->colors[0]), 76);
+    CHECK_INT(tig_color_get_green(palette->colors[0]), 76);
+    CHECK_INT(tig_color_get_blue(palette->colors[0]), 76);
+    CHECK_INT(tig_color_get_red(palette->colors[255]), 76);
 
     tig_palette_destroy(palette);
 }
@@ -173,7 +173,7 @@ TEST(modify_writes_to_dst_and_leaves_src_alone)
     info.dst_palette = dst;
     tig_palette_modify(&info);
 
-    CHECK_INT(tig_color_get_red(dst->colors[0]), 77);
+    CHECK_INT(tig_color_get_red(dst->colors[0]), 76);
     // The source must be untouched - `modify` copies before converting.
     CHECK_INT(tig_color_get_red(src->colors[0]), 255);
     CHECK_INT(tig_color_get_green(src->colors[0]), 0);
@@ -220,8 +220,8 @@ TEST(modify_applies_grayscale_before_tint)
     info.dst_palette = palette;
     tig_palette_modify(&info);
 
-    // grey 77 first, then multiplied by pure red: red survives, others go.
-    CHECK_INT(tig_color_get_red(palette->colors[0]), 77);
+    // grey 76 first, then multiplied by pure red: red survives, others go.
+    CHECK_INT(tig_color_get_red(palette->colors[0]), 76);
     CHECK_INT(tig_color_get_green(palette->colors[0]), 0);
     CHECK_INT(tig_color_get_blue(palette->colors[0]), 0);
 

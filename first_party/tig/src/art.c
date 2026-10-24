@@ -208,6 +208,7 @@ static int art_get_video_buffer(int cache_entry_index, tig_art_id_t art_id, TigV
 static int tig_art_blt_flags_convert(unsigned int art_blt_flags, unsigned int* vb_blt_flags_ptr);
 static int tig_art_cache_entry_blit(int cache_entry_index, TigArtBlitInfo* blit_info);
 static int art_blit(int cache_entry_index, TigArtBlitInfo* blit_info);
+static inline int art_blit_gray_level(tig_color_t color);
 static int tig_art_cache_entry_index_get(tig_art_id_t art_id);
 static void tig_art_cache_check_fullness(void);
 static int tig_art_cache_entry_compare_time(const void* va, const void* vb);
@@ -499,6 +500,12 @@ int tig_art_init(TigInitInfo* init_info)
     tig_art_available_system_memory = (art_size_t)(total_memory >> 2);
     tig_art_total_system_memory = (art_size_t)(total_memory >> 2);
 
+    // CE: the video budget is the same quarter of system memory, not half of
+    // it. The original sized it from DirectDraw's free video memory, a 2001
+    // card's 16-64 MB, halved (0x5005f2, 0x50061c), and fell back to this
+    // quarter only when the query failed; CE has no such query, the budget
+    // decides only when the cache reloads art (no mechanic reads it), and a
+    // larger one serves mods that add art (zsogg, 2026-10-24).
     tig_art_available_video_memory = tig_art_available_system_memory;
     tig_art_total_video_memory = tig_art_total_system_memory;
     tig_debug_printf("Art mem vid avail is %d\n", tig_art_available_video_memory);
@@ -722,10 +729,13 @@ int tig_art_blit(TigArtBlitInfo* blit_info)
         if ((mut_art_blit_info.flags & TIG_ART_BLT_BLEND_ALPHA_CONST) != 0) {
             vb_blit_info.alpha[0] = mut_art_blit_info.alpha[0];
         } else if ((mut_art_blit_info.flags & TIG_ART_BLT_BLEND_ALPHA_LERP_X) != 0) {
+            // FIX (porting bug #354): a horizontal ramp, corners {a0, a1, a1, a0}
+            // as for a colour array (0x50252d-0x50253d); CE wrote the vertical
+            // shape. Latent: the hardware path never runs in CE.
             vb_blit_info.alpha[0] = mut_art_blit_info.alpha[0];
-            vb_blit_info.alpha[1] = mut_art_blit_info.alpha[0];
+            vb_blit_info.alpha[1] = mut_art_blit_info.alpha[1];
             vb_blit_info.alpha[2] = mut_art_blit_info.alpha[1];
-            vb_blit_info.alpha[3] = mut_art_blit_info.alpha[1];
+            vb_blit_info.alpha[3] = mut_art_blit_info.alpha[0];
         } else if ((mut_art_blit_info.flags & TIG_ART_BLT_BLEND_ALPHA_LERP_Y) != 0) {
             vb_blit_info.alpha[0] = mut_art_blit_info.alpha[0];
             vb_blit_info.alpha[1] = mut_art_blit_info.alpha[0];
@@ -1349,9 +1359,12 @@ int tig_art_frame_data(tig_art_id_t art_id, TigArtFrameData* data)
     bool mirrored;
     int type;
 
+    // FIX (porting bug #351): an art that is not cached answers TIG_ERR_IO
+    // (0x5031d8 `mov eax,0xd`); CE answered TIG_ERR_GENERIC. No caller tells
+    // the two apart.
     cache_entry_index = tig_art_cache_entry_index_get(art_id);
     if (cache_entry_index == -1) {
-        return TIG_ERR_GENERIC;
+        return TIG_ERR_IO;
     }
 
     rotation = tig_art_id_rotation_get(art_id);
@@ -1423,8 +1436,12 @@ int tig_art_pixels_copy(tig_art_id_t art_id, uint8_t* dst, int pitch)
     width = tig_art_cache_entries[cache_entry_index].hdr.frames_tbl[rotation][v2].width;
     height = tig_art_cache_entries[cache_entry_index].hdr.frames_tbl[rotation][v2].height;
 
+    // FIX (porting bug #352): the source steps a row too (0x5033c1 `add
+    // edx,ebx`); CE copied the frame's top row into every row. Latent: no
+    // caller.
     while (height > 0) {
         memcpy(dst, src, width);
+        src += width;
         dst += pitch;
         height--;
     }
@@ -2128,7 +2145,10 @@ tig_art_id_t tig_art_critter_id_gender_set(tig_art_id_t art_id, int value)
     case TIG_ART_TYPE_CRITTER:
     case TIG_ART_TYPE_MONSTER:
     case TIG_ART_TYPE_UNIQUE_NPC:
-        if (value >= TIG_ART_CRITTER_GENDER_COUNT) {
+        // FIX (porting bug #353): the bound is unsigned (0x504005 `cmp ecx,2;
+        // jb`), so a negative gender is reset too; CE's signed test let it
+        // through to overwrite the type bits.
+        if ((unsigned int)value >= TIG_ART_CRITTER_GENDER_COUNT) {
             tig_debug_println("Range exceeded in art set.");
             value = 0;
         }
@@ -2964,7 +2984,9 @@ int art_get_video_buffer(int cache_entry_index, tig_art_id_t art_id, TigVideoBuf
             for (frame = 0; frame < tig_art_cache_entries[cache_entry_index].hdr.num_frames; frame++) {
                 vb_create_info.width = tig_art_cache_entries[cache_entry_index].hdr.frames_tbl[0][frame].width;
                 vb_create_info.height = tig_art_cache_entries[cache_entry_index].hdr.frames_tbl[0][frame].height;
-                video_memory_size += vb_create_info.width * vb_create_info.height * tig_art_bits_per_pixel;
+                // FIX (porting bug #348): bytes per pixel (0x5051f3, 0x50527c read
+                // 0x604738, bpp / 8); CE charged bits, eight times the roof's size.
+                video_memory_size += vb_create_info.width * vb_create_info.height * tig_art_bytes_per_pixel;
 
                 rc = tig_video_buffer_create(&vb_create_info, &(tig_art_cache_entries[cache_entry_index].video_buffers[palette][rotation][frame]));
                 if (rc != TIG_OK) {
@@ -2980,7 +3002,9 @@ int art_get_video_buffer(int cache_entry_index, tig_art_id_t art_id, TigVideoBuf
             for (; frame < 13; frame++) {
                 vb_create_info.width = tig_art_cache_entries[cache_entry_index].hdr.frames_tbl[0][frame - 9].width;
                 vb_create_info.height = tig_art_cache_entries[cache_entry_index].hdr.frames_tbl[0][frame - 9].height;
-                video_memory_size += vb_create_info.width * vb_create_info.height * tig_art_bits_per_pixel;
+                // FIX (porting bug #348): bytes per pixel (0x5051f3, 0x50527c read
+                // 0x604738, bpp / 8); CE charged bits, eight times the roof's size.
+                video_memory_size += vb_create_info.width * vb_create_info.height * tig_art_bytes_per_pixel;
 
                 rc = tig_video_buffer_create(&vb_create_info, &(tig_art_cache_entries[cache_entry_index].video_buffers[palette][rotation][frame]));
                 if (rc != TIG_OK) {
@@ -3321,6 +3345,15 @@ int tig_art_cache_entry_blit(int cache_entry_index, TigArtBlitInfo* blit_info)
     return TIG_OK;
 }
 
+// FIX (porting bug #346): ALPHA_AVG blends the source over the destination
+// with the source colour's gray level as the weight, 0-255; CE passed the
+// packed gray colour (0x202020 for level 32) as the weight, which wrapped the
+// red and green channels.
+static inline int art_blit_gray_level(tig_color_t color)
+{
+    return (int)((tig_color_rgb_to_grayscale(color) & tig_color_blue_mask) >> tig_color_blue_shift);
+}
+
 // 0x505EB0
 int art_blit(int cache_entry_index, TigArtBlitInfo* blit_info)
 {
@@ -3359,6 +3392,7 @@ int art_blit(int cache_entry_index, TigArtBlitInfo* blit_info)
     float alpha_horizontal_step;
     uint32_t* mask;
     unsigned int flip;
+    int src_checkerboard_start_x;
     int src_checkerboard_cur_x;
     int src_checkerboard_cur_y;
     int dst_checkerboard_cur_x;
@@ -3432,11 +3466,14 @@ int art_blit(int cache_entry_index, TigArtBlitInfo* blit_info)
 
     tmp_rect = *blit_info->dst_rect;
 
+    // FIX (porting bug #342): the stretched corrections are rounded to the
+    // nearest integer (0x506053-0x5060e9 `frndint` after the float store);
+    // CE truncated.
     if (stretched) {
-        tmp_rect.x += (int)((float)(src_rect.x - blit_info->src_rect->x) / width_ratio);
-        tmp_rect.y += (int)((float)(src_rect.y - blit_info->src_rect->y) / height_ratio);
-        tmp_rect.width -= (int)((float)(blit_info->src_rect->width - src_rect.width) / width_ratio);
-        tmp_rect.height -= (int)((float)(blit_info->src_rect->height - src_rect.height) / height_ratio);
+        tmp_rect.x += (int)lrintf((float)(src_rect.x - blit_info->src_rect->x) / width_ratio);
+        tmp_rect.y += (int)lrintf((float)(src_rect.y - blit_info->src_rect->y) / height_ratio);
+        tmp_rect.width -= (int)lrintf((float)(blit_info->src_rect->width - src_rect.width) / width_ratio);
+        tmp_rect.height -= (int)lrintf((float)(blit_info->src_rect->height - src_rect.height) / height_ratio);
     } else {
         tmp_rect.x += src_rect.x - blit_info->src_rect->x;
         tmp_rect.y += src_rect.y - blit_info->src_rect->y;
@@ -3456,11 +3493,16 @@ int art_blit(int cache_entry_index, TigArtBlitInfo* blit_info)
         return TIG_OK;
     }
 
+    // FIX (porting bug #343): clipping by the destination maps back to the
+    // source by multiplying by the source-to-destination ratio, rounded
+    // (0x5061b3-0x50624b `fmul` then `frndint`); CE divided and truncated,
+    // so a scaled sprite cut by the screen edge drew the wrong part of its
+    // frame.
     if (stretched) {
-        src_rect.x += (int)((float)(dst_rect.x - tmp_rect.x) / width_ratio);
-        src_rect.y += (int)((float)(dst_rect.y - tmp_rect.y) / height_ratio);
-        src_rect.width -= (int)((float)(tmp_rect.width - dst_rect.width) / width_ratio);
-        src_rect.height -= (int)((float)(tmp_rect.height - dst_rect.height) / height_ratio);
+        src_rect.x += (int)lrintf((float)(dst_rect.x - tmp_rect.x) * width_ratio);
+        src_rect.y += (int)lrintf((float)(dst_rect.y - tmp_rect.y) * height_ratio);
+        src_rect.width -= (int)lrintf((float)(tmp_rect.width - dst_rect.width) * width_ratio);
+        src_rect.height -= (int)lrintf((float)(tmp_rect.height - dst_rect.height) * height_ratio);
     } else {
         src_rect.x += dst_rect.x - tmp_rect.x;
         src_rect.y += dst_rect.y - tmp_rect.y;
@@ -3502,8 +3544,6 @@ int art_blit(int cache_entry_index, TigArtBlitInfo* blit_info)
         abort();
     }
 
-    src_checkerboard_cur_x = src_rect.x;
-    src_checkerboard_cur_y = src_rect.y;
     dst_checkerboard_cur_x = dst_rect.x;
     dst_checkerboard_cur_y = dst_rect.y;
 
@@ -3515,6 +3555,31 @@ int art_blit(int cache_entry_index, TigArtBlitInfo* blit_info)
             flip |= TIG_ART_BLT_FLIP_X;
         }
     }
+
+    // FIX (porting bug #344): the source stipple starts from the mirrored
+    // coordinates, the same ones the source pointer starts from
+    // (0x506436-0x50644c x, 0x50647c-0x50648a y), and each row restarts x
+    // there; CE always started at the rect's corner, so a mirrored sprite
+    // showed the other half of the checkerboard.
+    switch (flip) {
+    case TIG_ART_BLT_FLIP_X:
+        src_checkerboard_start_x = width - src_rect.x - 1;
+        src_checkerboard_cur_y = src_rect.y;
+        break;
+    case TIG_ART_BLT_FLIP_Y:
+        src_checkerboard_start_x = src_rect.x;
+        src_checkerboard_cur_y = src_rect.height - src_rect.y - 1;
+        break;
+    case TIG_ART_BLT_FLIP_X | TIG_ART_BLT_FLIP_Y:
+        src_checkerboard_start_x = width - src_rect.x - 1;
+        src_checkerboard_cur_y = src_rect.height - src_rect.y - 1;
+        break;
+    default:
+        src_checkerboard_start_x = src_rect.x;
+        src_checkerboard_cur_y = src_rect.y;
+        break;
+    }
+    src_checkerboard_cur_x = src_checkerboard_start_x;
 
     switch (flip) {
     case TIG_ART_BLT_FLIP_X:
@@ -3555,6 +3620,10 @@ int art_blit(int cache_entry_index, TigArtBlitInfo* blit_info)
         break;
     }
 
+    // NOTE: Faithful: a stretched blit's error stepping can walk the source
+    // pointer a pixel past its row, and a mirrored or clipped one several rows
+    // past the frame; both versions read whatever lies there (found by the
+    // emulation differential, which had to pad both fixtures to agree).
     if (stretched) {
         float width_error;
         float height_error;
@@ -3675,7 +3744,7 @@ int art_blit(int cache_entry_index, TigArtBlitInfo* blit_info)
                                 uint32_t color = tig_color_mul(plt->colors[*src_pixels], blit_info->color);
                                 *(uint32_t*)dst_pixels = tig_color_blend_alpha(color,
                                     *(uint32_t*)dst_pixels,
-                                    tig_color_rgb_to_grayscale(color));
+                                    art_blit_gray_level(color));
                             }
 
                             width_error += width_ratio;
@@ -3863,15 +3932,19 @@ int art_blit(int cache_entry_index, TigArtBlitInfo* blit_info)
 
                         src_pixels = prev_src_pixels;
                         height_error += height_ratio;
-                        while (height_error > 1.0f) {
-                            src_pixels += src_pitch;
-                            src_checkerboard_cur_y++;
-                            height_error -= 1.0f;
+                        // x restarts only when the source row advances (0x511640 jumps
+                        // over the restart at 0x511642).
+                        if (height_error > 1.0f) {
+                            src_checkerboard_cur_x = src_checkerboard_start_x;
+                            while (height_error > 1.0f) {
+                                src_pixels += src_pitch;
+                                src_checkerboard_cur_y++;
+                                height_error -= 1.0f;
+                            }
                         }
                         prev_src_pixels = src_pixels;
 
                         dst_pixels += dst_skip;
-                        src_checkerboard_cur_x = src_rect.x;
                     }
                     break;
                 }
@@ -3892,24 +3965,29 @@ int art_blit(int cache_entry_index, TigArtBlitInfo* blit_info)
                             width_error += width_ratio;
                             while (width_error > 1.0f) {
                                 src_pixels += src_step;
-                                dst_checkerboard_cur_x++;
                                 width_error -= 1.0f;
                             }
 
                             dst_pixels += 4;
+                            dst_checkerboard_cur_x++;
                         }
 
                         src_pixels = prev_src_pixels;
                         height_error += height_ratio;
                         while (height_error > 1.0f) {
                             src_pixels += src_pitch;
-                            dst_checkerboard_cur_y++;
                             height_error -= 1.0f;
                         }
                         prev_src_pixels = src_pixels;
 
                         dst_pixels += dst_skip;
-                        dst_checkerboard_cur_x = src_rect.x;
+                        // FIX (porting bug #345): a stretched destination stipple counts
+                        // destination pixels and rows, x restarting at the destination's
+                        // (0x5118f2, 0x511931, 0x511932); CE counted source steps and
+                        // restarted at the source's x, so a scaled sprite's pattern was
+                        // irregular.
+                        dst_checkerboard_cur_y++;
+                        dst_checkerboard_cur_x = dst_rect.x;
                     }
                     break;
                 }
@@ -4073,7 +4151,7 @@ int art_blit(int cache_entry_index, TigArtBlitInfo* blit_info)
                                 uint32_t color = tig_color_mul(plt->colors[*src_pixels], *mask);
                                 *(uint32_t*)dst_pixels = tig_color_blend_alpha(color,
                                     *(uint32_t*)dst_pixels,
-                                    tig_color_rgb_to_grayscale(color));
+                                    art_blit_gray_level(color));
                             }
 
                             width_error += width_ratio;
@@ -4275,15 +4353,19 @@ int art_blit(int cache_entry_index, TigArtBlitInfo* blit_info)
 
                         src_pixels = prev_src_pixels;
                         height_error += height_ratio;
-                        while (height_error > 1.0f) {
-                            src_pixels += src_pitch;
-                            src_checkerboard_cur_y++;
-                            height_error -= 1.0f;
+                        // x restarts only when the source row advances (0x511640 jumps
+                        // over the restart at 0x511642).
+                        if (height_error > 1.0f) {
+                            src_checkerboard_cur_x = src_checkerboard_start_x;
+                            while (height_error > 1.0f) {
+                                src_pixels += src_pitch;
+                                src_checkerboard_cur_y++;
+                                height_error -= 1.0f;
+                            }
                         }
                         prev_src_pixels = src_pixels;
 
                         dst_pixels += dst_skip;
-                        src_checkerboard_cur_x = src_rect.x;
                     }
                     break;
                 }
@@ -4307,24 +4389,29 @@ int art_blit(int cache_entry_index, TigArtBlitInfo* blit_info)
                             while (width_error > 1.0f) {
                                 mask++;
                                 src_pixels += src_step;
-                                dst_checkerboard_cur_x++;
                                 width_error -= 1.0f;
                             }
 
                             dst_pixels += 4;
+                            dst_checkerboard_cur_x++;
                         }
 
                         src_pixels = prev_src_pixels;
                         height_error += height_ratio;
                         while (height_error > 1.0f) {
                             src_pixels += src_pitch;
-                            dst_checkerboard_cur_y++;
                             height_error -= 1.0f;
                         }
                         prev_src_pixels = src_pixels;
 
                         dst_pixels += dst_skip;
-                        dst_checkerboard_cur_x = src_rect.x;
+                        // FIX (porting bug #345): a stretched destination stipple counts
+                        // destination pixels and rows, x restarting at the destination's
+                        // (0x5118f2, 0x511931, 0x511932); CE counted source steps and
+                        // restarted at the source's x, so a scaled sprite's pattern was
+                        // irregular.
+                        dst_checkerboard_cur_y++;
+                        dst_checkerboard_cur_x = dst_rect.x;
                     }
                     break;
                 }
@@ -4366,8 +4453,12 @@ int art_blit(int cache_entry_index, TigArtBlitInfo* blit_info)
                 }
             }
         } else if ((blit_info->flags & TIG_ART_BLT_BLEND_COLOR_LERP) != 0) {
-            // NOTE: It looks like this blend mode is not implemented for
-            // stretched blits.
+            // CE: a stretched COLOR_LERP blit draws nothing. The original sends
+            // it down the per-column colour-array path (0x512699 jumps to
+            // 0x51675d), indexing the four lerp colours as one colour per
+            // source column, far past their end. Nothing in CE makes one:
+            // objects never carry COLOR_LERP (object_render_flags_update),
+            // and tiles, its one user, are drawn at their own size.
         } else {
             if ((blit_info->flags & TIG_ART_BLT_BLEND_ADD) != 0) {
                 // 0x50FC61
@@ -4482,7 +4573,7 @@ int art_blit(int cache_entry_index, TigArtBlitInfo* blit_info)
                             if (*src_pixels != 0) {
                                 *(uint32_t*)dst_pixels = tig_color_blend_alpha(plt->colors[*src_pixels],
                                     *(uint32_t*)dst_pixels,
-                                    tig_color_rgb_to_grayscale(plt->colors[*src_pixels]));
+                                    art_blit_gray_level(plt->colors[*src_pixels]));
                             }
 
                             width_error += width_ratio;
@@ -4670,15 +4761,19 @@ int art_blit(int cache_entry_index, TigArtBlitInfo* blit_info)
 
                         src_pixels = prev_src_pixels;
                         height_error += height_ratio;
-                        while (height_error > 1.0f) {
-                            src_pixels += src_pitch;
-                            src_checkerboard_cur_y++;
-                            height_error -= 1.0f;
+                        // x restarts only when the source row advances (0x511640 jumps
+                        // over the restart at 0x511642).
+                        if (height_error > 1.0f) {
+                            src_checkerboard_cur_x = src_checkerboard_start_x;
+                            while (height_error > 1.0f) {
+                                src_pixels += src_pitch;
+                                src_checkerboard_cur_y++;
+                                height_error -= 1.0f;
+                            }
                         }
                         prev_src_pixels = src_pixels;
 
                         dst_pixels += dst_skip;
-                        src_checkerboard_cur_x = src_rect.x;
                     }
                     break;
                 }
@@ -4699,24 +4794,29 @@ int art_blit(int cache_entry_index, TigArtBlitInfo* blit_info)
                             width_error += width_ratio;
                             while (width_error > 1.0f) {
                                 src_pixels += src_step;
-                                dst_checkerboard_cur_x++;
                                 width_error -= 1.0f;
                             }
 
                             dst_pixels += 4;
+                            dst_checkerboard_cur_x++;
                         }
 
                         src_pixels = prev_src_pixels;
                         height_error += height_ratio;
                         while (height_error > 1.0f) {
                             src_pixels += src_pitch;
-                            dst_checkerboard_cur_y++;
                             height_error -= 1.0f;
                         }
                         prev_src_pixels = src_pixels;
 
                         dst_pixels += dst_skip;
-                        dst_checkerboard_cur_x = src_rect.x;
+                        // FIX (porting bug #345): a stretched destination stipple counts
+                        // destination pixels and rows, x restarting at the destination's
+                        // (0x5118f2, 0x511931, 0x511932); CE counted source steps and
+                        // restarted at the source's x, so a scaled sprite's pattern was
+                        // irregular.
+                        dst_checkerboard_cur_y++;
+                        dst_checkerboard_cur_x = dst_rect.x;
                     }
                     break;
                 }
@@ -4822,7 +4922,7 @@ int art_blit(int cache_entry_index, TigArtBlitInfo* blit_info)
                                 uint32_t color = tig_color_mul(plt->colors[*src_pixels], blit_info->color);
                                 *(uint32_t*)dst_pixels = tig_color_blend_alpha(color,
                                     *(uint32_t*)dst_pixels,
-                                    tig_color_rgb_to_grayscale(color));
+                                    art_blit_gray_level(color));
                             }
                             src_pixels += src_step;
                             dst_pixels += 4;
@@ -4943,7 +5043,7 @@ int art_blit(int cache_entry_index, TigArtBlitInfo* blit_info)
                         src_pixels += src_pitch;
                         dst_pixels += dst_skip;
 
-                        src_checkerboard_cur_x = src_rect.x;
+                        src_checkerboard_cur_x = src_checkerboard_start_x;
                         src_checkerboard_cur_y++;
                     }
                     break;
@@ -5070,7 +5170,7 @@ int art_blit(int cache_entry_index, TigArtBlitInfo* blit_info)
                                 uint32_t color = tig_color_mul(plt->colors[*src_pixels], *mask);
                                 *(uint32_t*)dst_pixels = tig_color_blend_alpha(color,
                                     *(uint32_t*)dst_pixels,
-                                    tig_color_rgb_to_grayscale(color));
+                                    art_blit_gray_level(color));
                             }
                             src_pixels += src_step;
                             dst_pixels += 4;
@@ -5211,7 +5311,7 @@ int art_blit(int cache_entry_index, TigArtBlitInfo* blit_info)
                         src_pixels += src_pitch;
                         dst_pixels += dst_skip;
 
-                        src_checkerboard_cur_x = src_rect.x;
+                        src_checkerboard_cur_x = src_checkerboard_start_x;
                         src_checkerboard_cur_y++;
                     }
                     break;
@@ -5401,7 +5501,7 @@ int art_blit(int cache_entry_index, TigArtBlitInfo* blit_info)
                             if (*src_pixels != 0) {
                                 *(uint32_t*)dst_pixels = tig_color_blend_alpha(plt->colors[*src_pixels],
                                     *(uint32_t*)dst_pixels,
-                                    tig_color_rgb_to_grayscale(plt->colors[*src_pixels]));
+                                    art_blit_gray_level(plt->colors[*src_pixels]));
                             }
                             src_pixels += src_step;
                             dst_pixels += 4;
@@ -5522,7 +5622,7 @@ int art_blit(int cache_entry_index, TigArtBlitInfo* blit_info)
                         src_pixels += src_pitch;
                         dst_pixels += dst_skip;
 
-                        src_checkerboard_cur_x = src_rect.x;
+                        src_checkerboard_cur_x = src_checkerboard_start_x;
                         src_checkerboard_cur_y++;
                     }
                     break;
@@ -6051,9 +6151,13 @@ int tig_art_file_read(tig_art_id_t art_id, const char* filename, TigArtHeader* h
         return TIG_ERR_GENERIC;
     }
 
+    // FIX (porting bug #350): the palette-only read fails when the file lacks
+    // the requested palette (0x51b7d3-0x51b7d9), and touches no other palette
+    // (0x51b876 jumps past the adjust); CE failed when it was present and
+    // adjusted the others. Latent: CE has no palette-only caller.
     if (a5) {
         current_palette_index = tig_art_id_palette_get(art_id);
-        if (hdr->palette_tbl[current_palette_index] != NULL) {
+        if (hdr->palette_tbl[current_palette_index] == NULL) {
             tig_file_fclose(stream);
             return TIG_ERR_GENERIC;
         }
@@ -6090,9 +6194,9 @@ int tig_art_file_read(tig_art_id_t art_id, const char* filename, TigArtHeader* h
                 for (index = 0; index < 256; index++) {
                     hdr->palette_tbl[palette]->colors[index] = tig_color_index_of(temp_palette_entries[index]);
                 }
-            }
 
-            tig_art_palette_adjust(art_id, hdr->palette_tbl[palette], palette_tbl[palette]);
+                tig_art_palette_adjust(art_id, hdr->palette_tbl[palette], palette_tbl[palette]);
+            }
         }
     }
 
@@ -6209,6 +6313,9 @@ int tig_art_file_read(tig_art_id_t art_id, const char* filename, TigArtHeader* h
                     FREE(hdr->pixels_tbl[1 + index]);
                     hdr->pixels_tbl[1 + index] = hdr->pixels_tbl[0];
 
+                    // FIX (porting bug #349): the freed frame table's size comes off
+                    // the count too (0x51bdaa-0x51bdbf); CE kept counting it.
+                    *size_ptr -= sizeof(TigArtFileFrameData) * hdr->num_frames;
                     FREE(hdr->frames_tbl[1 + index]);
                     hdr->frames_tbl[1 + index] = hdr->frames_tbl[0];
                 }

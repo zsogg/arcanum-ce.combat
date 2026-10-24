@@ -154,6 +154,7 @@ set(EMUDIFF_ART_STATICS
     tig_art_build_path
     tig_art_header_num_rotations
     tig_art_cache_entry_blit
+    art_blit
 )
 
 # Static *data* the oracle has to reach as well - `tig_art_cache_entry_blit`
@@ -163,6 +164,7 @@ set(EMUDIFF_ART_STATICS
 # .bss is `B`.
 set(EMUDIFF_ART_DATA
     tig_art_cache_entries
+    tig_art_bits_per_pixel
 )
 set(EMUDIFF_ART_OBJ "${CMAKE_CURRENT_BINARY_DIR}/art_globalized.o")
 set(_globalize_args "")

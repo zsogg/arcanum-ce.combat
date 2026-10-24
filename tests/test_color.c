@@ -218,18 +218,19 @@ TEST(blend_alpha_keeps_channels_separate_when_interpolating_down)
     CHECK_INT(tig_color_get_blue(result), 25);
 }
 
-TEST(grayscale_preserves_white_and_black)
+TEST(grayscale_brings_white_to_254_and_keeps_black)
 {
-    // The weights are 77/150/28, which sum to exactly 255, so a fully white
-    // pixel must come back fully white rather than 254 or 256.
+    // Porting bug #347: the three weights are truncated separately (76.5,
+    // 150.45 and 28.05 of the channel), so a fully white pixel comes back
+    // 254, as the original's 0x52C370 answers under emulation: 0xFEFEFE.
     tig_color_t result;
 
     use_argb8888();
 
     result = tig_color_rgb_to_grayscale(tig_color_make(255, 255, 255));
-    CHECK_INT(tig_color_get_red(result), 255);
-    CHECK_INT(tig_color_get_green(result), 255);
-    CHECK_INT(tig_color_get_blue(result), 255);
+    CHECK_INT(tig_color_get_red(result), 254);
+    CHECK_INT(tig_color_get_green(result), 254);
+    CHECK_INT(tig_color_get_blue(result), 254);
 
     result = tig_color_rgb_to_grayscale(tig_color_make(0, 0, 0));
     CHECK_INT(tig_color_get_red(result), 0);
@@ -252,7 +253,8 @@ TEST(grayscale_weights_green_most)
     CHECK(tig_color_get_red(g) > tig_color_get_red(r));
     CHECK(tig_color_get_red(r) > tig_color_get_red(b));
 
-    CHECK_INT(tig_color_get_red(r), 77);
+    // The original's own values for the three primaries (0x4C, 0x96, 0x1C).
+    CHECK_INT(tig_color_get_red(r), 76);
     CHECK_INT(tig_color_get_red(g), 150);
     CHECK_INT(tig_color_get_red(b), 28);
 }
@@ -289,7 +291,7 @@ void test_color_suite(void)
     RUN(blend_alpha_at_the_extremes_picks_one_side);
     RUN(blend_alpha_keeps_channels_separate_when_interpolating_down);
 
-    RUN(grayscale_preserves_white_and_black);
+    RUN(grayscale_brings_white_to_254_and_keeps_black);
     RUN(grayscale_weights_green_most);
 
     RUN(color_alpha_reads_the_red_channel);
