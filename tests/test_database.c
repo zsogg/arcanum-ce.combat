@@ -455,6 +455,33 @@ TEST(collapses_crlf_in_text_mode)
     close_and_remove(database, MIXED_PATH);
 }
 
+// Porting bug #337: in text mode a CR that is not followed by LF comes out as
+// itself, and the byte after it is the next read's (0x53c3bc-0x53c3eb). A
+// pushed-back CR makes one without a fixture change: "l\r" + "ine".
+TEST(a_lone_cr_in_text_mode_reads_as_itself)
+{
+    TigDatabase* database = open_mixed();
+    TigDatabaseFileHandle* stream;
+
+    CHECK(database != NULL);
+    if (database == NULL) {
+        return;
+    }
+
+    stream = tig_database_fopen(database, "text\\hello.txt", "rt");
+    CHECK(stream != NULL);
+    if (stream != NULL) {
+        CHECK_INT(tig_database_fgetc(stream), 'l');
+        CHECK_INT(tig_database_ungetc('\r', stream), '\r');
+        CHECK_INT(tig_database_fgetc(stream), '\r');
+        CHECK_INT(tig_database_fgetc(stream), 'i');
+        CHECK_INT(tig_database_fgetc(stream), 'n');
+        tig_database_fclose(stream);
+    }
+
+    close_and_remove(database, MIXED_PATH);
+}
+
 // `ungetc` pushes a byte back for the next read to hand out, and the position
 // moves with it.
 TEST(ungetc_hands_the_byte_to_the_next_read)
@@ -673,6 +700,7 @@ void test_database_suite(void)
     RUN(seeks_within_a_compressed_entry);
     RUN(seeks_within_a_plain_entry);
     RUN(collapses_crlf_in_text_mode);
+    RUN(a_lone_cr_in_text_mode_reads_as_itself);
     RUN(ungetc_hands_the_byte_to_the_next_read);
     RUN(enumerates_entries_matching_a_pattern);
     RUN(an_ignore_sidecar_hides_matching_entries);

@@ -207,7 +207,12 @@ void tig_str_parse_complex_value3(char** str, int delim, int* value1, int* value
         if (pch != NULL) {
             *value3 = atoi(pch + 1);
         } else {
-            *value3 = *value2;
+            // FIX (porting bug #339): with two components the third repeats
+            // the first (0x531d2b-0x531d35 store `*value1`); CE repeated the
+            // second. Its one caller is the eye-candy "Light Color:", so a
+            // two-component colour had blue = green; every shipped one has
+            // three.
+            *value3 = *value1;
         }
     } else {
         *value2 = *value1;
@@ -374,12 +379,16 @@ void tig_str_parse_flag_list(char** str, const char** keys, const unsigned int* 
             *str = NULL;
         }
 
+        // FIX: a separator ending the field leaves `*str` NULL, and the
+        // original's space skip then reads through it (0x5320d4-0x532101 in
+        // tig_str_parse_flag_list, the same in its two siblings): "Flags: A |"
+        // crashed the game. CE stops at the NULL.
         if (*str != NULL) {
             if (*(*str) == '\0') {
                 *str = NULL;
             }
 
-            while (isspace(*(*str))) {
+            while (*str != NULL && isspace(*(*str))) {
                 (*str)++;
             }
         }
@@ -458,12 +467,16 @@ void tig_str_parse_flag_list_64(char** str, const char** keys, const uint64_t* v
             *str = NULL;
         }
 
+        // FIX: a separator ending the field leaves `*str` NULL, and the
+        // original's space skip then reads through it (0x5320d4-0x532101 in
+        // tig_str_parse_flag_list, the same in its two siblings): "Flags: A |"
+        // crashed the game. CE stops at the NULL.
         if (*str != NULL) {
             if (*(*str) == '\0') {
                 *str = NULL;
             }
 
-            while (isspace(*(*str))) {
+            while (*str != NULL && isspace(*(*str))) {
                 (*str)++;
             }
         }
@@ -814,12 +827,16 @@ void tig_str_parse_flag_list_direct(char** str, const char** keys, int length, u
             *str = NULL;
         }
 
+        // FIX: a separator ending the field leaves `*str` NULL, and the
+        // original's space skip then reads through it (0x5320d4-0x532101 in
+        // tig_str_parse_flag_list, the same in its two siblings): "Flags: A |"
+        // crashed the game. CE stops at the NULL.
         if (*str != NULL) {
             if (*(*str) == '\0') {
                 *str = NULL;
             }
 
-            while (isspace(*(*str))) {
+            while (*str != NULL && isspace(*(*str))) {
                 (*str)++;
             }
         }

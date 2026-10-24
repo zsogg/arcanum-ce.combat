@@ -252,6 +252,34 @@ TEST(match_str_to_list_advances_past_the_separator)
     CHECK_AT_END(str);
 }
 
+TEST(complex_value3_with_two_components_repeats_the_first)
+{
+    // Porting bug #339: the original stores *value1 as the third (0x531d2b).
+    char buf[] = "(10@20)";
+    char* str = buf;
+    int a = -1, b = -1, c = -1;
+
+    tig_str_parse_complex_value3(&str, '@', &a, &b, &c);
+
+    CHECK_INT(a, 10);
+    CHECK_INT(b, 20);
+    CHECK_INT(c, 10);
+}
+
+TEST(flag_list_tolerates_a_separator_ending_the_field)
+{
+    // The original reads through a NULL here (0x5320d4-0x532101); CE stops.
+    static const char* keys[] = { "alpha", "beta" };
+    static const unsigned int values[] = { 0x1, 0x2 };
+    char buf[] = "beta |";
+    char* str = buf;
+    unsigned int value = 0;
+
+    tig_str_parse_flag_list(&str, keys, values, 2, &value);
+
+    CHECK_INT((int)value, 0x2);
+}
+
 void test_str_parse_suite(void)
 {
     RUN(parse_value_reads_a_plain_number);
@@ -274,4 +302,7 @@ void test_str_parse_suite(void)
 
     RUN(match_str_to_list_is_case_insensitive);
     RUN(match_str_to_list_advances_past_the_separator);
+
+    RUN(complex_value3_with_two_components_repeats_the_first);
+    RUN(flag_list_tolerates_a_separator_ending_the_field);
 }

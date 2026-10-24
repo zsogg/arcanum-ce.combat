@@ -116,6 +116,9 @@ size_t tig_idxtable_write(TigIdxTable* idxtable, TigFile* stream)
         entry = idxtable->buckets[index];
         while (entry != NULL) {
             bytes_written += tig_file_fwrite(&(entry->key), sizeof(entry->key), 1, stream);
+            // FIX: the value's bytes. The original writes `value_size` bytes
+            // from the entry record itself - its value pointer, next and key
+            // (0x5344ce pushes the entry, not [entry]). Nothing calls either.
             bytes_written += tig_file_fwrite(entry->value, idxtable->value_size, 1, stream);
             entry = entry->next;
         }
@@ -152,14 +155,22 @@ bool tig_idxtable_read(TigIdxTable* idxtable, TigFile* stream)
         return false;
     }
 
+    // NOTE: Faithful, and never past this point: every check here compares
+    // `tig_file_fread`'s element count with a byte size (0x53453a `cmp
+    // eax,4`), so the read always fails. Nothing calls it.
     idxtable->count = 0;
 
     for (index = 0; index < idxtable->buckets_count; index++) {
+        // FIX (porting bug #340): the bucket follows the chain as it is freed
+        // (0x5345af-0x5345b3 store next into the head), so a failed read
+        // below leaves it empty; CE freed through a local and left the head
+        // pointing at freed entries.
         entry = idxtable->buckets[index];
         while (entry != NULL) {
             next = entry->next;
             tig_idxtable_entry_destroy(entry);
             entry = next;
+            idxtable->buckets[index] = entry;
         }
 
         if (tig_file_fread(&count, sizeof(count), 1, stream) != sizeof(count)) {
@@ -288,7 +299,10 @@ void tig_idxtable_remove(TigIdxTable* idxtable, int key)
         key = -key;
     }
 
-    // NOTE: Original implementation is different.
+    // FIX: the count drops only for a removed entry. The original drops it
+    // once for any non-empty bucket, found or not (0x5347e4 skips only an
+    // empty one, the misses join at 0x534838 `dec [ebx+0xc]`). Nothing calls
+    // remove or the count.
     bucket = key % idxtable->buckets_count;
     entry_ptr = &(idxtable->buckets[bucket]);
 
@@ -335,7 +349,8 @@ TigIdxTableEntry* tig_idxtable_entry_copy(TigIdxTableEntry* entry, int size)
     memcpy(copy->value, entry->value, size);
     copy->next = tig_idxtable_entry_copy(entry->next, size);
 
-    // BUGFIX: Key was not being copied.
+    // FIX: the key is copied; the original never writes it (the copy's
+    // [ebx+0x8] is left as allocated).
     copy->key = entry->key;
 
     return copy;
@@ -353,6 +368,11 @@ bool tig_idxtable_entry_read(TigIdxTableEntry** entry_ptr, int size, int count, 
     int index;
 
     for (index = 0; index < count; index++) {
+        // FIX (porting bug #341): the value is read into its buffer and the
+        // next entry chains through `next` (0x534926-0x53492c push [entry],
+        // 0x53493b-0x53493e step to &entry->next); CE read over the value
+        // pointer and stepped to the neighbouring bucket. Unreachable while
+        // `tig_idxtable_read` always fails.
         *entry_ptr = tig_idxtable_entry_create(size);
         // FIX: Original code expects return value to be `4`. This is wrong as
         // `fread` is supposed to return number of elements read, not number of
@@ -364,11 +384,11 @@ bool tig_idxtable_entry_read(TigIdxTableEntry** entry_ptr, int size, int count, 
 
         // FIX: Original code expects return value to be `size`. Same error as
         // above.
-        if (tig_file_fread(&((*entry_ptr)->value), size, 1, stream) != 1) {
+        if (tig_file_fread((*entry_ptr)->value, size, 1, stream) != 1) {
             tig_idxtable_entry_destroy(*entry_ptr);
             return false;
         }
-        entry_ptr++;
+        entry_ptr = &((*entry_ptr)->next);
     }
 
     *entry_ptr = NULL;

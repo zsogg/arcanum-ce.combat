@@ -544,11 +544,17 @@ int tig_database_fgetc(TigDatabaseFileHandle* stream)
         return -1;
     }
 
+    // FIX (porting bug #337): a CR not followed by LF is returned as itself
+    // and the next character put back (0x53c3bc keeps the CR in esi,
+    // 0x53c3e1-0x53c3eb ungets the next and returns esi); CE returned the
+    // next character, so in a text stream "\rX" read as "XX". Latent for
+    // the shipped data: none of its 1,333 text files has a lone CR.
     if ((stream->flags & TIG_DATABASE_FILE_TEXT_MODE) != 0 && ch == '\r') {
-        ch = tig_database_fgetc_internal(stream);
-        if (ch != '\n') {
-            tig_database_ungetc(ch, stream);
+        int next = tig_database_fgetc_internal(stream);
+        if (next == '\n') {
+            return next;
         }
+        tig_database_ungetc(next, stream);
     }
 
     return ch;
@@ -725,11 +731,16 @@ int tig_database_fseek(TigDatabaseFileHandle* stream, int offset, int origin)
         return 1;
     }
 
+    // FIX (porting bug #338): only the plain branch stores the position
+    // (0x53c5da); the compressed one reaches it by reading, and an entry that
+    // is neither leaves it alone (0x53c5ea `je 0x53c6a5`). CE stored it on
+    // every path. Latent: no stream is opened on such an entry.
     if ((stream->entry->flags & TIG_DATABASE_ENTRY_PLAIN) != 0) {
         if (fseek(stream->underlying_stream, stream->entry->offset + pos, SEEK_SET) != 0) {
             stream->flags |= TIG_DATABASE_FILE_ERROR;
             return 1;
         }
+        stream->pos = pos;
     } else if ((stream->entry->flags & TIG_DATABASE_ENTRY_COMPRESSED) != 0) {
         unsigned int bytes_to_skip;
 
@@ -770,7 +781,6 @@ int tig_database_fseek(TigDatabaseFileHandle* stream, int offset, int origin)
         }
     }
 
-    stream->pos = pos;
     stream->flags &= ~(TIG_DATABASE_FILE_UNGOTTEN | TIG_DATABASE_FILE_EOF);
     return 0;
 }
@@ -889,8 +899,9 @@ int tig_database_find_entry_by_path(const void* a1, const void* a2)
 // which is by the path as the archiver wrote it - with backslash separators.
 //
 // The original gets this for free: it is Windows-only, keeps the separators it
-// was given, and `SDL_strcmp` (`strcmp` at 0x53CEB0) therefore sees exactly the
-// order `dbmaker.exe` sorted the table into. `tig_database_open` rewrites those
+// was given, and its comparator (0x53CEB0 calls `_stricmp` at 0x58ADB0, which
+// folds A-Z to lower case; CE lowercases every name at open instead) therefore
+// sees exactly the order `dbmaker.exe` sorted the table into. `tig_database_open` rewrites those
 // separators to the platform's, and '/' (0x2F) does not sort where '\' (0x5C)
 // did, so on every other platform the array the two binary searches over it
 // assume is sorted is not.

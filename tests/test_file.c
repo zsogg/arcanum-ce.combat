@@ -1235,9 +1235,48 @@ TEST(the_save_folder_redirect_rewrites_only_a_leading_save_component)
     CHECK_STR(small, "save\\abc");
 }
 
+// Porting bug #327: `tig_file_rmdir` answers true when the directory went
+// (0x52e02c-0x52e031 `== 0` on rmdir_ex's result), false when it did not.
+TEST(rmdir_answers_whether_the_directory_went)
+{
+    const char* path = "./arcanum_test_rmdir";
+
+    tig_file_mkdir(path);
+    CHECK(tig_file_is_directory(path));
+    CHECK(tig_file_rmdir(path));
+    CHECK(!tig_file_is_directory(path));
+    CHECK(!tig_file_rmdir(path));
+}
+
+// Porting bug #330: a relative rmdir_ex runs under every directory repository
+// and succeeds if any removal did (0x52f241-0x52f317).
+TEST(rmdir_ex_removes_under_every_directory_repository)
+{
+    tig_file_mkdir("./arcanum_test_rmdir_a");
+    tig_file_mkdir("./arcanum_test_rmdir_a/gone");
+    tig_file_mkdir("./arcanum_test_rmdir_b");
+    tig_file_mkdir("./arcanum_test_rmdir_b/gone");
+    tig_file_repository_add("./arcanum_test_rmdir_a");
+    tig_file_repository_add("./arcanum_test_rmdir_b");
+
+    CHECK_INT(tig_file_rmdir_ex("gone"), 0);
+    CHECK(!tig_file_is_directory("./arcanum_test_rmdir_a/gone"));
+    CHECK(!tig_file_is_directory("./arcanum_test_rmdir_b/gone"));
+    // A second call is not tested: SDL_RemovePath answers true for a path that
+    // is not there, where the original's _rmdir failed. Its one caller,
+    // tig_file_rmdir, tests for an empty directory first.
+
+    tig_file_repository_remove("./arcanum_test_rmdir_b");
+    tig_file_repository_remove("./arcanum_test_rmdir_a");
+    tig_file_rmdir("./arcanum_test_rmdir_b");
+    tig_file_rmdir("./arcanum_test_rmdir_a");
+}
+
 void test_file_suite(void)
 {
     RUN(the_save_folder_redirect_rewrites_only_a_leading_save_component);
+    RUN(rmdir_answers_whether_the_directory_went);
+    RUN(rmdir_ex_removes_under_every_directory_repository);
     RUN(the_archive_mounted_last_wins);
     RUN(an_archive_guid_is_found_by_either_spelling_of_its_path);
     RUN(reversing_the_mount_order_reverses_the_answer);

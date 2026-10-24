@@ -113,11 +113,10 @@ bool tig_file_rmdir_native(const char* path)
         return false;
     }
 
-    if (!tig_file_rmdir_ex(path)) {
-        return false;
-    }
-
-    return true;
+    // FIX (porting bug #327): `tig_file_rmdir_ex` returns 0 on success, and
+    // the original answers `== 0` (0x52e02c-0x52e031); CE answered the
+    // inverse, true for a failed removal.
+    return tig_file_rmdir_ex(path) == 0;
 }
 
 // 0x52E040
@@ -503,6 +502,12 @@ bool tig_file_unarchive_native(const char* src, const char* dst)
             tig_file_fclose(data_stream);
             tig_file_fclose(index_stream);
             return true;
+        } else {
+            // FIX (porting bug #328): an unknown record type fails the
+            // unarchive (0x52e7d9 `cmp eax,3; jne` to the failing exit); CE
+            // skipped it and read on, so a corrupt index could still answer
+            // true.
+            break;
         }
     }
 
@@ -936,11 +941,17 @@ int tig_file_mkdir_ex_native(const char* path)
 
     compat_append_path(temp_path, sizeof(temp_path), path);
 
+    // FIX (porting bug #329): the trailing separator is the last character
+    // (0x52f1c4-0x52f1c5 test `[len-1]`); CE tested the terminator, so the
+    // strip never happened.
     temp_path_length = strlen(temp_path);
-    if (temp_path[temp_path_length] == PATH_SEPARATOR) {
-        temp_path[temp_path_length] = '\0';
+    if (temp_path_length > 0 && temp_path[temp_path_length - 1] == PATH_SEPARATOR) {
+        temp_path[temp_path_length - 1] = '\0';
     }
 
+    // FIX: a failed creation answers -1. The original discards both `_mkdir`
+    // results and always returns 0 (0x52f222), so its callers never see a
+    // failure; CE's save transaction depends on seeing one.
     if (!SDL_CreateDirectory(temp_path)) {
         return -1;
     }
@@ -953,27 +964,33 @@ int tig_file_rmdir_ex_native(const char* path)
 {
     char temp_path[TIG_MAX_PATH];
     TigFileRepository* repo;
+    int rc;
 
-    temp_path[0] = '\0';
+    if (path[0] == '.' || path[0] == '\\' || path[1] == ':' || path[0] == '/') {
+        temp_path[0] = '\0';
+        compat_append_path(temp_path, sizeof(temp_path), path);
+        return SDL_RemovePath(temp_path) ? 0 : -1;
+    }
 
-    if (path[0] != '.' && path[0] != '\\' && path[1] != ':' && path[0] != '/') {
-        repo = tig_file_repositories_head;
-        while (repo != NULL) {
-            if ((repo->type & TIG_FILE_REPOSITORY_DIRECTORY) != 0) {
-                strcpy(temp_path, repo->path);
-                break;
+    // FIX (porting bug #330): a relative path is removed under every
+    // directory repository, and any success answers 0 (-1 preset at
+    // 0x52f241, 0 stored at 0x52f30e, the loop at 0x52f312-0x52f317); with no
+    // directory repository nothing is removed. CE removed under the first
+    // one only, or relative to the working directory when there was none.
+    rc = -1;
+    repo = tig_file_repositories_head;
+    while (repo != NULL) {
+        if ((repo->type & TIG_FILE_REPOSITORY_DIRECTORY) != 0) {
+            strcpy(temp_path, repo->path);
+            compat_append_path(temp_path, sizeof(temp_path), path);
+            if (SDL_RemovePath(temp_path)) {
+                rc = 0;
             }
-            repo = repo->next;
         }
+        repo = repo->next;
     }
 
-    compat_append_path(temp_path, sizeof(temp_path), path);
-
-    if (!SDL_RemovePath(temp_path)) {
-        return -1;
-    }
-
-    return 0;
+    return rc;
 }
 
 // 0x52F370
@@ -991,12 +1008,16 @@ void tig_file_ignore(const char* path, unsigned int flags)
             ignore->next = tig_file_ignore_head;
             tig_file_ignore_head = ignore;
 
-            // Trim *.* pattern from the end of string.
+            // FIX (porting bug #331): a trailing "*.*" becomes "*" for any
+            // path of three characters or more (0x52f3c5 `cmp ecx,2; jbe`,
+            // the terminator written one past the match at 0x52f408); CE
+            // needed four and cut the whole pattern. Latent: nothing calls
+            // `tig_file_ignore` in either version.
             path_length = strlen(ignore->path);
-            if (path_length > 3) {
+            if (path_length >= 3) {
                 pch = &(ignore->path[path_length - 3]);
                 if (strcmp(pch, "*.*") == 0) {
-                    *pch = '\0';
+                    pch[1] = '\0';
                 }
             }
         }
@@ -1323,7 +1344,12 @@ bool tig_file_exists_in_path_native(const char* search_path, const char* file_na
     repo = tig_file_repositories_head;
     while (repo != NULL) {
         if ((repo->type & TIG_FILE_REPOSITORY_DIRECTORY) != 0) {
-            if ((ignored & TIG_FILE_IGNORE_DATABASE) != 0
+            // FIX (porting bug #332): a directory repository is searched
+            // unless directories are ignored (0x52febb `test cl,2; jne`); CE
+            // searched it only when databases were ignored, which nothing
+            // sets, so `gamelib`'s module scan never found `mp.txt` in an
+            // unpacked module folder.
+            if ((ignored & TIG_FILE_IGNORE_DIRECTORY) == 0
                 && SDL_strcasecmp(search_path, repo->path) == 0) {
                 compat_join_path(path, sizeof(path), repo->path, file_name);
 
@@ -1372,8 +1398,11 @@ int tig_file_remove_native(const char* file_name)
     char path[TIG_MAX_PATH];
     TigDatabaseEntry* database_entry;
 
+    // FIX (porting bug #333): an absolute path answers the CRT `remove`'s
+    // result, -1 on failure (0x5301d9); CE answered 1, which
+    // `tig_file_unlock`'s `== -1` never sees.
     if (file_name[0] == '.' || file_name[0] == '\\' || file_name[1] == ':' || file_name[0] == '/') {
-        return SDL_RemovePath(file_name) ? 0 : 1;
+        return SDL_RemovePath(file_name) ? 0 : -1;
     }
 
     if ((tig_file_ignored(file_name) & 0x2) != 0) {
@@ -1420,7 +1449,9 @@ int tig_file_rename_native(const char* old_file_name, const char* new_file_name)
     char new_path[TIG_MAX_PATH];
 
     if (old_file_name[0] == '.' || old_file_name[0] == '\\' || old_file_name[1] == ':' || old_file_name[0] == '/') {
-        return SDL_RenamePath(old_file_name, new_file_name) ? 0 : 1;
+        // FIX (porting bug #334): as `tig_file_remove_native`, the CRT
+        // `rename`'s -1 on failure (0x5302bd); CE answered 1.
+        return SDL_RenamePath(old_file_name, new_file_name) ? 0 : -1;
     }
 
     if ((tig_file_ignored(old_file_name) & 0x2) != 0) {
@@ -1476,8 +1507,10 @@ int tig_file_fclose(TigFile* stream)
 // 0x530360
 int tig_file_fflush(TigFile* stream)
 {
+    // FIX (porting bug #335): a NULL stream flushes every stream, the CRT's
+    // `fflush(NULL)` (0x530368 `push 0`); CE flushed `stdin`.
     if (stream == NULL) {
-        return fflush(stdin);
+        return fflush(NULL);
     }
 
     if ((stream->flags & TIG_FILE_DATABASE) != 0) {
@@ -2176,11 +2209,18 @@ bool tig_file_copy_internal(TigFile* dst, TigFile* src)
     unsigned char buffer[1 << 15];
     unsigned int size;
 
+    // FIX (porting bug #336): the test is of the length (0x53126f `test
+    // esi,esi`); CE tested the stream. No effect: an empty file fails at the
+    // zero-size read below either way.
     size = tig_file_filelength(src);
-    if (src == 0) {
+    if (size == 0) {
         return false;
     }
 
+    // NOTE: Faithful: a file whose length is a multiple of 32 KiB is copied
+    // in full and then reported as a failure, because the last read is of
+    // zero bytes (0x5312c7-0x5312e7). CE's save-folder migration counts such
+    // a file as not copied.
     while (size >= sizeof(buffer)) {
         if (tig_file_fread(buffer, sizeof(buffer), 1, src) != 1) {
             return false;
