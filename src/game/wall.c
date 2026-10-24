@@ -1,11 +1,16 @@
 #include "game/wall.h"
 
+#include "game/a_name.h"
 #include "game/obj.h"
+#include "game/obj_pool.h"
 #include "game/obj_private.h"
 #include "game/object.h"
 
 static void wall_draw_lines(GameDrawInfo* draw_info);
 static void wall_draw_grid(GameDrawInfo* draw_info);
+static void wall_reconnect_location(int64_t loc, int variation, int p_piece);
+static void wall_reconnect_portal(tig_art_id_t art_id, int64_t loc);
+static void wall_reconnect_remove_portals(int64_t loc);
 static void wall_reconnect_pieces_9_20(int64_t obj);
 static void wall_reconnect_pieces_21_33(int64_t obj);
 static void wall_reconnect_pieces_34_45(int64_t obj);
@@ -272,26 +277,366 @@ void wall_draw_grid(GameDrawInfo* draw_info)
     }
 }
 
-// 0x4E20A0
-// Renumbers the wall segments that connected through a removed piece of
-// class 9-20 so the run reconnects. Same family as
-// wall_reconnect_pieces_34_45; the original at 0x4E20A0 is untranscribed.
-void wall_reconnect_pieces_9_20(int64_t obj)
+// Renumbers the walls at one tile of a run and deletes its portals: the
+// neighbour step the two functions below repeat.
+static void wall_reconnect_location(int64_t loc, int variation, int p_piece)
 {
-    (void)obj;
+    ObjectList objects;
+    ObjectNode* node;
+    tig_art_id_t art_id;
 
-    // TODO: Incomplete.
+    object_list_location(loc, OBJ_TM_WALL | OBJ_TM_PORTAL, &objects);
+    node = objects.head;
+    while (node != NULL) {
+        if (obj_field_int32_get(node->obj, OBJ_F_TYPE) == OBJ_TYPE_PORTAL) {
+            object_remove_from_sector(node->obj);
+            object_delete(node->obj);
+        } else {
+            art_id = obj_field_int32_get(node->obj, OBJ_F_CURRENT_AID);
+            art_id = tig_art_wall_id_variation_set(art_id, variation);
+            art_id = tig_art_wall_id_p_piece_set(art_id, p_piece);
+            object_set_current_aid(node->obj, art_id);
+        }
+        node = node->next;
+    }
+    object_list_destroy(&objects);
 }
 
+// Puts back the door or window a renumbered piece carries.
+static void wall_reconnect_portal(tig_art_id_t art_id, int64_t loc)
+{
+    ObjectID oid;
+    tig_art_id_t portal_art_id;
+    int64_t portal_obj;
+
+    portal_art_id = a_name_portal_aid_from_wall_aid(art_id, &oid);
+    if (portal_art_id != TIG_ART_ID_INVALID) {
+        object_create(obj_pool_perm_lookup(oid), loc, &portal_obj);
+        object_set_current_aid(portal_obj, portal_art_id);
+    }
+}
+
+// Deletes the portals on the removed piece's own tile.
+static void wall_reconnect_remove_portals(int64_t loc)
+{
+    ObjectList portals;
+    ObjectNode* node;
+
+    object_list_location(loc, OBJ_TM_PORTAL, &portals);
+    node = portals.head;
+    while (node != NULL) {
+        object_remove_from_sector(node->obj);
+        object_delete(node->obj);
+        node = node->next;
+    }
+    object_list_destroy(&portals);
+}
+
+// FIX (porting bug #323): removing a piece of a 3-, 4- or 5-piece run
+// (pieces 9-20) renumbers the rest of the run, deletes the portals on it and
+// recreates the window each renumbered piece carries (0x4e20a0: the piece table
+// at 0x4e2100, the own-tile portal sweep at 0x4e227e, the clockwise walk at
+// 0x4e22ea and the counter-clockwise one at 0x4e243f); CE left a TODO. Editor
+// only: `wall_delete` runs from `object_destroy`'s editor branch and
+// `portal_delete`.
+//
+// 0x4E20A0
+void wall_reconnect_pieces_9_20(int64_t obj)
+{
+    tig_art_id_t art_id;
+    int p_piece;
+    int variation;
+    int64_t loc;
+    int cw_size;
+    int ccw_size;
+    int base_p_piece;
+    int rot;
+    int cw_rot;
+    int ccw_rot;
+    int64_t adjacent_loc;
+
+    art_id = obj_field_int32_get(obj, OBJ_F_CURRENT_AID);
+    p_piece = tig_art_wall_id_p_piece_get(art_id);
+    variation = tig_art_wall_id_variation_get(art_id);
+    loc = obj_field_int64_get(obj, OBJ_F_LOCATION);
+    base_p_piece = 0;
+
+    switch (p_piece) {
+    case 9:
+        cw_size = 0;
+        ccw_size = 2;
+        variation = 0;
+        break;
+    case 10:
+        cw_size = 1;
+        ccw_size = 1;
+        variation = 0;
+        break;
+    case 11:
+        cw_size = 2;
+        ccw_size = 0;
+        variation = 0;
+        break;
+    case 12:
+        cw_size = 0;
+        ccw_size = 3;
+        base_p_piece = 9;
+        break;
+    case 13:
+        cw_size = 1;
+        ccw_size = 2;
+        variation = 0;
+        break;
+    case 14:
+        cw_size = 2;
+        ccw_size = 1;
+        variation = 0;
+        break;
+    case 15:
+        cw_size = 3;
+        ccw_size = 0;
+        base_p_piece = 11;
+        break;
+    case 16:
+        cw_size = 0;
+        ccw_size = 4;
+        base_p_piece = 12;
+        break;
+    case 17:
+        cw_size = 1;
+        ccw_size = 3;
+        variation = 0;
+        break;
+    case 18:
+        cw_size = 2;
+        ccw_size = 2;
+        variation = 0;
+        break;
+    case 19:
+        cw_size = 3;
+        ccw_size = 1;
+        variation = 0;
+        break;
+    case 20:
+        cw_size = 4;
+        ccw_size = 0;
+        base_p_piece = 15;
+        break;
+    default:
+        return;
+    }
+
+    rot = tig_art_id_rotation_get(art_id);
+    if ((rot & 1) == 0) {
+        rot++;
+    }
+
+    if (rot == 1 || rot == 3) {
+        cw_rot = (rot + 6) % 8;
+        ccw_rot = (rot + 2) % 8;
+    } else {
+        cw_rot = (rot + 2) % 8;
+        ccw_rot = (rot + 6) % 8;
+    }
+
+    art_id = tig_art_wall_id_variation_set(art_id, variation);
+    art_id = tig_art_wall_id_p_piece_set(art_id, 0);
+    object_set_current_aid(obj, art_id);
+    wall_reconnect_remove_portals(loc);
+
+    // The portal art is derived from the removed piece's art, renumbered.
+    p_piece = base_p_piece;
+    adjacent_loc = loc;
+    while (cw_size > 0) {
+        location_in_dir(adjacent_loc, cw_rot, &adjacent_loc);
+        wall_reconnect_location(adjacent_loc, variation, p_piece);
+        wall_reconnect_portal(tig_art_wall_id_p_piece_set(tig_art_wall_id_variation_set(art_id, variation), p_piece), adjacent_loc);
+
+        if (p_piece != 0) {
+            p_piece--;
+        }
+
+        cw_size--;
+    }
+
+    p_piece = base_p_piece;
+    adjacent_loc = loc;
+    while (ccw_size > 0) {
+        location_in_dir(adjacent_loc, ccw_rot, &adjacent_loc);
+        wall_reconnect_location(adjacent_loc, variation, p_piece);
+        wall_reconnect_portal(tig_art_wall_id_p_piece_set(tig_art_wall_id_variation_set(art_id, variation), p_piece), adjacent_loc);
+
+        if (p_piece != 0) {
+            p_piece++;
+        }
+
+        ccw_size--;
+    }
+}
+
+// FIX (porting bug #324): the same for 3-, 4- and 6-piece runs with doors
+// (pieces 21-33), where an end piece of the six leaves a four-piece run and a
+// single piece one step further (0x4e25b0: the piece table at 0x4e2673, the
+// extra steps at 0x4e2940 and 0x4e2b58); CE left a TODO. Editor only.
+//
 // 0x4E25B0
-// Renumbers the wall segments that connected through a removed piece of
-// class 21-33 so the run reconnects. Same family as
-// wall_reconnect_pieces_34_45; the original at 0x4E25B0 is untranscribed.
 void wall_reconnect_pieces_21_33(int64_t obj)
 {
-    (void)obj;
+    tig_art_id_t art_id;
+    int p_piece;
+    int variation;
+    int64_t loc;
+    int cw_size;
+    int ccw_size;
+    int base_p_piece;
+    bool cw_extra;
+    bool ccw_extra;
+    int rot;
+    int cw_rot;
+    int ccw_rot;
+    int64_t adjacent_loc;
 
-    // TODO: Incomplete.
+    art_id = obj_field_int32_get(obj, OBJ_F_CURRENT_AID);
+    p_piece = tig_art_wall_id_p_piece_get(art_id);
+    variation = tig_art_wall_id_variation_get(art_id);
+    loc = obj_field_int64_get(obj, OBJ_F_LOCATION);
+
+    rot = tig_art_id_rotation_get(art_id);
+    if ((rot & 1) == 0) {
+        rot++;
+    }
+
+    if (rot == 1 || rot == 3) {
+        cw_rot = (rot + 6) % 8;
+        ccw_rot = (rot + 2) % 8;
+    } else {
+        cw_rot = (rot + 2) % 8;
+        ccw_rot = (rot + 6) % 8;
+    }
+
+    base_p_piece = 0;
+    ccw_extra = false;
+    cw_extra = false;
+
+    // A six-piece run (28-33) losing an end piece leaves a four-piece run and
+    // one single piece past it.
+    switch (p_piece) {
+    case 21:
+        cw_size = 0;
+        ccw_size = 2;
+        variation = 0;
+        break;
+    case 22:
+        cw_size = 1;
+        ccw_size = 1;
+        variation = 0;
+        break;
+    case 23:
+        cw_size = 2;
+        ccw_size = 0;
+        variation = 0;
+        break;
+    case 24:
+        cw_size = 0;
+        ccw_size = 3;
+        base_p_piece = 21;
+        break;
+    case 25:
+        cw_size = 1;
+        ccw_size = 2;
+        variation = 0;
+        break;
+    case 26:
+        cw_size = 2;
+        ccw_size = 1;
+        variation = 0;
+        break;
+    case 27:
+        cw_size = 3;
+        ccw_size = 0;
+        base_p_piece = 23;
+        break;
+    case 28:
+        cw_size = 0;
+        ccw_size = 4;
+        base_p_piece = 24;
+        ccw_extra = true;
+        break;
+    case 29:
+        cw_size = 1;
+        ccw_size = 4;
+        variation = 0;
+        break;
+    case 30:
+        cw_size = 2;
+        ccw_size = 3;
+        variation = 0;
+        break;
+    case 31:
+        cw_size = 3;
+        ccw_size = 2;
+        variation = 0;
+        break;
+    case 32:
+        cw_size = 4;
+        ccw_size = 1;
+        variation = 0;
+        break;
+    case 33:
+        cw_size = 4;
+        ccw_size = 0;
+        base_p_piece = 27;
+        cw_extra = true;
+        break;
+    default:
+        return;
+    }
+
+    // NOTE: Unlike its two siblings, the original clears the removed piece's
+    // own variation even where the run keeps it (24, 27, 28, 33): 0x4E276F
+    // pushes a register zeroed before the switch.
+    art_id = tig_art_wall_id_variation_set(art_id, 0);
+    art_id = tig_art_wall_id_p_piece_set(art_id, 0);
+    object_set_current_aid(obj, art_id);
+    wall_reconnect_remove_portals(loc);
+
+    p_piece = base_p_piece;
+    adjacent_loc = loc;
+    while (cw_size > 0) {
+        location_in_dir(adjacent_loc, cw_rot, &adjacent_loc);
+        wall_reconnect_location(adjacent_loc, variation, p_piece);
+        wall_reconnect_portal(tig_art_wall_id_p_piece_set(tig_art_wall_id_variation_set(art_id, variation), p_piece), adjacent_loc);
+
+        if (p_piece != 0) {
+            p_piece--;
+        }
+
+        cw_size--;
+    }
+
+    if (cw_extra) {
+        location_in_dir(adjacent_loc, cw_rot, &adjacent_loc);
+        wall_reconnect_location(adjacent_loc, 0, 0);
+    }
+
+    p_piece = base_p_piece;
+    adjacent_loc = loc;
+    while (ccw_size > 0) {
+        location_in_dir(adjacent_loc, ccw_rot, &adjacent_loc);
+        wall_reconnect_location(adjacent_loc, variation, p_piece);
+        wall_reconnect_portal(tig_art_wall_id_p_piece_set(tig_art_wall_id_variation_set(art_id, variation), p_piece), adjacent_loc);
+
+        if (p_piece != 0) {
+            p_piece++;
+        }
+
+        ccw_size--;
+    }
+
+    if (ccw_extra) {
+        location_in_dir(adjacent_loc, ccw_rot, &adjacent_loc);
+        wall_reconnect_location(adjacent_loc, 0, 0);
+    }
 }
 
 // 0x4E2C50
