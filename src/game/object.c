@@ -706,10 +706,16 @@ void object_draw(GameDrawInfo* draw_info)
                                                                         // CE: The thing being perceived as a ghost is actually an overlay eye candy
                                                                         // on top of the dead, non-decaying critter's body. These "ghosts" must be placed
                                                                         // in the same z-order group as other normal objects.
-                                                                        if (obj_type == OBJ_TYPE_ARMOR
+                                                                        bool in_object_group = obj_type == OBJ_TYPE_ARMOR
                                                                             || (obj_type == OBJ_TYPE_NPC
                                                                                 && critter_is_dead(obj_node->obj)
-                                                                                && tig_art_num_get(art_id) == 243)) {
+                                                                                && tig_art_num_get(art_id) == 243);
+
+                                                                        // FIX (porting bug #326): a back overlay is drawn in the object's own
+                                                                        // group, behind it and among its neighbours (0x43b999 tests the field
+                                                                        // and takes the non-flat counter); CE drew it over everything, with the
+                                                                        // fore overlays, so the back half of a two-part effect covered the body.
+                                                                        if (fld == OBJ_F_OVERLAY_BACK || in_object_group) {
                                                                             order = non_flat_order++;
                                                                         } else {
                                                                             order = overlay_order++;
