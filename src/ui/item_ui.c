@@ -79,9 +79,12 @@ void item_ui_activate(int64_t owner_obj, int64_t item_obj)
         return;
     }
 
+    // FIX (porting bug #215): an owner that is off, dead or unconscious
+    // activates nothing (0x571ACD-0x571AF3, three `jne` to the exit); CE
+    // returned only for an owner both off and alive and conscious.
     if ((obj_field_int32_get(owner_obj, OBJ_F_FLAGS) & OF_OFF) != 0
-        && !critter_is_dead(owner_obj)
-        && !critter_is_unconscious(owner_obj)) {
+        || critter_is_dead(owner_obj)
+        || critter_is_unconscious(owner_obj)) {
         return;
     }
 
@@ -185,6 +188,11 @@ void item_ui_apply(TargetDescriptor* td)
             item_obj = item_find_first_generic(skill_invocation.source.obj, OGF_IS_LOCKPICK);
             dialog_copy_npc_let_me_handle_msg(skill_invocation.source.obj, pc_obj, str);
             dialog_ui_float_line(skill_invocation.source.obj, pc_obj, str, 0);
+            // FIX (porting bug #216): from here the follower who said "let me
+            // handle it" is the one who uses the lockpick (0x571CB0 sets the
+            // actor to the invocation's source after the float line, and every
+            // call below takes it); CE kept the player as the actor.
+            pc_obj = skill_invocation.source.obj;
             if (item_obj == OBJ_HANDLE_NULL) {
                 anim_goal_use_item_on_obj_with_skill(skill_invocation.source.obj,
                     OBJ_HANDLE_NULL,

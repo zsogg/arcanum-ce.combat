@@ -148,6 +148,10 @@ bool compact_ui_create(void)
         window_data.rect = comp->rect;
         window_data.background_color = tig_color_make(0, 0, 0);
         window_data.color_key = tig_color_make(comp->r, comp->g, comp->b);
+        // FIX (porting bug #211): the component keeps its colour key
+        // (0x568B0A stores it at +0x34), which the health bar fills its window
+        // with so the background is transparent; CE left it 0, black.
+        comp->field_34 = window_data.color_key;
         window_data.message_filter = comp->message_filter;
         hrp_apply(&(window_data.rect), comp->gravity);
 
@@ -359,10 +363,14 @@ void compact_ui_health_bar_draw(int a1)
     rect1.x = 1;
     rect1.width = 23;
     rect1.y = 100 * (100 * object_hp_damage_get(pc_obj) / object_hp_max(pc_obj)) / 100 + 1;
+    // FIX (porting bug #212): the bar reaches row 100 below full damage
+    // (0x5691EB `100 - y`, then 0x5691FB `inc` when the damage is under
+    // 100%); CE stopped a row short.
+    rect1.height = 101 - rect1.y;
     if (rect1.y > 100) {
         rect1.y = 100;
+        rect1.height = 0;
     }
-    rect1.height = 100 - rect1.y;
 
     poison = stat_level_get(pc_obj, STAT_POISON_LEVEL);
     if (poison > 0) {
@@ -402,10 +410,14 @@ void compact_ui_health_bar_draw(int a1)
     rect1.x = 25;
     rect1.width = 23;
     rect1.y = 100 * (100 * critter_fatigue_damage_get(pc_obj) / critter_fatigue_max(pc_obj)) / 100 + 1;
+    // FIX (porting bug #212): as for the health bar (0x56943D, 0x56944D),
+    // and the fatigue bar's clamp is 101 (0x569434 `mov eax,0x65`), so a
+    // fully fatigued bar is empty and its number sits a row lower.
+    rect1.height = 101 - rect1.y;
     if (rect1.y > 100) {
-        rect1.y = 100;
+        rect1.y = 101;
+        rect1.height = -1;
     }
-    rect1.height = 100 - rect1.y;
     compact_ui_fill_rect(compact_ui_components[0].window_handle,
         &rect1,
         tig_color_make(0, 0, 255));

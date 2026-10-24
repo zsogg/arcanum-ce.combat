@@ -1283,6 +1283,10 @@ void inven_ui_begin_drag_transfer(int64_t a1, bool a2)
         inven_ui_pc_obj = player_get_local_pc_obj();
     }
 
+    // FIX (porting bug #255): the cursor is refreshed before it becomes the
+    // drag overlay (0x573769 call 0x553990); CE overlaid whatever cursor was
+    // showing.
+    intgame_refresh_cursor();
     mouse_art_id = tig_mouse_cursor_get_art_id();
     inven_ui_drag_source_obj = inven_ui_pc_obj;
     inven_ui_drag_item_obj = a1;
@@ -1880,20 +1884,28 @@ static inline bool inven_ui_message_filter_handle_mouse_lbutton_up(int x, int y,
         switch (inven_ui_mode) {
         case INVEN_UI_MODE_NPC_IDENTIFY:
             inven_ui_identify_cost_update(v1);
-            if (inven_ui_item_cost > 0
-                && item_gold_get(inven_ui_pc_obj) >= inven_ui_item_cost) {
-                item_perform_identify_service(v1, inven_ui_target_obj, inven_ui_pc_obj, inven_ui_item_cost);
-            } else {
-                dialog_copy_npc_not_enough_money_msg(inven_ui_target_obj, inven_ui_pc_obj, inven_ui_npc_msg);
+            // FIX (porting bug #232): an item with no cost gets neither the
+            // service nor the "not enough money" line (0x574660, 0x574789 `jle`
+            // past both); CE drew the line, and its random pick, anyway.
+            if (inven_ui_item_cost > 0) {
+                if (item_gold_get(inven_ui_pc_obj) >= inven_ui_item_cost) {
+                    item_perform_identify_service(v1, inven_ui_target_obj, inven_ui_pc_obj, inven_ui_item_cost);
+                } else {
+                    dialog_copy_npc_not_enough_money_msg(inven_ui_target_obj, inven_ui_pc_obj, inven_ui_npc_msg);
+                }
             }
             break;
         case INVEN_UI_MODE_NPC_REPAIR:
             inven_ui_repair_cost_update(v1);
-            if (inven_ui_item_cost > 0
-                && item_gold_get(inven_ui_pc_obj) >= inven_ui_item_cost) {
-                skill_perform_repair_service(v1, inven_ui_target_obj, inven_ui_pc_obj, inven_ui_item_cost);
-            } else {
-                dialog_copy_npc_not_enough_money_msg(inven_ui_target_obj, inven_ui_pc_obj, inven_ui_npc_msg);
+            // FIX (porting bug #232): an item with no cost gets neither the
+            // service nor the "not enough money" line (0x574660, 0x574789 `jle`
+            // past both); CE drew the line, and its random pick, anyway.
+            if (inven_ui_item_cost > 0) {
+                if (item_gold_get(inven_ui_pc_obj) >= inven_ui_item_cost) {
+                    skill_perform_repair_service(v1, inven_ui_target_obj, inven_ui_pc_obj, inven_ui_item_cost);
+                } else {
+                    dialog_copy_npc_not_enough_money_msg(inven_ui_target_obj, inven_ui_pc_obj, inven_ui_npc_msg);
+                }
             }
             break;
         default:
@@ -1912,9 +1924,15 @@ static inline bool inven_ui_message_filter_handle_mouse_lbutton_up(int x, int y,
         && y >= inven_ui_drop_box_frame.y
         && x < inven_ui_drop_box_frame.x + inven_ui_drop_box_frame.width
         && y < inven_ui_drop_box_frame.y + inven_ui_drop_box_frame.height) {
+        // FIX (porting bug #229): a merchant's own item dropped in the box
+        // goes back to the merchant unless the merchant is a follower
+        // (0x57485C `cmp eax,1`, 0x574861 the follower test, 0x5748A4 the
+        // return); CE's last clause let barter through, dropping the stock on
+        // the ground for nothing.
         if (inven_ui_drag_source_obj != inven_ui_target_inventory_obj
             || (inven_ui_mode == INVEN_UI_MODE_BARTER && inven_ui_target_is_follower)
-            || (inven_ui_mode != INVEN_UI_MODE_STEAL
+            || (inven_ui_mode != INVEN_UI_MODE_BARTER
+                && inven_ui_mode != INVEN_UI_MODE_STEAL
                 && inven_ui_mode != INVEN_UI_MODE_LOOT)) {
             inven_ui_transfer_item(inven_ui_drag_item_obj, OBJ_HANDLE_NULL, -1, 2);
         } else {
@@ -1950,6 +1968,9 @@ static inline bool inven_ui_message_filter_handle_mouse_lbutton_up(int x, int y,
                 if (inven_ui_target_inventory_obj != OBJ_HANDLE_NULL) {
                     item_inventory_slots_get(inven_ui_target_inventory_obj, inven_ui_target_inventory_slots);
                 }
+                // FIX (porting bug #230): a throw keeps the item on the cursor
+                // for the throw (0x574A6F/0x574A84 jump past the stores at
+                // 0x5749E6-0x5749F2); CE cleared it and lost the throw.
             } else {
                 int64_t item_obj = inven_ui_drag_item_obj;
                 inven_ui_drop_dragged_item();
@@ -1964,12 +1985,14 @@ static inline bool inven_ui_message_filter_handle_mouse_lbutton_up(int x, int y,
                 if (!inven_ui_created) {
                     return true;
                 }
+                inven_ui_drag_item_obj = OBJ_HANDLE_NULL;
+                inven_ui_use_box_image = 342;
             }
         } else {
             inven_ui_drop_dragged_item();
+            inven_ui_drag_item_obj = OBJ_HANDLE_NULL;
+            inven_ui_use_box_image = 342;
         }
-        inven_ui_drag_item_obj = OBJ_HANDLE_NULL;
-        inven_ui_use_box_image = 342;
     } else {
         int64_t parent_obj;
         int inventory_location = inven_ui_location_hit_test(x, y, &parent_obj);
@@ -2028,6 +2051,10 @@ static inline bool inven_ui_message_filter_handle_mouse_lbutton_up(int x, int y,
                                     if (parent_obj == inven_ui_pc_obj) {
                                         item_error_msg(parent_obj, unwield_reason);
                                     }
+                                    // FIX (porting bug #231): the dragged item goes
+                                    // back when the worn one cannot come off (0x574E31
+                                    // after the message); CE left it on the cursor.
+                                    inven_ui_drop_dragged_item();
                                 }
                             } else {
                                 inven_ui_drop_dragged_item();
@@ -2080,7 +2107,10 @@ static inline bool inven_ui_message_filter_handle_mouse_lbutton_up(int x, int y,
     if (!inven_ui_drag_item_obj) {
         intgame_refresh_cursor();
     }
-    if (!v45) {
+    // FIX (porting bug #233): the test is of the flag (the original's
+    // `in_stack_00000010 == 0`); CE tested the pointer, never null, so the
+    // handler never returned true and fell into the close checks.
+    if (!*v45) {
         return true;
     }
 
@@ -2114,8 +2144,11 @@ static inline bool inven_ui_message_filter_handle_mouse_rbutton_up(int x, int y,
                     item_use_on_obj(inven_ui_pc_obj, v1, inven_ui_pc_obj);
                 }
 
+                // FIX (porting bug #254): a use that closed the inventory
+                // consumes the click (0x574543-0x57454f returns edi, 1 since
+                // 0x57387c); CE passed it on.
                 if (!inven_ui_created) {
-                    return false;
+                    return true;
                 }
             }
         }
@@ -2166,7 +2199,10 @@ static inline bool inven_ui_message_filter_handle_mouse_rbutton_up(int x, int y,
         intgame_refresh_cursor();
     }
 
-    if (!v45) {
+    // FIX (porting bug #233): the test is of the flag (the original's
+    // `in_stack_00000010 == 0`); CE tested the pointer, never null, so the
+    // handler never returned true and fell into the close checks.
+    if (!*v45) {
         return true;
     }
 
@@ -2383,6 +2419,8 @@ void inven_ui_transfer_to_pc(int a1)
             inven_ui_barter_cost_update(inven_ui_drag_item_obj, inven_ui_target_obj);
         }
 
+        // FIX (porting bug #265): both outcomes forget the quoted price
+        // (0x5752e1, 0x575317); CE kept it for the next drag.
         if (inven_ui_item_cost != 0 || inven_ui_target_is_follower) {
             if (item_gold_get(inven_ui_pc_obj) < inven_ui_item_cost) {
                 dialog_copy_npc_not_enough_money_msg(inven_ui_target_obj, inven_ui_pc_obj, inven_ui_npc_msg);
@@ -2390,6 +2428,7 @@ void inven_ui_transfer_to_pc(int a1)
             } else {
                 inven_ui_transfer_item(inven_ui_drag_item_obj, inven_ui_pc_obj, a1, 1);
             }
+            inven_ui_item_cost = -1;
         } else {
             inven_ui_drop_dragged_item();
             inven_ui_item_cost = -1;
@@ -2881,9 +2920,12 @@ void redraw_inven_fix_bad_inven_obj(int64_t obj)
             if (item_obj == obj_arrayfield_handle_get(obj, inventory_list_fld, j)) {
                 tig_debug_printf("redraw_inven_fix_bad_inven_obj: WARNING: Found duplicate handle for object in inventory...CORRECTING!\n");
                 cnt--;
+                // FIX (porting bug #263): the shift keeps the item being
+                // compared (0x57626a holds it; 0x5762bf-0x5762e9 shifts in
+                // registers); CE overwrote it with the shifted items, so
+                // the old last item then matched itself and was cut too.
                 for (k = j; k < cnt; k++) {
-                    item_obj = obj_arrayfield_handle_get(obj, inventory_list_fld, k + 1);
-                    obj_arrayfield_obj_set(obj, inventory_list_fld, k, item_obj);
+                    obj_arrayfield_obj_set(obj, inventory_list_fld, k, obj_arrayfield_handle_get(obj, inventory_list_fld, k + 1));
                 }
 
                 obj_arrayfield_length_set(obj, inventory_list_fld, cnt);
@@ -2919,7 +2961,9 @@ void redraw_inven_fix_bad_inven_obj(int64_t obj)
 
         if (item_check_remove(item_obj) == ITEM_CANNOT_OK) {
             item_drop_nearby(item_obj);
-            item_arrange_inventory(item_obj, false);
+            // FIX (porting bug #264): the owner is rearranged
+            // (0x576424-0x576428 pushes obj); CE arranged the dropped item.
+            item_arrange_inventory(obj, false);
             if (item_check_insert(item_obj, obj, &inventory_location) == ITEM_CANNOT_OK) {
                 if (!item_transfer_ex(item_obj, obj, inventory_location)) {
                     cnt--;
@@ -3009,15 +3053,19 @@ void redraw_inven(bool a1)
             tig_art_interface_id_create(portrait, 0, 0, 0, &(art_blit_info.art_id));
             tig_art_frame_data(art_blit_info.art_id, &art_frame_data);
 
+            // FIX (porting bug #258): this blit and seven more in
+            // redraw_inven (portraits, panel 221, the three boxes, the NPC
+            // paperdoll) take their height from the frame's height
+            // (0x57663b-0x576670, 0x57695d-0x576977); CE used its width.
             src_rect.x = 0;
             src_rect.y = 0;
             src_rect.width = art_frame_data.width;
-            src_rect.height = art_frame_data.width;
+            src_rect.height = art_frame_data.height;
 
             dst_rect.x = 183;
             dst_rect.y = 33;
             dst_rect.width = art_frame_data.width;
-            dst_rect.height = art_frame_data.width;
+            dst_rect.height = art_frame_data.height;
 
             art_blit_info.flags = 0;
             art_blit_info.src_rect = &src_rect;
@@ -3096,12 +3144,12 @@ void redraw_inven(bool a1)
             src_rect.x = 0;
             src_rect.y = 0;
             src_rect.width = art_frame_data.width;
-            src_rect.height = art_frame_data.width;
+            src_rect.height = art_frame_data.height;
 
             dst_rect.x = inven_ui_loot_target_portrait_rect.x;
             dst_rect.y = inven_ui_loot_target_portrait_rect.y;
             dst_rect.width = art_frame_data.width;
-            dst_rect.height = art_frame_data.width;
+            dst_rect.height = art_frame_data.height;
 
             art_blit_info.flags = 0;
             art_blit_info.src_rect = &src_rect;
@@ -3120,12 +3168,12 @@ void redraw_inven(bool a1)
             src_rect.x = 0;
             src_rect.y = 0;
             src_rect.width = art_frame_data.width;
-            src_rect.height = art_frame_data.width;
+            src_rect.height = art_frame_data.height;
 
             dst_rect.x = 141;
             dst_rect.y = 36;
             dst_rect.width = art_frame_data.width / 2;
-            dst_rect.height = art_frame_data.width / 2;
+            dst_rect.height = art_frame_data.height / 2;
 
             art_blit_info.flags = 0;
             art_blit_info.src_rect = &src_rect;
@@ -3151,12 +3199,12 @@ void redraw_inven(bool a1)
     src_rect.x = 0;
     src_rect.y = 0;
     src_rect.width = art_frame_data.width;
-    src_rect.height = art_frame_data.width;
+    src_rect.height = art_frame_data.height;
 
     dst_rect.x = 358;
     dst_rect.y = 0;
     dst_rect.width = art_frame_data.width;
-    dst_rect.height = art_frame_data.width;
+    dst_rect.height = art_frame_data.height;
 
     art_blit_info.flags = 0;
     art_blit_info.src_rect = &src_rect;
@@ -3174,7 +3222,10 @@ void redraw_inven(bool a1)
         src_rect.width = art_frame_data.width;
         src_rect.height = art_frame_data.height;
 
-        dst_rect.x = 358;
+        // FIX (porting bug #259): the paperdoll overlay sits three pixels
+        // right of the panel (0x576c1d 0x169; the panel's 0x166 at
+        // 0x576b76); CE drew both at 358.
+        dst_rect.x = 361;
         dst_rect.y = 0;
         dst_rect.width = art_frame_data.width;
         dst_rect.height = art_frame_data.height;
@@ -3305,12 +3356,12 @@ void redraw_inven(bool a1)
         src_rect.x = 0;
         src_rect.y = 0;
         src_rect.width = art_frame_data.width;
-        src_rect.height = art_frame_data.width;
+        src_rect.height = art_frame_data.height;
 
         dst_rect.x = 703;
         dst_rect.y = 344;
         dst_rect.width = art_frame_data.width;
-        dst_rect.height = art_frame_data.width;
+        dst_rect.height = art_frame_data.height;
 
         art_blit_info.flags = 0;
         art_blit_info.src_rect = &src_rect;
@@ -3331,12 +3382,12 @@ void redraw_inven(bool a1)
         src_rect.x = 0;
         src_rect.y = 0;
         src_rect.width = art_frame_data.width;
-        src_rect.height = art_frame_data.width;
+        src_rect.height = art_frame_data.height;
 
         dst_rect.x = 703;
         dst_rect.y = 236;
         dst_rect.width = art_frame_data.width;
-        dst_rect.height = art_frame_data.width;
+        dst_rect.height = art_frame_data.height;
 
         art_blit_info.flags = 0;
         art_blit_info.src_rect = &src_rect;
@@ -3357,12 +3408,12 @@ void redraw_inven(bool a1)
         src_rect.x = 0;
         src_rect.y = 0;
         src_rect.width = art_frame_data.width;
-        src_rect.height = art_frame_data.width;
+        src_rect.height = art_frame_data.height;
 
         dst_rect.x = 703;
         dst_rect.y = 290;
         dst_rect.width = art_frame_data.width;
-        dst_rect.height = art_frame_data.width;
+        dst_rect.height = art_frame_data.height;
 
         art_blit_info.flags = 0;
         art_blit_info.src_rect = &src_rect;
@@ -3471,14 +3522,21 @@ void redraw_inven(bool a1)
                         font_desc.str = str;
                         font_desc.width = 0;
                         tig_font_measure(&font_desc);
-                        dst_rect.height = font_desc.height;
+                        // FIX (porting bug #260): the label sits at the
+                        // bottom of the art (0x577554-0x57757f, as the NPC
+                        // branch does); CE shrank the rect first, so the
+                        // label stayed at its top.
                         dst_rect.y += dst_rect.height - font_desc.height;
+                        dst_rect.height = font_desc.height;
                         tig_window_text_write(inven_ui_window_handle, str, &dst_rect);
                         tig_font_pop();
                     }
-                }
 
-                filled_inv_slots[inventory_location - 1000] = true;
+                    // FIX (porting bug #261): a slot whose art fails stays
+                    // empty and gets the empty-slot art (0x577480 jne
+                    // 0x57781f skips 0x577597); CE marked it filled.
+                    filled_inv_slots[inventory_location - 1000] = true;
+                }
             }
 
             continue;
@@ -3594,12 +3652,12 @@ void redraw_inven(bool a1)
             src_rect.x = 0;
             src_rect.y = 0;
             src_rect.width = art_frame_data.width;
-            src_rect.height = art_frame_data.width;
+            src_rect.height = art_frame_data.height;
 
             dst_rect.x = 0;
             dst_rect.y = 0;
             dst_rect.width = art_frame_data.width;
-            dst_rect.height = art_frame_data.width;
+            dst_rect.height = art_frame_data.height;
 
             if (inven_ui_mode == INVEN_UI_MODE_BARTER) {
                 dst_rect.y = 157;
@@ -4023,8 +4081,11 @@ void inven_ui_transfer_item(int64_t item_obj, int64_t target_obj, int new_invent
             }
             critter_encumbrance_recalc_feedback_enable();
         } else {
+            // FIX (porting bug #257): the error is told to the item's owner
+            // (0x578a27-0x578a36 pushes the item_parent result); CE told the
+            // item, which is never the PC, so the message never showed.
             if (item_parent(item_obj, &parent_obj)) {
-                item_error_msg(item_obj, reason);
+                item_error_msg(parent_obj, reason);
             }
         }
 
@@ -4337,9 +4398,7 @@ bool inven_ui_process_transfer_packet(Packet81* pkt)
             if (!tig_net_is_active() || tig_net_is_host()) {
                 if (v3 == v6) {
                     if (item_gold_transfer(v3, v4, gold_amt, OBJ_HANDLE_NULL)) {
-                        if (gold_amt < worth) {
-                            gsound_play_sfx(8158, 1);
-                        } else {
+                        if (gold_amt >= worth) {
                             reaction_bargain_adj(v4, v6, gold_amt - worth);
                         }
                     } else {
@@ -4348,9 +4407,7 @@ bool inven_ui_process_transfer_packet(Packet81* pkt)
                     }
                 } else {
                     if (item_gold_transfer(v4, v1, gold_amt, OBJ_HANDLE_NULL)) {
-                        if (worth < gold_amt) {
-                            gsound_play_sfx(8158, 1);
-                        } else {
+                        if (worth >= gold_amt) {
                             reaction_bargain_adj(v4, v6, worth - gold_amt);
                         }
                     } else {
@@ -4358,6 +4415,14 @@ bool inven_ui_process_transfer_packet(Packet81* pkt)
                     }
                 }
             }
+        }
+
+        // FIX (porting bug #256): every completed transfer plays the sound,
+        // bargain or not, priced or free (0x5794a0 jle 0x57950e, 0x579506
+        // falls into 0x57950e, 0x579677 jmp 0x579505); CE played it only for
+        // an unbargained sale.
+        if (!error) {
+            gsound_play_sfx(8158, 1);
         }
     }
 
@@ -4481,7 +4546,10 @@ bool inven_ui_gamble_check(int64_t obj, bool a2)
         return false;
     }
 
-    training = basic_skill_training_get(inven_ui_target_obj, BASIC_SKILL_GAMBLING);
+    // FIX (porting bug #262): the worn and won't-sell gates test the PC's
+    // gambling training (0x5799c4-0x5799d3 pushes 0x6814f8); CE tested the
+    // NPC's.
+    training = basic_skill_training_get(inven_ui_pc_obj, BASIC_SKILL_GAMBLING);
     if (IS_WEAR_INV_LOC(item_inventory_location_get(obj))) {
         if (training < TRAINING_EXPERT) {
             if (!a2) {

@@ -2481,10 +2481,14 @@ void mainmenu_ui_draw_text(char* str, TigRect* rect, tig_font_handle_t font, uns
             font_desc.flags = 0;
             tig_font_measure(&font_desc);
 
+            // FIX (porting bug #248): both trims count the tab-expanded
+            // text and keep at least one character (0x54195d-0x54196e,
+            // 0x5419dc-0x5419ed); CE counted the unexpanded string, and the
+            // left trim could empty it.
             if (font_desc.width > rect->width) {
-                pos = strlen(str);
-                while (pos > 0 && font_desc.width > rect->width) {
-                    chunk[pos--] = '\0';
+                pos = strlen(chunk);
+                while (pos > 1 && font_desc.width > rect->width) {
+                    chunk[--pos] = '\0';
                     font_desc.width = 0;
                     font_desc.height = 0;
                     font_desc.str = chunk;
@@ -2500,8 +2504,8 @@ void mainmenu_ui_draw_text(char* str, TigRect* rect, tig_font_handle_t font, uns
             tig_font_measure(&font_desc);
 
             if (font_desc.width > rect->width) {
-                pos = strlen(str);
-                while (pos > 0 && font_desc.width > rect->width) {
+                pos = strlen(chunk);
+                while (pos > 1 && font_desc.width > rect->width) {
                     chunk++;
                     pos--;
                     font_desc.width = 0;
@@ -3294,7 +3298,10 @@ void mainmenu_ui_draw_text_ellipsized(char* str, TigRect* rect, tig_font_handle_
     text_rect.width -= font_desc.width;
     mainmenu_ui_draw_text(str, &text_rect, font, 1);
 
-    text_rect.x += font_desc.width;
+    // FIX (porting bug #199): the ellipsis follows the truncated text
+    // (0x542D00 advances x by the reduced width); CE advanced it by the
+    // ellipsis' own width, drawing "..." over the text's first letters.
+    text_rect.x += text_rect.width;
     text_rect.width = font_desc.width;
     mainmenu_ui_draw_text(mainmenu_ui_ellipsis, &text_rect, font, 0);
 }
@@ -3849,9 +3856,10 @@ void mainmenu_ui_save_game_refresh(TigRect* rect)
             && rect->y < window->content_rect.y + window->content_rect.height)) {
         dst_rect = window->content_rect;
 
+        // FIX (porting bug #250): a failed fill is logged and the list still
+        // drawn (0x543b0b je 0x543b1a, no exit); CE quit the game.
         if (tig_window_fill(mainmenu_ui_window_handle, &dst_rect, tig_color_make(0, 0, 0)) != TIG_OK) {
             tig_debug_printf("mmUIMPSaveGameRefreshFunc: ERROR: tig_window_fill2 failed!\n");
-            exit(EXIT_FAILURE);
         }
 
         int max_y = dst_rect.y + dst_rect.height - 1;
@@ -4037,6 +4045,14 @@ void mainmenu_ui_textedit_draw(const char* str, TigRect* rect, tig_font_handle_t
         text_rect.x += (rect->width - font_desc.width) / 2;
         text_rect.width = font_desc.width;
         mainmenu_ui_draw_text(mutable_str, &text_rect, font, 0);
+    } else {
+        // FIX (porting bug #247): text too wide for its rect is drawn
+        // trimmed from the left with the I-beam at its end (0x5441bc jge
+        // 0x5441e1, flags 2 at 0x5441e1); CE drew nothing.
+        strcat(mutable_str, "|");
+        mainmenu_ui_draw_text(mutable_str, &text_rect, font, 0x2);
+        tig_font_pop();
+        return;
     }
 
     // CE: There's a bug in the original game regarding cursor positioning. It
@@ -4764,7 +4780,10 @@ bool mainmenu_ui_new_char_next_race(int64_t obj)
     } else {
         race = RACE_HUMAN;
         if (stat_level_get(obj, STAT_GENDER) == GENDER_FEMALE) {
-            while (!mainmenu_ui_race_info[race].available_for_female) {
+            // FIX (porting bug #207): the search stops at the seventh race
+            // (0x545651 `cmp eax,0x5C51AC; jl`), as the branch above does; CE's
+            // loop had no bound and would run off the table.
+            while (race < 7 && !mainmenu_ui_race_info[race].available_for_female) {
                 race++;
             }
 
@@ -4969,7 +4988,9 @@ bool mainmenu_ui_pregen_char_execute(int btn)
         mes_file_entry.num = 551 + index;
         mes_get_msg(mainmenu_ui_mainmenu_mes_file, &mes_file_entry);
         flag = atoi(mes_file_entry.str);
-        if (flag > 0) {
+        // FIX (porting bug #252): flag 0 is a flag too (0x545c06 jl); CE
+        // skipped it. Latent: the shipped list names flags 2350-2361.
+        if (flag >= 0) {
             script_global_flag_set(flag, mainmenu_ui_pregen_char_idx - 1 == index);
         }
     }
@@ -5325,9 +5346,12 @@ void mainmenu_ui_create_window_func(bool should_display)
                     tig_debug_printf("mainmenu_ui_create_window_func: ERROR: tig_art_anim_data2 failed!\n");
                     exit(EXIT_SUCCESS); // NOTE: verified against 0x546825 - original exits 0 (EXIT_SUCCESS).
                 }
+            } else {
+                // FIX (porting bug #249): the cover is blitted only when its
+                // window was created (0x54673f jne 0x54680e, 0x546812 jne
+                // 0x54675c past the blit); CE blitted to the failed handle.
+                tig_window_blit_art(mainmenu_ui_top_bar_cover_window_handle, &art_blit_info);
             }
-
-            tig_window_blit_art(mainmenu_ui_top_bar_cover_window_handle, &art_blit_info);
         } else {
             if (!v1) {
                 tig_debug_printf("mainmenu_ui_create_window_func: ERROR: tig_art_anim_data2 failed!\n");
@@ -5674,7 +5698,10 @@ bool mainmenu_ui_message_filter(TigMessage* msg)
             case MM_WINDOW_OPTIONS:
                 if (intgame_pc_lens_check_pt(msg->data.mouse.x, msg->data.mouse.y)) {
                     if (mainmenu_ui_type_flags[mainmenu_ui_type][0]) {
-                        if (!options_ui_load_module()) {
+                        // FIX (porting bug #221): the options close when the
+                        // module loads (0x54704B `test eax,eax; je` past the
+                        // dismiss); CE dismissed on a failed load instead.
+                        if (options_ui_load_module()) {
                             mainmenu_ui_dismiss();
                         }
                     } else {
@@ -5907,6 +5934,10 @@ bool mainmenu_ui_message_filter(TigMessage* msg)
                     mainmenu_ui_dismiss();
                     mainmenu_ui_window_type = 0;
                     mainmenu_ui_exit_game();
+                    // FIX (porting bug #222): the Escape that leaves the game
+                    // is consumed (0x5476CC returns the key compare's 1); CE
+                    // passed it on.
+                    return true;
                 }
                 return false;
             case MM_WINDOW_OPTIONS:
@@ -6227,6 +6258,11 @@ bool mainmenu_ui_process_callback(TimeEvent* timeevent)
         next_art_id = tig_art_id_frame_set(next_art_id, 0);
     }
 
+    // FIX (porting bug #251): the animation keeps its advanced frame
+    // (0x547fed); CE redrew frame 1 forever. Latent: no menu window has an
+    // animation.
+    mainmenu_ui_anims[index].art_id = next_art_id;
+
     if (tig_art_frame_data(next_art_id, &art_frame_data) == TIG_OK) {
         src_rect.x = 0;
         src_rect.y = 0;
@@ -6510,7 +6546,9 @@ void mainmenu_ui_exit_game(void)
     gameuilib_exit();
     gamelib_exit();
     tig_exit();
-    tig_memory_print_stats(TIG_MEMORY_STATS_PRINT_GROUPED_BLOCKS);
+    // FIX (porting bug #253): the exit report lists every block (0x5495a3
+    // push 2); CE grouped them. Debug log only.
+    tig_memory_print_stats(TIG_MEMORY_STATS_PRINT_ALL_BLOCKS);
     exit(EXIT_SUCCESS);
 }
 

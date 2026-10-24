@@ -1282,6 +1282,8 @@ void intgame_resize(GameResizeInfo* resize_info)
         }
     }
 
+    // CE: a resize while the main menu hides the interface keeps it hidden
+    // (see mainmenu_ui.c's intgame_hide call); the original has no hide.
     if (tig_window_is_hidden(intgame_iso_window_handle)) {
         intgame_hide();
     }
@@ -1579,6 +1581,9 @@ void iso_interface_create(tig_window_handle_t window_handle)
         tig_button_hide(intgame_maintain_fs_buttons[index].button_handle);
     }
 
+    // CE: the interface starts hidden until the main menu lets it show
+    // (see mainmenu_ui.c's intgame_hide call); the original returns at
+    // 0x54a97e without it.
     intgame_hide();
 }
 
@@ -2281,9 +2286,11 @@ bool intgame_process_message(TigMessage* msg)
                 return true;
             }
 
+            // FIX (porting bug #269): the press is consumed only if the
+            // inventory opened (0x54b9ce call 0x572240 returns its eax); CE
+            // always consumed it.
             if (msg->data.button.button_handle == intgame_primary_buttons[INTGAME_PRIMARY_BUTTON_INVENTORY].button_handle) {
-                inven_ui_open(player_get_local_pc_obj(), OBJ_HANDLE_NULL, INVEN_UI_MODE_INVENTORY);
-                return true;
+                return inven_ui_open(player_get_local_pc_obj(), OBJ_HANDLE_NULL, INVEN_UI_MODE_INVENTORY);
             }
 
             if (msg->data.button.button_handle == intgame_primary_buttons[INTGAME_PRIMARY_BUTTON_MAP].button_handle) {
@@ -2549,8 +2556,12 @@ bool intgame_process_message(TigMessage* msg)
                 return true;
             }
 
+            // FIX (porting bug #268): the sleep button's hover is consumed
+            // like the others (0x54c172 mov eax,1); CE fell through and
+            // returned false.
             if (msg->data.button.button_handle == intgame_sleep_button_info.button_handle) {
                 intgame_hover_msg_num = (tig_net_is_active()) ? 1010 : 1009;
+                return true;
             }
 
             switch (intgame_iso_window_type) {
@@ -2775,6 +2786,28 @@ bool intgame_process_message(TigMessage* msg)
         }
 
         if (msg->data.keyboard.pressed) {
+            // FIX (porting bug #267): Enter is handled first, then nothing
+            // else while the main menu is up (0x54c63c call 0x541680,
+            // 0x54c643 jne 0x54b675), and L opens the logbook (jump table
+            // 0x54c85c case 4, 0x54c6a3 call 0x53f020); CE ran the hotkeys
+            // under the main menu and had no L.
+            bool handled = false;
+
+            if (msg->data.keyboard.key == SDLK_RETURN) {
+                if (intgame_iso_window_type == ROTWIN_TYPE_QUANTITY) {
+                    inven_ui_send_transfer_packet(intgame_quantity);
+                    intgame_mode_set(INTGAME_MODE_MAIN);
+                    handled = true;
+                } else if (!mainmenu_ui_is_active()) {
+                    broadcast_ui_open();
+                    handled = true;
+                }
+            }
+
+            if (mainmenu_ui_is_active()) {
+                return false;
+            }
+
             switch (msg->data.keyboard.key) {
             case SDLK_SPACE:
                 intgame_turn_based_toggle();
@@ -2790,6 +2823,10 @@ bool intgame_process_message(TigMessage* msg)
                 return true;
             case SDLK_I:
                 inven_ui_open(player_get_local_pc_obj(), OBJ_HANDLE_NULL, INVEN_UI_MODE_INVENTORY);
+                gsound_play_sfx(0, 1);
+                return true;
+            case SDLK_L:
+                logbook_ui_open(player_get_local_pc_obj());
                 gsound_play_sfx(0, 1);
                 return true;
             case SDLK_R:
@@ -2817,15 +2854,10 @@ bool intgame_process_message(TigMessage* msg)
                     return true;
                 }
                 break;
-            case SDLK_RETURN:
-                if (intgame_iso_window_type == ROTWIN_TYPE_QUANTITY) {
-                    inven_ui_send_transfer_packet(intgame_quantity);
-                    intgame_mode_set(INTGAME_MODE_MAIN);
-                    gsound_play_sfx(0, 1);
-                } else if (!mainmenu_ui_is_active()) {
-                    broadcast_ui_open();
-                    gsound_play_sfx(0, 1);
-                }
+            }
+
+            if (handled) {
+                gsound_play_sfx(0, 1);
                 return true;
             }
         }
@@ -3359,7 +3391,10 @@ void intgame_process_event(TigMessage* msg)
             }
             break;
         case TIG_MESSAGE_KEYBOARD:
-            if (textedit_ui_is_focused()
+            // FIX (porting bug #270): the broadcast and centre keys work
+            // when nothing is being typed (0x54e8db call 0x566ef0, 0x54e8e2
+            // jne past them); CE inverted the test.
+            if (!textedit_ui_is_focused()
                 && !msg->data.keyboard.pressed) {
                 switch (msg->data.keyboard.scancode) {
                 case SDL_SCANCODE_F1:
@@ -3803,8 +3838,10 @@ static void intgame_perform_action_on_target_inner(TargetDescriptor* td)
     spell_flags = obj_field_int32_get(pc_obj, OBJ_F_SPELL_FLAGS);
     critter_flags = obj_field_int32_get(pc_obj, OBJ_F_CRITTER_FLAGS);
 
+    // FIX (porting bug #266): either condition stops the action (0x54ede6
+    // and 0x54edf2 each jne out); CE needed both.
     if ((spell_flags & OSF_STONED) != 0
-        && (critter_flags & (OCF_PARALYZED | OCF_STUNNED)) != 0) {
+        || (critter_flags & (OCF_PARALYZED | OCF_STUNNED)) != 0) {
         return;
     }
 
@@ -4369,8 +4406,12 @@ void intgame_hotkey_activate(Hotkey* hotkey)
                 }
             }
 
+            // FIX (porting bug #272): the throw flag and the drag
+            // comparison read the hotkey's own item even after a matching
+            // item replaced it (0x54fe3f-0x54fe54, 0x54ff01-0x54ff0c); CE
+            // read the replacement.
             if (item_check_usable(pc_obj, v2)
-                || (obj_field_int32_get(v2, OBJ_F_ITEM_FLAGS) & OIF_USE_IS_THROW) != 0) {
+                || (obj_field_int32_get(hotkey->item_obj.obj, OBJ_F_ITEM_FLAGS) & OIF_USE_IS_THROW) != 0) {
                 switch (obj_field_int32_get(v2, OBJ_F_TYPE)) {
                 case OBJ_TYPE_WEAPON:
                     intgame_hotkey_equip_item(pc_obj, hotkey, ITEM_INV_LOC_WEAPON);
@@ -4383,7 +4424,7 @@ void intgame_hotkey_activate(Hotkey* hotkey)
                     break;
                 default:
                     v1 = inven_ui_drag_item_obj_get();
-                    if (v1 != v2) {
+                    if (v1 != hotkey->item_obj.obj) {
                         if (v1 != OBJ_HANDLE_NULL) {
                             inven_ui_drop_dragged_item();
                         }
@@ -4645,7 +4686,10 @@ bool intgame_rotwin_button_draw_progress(RotatingWindowType window_type, int pro
     art_blit_info.src_rect = &src_rect;
     art_blit_info.dst_rect = &dst_rect;
 
-    return tig_window_blit_art(intgame_interface_window_handles[iwid], &art_blit_info);
+    // FIX (porting bug #205): true on a successful blit (0x5503F0 returns
+    // `result == 0`); CE returned the error code, true on failure. Every
+    // caller discards it today.
+    return tig_window_blit_art(intgame_interface_window_handles[iwid], &art_blit_info) == TIG_OK;
 }
 
 // 0x5504F0
@@ -4931,8 +4975,11 @@ bool intgame_message_window_write_text(tig_window_handle_t window_handle, char* 
             size_t pos;
             char ch;
 
+            // FIX (porting bug #279): truncation keeps at least one
+            // character (0x550b7f-0x550b85 start at len-1, stop at 0); CE
+            // went on to the empty string.
             pos = strlen(str);
-            while (rc != TIG_OK && pos > 0) {
+            while (rc != TIG_OK && pos > 1) {
                 ch = str[pos - 1];
                 str[pos - 1] = '\0';
                 rc = tig_window_text_write(window_handle, str, &text_rect);
@@ -5646,15 +5693,23 @@ bool intgame_mode_set(IntgameMode mode)
             intgame_unforce_fullscreen();
             break;
         case INTGAME_MODE_LOOT:
-            if (mode == INTGAME_MODE_SPELL || mode == INTGAME_MODE_SKILL) {
-                if (mode != INTGAME_MODE_QUANTITY) {
-                    intgame_unforce_fullscreen();
-                }
-            } else if (mode != INTGAME_MODE_QUANTITY) {
+            // FIX (porting bug #271): leaving loot or steal drops the dragged
+            // item, and loot unforces the full interface whenever it is not
+            // going to the quantity box (0x551c84 and 0x551cb9 set esi, 0x551ca0
+            // reaches 0x551cab past the destroy); CE kept the drag and left
+            // the interface forced after a plain close.
+            v1 = true;
+            if (mode != INTGAME_MODE_SPELL
+                && mode != INTGAME_MODE_SKILL
+                && mode != INTGAME_MODE_QUANTITY) {
                 inven_ui_destroy();
+            }
+            if (mode != INTGAME_MODE_QUANTITY) {
+                intgame_unforce_fullscreen();
             }
             break;
         case INTGAME_MODE_STEAL:
+            v1 = true;
             if (mode != INTGAME_MODE_QUANTITY) {
                 inven_ui_destroy();
                 intgame_unforce_fullscreen();
@@ -5902,7 +5957,13 @@ void intgame_text_edit_refresh_color(const char* str, tig_font_handle_t font, ti
             }
         }
 
-        rect.width = font_desc.width;
+        // FIX (porting bug #202): text wider than the frame that is not
+        // scrolled (`a4 == 0`) is written into the frame's width (0x5521B0
+        // keeps the frame width when the measure reaches it); CE wrote the
+        // measured width, so the text and its cursor ran past the frame.
+        if (font_desc.width < rect.width || a4) {
+            rect.width = font_desc.width;
+        }
 
         tig_window_text_write(window_handle, str, &rect);
         tig_font_pop();
@@ -5990,7 +6051,10 @@ void intgame_clock_refresh(void)
             int v2;
             int idx;
 
-            v2 = ((datetime_seconds_since_reference_date(&datetime) + 43200) / 84600) % 28;
+            // FIX (porting bug #273): days are 86400 seconds (0x552433 the
+            // /86400 reciprocal 0xc22e4507); CE divided by 84600, so the
+            // moon ran about fourteen hours ahead each lunar month.
+            v2 = ((datetime_seconds_since_reference_date(&datetime) + 43200) / 86400) % 28;
 
             for (idx = 0; idx < 8; idx++) {
                 if (v2 <= intgame_moon_phase_days[idx]) {
@@ -6807,7 +6871,10 @@ void intgame_spell_maintain_refresh_func(tig_button_handle_t button_handle, UiBu
         }
     } else if (current_num != slot + 628) {
         if (current_num == slot + 188) {
-            if (tig_art_interface_id_create(slot + 188, 0, 0, 0, &art_id)) {
+            // FIX (porting bug #206): the button takes the slot art and hides
+            // when the art is FOUND (0x553670 `if (iVar1 == 0)`); CE tested the
+            // error code, so a spell ending never re-arted or hid its button.
+            if (tig_art_interface_id_create(slot + 188, 0, 0, 0, &art_id) == TIG_OK) {
                 tig_button_set_art(button_handle, art_id);
                 tig_button_hide(button_handle);
             }
@@ -6934,13 +7001,19 @@ void intgame_hover_on_mouse_move(TigMessage* msg)
         }
     } else {
         if (intgame_examine_obj != OBJ_HANDLE_NULL || object_hover_obj_get() == OBJ_HANDLE_NULL) {
+            // FIX (porting bug #274): a valid examined object is kept, and
+            // clearing an invalid one also clears the hover (0x553bb3
+            // returns; 0x553bb4-0x553bcc); CE cleared the valid one and kept
+            // the hover.
             if (intgame_iso_window_type != ROTWIN_TYPE_CHAT) {
                 if (obj_handle_is_valid(intgame_examine_obj)) {
                     object_hover_obj_set(intgame_examine_obj);
                     object_hover_obj_set(OBJ_HANDLE_NULL);
                     tb_ui_examine_object(player_get_local_pc_obj(), intgame_examine_obj);
+                } else {
+                    intgame_examine_obj = OBJ_HANDLE_NULL;
+                    object_hover_obj_set(OBJ_HANDLE_NULL);
                 }
-                intgame_examine_obj = OBJ_HANDLE_NULL;
             }
         } else {
             if (intgame_iso_window_type != ROTWIN_TYPE_CHAT) {
@@ -7828,7 +7901,10 @@ void intgame_examine_item(int64_t pc_obj, int64_t item_obj, char* str)
                 strcpy(buffer, mes_file_entry.str);
             }
         }
-        if (obj_type == OBJ_TYPE_GENERIC) {
+        // FIX (porting bug #276): the skill-bonus line only fills an empty
+        // effect description (0x55522f-0x555235 jne past it); CE overwrote
+        // the description.
+        if (obj_type == OBJ_TYPE_GENERIC && buffer[0] == '\0') {
             unsigned int flags = obj_field_int32_get(item_obj, OBJ_F_GENERIC_FLAGS);
             if ((flags & OGF_IS_LOCKPICK) != 0) {
                 mes_file_entry.num = 71; // "Bonus to Pick Locks skill"
@@ -7915,11 +7991,14 @@ void intgame_examine_item(int64_t pc_obj, int64_t item_obj, char* str)
         mes_file_entry.num = 19; // "Uses"
         mes_get_msg(intgame_mes_file, &mes_file_entry);
 
+        // FIX (porting bug #277): a positive store prints its count and the
+        // rest print "+" (0x555501 test esi,esi; jle to "%s: +"); CE had the
+        // two swapped.
         if (is_identified) {
             if (value > 0) {
-                snprintf(buffer, sizeof(buffer), "%s: +", mes_file_entry.str);
-            } else {
                 snprintf(buffer, sizeof(buffer), "%s: %d", mes_file_entry.str, value);
+            } else {
+                snprintf(buffer, sizeof(buffer), "%s: +", mes_file_entry.str);
             }
         } else {
             snprintf(buffer, sizeof(buffer), "%s: ??", mes_file_entry.str);
@@ -7931,10 +8010,12 @@ void intgame_examine_item(int64_t pc_obj, int64_t item_obj, char* str)
                 mes_file_entry.num = 19; // "Uses"
                 mes_get_msg(intgame_mes_file, &mes_file_entry);
 
+                // FIX (porting bug #278): uses are the remaining count
+                // (0x55557f push 0xd5); CE printed the skill bonus.
                 snprintf(buffer, sizeof(buffer),
                     "%s: %d",
                     mes_file_entry.str,
-                    obj_field_int32_get(item_obj, OBJ_F_GENERIC_USAGE_BONUS));
+                    obj_field_int32_get(item_obj, OBJ_F_GENERIC_USAGE_COUNT_REMAINING));
             }
             break;
         case OBJ_TYPE_WEAPON: {
@@ -8410,8 +8491,11 @@ void intgame_message_window_display_attack(int64_t obj)
     mes_file_entry.num = 59; // "Fatigue"
     mes_get_msg(intgame_mes_file, &mes_file_entry);
 
+    // FIX (porting bug #275): each damage line shows "0" only when both ends
+    // are 0 (0x5563af and 0x5563b3 each jne to the range); CE tested the
+    // maximum alone.
     item_weapon_damage(weapon_obj, obj, DAMAGE_TYPE_FATIGUE, skill, 0, &min_dam, &max_dam);
-    if (max_dam != 0) {
+    if (min_dam != 0 || max_dam != 0) {
         snprintf(str, sizeof(str),
             "%s: %d-%d",
             mes_file_entry.str,
@@ -8430,7 +8514,7 @@ void intgame_message_window_display_attack(int64_t obj)
     mes_get_msg(intgame_mes_file, &mes_file_entry);
 
     item_weapon_damage(weapon_obj, obj, DAMAGE_TYPE_FIRE, skill, 0, &min_dam, &max_dam);
-    if (max_dam != 0) {
+    if (min_dam != 0 || max_dam != 0) {
         snprintf(str, sizeof(str),
             "%s: %d-%d",
             mes_file_entry.str,
@@ -8449,7 +8533,7 @@ void intgame_message_window_display_attack(int64_t obj)
     mes_get_msg(intgame_mes_file, &mes_file_entry);
 
     item_weapon_damage(weapon_obj, obj, DAMAGE_TYPE_NORMAL, skill, 0, &min_dam, &max_dam);
-    if (max_dam != 0) {
+    if (min_dam != 0 || max_dam != 0) {
         snprintf(str, sizeof(str),
             "%s: %d-%d",
             mes_file_entry.str,
@@ -8468,7 +8552,7 @@ void intgame_message_window_display_attack(int64_t obj)
     mes_get_msg(intgame_mes_file, &mes_file_entry);
 
     item_weapon_damage(weapon_obj, obj, DAMAGE_TYPE_ELECTRICAL, skill, 0, &min_dam, &max_dam);
-    if (max_dam != 0) {
+    if (min_dam != 0 || max_dam != 0) {
         snprintf(str, sizeof(str),
             "%s: %d-%d",
             mes_file_entry.str,
@@ -8487,7 +8571,7 @@ void intgame_message_window_display_attack(int64_t obj)
     mes_get_msg(intgame_mes_file, &mes_file_entry);
 
     item_weapon_damage(weapon_obj, obj, DAMAGE_TYPE_POISON, skill, 0, &min_dam, &max_dam);
-    if (max_dam != 0) {
+    if (min_dam != 0 || max_dam != 0) {
         snprintf(str, sizeof(str),
             "%s: %d-%d",
             mes_file_entry.str,
@@ -8876,6 +8960,10 @@ void intgame_mt_button_disable(void)
 
         if (tig_art_interface_id_create(184, 0, 0, 0, &art_id) != TIG_OK) {
             tig_debug_printf("Intgame: intgame_mt_button_disable: ERROR: Can't find Interface Art: %d!\n", 184);
+            // FIX (porting bug #203): nothing is blitted without the art
+            // (0x556F80 returns after the print); CE went on and blitted the
+            // button's own art over the slot.
+            return;
         }
 
         rect.x = intgame_mt_button_info.x - intgame_interface_window_frames[1].x;
@@ -9291,6 +9379,8 @@ void intgame_toggle_interface(void)
         }
     }
 
+    // CE: a toggle while the main menu hides the interface keeps it hidden
+    // (see mainmenu_ui.c's intgame_hide call); the original has no hide.
     if (tig_window_is_hidden(intgame_iso_window_handle)) {
         intgame_hide();
     }

@@ -330,7 +330,10 @@ void cyclic_ui_control_show(int id, bool visible)
     }
 
     // Skip if visibility state is unchanged.
-    if (visible != ctrl->info.visible) {
+    // FIX (porting bug #213): the test was inverted - the original returns
+    // when the state is the same (0x57F938 `cmp ebx,edx; je` out); CE
+    // returned when it differed, so a change was ignored.
+    if (visible == ctrl->info.visible) {
         return;
     }
 

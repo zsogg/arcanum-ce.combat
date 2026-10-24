@@ -309,7 +309,10 @@ void options_ui_start(OptionsUiTab tab, tig_window_handle_t window_handle, bool 
             meta->getter(&value, &(control_info.enabled));
         } else {
             value = 0;
-            control_info.enabled = false;
+            // FIX (porting bug #204): a control without a getter starts
+            // enabled (0x589280 stores 1 with the zero value); CE disabled
+            // it. No shipped row lacks a getter.
+            control_info.enabled = true;
         }
 
         // Create the control and set its initial value.

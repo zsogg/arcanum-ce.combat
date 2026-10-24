@@ -104,10 +104,10 @@ typedef enum FollowerUiButton {
 #define FOLLOWER_UI_LOW_HP_THRESHOLD 20
 
 /**
- * Poison level at or above which the poisoned health bar art is used instead
- * of the normal one.
+ * Poison level above which the poisoned health bar art is used instead of the
+ * normal one.
  */
-#define FOLLOWER_UI_POISON_LEVEL_THRESHOLD 20
+#define FOLLOWER_UI_POISON_LEVEL_THRESHOLD 0
 
 /**
  * "flare12font.art"
@@ -820,7 +820,10 @@ bool follower_ui_message_filter(TigMessage* msg)
             case TIG_MESSAGE_MOUSE_RIGHT_BUTTON_UP:
                 // Any click outside a command button closes the menu.
                 follower_ui_drop_down_menu_destroy();
-                break;
+                // FIX (porting bug #214): the click that closes the menu is
+                // consumed (0x56AC5D `mov eax,1` after the destroy); CE let it
+                // through to the window underneath.
+                return true;
             default:
                 break;
             }
@@ -854,8 +857,11 @@ bool follower_ui_message_filter(TigMessage* msg)
             }
             return false;
         case TIG_BUTTON_STATE_MOUSE_OUTSIDE:
-            // Clear the message window when the cursor leaves any button.
-            for (index = 0; index < FOLLOWER_UI_BUTTON_COUNT; index++) {
+            // Clear the message window when the cursor leaves a portrait.
+            // FIX (porting bug #214): only the six portrait buttons
+            // (0x56ACBA `cmp eax,0x67BB50`), as the hover branch has it; CE
+            // cleared it for the toggle and scroll buttons too.
+            for (index = 0; index < FOLLOWER_UI_BUTTON_TOGGLE; index++) {
                 if (msg->data.button.button_handle == follower_ui_buttons[index]) {
                     intgame_message_window_clear();
                     object_hover_obj_set(OBJ_HANDLE_NULL);
@@ -1137,6 +1143,9 @@ void follower_ui_update(void)
 
         // Draw health bar.
         hp_percent = 100 * object_hp_current(follower_obj) / object_hp_max(follower_obj);
+        // FIX (porting bug #208): any poison shows the poisoned bar
+        // (0x56B40C `test eax,eax; jle` to the normal art), as the player's
+        // bar has it; CE switched only above 20.
         if (stat_level_get(follower_obj, STAT_POISON_LEVEL) > FOLLOWER_UI_POISON_LEVEL_THRESHOLD) {
             follower_ui_draw(follower_ui_windows[index], FOLLOWER_UI_POISON_BAR_ART, 3, 39, hp_percent, 100);
         } else {

@@ -3268,6 +3268,10 @@ bool charedit_tech_win_message_filter(TigMessage* msg)
             if (msg->data.button.button_handle == charedit_dec_tech_degree_btn) {
                 // TODO: Missing check for accepted level, check.
                 tech_ui_dec_degree(charedit_obj, charedit_selected_tech);
+                // FIX (porting bug #234): the press is consumed (0x55DC2F
+                // `mov eax,1` after tech_ui_dec_degree), as the increment is;
+                // CE passed it on to the windows below.
+                return true;
             }
         }
 
@@ -3990,7 +3994,10 @@ void charedit_error_skill_is_zero(void)
 // 0x55F340
 void charedit_error_skill_at_min(void)
 {
-    if (charedit_created) {
+    // FIX (porting bug #235): the message shows while the editor is open
+    // (0x55F347 `je` past it when it is not), as charedit_error_skill_is_zero
+    // has it; CE had the test inverted.
+    if (!charedit_created) {
         return;
     }
 

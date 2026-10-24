@@ -1084,7 +1084,11 @@ bool written_ui_draw_paragraph(char* str, int font_num, int centered, TigRect* r
                     break;
                 }
 
-                truncate_pos = pos;
+                // FIX (porting bug #201): the page ends just AFTER the space
+                // or newline (0x56C800 stores `pos + 1`), so the next page
+                // starts on the word, not on the separator. CE stored the
+                // separator's own position: a leading space or blank line.
+                truncate_pos = pos + 1;
             }
         }
 

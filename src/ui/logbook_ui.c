@@ -1034,7 +1034,10 @@ int logbook_ui_draw_page_spread(int start_entry, int max_entry)
     while (entry_idx != step + max_entry) {
         entry_height = logbook_ui_draw_entry(entry_idx, &page_rect, dry_run, is_first_on_page);
         is_first_on_page = false;
-        if (entry_height > 0 && entry_height <= page_rect.height) {
+        // FIX (porting bug #220): an entry exactly as tall as the space left
+        // goes to the next page (0x53F8F0 `local_4 <= iVar3` is the no-fit
+        // test); CE kept it on this one.
+        if (entry_height > 0 && entry_height < page_rect.height) {
             // Entry fits, consume vertical space and move to the next entry.
             page_rect.y += entry_height;
             page_rect.height -= entry_height;
@@ -1288,7 +1291,10 @@ void logbook_ui_load_data(void)
         curse_idx = 0;
         for (idx = 0; idx < logbook_ui_entry_count; idx++) {
             if (bless_idx < num_blessings
-                && (curse_idx == num_curses || datetime_compare(&(blessings[bless_idx].datetime), &(curses[curse_idx].datetime)))) {
+                // FIX (porting bug #217): the blessing goes first when it is
+                // not later than the curse (0x53FBB0 `datetime_compare(...) < 1`);
+                // CE took any non-zero comparison, so the later one went first.
+                && (curse_idx == num_curses || datetime_compare(&(blessings[bless_idx].datetime), &(curses[curse_idx].datetime)) <= 0)) {
                 logbook_ui_entry_ids[idx] = blessings[bless_idx].id;
                 logbook_ui_entry_datetimes[idx] = blessings[bless_idx].datetime;
                 logbook_ui_entry_fonts[idx] = logbook_ui_font_active;
@@ -1358,8 +1364,13 @@ void logbook_ui_load_data(void)
             }
         }
 
+        // FIX (porting bug #218): the two arm scans share one index, the
+        // second starting below the first's match (0x54007F and 0x5400A8 both
+        // `dec ecx` on it), so two crippled arms leave two arm entries
+        // unstruck; CE restarted the second scan and found the same entry.
+        index = logbook_ui_entry_count;
         if ((flags & OCF_CRIPPLED_ARMS_BOTH) != 0) {
-            for (index = logbook_ui_entry_count - 1; index >= 9; index--) {
+            for (index = index - 1; index >= 9; index--) {
                 if (logbook_ui_entry_datetimes[index].milliseconds == LBI_CRIPPLED_ARM) {
                     logbook_ui_entry_fonts[index] = logbook_ui_font_default;
                     break;
@@ -1368,7 +1379,7 @@ void logbook_ui_load_data(void)
         }
 
         if ((flags & OCF_CRIPPLED_ARMS_ONE) != 0) {
-            for (index = logbook_ui_entry_count - 1; index >= 9; index--) {
+            for (index = index - 1; index >= 9; index--) {
                 if (logbook_ui_entry_datetimes[index].milliseconds == LBI_CRIPPLED_ARM) {
                     logbook_ui_entry_fonts[index] = logbook_ui_font_default;
                     break;
@@ -1377,14 +1388,18 @@ void logbook_ui_load_data(void)
         }
 
         // Special case - scarring is also in the logbook ego array, but it is
-        // managed as effect, rather than being stored in the flags. Actual
-        // count of scarring effects does not matter.
+        // managed as effect, rather than being stored in the flags.
+        // FIX (porting bug #219): one scar entry is unstruck per scarring
+        // effect (0x53FBB0's loop decrements the count on each match and stops
+        // at 0); CE unstruck only the latest.
         cnt = effect_count_effects_of_type(logbook_ui_obj, EFFECT_SCARRING);
         if (cnt > 0) {
             for (index = logbook_ui_entry_count - 1; index >= 9; index--) {
                 if (logbook_ui_entry_datetimes[index].milliseconds == LBI_SCARRED) {
                     logbook_ui_entry_fonts[index] = logbook_ui_font_default;
-                    break;
+                    if (--cnt == 0) {
+                        break;
+                    }
                 }
             }
         }

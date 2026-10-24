@@ -1400,6 +1400,9 @@ bool wmap_load_worldmap_info(void)
         wmap_ui_mode_info[WMAP_UI_MODE_WORLD].map_width = wmap_ui_mode_info[WMAP_UI_MODE_WORLD].tile_width * wmap_ui_mode_info[WMAP_UI_MODE_WORLD].num_hor_tiles;
         wmap_ui_mode_info[WMAP_UI_MODE_WORLD].map_height = wmap_ui_mode_info[WMAP_UI_MODE_WORLD].tile_height * wmap_ui_mode_info[WMAP_UI_MODE_WORLD].num_vert_tiles;
         wmap_ui_mode_info[WMAP_UI_MODE_WORLD].str[0] = '\0';
+        // FIX (porting bug #241): the fallback also clears the keyed map
+        // (0x560E18); CE left the previous module's.
+        wmap_ui_map_keyed_to = 0;
     }
 
     for (idx = 0; idx < WMAP_UI_MODE_COUNT; idx++) {
@@ -2099,7 +2102,11 @@ bool wmap_ui_message_filter(TigMessage* msg)
 
                     return true;
                 case WMAP_UI_STATE_1:
-                    if (wmap_info) {
+                    // FIX (porting bug #239): only with the pointer inside the
+                    // map (0x562018 `test ebx,ebx` on the inside flag); CE
+                    // tested wmap_info, always set, so a drag that left the
+                    // map kept scrolling it.
+                    if (inside) {
                         wmap_ui_edge_scroll(msg->data.mouse.x, msg->data.mouse.y);
                         if (wmap_ui_can_travel_to_coords(&wmap_ui_mouse_coords)) {
                             wmap_ui_waypoint_update_hook(wmap_ui_selected_waypoint, &wmap_ui_mouse_coords);
@@ -2332,8 +2339,12 @@ bool wmap_ui_message_filter(TigMessage* msg)
                 return false;
             }
 
+            // FIX (porting bug #237): Z does nothing while travelling
+            // (0x562565 `je` to `return 1`), and from the continent with a
+            // town map open it switches to the town map (0x56258A to
+            // `push 2` at 0x5621AB); CE had the town switch on the travel
+            // test and none on the continent.
             if (wmap_ui_state == WMAP_UI_STATE_MOVING) {
-                wmap_ui_mode_set(WMAP_UI_MODE_TOWN);
                 return true;
             }
 
@@ -2349,6 +2360,7 @@ bool wmap_ui_message_filter(TigMessage* msg)
                 return true;
             }
 
+            wmap_ui_mode_set(WMAP_UI_MODE_TOWN);
             return true;
         case SDL_SCANCODE_HOME:
             if (wmap_ui_state != WMAP_UI_STATE_MOVING) {
@@ -2385,7 +2397,30 @@ bool wmap_ui_message_filter(TigMessage* msg)
                 return false;
             }
 
-            // TODO: Incomplete.
+            // FIX (porting bug #238): Delete removes the selected waypoint, or
+            // the last when none is selected, as the right button does
+            // (0x562682-0x5626C8, wmap_ui_remove_waypoint at 0x5626C8, then
+            // 0x5626F7 ends a move); CE left it a TODO that did nothing.
+            {
+                WmapRouteType route_type = wmap_ui_mode == WMAP_UI_MODE_TOWN
+                    ? WMAP_ROUTE_TYPE_TOWN
+                    : WMAP_ROUTE_TYPE_WORLD;
+                if (wmap_ui_selected_waypoint == -1) {
+                    wmap_ui_selected_waypoint = wmap_ui_routes[route_type].length - 1;
+                }
+
+                if (wmap_ui_selected_waypoint >= 0) {
+                    wmap_ui_remove_waypoint(wmap_ui_selected_waypoint);
+                    if (wmap_ui_selected_waypoint >= wmap_ui_routes[route_type].length) {
+                        wmap_ui_selected_waypoint = wmap_ui_routes[route_type].length - 1;
+                    }
+                }
+            }
+
+            if (wmap_ui_state == WMAP_UI_STATE_MOVING) {
+                wmap_ui_state_set(WMAP_UI_STATE_NORMAL);
+            }
+
             return true;
         case SDL_SCANCODE_D:
             if (!msg->data.keyboard.pressed
@@ -2909,8 +2944,11 @@ void wmap_town_scroll(int direction, int a2, int a3, int a4)
     case 3:
         dx = -a4;
         dy = -a4;
-        one.height = wmap_ui_nav_cvr_frame.height + a4;
+        // FIX (porting bug #243): the strip is the bottom one - y comes from
+        // the full height before it is cut (0x5633F7-0x563421, as case 5); CE
+        // cut it first and got the top. Cases 3 and 4; no caller today.
         one.y = one.height + three.y - (a4 + wmap_ui_nav_cvr_frame.height);
+        one.height = wmap_ui_nav_cvr_frame.height + a4;
         two.width = 0;
         three.x += three.width - a4;
         three.width = a4;
@@ -2919,8 +2957,8 @@ void wmap_town_scroll(int direction, int a2, int a3, int a4)
     case 4:
         dx = 0;
         dy = -a4;
-        one.height = wmap_ui_nav_cvr_frame.height + a4;
         one.y = one.height + three.y - (wmap_ui_nav_cvr_frame.height + a4);
+        one.height = wmap_ui_nav_cvr_frame.height + a4;
         two.width = 0;
         three.width = 0;
         break;
@@ -2950,6 +2988,10 @@ void wmap_town_scroll(int direction, int a2, int a3, int a4)
         three.width = dy;
         three.height -= dy;
         break;
+    default:
+        // FIX (porting bug #243): an unknown direction scrolls nothing
+        // (0x56354C returns after its print); CE scrolled by garbage.
+        return;
     }
 
     tig_window_scroll_rect(wmap_ui_window, &(wmap_info->rect), dx, dy);
@@ -2988,7 +3030,10 @@ void wmap_ui_set_scroll_origin(WmapCoords* coords, bool a2)
     v2 = coords->y - wmap_info->field_28;
     if (v2 < 0) {
         v2 = 0;
-    } else if (v2 > wmap_info->field_24 + wmap_info->field_30) {
+        // FIX (porting bug #200): the y bound is the y origin plus the y extent
+        // (0x563590 adds +0x28 and +0x30), as the x branch adds +0x24 and
+        // +0x2C; CE added the x origin to the y extent.
+    } else if (v2 > wmap_info->field_28 + wmap_info->field_30) {
         v2 = wmap_info->field_30;
     }
 
@@ -3706,6 +3751,13 @@ bool wmap_ui_add_waypoint(WmapCoords* coords)
         path_info.from = sector_id_from_loc(from);
 
         wmap_ui_coords_to_loc(coords, &to);
+        // FIX (porting bug #240): the waypoint snaps to a known area close
+        // by before the path is planned (0x5644BA calls the snap, 0x5644BF
+        // re-reads the location); the clicked coordinates are still the ones
+        // stored. CE never snapped a new world waypoint.
+        wp->loc = to;
+        wmap_ui_snap_waypoint_to_area(wp);
+        to = wp->loc;
         path_info.to = sector_id_from_loc(to);
         path_info.max_rotations = 5000 - start;
         path_info.rotations = &(byte_64E828[start]);
@@ -3757,10 +3809,13 @@ bool wmap_ui_waypoint_at_coords(WmapCoords* coords, int* idx_ptr)
     dy = wmap_ui_note_height / 2 + 5;
 
     for (idx = wmap_ui_routes[route_type].length - 1; idx >= 0; idx--) {
+        // FIX (porting bug #242): the right and bottom edges are exclusive
+        // (0x5647EB `jge` miss, 0x564802 `jl` hit); CE's hit box was a pixel
+        // wider and taller.
         if (coords->x >= wmap_ui_routes[route_type].waypoints[idx].coords.x - dx
-            && coords->x <= wmap_ui_routes[route_type].waypoints[idx].coords.x + dx
+            && coords->x < wmap_ui_routes[route_type].waypoints[idx].coords.x + dx
             && coords->y >= wmap_ui_routes[route_type].waypoints[idx].coords.y - dy
-            && coords->y <= wmap_ui_routes[route_type].waypoints[idx].coords.y + dy) {
+            && coords->y < wmap_ui_routes[route_type].waypoints[idx].coords.y + dy) {
             *idx_ptr = idx;
             return true;
         }
@@ -4258,6 +4313,10 @@ void wmap_continent_refresh(void)
 
     for (idx = 0; idx < *wmap_ui_mode_info[WMAP_UI_MODE_WORLD].num_notes; idx++) {
         note = &(wmap_ui_mode_info[WMAP_UI_MODE_WORLD].notes[idx]);
+        // FIX: the original tests the type table by the NOTE's index (0x565387
+        // `cmp [ebx],1`, ebx stepping 0x18 per note from 0x5C9174), which reads
+        // past the 8-entry table from the ninth note on; CE tests the note's
+        // own type.
         if (wmap_note_type_info[note->type].enabled) {
             tmp_rect.x = vb_dst_rect.x + note->coords.x;
             tmp_rect.y = vb_dst_rect.y + note->coords.y + wmap_ui_window_frame.y;
@@ -4273,8 +4332,11 @@ void wmap_continent_refresh(void)
     area = area_get_last_known_area(player_get_local_pc_obj());
     if (area != AREA_UNKNOWN) {
         wmap_ui_loc_to_coords(area_get_location(area), &coords);
-        tmp_rect.x = vb_dst_rect.x + note->coords.x;
-        tmp_rect.y = vb_dst_rect.y + note->coords.y + wmap_ui_window_frame.y;
+        // FIX (porting bug #244): the marker is placed at the area's own
+        // coordinates, just computed (0x565480, then 0x565489-0x5654A8 read
+        // them); CE used the last note's, stale - or unset with no notes.
+        tmp_rect.x = vb_dst_rect.x + coords.x;
+        tmp_rect.y = vb_dst_rect.y + coords.y + wmap_ui_window_frame.y;
         wmap_continent_scale_coords(tmp_rect.x, tmp_rect.y, &coords);
         tmp_rect.x = vb_dst_rect.x + coords.x - 1;
         tmp_rect.y = vb_dst_rect.y + coords.y - 1;
@@ -4377,9 +4439,14 @@ void wmap_world_refresh_rect(TigRect* rect)
         rect = &(wmap_info->rect);
     }
 
-    tmp_rect = *rect;
+    // FIX (porting bug #246): tiles and notes are placed relative to the
+    // whole map rect and only the fill and the overlays are clipped to the
+    // refreshed one (0x5657c8-0x5657f4 copies 0x5c922c, the fill takes
+    // param_1); CE offset everything by the refreshed rect's origin. Latent:
+    // the world and continent maps refresh the whole rect.
+    tmp_rect = wmap_info->rect;
 
-    tig_window_fill(wmap_ui_window, &tmp_rect, tig_color_make(0, 0, 0));
+    tig_window_fill(wmap_ui_window, rect, tig_color_make(0, 0, 0));
 
     if (wmap_info->field_68[0] == '\0') {
         return;
@@ -4677,27 +4744,36 @@ void wmap_note_background_blit(TigVideoBuffer* video_buffer, TigRect* rect)
             idx = col + wmap_ui_mode_info[WMAP_UI_MODE_WORLD].num_hor_tiles * row;
             entry = &(wmap_ui_mode_info[WMAP_UI_MODE_WORLD].tiles[idx]);
 
-            src_rect.x = bounds.x + src_rect.width * min_x - offset_x;
-            src_rect.y = bounds.y + src_rect.height * min_y - offset_y;
+            // FIX (porting bug #245): each tile is placed at its own column
+            // and row, sized by its own rect, and the first tile outside the
+            // bounds ends the row (0x566032-0x56606c, 0x566081 jne
+            // 0x5660f7); CE placed every tile at the first one's position
+            // with the 5x5 initial size.
+            src_rect.width = entry->rect.width;
+            src_rect.height = entry->rect.height;
+            src_rect.x = bounds.x + src_rect.width * col - offset_x;
+            src_rect.y = bounds.y + src_rect.height * row - offset_y;
 
-            if (tig_rect_intersection(&src_rect, &bounds, &dst_rect) == TIG_OK) {
-                src_rect.x = dst_rect.x - src_rect.x;
-                src_rect.y = dst_rect.y - src_rect.y;
-                src_rect.width = dst_rect.width;
-                src_rect.height = dst_rect.height;
+            if (tig_rect_intersection(&src_rect, &bounds, &dst_rect) != TIG_OK) {
+                break;
+            }
 
-                if (wmTileArtLock(idx)) {
-                    dst_rect.x = 0;
-                    dst_rect.y = 0;
-                    vb_blit_info.src_video_buffer = entry->video_buffer;
+            src_rect.x = dst_rect.x - src_rect.x;
+            src_rect.y = dst_rect.y - src_rect.y;
+            src_rect.width = dst_rect.width;
+            src_rect.height = dst_rect.height;
 
-                    if (tig_video_buffer_blit(&vb_blit_info) != TIG_OK) {
-                        tig_debug_printf("WMapUI: Zoomed Blit: ERROR: Blit FAILED!\n");
-                        return;
-                    }
+            if (wmTileArtLock(idx)) {
+                dst_rect.x = 0;
+                dst_rect.y = 0;
+                vb_blit_info.src_video_buffer = entry->video_buffer;
 
-                    wmTileArtUnlock(idx);
+                if (tig_video_buffer_blit(&vb_blit_info) != TIG_OK) {
+                    tig_debug_printf("WMapUI: Zoomed Blit: ERROR: Blit FAILED!\n");
+                    return;
                 }
+
+                wmTileArtUnlock(idx);
             }
         }
     }

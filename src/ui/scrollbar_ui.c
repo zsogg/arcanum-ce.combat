@@ -493,10 +493,13 @@ void scrollbar_ui_control_draw(int index, int dy)
     art_blit_info.src_rect = &scrollbar_ui_thumb_middle_src_rect;
     art_blit_info.dst_rect = &dst_rect;
 
+    // FIX (porting bug #227): one 1-pixel row per step (0x580995 `fsub 1.0`
+    // against the 7.0 at 0x5809AF); CE stepped by 7, so the thumb was drawn
+    // about a seventh of its height.
     while (thumb_height > 7.0f) {
         tig_window_blit_art(ctrl->window_handle, &art_blit_info);
         dst_rect.y++;
-        thumb_height -= 7.0f;
+        thumb_height -= 1.0f;
     }
 
     // Draw bottom cap.
@@ -611,7 +614,11 @@ bool scrollbar_ui_process_event(TigMessage* msg)
         case TIG_MESSAGE_MOUSE_LEFT_BUTTON_UP:
             if (scrollbar_ui_dragging_index != -1) {
                 // Commit the accumulated delta to the stored value.
-                if (scrollbar_ui_is_value_in_range(scrollbar_ui_dragging_index, scrollbar_ui_controls[scrollbar_ui_dragging_index].info.value) + scrollbar_ui_drag_delta) {
+                // FIX (porting bug #224): the value tested is value + delta
+                // (0x580E17 `add eax,ebx` before the call at 0x580E1B); CE's
+                // parenthesis added the delta to the test's result, so a
+                // one-line drag up was dropped and an overshoot was committed.
+                if (scrollbar_ui_is_value_in_range(scrollbar_ui_dragging_index, scrollbar_ui_controls[scrollbar_ui_dragging_index].info.value + scrollbar_ui_drag_delta)) {
                     scrollbar_ui_controls[scrollbar_ui_dragging_index].info.value += scrollbar_ui_drag_delta;
                 }
 
@@ -717,7 +724,10 @@ bool scrollbar_ui_process_event(TigMessage* msg)
                         scrollbar_ui_control_redraw(ctrl->id);
                         return true;
                     }
-                    return false;
+                    // FIX (porting bug #225): a wheel event over the control
+                    // is consumed even with no vertical motion (0x58106A
+                    // `jge` to `mov eax,1` at 0x5810C3); CE passed it on.
+                    return true;
                 }
             }
             return false;
@@ -852,7 +862,9 @@ void scrollbar_ui_end_ignore_events(void)
  */
 void scrollbar_ui_control_reset(ScrollbarUiControl* ctrl)
 {
-    ctrl->id.index = -1;
+    // FIX (porting bug #223): both halves of the id are reset (0x5811D3
+    // global_index, 0x5811D6 index); CE reset the index twice.
+    ctrl->id.global_index = -1;
     ctrl->id.index = -1;
     ctrl->flags = 0;
     memset(&(ctrl->info), 0, sizeof(ctrl->info));
@@ -945,8 +957,6 @@ bool scrollbar_ui_control_alloc(ScrollbarId* id)
  */
 bool scrollbar_ui_control_get(const ScrollbarId* id, ScrollbarUiControl** ctrl_ptr)
 {
-    int index;
-
     // Quick lookup using index.
     if (id->index >= 0 && id->index < MAX_CONTROLS
         && scrollbar_ui_controls[id->index].id.global_index == id->global_index
@@ -955,15 +965,11 @@ bool scrollbar_ui_control_get(const ScrollbarId* id, ScrollbarUiControl** ctrl_p
         return true;
     }
 
-    // "Slow" linear scan over all slots.
-    for (index = 0; index < MAX_CONTROLS; index++) {
-        if (scrollbar_ui_controls[index].id.global_index == id->global_index
-            && (scrollbar_ui_controls[id->index].flags & SB_IN_USE) != 0) {
-            *ctrl_ptr = &(scrollbar_ui_controls[id->index]);
-            return true;
-        }
-    }
-
+    // FIX (porting bug #228): the original's "slow scan" re-tests the same
+    // slot eight times (0x581326-0x58133B index only `id->index`), so it
+    // fails whenever the quick lookup did. CE scanned every slot and, on
+    // finding the global index elsewhere, returned the `id->index` slot - a
+    // different control.
     return false;
 }
 
@@ -1005,7 +1011,10 @@ bool scrollbar_ui_hit_test_track_above_thumb(int index, int x, int y)
 
     return x - window_data.rect.x >= ctrl->info.scrollbar_rect.x
         && x - window_data.rect.x <= ctrl->info.scrollbar_rect.x + ctrl->info.scrollbar_rect.width
-        && y - window_data.rect.y >= ctrl->info.content_rect.y + scrollbar_ui_button_up_height
+        // FIX (porting bug #226): the track starts below the up button of
+        // the SCROLLBAR rect (0x58142A reads +0x14, scrollbar_rect.y); CE
+        // read the content rect, which is zero without info flag 2.
+        && y - window_data.rect.y >= ctrl->info.scrollbar_rect.y + scrollbar_ui_button_up_height
         && y - window_data.rect.y <= scrollbar_ui_get_thumb_top(index);
 }
 
@@ -1028,7 +1037,10 @@ bool scrollbar_ui_hit_test_track_below_thumb(int index, int x, int y)
     return x - window_data.rect.x >= ctrl->info.scrollbar_rect.x
         && x - window_data.rect.x <= ctrl->info.scrollbar_rect.x + ctrl->info.scrollbar_rect.width
         && y - window_data.rect.y >= scrollbar_ui_get_thumb_bottom(index)
-        && y - window_data.rect.y <= ctrl->info.content_rect.y + ctrl->info.content_rect.height - scrollbar_ui_button_down_height;
+        // FIX (porting bug #226): as above, the scrollbar rect (0x5814B7
+        // +0x1C height, 0x5814BA +0x14 y); with a zero content rect CE's
+        // page-down zone was empty.
+        && y - window_data.rect.y <= ctrl->info.scrollbar_rect.y + ctrl->info.scrollbar_rect.height - scrollbar_ui_button_down_height;
 }
 
 /**

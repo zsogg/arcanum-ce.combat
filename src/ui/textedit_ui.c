@@ -320,7 +320,9 @@ void textedit_ui_clear(void)
 
     if (textedit_ui_current_textedit != NULL) {
         *textedit_ui_current_textedit->buffer = '\0';
-        if (textedit_ui_current_textedit != NULL) {
+        // FIX (porting bug #236): the callback is tested, not the control a
+        // second time (0x5672C2 `cmp [ecx+0x10],0; je`); CE called a null on_change.
+        if (textedit_ui_current_textedit->on_change != NULL) {
             textedit_ui_current_textedit->on_change(textedit_ui_current_textedit);
         }
     }
@@ -335,7 +337,9 @@ void textedit_ui_restore(void)
 {
     if (textedit_ui_current_textedit != NULL) {
         strcpy(textedit_ui_current_textedit->buffer, textedit_ui_backup);
-        if (textedit_ui_current_textedit != NULL) {
+        // FIX (porting bug #236): the callback is tested, not the control a
+        // second time (0x567307 `cmp [ecx+0x10],0; je`); CE called a null on_change.
+        if (textedit_ui_current_textedit->on_change != NULL) {
             textedit_ui_current_textedit->on_change(textedit_ui_current_textedit);
         }
     }

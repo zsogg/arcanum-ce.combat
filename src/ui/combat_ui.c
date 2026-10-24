@@ -151,7 +151,10 @@ bool combat_ui_init(GameInitInfo* init_info)
     }
 
     combat_ui_ap_bar_loading_indicator_frame.x = window_data.rect.x + window_data.rect.width - art_frame_data.width - 2;
-    combat_ui_ap_bar_loading_indicator_frame.y = window_data.rect.y + art_frame_data.height + 2;
+    // FIX (porting bug #209): four below the bar art, as combat_ui_resize
+    // has it (0x56EB3E `lea esi,[eax+2]`, 0x56EB7A `lea edx,[ecx+esi+2]`);
+    // CE added two, so the indicator sat 2 px high until the first resize.
+    combat_ui_ap_bar_loading_indicator_frame.y = window_data.rect.y + art_frame_data.height + 4;
 
     tig_art_interface_id_create(601, 0, 0, 0, &combat_ui_ap_bar_loading_indicator_art_id);
 
@@ -818,7 +821,10 @@ void combat_ui_refresh(void)
             tig_window_blit_art(combat_ui_ap_bar_window_handle, &blit_info);
         }
 
-        if (tig_art_frame_data(art_id, &art_frame_data)) {
+        // FIX (porting bug #210): the knobs are drawn when the frame data IS
+        // found (0x56F740 `test eax,eax; jne` past the blits); CE tested the
+        // error code, so the full interface never animated an NPC's turn.
+        if (tig_art_frame_data(art_id, &art_frame_data) == TIG_OK) {
             src_rect.x = 0;
             src_rect.y = 0;
             src_rect.width = art_frame_data.width;
