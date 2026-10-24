@@ -2298,6 +2298,9 @@ bool mainmenu_ui_handle(void)
                 gamelib_redraw();
                 break;
             case TIG_MESSAGE_KEYBOARD:
+                // CE: Escape closes a main-menu screen other than the main
+                // menu itself; the original's loop handles only quit and
+                // redraw (0x541590).
                 if (!msg.data.keyboard.pressed
                     && msg.data.keyboard.scancode == SDL_SCANCODE_ESCAPE
                     && mainmenu_ui_window_type != MM_WINDOW_MAINMENU) {

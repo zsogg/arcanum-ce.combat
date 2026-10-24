@@ -64,7 +64,10 @@ void highres_config_reset(void)
     highres_config.height = 600;
     highres_config.windowed = false;
     highres_config.show_fps = false;
-    highres_config.scroll_fps = 35;
+    // FIX (porting bug #325): without `-scrollfps:` the original scrolls at
+    // 60 (0x401392 pushes 0x3C to scroll_fps_set); CE's default was 35, so an
+    // install without HighRes/config.ini scrolled more slowly.
+    highres_config.scroll_fps = 60;
     highres_config.scroll_dist = 10;
     highres_config.preload_limit = 30;
     highres_config.broadcast_limit = 10;

@@ -686,11 +686,13 @@ int area_get_nearest_known_area(int64_t loc, int64_t pc_obj, int64_t range)
     return nearest_area;
 }
 
-/**
- * NOTE: Original code is different.
- *
- * 0x4CB4D0
- */
+// FIX: CE takes the nearest area whose own radius holds `loc`. The original
+// takes the first such area in list order (0x4cb4ee-0x4cb552), then any later
+// area nearer than it and inside the current choice's radius, whether or not
+// its own radius holds `loc` (0x4cb574-0x4cb5f4), so the Teleport Exit spell
+// (its only caller, on the start map) could pick an area the caster is not in.
+//
+// 0x4CB4D0
 int area_get_nearest_area_in_range(int64_t loc, bool safe)
 {
     int area;

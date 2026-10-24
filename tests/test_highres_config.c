@@ -107,7 +107,7 @@ TEST(defaults_apply_when_there_is_no_config_file)
     CHECK_INT(cfg->height, 600);
     CHECK(!cfg->windowed);
     CHECK(!cfg->show_fps);
-    CHECK_INT(cfg->scroll_fps, 35);
+    CHECK_INT(cfg->scroll_fps, 60);
     CHECK_INT(cfg->scroll_dist, 10);
     CHECK_INT(cfg->preload_limit, 30);
     CHECK_INT(cfg->broadcast_limit, 10);
@@ -208,7 +208,7 @@ TEST(out_of_range_values_are_ignored_not_clamped)
     cfg = highres_config_get();
     CHECK_INT(cfg->width, 800);
     CHECK_INT(cfg->height, 600);
-    CHECK_INT(cfg->scroll_fps, 35);
+    CHECK_INT(cfg->scroll_fps, 60);
     CHECK_INT(cfg->scroll_dist, 10);
     CHECK_INT(cfg->preload_limit, 30);
     CHECK_INT(cfg->broadcast_limit, 10);

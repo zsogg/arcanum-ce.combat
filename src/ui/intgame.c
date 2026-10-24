@@ -9295,6 +9295,11 @@ bool intgame_create_iso_window(tig_window_handle_t* window_handle_ptr)
     TigWindowData window_data;
 
     window_data.flags = intgame_iso_window_flags | TIG_WINDOW_ALWAYS_ON_BOTTOM | TIG_WINDOW_VIDEO_MEMORY;
+    // CE: The iso window always covers the whole screen, under the interface
+    // bars. The original gives the full interface only the strip between them
+    // (y 41, height 400: 0x557838, 0x557840) and the compact one the whole
+    // screen, and intgame_toggle_interface switches the rect (0x55798c,
+    // 0x557a1e); larger resolutions and the compact layout rely on CE's.
     window_data.rect.x = 0;
     window_data.rect.y = 0;
     window_data.rect.width = intgame_iso_window_width;

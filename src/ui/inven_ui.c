@@ -1627,6 +1627,11 @@ static inline bool inven_ui_message_filter_handle_mouse_lbutton_down(int x, int 
     return false;
 }
 
+// NOTE: Never called. In the original 0x5747E4 is not a function but the
+// accept-drop block of the button-up handler, reached by the jne at 0x574615;
+// `..._lbutton_up` carries that block inline, so this copy only keeps the
+// address in the map.
+//
 // 0x5747E4
 static inline bool inven_ui_message_filter_handle_mouse_lbutton_up_accept_drop(TigMessage* msg, bool* v45)
 {
