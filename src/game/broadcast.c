@@ -342,9 +342,14 @@ void broadcast_msg_client(int64_t pc_obj, Broadcast* bcast)
                     break;
                 case BROADCAST_CMD_TYPE_ATTACK:
                     target_obj = object_hover_obj_get();
+                    // FIX (porting bug #299): outside combat a follower will
+                    // not attack one of the player's own party
+                    // (0x4c37aa-0x4c37b8 compare the target's leader with the
+                    // PC); CE compared it with the follower, which is never a
+                    // leader, so the order was always carried out.
                     if (target_obj != OBJ_HANDLE_NULL
                         && (combat_critter_is_combat_mode_active(pc_obj)
-                            || critter_pc_leader_get(target_obj) != candidate_obj)) {
+                            || critter_pc_leader_get(target_obj) != pc_obj)) {
                         ai_allow_attacking(candidate_obj);
                         ai_attack(candidate_obj, target_obj, LOUDNESS_LOUD, 0x4);
                     }

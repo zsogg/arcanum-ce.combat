@@ -916,7 +916,10 @@ TextFloaterEntry* tf_entry_create(void)
     entry->next = NULL;
 
     // Create a video buffer.
-    vb_create_info.flags = TIG_VIDEO_BUFFER_CREATE_COLOR_KEY | TIG_VIDEO_BUFFER_CREATE_VIDEO_MEMORY;
+    // FIX (porting bug #294): the floater's buffer is in system memory
+    // (0x4d599a stores 5); CE asked for video memory. No effect today: CE's
+    // tig keeps every buffer in system memory.
+    vb_create_info.flags = TIG_VIDEO_BUFFER_CREATE_COLOR_KEY | TIG_VIDEO_BUFFER_CREATE_SYSTEM_MEMORY;
     vb_create_info.width = TEXT_FLOATER_WIDTH;
     vb_create_info.height = tf_line_height;
     vb_create_info.background_color = tf_background_color;

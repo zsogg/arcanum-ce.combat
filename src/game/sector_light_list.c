@@ -144,6 +144,11 @@ bool sector_light_list_load(SectorLightList* list, TigFile* stream, int64_t sect
             // tile id.
             loc = LOCATION_MAKE(TILE_X(sec) + x, TILE_Y(sec) + y);
             light_set_location(light, loc);
+            // FIX (porting bug #289): the rebased light is not a change
+            // (0x4f73cc call 0x4d94c0 after the move at 0x4f73c2); CE kept
+            // light_set_location's modified flag, so every light of a
+            // terrain sector was saved again as a dif record.
+            light_clear_modified(light);
         }
 
         if (!sector_light_list_add(list, light)) {

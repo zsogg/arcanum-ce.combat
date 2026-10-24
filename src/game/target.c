@@ -319,9 +319,14 @@ bool target_pick(int x, int y, TargetDescriptor* td)
         }
     }
 
+    // FIX (porting bug #306): the dead critters walked are the vicinity's
+    // (0x4f29ab and 0x4f2bd6 read that list), and each list is destroyed
+    // after its flags are restored (0x4f2b7a, 0x4f2bb9, 0x4f2c0f); CE walked
+    // the multiplayer party list, empty in single player, so corpses were
+    // never click-through, and leaked all three lists' nodes.
     if ((stru_603D20.tgt & TGT_OBJ_NO_ST_CRITTER_DEAD) != 0) {
         object_list_vicinity(pc_obj, OBJ_TM_PC | OBJ_TM_NPC, &dead_critters);
-        node = mp_party_members.head;
+        node = dead_critters.head;
         while (node != NULL) {
             if (critter_is_dead(node->obj)) {
                 object_flags_set(node->obj, OF_CLICK_THROUGH);
@@ -373,6 +378,7 @@ bool target_pick(int x, int y, TargetDescriptor* td)
             object_flags_unset(node->obj, OF_CLICK_THROUGH);
             node = node->next;
         }
+        object_list_destroy(&party_members);
 
         if (tig_net_is_host()) {
             node = mp_party_members.head;
@@ -380,17 +386,19 @@ bool target_pick(int x, int y, TargetDescriptor* td)
                 object_flags_unset(node->obj, OF_CLICK_THROUGH);
                 node = node->next;
             }
+            object_list_destroy(&mp_party_members);
         }
     }
 
     if ((stru_603D20.tgt & TGT_OBJ_NO_ST_CRITTER_DEAD) != 0) {
-        node = mp_party_members.head;
+        node = dead_critters.head;
         while (node != NULL) {
             if (critter_is_dead(node->obj)) {
                 object_flags_unset(node->obj, OF_CLICK_THROUGH);
             }
             node = node->next;
         }
+        object_list_destroy(&dead_critters);
     }
 
     if (!ret) {
@@ -838,9 +846,13 @@ bool target_context_evaluate(TargetContext* ctx)
                     return false;
                 }
             } else if ((tgt & TGT_OBJ_NO_DAMAGED) != 0) {
+                // FIX (porting bug #307): damaged means hurt or, for a critter,
+                // injured (0x4f37db jg rejects any damage, 0x4f3800 tests
+                // 0x780 on critters); CE required damage and then a non-critter
+                // or an injury. No shipped spell uses this flag.
                 if (object_hp_damage_get(ctx->target_obj) > 0
-                    && (!obj_type_is_critter(obj_type)
-                        || (obj_field_int32_get(ctx->target_obj, OBJ_F_CRITTER_FLAGS) & OCF_INJURED) != 0)) {
+                    || (obj_type_is_critter(obj_type)
+                        && (obj_field_int32_get(ctx->target_obj, OBJ_F_CRITTER_FLAGS) & OCF_INJURED) != 0)) {
                     target_last_rejection = TGT_OBJ_NO_DAMAGED;
                     return false;
                 }
@@ -1359,13 +1371,18 @@ void target_context_build_list(TargetContext* ctx)
             rot = 0;
         }
 
+        // FIX (porting bug #302): rotation 2 steps diagonally (jump table
+        // 0x4f4da8 entry 2: 0x4f4628 sets both to -1), and the wall reaches
+        // its radius on each side (0x4f47ff jle); CE repeated rotation 1's
+        // step and stopped one short, so Radius 2 walls were 3 tiles long,
+        // not 5.
         switch (rot) {
         case 1:
             sx = 0;
             sy = -1;
             break;
         case 2:
-            sx = 0;
+            sx = -1;
             sy = -1;
             break;
         case 3:
@@ -1398,7 +1415,7 @@ void target_context_build_list(TargetContext* ctx)
         dy1 = 0;
         dx2 = 0;
         dy2 = 0;
-        for (range = 0; range < target_params->radius; range++) {
+        for (range = 0; range <= target_params->radius; range++) {
             tmp_target_ctx.target_loc = location_make(location_get_x(origin) + dx1, location_get_y(origin) + dy1);
             if (target_context_evaluate(&tmp_target_ctx)) {
                 target_list_add_loc(targets, tmp_target_ctx.target_loc);
@@ -1501,11 +1518,19 @@ void target_context_build_list(TargetContext* ctx)
                             obj_node = obj_node->next;
                         }
                         object_list_destroy(&objects);
+
+                        // FIX (porting bug #308): a used-up count ends the
+                        // scan at this tile (0x4f4a85-0x4f4a8b test the
+                        // requested count > 0 and the remaining == 0, then
+                        // 0x4f4a99-0x4f4aa2 leave the row loop); CE finished
+                        // the row, where a count of 0 then added every
+                        // object. An earlier note here read those two
+                        // counts as one. No shipped cone sets a count.
+                        if (done) {
+                            break;
+                        }
                     }
 
-                    // NOTE: There is a bug in the original code related to tracking
-                    // count. It checks for `count > 0 && count == 0` to break out of
-                    // this outer loop, which is obviously wrong.
                     if (done) {
                         break;
                     }

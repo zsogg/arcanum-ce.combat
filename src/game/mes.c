@@ -405,7 +405,9 @@ void mes_merge(mes_file_handle_t dst, mes_file_handle_t src)
         src_mes_file->entries,
         sizeof(MesFileEntry) * src_mes_file->num_entries);
 
-    // Fix string pointers in the destination entries.
+    // FIX: the destination's own strings are rebased after the realloc; the
+    // original fixes only the copied entries (0x4d47c1-0x4d47ea), so a moved
+    // block left them pointing into freed memory.
     for (index = 0; index < dst_mes_file->num_entries; index++) {
         dst_mes_file->entries[index].str += dst_mes_file->data - data;
     }
@@ -703,7 +705,11 @@ int consume_next_char(TigFile* stream)
         }
     }
 
-    return mes_file_parse_buffer[mes_file_parse_pos++];
+    // FIX (porting bug #293): the byte comes back zero-extended (0x4d4cfc
+    // xor edx,edx; mov dl), so 0xFF is a character; CE returned the signed
+    // char, so 0xFF read as EOF and cut the file short. Latent: no shipped
+    // .mes holds 0xFF, but cp1251 text does ('ya').
+    return (unsigned char)mes_file_parse_buffer[mes_file_parse_pos++];
 }
 
 /**

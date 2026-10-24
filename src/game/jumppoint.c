@@ -500,8 +500,11 @@ bool jumppoint_move(int64_t from, int64_t to)
     int found = -1;
 
     // No action needed if locations are the same.
+    //
+    // FIX (porting bug #321): that is a successful move (0x4e35ee-0x4e3606
+    // return 1); CE reported failure. Latent: nothing calls this.
     if (from == to) {
-        return false;
+        return true;
     }
 
     // Find the index of jumppoint to move.

@@ -344,8 +344,14 @@ bool tile_script_list_save(TileScriptList* list, TigFile* stream)
     }
 
     // Write each node.
+    //
+    // FIX (porting bug #295): a full save clears each node's modified bit
+    // and writes it cleared (0x4f6680-0x4f668b, then the write at 0x4f668d);
+    // CE wrote the bit, so the nodes came back modified after a reload and
+    // were written again into the sector's dif.
     node = list->head;
     while (node != NULL) {
+        node->flags &= ~TILE_SCRIPT_LIST_NODE_MODIFIED;
         serialized.flags = node->flags;
         serialized.id = node->id;
         serialized.scr = node->scr;

@@ -323,8 +323,14 @@ void settings_trim(char* str)
     memmove(str, curr, len + 1); // FIX: Instead of `memcpy`.
 
     // Remove trailing whitespace.
-    if (len > 0) {
-        curr = str + len;
+    //
+    // FIX (porting bug #300): the scan starts at the last character
+    // (0x438f4d lea esi,[edi+ebx-1], under len > 1 at 0x438f49); CE started
+    // at the terminator, so nothing was trimmed: every value kept fgets's
+    // newline (arcanum.cfg gained a blank line per key on each save) and a
+    // key written "key = v" was stored as "key ".
+    if (len > 1) {
+        curr = str + len - 1;
         while (SDL_isspace(*curr)) {
             *curr-- = '\0';
         }

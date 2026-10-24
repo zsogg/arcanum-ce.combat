@@ -85,6 +85,7 @@ void test_module_paths_suite(void);
 void test_ai_memo_suite(void);
 void test_combat_order_suite(void);
 void test_proto_suite(void);
+void test_text_filter_suite(void);
 void test_fatigue_suite(void);
 void test_area_suite(void);
 void test_provenance_suite(void);
@@ -170,6 +171,7 @@ int main(void)
     test_ai_memo_suite();
     test_combat_order_suite();
     test_proto_suite();
+    test_text_filter_suite();
     test_fatigue_suite();
     test_eye_candy_sound_suite();
     test_area_suite();

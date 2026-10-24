@@ -118,6 +118,10 @@ void portrait_path(int num, char* path, size_t maxlen, int size)
         mes_file = portrait_user_mes_file;
     } else {
         // Default portrait.
+        //
+        // FIX: a negative number takes the default too; the original handles
+        // only 0 that way and searches a negative one through an
+        // uninitialised handle (0x4ce3f9-0x4ce416).
         mes_file = portrait_mes_file;
         mes_file_entry.num = 1000;
     }
@@ -494,8 +498,7 @@ int portrait_get(int64_t obj)
 {
     int type;
     int portrait;
-    int next;
-    int prev;
+    int other;
 
     type = obj_field_int32_get(obj, OBJ_F_TYPE);
     portrait = obj_field_int32_get(obj, OBJ_F_CRITTER_PORTRAIT);
@@ -506,10 +509,17 @@ int portrait_get(int64_t obj)
         && type == OBJ_TYPE_NPC
         && portrait == portrait_get(player_get_local_pc_obj())) {
         // Fallback to next/prev portrait.
-        if (portrait_find_next(obj, &next)) {
-            portrait = next;
-        } else if (portrait_find_prev(obj, &prev)) {
-            portrait = prev;
+        //
+        // FIX (porting bug #318): both searches start from the NPC's own
+        // portrait, in one slot, and with neither found the NPC has none
+        // (0x4cebcc and 0x4cebdf pass the same slot; 0x4cebf2 returns 0);
+        // CE started from uninitialised values and kept the player's
+        // portrait when nothing else was valid.
+        other = portrait;
+        if (portrait_find_next(obj, &other) || portrait_find_prev(obj, &other)) {
+            portrait = other;
+        } else {
+            portrait = 0;
         }
     }
 

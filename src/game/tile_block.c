@@ -383,8 +383,13 @@ void tileblock_get_rect_internal(int64_t sec, int tile, TigRect* rect)
     TigArtFrameData art_frame_data;
 
     // Retrieve position on screen.
-    loc = location_make(SECTOR_X(sec) + TILE_X(tile),
-        SECTOR_Y(sec) + TILE_Y(tile));
+    //
+    // FIX (porting bug #291): a sector coordinate is 64 tiles (0x4bb5b8 and
+    // 0x4bb5e6 __allmul by 0x40), as everywhere else a location is built
+    // from a sector id; CE added it unscaled, so the editor drew every
+    // block overlay outside sector 0 near the map origin.
+    loc = location_make((SECTOR_X(sec) << 6) + TILE_X(tile),
+        (SECTOR_Y(sec) << 6) + TILE_Y(tile));
     location_xy(loc, &x, &y);
 
     if (x > INT_MIN && x < INT_MAX

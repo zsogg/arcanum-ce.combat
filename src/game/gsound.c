@@ -496,11 +496,15 @@ bool gsound_init(GameInitInfo* init_info)
         }
 
         // Small, maximum volume.
+        //
+        // FIX (porting bug #309): it is the small size's cap (0x41ad3a and
+        // 0x41ad41 store 0x5d55a0, the table's first slot); CE stored it as
+        // the medium cap, which key 22 then overwrote, and left small at 0.
         mes_file_entry.num = 12;
         if (mes_search(tmp_mes_file, &mes_file_entry)) {
-            sound_maximum_volume[TIG_SOUND_SIZE_MEDIUM] = atoi(mes_file_entry.str);
+            sound_maximum_volume[TIG_SOUND_SIZE_SMALL] = atoi(mes_file_entry.str);
         } else {
-            sound_maximum_volume[TIG_SOUND_SIZE_MEDIUM] = 40;
+            sound_maximum_volume[TIG_SOUND_SIZE_SMALL] = 40;
         }
 
         // Medium, minimum radius.
@@ -872,7 +876,10 @@ void gsound_calc_positional_params(int64_t x, int64_t y, int* volume_ptr, int* e
     // isometric projection mapping.
     dx = x - gsound_listener_x;
     dy = GSOUND_ISOMETRIC_Y_SCALE * (y - gsound_listener_y);
-    distance = (int64_t)sqrt((double)(dx * dx + dy * dy));
+    // FIX (porting bug #311): the distance is rounded to the nearest, from a
+    // float (0x41b4a4 fstp DWORD, 0x41b4ad frndint); CE truncated, so it
+    // could come out one short at the radius boundaries.
+    distance = (int64_t)lrintf((float)sqrt((double)(dx * dx + dy * dy)));
 
     // Absolute horizontal offset used for stereo panning.
     dx = x - gsound_listener_x;
@@ -936,8 +943,12 @@ void gsound_calc_positional_params(int64_t x, int64_t y, int* volume_ptr, int* e
         }
     }
 
+    // FIX (porting bug #310): the volume is scaled by the size's cap from
+    // soundparams.mes (0x41b507 loads it, 0x41b6e9-0x41b701 multiply and
+    // divide by 100); CE ignored the caps, so small and medium positional
+    // sounds played up to 100% instead of 40% and 70%.
     if (volume_ptr != NULL) {
-        *volume_ptr = volume;
+        *volume_ptr = sound_maximum_volume[size] * volume / 100;
     }
 
     if (extra_volume_ptr != NULL) {
@@ -1221,6 +1232,13 @@ void gsound_update(void)
 
                     // Fire and forget.
                     gsound_play_sfx_func(path, 1, volume, extra_volume, 0);
+
+                    // FIX (porting bug #312): one ambient sound per scheme per
+                    // tick; the rest of the scheme waits for the next tick
+                    // (0x41bcae-0x41bcb2 move to the next scheme after the
+                    // call); CE kept going, so ambience was denser and drew
+                    // more random numbers.
+                    break;
                 }
             } else if (sound->is_transition) {
                 // Transition song: monitor for completion and restore previous
@@ -1440,8 +1458,11 @@ Sound* gsound_scheme_parse_entry(SoundScheme* scheme, const char* path)
         return NULL;
     }
 
+    // FIX: a full scheme refuses the entry; the original frees the copy and
+    // then reads through its null sound (0x41bf99 jge 0x41c166, 0x41c16c),
+    // which would crash. Only mod data reaches 25 entries.
     if (scheme->count >= GSOUND_SCHEME_MAX_SOUNDS) {
-        // No more slots.
+        FREE(copy);
         return NULL;
     }
 
@@ -1481,12 +1502,14 @@ Sound* gsound_scheme_parse_entry(SoundScheme* scheme, const char* path)
             sound->song = true;
 
             // `/over`: play once and then restore the previous scheme.
+            //
+            // FIX (porting bug #314): `/over` takes precedence and skips the
+            // `/loop` test (0x41c130 sets it, 0x41c134 jumps past); CE tested
+            // both, so an entry with both looped and never played once.
             if (strstr(pch, "/over") != NULL) {
                 sound->is_transition = true;
-            }
-
-            // `/loop`: repeat indefinitely within the active hour window.
-            if (strstr(pch, "/loop") != NULL) {
+            } else if (strstr(pch, "/loop") != NULL) {
+                // `/loop`: repeat indefinitely within the active hour window.
                 sound->loop = true;
                 gsound_scheme_parse_param(pch, "/time:", &(sound->time_start), &(sound->time_end));
             }
@@ -1539,10 +1562,12 @@ Sound* gsound_scheme_parse_entry(SoundScheme* scheme, const char* path)
         sound->volume_max = GSOUND_VOLUME_MAX;
     }
 
+    // FIX (porting bug #313): an over-range left balance clamps to the
+    // maximum (0x41c235-0x41c23a), as the right does; CE set it to 0.
     if (sound->balance_left < 0) {
         sound->balance_left = 0;
     } else if (sound->balance_left > GSOUND_VOLUME_MAX) {
-        sound->balance_left = 0;
+        sound->balance_left = GSOUND_VOLUME_MAX;
     }
 
     if (sound->balance_right < 0) {

@@ -226,8 +226,12 @@ bool objlist_load_with_difs(SectorObjectList* list, TigFile* sec_stream, TigFile
     }
 
     if (sector_id != -1) {
-        x = SECTOR_X(sector_id);
-        y = SECTOR_Y(sector_id);
+        // FIX (porting bug #305): the sector's corner in tiles, scaled by 64
+        // as objlist_load does (0x4f166a-0x4f1671 shl 6, 0x4f167e-0x4f1692
+        // shr 20 & ~0x3f); CE took the unscaled index, so objects of a
+        // terrain sector with an object dif were placed near the origin.
+        x = (int)SECTOR_X(sector_id) << 6;
+        y = (int)SECTOR_Y(sector_id) << 6;
     }
 
     dif = false;
@@ -534,6 +538,10 @@ bool objlist_tile_of_object(SectorObjectList* list, int64_t obj, int* tile_ptr)
                 times++;
                 found = index;
             }
+            // FIX (porting bug #304): step to the next node (0x4f1e95,
+            // 0x4f1ebc-0x4f1ec0); CE never advanced and looped forever on the
+            // first non-empty tile. Latent: nothing calls this.
+            node = node->next;
         }
     }
 
@@ -750,7 +758,12 @@ void objlist_notify_sector_changed(int64_t sec, int64_t pc_obj)
         invocation.line = 0;
         script_execute(&invocation);
 
-        if (prev_scr.hdr.flags != scr.hdr.flags
+        // FIX (porting bug #303): the script number is compared too
+        // (0x4f2437-0x4f245c compare three fields); CE missed it, so a
+        // self-removing sector script (which zeroes its number) was never
+        // removed and ran again on every entry to the sector.
+        if (prev_scr.num != scr.num
+            || prev_scr.hdr.flags != scr.hdr.flags
             || prev_scr.hdr.counters != scr.hdr.counters) {
             sector_script_set(sec, &scr);
         }

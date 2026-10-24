@@ -665,10 +665,12 @@ int area_get_nearest_known_area(int64_t loc, int64_t pc_obj, int64_t range)
         return AREA_UNKNOWN;
     }
 
-    // Initialize with an invalid distance to ensure at least one area is
-    // considered.
+    // FIX (porting bug #319): only an area nearer than the range counts
+    // (0x4cb329-0x4cb335, 0x4cb37d-0x4cb38b and 0x4cb3cc-0x4cb3d8 all test
+    // dist < range); CE started from range + 1 and accepted an area exactly
+    // at it (320 tiles from the world map's callers).
     nearest_area = AREA_UNKNOWN;
-    nearest_dist = range + 1;
+    nearest_dist = range;
 
     // Check all areas for known status and distance.
     for (area = 1; area < num_areas; area++) {

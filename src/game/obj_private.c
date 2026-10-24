@@ -324,7 +324,10 @@ void obj_data_store(ObjDataDescriptor* descr)
         if (*(char**)descr->ptr != NULL) {
             FREE(*(char**)descr->ptr);
         }
-        *(char**)descr->ptr = STRDUP(descr->storage.str);
+        // FIX (porting bug #290): a NULL string clears the field
+        // (0x4e413e-0x4e4140 jump to the store of 0 at 0x4e4107); CE passed
+        // NULL to strdup. Latent: every caller stores a real string.
+        *(char**)descr->ptr = descr->storage.str != NULL ? STRDUP(descr->storage.str) : NULL;
         break;
     case OD_TYPE_HANDLE:
         if (descr->storage.oid.type != OID_TYPE_NULL) {
@@ -815,6 +818,11 @@ void obj_data_read_mem(ObjDataDescriptor* descr, uint8_t** data)
 
         if (!presence) {
             // Not present: free any existing allocation and null the pointer.
+            //
+            // FIX: the original only nulls the pointer here (0x4e46ab je
+            // 0x4e4706, no free), leaking an array the object already held;
+            // CE frees it. On a freshly read object the pointer is NULL and
+            // the two agree.
             if (*(SizeableArray**)descr->ptr != NULL) {
                 FREE(*(SizeableArray**)descr->ptr);
                 *(SizeableArray**)descr->ptr = NULL;
@@ -952,6 +960,10 @@ bool obj_data_write_file(ObjDataDescriptor* descr, TigFile* stream)
     }
 }
 
+// CE: the body is commented out (upstream): the only caller is
+// object_write_mem for multiplayer.c, and multiplayer is out of scope. The
+// original serializes every type here (0x4e49af, 0x4e49c3).
+//
 // 0x4E4990
 void obj_data_write_mem(ObjDataDescriptor* a1, WriteBuffer* wb)
 {

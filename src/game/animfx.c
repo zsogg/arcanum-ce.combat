@@ -259,6 +259,11 @@ bool animfx_has(AnimFxNode* node)
 
     num = tig_art_num_get(entry->eye_candy_art_id);
 
+    // FIX: an empty slot is skipped, not the end of the search, here and in
+    // the back and underlay loops below; the original stops at it (0x4cce7f,
+    // 0x4ccec2, 0x4cceff je out), but object_overlay_set(-1) leaves holes, so
+    // it reported an effect past a hole as absent. The light loop's NOTE
+    // records the same choice.
     if ((entry->flags & ANIMFX_LIST_ENTRY_FOREGROUND_OVERLAY) != 0) {
         for (index = 0; index < 7; index++) {
             art_id = obj_arrayfield_uint32_get(node->obj, OBJ_F_OVERLAY_FORE, index);
@@ -410,7 +415,11 @@ bool animfx_add(AnimFxNode* node)
             base_eye_candy_art_id = tig_art_id_rotation_set(base_eye_candy_art_id, node->rotation);
         }
 
-        eye_candy_art_num = tig_art_num_get(eye_candy_art_id);
+        // FIX (porting bug #315): the cap counts copies of this entry's art
+        // (0x4cd0ee reads entry->eye_candy_art_id for 0x502710); CE took the
+        // number of the still-invalid id, so no slot ever matched and blood
+        // splotches (cap 3) and weapon eye candy (cap 2) stacked unbounded.
+        eye_candy_art_num = tig_art_num_get(entry->eye_candy_art_id);
 
         if ((entry->flags & ANIMFX_LIST_ENTRY_FOREGROUND_OVERLAY) != 0) {
             int found = 0;
@@ -496,13 +505,17 @@ bool animfx_add(AnimFxNode* node)
                 } else {
                     eye_candy_art_id = tig_art_eye_candy_id_scale_set(eye_candy_art_id, node->scale);
                 }
-            }
 
-            if (!node->animate) {
-                object_overlay_set(node->obj, OBJ_F_OVERLAY_BACK, index, eye_candy_art_id);
-            }
+                // FIX (porting bug #316): the back overlay and the underlay
+                // are placed only when their art exists (0x4cd284 jne
+                // 0x4cd2d9 skips 0x4cd2cd-0x4cd2d5; 0x4cd362 jne 0x4cd3af skips
+                // 0x4cd39b-0x4cd3a7); CE placed the missing art anyway.
+                if (!node->animate) {
+                    object_overlay_set(node->obj, OBJ_F_OVERLAY_BACK, index, eye_candy_art_id);
+                }
 
-            overlay_back_index = index;
+                overlay_back_index = index;
+            }
         }
 
         if ((entry->flags & ANIMFX_LIST_ENTRY_UNDERLAY) != 0) {
@@ -554,14 +567,15 @@ bool animfx_add(AnimFxNode* node)
                 } else {
                     eye_candy_art_id = tig_art_eye_candy_id_scale_set(eye_candy_art_id, node->scale);
                 }
-            }
 
-            if (!node->animate) {
-                object_overlay_set(node->obj, OBJ_F_UNDERLAY, index, eye_candy_art_id);
-            }
+                // See porting bug #316 above.
+                if (!node->animate) {
+                    object_overlay_set(node->obj, OBJ_F_UNDERLAY, index, eye_candy_art_id);
+                }
 
-            overlay_fore_index = index;
-            overlay_back_index = -5;
+                overlay_fore_index = index;
+                overlay_back_index = -5;
+            }
         }
 
         if (entry->light_art_id != TIG_ART_ID_INVALID) {
@@ -573,6 +587,10 @@ bool animfx_add(AnimFxNode* node)
                     break;
                 }
 
+                // FIX: the original compares the eye candy id still in a
+                // register (0x4cd3e0 takes ebx, the last overlay id or -1),
+                // not this slot's light; CE compares the slot, as it does in
+                // animfx_has and animfx_overlay_remove.
                 if (node->max_simultaneous_effects > 0
                     && tig_art_num_get(art_id) == eye_candy_art_num) {
                     found++;
@@ -874,6 +892,11 @@ bool animfx_overlay_remove(AnimFxListEntry* entry, int64_t obj)
 
     num = tig_art_num_get(entry->eye_candy_art_id);
 
+    // FIX: an empty slot is skipped, not the end of the search, here and in
+    // the back and underlay loops below; the original stops at it (0x4cda21,
+    // 0x4cda6f, 0x4cdab7 je out), so an effect past a hole left by
+    // object_overlay_set(-1) stayed on the object. The light loop's NOTE
+    // records the same choice.
     if ((entry->flags & ANIMFX_LIST_ENTRY_FOREGROUND_OVERLAY) != 0) {
         for (index = 0; index < 7; index++) {
             art_id = obj_arrayfield_uint32_get(obj, OBJ_F_OVERLAY_FORE, index);
@@ -1109,7 +1132,10 @@ void animfx_build_eye_candy_effect(int index, char* str)
 
     int art;
     int palette;
-    int scale;
+    // FIX (porting bug #317): an entry with no `Scale:` key gets scale 4
+    // (0x4cde03 stores it before parsing); CE left it uninitialised. Latent:
+    // every shipped Art: entry has Scale:.
+    int scale = 4;
     int blend;
     int sound;
     int art_effect;

@@ -44,6 +44,9 @@ static char* text_filter_sleeping_replacement_str;
 // 0x603DDC
 static size_t text_filter_sleeping_replacement_length;
 
+// 0x603DE0
+static size_t text_filter_sleeping_replacement_index;
+
 // 0x4F67D0
 bool text_filter_init(void)
 {
@@ -169,9 +172,62 @@ bool text_filter_sleeping_validate(int64_t obj)
     return critter_is_unconscious(obj) || critter_is_sleeping(obj);
 }
 
+// FIX (porting bug #322): the sleeper mumbles - each letter becomes the next
+// character of the replacement line, except where one of the protected
+// strings matches, which is kept (0x4f6bb0: the alpha test at 0x4f6be3, the
+// case-folded match at 0x4f6c20-0x4f6c59, the run copy at 0x4f6c86, the
+// replacement and its rolling index at 0x4f6c9a-0x4f6cbd); CE copied the line
+// unchanged, so a sleeping PC's broadcasts were spoken and obeyed as typed.
+//
+// FIX: the original's compare runs on past both terminators, and after a
+// match at the end of the line it skips the end test and reads past the
+// input; CE stops at the terminator in both places.
+//
 // 0x4F6BB0
 void text_filter_sleeping_process(const char* src, char** dst)
 {
+    const char* in;
+    char* out;
+    int index;
+
     *dst = STRDUP(src);
-    // TODO: Incomplete.
+    out = *dst;
+    in = src;
+
+    while (*in != '\0') {
+        if (!SDL_isalpha((unsigned char)*in)) {
+            *out++ = *in++;
+            continue;
+        }
+
+        for (index = 0; text_filter_sleeping_strings[index] != NULL; index++) {
+            const char* p = in;
+            const char* q = text_filter_sleeping_strings[index];
+
+            while (*q != '\0' && SDL_tolower((unsigned char)*p) == SDL_tolower((unsigned char)*q)) {
+                p++;
+                q++;
+            }
+
+            if (*q == '\0' && p != in) {
+                break;
+            }
+        }
+
+        if (text_filter_sleeping_strings[index] != NULL) {
+            // A protected string: keep it as written.
+            const char* end = in + strlen(text_filter_sleeping_strings[index]);
+
+            while (in != end) {
+                *out++ = *in++;
+            }
+            continue;
+        }
+
+        *out++ = text_filter_sleeping_replacement_str[text_filter_sleeping_replacement_index];
+        text_filter_sleeping_replacement_index = (text_filter_sleeping_replacement_index + 1) % text_filter_sleeping_replacement_length;
+        in++;
+    }
+
+    *out = '\0';
 }

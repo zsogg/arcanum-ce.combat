@@ -200,7 +200,10 @@ void wall_draw_lines(GameDrawInfo* draw_info)
                         break;
                     }
 
-                    tig_window_fill(wall_iso_window_handle, &rect, tig_color_make(255, 0, 0));
+                    // FIX (porting bug #320): the wall lines are green
+                    // (0x4e1dc9-0x4e1dd3 index the green table at 0xff); CE drew
+                    // them red. Editor only.
+                    tig_window_fill(wall_iso_window_handle, &rect, tig_color_make(0, 255, 0));
                 }
                 node = node->next;
             }

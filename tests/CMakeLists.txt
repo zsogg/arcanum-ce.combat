@@ -28,6 +28,7 @@ add_executable(arcanum-tests
     "test_trap_spotting.c"
     "test_penetration.c"
     "test_ai_targeting.c"
+    "test_text_filter.c"
     "test_followers.c"
     "test_carried_lights.c"
     "test_schematic_cap.c"
@@ -789,6 +790,46 @@ add_custom_command(
 add_custom_target(arcanum-proto-test-obj DEPENDS "${PROTO_TEST_OBJ}")
 target_link_libraries(arcanum-tests PRIVATE "${PROTO_TEST_OBJ}")
 add_dependencies(arcanum-tests arcanum-proto-test-obj)
+
+# `text_filter.c` (card FC1 phase 4b). The sleep filter (0x4F6BB0, porting bug
+# #322) and its state are `static`; `test_text_filter.c` drives it directly.
+set(TEXT_FILTER_TEST_STATICS
+    text_filter_sleeping_process
+)
+set(TEXT_FILTER_TEST_DATA
+    text_filter_sleeping_strings
+    text_filter_sleeping_replacement_str
+    text_filter_sleeping_replacement_length
+    text_filter_sleeping_replacement_index
+)
+set(TEXT_FILTER_TEST_OBJ "${CMAKE_CURRENT_BINARY_DIR}/text_filter_globalized.o")
+set(_text_filter_globalize_args "")
+foreach(sym ${TEXT_FILTER_TEST_STATICS} ${TEXT_FILTER_TEST_DATA})
+    list(APPEND _text_filter_globalize_args "--globalize-symbol=${sym}")
+endforeach()
+
+file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/textfilterobj")
+
+add_custom_command(
+    OUTPUT "${TEXT_FILTER_TEST_OBJ}"
+    COMMAND "${CMAKE_AR}" x "$<TARGET_FILE:arcanum-game>" text_filter.c${CMAKE_C_OUTPUT_EXTENSION}
+    COMMAND "${CMAKE_OBJCOPY}" ${_text_filter_globalize_args} text_filter.c${CMAKE_C_OUTPUT_EXTENSION} "${TEXT_FILTER_TEST_OBJ}"
+    COMMAND "${CMAKE_COMMAND}" -E rm -f text_filter.c${CMAKE_C_OUTPUT_EXTENSION}
+    COMMAND "${CMAKE_COMMAND}"
+        "-DOBJ=${TEXT_FILTER_TEST_OBJ}"
+        "-DSYMS=${TEXT_FILTER_TEST_STATICS}"
+        "-DDATA_SYMS=${TEXT_FILTER_TEST_DATA}"
+        "-DNM=${CMAKE_NM}"
+        -P "${CMAKE_CURRENT_SOURCE_DIR}/verify_globalized.cmake"
+    WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/textfilterobj"
+    DEPENDS arcanum-game
+    COMMENT "tests: globalizing text_filter.c statics (no source change)"
+    VERBATIM
+)
+
+add_custom_target(arcanum-text-filter-test-obj DEPENDS "${TEXT_FILTER_TEST_OBJ}")
+target_link_libraries(arcanum-tests PRIVATE "${TEXT_FILTER_TEST_OBJ}")
+add_dependencies(arcanum-tests arcanum-text-filter-test-obj)
 
 # A focused executable for the script VM. The full suite deliberately contains
 # subprocess crash specifications whose expected signal changes under UBSan;

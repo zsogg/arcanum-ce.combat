@@ -117,8 +117,13 @@ void logbook_add_injury(int64_t pc_obj, int64_t inflicted_by_obj, int injury)
     }
 
     // Only record injuries inflicted by critters.
+    //
+    // FIX (porting bug #301): the injury is recorded only when a critter
+    // inflicted it (0x4f56d5-0x4f56dd return unless the type is 15 or 16);
+    // CE had the test inverted, so no injury a critter dealt reached the
+    // logbook.
     type = obj_field_int32_get(inflicted_by_obj, OBJ_F_TYPE);
-    if (obj_type_is_critter(type)) {
+    if (!obj_type_is_critter(type)) {
         return;
     }
 

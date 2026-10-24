@@ -317,8 +317,10 @@ int sfx_critter_sound(int64_t obj, CritterSoundType type)
         return -1;
     }
 
-    // Check if the critter is disabled.
-    if ((obj_field_int32_get(obj, OBJ_F_FLAGS) & OF_OFF) != 0) {
+    // FIX (porting bug #287): every critter sound is silenced while the
+    // local PC is off (0x4f0f10-0x4f0f1e read OBJ_F_FLAGS off the PC handle
+    // 0x40da50 returned); CE tested the critter's own flags instead.
+    if ((obj_field_int32_get(pc_obj, OBJ_F_FLAGS) & OF_OFF) != 0) {
         return -1;
     }
 

@@ -753,7 +753,9 @@ void main_loop(void)
     char mouse_state_str[20];
     char story_state_str[80];
 
-    // TODO: Figure out if this is really needed.
+    // CE: the original places the PC on the tile under screen point (400,200)
+    // and returns if there is none (0x401570-0x4015bf); CE keeps the PC on
+    // its own location. TODO: Figure out if this is really needed.
 #if 0
     if (!location_at(400, 200, &location)) {
         return;
@@ -894,6 +896,9 @@ void main_loop(void)
                 if (!message.data.keyboard.pressed) {
                     switch (message.data.keyboard.scancode) {
                     case SDL_SCANCODE_ESCAPE: {
+                        // CE: outside the main, dialog and barter modes Escape
+                        // returns to the main mode; the original opens the
+                        // menu from any mode (0x401705-0x401752).
                         IntgameMode esc_mode = intgame_mode_get();
                         if (esc_mode != INTGAME_MODE_MAIN
                             && esc_mode != INTGAME_MODE_DIALOG
@@ -1218,6 +1223,9 @@ void handle_mouse_scroll(void)
         return;
     }
 
+    // CE: an 8-pixel band at the iso window's edges starts a scroll; the
+    // original scrolls only on the edge pixels themselves, x 0 or 799 and y 0
+    // or 599 (0x401f64, 0x401fa1, 0x401f6c, 0x401f7e).
     tig_mouse_get_state(&mouse_state);
     width = hrp_iso_window_width_get();
     height = hrp_iso_window_height_get();

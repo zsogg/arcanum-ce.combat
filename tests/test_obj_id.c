@@ -164,13 +164,30 @@ TEST(guid_ids_round_trip_through_their_text_form)
     ObjectID oid;
     ObjectID parsed;
 
+    // Porting bug #298: the first three fields are the little-endian dword
+    // and words the original prints (0x4E6570).
     make_guid(&oid);
     objid_id_to_str(buffer, oid);
-    CHECK_STR(buffer, "G_00010203_0405_0607_0809_0A0B0C0D0E0F");
+    CHECK_STR(buffer, "G_03020100_0504_0706_0809_0A0B0C0D0E0F");
 
     CHECK(objid_id_from_str(&parsed, buffer));
     CHECK_INT(parsed.type, OID_TYPE_GUID);
     CHECK(memcmp(parsed.d.g.data, oid.d.g.data, sizeof(oid.d.g.data)) == 0);
+}
+
+TEST(a_shipped_guid_file_name_parses_to_the_guid_its_file_holds)
+{
+    // modules/Arcanum/maps/ShopMap/G_6DAE2D90_6C4D_11D4_8F1D_00A0CC6511C6.mob
+    // holds this GUID's bytes at offset 0x24.
+    static const uint8_t bytes[16] = {
+        0x90, 0x2D, 0xAE, 0x6D, 0x4D, 0x6C, 0xD4, 0x11,
+        0x8F, 0x1D, 0x00, 0xA0, 0xCC, 0x65, 0x11, 0xC6
+    };
+    ObjectID oid;
+
+    CHECK(objid_id_from_str(&oid, "G_6DAE2D90_6C4D_11D4_8F1D_00A0CC6511C6"));
+    CHECK_INT(oid.type, OID_TYPE_GUID);
+    CHECK(memcmp(oid.d.g.data, bytes, sizeof(bytes)) == 0);
 }
 
 TEST(malformed_or_unknown_ids_are_rejected)
@@ -193,6 +210,7 @@ void test_obj_id_suite(void)
     RUN(guid_ids_compare_lexicographically_byte_by_byte);
     RUN(p_ids_compare_by_location_then_temp_id_then_map);
     RUN(null_and_blocked_parse_from_their_names);
+    RUN(a_shipped_guid_file_name_parses_to_the_guid_its_file_holds);
     RUN(a_ids_round_trip_through_their_text_form);
     RUN(p_ids_round_trip_through_their_text_form);
     RUN(guid_ids_round_trip_through_their_text_form);

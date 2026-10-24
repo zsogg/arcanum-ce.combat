@@ -219,6 +219,7 @@ void scroll_start(int direction)
     bool blocked;
     int64_t viewport_center_loc;
     int rot;
+    int requested_direction;
 
     // In non-editor mode, enforce scroll rate limit.
     if (!scroll_init_info.editor) {
@@ -326,6 +327,7 @@ void scroll_start(int direction)
     }
 
     blocked = false;
+    requested_direction = direction;
 
     // Adjust direction if horizontal distance exceeds scroll distance limit.
     if (hor >= 80 * distance) {
@@ -390,9 +392,14 @@ void scroll_start(int direction)
     // Scrolling is blocked. Update the mouse cursor and set appropriate offsets
     // so it appears sticked to the relevant edge.
     tig_art_interface_id_create(678, 0, 0, 0, &art_id);
+    // FIX (porting bug #288): the blocked cursor points the way the player
+    // asked to scroll, not the way the limits rewrote it (0x40e440 switches
+    // on the argument, the limit switches rewrite a copy in ecx), and down-
+    // left sits in the corner (0x40e4e3-0x40e4ec, x 0); CE used the rewritten
+    // direction, so a diagonal never showed, and centred down-left.
     if (scroll_cursor_art_set(art_id)
         && tig_art_frame_data(art_id, &art_frame_data) == TIG_OK) {
-        switch (direction) {
+        switch (requested_direction) {
         case SCROLL_DIRECTION_UP:
             tig_mouse_cursor_set_offset(art_frame_data.width / 2, 0);
             break;
@@ -409,7 +416,7 @@ void scroll_start(int direction)
             tig_mouse_cursor_set_offset(art_frame_data.width / 2, art_frame_data.height - 1);
             break;
         case SCROLL_DIRECTION_DOWN_LEFT:
-            tig_mouse_cursor_set_offset(art_frame_data.width / 2, art_frame_data.height - 1);
+            tig_mouse_cursor_set_offset(0, art_frame_data.height - 1);
             break;
         case SCROLL_DIRECTION_LEFT:
             tig_mouse_cursor_set_offset(0, art_frame_data.height / 2);

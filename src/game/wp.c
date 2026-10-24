@@ -259,9 +259,13 @@ void wp_entries_compact(void)
             || !obj_handle_is_valid(stru_5FC668[idx].obj)
             || obj_field_int32_get(stru_5FC668[idx].obj, OBJ_F_TYPE) != OBJ_TYPE_NPC) {
             dword_5FC654--;
+            // FIX (porting bug #297): the entries after this one move
+            // (0x4c03cc-0x4c03cf: edi steps by 0x0fffffff, -1 once shifted, so
+            // the size is 16 * (count - idx)); CE copied Ghidra's `+ idx` and
+            // ran past the table. Latent: only the editor adds entries.
             memmove(&(stru_5FC668[idx]),
                 &(stru_5FC668[idx + 1]),
-                sizeof(*stru_5FC668) * (dword_5FC654 + idx));
+                sizeof(*stru_5FC668) * (dword_5FC654 - idx));
             idx--;
         }
     }

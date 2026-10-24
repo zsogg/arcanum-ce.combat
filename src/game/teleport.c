@@ -412,9 +412,7 @@ bool teleport_run(TeleportData* teleport_data)
         node = teleport_obj_node_head;
         while (node != NULL) {
             flags = obj_field_int32_get(node->obj, OBJ_F_FLAGS);
-            flags |= OF_DYNAMIC;
-            flags |= OF_TELEPORTED;
-            obj_field_int32_set(node->obj, OBJ_F_FLAGS, flags);
+            obj_field_int32_set(node->obj, OBJ_F_FLAGS, flags | OF_DYNAMIC | OF_TELEPORTED);
             obj_field_int64_set(node->obj, OBJ_F_LOCATION, teleport_data->loc);
             obj_field_int32_set(node->obj, OBJ_F_OFFSET_X, 0);
             obj_field_int32_set(node->obj, OBJ_F_OFFSET_Y, 0);
@@ -431,11 +429,13 @@ bool teleport_run(TeleportData* teleport_data)
             }
 
             tig_file_fclose(stream);
-            flags &= ~OF_DYNAMIC;
-            flags &= ~OF_TELEPORTED;
-            flags |= OF_DESTROYED;
-            flags |= OF_EXTINCT;
-            obj_field_int32_set(node->obj, OBJ_F_FLAGS, flags);
+            // FIX (porting bug #292): the source map's copy keeps the flags it
+            // had, now destroyed and extinct (0x4d3c5b keeps them in edi,
+            // only the written copy gets 0x40002000 at 0x4d3c62, 0x4d3d09 or
+            // edi,0x800001); CE cleared dynamic and teleported, so an object
+            // already dynamic (the PC, a follower) was appended to the
+            // source map's mobile.des on every cross-map teleport.
+            obj_field_int32_set(node->obj, OBJ_F_FLAGS, flags | OF_DESTROYED | OF_EXTINCT);
 
             node = node->next;
         }

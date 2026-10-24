@@ -171,7 +171,10 @@ bool is_in_queue(int num)
 {
     int index;
 
-    for (index = 0; index < QUEUE_SIZE; index++) {
+    // FIX (porting bug #296): only today's paper and the coming ones are
+    // searched (0x4bf1da mov eax,4); CE also searched the four past ones,
+    // so a story paper already shown could not be queued again.
+    for (index = NEWSPAPER_CURRENT; index < QUEUE_SIZE; index++) {
         if (newspaper_queue[index] == num) {
             return true;
         }

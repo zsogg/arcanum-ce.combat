@@ -142,13 +142,19 @@ void objid_id_to_str(char* buffer, ObjectID oid)
     case OID_TYPE_GUID:
         snprintf(buffer, OID_STR_LEN,
             "G_%08X_%04X_%04X_%02X%02X_%02X%02X%02X%02X%02X%02X",
-            // The bytes promote to `int`, so a first byte of 0x80 or above
-            // shifts into the sign bit and overflows - undefined, and fatal
-            // under the sanitizer preset. `%08X` wants an unsigned anyway.
-            ((unsigned int)oid.d.g.data[0] << 24) | ((unsigned int)oid.d.g.data[1] << 16)
-                | ((unsigned int)oid.d.g.data[2] << 8) | oid.d.g.data[3],
-            (oid.d.g.data[4] << 8) | oid.d.g.data[5],
-            (oid.d.g.data[6] << 8) | oid.d.g.data[7],
+            // FIX (porting bug #298): the first three fields are the GUID's
+            // little-endian dword and words (0x4e65eb reads the dword at d+0,
+            // 0x4e65da/0x4e65d5 the words at d+4/d+6), as the shipped
+            // `G_6DAE2D90_6C4D_11D4_...mob` names bytes `90 2d ae 6d 4d 6c d4
+            // 11`; CE printed them big-endian, a name no shipped file has.
+            //
+            // The bytes promote to `int`, so a high byte of 0x80 or above
+            // would shift into the sign bit - undefined, and fatal under the
+            // sanitizer preset. `%08X` wants an unsigned anyway.
+            ((unsigned int)oid.d.g.data[3] << 24) | ((unsigned int)oid.d.g.data[2] << 16)
+                | ((unsigned int)oid.d.g.data[1] << 8) | oid.d.g.data[0],
+            (oid.d.g.data[5] << 8) | oid.d.g.data[4],
+            (oid.d.g.data[7] << 8) | oid.d.g.data[6],
             oid.d.g.data[8],
             oid.d.g.data[9],
             oid.d.g.data[10],
@@ -220,27 +226,31 @@ bool objid_g_from_str(TigGuid* guid, const char* str)
     if (str[0] != 'G' || str[1] != '_') return false;
     str += 2;
 
+    // FIX (porting bug #298): the fields are stored little-endian, a dword
+    // and two words (0x4e67e2 mov [edi],ecx; 0x4e680e and 0x4e683c the
+    // words at +4 and +6), the reverse of objid_id_to_str; CE stored them
+    // big-endian, so a name in the original's form matched no object.
     if (!objid_parse_hex(&value, str, 8)) return false;
-    guid->data[0] = (value >> 24) & 0xFF;
-    guid->data[1] = (value >> 16) & 0xFF;
-    guid->data[2] = (value >> 8) & 0xFF;
-    guid->data[3] = value & 0xFF;
+    guid->data[0] = value & 0xFF;
+    guid->data[1] = (value >> 8) & 0xFF;
+    guid->data[2] = (value >> 16) & 0xFF;
+    guid->data[3] = (value >> 24) & 0xFF;
     str += 8;
 
     if (str[0] != '_') return false;
     str++;
 
     if (!objid_parse_hex(&value, str, 4)) return false;
-    guid->data[4] = (value >> 8) & 0xFF;
-    guid->data[5] = value & 0xFF;
+    guid->data[4] = value & 0xFF;
+    guid->data[5] = (value >> 8) & 0xFF;
     str += 4;
 
     if (str[0] != '_') return false;
     str++;
 
     if (!objid_parse_hex(&value, str, 4)) return false;
-    guid->data[6] = (value >> 8) & 0xFF;
-    guid->data[7] = value & 0xFF;
+    guid->data[6] = value & 0xFF;
+    guid->data[7] = (value >> 8) & 0xFF;
     str += 4;
 
     if (str[0] != '_') return false;
@@ -363,6 +373,10 @@ bool objid_parse_hex(int* value_ptr, const char* str, size_t length)
     return true;
 }
 
+// FIX: every character is checked; the original tests src[0] on each pass
+// (0x4e6b1c reads [ebp], which never advances), so only the first digit was
+// validated and strtoul judged the rest.
+//
 // 0x4E6B00
 bool objid_copy_hex(char* dst, const char* src, size_t length)
 {

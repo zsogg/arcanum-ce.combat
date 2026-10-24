@@ -458,6 +458,11 @@ int path_make_astar(PathCreateInfo* path_create_info)
                 continue;
             }
 
+            // FIX: the original clears this only on the PATH_FLAG_0x0040 path
+            // (0x41fe74); stepping onto the target of a stop-adjacent path
+            // (0x41fdc8-0x41fdd4 jne 0x41fe86) it reads the previous
+            // neighbour's answer, or stack residue, and may add 50 (0x41febf).
+            // CE starts every neighbour clear.
             bool is_window = false;
             if ((path_create_info->flags & PATH_FLAG_0x0040) == 0) {
                 if (adjacent_loc != path_create_info->to
