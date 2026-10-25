@@ -13,19 +13,23 @@ Obscura*.
 
 - It runs over GOG's Arcanum 1.0.7.4 with the Unofficial Arcanum Patch (UAP)
   2.0.2 and its High Resolution Patch.
+- It is built on Arcanum Community Edition
+  (github.com/alexbatalov/arcanum-ce), a decompilation of the original game.
+  The bug fixes come in two kinds, kept apart below:
+  - **bugs of the original 2001 game**, which CE fixes (section 3.1);
+  - **mistakes in the decompilation**, places where its code did not do what
+    the original game does. These are put right so that the game plays as
+    the original (sections 3.2 and 3.3).
 - The original's own quirks are kept on purpose. The ones a player can meet
   are listed in section 6.
 - Release 1 came out on 2026-10-18. Everything marked "in release 1" below
   is what that release did; the rest of this catalogue is what the game does
   now.
-- Since release 1, every function of the engine has been compared with the
-  original game's, one by one. That found 313 places where CE had copied the
-  original wrongly. All are fixed, and section 2.2 lists them.
 
 **Contents:**
-1. Highlights: the bugs worth a story, and the quirks left alone
-2. Bug fixes: the original's bugs, CE's own copying mistakes, safety
-3. Combat additions: Combat Rebalance, Real-Time Pacing, Called Shots
+1. The combat mods: Combat Rebalance, Real-Time Pacing, Called Shots
+2. Highlights: the bugs worth a story, and the quirks left alone
+3. Bug fixes: the original game's bugs, the decompilation's mistakes, safety
 4. Changes to game mechanics: the Unofficial Arcanum Patch, CE's own rules,
    mods built since release 1
 5. Running the game
@@ -33,11 +37,203 @@ Obscura*.
 
 Within each category, changes are listed from the largest effect on play to
 the smallest. A number such as (#58) is the fix's entry in the project's
-porting-bug ledger.
+ledger of decompilation mistakes.
 
-## 1. Highlights
+## 1. The combat mods
 
-**Bugs worth a story, now fixed**
+Three optional mods come with Arcanum CE, all off unless you turn them on.
+
+- **Turning them on:** setup asks about each one. Afterwards each is one line
+  in `arcanum-ce.cfg`: change its `0` to `1` and restart the game to turn it
+  on, back to `0` to turn it off.
+- **Saves:** keep the Combat Rebalance on for a save made with it. Real-Time
+  Pacing and Called Shots save nothing, so they can be turned on or off with
+  any save.
+
+### 1.1 Combat Rebalance (preview) - `mod combat-rebalance`
+
+A rework of combat, built and tuned piece by piece. **A preview:** the balance
+is still being tuned.
+
+**Press Q to reload a gun.** With the Combat Rebalance on, guns hold only a
+few ready shots and must be reloaded.
+
+**Firearms**
+
+- **Reloading.** A gun holds ready shots, and **Q** reloads:
+  - pistols and revolvers 6, rifles and muzzle-loaders 1, repeaters 7, heavy
+    guns 2;
+  - one shot at a time, though some guns refill a whole magazine;
+  - in turn-based combat, unfinished loading carries over to the next turn;
+  - in real time you stand still while loading;
+  - followers and enemies reload, top up and switch to a melee backup too;
+  - outside combat, guns load themselves.
+- **Every gun retuned by its class** (all 41 firearms): damage, firing and
+  loading cost, range and price.
+  - Muzzle-loaders hit hard and load slowly.
+  - Rifles and repeaters stay accurate further out.
+  - Pistols are quick, and lose accuracy and penetration with distance.
+  - The rare guns each have a role: the Acid Gun eats armor, the Tranquilizer
+    Gun knocks out, and the Grenade Launcher's explosion lands.
+- **The ammunition counter shows the gun's state** (new since release 1):
+  ready shots over capacity, then spare rounds, such as `3/7 24`, or
+  `JAM 24` while the gun is jammed.
+- **Gun criticals by kind:** pistols critical often, rifles find gaps in
+  armor, muzzle-loaders and heavy guns knock down.
+- **Jams:** a firearm's fumble jams it. Clearing the jam costs reload work,
+  and the gun keeps its rounds. (In the original, every fumble shot its
+  shooter.)
+- **An easier first shot** at a critter that has not noticed you.
+
+**Armor**
+
+- **Armor stops damage where it covers**, against each hit's penetration, on
+  a curve: every weapon and 222 armor pieces carry their own values.
+- **Criticals and called shots find gaps** in armor.
+- **Shields block.**
+- **Natural hide and magical protection** count as armor.
+- **A blow the armor stops still tires the target:** a monster's partly, a
+  mace's 40%, a staff's or club's 20%.
+
+**Opponents**
+
+- **They pick weapons they can use:** suited to your armor, and ones they can
+  afford to swing. (In the original an NPC could pick a weapon that cost more
+  than its turn, and never attack.)
+- **Casters cast**, and summon (up to 3 creatures).
+- **Targets are chosen better:** undead hold their ground, and hunters go for
+  gunners and casters.
+- **Followers on Defensive** fight within 8 tiles of you.
+- **Potions:** an enemy drinks at most two a fight, and drinking costs 6 AP.
+
+**Creatures** (new since release 1)
+
+- **A critical hit does what suits the body it lands on.** Six kinds of body:
+  living, skeletal undead, fleshy undead, mechanical, spirit and phantom. The
+  original allowed nothing at all for shapeless creatures and only a
+  knockdown for undead.
+- **Phantoms are hurt only by critical hits, spells, explosions and traps.**
+  Ordinary blows pass through them; a weapon's on-hit spell still goes off.
+  Hovering over a phantom tells you what hurts it, in place of its reaction.
+- **Opponents look for another way against a phantom**, such as a spell,
+  rather than swinging uselessly.
+- **A crushing critical on a skeleton** does 10 more damage.
+- **The creature sheet** sets named creatures' body type, natural protection
+  (in place of the usual armour calculation) and resistance to gunfire.
+
+**Criticals**
+
+- **More criticals.**
+- **Each has a temporary effect by where it struck:** Winded, Numbed arm,
+  Hobbled, Staggered or Dazzled. Injuries rarely last.
+- **A full turn safe from another stun** after recovering from a stun,
+  knockdown or knockout.
+
+**Magic**
+
+- **Per-spell costs:** 4 to 7 AP by power, 1 less in a mastered college.
+- **The aptitude damage bonus** is 30% smaller.
+- **Spell criticals:** damage spells add damage and a stun or knockdown;
+  Weaken, Drain Will, Plague of Insects, Shrink and Congeal Time leave their
+  target Exposed, Unfocused, Dazzled or Hobbled for two turns; other spells
+  return their casting fatigue.
+- **No stacking:** a second casting of a buff does not add to the first.
+- **Summoning sickness:** a creature summoned in combat waits a turn before
+  acting.
+
+**Traps** (new since release 1)
+
+- **Traps are easier to see.** Spot Trap now rises on the same curve as
+  Melee and Bow: 75% at 10 skill points, where the original gave 40%.
+- **Training sees without rolling:** an Apprentice always sees an ordinary
+  trap of the easiest kind, and an Expert a magical one too.
+- **The party's best spotter looks ahead** three tiles along your path, once
+  per trap, and checks a trapped door or chest for whoever opens it. The
+  message names who saw it.
+- **A trap's own difficulty makes it harder to spot.** The original counted
+  it only against disarming.
+
+**Weapons**
+
+- **Swapping weapons** costs 4 AP.
+- **Exertion:** you may act **1 AP short**, at a cost of 2 fatigue. The
+  action bar shows such an action's knob in yellow, with "+2 fatigue" above
+  it (new since release 1).
+- **A throw you cannot pay for is refused** before it starts, and the item
+  stays in your pack (new since release 1). Before, at 1 or 2 AP every
+  grenade you carried could be thrown for free.
+- **A weapon's on-hit spell** costs no AP. (In the original it was charged as
+  a cast, so in turn-based the Grenade Launcher's explosion never landed.)
+- **Bows** are quicker: 3 to 5 AP, 1 less from Apprentice.
+- **The Throwing Dagger**, wielded and thrown, keeps its target and can hurt
+  it. (In the original a wielded thrown weapon injured nobody.)
+- **A throw under way** plays out.
+
+**The opening, poison and prowling**
+
+- **The opening:** at most one enemy acts before your first turn.
+- **Poison** ticks every second turn in combat (every 4 seconds in real
+  time). In the original it ticked once in fifteen turn-based rounds.
+- **Prowling:**
+  - attacking from prowl ends it;
+  - followers prowl with you only if they have some Prowling skill, and an
+    attack on one reveals only that follower;
+  - starting to prowl in combat needs Master training (prowling started
+    before combat carries into it);
+  - darkness helps against being seen, up to 30, unless you carry a light or
+    the watcher sees in the dark;
+  - open ground halves your prowling below Expert, instead of a flat 50
+    penalty.
+
+**Fixes to the mod itself since release 1**
+
+- Enemies' memory of who is desperate, armoured or carrying potions forgets
+  the dead. After 64 NPCs in one session, enemies had begun to share one
+  record and make odd choices.
+- Poison that ticks per turn frees the record of dead or cured critters, so a
+  long fight can no longer stop poison working.
+- With potion costs on and exertion off, the action bar no longer offers a
+  potion you cannot afford and then refuses the drink.
+
+### 1.2 Real-Time Pacing - `mod real-time-pacing`
+
+In real-time combat, **every action takes the time its action points would
+take in turn-based combat.** Speed and the weapon or spell you choose then
+matter in real time as they do turn by turn.
+
+- **Timed:** attacks, throws and grenades, skills, and every spell.
+- **The pace:** a whole turn is worth 2 seconds (the `real time pace ms`
+  setting in `arcanum-ce.cfg`). At Speed 11:
+  - a Bow fires about once a second, rather than twice;
+  - Harm takes three-quarters of a second, rather than a click.
+- **Never faster than its animation.**
+- **Instant actions stay instant:** doors, containers, picking things up,
+  plain items, pickpocketing.
+- **Moving costs fighting time:** recovery pauses while you walk or run, as
+  in turn-based (`real time recovery pauses while moving`).
+- **A melee swing whose target stepped out of reach** costs nothing.
+- **Chasing:** a melee enemy swings only at a target that has stopped, not at
+  one running past.
+- **Potions take time:** drinking one in combat means standing still for its
+  cost, and the effect comes at the end.
+- **Turn-based combat is unchanged.**
+
+### 1.3 Called Shots - `mod called-shots`
+
+- **A panel beside the combat bar:** Body, Head, Arms, Legs. Choose one, and
+  your attacks aim there until you choose again or leave combat mode.
+- **Where:** in turn-based and real-time combat, and while prowling. Outside
+  combat mode the panel is hidden.
+- **Arcanum's own aimed attacks:** holding comma (head), period (arms) or
+  slash (legs) has always aimed an attack. The keys still work, and win over
+  the panel while held.
+- **Arcanum's own rules:** an aimed attack is harder to land (-50 for the
+  head, -30 for a limb) and, when it is a critical, more likely to leave a
+  lasting effect (+10). The panel changes no number.
+
+## 2. Highlights
+
+**Mistakes in the decompilation, now fixed**
 
 - **Random encounters were always the same.** Each encounter table only ever
   produced its first line, so whole groups, such as the Malochian Hand's
@@ -58,11 +254,28 @@ porting-bug ledger.
   86,400) put the moon about 14 hours ahead every lunar month. (#273)
 - **Free goods.** A merchant's item dropped outside the trade window landed
   on the floor, yours for nothing. (#229)
+- **Every script division added instead.** Each division in every shipped
+  script returned the sum of the two numbers. (#45)
+- **Dodge was worth five points a level** instead of two, so a skilled
+  dodger avoided nearly every hit. (#49)
 - **Stunned enemies kept fighting.** A stun barely held them. (#77)
 - **The dice game vanished.** Gamblers could never offer "Roll the dice".
   (#70)
-- **The original's own bug:** a failed or interrupted save damaged the save
-  it was replacing. CE writes saves aside and commits them whole.
+**Bugs of the original game, now fixed**
+
+- **A failed save could destroy the one it replaced.** A failed or
+  interrupted save damaged the save it was overwriting. CE writes saves
+  aside and commits them whole.
+- **Quitting during a conversation crashed the game.**
+- **Walking through walls.** Walking a plotted path while the game checked
+  whether you could see an item's owner turned the player on the spot, so
+  they ran straight through obstacles.
+- **Masters were refused spells they could afford.** The Energy check forgot
+  the mastery discount that the charge applied.
+- **Charm could leave a permanent mark.** Its reaction bonus could stick: a
+  gnome gained 10 for every charm.
+- **Spell glows could stay on for good** after an earlier effect was
+  removed.
 
 **Quirks of the original, kept on purpose**
 
@@ -80,11 +293,11 @@ porting-bug ledger.
 - **Spells are learned on Willpower**, whatever the spell list says about
   Intelligence.
 
-## 2. Bug fixes
+## 3. Bug fixes
 
-### 2.1 Bugs of the original game, fixed
+### 3.1 Bugs of the original game, fixed
 
-These were wrong in the original 2001 game too. CE fixes them, always.
+These were wrong in the original 2001 game itself. CE fixes them, always.
 
 **Saving**
 
@@ -168,8 +381,6 @@ These were wrong in the original 2001 game too. CE fixes them, always.
 
 - The "ghosts" over dead critters that do not decay draw correctly.
 - Summoned creatures keep their own colours.
-- The mouse cursor no longer leaves marks at the window's edge or outside
-  it.
 - An effect's light is added once, not twice or not at all.
 
 **Smaller fixes, with no ordinary effect on play**
@@ -195,10 +406,12 @@ These were wrong in the original 2001 game too. CE fixes them, always.
 - A character with a negative portrait number gets the default portrait
   instead of garbage.
 
-### 2.2 CE's own copying mistakes, fixed since release 1
+### 3.2 Mistakes in the decompilation, fixed since release 1
 
-Each of these was a place where CE did not do what the original game does.
-All are fixed: the game now plays as the original here.
+Each of these was a place where the code CE is built on did not do what the
+original game does. From 2026-10-20 to 10-24 every function was compared with
+the original's, one by one, and these are what that found. All are fixed:
+the game now plays as the original here.
 
 **Combat**
 
@@ -729,7 +942,149 @@ All are fixed: the game now plays as the original here.
   #336, #338, #340, #341, #348, #349, #350, #351, #352, #353, #354, #357,
   #360, #362, #363, #370)
 
-### 2.3 Safety by design
+### 3.3 Mistakes in the decompilation, fixed before release 1
+
+The same kind of fix, found earlier, while the code was being named and
+tested; release 1 already had these.
+
+**Combat**
+
+- Dodge gives two points per skill level, as in the original; before the fix
+  it gave five, so a skilled dodger avoided nearly every hit. (#49)
+- NPCs choose their weapon by its total damage; before the fix they judged by
+  fatigue damage alone, so a guard would draw a mace over a fine sword. (#52)
+- In turn-based combat a knocked-down character gets up on its own turn, with
+  the animation and its action-point cost; before the fix it rose free during
+  others' turns. (#55)
+- When an NPC makes peace, a character in the middle of an attempted attack
+  now stops; before the fix only some kinds of attack were called off. (#16)
+- Running during combat costs one point of fatigue each interval, as in the
+  original; before the fix running in combat was free. (#30)
+- In combat mode a plain click on a corpse does nothing and Alt-click loots
+  it; before the fix the plain click started an unpredictable action. (#47)
+- Attacking your own follower in combat asks for confirmation again, with Alt
+  to force it; before the fix a click simply attacked them. (#48)
+- NPCs pick the best of the weapons that can reach their target; before the
+  fix they took the last such weapon in their pack. (#53)
+- NPCs deciding whether to flee now weigh each party member's own level;
+  before the fix they counted the leader's level once per member. (#54)
+- Carrying a small light reduces the darkness penalty by the original amount;
+  before the fix it was reduced slightly too much, by up to two points. (#50)
+
+**Spells and magic**
+
+- Spell projectiles now light up and play their sound where they hit; before
+  the fix that impact light and sound never happened at all. (#13)
+- Items that act only on their user now take effect directly, as in the
+  original; before the fix they were routed through the spell-casting process
+  instead. (#19)
+- Magic items that pay for a spell with fatigue now charge that spell's cost;
+  before the fix they charged another spell's cost and the cast could fail.
+  (#29)
+- Each spell now starts with its caster's reflection settings cleared, as in
+  the original; before the fix the previous caster's could carry over (effect
+  unmeasured). (#44)
+
+**World, maps and travel**
+
+- Random encounters now respect their maximum character level; before the fix
+  that limit was never read, the minimum being read twice instead. (#24)
+- Monsters in a random encounter group now spread over neighbouring tiles in
+  the original's pattern; before the fix each one was shifted diagonally.
+  (#25)
+- On Linux, mod archives with folders whose names begin another folder's name
+  find every file; before the fix some existing files were reported missing.
+  (#34)
+
+**Dialogue, quests and scripts**
+
+- Dialogue replies can be clicked with the mouse again; before the fix their
+  click areas were placed outside the window, all on one row, and did nothing.
+  (#9)
+- Game scripts divide numbers again; before the fix every division in every
+  shipped script added the two numbers together instead. (#45)
+- NPCs such as H.T. Parnell and Nasrudin pick the special greetings their
+  dialogue files ask for; before the fix those greeting choices were misread
+  and skipped. (#22)
+- Low-intelligence characters read the simple-language quest log written for
+  them; before the fix they saw the normal text and the dumb version was never
+  used. (#39)
+- A newspaper headline repeated in dialogue no longer gains a stray full stop
+  after its own '!', '?' or '.'; before the fix every headline got one. (#18)
+
+**Crashes and hangs**
+
+- Reaching the experience needed for the level cap now stops at the cap;
+  before the fix it crashed the game outright. (#56)
+- A message file line of 2,000 or more characters, as a mod might contain, is
+  cut off as in the original; before the fix it could crash the game. (#11)
+
+**Saving and loading**
+
+- Saves now record how often each random encounter has been met; before the
+  fix those counts were lost and every save carried 1.7 KB of junk. (#31)
+- Reading an empty part of a file no longer leaves it unusable for later
+  reads, as in the original; before the fix the file was stuck afterwards.
+  (#36)
+- On Linux, deleting and renaming game files now finds them whatever the
+  capital letters, as opening does; before the fix such files were left
+  behind. (#46)
+- On Linux, the game recognises its own module archive again, so map caches
+  and saves record which module wrote them; before the fix they recorded
+  nothing. (#57)
+
+**Items, inventory and trade**
+
+- The last-listed shop stock, the Multi-Magic (Dark) set on the stock game,
+  restocks with goods again; before the fix any merchant or container using it
+  stayed empty. (#12)
+- Characters with exactly zero magical or technological aptitude can use magic
+  and tech items as in the original; before the fix some such items refused
+  them. (#20)
+- Winning a gamble now gives you the item with the winner's message; before
+  the fix a win was handled the same way as a loss. (#26)
+- Alt-click dragging an item onto your tile now leaves items held inside an
+  inventory alone; before the fix the check meant to skip them never did.
+  (#37)
+
+**Movement and animation**
+
+- Characters no longer fidget in the background while the main menu has the
+  game paused; before the fix their idle animations kept playing behind it.
+  (#7)
+
+**Interface and screens**
+
+- Moving a window now moves its buttons with it; before the fix a ghost copy
+  of the interface bar appeared at any screen height but 600. (#10)
+- Six early copying mistakes now match the original: a floating-text effect,
+  wandering in the dark, the skill button under the mouse, an overwrite
+  prompt, lock files, a map check. (#1-#6)
+- Main-menu screen text containing a tab is shown in full again; before the
+  fix every such line was cut off where the tab began. (#8)
+- The recent-actions button for a used item now gets the same art as in the
+  original; before the fix it was given no art at all. (#27)
+- The last line of a message file without a line ending no longer gains junk
+  characters; before the fix 60 shipped message files were affected. (#35)
+
+**Drawing and sound**
+
+- Lights stored with a map area now shine where they were placed; before the
+  fix they were put at tiny coordinates near the map's corner. (#23)
+- Spell effects play their sounds again; before the fix every sound attached
+  to a visual spell effect was silent, through three separate mistakes. (#33)
+- Door and portal art now takes its colour set from the direction it faces, as
+  in the original; before the fix the requested colour set was kept. (#32)
+- Pictures clipped at the left or top of the screen or window are cut off
+  cleanly; before the fix they drew a shifted part of the image. (#41)
+- On Linux, the few sounds with no file assigned now simply stay silent;
+  before the fix the game tried to load a folder as a sound. (#51)
+
+**Fixes with no effect in ordinary play** (8): unused routines,
+multiplayer-only paths and the editor's start-up. (#14, #15, #17, #21, #28,
+#38, #40, #43)
+
+### 3.4 Safety by design
 
 - **A save is never reported saved when it was not.** If any part fails to
   write, the save fails and the old one stays.
@@ -762,198 +1117,6 @@ All are fixed: the game now plays as the original here.
   Linux and Windows.
 - **The original's arithmetic, exactly.** CE is built so that numbers
   overflow the way the original's did, at any compiler optimization.
-
-## 3. Combat additions
-
-Three optional mods come with Arcanum CE, all off unless you turn them on.
-
-- **Turning them on:** setup asks about each one. Afterwards each is one line
-  in `arcanum-ce.cfg`: change its `0` to `1` and restart the game to turn it
-  on, back to `0` to turn it off.
-- **Saves:** keep the Combat Rebalance on for a save made with it. Real-Time
-  Pacing and Called Shots save nothing, so they can be turned on or off with
-  any save.
-
-### 3.1 Combat Rebalance (preview) - `mod combat-rebalance`
-
-A rework of combat, built and tuned piece by piece. **A preview:** the balance
-is still being tuned.
-
-**Press Q to reload a gun.** With the Combat Rebalance on, guns hold only a
-few ready shots and must be reloaded.
-
-**Firearms**
-
-- **Reloading.** A gun holds ready shots, and **Q** reloads:
-  - pistols and revolvers 6, rifles and muzzle-loaders 1, repeaters 7, heavy
-    guns 2;
-  - one shot at a time, though some guns refill a whole magazine;
-  - in turn-based combat, unfinished loading carries over to the next turn;
-  - in real time you stand still while loading;
-  - followers and enemies reload, top up and switch to a melee backup too;
-  - outside combat, guns load themselves.
-- **Every gun retuned by its class** (all 41 firearms): damage, firing and
-  loading cost, range and price.
-  - Muzzle-loaders hit hard and load slowly.
-  - Rifles and repeaters stay accurate further out.
-  - Pistols are quick, and lose accuracy and penetration with distance.
-  - The rare guns each have a role: the Acid Gun eats armor, the Tranquilizer
-    Gun knocks out, and the Grenade Launcher's explosion lands.
-- **The ammunition counter shows the gun's state** (new since release 1):
-  ready shots over capacity, then spare rounds, such as `3/7 24`, or
-  `JAM 24` while the gun is jammed.
-- **Gun criticals by kind:** pistols critical often, rifles find gaps in
-  armor, muzzle-loaders and heavy guns knock down.
-- **Jams:** a firearm's fumble jams it. Clearing the jam costs reload work,
-  and the gun keeps its rounds. (In the original, every fumble shot its
-  shooter.)
-- **An easier first shot** at a critter that has not noticed you.
-
-**Armor**
-
-- **Armor stops damage where it covers**, against each hit's penetration, on
-  a curve: every weapon and 222 armor pieces carry their own values.
-- **Criticals and called shots find gaps** in armor.
-- **Shields block.**
-- **Natural hide and magical protection** count as armor.
-- **A blow the armor stops still tires the target:** a monster's partly, a
-  mace's 40%, a staff's or club's 20%.
-
-**Opponents**
-
-- **They pick weapons they can use:** suited to your armor, and ones they can
-  afford to swing. (In the original an NPC could pick a weapon that cost more
-  than its turn, and never attack.)
-- **Casters cast**, and summon (up to 3 creatures).
-- **Targets are chosen better:** undead hold their ground, and hunters go for
-  gunners and casters.
-- **Followers on Defensive** fight within 8 tiles of you.
-- **Potions:** an enemy drinks at most two a fight, and drinking costs 6 AP.
-
-**Creatures** (new since release 1)
-
-- **A critical hit does what suits the body it lands on.** Six kinds of body:
-  living, skeletal undead, fleshy undead, mechanical, spirit and phantom. The
-  original allowed nothing at all for shapeless creatures and only a
-  knockdown for undead.
-- **Phantoms are hurt only by critical hits, spells, explosions and traps.**
-  Ordinary blows pass through them; a weapon's on-hit spell still goes off.
-  Hovering over a phantom tells you what hurts it, in place of its reaction.
-- **Opponents look for another way against a phantom**, such as a spell,
-  rather than swinging uselessly.
-- **A crushing critical on a skeleton** does 10 more damage.
-- **The creature sheet** sets named creatures' body type, natural protection
-  (in place of the usual armour calculation) and resistance to gunfire.
-
-**Criticals**
-
-- **More criticals.**
-- **Each has a temporary effect by where it struck:** Winded, Numbed arm,
-  Hobbled, Staggered or Dazzled. Injuries rarely last.
-- **A full turn safe from another stun** after recovering from a stun,
-  knockdown or knockout.
-
-**Magic**
-
-- **Per-spell costs:** 4 to 7 AP by power, 1 less in a mastered college.
-- **The aptitude damage bonus** is 30% smaller.
-- **Spell criticals:** damage spells add damage and a stun or knockdown;
-  Weaken, Drain Will, Plague of Insects, Shrink and Congeal Time leave their
-  target Exposed, Unfocused, Dazzled or Hobbled for two turns; other spells
-  return their casting fatigue.
-- **No stacking:** a second casting of a buff does not add to the first.
-- **Summoning sickness:** a creature summoned in combat waits a turn before
-  acting.
-
-**Traps** (new since release 1)
-
-- **Traps are easier to see.** Spot Trap now rises on the same curve as
-  Melee and Bow: 75% at 10 skill points, where the original gave 40%.
-- **Training sees without rolling:** an Apprentice always sees an ordinary
-  trap of the easiest kind, and an Expert a magical one too.
-- **The party's best spotter looks ahead** three tiles along your path, once
-  per trap, and checks a trapped door or chest for whoever opens it. The
-  message names who saw it.
-- **A trap's own difficulty makes it harder to spot.** The original counted
-  it only against disarming.
-
-**Weapons**
-
-- **Swapping weapons** costs 4 AP.
-- **Exertion:** you may act **1 AP short**, at a cost of 2 fatigue. The
-  action bar shows such an action's knob in yellow, with "+2 fatigue" above
-  it (new since release 1).
-- **A throw you cannot pay for is refused** before it starts, and the item
-  stays in your pack (new since release 1). Before, at 1 or 2 AP every
-  grenade you carried could be thrown for free.
-- **A weapon's on-hit spell** costs no AP. (In the original it was charged as
-  a cast, so in turn-based the Grenade Launcher's explosion never landed.)
-- **Bows** are quicker: 3 to 5 AP, 1 less from Apprentice.
-- **The Throwing Dagger**, wielded and thrown, keeps its target and can hurt
-  it. (In the original a wielded thrown weapon injured nobody.)
-- **A throw under way** plays out.
-
-**The opening, poison and prowling**
-
-- **The opening:** at most one enemy acts before your first turn.
-- **Poison** ticks every second turn in combat (every 4 seconds in real
-  time). In the original it ticked once in fifteen turn-based rounds.
-- **Prowling:**
-  - attacking from prowl ends it;
-  - followers prowl with you only if they have some Prowling skill, and an
-    attack on one reveals only that follower;
-  - starting to prowl in combat needs Master training (prowling started
-    before combat carries into it);
-  - darkness helps against being seen, up to 30, unless you carry a light or
-    the watcher sees in the dark;
-  - open ground halves your prowling below Expert, instead of a flat 50
-    penalty.
-
-**Fixes to the mod itself since release 1**
-
-- Enemies' memory of who is desperate, armoured or carrying potions forgets
-  the dead. After 64 NPCs in one session, enemies had begun to share one
-  record and make odd choices.
-- Poison that ticks per turn frees the record of dead or cured critters, so a
-  long fight can no longer stop poison working.
-- With potion costs on and exertion off, the action bar no longer offers a
-  potion you cannot afford and then refuses the drink.
-
-### 3.2 Real-Time Pacing - `mod real-time-pacing`
-
-In real-time combat, **every action takes the time its action points would
-take in turn-based combat.** Speed and the weapon or spell you choose then
-matter in real time as they do turn by turn.
-
-- **Timed:** attacks, throws and grenades, skills, and every spell.
-- **The pace:** a whole turn is worth 2 seconds (the `real time pace ms`
-  setting in `arcanum-ce.cfg`). At Speed 11:
-  - a Bow fires about once a second, rather than twice;
-  - Harm takes three-quarters of a second, rather than a click.
-- **Never faster than its animation.**
-- **Instant actions stay instant:** doors, containers, picking things up,
-  plain items, pickpocketing.
-- **Moving costs fighting time:** recovery pauses while you walk or run, as
-  in turn-based (`real time recovery pauses while moving`).
-- **A melee swing whose target stepped out of reach** costs nothing.
-- **Chasing:** a melee enemy swings only at a target that has stopped, not at
-  one running past.
-- **Potions take time:** drinking one in combat means standing still for its
-  cost, and the effect comes at the end.
-- **Turn-based combat is unchanged.**
-
-### 3.3 Called Shots - `mod called-shots`
-
-- **A panel beside the combat bar:** Body, Head, Arms, Legs. Choose one, and
-  your attacks aim there until you choose again or leave combat mode.
-- **Where:** in turn-based and real-time combat, and while prowling. Outside
-  combat mode the panel is hidden.
-- **Arcanum's own aimed attacks:** holding comma (head), period (arms) or
-  slash (legs) has always aimed an attack. The keys still work, and win over
-  the panel while held.
-- **Arcanum's own rules:** an aimed attack is harder to land (-50 for the
-  head, -30 for a limb) and, when it is a critical, more likely to leave a
-  lasting effect (+10). The panel changes no number.
 
 ## 4. Changes to game mechanics
 
@@ -1204,7 +1367,7 @@ does the same. These are the ones a player can meet.
 ### 6.2 Kept unless an optional mod is on
 
 These are as the original has them in a default install. The mod named
-changes each one (section 3).
+changes each one (section 1).
 
 - **An NPC may wield a weapon that costs more than its turn**, and then never
   attacks in turn-based combat. Combat Rebalance.
