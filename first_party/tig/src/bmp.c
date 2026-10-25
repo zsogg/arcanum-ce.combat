@@ -6,6 +6,12 @@
 #include "tig/video.h"
 #include "tig/window.h"
 
+// CE: SDL's loader reads the file. The original's own reader refuses a header
+// other than 40 bytes, one plane and no compression (at 0x535e44, 0x535e4f
+// and 0x535e75), and keeps a palette without alpha bits (at 0x535f1b); CE
+// takes what SDL takes. The one caller, the light module, needs 8 bpp and never reads the
+// palette, and the shipped shadow map reads the same either way.
+//
 // 0x535D80
 int tig_bmp_create(TigBmp* bmp)
 {

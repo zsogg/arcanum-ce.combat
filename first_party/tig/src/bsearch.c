@@ -1,6 +1,10 @@
 #include "tig/bsearch.h"
 
-// NOTE: Original code is slightly different.
+// CE: a plain halving search. The original is the CRT's (half = num / 2,
+// less one when num is even, 0x53796f), so with an even count it probes the
+// lower middle. A missing key gives the same insertion point; a duplicated
+// one may be found at another copy, which its one caller, `mes_find_next`,
+// steps past in full.
 //
 // 0x537940
 void* tig_bsearch(void const* key, void const* base, size_t cnt, size_t size, int (*fn)(void const*, void const*), int* exists_ptr)

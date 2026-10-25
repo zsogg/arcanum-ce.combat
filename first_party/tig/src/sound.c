@@ -162,7 +162,13 @@ void tig_sound_update(void)
                     new_volume = snd->volume * (snd->fade_duration - snd->fade_step) / snd->fade_duration;
                 } else {
                     snd->flags &= ~TIG_SOUND_FADE_OUT;
-                    if (snd->next_sound_handle >= 0) {
+                    // FIX (porting bug #364): the next sound is started only
+                    // while it is still waiting (0x532eb8-0x532eba); CE set
+                    // FADE_IN on it whatever it had become since - stopped, or
+                    // its handle reused by another sound. Latent: no caller
+                    // queues a sound behind another.
+                    if (snd->next_sound_handle >= 0
+                        && (tig_sounds[snd->next_sound_handle].flags & TIG_SOUND_WAIT) != 0) {
                         TigSound* next_snd = &(tig_sounds[snd->next_sound_handle]);
                         next_snd->flags &= ~TIG_SOUND_WAIT;
                         next_snd->flags |= TIG_SOUND_FADE_IN;
@@ -336,8 +342,10 @@ int tig_sound_acquire_handle(TigSoundType type)
         }
         break;
     default:
-        // Should be unreachable.
-        abort();
+        // NOTE: Faithful. An unknown type is not refused: it falls through to
+        // the dump and -1 (0x5331b6 `jne 0x5331d1`), where CE aborted. Every
+        // caller passes one of the three types.
+        break;
     }
 
     // FIX: The %d had no argument, so this read past the end of the
