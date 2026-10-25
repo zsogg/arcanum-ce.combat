@@ -127,7 +127,12 @@ int tig_movie_play(const char* path, TigMovieFlags movie_flags, int sound_track)
             if ((movie_flags & TIG_MOVIE_IGNORE_KEYBOARD) == 0
                 && message.type == TIG_MESSAGE_KEYBOARD
                 && message.data.keyboard.pressed == 1) {
-                key = message.data.keyboard.key;
+                // FIX (porting bug #369): the key waited on below is the
+                // one the keyboard state is indexed by, the message's own
+                // (0x5316a1, 0x5316c2 `call 0x52b340`); CE kept the keycode,
+                // so Escape tested the X key and Shift, Ctrl, the arrows or
+                // an F-key read about 1 GB past the state array.
+                key = message.data.keyboard.scancode;
                 stop = true;
             }
         }

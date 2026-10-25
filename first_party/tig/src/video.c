@@ -1,6 +1,7 @@
 #include "tig/video.h"
 
 #include <limits.h>
+#include <math.h>
 #include <stdio.h>
 
 #include "tig/art.h"
@@ -52,7 +53,7 @@ static int tig_video_screenshot_key = -1;
 static TigVideoState tig_video_state;
 
 // 0x60FEF8
-static float tig_video_gamma;
+static float tig_video_gamma = 1.0f;
 
 // 0x61030C
 static int tig_video_bpp;
@@ -272,7 +273,26 @@ int tig_video_flip(void)
     SDL_UpdateTexture(tig_video_state.texture, NULL, tig_video_state.surface->pixels, tig_video_state.surface->pitch);
 
     SDL_RenderClear(tig_video_state.renderer);
+
+    // The brightness (`tig_video_set_gamma`): below 1 the frame is drawn
+    // dimmed; above 1 it is drawn again, added at the excess, which clamps at
+    // full as the original's ramp does.
+    if (tig_video_gamma < 1.0f) {
+        SDL_SetTextureColorModFloat(tig_video_state.texture, tig_video_gamma, tig_video_gamma, tig_video_gamma);
+    }
     SDL_RenderTexture(tig_video_state.renderer, tig_video_state.texture, NULL, NULL);
+    if (tig_video_gamma < 1.0f) {
+        SDL_SetTextureColorModFloat(tig_video_state.texture, 1.0f, 1.0f, 1.0f);
+    } else if (tig_video_gamma > 1.0f) {
+        SDL_BlendMode texture_blend_mode;
+
+        SDL_GetTextureBlendMode(tig_video_state.texture, &texture_blend_mode);
+        SDL_SetTextureBlendMode(tig_video_state.texture, SDL_BLENDMODE_ADD);
+        SDL_SetTextureColorModFloat(tig_video_state.texture, tig_video_gamma - 1.0f, tig_video_gamma - 1.0f, tig_video_gamma - 1.0f);
+        SDL_RenderTexture(tig_video_state.renderer, tig_video_state.texture, NULL, NULL);
+        SDL_SetTextureColorModFloat(tig_video_state.texture, 1.0f, 1.0f, 1.0f);
+        SDL_SetTextureBlendMode(tig_video_state.texture, texture_blend_mode);
+    }
 
     if (tig_fade_state.enabled) {
         SDL_BlendMode blend_mode;
@@ -408,41 +428,44 @@ int tig_video_check_gamma_control(void)
 // This implementation prefers `steps` over `duration` - the decision is based
 // on subjective perception of default fade steps (48 steps) vs. default fade
 // duration (2 seconds) on a target 60 fps monitor. The steps approach takes
-// about 800 ms which is perfectly fine.
+// about 800 ms which is perfectly fine. `duration` still decides, as in the
+// original, whether there is a fade at all; an immediate one shows on the next
+// flip, where the original's gamma ramp changed the screen at once.
 //
 // 0x51FCA0
 int tig_video_fade(tig_color_t color, int steps, float duration, TigFadeFlags flags)
 {
-    int step;
-
-    (void)duration;
+    int target;
+    int alpha;
+    int remaining;
 
     if ((flags & TIG_FADE_IN) == 0) {
-        // Enable faded state.
-        tig_fade_state.enabled = true;
         tig_fade_state.color.r = (Uint8)tig_color_get_red(color);
         tig_fade_state.color.g = (Uint8)tig_color_get_green(color);
         tig_fade_state.color.b = (Uint8)tig_color_get_blue(color);
     }
 
-    if ((flags & TIG_FADE_IN) != 0) {
-        // Fade in by gradually reducing alpha from 255 (fully opaque) to 0
-        // (completely transparent).
-        for (step = 0; step < steps; step++) {
-            tig_fade_state.color.a = (Uint8)(255 - step * 255 / steps);
-            tig_video_flip();
-        }
+    // FIX (porting bug #365): the fade moves from where the screen is now,
+    // each step a 1/remaining share of what is left (0x51fddc-0x51fde4,
+    // 0x51fe76), so its last step lands on the target; with fewer than one
+    // step or under a second it is applied at once (0x51fd56-0x51fd71,
+    // 0x51fe95). CE restarted from clear or fully covered, stopped a step
+    // short of the colour, and on a zero-step fade-out kept the old cover.
+    target = (flags & TIG_FADE_IN) != 0 ? 0 : 255;
+    alpha = tig_fade_state.enabled ? tig_fade_state.color.a : 0;
+    tig_fade_state.enabled = true;
+
+    if (steps < 1 || duration < 1.0f) {
+        tig_fade_state.color.a = (Uint8)target;
     } else {
-        // Fade out by gradually increasing alpha from 0 (completely
-        // transparent) to 255 (fully opaque).
-        for (step = 0; step < steps; step++) {
-            tig_fade_state.color.a = (Uint8)(step * 255 / steps);
+        for (remaining = steps; remaining > 0; remaining--) {
+            alpha += (target - alpha) / remaining;
+            tig_fade_state.color.a = (Uint8)alpha;
             tig_video_flip();
         }
     }
 
     if ((flags & TIG_FADE_IN) != 0) {
-        // Disable faded state.
         tig_fade_state.enabled = false;
     }
 
@@ -456,7 +479,12 @@ int tig_video_set_gamma(float gamma)
         return TIG_OK;
     }
 
-    if (gamma < 0.0 || gamma >= 2.0) {
+    // FIX (porting bug #366): the brightness is applied, scaling the screen's
+    // colours by `gamma` with each clamped at full (0x520036-0x5200c2;
+    // `tig_video_flip` draws it), and a gamma that is not above zero is
+    // refused (0x52000a-0x520015). CE stored it and changed nothing on screen,
+    // while `tig_video_check_gamma_control` offered the slider.
+    if (!(gamma > 0.0f) || gamma >= 2.0f) {
         return TIG_ERR_INVALID_PARAM;
     }
 
@@ -485,6 +513,10 @@ int tig_video_buffer_create(TigVideoBufferCreateInfo* vb_create_info, TigVideoBu
         return TIG_ERR_OUT_OF_MEMORY;
     }
 
+    // CE: every buffer is a system-memory SDL surface. The original also
+    // carries the render-target and texture create flags into the buffer's
+    // (0x52031b-0x52032f), and skips the background fill for a texture; CE sets
+    // neither, so it fills every buffer. Only the 3-D path reads the first.
     video_buffer->flags |= TIG_VIDEO_BUFFER_SYSTEM_MEMORY;
 
     if ((vb_create_info->flags & TIG_VIDEO_BUFFER_CREATE_COLOR_KEY) != 0) {
@@ -864,6 +896,10 @@ int tig_video_buffer_render_target_check(TigVideoBuffer* video_buffer, unsigned 
 {
     TigVideoBufferData data;
 
+    // CE: only a blit with no flags passes; the original also passes one with
+    // only the mirror flags (0x520fb7 `test eax,0xfffffffc`), which its buffer
+    // blit then mirrors. CE's buffer blit does not mirror, so a mirrored art
+    // blit takes `art_blit`, which draws the same sprite.
     if (flags == 0) {
         return TIG_OK;
     }
@@ -925,11 +961,16 @@ int tig_video_buffer_blit(TigVideoBufferBlitInfo* blit_info)
 
     tmp_rect = *blit_info->dst_rect;
 
+    // FIX (porting bug #368): the stretched corrections are rounded
+    // (0x5210d1-0x521175 `frndint`), and clipping by the destination maps back
+    // to the source by multiplying by the ratio (0x521231-0x5212c9 `fmul`,
+    // `frndint`), as `art_blit` does (#342, #343); CE truncated, and divided
+    // on the way back.
     if (stretched) {
-        tmp_rect.x += (int)((float)(blit_src_rect.x - blit_info->src_rect->x) / width_ratio);
-        tmp_rect.y += (int)((float)(blit_src_rect.y - blit_info->src_rect->y) / height_ratio);
-        tmp_rect.width -= (int)((float)(blit_info->src_rect->width - blit_src_rect.width) / width_ratio);
-        tmp_rect.height -= (int)((float)(blit_info->src_rect->height - blit_src_rect.height) / height_ratio);
+        tmp_rect.x += (int)lrintf((float)(blit_src_rect.x - blit_info->src_rect->x) / width_ratio);
+        tmp_rect.y += (int)lrintf((float)(blit_src_rect.y - blit_info->src_rect->y) / height_ratio);
+        tmp_rect.width -= (int)lrintf((float)(blit_info->src_rect->width - blit_src_rect.width) / width_ratio);
+        tmp_rect.height -= (int)lrintf((float)(blit_info->src_rect->height - blit_src_rect.height) / height_ratio);
     } else {
         tmp_rect.x += blit_src_rect.x - blit_info->src_rect->x;
         tmp_rect.y += blit_src_rect.y - blit_info->src_rect->y;
@@ -950,10 +991,10 @@ int tig_video_buffer_blit(TigVideoBufferBlitInfo* blit_info)
     }
 
     if (stretched) {
-        blit_src_rect.x += (int)((float)(blit_dst_rect.x - tmp_rect.x) / width_ratio);
-        blit_src_rect.y += (int)((float)(blit_dst_rect.y - tmp_rect.y) / height_ratio);
-        blit_src_rect.width -= (int)((float)(tmp_rect.width - blit_dst_rect.width) / width_ratio);
-        blit_src_rect.height -= (int)((float)(tmp_rect.height - blit_dst_rect.height) / height_ratio);
+        blit_src_rect.x += (int)lrintf((float)(blit_dst_rect.x - tmp_rect.x) * width_ratio);
+        blit_src_rect.y += (int)lrintf((float)(blit_dst_rect.y - tmp_rect.y) * height_ratio);
+        blit_src_rect.width -= (int)lrintf((float)(tmp_rect.width - blit_dst_rect.width) * width_ratio);
+        blit_src_rect.height -= (int)lrintf((float)(tmp_rect.height - blit_dst_rect.height) * height_ratio);
     } else {
         blit_src_rect.x += blit_dst_rect.x - tmp_rect.x;
         blit_src_rect.y += blit_dst_rect.y - tmp_rect.y;
@@ -1052,6 +1093,50 @@ int tig_video_buffer_blit(TigVideoBufferBlitInfo* blit_info)
 
             src = (uint32_t*)((uint8_t*)src + blit_info->src_video_buffer->surface->pitch - 4 * blit_src_rect.width);
             dst = (uint32_t*)((uint8_t*)dst + blit_info->dst_video_buffer->surface->pitch - 4 * blit_dst_rect.width);
+        }
+
+        return TIG_OK;
+    }
+
+    // FIX (porting bug #367): a constant-alpha blit blends each channel as
+    // dst + (src - dst) * alpha[0] / 256, rounded down, keeping the colour key
+    // (0x522a38, 0x522cf7-0x522d84); CE copied the source, so text floaters
+    // drew at full strength to the end. The world map's note backdrop passes
+    // alpha 0 and so leaves its colour-keyed note untouched, as the original
+    // does. shortcut: unstretched only, since no caller stretches one; add
+    // the stretched walk if one does.
+    if ((blit_info->flags & TIG_VIDEO_BUFFER_BLIT_BLEND_ALPHA_CONST) != 0 && !stretched) {
+        int alpha = blit_info->alpha[0];
+        bool keyed = (blit_info->src_video_buffer->flags & TIG_VIDEO_BUFFER_COLOR_KEY) != 0;
+        int x;
+        int y;
+
+        for (y = 0; y < blit_dst_rect.height; y++) {
+            uint32_t* src = (uint32_t*)((uint8_t*)blit_info->src_video_buffer->surface->pixels
+                + blit_info->src_video_buffer->surface->pitch * (blit_src_rect.y + y)
+                + 4 * blit_src_rect.x);
+            uint32_t* dst = (uint32_t*)((uint8_t*)blit_info->dst_video_buffer->surface->pixels
+                + blit_info->dst_video_buffer->surface->pitch * (blit_dst_rect.y + y)
+                + 4 * blit_dst_rect.x);
+
+            for (x = 0; x < blit_dst_rect.width; x++) {
+                uint32_t s = src[x];
+                uint32_t d = dst[x];
+                uint32_t out = d & 0xFF000000u;
+                int shift;
+
+                if (keyed && s == blit_info->src_video_buffer->color_key) {
+                    continue;
+                }
+
+                for (shift = 0; shift < 24; shift += 8) {
+                    int sc = (int)((s >> shift) & 0xFFu);
+                    int dc = (int)((d >> shift) & 0xFFu);
+                    out |= (uint32_t)(dc + (((sc - dc) * alpha) >> 8)) << shift;
+                }
+
+                dst[x] = out;
+            }
         }
 
         return TIG_OK;
@@ -1485,7 +1570,11 @@ int tig_video_buffer_data_to_bmp(SDL_Surface* surface, TigRect* rect, const char
         blit_rect.w = rect->width;
         blit_rect.h = rect->height;
 
-        if (!SDL_BlitSurface(surface, &blit_rect, intermediate_surface, &blit_rect)) {
+        // FIX (porting bug #370): the rect is read from the surface into the
+        // file's own origin (0x526032-0x526058); CE also placed it at the
+        // rect's position, past the smaller surface. Latent: every caller
+        // saves a rect at 0,0.
+        if (!SDL_BlitSurface(surface, &blit_rect, intermediate_surface, NULL)) {
             SDL_DestroySurface(intermediate_surface);
             SDL_CloseIO(io);
             return TIG_ERR_GENERIC;

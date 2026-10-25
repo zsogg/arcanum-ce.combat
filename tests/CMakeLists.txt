@@ -83,6 +83,7 @@ add_executable(arcanum-tests
     "test_proto.c"
     "test_fatigue.c"
     "test_window.c"
+    "test_video.c"
     "test_area.c"
     "test_provenance.c"
     "test_determinism.c"
