@@ -513,6 +513,10 @@ bool tig_button_process_mouse_msg(TigMouseMessageData* mouse)
 
         button_index = tig_button_handle_to_index(button_handle);
 
+        // CE: the original hands a press on a button with flag 0x1000 to its
+        // pop-up menu module (0x53837e-0x53839d, 0x539aa0); only the network
+        // code creates such buttons, so CE has neither the flag nor the menu.
+
         new_state = TIG_BUTTON_STATE_PRESSED;
         if (tig_button_pressed_button_handle == TIG_BUTTON_HANDLE_INVALID) {
             if ((buttons[button_index].flags & TIG_BUTTON_TOGGLE) != 0) {

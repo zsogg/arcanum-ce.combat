@@ -249,6 +249,9 @@ TigDatabase* tig_database_open(const char* path)
 
     fclose(stream);
 
+    // NOTE: Faithful. A short or malformed index drops the copied path: the
+    // original frees the name table, the entries and the database
+    // (0x53beda-0x53beed), never the path it duplicated at 0x53bde6.
     if (index < database->entries_count) {
         FREE(database->name_table);
         FREE(database->entries);

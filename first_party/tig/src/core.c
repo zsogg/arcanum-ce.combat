@@ -31,9 +31,10 @@ typedef struct TigModule {
     TigExitFunc exit_func;
 } TigModule;
 
-// NOTE: Original code is slightly different. It has two separate arrays of
-// init and exit funcs, and does not have human-readable name. This approach is
-// borrowed from ToEE.
+// CE: the original has two separate arrays of init and exit funcs, and no
+// names (this layout is borrowed from ToEE). Its 23 modules include DirectInput
+// (0x537a80, 0x537ac0), the network (0x526e60, 0x5270c0) and the pop-up menu
+// (0x538f60, 0x5390c0), which CE does without; `guid` is CE's.
 static TigModule modules[] = {
     { "memory", tig_memory_init, tig_memory_exit },
     { "debug", tig_debug_init, tig_debug_exit },

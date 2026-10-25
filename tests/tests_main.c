@@ -57,6 +57,7 @@ void test_core_suite(void);
 void test_debug_suite(void);
 void test_draw_suite(void);
 void test_kb_suite(void);
+void test_window_suite(void);
 void test_guid_suite(void);
 void test_dialog_shutdown_suite(void);
 void test_dialog_options_suite(void);
@@ -143,6 +144,7 @@ int main(void)
     test_debug_suite();
     test_draw_suite();
     test_kb_suite();
+    test_window_suite();
     test_guid_suite();
     test_dialog_shutdown_suite();
     test_dialog_options_suite();

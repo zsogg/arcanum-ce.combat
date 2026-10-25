@@ -26,6 +26,7 @@
 #include <string.h>
 
 #include "tig/message.h"
+#include "tig/mouse.h"
 #include "tig/timer.h"
 
 #include "test_harness.h"
@@ -542,8 +543,33 @@ TEST(a_registered_handler_is_not_called_while_its_key_is_up)
     msg_end();
 }
 
+// Porting bug #355: a release is acted on only when the button was down
+// (0x4ff528-0x4ff52c). The right button keeps clear of the button module,
+// which takes only the left one.
+TEST(a_lone_mouse_release_sends_no_button_up)
+{
+    TigMessage message;
+
+    msg_begin();
+    tig_mouse_set_button(TIG_MOUSE_BUTTON_RIGHT, false);
+    CHECK_INT(msg_drain_all(), 0);
+
+    tig_mouse_set_button(TIG_MOUSE_BUTTON_RIGHT, true);
+    tig_mouse_set_button(TIG_MOUSE_BUTTON_RIGHT, false);
+    CHECK_INT(tig_message_dequeue(&message), TIG_OK);
+    CHECK_INT(message.data.mouse.event, TIG_MESSAGE_MOUSE_RIGHT_BUTTON_DOWN);
+    CHECK_INT(tig_message_dequeue(&message), TIG_OK);
+    CHECK_INT(message.data.mouse.event, TIG_MESSAGE_MOUSE_RIGHT_BUTTON_UP);
+    CHECK_INT(msg_drain_all(), 0);
+
+    tig_mouse_set_button(TIG_MOUSE_BUTTON_RIGHT, false);
+    CHECK_INT(msg_drain_all(), 0);
+    msg_end();
+}
+
 void test_message_suite(void)
 {
+    RUN(a_lone_mouse_release_sends_no_button_up);
     RUN(an_empty_queue_reports_empty_rather_than_succeeding);
     RUN(a_drain_stops_when_the_queue_is_empty);
     RUN(a_failed_dequeue_leaves_the_callers_message_alone);

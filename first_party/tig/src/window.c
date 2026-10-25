@@ -186,6 +186,14 @@ int tig_window_create(TigWindowData* window_data, tig_window_handle_t* window_ha
     }
 
     win->message_filter = window_data->message_filter;
+
+    // FIX (porting bug #356): a filtering window - modal ones included - with
+    // no filter is refused before anything is created (0x51cbf2-0x51cc07);
+    // CE created it, and `tig_window_filter_message` then called NULL.
+    if ((win->flags & TIG_WINDOW_MESSAGE_FILTER) != 0 && win->message_filter == NULL) {
+        return TIG_ERR_INVALID_PARAM;
+    }
+
     win->frame = window_data->rect;
     win->bounds.x = 0;
     win->bounds.y = 0;
@@ -475,11 +483,15 @@ void tig_window_repaint_rect(TigRect* src_rect, TigVideoBuffer* dst_video_buffer
                     if ((win->flags & TIG_WINDOW_TRANSPARENT) == 0) {
                         cont = true;
                     } else if ((tig_window_ctx_flags & TIG_INITIALIZE_SCRATCH_BUFFER) != 0) {
+                        // FIX (porting bug #357): the windows below are the
+                        // ones under this stack position (0x51d206-0x51d231);
+                        // CE passed the window's slot index. Latent: nothing
+                        // sets TIG_INITIALIZE_SCRATCH_BUFFER.
                         tig_window_repaint_rect(&dirty_rect,
                             win->secondary_video_buffer,
                             dirty_rect.x - win->frame.x,
                             dirty_rect.y - win->frame.y,
-                            window_index - 1);
+                            top_window_index - 1);
                         src_video_buffer = win->secondary_video_buffer;
                         cont = true;
                     } else if (v38 < 20) {
@@ -981,7 +993,10 @@ int tig_window_copy(tig_window_handle_t dst_window_handle, TigRect* dst_rect, ti
         dirty_rect.x = dst_rect->x + windows[dst_window_index].frame.x;
         dirty_rect.y = dst_rect->y + windows[dst_window_index].frame.y;
         dirty_rect.width = dst_rect->width;
-        dirty_rect.width = dst_rect->height;
+        // FIX (porting bug #358): the height is the rect's height
+        // (0x51de46-0x51de5d); CE wrote it over the width and left the height
+        // unset, so the PC lens repainted the wrong area.
+        dirty_rect.height = dst_rect->height;
         tig_window_invalidate_rect(&dirty_rect);
     }
 
@@ -1350,11 +1365,13 @@ int tig_window_get_at_position(int x, int y, tig_window_handle_t* window_handle_
         window_handle = tig_window_stack[index];
         window_index = tig_window_handle_to_index(window_handle);
         win = &(windows[window_index]);
+        // FIX (porting bug #359): the right and bottom edges are outside
+        // (0x51e6f3-0x51e702); CE counted the pixel past them as inside.
         if ((win->flags & TIG_WINDOW_HIDDEN) == 0
             && x >= win->frame.x
             && y >= win->frame.y
-            && x <= win->frame.x + win->frame.width
-            && y <= win->frame.y + win->frame.height) {
+            && x < win->frame.x + win->frame.width
+            && y < win->frame.y + win->frame.height) {
             if ((win->flags & TIG_WINDOW_TRANSPARENT) != 0) {
                 if (tig_video_buffer_get_pixel_color(win->video_buffer, x - win->frame.x, y - win->frame.y, &color) == TIG_OK
                     && color == win->color_key) {
@@ -1546,6 +1563,9 @@ int tig_window_modal_dialog(TigWindowModalDialogInfo* modal_info, TigWindowModal
     window_data.rect.y = modal_info->y;
 
     if (tig_window_create(&window_data, &tig_window_modal_dialog_window_handle) != TIG_OK) {
+        // FIX (porting bug #360): the font `tig_window_modal_dialog_init`
+        // created is destroyed (0x51eb11, 0x51ebd8); CE kept it.
+        tig_window_modal_dialog_exit();
         return TIG_ERR_GENERIC;
     }
 
@@ -1590,7 +1610,28 @@ bool tig_window_modal_dialog_message_filter(TigMessage* msg)
 {
     switch (msg->type) {
     case TIG_MESSAGE_KEYBOARD:
-        if (msg->data.keyboard.pressed) {
+        // FIX (porting bug #361): an OK/Cancel dialog takes Enter and Escape
+        // when they are released (0x51ec73-0x51ec9c); CE took them pressed,
+        // so the release went on to the window beneath - the save menu, which
+        // acts on release, ran its Enter or Escape a second time.
+        //
+        // CE: the original reads the shortcut letters, and closes an OK or a
+        // Cancel dialog, on the character message (0x51ebfe-0x51ec71); CE
+        // sends text messages only while a text field is open, so a key press
+        // stands in for it, and any key closes those two, not only keys that
+        // type a character.
+        if (!msg->data.keyboard.pressed) {
+            if (tig_window_modal_dialog_info.type == TIG_WINDOW_MODAL_DIALOG_TYPE_OK_CANCEL) {
+                if (msg->data.keyboard.scancode == SDL_SCANCODE_RETURN
+                    || msg->data.keyboard.scancode == SDL_SCANCODE_KP_ENTER) {
+                    tig_message_modal_dialog_choice = TIG_WINDOW_MODAL_DIALOG_CHOICE_OK;
+                    tig_window_modal_dialog_close();
+                } else if (msg->data.keyboard.scancode == SDL_SCANCODE_ESCAPE) {
+                    tig_message_modal_dialog_choice = TIG_WINDOW_MODAL_DIALOG_CHOICE_CANCEL;
+                    tig_window_modal_dialog_close();
+                }
+            }
+        } else {
             switch (tig_window_modal_dialog_info.type) {
             case TIG_WINDOW_MODAL_DIALOG_TYPE_OK:
                 tig_message_modal_dialog_choice = TIG_WINDOW_MODAL_DIALOG_CHOICE_OK;
@@ -1601,13 +1642,10 @@ bool tig_window_modal_dialog_message_filter(TigMessage* msg)
                 tig_window_modal_dialog_close();
                 break;
             case TIG_WINDOW_MODAL_DIALOG_TYPE_OK_CANCEL:
-                if (msg->data.keyboard.scancode == SDL_SCANCODE_RETURN
-                    || msg->data.keyboard.scancode == SDL_SCANCODE_KP_ENTER
-                    || SDL_toupper(msg->data.keyboard.key) == SDL_toupper(tig_window_modal_dialog_info.keys[0])) {
+                if (SDL_toupper(msg->data.keyboard.key) == SDL_toupper(tig_window_modal_dialog_info.keys[0])) {
                     tig_message_modal_dialog_choice = TIG_WINDOW_MODAL_DIALOG_CHOICE_OK;
                     tig_window_modal_dialog_close();
-                } else if (msg->data.keyboard.scancode == SDL_SCANCODE_ESCAPE
-                    || SDL_toupper(msg->data.keyboard.key) == SDL_toupper(tig_window_modal_dialog_info.keys[1])) {
+                } else if (SDL_toupper(msg->data.keyboard.key) == SDL_toupper(tig_window_modal_dialog_info.keys[1])) {
                     tig_message_modal_dialog_choice = TIG_WINDOW_MODAL_DIALOG_CHOICE_CANCEL;
                     tig_window_modal_dialog_close();
                 }

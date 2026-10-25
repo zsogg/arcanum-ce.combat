@@ -336,6 +336,13 @@ void tig_mouse_set_button(int button, bool pressed)
         message.data.mouse.repeat = false;
         tig_message_enqueue(&message);
     } else {
+        // FIX (porting bug #355): a release is acted on only when the button
+        // was down or repeating (0x4ff528-0x4ff52c); CE sent a button-up for
+        // a lone release, such as one whose press went to another window.
+        if ((tig_mouse_state.flags & (tig_mouse_state_button_down_flags[button] | tig_mouse_state_button_down_repeat_flags[button])) == 0) {
+            return;
+        }
+
         tig_mouse_software_button_timestamps[button] = tig_ping_timestamp;
 
         tig_mouse_state.flags &= ~tig_mouse_state_button_down_flags[button];
@@ -682,7 +689,8 @@ int tig_mouse_cursor_overlay(tig_art_id_t art_id, int x, int y)
 
     rc = tig_art_frame_data(art_id, &art_frame_data);
     if (rc != TIG_OK) {
-        // FIXME: Visibility is not restored.
+        // NOTE: Faithful. The cursor hidden above stays hidden: the original
+        // returns here without showing it (0x500194 to 0x500507).
         return rc;
     }
 

@@ -22,3 +22,11 @@ leak:mes_load_internal
 # `unarchiving_an_absent_archive_fails`. See the NOTE in
 # first_party/tig/src/file.c.
 leak:tig_file_unarchive_native
+
+# tig_database_open: an index whose names or entries fail their checks frees
+# the name table, the entries and the database but not the path duplicated for
+# it. The original does the same: 0x53beda-0x53beed frees those three
+# (0x58a347), never the `_strdup` result from 0x53bde6. Reached deliberately by
+# the bounds cases in `test_mod_format_bounds.c`. See the NOTE in
+# first_party/tig/src/database.c.
+leak:tig_database_open

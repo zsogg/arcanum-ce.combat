@@ -76,6 +76,11 @@ void tig_message_exit(void)
         tig_message_empty_node_head = next;
     }
 
+    // FIX (porting bug #363): the key-handler table is emptied too
+    // (0x52b796); CE kept the count. Latent: `tig_message_init` zeroes it as
+    // well, so only a ping between exit and the next init could tell.
+    tig_message_key_handlers_count = 0;
+
     SDL_DestroyMutex(tig_message_mutex);
     tig_message_mutex = NULL;
 }
@@ -111,6 +116,8 @@ void tig_message_ping(void)
         SDL_ConvertEventToRenderCoordinates(renderer, &event);
 
         switch (event.type) {
+        // CE: the game is active while the pointer is over its window; the
+        // original follows WM_ACTIVATEAPP (0x52bb16, 0x52bb5c-0x52bb69).
         case SDL_EVENT_WINDOW_MOUSE_ENTER:
             tig_set_active(true);
             break;
@@ -264,6 +271,9 @@ int tig_message_dequeue(TigMessage* message)
         return TIG_ERR_MESSAGE_QUEUE_EMPTY;
     }
 
+    // FIX: the original returns from an emptied queue still holding the
+    // critical section it entered (0x52bdb4; returns 0x52be25-0x52be30, the
+    // only leave 0x52be45); CE unlocks on both paths.
     SDL_LockMutex(tig_message_mutex);
 
     while (tig_message_queue_head != NULL) {
@@ -327,7 +337,9 @@ void tig_message_node_reserve(void)
     TigMessageListNode* node;
 
     if (tig_message_empty_node_head == NULL) {
-        for (index = 0; index < 32; index++) {
+        // FIX (porting bug #362): 33 nodes a batch, as the original allocates
+        // (0x52bf25); CE allocated 32.
+        for (index = 0; index < 33; index++) {
             node = (TigMessageListNode*)MALLOC(sizeof(*node));
             node->next = tig_message_empty_node_head;
             tig_message_empty_node_head = node;
