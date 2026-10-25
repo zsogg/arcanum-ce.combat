@@ -12,8 +12,10 @@ static TigRect stru_64C6F8;
 static bool iso_interface_created;
 
 // 0x64C70C
-static tig_font_handle_t dword_64C70C;
+static tig_font_handle_t iso_load_screen_font;
 
+// Write-only, in the original too: iso_init zeroes it and nothing reads it.
+//
 // 0x64C710
 static int dword_64C710;
 
@@ -56,7 +58,7 @@ void iso_exit(void)
     if (iso_interface_created) {
         iso_interface_destroy();
     }
-    tig_font_destroy(dword_64C70C);
+    tig_font_destroy(iso_load_screen_font);
 }
 
 // 0x557EC0
@@ -83,7 +85,7 @@ void iso_load_screen_font_create(void)
     tig_art_interface_id_create(327, 0, 0, 0, &(font.art_id));
     font.str = NULL;
     font.color = tig_color_make(255, 255, 255);
-    tig_font_create(&font, &dword_64C70C);
+    tig_font_create(&font, &iso_load_screen_font);
 }
 
 // 0x557FD0
@@ -101,7 +103,7 @@ void iso_load_screen_draw(const char* str)
     tig_window_fill(iso_window_handle, &rect, tig_color_make(0, 0, 0));
 
     if (str != NULL && *str != '\0') {
-        tig_font_push(dword_64C70C);
+        tig_font_push(iso_load_screen_font);
 
         font.width = 0;
         font.str = str;

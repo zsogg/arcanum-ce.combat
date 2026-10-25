@@ -16,6 +16,10 @@ static const char* gameinit_adventure_name;
 // 0x5FC304
 static int gameinit_adventure_id;
 
+// NOTE: `dword_5FC308`, `dword_5FC310`, `dword_5FC314`, `dword_5FC318` and
+// `dword_5FC31C` are write-only, in the original too: gameinit_init and
+// gameinit_mod_unload zero them and nothing reads them.
+//
 // 0x5FC308
 static int dword_5FC308;
 

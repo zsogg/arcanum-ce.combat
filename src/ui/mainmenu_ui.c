@@ -286,6 +286,8 @@ static MainMenuButtonInfo stru_5C3860[] = {
     { 410, 343, -1, TIG_BUTTON_HANDLE_INVALID, -1, 0, 0, { 0 }, -1 },
 };
 
+// The empty entry for `MM_WINDOW_0`, the no-window value; unnamed with it.
+//
 // 0x5C3AB0
 static MainMenuWindowInfo stru_5C3AB0 = {
     2,
@@ -320,6 +322,8 @@ static MainMenuWindowInfo stru_5C3AB0 = {
     1,
 };
 
+// The empty entry for `MM_WINDOW_1`; unnamed with it.
+//
 // 0x5C3B48
 static MainMenuWindowInfo stru_5C3B48 = {
     2,
@@ -430,9 +434,10 @@ static mes_file_handle_t mainmenu_ui_mainmenu_mes_file = MES_FILE_HANDLE_INVALID
 // 0x5C3FB8
 static int dword_5C3FB8 = -1;
 
-// NOTE: Unused, and unused in the original too - `search_instructions` finds no
-// instruction anywhere in the exe with either address as an operand. Troika's
-// own dead data, not something the port dropped.
+// NOTE: `stru_5C3FC0` and `stru_5C3FD0` are unused, and unused in the original
+// too - `search_instructions` finds no instruction anywhere in the exe with
+// either address as an operand. Troika's own dead data, not something the port
+// dropped.
 //
 // 0x5C3FC0
 static TigRect stru_5C3FC0 = { 260, 293, 60, 20 };
@@ -440,12 +445,12 @@ static TigRect stru_5C3FC0 = { 260, 293, 60, 20 };
 // 0x5C3FD0
 static TigRect stru_5C3FD0 = { 160, 263, 150, 20 };
 
-// NOTE: These two are the click rects of the two text fields on the original's
-// window type 17, and CE has no such window: its `MainMenuWindowType` is a
-// compressed renumbering that drops it (see the enum's comment). 17 is the
-// multiplayer host/join screen - its create function at 0x585D50 calls three
-// routines in TIG's networking range, which CE stubs out entirely in
-// `net_compat.h`.
+// NOTE: These two (`stru_5C3FE0`, `stru_5C3FF0`) are the click rects of the two
+// text fields on the original's window type 17, and CE has no such window: its
+// `MainMenuWindowType` is a compressed renumbering that drops it (see the
+// enum's comment). 17 is the multiplayer host/join screen - its create
+// function at 0x585D50 calls three routines in TIG's networking range, which CE
+// stubs out entirely in `net_compat.h`.
 //
 // The original hit-tests them in `mainmenu_ui_message_filter` at 0x54710B and
 // 0x54717C and again in the click handler at 0x545FD0, which focuses the shared
@@ -1198,7 +1203,7 @@ static MainMenuButtonInfo mainmenu_ui_new_char_name_button = {
 };
 
 // NOTE: These two keep their placeholder names because nothing uses them.
-// Unreferenced in CE and in the original - 0x5C50D0 and 0x5C5100 have no
+// Unreferenced in CE and in the original - `stru_5C50D0` and `stru_5C5100` have no
 // references at all - so no window ever built a button from either. They are a
 // pair at x=22, y=272 and y=322, on the 50px pitch this file's menu rows use
 // and with every other field neutral (-1 art, -1 window, no handler), which

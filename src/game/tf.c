@@ -98,9 +98,9 @@ static ViewOptions text_floater_view_options;
  */
 static TigRect tf_iso_content_rect;
 
-/**
- * 0x6028C0
- */
+// Write-only, in the original too: tf_init sets it to black and nothing reads it.
+//
+// 0x6028C0
 static tig_color_t dword_6028C0;
 
 /**

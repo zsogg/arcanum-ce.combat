@@ -132,7 +132,7 @@ static MapModule map_modules[MAP_MODULE_COUNT] = {
 };
 
 // 0x59F3DC
-static char off_59F3DC[] = "*** Deleted Map ***";
+static char map_deleted_map_name[] = "*** Deleted Map ***";
 
 // 0x5D11E0
 static int64_t map_starting_loc;
@@ -143,14 +143,17 @@ static int64_t map_starting_loc;
 // 0x5D11E8
 static bool map_closed;
 
+// Read only by 0x412910, which nothing calls in the original: it passes this
+// as `is_start_map` to map_list_info_add. CE does not carry that function.
+//
 // 0x5D11EC
-static bool dword_5D11EC;
+static bool map_is_start_map;
 
 // 0x5D11D0
 static bool map_gender_check_enabled;
 
 // 0x5D11D8
-static int dword_5D11D8;
+static int map_list_mes_file;
 
 // Whether `map_init` has run. It early-returns true when already set, and
 // `map_save` refuses when it is not - so this gates saving, not just setup.
@@ -191,7 +194,7 @@ static int map_current_map_index;
 static int map_type_to_map_index[MAP_TYPE_COUNT];
 
 // 0x5D1220
-static int dword_5D1220;
+static int map_jumppoint_depth;
 
 // 0x40EA90
 bool map_init(GameInitInfo* init_info)
@@ -229,7 +232,7 @@ bool map_init(GameInitInfo* init_info)
     map_gender_check_enabled = 0;
     map_initialized = true;
     map_editor = init_info->editor;
-    dword_5D11EC = false;
+    map_is_start_map = false;
 
     return true;
 }
@@ -269,7 +272,7 @@ void map_reset(void)
             }
         }
 
-        dword_5D11EC = false;
+        map_is_start_map = false;
 
         tig_debug_printf("map_reset: Done.  Total time: %d ms.\n", tig_timer_elapsed(reset_start));
     }
@@ -801,9 +804,9 @@ bool map_open(const char* base_path, const char* save_path, bool a3)
     tig_debug_printf("map_open: map_gender_check()...");
     tig_timer_now(&timestamp);
     map_gender_check();
-    dword_5D11EC = false;
+    map_is_start_map = false;
     if (map_current_map_index != 0 && map_type_to_map_index[MAP_TYPE_START_MAP] == map_current_map_index) {
-        dword_5D11EC = true;
+        map_is_start_map = true;
     }
     duration = tig_timer_elapsed(timestamp);
     tig_debug_printf("done.  Time (ms): %d\n", duration);
@@ -1058,9 +1061,9 @@ void map_process_jumppoint(int64_t loc, int64_t obj)
     JumpPoint jumppoint;
     TeleportData teleport_data;
 
-    if (dword_5D1220 < 9) {
+    if (map_jumppoint_depth < 9) {
         if (jumppoint_get(loc, &jumppoint)) {
-            dword_5D1220++;
+            map_jumppoint_depth++;
 
             teleport_data.flags = 0;
             teleport_data.obj = obj;
@@ -1068,7 +1071,7 @@ void map_process_jumppoint(int64_t loc, int64_t obj)
             teleport_data.map = jumppoint.dst_map;
             teleport_do(&teleport_data);
 
-            dword_5D1220--;
+            map_jumppoint_depth--;
         }
     }
 }
@@ -1091,7 +1094,7 @@ void map_starting_loc_get(int64_t* loc_ptr)
 void map_starting_loc_set(int64_t loc)
 {
     map_starting_loc = loc;
-    dword_5D11EC = true;
+    map_is_start_map = true;
 }
 
 // 0x4102C0
@@ -2124,14 +2127,14 @@ bool map_list_info_load(void)
 {
     MesFileEntry mes_file_entry;
 
-    if (!mes_load("Rules\\MapList.mes", &dword_5D11D8)) {
+    if (!mes_load("Rules\\MapList.mes", &map_list_mes_file)) {
         return false;
     }
 
     tig_str_parse_set_separator(',');
 
     mes_file_entry.num = 5000;
-    while (mes_search(dword_5D11D8, &mes_file_entry)) {
+    while (mes_search(map_list_mes_file, &mes_file_entry)) {
         char* str = mes_file_entry.str;
         tig_str_parse_str_value(&str, map_list_info[map_list_info_count].name);
 
@@ -2139,7 +2142,7 @@ bool map_list_info_load(void)
         // overrun `MAP_NAME_LENGTH` and crash before this check
         if (strlen(map_list_info[map_list_info_count].name) >= MAP_NAME_LENGTH) {
             tig_debug_println("ERROR: Map name is too long");
-            mes_unload(dword_5D11D8);
+            mes_unload(map_list_mes_file);
             return false;
         }
 
@@ -2176,7 +2179,7 @@ bool map_list_info_load(void)
         mes_file_entry.num++;
     }
 
-    mes_unload(dword_5D11D8);
+    mes_unload(map_list_mes_file);
     return true;
 }
 
@@ -2222,7 +2225,7 @@ bool map_list_info_add(const char* name, int64_t x, int64_t y, bool is_start_map
         return map_list_info_set(index, name, x, y, is_start_map, map_list_info[index].worldmap, map_list_info[index].area);
     }
 
-    index = map_list_info_find(off_59F3DC);
+    index = map_list_info_find(map_deleted_map_name);
     if (index != -1) {
         return map_list_info_set(index, name, x, y, is_start_map, -1, 0);
     }

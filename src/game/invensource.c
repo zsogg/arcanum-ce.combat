@@ -61,9 +61,12 @@ static bool invensource_editor;
 static char invensource_error[256];
 
 /**
+ * Skips the editor's error message box in show_error. Set only by an
+ * uncalled setter at 0x4BF380 that CE does not carry, so always false.
+ *
  * 0x5FC62C
  */
-static bool dword_5FC62C;
+static bool invensource_error_box_suppressed;
 
 /**
  * Flag indicating whether the inventory source system is initialized.
@@ -506,7 +509,7 @@ void show_error(const char* msg)
 {
     tig_debug_println(msg);
 
-    if (!dword_5FC62C && invensource_editor) {
+    if (!invensource_error_box_suppressed && invensource_editor) {
         SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Error", msg, NULL);
     }
 }

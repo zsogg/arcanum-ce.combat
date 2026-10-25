@@ -219,7 +219,7 @@ static AiParams dword_5F5CB0[150];
 static AiFloatLineFunc ai_float_line_func;
 
 // 0x5F848C
-static Func5F848C dword_5F848C;
+static AiEndDialogFunc ai_end_dialog_func;
 
 // 0x5F8498
 static bool in_find_target;
@@ -431,7 +431,7 @@ bool ai_init(GameInitInfo* init_info)
 
     (void)init_info;
 
-    dword_5F848C = NULL;
+    ai_end_dialog_func = NULL;
     ai_float_line_func = NULL;
 
     if (!mes_load("rules\\ai_params.mes", &mes_file)) {
@@ -512,9 +512,9 @@ void ai_mod_unload(void)
 }
 
 // 0x4A84D0
-void ai_set_callbacks(Func5F848C a1, AiFloatLineFunc float_line_func)
+void ai_set_callbacks(AiEndDialogFunc a1, AiFloatLineFunc float_line_func)
 {
-    dword_5F848C = a1;
+    ai_end_dialog_func = a1;
     ai_float_line_func = float_line_func;
 }
 
@@ -812,10 +812,10 @@ bool ai_prepare_to_act(Ai* ai)
     v1 = reaction_current_pc_get(ai->obj);
     if (v1) {
         if (pc_obj == v1
-            && dword_5F848C != NULL
+            && ai_end_dialog_func != NULL
             && ai->danger_type != AI_DANGER_SOURCE_TYPE_NONE
             && ai->danger_type != AI_DANGER_SOURCE_TYPE_SURRENDER) {
-            dword_5F848C(pc_obj, 0);
+            ai_end_dialog_func(pc_obj, 0);
         }
         return false;
     }
@@ -1591,8 +1591,8 @@ void ai_start_attacking(int64_t attacker_obj, int64_t target_obj)
         return;
     }
 
-    if (dword_5F848C != NULL) {
-        dword_5F848C(attacker_obj, 0);
+    if (ai_end_dialog_func != NULL) {
+        ai_end_dialog_func(attacker_obj, 0);
     }
 
     if (!combat_critter_is_combat_mode_active(attacker_obj)) {

@@ -28,7 +28,7 @@ typedef struct S5CB3A8 {
 static void spell_ui_maintain_reset(void);
 
 // 0x5CB3A0
-static int dword_5CB3A0 = 10000;
+static int spell_ui_spl = 10000;
 
 // 0x5CB3A8
 static S5CB3A8 spell_ui_maintain_slots[FIVE] = {
@@ -43,13 +43,13 @@ static S5CB3A8 spell_ui_maintain_slots[FIVE] = {
 static int spell_ui_maintain_bar_num_slots = -1;
 
 // 0x6834F8
-static int64_t qword_6834F8;
+static int64_t spell_ui_source_obj;
 
 // 0x683500
-static int64_t qword_683500;
+static int64_t spell_ui_caster_obj;
 
 // 0x683508
-static bool dword_683508;
+static bool spell_ui_activating;
 
 // 0x57BB30
 bool spell_ui_init(GameInitInfo* init_info)
@@ -126,33 +126,33 @@ SpellUiActivate spell_ui_activate(int64_t obj, int spl)
         return SPELL_UI_ACTIVATE_ERR;
     }
 
-    dword_683508 = true;
+    spell_ui_activating = true;
 
     if (obj_type_is_item(obj_field_int32_get(obj, OBJ_F_TYPE))) {
-        if (!item_parent(obj, &qword_683500)) {
+        if (!item_parent(obj, &spell_ui_caster_obj)) {
             return SPELL_UI_ACTIVATE_ERR;
         }
     } else {
-        qword_683500 = obj;
+        spell_ui_caster_obj = obj;
     }
 
-    if (qword_683500 == OBJ_HANDLE_NULL) {
+    if (spell_ui_caster_obj == OBJ_HANDLE_NULL) {
         return SPELL_UI_ACTIVATE_ERR;
     }
 
-    if (!player_is_pc_obj(qword_683500)) {
+    if (!player_is_pc_obj(spell_ui_caster_obj)) {
         return SPELL_UI_ACTIVATE_ERR;
     }
 
-    if ((obj_field_int32_get(qword_683500, OBJ_F_FLAGS) & OF_OFF) != 0) {
+    if ((obj_field_int32_get(spell_ui_caster_obj, OBJ_F_FLAGS) & OF_OFF) != 0) {
         return SPELL_UI_ACTIVATE_ERR;
     }
 
-    if (critter_is_dead(qword_683500)) {
+    if (critter_is_dead(spell_ui_caster_obj)) {
         return SPELL_UI_ACTIVATE_ERR;
     }
 
-    if (critter_is_unconscious(qword_683500)) {
+    if (critter_is_unconscious(spell_ui_caster_obj)) {
         return SPELL_UI_ACTIVATE_ERR;
     }
 
@@ -161,25 +161,25 @@ SpellUiActivate spell_ui_activate(int64_t obj, int spl)
     }
 
     if (!magictech_is_enabled(spl)) {
-        dword_683508 = false;
+        spell_ui_activating = false;
         return SPELL_UI_ACTIVATE_ERR;
     }
 
     // CE (magic, milestone MG-2): an Unfocused caster cannot cast its own
     // spells, saying so; an item still works.
-    if (obj == qword_683500 && crit_effects_unfocused(qword_683500)) {
-        tf_add(qword_683500, TF_TYPE_WHITE, "Unfocused");
-        dword_683508 = false;
+    if (obj == spell_ui_caster_obj && crit_effects_unfocused(spell_ui_caster_obj)) {
+        tf_add(spell_ui_caster_obj, TF_TYPE_WHITE, "Unfocused");
+        spell_ui_activating = false;
         return SPELL_UI_ACTIVATE_ERR;
     }
 
-    dword_5CB3A0 = spl;
-    qword_6834F8 = obj;
+    spell_ui_spl = spl;
+    spell_ui_source_obj = obj;
 
     magictech_target_flags_get(spl, &tgt_ptr);
     tgt = *tgt_ptr;
 
-    if (magictech_is_aggressive(dword_5CB3A0)
+    if (magictech_is_aggressive(spell_ui_spl)
         && !tig_kb_get_modifier(SDL_KMOD_ALT)) {
         tgt |= TGT_NON_PARTY_CRITTERS;
     }
@@ -193,11 +193,11 @@ SpellUiActivate spell_ui_activate(int64_t obj, int spl)
         if (inven_ui_is_created()) {
             v1 = true;
         } else {
-            inven_ui_open(qword_6834F8, OBJ_HANDLE_NULL, INVEN_UI_MODE_INVENTORY);
+            inven_ui_open(spell_ui_source_obj, OBJ_HANDLE_NULL, INVEN_UI_MODE_INVENTORY);
         }
     } else {
         if (!intgame_mode_set(INTGAME_MODE_MAIN)) {
-            dword_683508 = false;
+            spell_ui_activating = false;
             return SPELL_UI_ACTIVATE_ERR;
         }
     }
@@ -207,16 +207,16 @@ SpellUiActivate spell_ui_activate(int64_t obj, int spl)
         || ((*tgt_ptr & TGT_SELF) != 0
             && (*tgt_ptr & TGT_TILE) == 0)
         || *tgt_ptr == TGT_OBJ_RADIUS) {
-        target_descriptor_set_loc(&td, obj_field_int64_get(qword_683500, OBJ_F_LOCATION));
+        target_descriptor_set_loc(&td, obj_field_int64_get(spell_ui_caster_obj, OBJ_F_LOCATION));
         spell_ui_apply(&td);
-        dword_683508 = false;
+        spell_ui_activating = false;
         return SPELL_UI_ACTIVATE_ERR;
     }
 
     // CE (magic, milestone MG-1): the preview prices this spell, or the item
     // cost when an item casts it.
-    if (!combat_check_cast_spell_for(qword_683500, spl, obj != qword_683500 ? obj : OBJ_HANDLE_NULL)) {
-        dword_683508 = false;
+    if (!combat_check_cast_spell_for(spell_ui_caster_obj, spl, obj != spell_ui_caster_obj ? obj : OBJ_HANDLE_NULL)) {
+        spell_ui_activating = false;
         return false;
     }
 
@@ -229,7 +229,7 @@ SpellUiActivate spell_ui_activate(int64_t obj, int spl)
             target_descriptor_set_obj(&td, player_get_local_pc_obj());
             if ((*tgt_ptr & TGT_OBJ_NO_SELF) == 0) {
                 spell_ui_apply(&td);
-                dword_683508 = false;
+                spell_ui_activating = false;
                 return SPELL_UI_ACTIVATE_ERR;
             }
         }
@@ -237,11 +237,11 @@ SpellUiActivate spell_ui_activate(int64_t obj, int spl)
 
     if (v1) {
         if (!inven_ui_is_created()) {
-            inven_ui_open(qword_6834F8, OBJ_HANDLE_NULL, INVEN_UI_MODE_INVENTORY);
+            inven_ui_open(spell_ui_source_obj, OBJ_HANDLE_NULL, INVEN_UI_MODE_INVENTORY);
         }
     }
 
-    dword_683508 = false;
+    spell_ui_activating = false;
     return SPELL_UI_ACTIVATE_OK;
 }
 
@@ -250,10 +250,10 @@ void spell_ui_cancel(void)
 {
     intgame_mode_set(INTGAME_MODE_MAIN);
 
-    if (!dword_683508) {
-        dword_5CB3A0 = 10000;
-        qword_6834F8 = OBJ_HANDLE_NULL;
-        qword_683500 = OBJ_HANDLE_NULL;
+    if (!spell_ui_activating) {
+        spell_ui_spl = 10000;
+        spell_ui_source_obj = OBJ_HANDLE_NULL;
+        spell_ui_caster_obj = OBJ_HANDLE_NULL;
     }
 }
 
@@ -281,7 +281,7 @@ void spell_ui_aggressive_mode_off(void)
 {
     uint64_t tgt;
 
-    if (magictech_is_aggressive(dword_5CB3A0)) {
+    if (magictech_is_aggressive(spell_ui_spl)) {
         tgt = target_flags_get();
         tgt &= ~TGT_NON_PARTY_CRITTERS;
         target_flags_set(tgt);
@@ -293,7 +293,7 @@ void spell_ui_aggressive_mode_on(void)
 {
     uint64_t tgt;
 
-    if (magictech_is_aggressive(dword_5CB3A0)) {
+    if (magictech_is_aggressive(spell_ui_spl)) {
         tgt = target_flags_get();
         tgt |= TGT_NON_PARTY_CRITTERS;
         target_flags_set(tgt);
@@ -307,8 +307,8 @@ void spell_ui_apply(TargetDescriptor* td)
     UiMessage ui_message;
     MagicTechInvocation mt_invocation;
 
-    if (critter_is_dead(qword_683500)
-        || critter_is_unconscious(qword_683500)) {
+    if (critter_is_dead(spell_ui_caster_obj)
+        || critter_is_unconscious(spell_ui_caster_obj)) {
         return;
     }
 
@@ -318,15 +318,15 @@ void spell_ui_apply(TargetDescriptor* td)
     if (combat_observer_is_enabled()) {
         char actor[COMBAT_OBSERVER_IDENTITY_SIZE];
         char target[COMBAT_OBSERVER_IDENTITY_SIZE];
-        combat_observer_object_id(qword_683500, actor);
+        combat_observer_object_id(spell_ui_caster_obj, actor);
         combat_observer_object_id(td->is_loc ? OBJ_HANDLE_NULL : td->obj, target);
-        combat_observer_cast_requested(actor, dword_5CB3A0,
+        combat_observer_cast_requested(actor, spell_ui_spl,
             td->is_loc ? "location" : "object", target,
             td->is_loc ? td->loc : 0);
     }
 
-    if (obj_type_is_critter(obj_field_int32_get(qword_6834F8, OBJ_F_TYPE))
-        && !magictech_can_charge_spell_fatigue(qword_683500, dword_5CB3A0)) {
+    if (obj_type_is_critter(obj_field_int32_get(spell_ui_source_obj, OBJ_F_TYPE))
+        && !magictech_can_charge_spell_fatigue(spell_ui_caster_obj, spell_ui_spl)) {
         mes_file_entry.num = 600; // "Not enough Energy."
         magictech_get_msg(&mes_file_entry);
 
@@ -334,7 +334,7 @@ void spell_ui_apply(TargetDescriptor* td)
         return;
     }
 
-    magictech_invocation_init(&mt_invocation, qword_6834F8, dword_5CB3A0);
+    magictech_invocation_init(&mt_invocation, spell_ui_source_obj, spell_ui_spl);
     if (td->is_loc) {
         mt_invocation.target_loc = td->loc;
     } else {
@@ -517,12 +517,12 @@ bool spell_ui_maintain_has(int slot)
 // 10000 and OBJ_HANDLE_NULL when none.
 int spell_ui_selected_spell(void)
 {
-    return dword_5CB3A0;
+    return spell_ui_spl;
 }
 
 int64_t spell_ui_selected_source(void)
 {
-    return qword_6834F8;
+    return spell_ui_source_obj;
 }
 
 // 0x57C540

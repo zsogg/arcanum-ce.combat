@@ -69,7 +69,7 @@ static void build_cmd_line(char* dst, size_t size, int argc, char** argv);
 static float gamma = 1.0f;
 
 // 0x5CFF00
-static int dword_5CFF00;
+static int saved_light_scheme;
 
 // CE: the reproducible-run harness. Not in the original.
 //
@@ -1056,9 +1056,9 @@ void main_loop(void)
                             switch (message.data.keyboard.scancode) {
                             case SDL_SCANCODE_D:
                                 if (light_scheme_get() == LIGHT_SCHEME_DEFAULT_LIGHTING) {
-                                    light_scheme_set(dword_5CFF00, light_scheme_get_hour());
+                                    light_scheme_set(saved_light_scheme, light_scheme_get_hour());
                                 } else {
-                                    dword_5CFF00 = light_scheme_get();
+                                    saved_light_scheme = light_scheme_get();
                                     light_scheme_set(LIGHT_SCHEME_DEFAULT_LIGHTING, light_scheme_get_hour());
                                 }
                                 break;

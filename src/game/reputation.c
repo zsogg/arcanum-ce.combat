@@ -82,7 +82,7 @@ static ReputationInfo* reputations;
 static mes_file_handle_t* reputation_mes_files;
 
 // 0x5FC8B8
-static int dword_5FC8B8[1000];
+static int reputation_pick_candidates[1000];
 
 /**
  * Called when the game is initialized.
@@ -581,7 +581,7 @@ int reputation_pick(int64_t pc_obj, int64_t npc_obj)
                     // the way out (0x4C20DC); CE stored the position in the
                     // PC's reputation array, so an NPC greeted with
                     // whichever reputation had that number.
-                    dword_5FC8B8[selected_cnt++] = i;
+                    reputation_pick_candidates[selected_cnt++] = i;
                     break;
                 }
             }
@@ -590,7 +590,7 @@ int reputation_pick(int64_t pc_obj, int64_t npc_obj)
 
     // Randomly select one of the eligible reputations.
     return selected_cnt > 0
-        ? rep_idx_to_num(dword_5FC8B8[random_between(0, selected_cnt - 1)])
+        ? rep_idx_to_num(reputation_pick_candidates[random_between(0, selected_cnt - 1)])
         : 0;
 }
 

@@ -5860,7 +5860,7 @@ int combat_turn_based_turn_get(void)
 void combat_recalc_reaction(int64_t obj)
 {
     // 0x5B5818
-    static unsigned int dword_5B5818[7] = {
+    static unsigned int reaction_flags[7] = {
         OCF2_REACTION_0,
         OCF2_REACTION_1,
         OCF2_REACTION_2,
@@ -5886,7 +5886,7 @@ void combat_recalc_reaction(int64_t obj)
 
     flags = obj_field_int32_get(obj, OBJ_F_CRITTER_FLAGS2);
     flags &= ~(OCF2_REACTION_0 | OCF2_REACTION_1 | OCF2_REACTION_2 | OCF2_REACTION_3 | OCF2_REACTION_4 | OCF2_REACTION_5 | OCF2_REACTION_6);
-    flags |= dword_5B5818[reaction_type];
+    flags |= reaction_flags[reaction_type];
     obj_field_int32_set(obj, OBJ_F_CRITTER_FLAGS2, flags);
 
     if (critter_is_dead(obj) || combat_turn_based_critter_is_dontdraw(obj)) {

@@ -149,9 +149,9 @@ static int tb_text_duration;
  */
 static tig_window_handle_t tb_iso_window_handle;
 
-/**
- * 0x602AC0
- */
+// Write-only, in the original too: tb_init sets it to black and nothing reads it.
+//
+// 0x602AC0
 static int dword_602AC0;
 
 /**

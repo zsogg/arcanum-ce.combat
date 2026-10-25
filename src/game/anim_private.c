@@ -211,6 +211,9 @@ int anim_next_unique_id;
 // 0x687700
 AnimRunInfo anim_run_info[216];
 
+// `dword_739E40` and `dword_739E44` are savegame ballast: see the NOTE above
+// anim.c's `dword_5DE6xx` block.
+//
 // 0x739E40
 int dword_739E40;
 

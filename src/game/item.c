@@ -146,7 +146,7 @@ static int item_decay_process_cnt;
 static TigRect item_iso_content_rect;
 
 // 0x5E8818
-static int64_t qword_5E8818;
+static int64_t item_respawn_test_obj;
 
 // 0x5E8820
 static bool item_force_remove_failed;
@@ -2469,7 +2469,7 @@ void item_inventory_respawn_schedule(int64_t obj)
 
     inven_source_obj = item_inventory_source(obj);
     if (inven_source_obj != OBJ_HANDLE_NULL) {
-        qword_5E8818 = obj;
+        item_respawn_test_obj = obj;
         timeevent_clear_all_ex(TIMEEVENT_TYPE_NPC_RESPAWN, item_inventory_respawn_timeevent_match);
         timeevent.type = TIMEEVENT_TYPE_NPC_RESPAWN;
         timeevent.params[0].object_value = obj;
@@ -2487,7 +2487,7 @@ void item_inventory_respawn_schedule(int64_t obj)
 // 0x464150
 bool item_inventory_respawn_timeevent_match(TimeEvent* timeevent)
 {
-    return timeevent != NULL && timeevent->params[0].object_value == qword_5E8818;
+    return timeevent != NULL && timeevent->params[0].object_value == item_respawn_test_obj;
 }
 
 // 0x464180

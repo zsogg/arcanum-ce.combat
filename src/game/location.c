@@ -21,7 +21,7 @@ static IsoInvalidateRectFunc* location_iso_invalidate_rect;
 static int64_t location_screen_center_x;
 
 // 0x5FC2A8
-static int8_t byte_5FC2A8[30];
+static int8_t location_empty_tile_path_rotations[30];
 
 // 0x5FC2C8
 static bool location_editor;
@@ -32,6 +32,9 @@ static int location_iso_window_handle;
 // 0x5FC2D0
 static ViewOptions location_view_options;
 
+// `20 * location_limit_y`, read only by location_origin_scroll's bounds test,
+// as in the original; what the product measures is not established.
+//
 // 0x5FC2D8
 static int64_t qword_5FC2D8;
 
@@ -672,8 +675,8 @@ bool location_empty_tile_find(int64_t from, int64_t* to)
                 path_create_info.obj = OBJ_HANDLE_NULL;
                 path_create_info.from = from;
                 path_create_info.to = targets.entries[idx].loc;
-                path_create_info.max_rotations = sizeof(byte_5FC2A8);
-                path_create_info.rotations = byte_5FC2A8;
+                path_create_info.max_rotations = sizeof(location_empty_tile_path_rotations);
+                path_create_info.rotations = location_empty_tile_path_rotations;
                 path_create_info.flags = PATH_FLAG_0x0010 | PATH_FLAG_0x0004 | PATH_FLAG_0x0002;
                 if (path_make(&path_create_info)) {
                     if (to != NULL) {

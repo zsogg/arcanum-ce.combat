@@ -265,7 +265,7 @@ static bool inven_ui_have_use_box;
 static int inven_ui_pc_inventory_slots[120];
 
 // 0x6812FC
-static char byte_6812FC[128];
+static char inven_ui_transfer_item_id_str[128];
 
 // 0x681390
 static tig_font_handle_t inven_ui_stat_font;
@@ -298,7 +298,7 @@ static int64_t inven_ui_target_inventory_obj;
 static TigRect inven_ui_drop_box_frame;
 
 // 0x6813C0
-static char byte_6813C0[128];
+static char inven_ui_transfer_to_name[128];
 
 // 0x681440
 static int inven_ui_item_cost;
@@ -326,7 +326,7 @@ static tig_button_handle_t inven_ui_total_attack_value_btn;
 static tig_button_handle_t inven_ui_take_all_btn;
 
 // 0x681468
-static char byte_681468[128];
+static char inven_ui_transfer_from_name[128];
 
 // 0x6814E8
 static tig_button_handle_t inven_ui_total_defence_image_btn;
@@ -368,10 +368,10 @@ static tig_font_handle_t inven_ui_description_font;
 static char inven_ui_npc_msg[1000];
 
 // 0x682804
-static char byte_682804[1000];
+static char inven_ui_npc_msg_tmp[1000];
 
 // 0x682BEC
-static char byte_682BEC[128];
+static char inven_ui_transfer_item_name[128];
 
 // 0x682C6C
 static tig_button_handle_t inven_ui_total_attack_image_btn;
@@ -400,7 +400,7 @@ static tig_button_handle_t inven_ui_target_total_defence_btn;
 static tig_button_handle_t inven_ui_total_defence_value_btn;
 
 // 0x682C8C
-static char byte_682C8C[MAX_STRING];
+static char inven_ui_target_name[MAX_STRING];
 
 // 0x68345C
 static tig_font_handle_t inven_ui_gold_ammo_font;
@@ -1024,7 +1024,7 @@ bool inven_ui_create(int64_t pc_obj, int64_t target_obj, int mode)
     inven_ui_target_inventory_scroll_max = 5;
 
     if (inven_ui_target_inventory_obj != OBJ_HANDLE_NULL) {
-        object_examine(inven_ui_target_obj, inven_ui_pc_obj, byte_682C8C);
+        object_examine(inven_ui_target_obj, inven_ui_pc_obj, inven_ui_target_name);
         inven_ui_target_inventory_scroll_max = 4;
         if (inven_ui_mode == INVEN_UI_MODE_BARTER) {
             inven_ui_target_inventory_scroll_max = 5;
@@ -3084,7 +3084,7 @@ void redraw_inven(bool a1)
         src_rect.width = 200;
         src_rect.height = 20;
 
-        font_desc.str = byte_682C8C;
+        font_desc.str = inven_ui_target_name;
         font_desc.width = 0;
         tig_font_measure(&font_desc);
 
@@ -3936,15 +3936,15 @@ void inven_ui_barter_cost_update(int64_t a1, int64_t a2)
             }
 
             if (inven_ui_item_cost > gold) {
-                dialog_copy_npc_buy_for_less_msg(inven_ui_target_obj, inven_ui_pc_obj, byte_682804);
+                dialog_copy_npc_buy_for_less_msg(inven_ui_target_obj, inven_ui_pc_obj, inven_ui_npc_msg_tmp);
                 snprintf(&(inven_ui_npc_msg[pos]), sizeof(inven_ui_npc_msg) - pos,
-                    byte_682804,
+                    inven_ui_npc_msg_tmp,
                     inven_ui_item_cost,
                     gold);
             } else {
-                dialog_copy_npc_buy_msg(inven_ui_target_obj, inven_ui_pc_obj, byte_682804);
+                dialog_copy_npc_buy_msg(inven_ui_target_obj, inven_ui_pc_obj, inven_ui_npc_msg_tmp);
                 snprintf(&(inven_ui_npc_msg[pos]), sizeof(inven_ui_npc_msg) - pos,
-                    byte_682804,
+                    inven_ui_npc_msg_tmp,
                     inven_ui_item_cost);
             }
         } else {
@@ -3965,9 +3965,9 @@ void inven_ui_barter_cost_update(int64_t a1, int64_t a2)
                 pos = 0;
             }
 
-            dialog_copy_npc_sell_msg(inven_ui_target_obj, inven_ui_pc_obj, byte_682804);
+            dialog_copy_npc_sell_msg(inven_ui_target_obj, inven_ui_pc_obj, inven_ui_npc_msg_tmp);
             snprintf(&(inven_ui_npc_msg[pos]), sizeof(inven_ui_npc_msg) - pos,
-                byte_682804,
+                inven_ui_npc_msg_tmp,
                 inven_ui_item_cost);
 
             if (basic_skill_training_get(inven_ui_pc_obj, BASIC_SKILL_HAGGLE) >= TRAINING_APPRENTICE) {
@@ -3980,8 +3980,8 @@ void inven_ui_barter_cost_update(int64_t a1, int64_t a2)
                     discount = 1;
                 }
 
-                snprintf(byte_682804, sizeof(byte_682804), "(%d%%)", discount);
-                strcat(inven_ui_npc_msg, byte_682804);
+                snprintf(inven_ui_npc_msg_tmp, sizeof(inven_ui_npc_msg_tmp), "(%d%%)", discount);
+                strcat(inven_ui_npc_msg, inven_ui_npc_msg_tmp);
             }
         } else {
             dialog_copy_npc_wont_sell_msg(inven_ui_target_obj, inven_ui_pc_obj, inven_ui_npc_msg);
@@ -3998,8 +3998,8 @@ void inven_ui_identify_cost_update(int64_t obj)
         dialog_copy_npc_wont_identify_already_msg(inven_ui_target_obj, inven_ui_pc_obj, inven_ui_npc_msg);
     } else {
         inven_ui_item_cost = spell_money(SPELL_DIVINE_MAGICK);
-        dialog_copy_npc_identify_msg(inven_ui_target_obj, inven_ui_pc_obj, byte_682804);
-        snprintf(inven_ui_npc_msg, sizeof(inven_ui_npc_msg), byte_682804, inven_ui_item_cost);
+        dialog_copy_npc_identify_msg(inven_ui_target_obj, inven_ui_pc_obj, inven_ui_npc_msg_tmp);
+        snprintf(inven_ui_npc_msg, sizeof(inven_ui_npc_msg), inven_ui_npc_msg_tmp, inven_ui_item_cost);
     }
     redraw_inven(false);
 }
@@ -4031,8 +4031,8 @@ void inven_ui_repair_cost_update(int64_t obj)
             inven_ui_item_cost = 2;
         }
 
-        dialog_copy_npc_repair_msg(inven_ui_target_obj, inven_ui_pc_obj, byte_682804);
-        snprintf(inven_ui_npc_msg, sizeof(inven_ui_npc_msg), byte_682804, inven_ui_item_cost);
+        dialog_copy_npc_repair_msg(inven_ui_target_obj, inven_ui_pc_obj, inven_ui_npc_msg_tmp);
+        snprintf(inven_ui_npc_msg, sizeof(inven_ui_npc_msg), inven_ui_npc_msg_tmp, inven_ui_item_cost);
         redraw_inven(false);
     } else {
         dialog_copy_npc_wont_repair_undamaged_msg(inven_ui_target_obj, inven_ui_pc_obj, inven_ui_npc_msg);
@@ -4189,38 +4189,38 @@ void inven_ui_send_transfer_packet(int a1)
     if (tig_net_is_active()) {
         object_examine(obj_pool_perm_lookup(pkt->field_10),
             obj_pool_perm_lookup(pkt->field_10),
-            byte_682BEC);
-        objid_id_to_str(byte_6812FC, pkt->field_10);
+            inven_ui_transfer_item_name);
+        objid_id_to_str(inven_ui_transfer_item_id_str, pkt->field_10);
 
         if (pkt->field_40.type != OID_TYPE_NULL) {
             object_examine(obj_pool_perm_lookup(pkt->field_40),
                 obj_pool_perm_lookup(pkt->field_40),
-                byte_6813C0);
+                inven_ui_transfer_to_name);
         } else {
-            strcpy(byte_6813C0, "nobody");
+            strcpy(inven_ui_transfer_to_name, "nobody");
         }
 
         if (pkt->field_28.type != OID_TYPE_NULL) {
             object_examine(obj_pool_perm_lookup(pkt->field_28),
                 obj_pool_perm_lookup(pkt->field_28),
-                byte_681468);
+                inven_ui_transfer_from_name);
         } else {
-            strcpy(byte_681468, "nobody");
+            strcpy(inven_ui_transfer_from_name, "nobody");
         }
 
         if (pkt->field_60 > 1) {
             tig_debug_printf("UI: InvenItemTransfer - %d %ss(%s) going from %s to %s\n",
                 pkt->field_60,
-                byte_682BEC,
-                byte_6812FC,
-                byte_681468,
-                byte_6813C0);
+                inven_ui_transfer_item_name,
+                inven_ui_transfer_item_id_str,
+                inven_ui_transfer_from_name,
+                inven_ui_transfer_to_name);
         } else {
             tig_debug_printf("UI: InvenItemTransfer - %s(%s) going from %s to %s\n",
-                byte_682BEC,
-                byte_6812FC,
-                byte_681468,
-                byte_6813C0);
+                inven_ui_transfer_item_name,
+                inven_ui_transfer_item_id_str,
+                inven_ui_transfer_from_name,
+                inven_ui_transfer_to_name);
         }
     }
 
@@ -4274,8 +4274,8 @@ bool inven_ui_process_transfer_packet(Packet81* pkt)
         && (flags & 0x18) != 0) {
         gold_amt = qty * item_cost(v2, v4, v6, false);
         if (gold_amt > item_gold_get(v6)) {
-            dialog_copy_npc_gamble_msg(v4, v6, 4, byte_682804);
-            snprintf(inven_ui_npc_msg, sizeof(inven_ui_npc_msg), byte_682804, gold_amt);
+            dialog_copy_npc_gamble_msg(v4, v6, 4, inven_ui_npc_msg_tmp);
+            snprintf(inven_ui_npc_msg, sizeof(inven_ui_npc_msg), inven_ui_npc_msg_tmp, gold_amt);
             return true;
         }
     }
@@ -4478,8 +4478,8 @@ bool inven_ui_process_transfer_packet(Packet81* pkt)
         dialog_copy_npc_gamble_msg(v4, v6, 0, inven_ui_npc_msg);
         reaction_bargain_adj(v4, v6, -worth);
     } else if ((flags & 0x10) != 0) {
-        dialog_copy_npc_gamble_msg(v4, v6, 1, byte_682804);
-        snprintf(inven_ui_npc_msg, sizeof(inven_ui_npc_msg), byte_682804, gold_amt);
+        dialog_copy_npc_gamble_msg(v4, v6, 1, inven_ui_npc_msg_tmp);
+        snprintf(inven_ui_npc_msg, sizeof(inven_ui_npc_msg), inven_ui_npc_msg_tmp, gold_amt);
     }
 
     return true;
@@ -4545,8 +4545,8 @@ bool inven_ui_gamble_check(int64_t obj, bool a2)
 
     if (v1 > item_gold_get(inven_ui_pc_obj)) {
         if (!a2) {
-            dialog_copy_npc_gamble_msg(inven_ui_target_obj, inven_ui_pc_obj, 4, byte_682804);
-            snprintf(inven_ui_npc_msg, sizeof(inven_ui_npc_msg), byte_682804, v1);
+            dialog_copy_npc_gamble_msg(inven_ui_target_obj, inven_ui_pc_obj, 4, inven_ui_npc_msg_tmp);
+            snprintf(inven_ui_npc_msg, sizeof(inven_ui_npc_msg), inven_ui_npc_msg_tmp, v1);
         }
         return false;
     }
@@ -4586,9 +4586,9 @@ bool inven_ui_gamble_check(int64_t obj, bool a2)
             pos = 0;
         }
 
-        dialog_copy_npc_gamble_msg(inven_ui_target_obj, inven_ui_pc_obj, 8, byte_682804);
+        dialog_copy_npc_gamble_msg(inven_ui_target_obj, inven_ui_pc_obj, 8, inven_ui_npc_msg_tmp);
         snprintf(&(inven_ui_npc_msg[pos]), sizeof(inven_ui_npc_msg) - pos,
-            byte_682804,
+            inven_ui_npc_msg_tmp,
             v1);
     }
 

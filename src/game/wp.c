@@ -4,15 +4,15 @@
 #include "game/obj.h"
 #include "game/obj_private.h"
 
-typedef struct S5FC668 {
+typedef struct WpEntry {
     /* 0000 */ int64_t obj;
     /* 0008 */ tig_color_t field_8;
     /* 000C */ int field_C;
-} S5FC668;
+} WpEntry;
 
 static void wp_invalidate_all(void);
 static void wp_invalidate_critter_waypoints(int64_t obj);
-static void wp_draw_critter_waypoints(S5FC668* entry, GameDrawInfo* draw_info);
+static void wp_draw_critter_waypoints(WpEntry* entry, GameDrawInfo* draw_info);
 static bool wp_waypoint_screen_rect(int64_t location, TigRect* rect);
 static void wp_entries_compact(void);
 
@@ -32,7 +32,7 @@ static bool wp_enabled;
 static bool wp_initialized;
 
 // 0x5FC654
-static int dword_5FC654;
+static int wp_entries_count;
 
 // 0x5FC658
 static tig_art_id_t wp_iso_art_id;
@@ -44,7 +44,7 @@ static bool wp_editor;
 static tig_window_handle_t wp_iso_window_handle;
 
 // 0x5FC668
-static S5FC668 stru_5FC668[32];
+static WpEntry wp_entries[32];
 
 // 0x4BFCE0
 bool wp_init(GameInitInfo* init_info)
@@ -66,7 +66,7 @@ bool wp_init(GameInitInfo* init_info)
     wp_iso_art_num_frames = art_anim_data.num_frames;
 
     for (index = 0; index < 32; index++) {
-        stru_5FC668[index].obj = OBJ_HANDLE_NULL;
+        wp_entries[index].obj = OBJ_HANDLE_NULL;
     }
 
     wp_enabled = true;
@@ -81,7 +81,7 @@ void wp_exit(void)
     int index;
 
     for (index = 0; index < 32; index++) {
-        stru_5FC668[index].obj = OBJ_HANDLE_NULL;
+        wp_entries[index].obj = OBJ_HANDLE_NULL;
     }
 
     wp_initialized = false;
@@ -126,8 +126,8 @@ void wp_draw(GameDrawInfo* draw_info)
 
     wp_entries_compact();
 
-    for (index = 0; index < dword_5FC654; index++) {
-        wp_draw_critter_waypoints(&(stru_5FC668[index]), draw_info);
+    for (index = 0; index < wp_entries_count; index++) {
+        wp_draw_critter_waypoints(&(wp_entries[index]), draw_info);
     }
 }
 
@@ -144,8 +144,8 @@ void wp_invalidate_all(void)
 
     wp_entries_compact();
 
-    for (index = 0; index < dword_5FC654; index++) {
-        wp_invalidate_critter_waypoints(stru_5FC668[index].obj);
+    for (index = 0; index < wp_entries_count; index++) {
+        wp_invalidate_critter_waypoints(wp_entries[index].obj);
     }
 }
 
@@ -171,7 +171,7 @@ void wp_invalidate_critter_waypoints(int64_t obj)
 }
 
 // 0x4C0140
-void wp_draw_critter_waypoints(S5FC668* entry, GameDrawInfo* draw_info)
+void wp_draw_critter_waypoints(WpEntry* entry, GameDrawInfo* draw_info)
 {
     TigArtBlitInfo art_blit_info;
     TigRect src_rect;
@@ -254,18 +254,18 @@ void wp_entries_compact(void)
 {
     int idx;
 
-    for (idx = 0; idx < dword_5FC654; idx++) {
-        if (stru_5FC668[idx].obj == OBJ_HANDLE_NULL
-            || !obj_handle_is_valid(stru_5FC668[idx].obj)
-            || obj_field_int32_get(stru_5FC668[idx].obj, OBJ_F_TYPE) != OBJ_TYPE_NPC) {
-            dword_5FC654--;
+    for (idx = 0; idx < wp_entries_count; idx++) {
+        if (wp_entries[idx].obj == OBJ_HANDLE_NULL
+            || !obj_handle_is_valid(wp_entries[idx].obj)
+            || obj_field_int32_get(wp_entries[idx].obj, OBJ_F_TYPE) != OBJ_TYPE_NPC) {
+            wp_entries_count--;
             // FIX (porting bug #297): the entries after this one move
             // (0x4c03cc-0x4c03cf: edi steps by 0x0fffffff, -1 once shifted, so
             // the size is 16 * (count - idx)); CE copied Ghidra's `+ idx` and
             // ran past the table. Latent: only the editor adds entries.
-            memmove(&(stru_5FC668[idx]),
-                &(stru_5FC668[idx + 1]),
-                sizeof(*stru_5FC668) * (dword_5FC654 - idx));
+            memmove(&(wp_entries[idx]),
+                &(wp_entries[idx + 1]),
+                sizeof(*wp_entries) * (wp_entries_count - idx));
             idx--;
         }
     }

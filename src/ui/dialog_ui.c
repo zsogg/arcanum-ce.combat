@@ -50,7 +50,7 @@ static void dialog_ui_speech_start(int64_t npc_obj, int64_t pc_obj, int speech_i
 static void dialog_ui_speech_stop(void);
 
 // 0x66DAB8
-static DialogUiEntry stru_66DAB8[8];
+static DialogUiEntry dialog_ui_entries[8];
 
 // 0x67B960
 static tig_sound_handle_t dialog_ui_speech_handle;
@@ -66,8 +66,8 @@ bool dialog_ui_init(GameInitInfo* init_info)
     (void)init_info;
 
     for (index = 0; index < MAX_ENTRIES; index++) {
-        stru_66DAB8[index].field_1850 = false;
-        stru_66DAB8[index].slot = index;
+        dialog_ui_entries[index].field_1850 = false;
+        dialog_ui_entries[index].slot = index;
     }
 
     script_set_callbacks(dialog_ui_start_dialog, dialog_ui_float_line);
@@ -95,8 +95,8 @@ void dialog_ui_reset(void)
     }
 
     for (index = 0; index < MAX_ENTRIES; index++) {
-        if (stru_66DAB8[index].field_1850) {
-            dialog_ui_entry_end(&(stru_66DAB8[index]));
+        if (dialog_ui_entries[index].field_1850) {
+            dialog_ui_entry_end(&(dialog_ui_entries[index]));
         }
     }
 }
@@ -115,7 +115,7 @@ DialogUiEntry* dialog_ui_entry_get(int64_t obj)
 {
     (void)obj;
 
-    return &(stru_66DAB8[0]);
+    return &(dialog_ui_entries[0]);
 }
 
 // 0x567460
@@ -480,8 +480,8 @@ void dialog_ui_notify_object_destroyed(int64_t obj)
     int index;
 
     for (index = 0; index < 8; index++) {
-        if (stru_66DAB8[index].state.pc_obj == obj
-            || stru_66DAB8[index].state.npc_obj == obj) {
+        if (dialog_ui_entries[index].state.pc_obj == obj
+            || dialog_ui_entries[index].state.npc_obj == obj) {
             dialog_ui_end_dialog(obj, 0);
         }
     }

@@ -4,10 +4,10 @@
 static UiCallbacks ui_callbacks;
 
 // 0x5E87C8
-static TigIdxTable stru_5E87C8;
+static TigIdxTable ui_delayed_messages;
 
 // 0x5E87D8
-static int dword_5E87D8;
+static int ui_delayed_message_next_id;
 
 // 0x45FD40
 void ui_init(UiCallbacks* callbacks)
@@ -16,13 +16,13 @@ void ui_init(UiCallbacks* callbacks)
         ui_callbacks = *callbacks;
     }
 
-    tig_idxtable_init(&stru_5E87C8, sizeof(UiMessage));
+    tig_idxtable_init(&ui_delayed_messages, sizeof(UiMessage));
 }
 
 // 0x460150
 void ui_exit(void)
 {
-    tig_idxtable_exit(&stru_5E87C8);
+    tig_idxtable_exit(&ui_delayed_messages);
 }
 
 // 0x460160
@@ -34,7 +34,7 @@ bool ui_timeevent_process(TimeEvent* timeevent)
         tig_debug_printf("UI: Unknown type of timeevent passed to ui_timeevent_process (%d).\n",
             timeevent->params[0].integer_value);
     } else {
-        tig_idxtable_get(&stru_5E87C8, timeevent->params[1].integer_value, &ui_message);
+        tig_idxtable_get(&ui_delayed_messages, timeevent->params[1].integer_value, &ui_message);
         ui_display_msg(&ui_message);
         FREE(ui_message.str);
     }
@@ -330,13 +330,13 @@ void ui_display_msg_delayed(UiMessage* ui_message, unsigned int milliseconds)
     DateTime datetime;
     TimeEvent timeevent;
 
-    id = dword_5E87D8++;
+    id = ui_delayed_message_next_id++;
     ui_message->str = STRDUP(ui_message->str);
     timeevent.type = TIMEEVENT_TYPE_UI;
     timeevent.params[0].integer_value = 0;
     timeevent.params[1].integer_value = id;
     datetime_from_milliseconds(&datetime, milliseconds);
-    tig_idxtable_set(&stru_5E87C8, id, ui_message);
+    tig_idxtable_set(&ui_delayed_messages, id, ui_message);
     timeevent_add_delay(&timeevent, &datetime);
 }
 

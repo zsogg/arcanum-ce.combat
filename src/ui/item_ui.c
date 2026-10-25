@@ -20,16 +20,18 @@
 static void item_ui_target_flags_get(int64_t item_obj, uint64_t** tgt_ptr);
 
 // 0x5CAC40
-static uint64_t qword_5CAC40 = TGT_OBJECT;
+static uint64_t item_ui_default_tgt = TGT_OBJECT;
 
+// Unreferenced, in the original too: no instruction names 0x5CAC48.
+//
 // 0x5CAC48
 static uint64_t qword_5CAC48 = TGT_OBJECT | TGT_OBJ_INVEN;
 
 // 0x5CAC50
-static uint64_t qword_5CAC50 = TGT_OBJECT | TGT_TILE;
+static uint64_t item_ui_trap_device_tgt = TGT_OBJECT | TGT_TILE;
 
 // 0x6810D8
-static int64_t qword_6810D8;
+static int64_t item_ui_item_obj;
 
 // 0x5719D0
 bool item_ui_init(GameInitInfo* init_info)
@@ -60,9 +62,9 @@ void item_ui_target_flags_get(int64_t item_obj, uint64_t** tgt_ptr)
         if (mana_store != 0 || (flags & OIF_IS_MAGICAL) != 0) {
             magictech_target_flags_get(spl, tgt_ptr);
         } else if (trap_is_trap_device(item_obj)) {
-            *tgt_ptr = &qword_5CAC50;
+            *tgt_ptr = &item_ui_trap_device_tgt;
         } else if (spl == -1) {
-            *tgt_ptr = &qword_5CAC40;
+            *tgt_ptr = &item_ui_default_tgt;
         } else {
             magictech_target_flags_get(spl, tgt_ptr);
         }
@@ -92,7 +94,7 @@ void item_ui_activate(int64_t owner_obj, int64_t item_obj)
         item_ui_deactivate();
     }
 
-    qword_6810D8 = item_obj;
+    item_ui_item_obj = item_obj;
 
     item_ui_target_flags_get(item_obj, &tgt_ptr);
 
@@ -119,14 +121,14 @@ void item_ui_activate(int64_t owner_obj, int64_t item_obj)
     }
 
     // CE (real-time session C): the shared cost - the original's 4.
-    if (combat_check_action_points(owner_obj, combat_use_item_cost(owner_obj, qword_6810D8))) {
+    if (combat_check_action_points(owner_obj, combat_use_item_cost(owner_obj, item_ui_item_obj))) {
         target_flags_set(*tgt_ptr);
         if (intgame_mode_set(INTGAME_MODE_ITEM)) {
             target_flags_set(*tgt_ptr);
             // UAP (0x571BE7): `jge` becomes `jg`, widening the test from
             // "< 0" to "<= 0", so an item of neutral complexity gets the
             // magickal targeting cursor too rather than keeping the default.
-            int complexity = obj_field_int32_get(qword_6810D8, OBJ_F_ITEM_MAGIC_TECH_COMPLEXITY);
+            int complexity = obj_field_int32_get(item_ui_item_obj, OBJ_F_ITEM_MAGIC_TECH_COMPLEXITY);
             if (uap_fixes_enabled() ? complexity <= 0 : complexity < 0) {
                 intgame_item_mode_cursor_set(620);
                 intgame_refresh_cursor();
@@ -145,7 +147,7 @@ void item_ui_activate(int64_t owner_obj, int64_t item_obj)
 void item_ui_deactivate(void)
 {
     intgame_mode_set(INTGAME_MODE_MAIN);
-    qword_6810D8 = OBJ_HANDLE_NULL;
+    item_ui_item_obj = OBJ_HANDLE_NULL;
     intgame_item_mode_cursor_set(21);
 }
 
@@ -170,9 +172,9 @@ void item_ui_apply(TargetDescriptor* td)
         return;
     }
 
-    if (obj_field_int32_get(qword_6810D8, OBJ_F_TYPE) == OBJ_TYPE_GENERIC
+    if (obj_field_int32_get(item_ui_item_obj, OBJ_F_TYPE) == OBJ_TYPE_GENERIC
         && !tig_kb_get_modifier(SDL_KMOD_LCTRL)
-        && (obj_field_int32_get(qword_6810D8, OBJ_F_GENERIC_FLAGS) & OGF_IS_LOCKPICK) != 0) {
+        && (obj_field_int32_get(item_ui_item_obj, OBJ_F_GENERIC_FLAGS) & OGF_IS_LOCKPICK) != 0) {
         skill_invocation_init(&skill_invocation);
         object_ref_init(pc_obj, &(skill_invocation.source));
         if (!td->is_loc) {
@@ -183,7 +185,7 @@ void item_ui_apply(TargetDescriptor* td)
         skill_pick_best_follower(&skill_invocation);
 
         if (pc_obj == skill_invocation.source.obj) {
-            item_obj = qword_6810D8;
+            item_obj = item_ui_item_obj;
         } else {
             item_obj = item_find_first_generic(skill_invocation.source.obj, OGF_IS_LOCKPICK);
             dialog_copy_npc_let_me_handle_msg(skill_invocation.source.obj, pc_obj, str);
@@ -204,7 +206,7 @@ void item_ui_apply(TargetDescriptor* td)
             }
         }
     } else {
-        item_obj = qword_6810D8;
+        item_obj = item_ui_item_obj;
     }
 
     if (item_obj != OBJ_HANDLE_NULL) {

@@ -118,7 +118,7 @@ static unsigned int object_blit_flags = TIG_ART_BLT_BLEND_ALPHA_CONST;
 // NOTE: Write-only, so both keep placeholder names. object_init and
 // object_resize compute them from the iso window - half its span in 40x20 tiles
 // plus a two-tile margin - and nothing ever reads them back, in CE or in the
-// original (0x5E2E60 and 0x5E2F50 have writes and no reads). The expression
+// original (`qword_5E2E60` and `qword_5E2F50` have writes and no reads). The expression
 // says what they hold; nothing says what they were for.
 //
 // 0x5E2E60

@@ -166,7 +166,7 @@ static struct {
     int x;
     int y;
     int field_8;
-} stru_5C7E70[CHAREDIT_STAT_COUNT] = {
+} charedit_stat_value_positions[CHAREDIT_STAT_COUNT] = {
     { 337, 94, 3 },
     { 337, 75, 2 },
     { 337, 113, 6 },
@@ -1865,8 +1865,8 @@ void charedit_refresh_stat(int stat)
 
     snprintf(str, sizeof(str), " %d ", value);
     charedit_stat_value_label.str = str;
-    charedit_stat_value_label.x = stru_5C7E70[stat].x;
-    charedit_stat_value_label.y = stru_5C7E70[stat].y;
+    charedit_stat_value_label.x = charedit_stat_value_positions[stat].x;
+    charedit_stat_value_label.y = charedit_stat_value_positions[stat].y;
     charedit_draw_text_rows(charedit_window_handle, font, &charedit_stat_value_label, NULL, -1, 1);
 }
 

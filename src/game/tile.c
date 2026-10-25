@@ -32,7 +32,7 @@ static void tile_draw_topdown(GameDrawInfo* draw_info);
 static void tile_draw_iso(GameDrawInfo* draw_info);
 
 // 0x602AE0
-static TileCacheEntry stru_602AE0[TILE_CACHE_CAPACITY];
+static TileCacheEntry tile_cache[TILE_CACHE_CAPACITY];
 
 // The 80x40 system-memory buffer one tile is composed into before it is
 // blitted. Named with `tile_render_buffer_created` below, which is written
@@ -43,16 +43,16 @@ static TileCacheEntry stru_602AE0[TILE_CACHE_CAPACITY];
 static TigVideoBuffer* tile_render_video_buffer;
 
 // 0x602DE4
-static uint8_t* dword_602DE4;
+static uint8_t* tile_cache_lookup_y;
 
 // 0x602DE8
-static uint8_t* dword_602DE8;
+static uint8_t* tile_cache_lookup_x;
 
 // 0x602DEC
 static IsoInvalidateRectFunc* tile_invalidate_rect;
 
 // 0x602DF0
-static TigVideoBuffer* dword_602DF0;
+static TigVideoBuffer* tile_iso_window_video_buffer;
 
 // 0x602DF4
 static bool tile_visible;
@@ -75,7 +75,7 @@ static bool tile_render_buffer_created;
 // 0x4D6840
 bool tile_init(GameInitInfo* init_info)
 {
-    if (tig_window_vbid_get(init_info->iso_window_handle, &dword_602DF0) != TIG_OK) {
+    if (tig_window_vbid_get(init_info->iso_window_handle, &tile_iso_window_video_buffer) != TIG_OK) {
         return false;
     }
 
@@ -99,7 +99,7 @@ void tile_exit(void)
 // 0x4D68C0
 void tile_resize(GameResizeInfo* resize_info)
 {
-    if (tig_window_vbid_get(resize_info->window_handle, &dword_602DF0) != TIG_OK) {
+    if (tig_window_vbid_get(resize_info->window_handle, &tile_iso_window_video_buffer) != TIG_OK) {
         tig_debug_printf("tile_resize: ERROR: couldn't grab window vbid!");
         exit(EXIT_FAILURE);
     }
@@ -371,7 +371,7 @@ void tile_cache_fill(tig_art_id_t art_id, TigVideoBuffer* video_buffer)
         for (int y = 0; y < tile_view_options.zoom; y++) {
             for (int x = 0; x < tile_view_options.zoom; x++) {
                 int index = y * tile_view_options.zoom + x;
-                int src_index = dword_602DE4[index] * src_video_buffer_data.pitch / 4 + dword_602DE8[index];
+                int src_index = tile_cache_lookup_y[index] * src_video_buffer_data.pitch / 4 + tile_cache_lookup_x[index];
                 int dst_index = y * dst_video_buffer_data.pitch / 4 + x;
                 ((uint32_t*)dst_video_buffer_data.pixels)[dst_index] = ((uint32_t*)src_video_buffer_data.pixels)[src_index];
             }
@@ -474,8 +474,8 @@ void tile_cache_create(int zoom)
     vb_create_info.background_color = 0;
 
     for (index = 0; index < TILE_CACHE_CAPACITY; index++) {
-        stru_602AE0[index].art_id = TIG_ART_ID_INVALID;
-        tig_video_buffer_create(&vb_create_info, &(stru_602AE0[index].video_buffer));
+        tile_cache[index].art_id = TIG_ART_ID_INVALID;
+        tig_video_buffer_create(&vb_create_info, &(tile_cache[index].video_buffer));
     }
 }
 
@@ -485,12 +485,12 @@ void tile_cache_destroy(void)
     int index;
 
     for (index = 0; index < TILE_CACHE_CAPACITY; index++) {
-        if (stru_602AE0[index].video_buffer != NULL) {
-            tig_video_buffer_destroy(stru_602AE0[index].video_buffer);
+        if (tile_cache[index].video_buffer != NULL) {
+            tig_video_buffer_destroy(tile_cache[index].video_buffer);
         }
 
-        stru_602AE0[index].video_buffer = NULL;
-        stru_602AE0[index].art_id = TIG_ART_ID_INVALID;
+        tile_cache[index].video_buffer = NULL;
+        tile_cache[index].art_id = TIG_ART_ID_INVALID;
     }
 }
 
@@ -513,8 +513,8 @@ void tile_cache_lookup_tables_build(int zoom)
 
     v1 = zoom * 0.5 - 1.0;
 
-    dword_602DE8 = (uint8_t*)MALLOC(sizeof(*dword_602DE8) * (zoom * zoom));
-    dword_602DE4 = (uint8_t*)MALLOC(sizeof(*dword_602DE4) * (zoom * zoom));
+    tile_cache_lookup_x = (uint8_t*)MALLOC(sizeof(*tile_cache_lookup_x) * (zoom * zoom));
+    tile_cache_lookup_y = (uint8_t*)MALLOC(sizeof(*tile_cache_lookup_y) * (zoom * zoom));
 
     v2 = ((zoom - 1) - v1) * M_SQRT1_2;
     v3 = 80.0 / (v2 * 4.0);
@@ -549,8 +549,8 @@ void tile_cache_lookup_tables_build(int zoom)
         v7 = (y - v1) * M_SQRT1_2;
         for (x = 0; x < zoom; x++) {
             v8 = (x - v1) * M_SQRT1_2;
-            dword_602DE8[y * zoom + x] = (uint8_t)((v7 + v8) * v5 + 40.0);
-            dword_602DE4[y * zoom + x] = (uint8_t)((v7 - v8) * v6 + 20.0);
+            tile_cache_lookup_x[y * zoom + x] = (uint8_t)((v7 + v8) * v5 + 40.0);
+            tile_cache_lookup_y[y * zoom + x] = (uint8_t)((v7 - v8) * v6 + 20.0);
         }
     }
 }
@@ -558,14 +558,14 @@ void tile_cache_lookup_tables_build(int zoom)
 // 0x4D7C70
 void tile_cache_lookup_tables_destroy(void)
 {
-    if (dword_602DE8 != NULL) {
-        FREE(dword_602DE8);
-        dword_602DE8 = NULL;
+    if (tile_cache_lookup_x != NULL) {
+        FREE(tile_cache_lookup_x);
+        tile_cache_lookup_x = NULL;
     }
 
-    if (dword_602DE4 != NULL) {
-        FREE(dword_602DE4);
-        dword_602DE4 = NULL;
+    if (tile_cache_lookup_y != NULL) {
+        FREE(tile_cache_lookup_y);
+        tile_cache_lookup_y = NULL;
     }
 }
 
@@ -577,18 +577,18 @@ TigVideoBuffer* tile_cache_get(unsigned int art_id)
     int index;
 
     for (index = 0; index < TILE_CACHE_CAPACITY; index++) {
-        if (stru_602AE0[index].art_id == -1) {
+        if (tile_cache[index].art_id == -1) {
             found = index;
         } else {
-            if (stru_602AE0[index].art_id == art_id) {
-                stru_602AE0[index].time = gamelib_ping_time;
-                return stru_602AE0[index].video_buffer;
+            if (tile_cache[index].art_id == art_id) {
+                tile_cache[index].time = gamelib_ping_time;
+                return tile_cache[index].video_buffer;
             }
 
             if (candidate == -1) {
                 candidate = index;
             } else {
-                if (stru_602AE0[index].time < stru_602AE0[candidate].time) {
+                if (tile_cache[index].time < tile_cache[candidate].time) {
                     candidate = index;
                 }
             }
@@ -599,11 +599,11 @@ TigVideoBuffer* tile_cache_get(unsigned int art_id)
         found = candidate;
     }
 
-    tile_cache_fill(art_id, stru_602AE0[found].video_buffer);
-    stru_602AE0[found].art_id = art_id;
-    stru_602AE0[found].time = gamelib_ping_time;
+    tile_cache_fill(art_id, tile_cache[found].video_buffer);
+    tile_cache[found].art_id = art_id;
+    tile_cache[found].time = gamelib_ping_time;
 
-    return stru_602AE0[found].video_buffer;
+    return tile_cache[found].video_buffer;
 }
 
 // 0x4D7CB0
@@ -751,7 +751,7 @@ void tile_draw_iso(GameDrawInfo* draw_info)
                                     if (!blit_info_initialized) {
                                         blit_info_initialized = true;
 
-                                        art_blit_info.dst_video_buffer = dword_602DF0;
+                                        art_blit_info.dst_video_buffer = tile_iso_window_video_buffer;
                                         art_blit_info.field_14 = v36;
 
                                         color = !tile_type ? indoor_color : outdoor_color;

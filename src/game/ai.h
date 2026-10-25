@@ -6,7 +6,7 @@
 #include "game/timeevent.h"
 
 typedef void (*AiFloatLineFunc)(int64_t npc_obj, int64_t pc_obj, const char* str, int speech_id);
-typedef void (*Func5F848C)(int64_t, int);
+typedef void (*AiEndDialogFunc)(int64_t, int);
 
 /**
  * Optional fatigue policy for combat AI spell casting.
@@ -195,7 +195,7 @@ bool ai_init(GameInitInfo* init_info);
 void ai_exit(void);
 bool ai_mod_load(void);
 void ai_mod_unload(void);
-void ai_set_callbacks(Func5F848C a1, AiFloatLineFunc float_line_func);
+void ai_set_callbacks(AiEndDialogFunc a1, AiFloatLineFunc float_line_func);
 void ai_process(int64_t obj);
 void ai_redirect_init(AiRedirect* ai_redirect, int64_t source_obj, int64_t target_obj);
 void ai_redirect_perform(AiRedirect* ai_redirect);

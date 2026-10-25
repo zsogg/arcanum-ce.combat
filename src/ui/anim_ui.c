@@ -27,10 +27,10 @@ static void ambient_lighting_reschedule(void);
 static bool ambient_lighting_enabled = true;
 
 // 0x5CB40C
-static int dword_5CB40C = -1;
+static int anim_ui_event_match_type = -1;
 
 // 0x5CB410
-static int dword_5CB410 = -1;
+static int anim_ui_event_match_param = -1;
 
 // 0x57D240
 bool anim_ui_init(GameInitInfo* init_info)
@@ -119,19 +119,19 @@ void anim_ui_event_add_delay(int type, int param, int milliseconds)
 // 0x57D3B0
 bool anim_ui_event_match(TimeEvent* timeevent)
 {
-    return timeevent->params[0].integer_value == dword_5CB40C
-        && timeevent->params[1].integer_value == dword_5CB410;
+    return timeevent->params[0].integer_value == anim_ui_event_match_type
+        && timeevent->params[1].integer_value == anim_ui_event_match_param;
 }
 
 // 0x57D3E0
 void anim_ui_event_remove(int type, int param)
 {
-    dword_5CB40C = type;
-    dword_5CB410 = param;
+    anim_ui_event_match_type = type;
+    anim_ui_event_match_param = param;
     // FIX: Original code uses `type` as timeevent type which is obviously wrong.
     timeevent_clear_one_ex(TIMEEVENT_TYPE_BKG_ANIM, anim_ui_event_match);
-    dword_5CB40C = -1;
-    dword_5CB410 = -1;
+    anim_ui_event_match_type = -1;
+    anim_ui_event_match_param = -1;
 }
 
 // 0x57D410

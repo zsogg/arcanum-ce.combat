@@ -63,10 +63,10 @@ static int64_t target_path_from;
 static int64_t target_path_to;
 
 // 0x603CB8
-static TargetContext stru_603CB8;
+static TargetContext target_current_ctx;
 
 // 0x603D20
-static TargetParams stru_603D20;
+static TargetParams target_current_params;
 
 // 0x603D38
 static bool target_initialized;
@@ -92,7 +92,7 @@ bool target_init(GameInitInfo* init_info)
     }
 
     target_iso_content_rect = window_data.rect;
-    target_context_init(&stru_603CB8, &stru_603D20, OBJ_HANDLE_NULL);
+    target_context_init(&target_current_ctx, &target_current_params, OBJ_HANDLE_NULL);
     target_initialized = true;
 
     return true;
@@ -123,7 +123,7 @@ void target_resize(GameResizeInfo* resize_info)
  */
 void target_flags_set(uint64_t flags)
 {
-    stru_603D20.tgt = flags;
+    target_current_params.tgt = flags;
 }
 
 /**
@@ -133,7 +133,7 @@ void target_flags_set(uint64_t flags)
  */
 uint64_t target_flags_get(void)
 {
-    return stru_603D20.tgt;
+    return target_current_params.tgt;
 }
 
 // 0x4F25E0
@@ -181,28 +181,28 @@ void target_context_init(TargetContext* ctx, TargetParams* params, int64_t sourc
 // 0x4F2680
 bool target_is_valid(S4F2680* a1)
 {
-    stru_603CB8.source_obj = a1->field_0;
+    target_current_ctx.source_obj = a1->field_0;
 
     if (a1->td->is_loc) {
-        stru_603CB8.orig_target_loc = a1->td->loc;
-        stru_603CB8.target_loc = a1->td->loc;
-        stru_603CB8.target_obj = OBJ_HANDLE_NULL;
-        stru_603CB8.orig_target_obj = OBJ_HANDLE_NULL;
+        target_current_ctx.orig_target_loc = a1->td->loc;
+        target_current_ctx.target_loc = a1->td->loc;
+        target_current_ctx.target_obj = OBJ_HANDLE_NULL;
+        target_current_ctx.orig_target_obj = OBJ_HANDLE_NULL;
     } else {
         if ((obj_field_int32_get(a1->td->obj, OBJ_F_FLAGS) & OF_CLICK_THROUGH) != 0) {
             return false;
         }
 
-        stru_603CB8.orig_target_obj = a1->td->obj;
-        stru_603CB8.target_obj = a1->td->obj;
-        stru_603CB8.target_loc = OBJ_HANDLE_NULL;
-        stru_603CB8.orig_target_loc = OBJ_HANDLE_NULL;
+        target_current_ctx.orig_target_obj = a1->td->obj;
+        target_current_ctx.target_obj = a1->td->obj;
+        target_current_ctx.target_loc = OBJ_HANDLE_NULL;
+        target_current_ctx.orig_target_loc = OBJ_HANDLE_NULL;
     }
 
-    stru_603CB8.self_obj = a1->field_8;
+    target_current_ctx.self_obj = a1->field_8;
 
-    if (target_context_evaluate(&stru_603CB8)) {
-        if (stru_603D20.tgt) {
+    if (target_context_evaluate(&target_current_ctx)) {
+        if (target_current_params.tgt) {
             return true;
         }
         return false;
@@ -210,11 +210,11 @@ bool target_is_valid(S4F2680* a1)
 
     if (!a1->td->is_loc) {
         if (a1->td->obj != OBJ_HANDLE_NULL) {
-            stru_603CB8.target_loc = obj_field_int64_get(a1->td->obj, OBJ_F_LOCATION);
-            stru_603CB8.orig_target_loc = stru_603CB8.target_loc;
+            target_current_ctx.target_loc = obj_field_int64_get(a1->td->obj, OBJ_F_LOCATION);
+            target_current_ctx.orig_target_loc = target_current_ctx.target_loc;
         }
-        if (target_context_evaluate(&stru_603CB8) && stru_603D20.tgt) {
-            target_descriptor_set_loc(a1->td, stru_603CB8.target_loc);
+        if (target_context_evaluate(&target_current_ctx) && target_current_params.tgt) {
+            target_descriptor_set_loc(a1->td, target_current_ctx.target_loc);
             return true;
         }
     }
@@ -297,11 +297,11 @@ bool target_pick(int x, int y, TargetDescriptor* td)
     v1.field_8 = pc_obj;
     v1.td = td;
 
-    if ((stru_603D20.tgt & TGT_OBJ_NO_SELF) != 0) {
+    if ((target_current_params.tgt & TGT_OBJ_NO_SELF) != 0) {
         object_flags_set(pc_obj, OF_CLICK_THROUGH);
     }
 
-    if ((stru_603D20.tgt & TGT_NON_PARTY_CRITTERS) != 0) {
+    if ((target_current_params.tgt & TGT_NON_PARTY_CRITTERS) != 0) {
         object_list_all_followers(pc_obj, &party_members);
         node = party_members.head;
         while (node != NULL) {
@@ -324,7 +324,7 @@ bool target_pick(int x, int y, TargetDescriptor* td)
     // after its flags are restored (0x4f2b7a, 0x4f2bb9, 0x4f2c0f); CE walked
     // the multiplayer party list, empty in single player, so corpses were
     // never click-through, and leaked all three lists' nodes.
-    if ((stru_603D20.tgt & TGT_OBJ_NO_ST_CRITTER_DEAD) != 0) {
+    if ((target_current_params.tgt & TGT_OBJ_NO_ST_CRITTER_DEAD) != 0) {
         object_list_vicinity(pc_obj, OBJ_TM_PC | OBJ_TM_NPC, &dead_critters);
         node = dead_critters.head;
         while (node != NULL) {
@@ -368,11 +368,11 @@ bool target_pick(int x, int y, TargetDescriptor* td)
         }
     }
 
-    if ((stru_603D20.tgt & TGT_OBJ_NO_SELF) != 0) {
+    if ((target_current_params.tgt & TGT_OBJ_NO_SELF) != 0) {
         object_flags_unset(pc_obj, OF_CLICK_THROUGH);
     }
 
-    if ((stru_603D20.tgt & TGT_NON_PARTY_CRITTERS) != 0) {
+    if ((target_current_params.tgt & TGT_NON_PARTY_CRITTERS) != 0) {
         node = party_members.head;
         while (node != NULL) {
             object_flags_unset(node->obj, OF_CLICK_THROUGH);
@@ -390,7 +390,7 @@ bool target_pick(int x, int y, TargetDescriptor* td)
         }
     }
 
-    if ((stru_603D20.tgt & TGT_OBJ_NO_ST_CRITTER_DEAD) != 0) {
+    if ((target_current_params.tgt & TGT_OBJ_NO_ST_CRITTER_DEAD) != 0) {
         node = dead_critters.head;
         while (node != NULL) {
             if (critter_is_dead(node->obj)) {

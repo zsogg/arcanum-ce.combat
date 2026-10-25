@@ -51,7 +51,7 @@ static BroadcastFloatLineFunc broadcast_float_line_func;
 static mes_file_handle_t broadcast_multiplayer_mes_file;
 
 // 0x5FDC90
-static char byte_5FDC90[6][1000];
+static char broadcast_messages[6][1000];
 
 // 0x5FF400
 static bool broadcast_initialized;
@@ -499,7 +499,7 @@ void broadcast_messages_load(void)
     for (index = 0; index < 6; index++) {
         mes_file_entry.num = 500 + index;
         mes_get_msg(broadcast_mes_file, &mes_file_entry);
-        strncpy(byte_5FDC90[index], mes_file_entry.str, 1000);
+        strncpy(broadcast_messages[index], mes_file_entry.str, 1000);
     }
 }
 
@@ -510,7 +510,7 @@ void broadcast_send(int index, int64_t loc)
 
     if (index < 6) {
         bcast.loc = loc;
-        strcpy(bcast.str, byte_5FDC90[index]);
+        strcpy(bcast.str, broadcast_messages[index]);
         broadcast_msg(player_get_local_pc_obj(), &bcast);
     }
 }

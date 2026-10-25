@@ -244,8 +244,11 @@ static char byte_5D0A50[256];
 // 0x5D0B50
 static ViewOptions gamelib_view_options;
 
+// The partial-install module directory (0x404FA1 writes it): set only by the
+// fallback the NOTE in gamelib_init says CE does not carry, so always empty.
+//
 // 0x5D0B58
-static char byte_5D0B58[TIG_MAX_PATH];
+static char gamelib_mod_install_dir_path[TIG_MAX_PATH];
 
 // 0x5D0D60
 static TigRect gamelib_iso_content_rect_ex;
@@ -275,7 +278,7 @@ static int gamelib_game_difficulty;
 static bool gamelib_mod_loaded;
 
 // 0x5D0EA4
-static char byte_5D0EA4[TIG_MAX_PATH];
+static char gamelib_loaded_mod_name[TIG_MAX_PATH];
 
 // 0x5D0FA8
 static char gamelib_mod_dat_path[TIG_MAX_PATH];
@@ -290,7 +293,7 @@ static TigGuid gamelib_mod_guid;
 static int gamelib_thumbnail_width;
 
 // 0x5D10C4
-static bool dword_5D10C4;
+static bool gamelib_mod_guid_valid;
 
 // 0x5D10D4
 static GameExtraSaveFunc gamelib_extra_save_func;
@@ -705,7 +708,7 @@ void gamelib_modlist_create(GameModuleList* module_list, int type)
                     module_list->paths = (char**)REALLOC(module_list->paths, sizeof(module_list->paths) * (module_list->count + 1));
                     module_list->paths[module_list->count] = STRDUP(file_list.entries[file_index].path);
 
-                    if (SDL_strcasecmp(byte_5D0EA4, file_list.entries[file_index].path) == 0) {
+                    if (SDL_strcasecmp(gamelib_loaded_mod_name, file_list.entries[file_index].path) == 0) {
                         module_list->selected = module_list->count;
                     }
 
@@ -805,7 +808,7 @@ bool gamelib_mod_load(const char* path)
         tig_file_repository_guid(gamelib_mod_dat_path, &gamelib_mod_guid);
     }
 
-    dword_5D10C4 = true;
+    gamelib_mod_guid_valid = true;
 
     gamelib_save_import();
 
@@ -857,7 +860,7 @@ bool gamelib_mod_load(const char* path)
         }
     }
 
-    strcpy(byte_5D0EA4, path);
+    strcpy(gamelib_loaded_mod_name, path);
     gamelib_mod_loaded = true;
 
     return true;
@@ -866,7 +869,7 @@ bool gamelib_mod_load(const char* path)
 // 0x402C20
 bool gamelib_mod_guid_get(TigGuid* guid_ptr)
 {
-    if (!dword_5D10C4) {
+    if (!gamelib_mod_guid_valid) {
         return false;
     }
 
@@ -1419,23 +1422,23 @@ bool gamelib_delete(const char* name)
 const char* gamelib_last_save_name(void)
 {
     // 0x5D0D88
-    static char byte_5D0D88[TIG_MAX_PATH];
+    static char last_save_name[TIG_MAX_PATH];
 
     // 0x5D10C8
     static GameSaveList save_list;
 
-    byte_5D0D88[0] = '\0';
+    last_save_name[0] = '\0';
     gamelib_savelist_create(&save_list);
     gamelib_savelist_sort(&save_list, GAME_SAVE_LIST_ORDER_DATE, true);
 
     if (save_list.count > 0) {
-        strcpy(byte_5D0D88, save_list.names[0]);
+        strcpy(last_save_name, save_list.names[0]);
     }
 
     // FIX: Memory leak.
     gamelib_savelist_destroy(&save_list);
 
-    return byte_5D0D88;
+    return last_save_name;
 }
 
 // CE: resolve an exact eight-character slot identity (for example
@@ -2222,8 +2225,8 @@ void gamelib_unload_module_data(void)
 
     tig_file_repository_remove(gamelib_mod_dir_path);
 
-    if (byte_5D0B58[0] != '\0') {
-        tig_file_repository_remove(byte_5D0B58);
+    if (gamelib_mod_install_dir_path[0] != '\0') {
+        tig_file_repository_remove(gamelib_mod_install_dir_path);
     }
 
     for (index = GAMELIB_MAX_PATCH_COUNT - 1; index >= 0; index--) {
@@ -2238,11 +2241,11 @@ void gamelib_unload_module_data(void)
     }
 
     gamelib_mod_dir_path[0] = '\0';
-    byte_5D0B58[0] = '\0';
+    gamelib_mod_install_dir_path[0] = '\0';
     gamelib_mod_dat_path[0] = '\0';
-    byte_5D0EA4[0] = '\0';
+    gamelib_loaded_mod_name[0] = '\0';
 
     memset(&gamelib_mod_guid, 0, sizeof(gamelib_mod_guid));
 
-    dword_5D10C4 = false;
+    gamelib_mod_guid_valid = false;
 }
