@@ -417,11 +417,17 @@ void tc_clear(bool compact)
     tc_content_rect.height = highres_dialog_metrics()->window_height;
     tc_content_rect.x = (tc_iso_window_rect.width - tc_content_rect.width) / 2;
 
-    // Adjust vertical position depending on normal vs. compact mode.
+    // FIX (porting bug #371): the box sits 80 above the bottom in the compact
+    // interface and 160 in the normal one, as the High Resolution Patch writes
+    // them (Dialog.tph: 0x4C97F2 `Height - 80 - h`, 0x4C97FD `Height - 160 - h`;
+    // the UAP exe's 0x20D and 0x1BD at 1280x720). With the stock box at
+    // 800x600 that is the clean exe's 419 and 340 to a pixel (0x4C97F7
+    // `add eax,-181`; 0x4C97EC 299 in the view below the top bar). CE used 37
+    // and 159, so the compact box sat 43 low, on the hotkey bar.
     if (compact) {
-        tc_content_rect.y = tc_iso_window_rect.height - tc_content_rect.height - 37;
+        tc_content_rect.y = tc_iso_window_rect.height - tc_content_rect.height - 80;
     } else {
-        tc_content_rect.y = tc_iso_window_rect.height - tc_content_rect.height - 159;
+        tc_content_rect.y = tc_iso_window_rect.height - tc_content_rect.height - 160;
     }
 }
 

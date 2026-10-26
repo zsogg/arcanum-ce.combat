@@ -38,8 +38,10 @@
 #include "game/settings.h"
 #include "game/skill.h"
 #include "game/target.h"
+#include "game/tc.h"
 
 #include "tig/art.h"
+#include "tig/video.h"
 
 #include "obj_harness.h"
 #include "test_harness.h"
@@ -345,6 +347,54 @@ TEST(an_odd_negative_screen_offset_floors)
     CHECK_INT(wy, 0);
 }
 
+// `static` in tc.c, reached through tc_globalized.o.
+extern bool tc_editor;
+extern TigRect tc_iso_window_rect;
+extern TigVideoBuffer* tc_scratch_video_buffer;
+extern IsoInvalidateRectFunc* tc_iso_window_invalidate_rect;
+extern TigRect tc_content_rect;
+
+static void tc_ignore_invalidate(TigRect* rect)
+{
+    (void)rect;
+}
+
+// Porting bug #371: `tc_clear` puts the dialogue-option box 160 above the
+// bottom of the view, less its height, in the normal interface and 80 in the
+// compact one - the High Resolution Patch's Dialog.tph, and the clean exe's
+// 340 and 419 at 800x600 to a pixel (0x4C97EC, 0x4C97F7). CE used 159 and 37.
+// The stock box is 100 high (DialogFont 0, the harness's default).
+TEST(the_dialogue_box_sits_where_the_patch_puts_it)
+{
+    TigVideoBufferCreateInfo create_info;
+    TigVideoBuffer* saved_buffer = tc_scratch_video_buffer;
+    IsoInvalidateRectFunc* saved_invalidate = tc_iso_window_invalidate_rect;
+    TigRect saved_rect = tc_iso_window_rect;
+
+    memset(&create_info, 0, sizeof(create_info));
+    create_info.width = 400;
+    create_info.height = 100;
+    CHECK_INT(tig_video_buffer_create(&create_info, &tc_scratch_video_buffer), TIG_OK);
+    tc_iso_window_invalidate_rect = tc_ignore_invalidate;
+    tc_editor = false;
+    tc_iso_window_rect.x = 0;
+    tc_iso_window_rect.y = 0;
+    tc_iso_window_rect.width = 800;
+    tc_iso_window_rect.height = 600;
+
+    tc_clear(false);
+    CHECK_INT(tc_content_rect.height, 100);
+    CHECK_INT(tc_content_rect.y, 600 - 160 - 100);
+
+    tc_clear(true);
+    CHECK_INT(tc_content_rect.y, 600 - 80 - 100);
+
+    tig_video_buffer_destroy(tc_scratch_video_buffer);
+    tc_scratch_video_buffer = saved_buffer;
+    tc_iso_window_invalidate_rect = saved_invalidate;
+    tc_iso_window_rect = saved_rect;
+}
+
 void test_compare_fixes_suite(void)
 {
     RUN(a_radius_2_wall_is_5_tiles_along_its_rotation);
@@ -355,4 +405,5 @@ void test_compare_fixes_suite(void)
     RUN(a_knockback_path_is_blocked_only_by_its_bit);
     RUN(the_object_lighting_setting_is_stored);
     RUN(an_odd_negative_screen_offset_floors);
+    RUN(the_dialogue_box_sits_where_the_patch_puts_it);
 }

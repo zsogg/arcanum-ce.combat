@@ -955,6 +955,45 @@ add_custom_target(arcanum-location-test-obj DEPENDS "${LOCATION_TEST_OBJ}")
 target_link_libraries(arcanum-tests PRIVATE "${LOCATION_TEST_OBJ}")
 add_dependencies(arcanum-tests arcanum-location-test-obj)
 
+# `tc.c`. `tc_clear` (porting bug #371) places the dialogue box from the
+# view's rect and needs the scratch buffer and the invalidate callback, all
+# `static`; `test_compare_fixes.c` sets them and reads the box back.
+set(TC_TEST_DATA
+    tc_editor
+    tc_iso_window_rect
+    tc_scratch_video_buffer
+    tc_iso_window_invalidate_rect
+    tc_content_rect
+)
+set(TC_TEST_OBJ "${CMAKE_CURRENT_BINARY_DIR}/tc_globalized.o")
+set(_tc_globalize_args "")
+foreach(sym ${TC_TEST_DATA})
+    list(APPEND _tc_globalize_args "--globalize-symbol=${sym}")
+endforeach()
+
+file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/tcobj")
+
+add_custom_command(
+    OUTPUT "${TC_TEST_OBJ}"
+    COMMAND "${CMAKE_AR}" x "$<TARGET_FILE:arcanum-game>" tc.c${CMAKE_C_OUTPUT_EXTENSION}
+    COMMAND "${CMAKE_OBJCOPY}" ${_tc_globalize_args} tc.c${CMAKE_C_OUTPUT_EXTENSION} "${TC_TEST_OBJ}"
+    COMMAND "${CMAKE_COMMAND}" -E rm -f tc.c${CMAKE_C_OUTPUT_EXTENSION}
+    COMMAND "${CMAKE_COMMAND}"
+        "-DOBJ=${TC_TEST_OBJ}"
+        "-DSYMS="
+        "-DDATA_SYMS=${TC_TEST_DATA}"
+        "-DNM=${CMAKE_NM}"
+        -P "${CMAKE_CURRENT_SOURCE_DIR}/verify_globalized.cmake"
+    WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/tcobj"
+    DEPENDS arcanum-game
+    COMMENT "tests: globalizing tc.c statics (no source change)"
+    VERBATIM
+)
+
+add_custom_target(arcanum-tc-test-obj DEPENDS "${TC_TEST_OBJ}")
+target_link_libraries(arcanum-tests PRIVATE "${TC_TEST_OBJ}")
+add_dependencies(arcanum-tests arcanum-tc-test-obj)
+
 # A focused executable for the script VM. The full suite deliberately contains
 # subprocess crash specifications whose expected signal changes under UBSan;
 # this target lets the VM's boundary and repeated-invocation cases run cleanly
