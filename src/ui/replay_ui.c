@@ -246,6 +246,24 @@ typedef enum ReplayKind {
     REPLAY_KIND_AWAIT_DEATH,
     REPLAY_KIND_REMOVE,
     REPLAY_KIND_EXAMINE,
+    // Card PH1 (2026-10-25), what the engine-fix playtests need. Test rows:
+    //   press <key>
+    //       a key pressed and released, by its SDL name (`L`, `Escape`,
+    //       `Return`, `F7`), enqueued as two keyboard messages so it meets the
+    //       same handlers a real key does - the logbook, the save screen.
+    //   click <x> <y>
+    //       a left click at that screen pixel, enqueued as `panel` enqueues
+    //       its click, for a control or a tile no other row reaches.
+    //   inspect location <id>
+    //       one log line with that object's tile, so a script can see where a
+    //       move stopped or a knockback landed.
+    //   @pc, @follower
+    //       wherever a row takes an object's identity: the player, and the
+    //       first follower, so a script reaches a save's own party.
+    //   cast <spell> location @<name>
+    //       the tile that object stands on, for a wall aimed at the party.
+    REPLAY_KIND_PRESS,
+    REPLAY_KIND_CLICK,
 } ReplayKind;
 
 // A cast's target, which is a third shape: the caster, an object or a tile.
@@ -743,8 +761,38 @@ static bool replay_parse_line(const char* text, ReplayCommand* command)
         return command->proto != 0 && index == count;
     }
 
+    if (strcmp(kind, "press") == 0) {
+        command->kind = REPLAY_KIND_PRESS;
+        if (SDL_GetScancodeFromName(tokens[index]) == SDL_SCANCODE_UNKNOWN) {
+            tig_debug_printf("Replay: '%s' is not a key name\n", tokens[index]);
+            return false;
+        }
+        replay_copy_target(command, tokens[index++]);
+        return index == count;
+    }
+
+    if (strcmp(kind, "click") == 0) {
+        command->kind = REPLAY_KIND_CLICK;
+        if (!replay_parse_int(tokens[index++], &(command->dx))
+            || index >= count
+            || !replay_parse_int(tokens[index++], &(command->dy))) {
+            return false;
+        }
+        return index == count;
+    }
+
     if (strcmp(kind, "inspect") == 0) {
         command->kind = REPLAY_KIND_INSPECT;
+        // `inspect location <id>` (card PH1): `stat` 3, the object in `target`.
+        if (strcmp(tokens[index], "location") == 0) {
+            command->stat = 3;
+            index++;
+            if (index >= count) {
+                return false;
+            }
+            replay_copy_target(command, tokens[index++]);
+            return index == count;
+        }
         // `inspect awareness` (2026-10-12): what each critter nearby makes of
         // the player, for prowling. `stat` tells the two apart.
         if (strcmp(tokens[index], "awareness") == 0) {
@@ -1009,7 +1057,11 @@ static bool replay_parse_line(const char* text, ReplayCommand* command)
             index += 2;
         } else if (strcmp(tokens[index], "location") == 0 && index + 1 < count) {
             command->cast_target = REPLAY_CAST_LOCATION;
-            command->loc = (int64_t)strtoll(tokens[index + 1], NULL, 10);
+            if (tokens[index + 1][0] == '@') {
+                replay_copy_target(command, tokens[index + 1]);
+            } else {
+                command->loc = (int64_t)strtoll(tokens[index + 1], NULL, 10);
+            }
             index += 2;
         } else {
             return false;
@@ -1143,6 +1195,26 @@ static bool replay_resolve(const ReplayCommand* command, int64_t* obj_ptr)
 {
     ObjectID oid;
     int index;
+
+    // CE (card PH1): two names no spawn row makes - the player, and the first
+    // follower - so a script can reach a save's own party without its ids.
+    if (strcmp(command->target, "@pc") == 0) {
+        *obj_ptr = player_get_local_pc_obj();
+        return *obj_ptr != OBJ_HANDLE_NULL;
+    }
+    if (strcmp(command->target, "@follower") == 0) {
+        ObjectList followers;
+
+        object_list_followers(player_get_local_pc_obj(), &followers);
+        *obj_ptr = followers.head != NULL ? followers.head->obj : OBJ_HANDLE_NULL;
+        object_list_destroy(&followers);
+        if (*obj_ptr == OBJ_HANDLE_NULL) {
+            tig_debug_printf("Replay: command %d names @follower, and the player has none\n",
+                replay_next);
+            return false;
+        }
+        return true;
+    }
 
     // A critter a `spawn` row made, by its name.
     if (command->target[0] == '@') {
@@ -1349,7 +1421,16 @@ void replay_ui_tick(void)
     if (command->kind == REPLAY_KIND_INSPECT) {
         replay_stall_reported = false;
         replay_next++;
-        if (command->stat == 1) {
+        if (command->stat == 3) {
+            int64_t loc;
+
+            if (!replay_resolve(command, &target_obj)) {
+                return;
+            }
+            loc = obj_field_int64_get(target_obj, OBJ_F_LOCATION);
+            tig_debug_printf("Replay: command %d: '%s' is at %d,%d\n", replay_next - 1,
+                command->target, (int)location_get_x(loc), (int)location_get_y(loc));
+        } else if (command->stat == 1) {
             replay_inspect_awareness(pc_obj);
         } else if (command->stat == 2) {
             replay_inspect_xp(pc_obj);
@@ -1668,6 +1749,41 @@ void replay_ui_tick(void)
         return;
     }
 
+    if (command->kind == REPLAY_KIND_PRESS) {
+        TigMessage press;
+
+        replay_stall_reported = false;
+        replay_next++;
+        memset(&press, 0, sizeof(press));
+        press.type = TIG_MESSAGE_KEYBOARD;
+        press.data.keyboard.scancode = SDL_GetScancodeFromName(command->target);
+        press.data.keyboard.key = SDL_GetKeyFromScancode(press.data.keyboard.scancode, SDL_KMOD_NONE, false);
+        press.data.keyboard.pressed = true;
+        tig_message_enqueue(&press);
+        press.data.keyboard.pressed = false;
+        tig_message_enqueue(&press);
+        tig_debug_printf("Replay: command %d pressed %s\n", replay_next - 1, command->target);
+        return;
+    }
+
+    if (command->kind == REPLAY_KIND_CLICK) {
+        TigMessage click;
+
+        replay_stall_reported = false;
+        replay_next++;
+        memset(&click, 0, sizeof(click));
+        click.type = TIG_MESSAGE_MOUSE;
+        click.data.mouse.x = command->dx;
+        click.data.mouse.y = command->dy;
+        click.data.mouse.event = TIG_MESSAGE_MOUSE_LEFT_BUTTON_DOWN;
+        tig_message_enqueue(&click);
+        click.data.mouse.event = TIG_MESSAGE_MOUSE_LEFT_BUTTON_UP;
+        tig_message_enqueue(&click);
+        tig_debug_printf("Replay: command %d clicked at %d,%d\n", replay_next - 1,
+            command->dx, command->dy);
+        return;
+    }
+
     if (command->kind == REPLAY_KIND_PANEL) {
         TigMessage click;
         int x;
@@ -1831,6 +1947,13 @@ void replay_ui_tick(void)
         if (command->cast_target == REPLAY_CAST_LOCATION) {
             td.is_loc = 1;
             td.loc = command->loc;
+            if (command->target[0] == '@') {
+                if (!replay_resolve(command, &target_obj)) {
+                    replay_next++;
+                    return;
+                }
+                td.loc = obj_field_int64_get(target_obj, OBJ_F_LOCATION);
+            }
         } else if (command->cast_target == REPLAY_CAST_SELF) {
             td.obj = pc_obj;
         } else {
