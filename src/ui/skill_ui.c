@@ -210,6 +210,9 @@ void skill_ui_preprocess(int64_t obj, int type)
             && combat_critter_is_combat_mode_active(obj)
             && basic_skill_training_get(obj, BASIC_SKILL_PROWLING) < TRAINING_MASTER) {
             tf_add(obj, TF_TYPE_WHITE, "Only a master prowler hides in a fight");
+            // CE (card MI1, IN-3): a refused press leaves no command a replay
+            // could record, so the log says it happened.
+            tig_debug_printf("Prowl: refused: not a master prowler, in combat mode\n");
             break;
         }
         critter_set_concealed(obj, !critter_is_concealed(obj));

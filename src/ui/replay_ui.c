@@ -262,6 +262,13 @@ typedef enum ReplayKind {
     //       first follower, so a script reaches a save's own party.
     //   cast <spell> location @<name>
     //       the tile that object stands on, for a wall aimed at the party.
+    // Card MI1 (2026-10-26), the measuring instruments:
+    //   afflict <effect> [<id>]
+    //       as before, on that critter rather than the player when one is named.
+    //   inspect light <id>
+    //       the light level at that critter and the light it carries.
+    //   inspect wear [<id>]
+    //       each wielded or worn item's durability, the player's by default.
     REPLAY_KIND_PRESS,
     REPLAY_KIND_CLICK,
 } ReplayKind;
@@ -522,6 +529,43 @@ static void replay_inspect_awareness(int64_t pc_obj)
     object_list_destroy(&objects);
 }
 
+// `inspect light <id>` (card MI1, IN-1): the light level at a critter, as
+// the prowling darkness bonus and the attack's darkness penalty read it
+// (`light_obj_grayscale_get`, 0 dark to 255 bright), and which light it
+// carries - porting bug #50 is the small one.
+static void replay_inspect_light(int64_t obj, const char* who)
+{
+    unsigned int flags = obj_field_int32_get(obj, OBJ_F_CRITTER_FLAGS);
+
+    tig_debug_printf("Replay: light %s %d carries %s\n",
+        who,
+        light_obj_grayscale_get(obj) & 0xFF,
+        (flags & OCF_LIGHT_XLARGE) != 0       ? "xlarge"
+            : (flags & OCF_LIGHT_LARGE) != 0  ? "large"
+            : (flags & OCF_LIGHT_MEDIUM) != 0 ? "medium"
+            : (flags & OCF_LIGHT_SMALL) != 0  ? "small"
+                                              : "none");
+}
+
+// `inspect wear [id]` (card MI1, IN-5): each wielded or worn item's
+// durability, so a run can show what an attack wore down (DF-14).
+static void replay_inspect_wear(int64_t obj, const char* who)
+{
+    int inventory_location;
+    int64_t item_obj;
+    char name[MAX_STRING];
+
+    for (inventory_location = FIRST_WEAR_INV_LOC; inventory_location <= LAST_WEAR_INV_LOC; inventory_location++) {
+        item_obj = item_wield_get(obj, inventory_location);
+        if (item_obj == OBJ_HANDLE_NULL) {
+            continue;
+        }
+        object_examine(item_obj, obj, name);
+        tig_debug_printf("Replay: wear %s %d %s %d/%d\n",
+            who, inventory_location, name, object_hp_current(item_obj), object_hp_max(item_obj));
+    }
+}
+
 // `inspect xp` (release 1, R1): the player's level and experience, and each
 // party member's basic skills as training/level - for UAP's level-cap and
 // Educator add-ons. Training needs the skill level its tier requires, so the
@@ -758,6 +802,11 @@ static bool replay_parse_line(const char* text, ReplayCommand* command)
             }
         }
         index++;
+        // CE (card MI1, IN-2): an optional critter, so an enemy caster can be
+        // made Unfocused; the player when there is none.
+        if (index < count) {
+            replay_copy_target(command, tokens[index++]);
+        }
         return command->proto != 0 && index == count;
     }
 
@@ -792,6 +841,16 @@ static bool replay_parse_line(const char* text, ReplayCommand* command)
             }
             replay_copy_target(command, tokens[index++]);
             return index == count;
+        }
+        // `inspect light <id>` and `inspect wear [id]` (card MI1, IN-1 and
+        // IN-5): `stat` 4 and 5; wear defaults to the player.
+        if (strcmp(tokens[index], "light") == 0 || strcmp(tokens[index], "wear") == 0) {
+            command->stat = strcmp(tokens[index], "light") == 0 ? 4 : 5;
+            index++;
+            if (index < count) {
+                replay_copy_target(command, tokens[index++]);
+            }
+            return index == count && (command->stat == 5 || command->target[0] != '\0');
         }
         // `inspect awareness` (2026-10-12): what each critter nearby makes of
         // the player, for prowling. `stat` tells the two apart.
@@ -1421,6 +1480,18 @@ void replay_ui_tick(void)
     if (command->kind == REPLAY_KIND_INSPECT) {
         replay_stall_reported = false;
         replay_next++;
+        if (command->stat == 4 || command->stat == 5) {
+            target_obj = pc_obj;
+            if (command->target[0] != '\0' && !replay_resolve(command, &target_obj)) {
+                return;
+            }
+            if (command->stat == 4) {
+                replay_inspect_light(target_obj, command->target[0] != '\0' ? command->target : "the player");
+            } else {
+                replay_inspect_wear(target_obj, command->target[0] != '\0' ? command->target : "the player");
+            }
+            return;
+        }
         if (command->stat == 3) {
             int64_t loc;
 
@@ -1538,9 +1609,14 @@ void replay_ui_tick(void)
     if (command->kind == REPLAY_KIND_AFFLICT) {
         replay_stall_reported = false;
         replay_next++;
-        crit_effects_apply_for(pc_obj, (unsigned int)command->proto, SPELL_CRITICAL_EFFECT_TURNS);
-        tig_debug_printf("Replay: command %d afflicted the player (effect 0x%x)\n",
-            replay_next - 1, (unsigned int)command->proto);
+        target_obj = pc_obj;
+        if (command->target[0] != '\0' && !replay_resolve(command, &target_obj)) {
+            return;
+        }
+        crit_effects_apply_for(target_obj, (unsigned int)command->proto, SPELL_CRITICAL_EFFECT_TURNS);
+        tig_debug_printf("Replay: command %d afflicted %s (effect 0x%x)\n",
+            replay_next - 1, command->target[0] != '\0' ? command->target : "the player",
+            (unsigned int)command->proto);
         return;
     }
 

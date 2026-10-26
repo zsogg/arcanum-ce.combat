@@ -968,7 +968,23 @@ TEST(the_afflict_row_names_a_debuff_critical)
     CHECK(row_is(1, "turn=1 now=0 kind=afflict target= loc=0 aim=0 spell=0 cast=- wait=0 proto=32 count=0"));
     CHECK(!load_script("0 afflict\n"));
     CHECK(!load_script("0 afflict winded\n"));
-    CHECK(!load_script("0 afflict unfocused now\n"));
+    // Card MI1 (2026-10-26): an optional critter, so an enemy can be
+    // afflicted; still one word at most after the effect.
+    CHECK(load_script("0 afflict unfocused G_00000084_1104_4040_8000_000000000411\n"));
+    CHECK(row_is(0, "turn=0 now=0 kind=afflict target=G_00000084_1104_4040_8000_000000000411 loc=0 aim=0 spell=0 cast=- wait=0 proto=64 count=0"));
+    CHECK(!load_script("0 afflict unfocused G_1 extra\n"));
+}
+
+TEST(the_inspect_light_and_wear_rows_load)
+{
+    // Card MI1 (2026-10-26): `inspect light` needs a critter, `inspect wear`
+    // defaults to the player.
+    CHECK(load_script("0 inspect light @pc\n0 inspect wear\n0 inspect wear @w\n"));
+    CHECK_INT(replay_ui_count(), 3);
+    CHECK(row_is(0, "turn=0 now=0 kind=inspect target=@pc loc=0 aim=0 spell=0 cast=- wait=0"));
+    CHECK(row_is(1, "turn=0 now=0 kind=inspect target= loc=0 aim=0 spell=0 cast=- wait=0"));
+    CHECK(!load_script("0 inspect light\n"));
+    CHECK(!load_script("0 inspect wear @w extra\n"));
 }
 
 TEST(the_poison_row_sets_a_level_on_the_player_or_a_critter)
@@ -1988,6 +2004,7 @@ void test_combat_observer_suite(void)
     RUN(the_skill_stat_and_training_rows_take_an_optional_critter);
     RUN(the_examine_row_names_the_object_it_shows);
     RUN(the_afflict_row_names_a_debuff_critical);
+    RUN(the_inspect_light_and_wear_rows_load);
     RUN(the_poison_row_sets_a_level_on_the_player_or_a_critter);
     RUN(the_use_row_names_a_prototype_and_perhaps_a_target);
     RUN(the_xp_train_and_inspect_xp_rows_load);

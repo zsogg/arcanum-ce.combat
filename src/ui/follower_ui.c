@@ -804,6 +804,9 @@ bool follower_ui_message_filter(TigMessage* msg)
                             if (mes_search(follower_ui_mes_file, &mes_file_entry)) {
                                 object_examine(follower_ui_subordinate_obj, follower_ui_commander_obj, str);
                                 snprintf(bcast.str, sizeof(bcast.str), "%s %s", str, mes_file_entry.str);
+                                // CE (card MI1, IN-3): the order goes out as a
+                                // broadcast, which no replay records.
+                                tig_debug_printf("Follower: ordered \"%s\"\n", bcast.str);
                                 broadcast_msg(follower_ui_commander_obj, &bcast);
                             }
                             break;
