@@ -2143,8 +2143,14 @@ void mainmenu_ui_dismiss_ex(bool exiting)
     }
     timeevent_unpause();
 
-    // CE: Restore main interface to its normal state.
-    intgame_show();
+    // CE: Restore main interface to its normal state - but not on the way
+    // out. `gameuilib_exit` runs `intgame_exit` first, which destroys these
+    // windows, and a maintained spell's window handle is by then invalid:
+    // showing it indexed past tig's window table, and quitting while
+    // maintaining a spell crashed about one exit in four (2026-10-26, ASan).
+    if (!exiting) {
+        intgame_show();
+    }
 }
 
 // CE: reproducible-run harness flag. Not in the original.

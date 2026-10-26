@@ -1059,7 +1059,7 @@ static RotatingWindowType dword_64C6AC;
 // Set once by `iso_interface_create` and never cleared, so the drawing helpers
 // can bail before the interface windows exist. Distinct from
 // `intgame_iso_interface_created`, which tracks whether it is *currently* set
-// up and does get cleared.
+// up: `iso_interface_create` sets it and `iso_interface_destroy` clears it.
 //
 // 0x64C6B0
 static bool intgame_iso_interface_exists;
@@ -1609,6 +1609,16 @@ void iso_interface_destroy(void)
                 intgame_maintain_fs_windows[index] = TIG_WINDOW_HANDLE_INVALID;
             }
         }
+
+        // FIX: the original leaves the flag set once the windows are gone
+        // (0x54A9A0 writes nothing to 0x64C6B4), so every guard on it still
+        // passes and draws into freed windows. The game's own shutdown does
+        // that: `gamelib_exit` runs after `gameuilib_exit`, and clearing the
+        // map interrupts a maintained spell, whose icon is redrawn
+        // (`intgame_spell_maintain_art_set`). Silent on the original's heap;
+        // a use-after-free on Linux, the same shape as the follower bar's.
+        // Found 2026-10-26 by ASan, quitting with Wall of Fire maintained.
+        intgame_iso_interface_created = false;
     }
 
     tig_video_buffer_destroy(dword_64C474);
