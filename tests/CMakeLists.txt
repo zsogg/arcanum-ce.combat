@@ -78,6 +78,7 @@ add_executable(arcanum-tests
     "test_effect_parse.c"
     "test_dialog_conditions.c"
     "test_rules_fixes.c"
+    "test_compare_fixes.c"
     "test_compat.c"
     "test_magitech.c"
     "test_proto.c"
@@ -250,12 +251,21 @@ add_custom_target(arcanum-emudiff-combat-obj DEPENDS "${EMUDIFF_COMBAT_OBJ}")
 # trio, and `magictech_disallowed_flags_check` is the widest thing in
 # `magictech.c` that reaches nothing but the field accessors. Neither source
 # file is modified.
+#
+# The unit suite links the same object (as it does `anim_globalized.o`):
+# `test_compare_fixes.c` drives `object_lighting_changed` (porting bug #178)
+# and reads the flag it stores, with the invalidate callback pointed at a stub.
 set(EMUDIFF_OBJECT_STATICS
     object_hp_from_pts
+    object_lighting_changed
+)
+set(EMUDIFF_OBJECT_DATA
+    object_lighting
+    object_iso_invalidate_rect
 )
 set(EMUDIFF_OBJECT_OBJ "${CMAKE_CURRENT_BINARY_DIR}/object_globalized.o")
 set(_object_globalize_args "")
-foreach(sym ${EMUDIFF_OBJECT_STATICS})
+foreach(sym ${EMUDIFF_OBJECT_STATICS} ${EMUDIFF_OBJECT_DATA})
     list(APPEND _object_globalize_args "--globalize-symbol=${sym}")
 endforeach()
 
@@ -269,7 +279,7 @@ add_custom_command(
     COMMAND "${CMAKE_COMMAND}"
         "-DOBJ=${EMUDIFF_OBJECT_OBJ}"
         "-DSYMS=${EMUDIFF_OBJECT_STATICS}"
-        "-DDATA_SYMS="
+        "-DDATA_SYMS=${EMUDIFF_OBJECT_DATA}"
         "-DNM=${CMAKE_NM}"
         -P "${CMAKE_CURRENT_SOURCE_DIR}/verify_globalized.cmake"
     WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/objectobj"
@@ -490,6 +500,8 @@ set(ANIM_TEST_STATICS
     anim_eye_candy_sound_begin
     anim_eye_candy_sound_move
     anim_eye_candy_sound_restart
+    anim_goal_turn_on_stop_at_blockers
+    anim_knockback_path_blocked
 )
 set(ANIM_TEST_OBJ "${CMAKE_CURRENT_BINARY_DIR}/anim_globalized.o")
 set(_anim_globalize_args "")
@@ -699,8 +711,8 @@ target_link_libraries(arcanum-tests PRIVATE "${MAGICTECH_TEST_OBJ}")
 add_dependencies(arcanum-tests arcanum-magictech-test-obj)
 
 
-target_link_libraries(arcanum-tests PRIVATE "${ANIM_TEST_OBJ}")
-add_dependencies(arcanum-tests arcanum-anim-test-obj)
+target_link_libraries(arcanum-tests PRIVATE "${ANIM_TEST_OBJ}" "${EMUDIFF_OBJECT_OBJ}")
+add_dependencies(arcanum-tests arcanum-anim-test-obj arcanum-emudiff-object-obj)
 
 
 # The same objcopy trick again, for `script.c`, so the unit suite can execute
@@ -834,6 +846,114 @@ add_custom_command(
 add_custom_target(arcanum-text-filter-test-obj DEPENDS "${TEXT_FILTER_TEST_OBJ}")
 target_link_libraries(arcanum-tests PRIVATE "${TEXT_FILTER_TEST_OBJ}")
 add_dependencies(arcanum-tests arcanum-text-filter-test-obj)
+
+# `inven_ui.c`. `inven_ui_gamble_check` (0x579840, porting bug #262) and the
+# three handles it reads are `static`; `test_compare_fixes.c` sets the handles
+# and calls the check directly.
+set(INVEN_UI_TEST_STATICS
+    inven_ui_gamble_check
+)
+set(INVEN_UI_TEST_DATA
+    inven_ui_drag_source_obj
+    inven_ui_pc_obj
+    inven_ui_target_obj
+)
+set(INVEN_UI_TEST_OBJ "${CMAKE_CURRENT_BINARY_DIR}/inven_ui_globalized.o")
+set(_inven_ui_globalize_args "")
+foreach(sym ${INVEN_UI_TEST_STATICS} ${INVEN_UI_TEST_DATA})
+    list(APPEND _inven_ui_globalize_args "--globalize-symbol=${sym}")
+endforeach()
+
+file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/invenuiobj")
+
+add_custom_command(
+    OUTPUT "${INVEN_UI_TEST_OBJ}"
+    COMMAND "${CMAKE_AR}" x "$<TARGET_FILE:arcanum-game>" inven_ui.c${CMAKE_C_OUTPUT_EXTENSION}
+    COMMAND "${CMAKE_OBJCOPY}" ${_inven_ui_globalize_args} inven_ui.c${CMAKE_C_OUTPUT_EXTENSION} "${INVEN_UI_TEST_OBJ}"
+    COMMAND "${CMAKE_COMMAND}" -E rm -f inven_ui.c${CMAKE_C_OUTPUT_EXTENSION}
+    COMMAND "${CMAKE_COMMAND}"
+        "-DOBJ=${INVEN_UI_TEST_OBJ}"
+        "-DSYMS=${INVEN_UI_TEST_STATICS}"
+        "-DDATA_SYMS=${INVEN_UI_TEST_DATA}"
+        "-DNM=${CMAKE_NM}"
+        -P "${CMAKE_CURRENT_SOURCE_DIR}/verify_globalized.cmake"
+    WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/invenuiobj"
+    DEPENDS arcanum-game
+    COMMENT "tests: globalizing inven_ui.c gamble check statics (no source change)"
+    VERBATIM
+)
+
+add_custom_target(arcanum-inven-ui-test-obj DEPENDS "${INVEN_UI_TEST_OBJ}")
+target_link_libraries(arcanum-tests PRIVATE "${INVEN_UI_TEST_OBJ}")
+add_dependencies(arcanum-tests arcanum-inven-ui-test-obj)
+
+# tig's `video.c`. The fade state (porting bug #365) is `static` and is drawn
+# only by `tig_video_flip`; `test_video.c` reads it after an immediate fade.
+set(VIDEO_TEST_DATA
+    tig_fade_state
+)
+set(VIDEO_TEST_OBJ "${CMAKE_CURRENT_BINARY_DIR}/video_globalized.o")
+set(_video_globalize_args "")
+foreach(sym ${VIDEO_TEST_DATA})
+    list(APPEND _video_globalize_args "--globalize-symbol=${sym}")
+endforeach()
+
+file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/videoobj")
+
+add_custom_command(
+    OUTPUT "${VIDEO_TEST_OBJ}"
+    COMMAND "${CMAKE_AR}" x "$<TARGET_FILE:tig>" video.c${CMAKE_C_OUTPUT_EXTENSION}
+    COMMAND "${CMAKE_OBJCOPY}" ${_video_globalize_args} video.c${CMAKE_C_OUTPUT_EXTENSION} "${VIDEO_TEST_OBJ}"
+    COMMAND "${CMAKE_COMMAND}" -E rm -f video.c${CMAKE_C_OUTPUT_EXTENSION}
+    COMMAND "${CMAKE_COMMAND}"
+        "-DOBJ=${VIDEO_TEST_OBJ}"
+        "-DSYMS="
+        "-DDATA_SYMS=${VIDEO_TEST_DATA}"
+        "-DNM=${CMAKE_NM}"
+        -P "${CMAKE_CURRENT_SOURCE_DIR}/verify_globalized.cmake"
+    WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/videoobj"
+    DEPENDS tig
+    COMMENT "tests: globalizing tig video.c fade state (no source change)"
+    VERBATIM
+)
+
+add_custom_target(arcanum-video-test-obj DEPENDS "${VIDEO_TEST_OBJ}")
+target_link_libraries(arcanum-tests PRIVATE "${VIDEO_TEST_OBJ}")
+add_dependencies(arcanum-tests arcanum-video-test-obj)
+
+# `location.c`. `convert_screen_to_world_coords` (0x4B98B0, porting bug #186)
+# is `static`; `test_compare_fixes.c` calls it against the default view.
+set(LOCATION_TEST_STATICS
+    convert_screen_to_world_coords
+)
+set(LOCATION_TEST_OBJ "${CMAKE_CURRENT_BINARY_DIR}/location_globalized.o")
+set(_location_globalize_args "")
+foreach(sym ${LOCATION_TEST_STATICS})
+    list(APPEND _location_globalize_args "--globalize-symbol=${sym}")
+endforeach()
+
+file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/locationobj")
+
+add_custom_command(
+    OUTPUT "${LOCATION_TEST_OBJ}"
+    COMMAND "${CMAKE_AR}" x "$<TARGET_FILE:arcanum-game>" location.c${CMAKE_C_OUTPUT_EXTENSION}
+    COMMAND "${CMAKE_OBJCOPY}" ${_location_globalize_args} location.c${CMAKE_C_OUTPUT_EXTENSION} "${LOCATION_TEST_OBJ}"
+    COMMAND "${CMAKE_COMMAND}" -E rm -f location.c${CMAKE_C_OUTPUT_EXTENSION}
+    COMMAND "${CMAKE_COMMAND}"
+        "-DOBJ=${LOCATION_TEST_OBJ}"
+        "-DSYMS=${LOCATION_TEST_STATICS}"
+        "-DDATA_SYMS="
+        "-DNM=${CMAKE_NM}"
+        -P "${CMAKE_CURRENT_SOURCE_DIR}/verify_globalized.cmake"
+    WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/locationobj"
+    DEPENDS arcanum-game
+    COMMENT "tests: globalizing location.c statics (no source change)"
+    VERBATIM
+)
+
+add_custom_target(arcanum-location-test-obj DEPENDS "${LOCATION_TEST_OBJ}")
+target_link_libraries(arcanum-tests PRIVATE "${LOCATION_TEST_OBJ}")
+add_dependencies(arcanum-tests arcanum-location-test-obj)
 
 # A focused executable for the script VM. The full suite deliberately contains
 # subprocess crash specifications whose expected signal changes under UBSan;

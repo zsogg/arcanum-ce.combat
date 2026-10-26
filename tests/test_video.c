@@ -1,6 +1,6 @@
 // Tests for `tig/video.c` - the parts of the video layer that run without a
-// renderer: buffer blits between SDL surfaces, and the brightness setter's
-// bounds.
+// renderer: buffer blits between SDL surfaces, the brightness setter's
+// bounds, and the immediate fade.
 //
 // Written 2026-10-24 for FC1 phase 5f. `Arcanum.exe` is the oracle for each
 // case. Pixels are read through `tig_video_buffer_data` under a lock, since
@@ -12,6 +12,13 @@
 #include "tig/video.h"
 
 #include "test_harness.h"
+
+// `static` in video.c, reached through video_globalized.o (see
+// tests/CMakeLists.txt); the layout mirrors video.c's private TigFadeState.
+extern struct {
+    bool enabled;
+    SDL_Color color;
+} tig_fade_state;
 
 static TigVideoBuffer* vb_make(int width, unsigned int background, unsigned int flags, unsigned int color_key)
 {
@@ -107,9 +114,26 @@ TEST(the_brightness_setter_refuses_what_the_original_refuses)
     CHECK_INT(tig_video_set_gamma(1.0f), TIG_OK);
 }
 
+// Porting bug #365: under one step the fade is applied at once (0x51fd56-
+// 0x51fd71), so a fade-out covers fully even over a cover already part way
+// up, and a fade-in clears. A stepped fade calls `tig_video_flip`, which needs
+// a renderer, so only this path is reachable here.
+TEST(an_immediate_fade_lands_on_its_target)
+{
+    tig_fade_state.enabled = true;
+    tig_fade_state.color.a = 100;
+    CHECK_INT(tig_video_fade(0, 0, 0.0f, TIG_FADE_OUT), TIG_OK);
+    CHECK(tig_fade_state.enabled);
+    CHECK_INT(tig_fade_state.color.a, 255);
+
+    CHECK_INT(tig_video_fade(0, 0, 0.0f, TIG_FADE_IN), TIG_OK);
+    CHECK(!tig_fade_state.enabled);
+}
+
 void test_video_suite(void)
 {
     RUN(a_constant_alpha_blit_blends_each_channel);
     RUN(a_constant_alpha_blit_skips_the_colour_key);
     RUN(the_brightness_setter_refuses_what_the_original_refuses);
+    RUN(an_immediate_fade_lands_on_its_target);
 }
