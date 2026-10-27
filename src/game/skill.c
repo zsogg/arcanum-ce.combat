@@ -1615,6 +1615,12 @@ bool skill_invocation_run(SkillInvocation* skill_invocation)
             // CE (criticals, milestone CR-4.1): under `firearm fumbles` a
             // master of firearms never fumbles either (zsogg, 2026-10-06).
             is_critical = false;
+        } else if ((basic_skill == BASIC_SKILL_BOW || basic_skill == BASIC_SKILL_THROWING)
+            && training >= TRAINING_MASTER
+            && feature_enabled(FEATURE_WEAPON_FUMBLES)) {
+            // CE (`weapon fumbles`, card FU1): nor does a master of the bow
+            // or of throwing (zsogg, 2026-10-27).
+            is_critical = false;
         } else {
             is_critical = skill_invocation_check_crit_miss(crit_roll, effectiveness, skill_invocation);
         }

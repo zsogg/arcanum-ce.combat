@@ -150,5 +150,13 @@ FEATURE(STILL_IS_SILENT, "still is silent", false)
 // it attacks, defends or catches a thief only on sight. In a turn-based
 // fight it only turns. An NPC already fighting keeps its target, as stock.
 FEATURE(HEARING_ALERTS, "hearing alerts", false)
+// Weapon fumbles (zsogg, 2026-10-27; card FU1), `combat.c`, `skill.c`: a
+// fumble with a melee weapon, a bow, a thrown weapon or bare hands - 50%
+// stumble and fall (6 AP to get up), 30% a full-damage self-hit, 15% drop the
+// weapon, 5% a critical self-hit (`fumble_rules.c`); a thrown item that goes
+// off where it lands flies a tile and goes off there; an Expert never hits
+// themselves, and a Master of Bow or Throwing never fumbles, as one of Melee.
+// Firearms keep `firearm fumbles`.
+FEATURE(WEAPON_FUMBLES, "weapon fumbles", false)
 
 // clang-format on

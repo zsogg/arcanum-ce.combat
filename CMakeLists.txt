@@ -98,6 +98,8 @@ set(SRCS
     "src/game/spell_rules.h"
     "src/game/sense_rules.c"
     "src/game/sense_rules.h"
+    "src/game/fumble_rules.c"
+    "src/game/fumble_rules.h"
     "src/game/rt_budget.h"
     "src/game/context.h"
     "src/game/criticals.h"

@@ -44,6 +44,7 @@ add_executable(arcanum-tests
     "test_install_check.c"
     "test_spell_rules.c"
     "test_sense_rules.c"
+    "test_fumble_rules.c"
     "test_poison_pace.c"
     "test_bsearch.c"
     "test_palette.c"
