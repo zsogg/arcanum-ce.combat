@@ -91,4 +91,26 @@ const char* spell_rules_critical_name(SpellCritical critical);
 // the aptitude part at `percent` of stock (100: stock).
 int spell_rules_scaled_damage(int min, int max, int aptitude, int percent);
 
+// CE (`grenade blasts`, DB-2; zsogg, 2026-10-27): the item spells a grenade's
+// explosion runs - Explosive, Electrocution and Concussion grenades and the
+// Grenade Launcher's burst, each a 2-tile blast. Gas, fire and the placed
+// bombs keep their stock rules. A tech spell's `spelllist.mes` entry is
+// 3000 + 50 x its number (`magictech_load_spell_list`), so these are the
+// file's 11750, 12950, 13050 and 13250.
+#define SPELL_BLAST_EXPLOSIVE 175
+#define SPELL_BLAST_ELECTRICAL 199
+#define SPELL_BLAST_CONCUSSION 201
+#define SPELL_BLAST_LAUNCHER 205
+// A blast critical's damage bonus, percent; it knocks down too.
+#define SPELL_BLAST_CRITICAL_BONUS 20
+
+// Pure: whether `spell` is one of the blasts above.
+bool spell_rules_is_blast(int spell);
+// Pure: the share of a blast's damage, percent, a victim `dist` tiles from
+// where it lands takes - 100, then 50, then 20 at the edge and beyond.
+int spell_rules_blast_percent(int dist);
+// Pure: a victim's chance of a blast critical, percent, by the same distance -
+// 15, then 5, never at the edge.
+int spell_rules_blast_critical_chance(int dist);
+
 #endif /* ARCANUM_GAME_SPELL_RULES_H_ */

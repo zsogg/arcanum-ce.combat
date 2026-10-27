@@ -2186,6 +2186,43 @@ void magictech_process_run_info(MagicTechRunInfo* run_info)
     magictech_process();
 }
 
+// CE (`grenade blasts`, DB-2; zsogg, 2026-10-27): whether the spell now
+// running is a grenade's blast under the switch.
+static bool magictech_cur_is_blast(void)
+{
+    return feature_enabled(FEATURE_GRENADE_BLASTS)
+        && spell_rules_is_blast(magictech_cur_run_info->spell);
+}
+
+// CE (`grenade blasts`): how many tiles `obj` stands from where the blast
+// landed - its target tile, or the object it was set off on.
+static int magictech_blast_dist(int64_t obj)
+{
+    int64_t centre = magictech_cur_target_ctx.orig_target_loc;
+
+    if (centre == 0 && magictech_cur_target_ctx.orig_target_obj != OBJ_HANDLE_NULL) {
+        centre = obj_field_int64_get(magictech_cur_target_ctx.orig_target_obj, OBJ_F_LOCATION);
+    }
+    if (centre == 0 || obj == OBJ_HANDLE_NULL) {
+        return 0;
+    }
+    return (int)location_dist(centre, obj_field_int64_get(obj, OBJ_F_LOCATION));
+}
+
+// CE (`grenade blasts`): a blast reaches the player's party too - the stock
+// target rules spare it - so `params` is copied into `scratch` without that
+// exclusion. (`Tgt_Obj_No_Self` stays: the blast's self is the grenade.)
+static TargetParams* magictech_blast_params(TargetParams* params, TargetParams* scratch)
+{
+    if (!magictech_cur_is_blast()) {
+        return params;
+    }
+
+    *scratch = *params;
+    scratch->tgt &= ~TGT_NON_PARTY_CRITTERS;
+    return scratch;
+}
+
 // 0x4510F0
 // CE (magic, milestone MG-2): under `spell criticals`, whether the spell now
 // beginning is critical on the current target: 5% + 2% per spell the caster
@@ -2206,22 +2243,49 @@ static bool magictech_roll_critical(int64_t target_obj)
     magictech_cur_critical_bonus = 0;
     magictech_cur_critical_target = target_obj;
 
-    if (!feature_enabled(FEATURE_SPELL_CRITICALS)
-        || magictech_cur_run_info->action != MAGICTECH_ACTION_BEGIN
+    // CE (`grenade blasts`): a blast's caster is the grenade; its thrower,
+    // whom `mt_item_notify_parent_attacks_loc` records, rolls instead.
+    if (magictech_cur_is_blast() && magictech_cur_run_info->attacker_obj.obj != OBJ_HANDLE_NULL) {
+        caster_obj = magictech_cur_run_info->attacker_obj.obj;
+    }
+
+    if (magictech_cur_run_info->action != MAGICTECH_ACTION_BEGIN
         || caster_obj == OBJ_HANDLE_NULL
         || !obj_type_is_critter(obj_field_int32_get(caster_obj, OBJ_F_TYPE))) {
         return false;
     }
 
-    magictech_cur_critical_kind = spell_rules_critical(magictech_cur_run_info->spell,
-        &magictech_cur_critical_bonus);
-    if (magictech_cur_critical_kind == SPELL_CRITICAL_NONE) {
-        return false;
+    if (magictech_cur_is_blast()) {
+        // CE (`grenade blasts`, DB-2; zsogg, 2026-10-27): each victim's own
+        // roll, by its distance from the centre - never at the edge, so a
+        // glancing blast stays glancing. Only a critter is a victim: the
+        // list holds the blast's tile too.
+        if (target_obj == OBJ_HANDLE_NULL
+            || !obj_type_is_critter(obj_field_int32_get(target_obj, OBJ_F_TYPE))) {
+            return false;
+        }
+        chance = spell_rules_blast_critical_chance(magictech_blast_dist(target_obj));
+        if (chance == 0) {
+            return false;
+        }
+        magictech_cur_critical_kind = SPELL_CRITICAL_KNOCKDOWN;
+        magictech_cur_critical_bonus = SPELL_BLAST_CRITICAL_BONUS;
+    } else {
+        if (!feature_enabled(FEATURE_SPELL_CRITICALS)) {
+            return false;
+        }
+
+        magictech_cur_critical_kind = spell_rules_critical(magictech_cur_run_info->spell,
+            &magictech_cur_critical_bonus);
+        if (magictech_cur_critical_kind == SPELL_CRITICAL_NONE) {
+            return false;
+        }
+
+        chance = SPELL_CRITICAL_BASE_CHANCE
+            + SPELL_CRITICAL_PER_SPELL_KNOWN
+                * spell_college_level_get(caster_obj, COLLEGE_FROM_SPELL(magictech_cur_run_info->spell));
     }
 
-    chance = SPELL_CRITICAL_BASE_CHANCE
-        + SPELL_CRITICAL_PER_SPELL_KNOWN
-            * spell_college_level_get(caster_obj, COLLEGE_FROM_SPELL(magictech_cur_run_info->spell));
     if (crit_guard_debug_forces(caster_obj, target_obj)) {
         roll = 0;
     } else {
@@ -2297,6 +2361,10 @@ void magictech_process(void)
     int comp;
     // CE (magic, milestone MG-2): a Refund returns the fatigue once a cast.
     bool refunded = false;
+    // CE (`grenade blasts`): the target rules a blast reads in place of its
+    // own; static, as the target context keeps pointing at them.
+    static TargetParams blast_list_params;
+    static TargetParams blast_component_params;
 
     if (magictech_cur_run_info->id == -1) {
         return;
@@ -2369,7 +2437,9 @@ void magictech_process(void)
     }
 
     if (magictech_cur_component_list->cnt > 0) {
-        magictech_cur_target_ctx.params = &(magictech_cur_spell_info->target_params[magictech_cur_run_info->action]);
+        // CE (`grenade blasts`): a blast lists the party too.
+        magictech_cur_target_ctx.params = magictech_blast_params(&(magictech_cur_spell_info->target_params[magictech_cur_run_info->action]),
+            &blast_list_params);
         target_context_build_list(&magictech_cur_target_ctx);
 
         if (magictech_cur_run_info->source_obj.obj != OBJ_HANDLE_NULL
@@ -2405,7 +2475,8 @@ void magictech_process(void)
 
                     for (comp = 0; comp < magictech_cur_component_list->cnt; comp++) {
                         magictech_cur_component = &(magictech_cur_component_list->entries[comp]);
-                        magictech_cur_target_ctx.params = &(magictech_cur_component->aoe);
+                        magictech_cur_target_ctx.params = magictech_blast_params(&(magictech_cur_component->aoe),
+                            &blast_component_params);
 
                         if (target_context_evaluate(&magictech_cur_target_ctx)) {
                             magictech_apply_aoe_target();
@@ -2663,6 +2734,22 @@ void MTComponentDamage_ProcFunc(void)
             && (obj_field_int32_get(magictech_cur_target_ctx.target_obj, OBJ_F_CRITTER_FLAGS) & OCF_STUNNED) == 0) {
             crit_effects_mark_long_stun(magictech_cur_target_ctx.target_obj);
         }
+    }
+
+    // CE (`grenade blasts`, DB-2; zsogg, 2026-10-27): a blast's damage falls
+    // off fast from where it lands - HP and fatigue alike - before armour and
+    // resistance take their share.
+    if (magictech_cur_is_blast()
+        && magictech_cur_component->data.damage.damage_type < DAMAGE_TYPE_COUNT) {
+        int type = magictech_cur_component->data.damage.damage_type;
+        int dist = magictech_blast_dist(magictech_cur_target_ctx.target_obj);
+        int rolled = combat.dam[type];
+        char victim[COMBAT_OBSERVER_IDENTITY_SIZE];
+
+        combat.dam[type] = rolled * spell_rules_blast_percent(dist) / 100;
+        combat_observer_object_id(magictech_cur_target_ctx.target_obj, victim);
+        tig_debug_printf("grenade blast: spell %d on %s, %d tile(s) out, damage type %d, %d of %d\n",
+            magictech_cur_run_info->spell, victim, dist, type, combat.dam[type], rolled);
     }
 
     if (magictech_cur_component->data.damage.damage_type < DAMAGE_TYPE_COUNT) {

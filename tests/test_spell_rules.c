@@ -119,6 +119,28 @@ TEST(the_aptitude_part_of_scaled_damage_is_30_percent_smaller)
     CHECK_INT(spell_rules_scaled_damage(3, 40, -40, SPELL_APTITUDE_DAMAGE_PERCENT), 3);
 }
 
+TEST(a_grenade_blast_falls_off_fast_and_is_critical_only_near_its_centre)
+{
+    // zsogg, 2026-10-27 (DB-2): 100 / 50 / 20 percent, criticals 15 / 5 / 0.
+    CHECK_INT(spell_rules_blast_percent(0), 100);
+    CHECK_INT(spell_rules_blast_percent(1), 50);
+    CHECK_INT(spell_rules_blast_percent(2), 20);
+    CHECK_INT(spell_rules_blast_percent(3), 20);
+    CHECK_INT(spell_rules_blast_critical_chance(0), 15);
+    CHECK_INT(spell_rules_blast_critical_chance(1), 5);
+    CHECK_INT(spell_rules_blast_critical_chance(2), 0);
+    CHECK_INT(spell_rules_blast_critical_chance(3), 0);
+    // The four blasts, and not the gas, fire or placed bombs beside them.
+    CHECK(spell_rules_is_blast(175));
+    CHECK(spell_rules_is_blast(199));
+    CHECK(spell_rules_is_blast(201));
+    CHECK(spell_rules_is_blast(205));
+    CHECK(!spell_rules_is_blast(176));
+    CHECK(!spell_rules_is_blast(200));
+    CHECK(!spell_rules_is_blast(219));
+    CHECK(!spell_rules_is_blast(55));
+}
+
 void test_spell_rules_suite(void)
 {
     RUN(an_entry_reads_its_ap_cost);
@@ -128,4 +150,5 @@ void test_spell_rules_suite(void)
     RUN(an_entry_reads_no_stacking);
     RUN(a_complete_college_casts_for_one_less_never_below_3);
     RUN(the_aptitude_part_of_scaled_damage_is_30_percent_smaller);
+    RUN(a_grenade_blast_falls_off_fast_and_is_critical_only_near_its_centre);
 }

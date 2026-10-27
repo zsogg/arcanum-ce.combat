@@ -232,3 +232,27 @@ const char* spell_rules_critical_name(SpellCritical critical)
     }
     return "none";
 }
+
+bool spell_rules_is_blast(int spell)
+{
+    return spell == SPELL_BLAST_EXPLOSIVE
+        || spell == SPELL_BLAST_ELECTRICAL
+        || spell == SPELL_BLAST_CONCUSSION
+        || spell == SPELL_BLAST_LAUNCHER;
+}
+
+int spell_rules_blast_percent(int dist)
+{
+    if (dist <= 0) {
+        return 100;
+    }
+    return dist == 1 ? 50 : 20;
+}
+
+int spell_rules_blast_critical_chance(int dist)
+{
+    if (dist <= 0) {
+        return 15;
+    }
+    return dist == 1 ? 5 : 0;
+}

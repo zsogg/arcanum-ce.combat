@@ -123,5 +123,12 @@ FEATURE(CREATURE_PROFILES, "creature profiles", false)
 // best spotter checks the next 3 tiles of a party member's path, once per
 // trap, naming who saw it. arcanum-work `docs/TRAPS.md`.
 FEATURE(TRAP_SPOTTING, "trap spotting", false)
+// Grenade blasts (zsogg, 2026-10-27; DB-2), `magictech.c`: the Explosive,
+// Electrocution and Concussion grenades and the Grenade Launcher's burst hurt
+// everyone in the blast, the thrower and the party included; damage falls to
+// 50% one tile from where it lands and 20% at the edge; each victim rolls its
+// own critical, 15% at the centre and 5% one tile out, for 20% more damage and
+// a knockdown. Followers count the player before throwing (`ai.c`).
+FEATURE(GRENADE_BLASTS, "grenade blasts", false)
 
 // clang-format on

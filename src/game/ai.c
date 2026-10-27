@@ -3929,7 +3929,12 @@ bool ai_use_grenade(Ai* ai, int64_t distance)
         return false;
     }
 
-    ai_objects_in_radius(ai->danger_source, radius, &objects, OBJ_TM_NPC);
+    // CE (`grenade blasts`, DB-2; zsogg, 2026-10-27): a blast hurts the
+    // party too, so a follower counts the player it protects as well.
+    ai_objects_in_radius(ai->danger_source,
+        radius,
+        &objects,
+        feature_enabled(FEATURE_GRENADE_BLASTS) ? OBJ_TM_NPC | OBJ_TM_PC : OBJ_TM_NPC);
     node = objects.head;
     while (node != NULL) {
         if (!critter_is_dead(node->obj)
