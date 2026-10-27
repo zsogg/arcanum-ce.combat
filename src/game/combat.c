@@ -20,6 +20,7 @@
 #include "game/effect.h"
 #include "game/fate.h"
 #include "game/feature.h"
+#include "game/fumble_rules.h"
 #include "game/gamelib.h"
 #include "game/gsound.h"
 #include "game/item.h"
@@ -67,6 +68,8 @@ static void combat_apply_weapon_wear(CombatContext* combat);
 static void combat_remove_blood_splotch(int64_t loc);
 static void combat_process_crit_hit(CombatContext* combat);
 static void combat_process_crit_miss(CombatContext* combat);
+static void combat_apply_fumble(void);
+static bool combat_fumble_strikes_at_once(CombatContext* combat);
 static int combat_random_hit_loc(void);
 static bool combat_consume_ammo(int64_t weapon_obj, int64_t critter_obj, int cnt, bool destroy);
 static void combat_calc_dmg(CombatContext* combat);
@@ -1251,10 +1254,22 @@ int combat_attack(CombatContext* combat)
     }
 
     if ((combat->flags & CF_RANGED) != 0) {
-        combat_process_ranged_attack(combat);
+        // CE (`weapon fumbles`, card FU1): a ranged weapon's self-hit strikes
+        // at once. Stock sends the arrow at its archer's own tile, a flight
+        // with no path, and it vanishes without hitting (measured
+        // 2026-10-27: `projectile.ended` "abandoned", no damage).
+        if (combat_fumble_strikes_at_once(combat)) {
+            combat_process_attack_result(combat);
+        } else {
+            combat_process_ranged_attack(combat);
+        }
     } else {
         combat_process_melee_attack(combat);
     }
+
+    // CE (`weapon fumbles`, card FU1): a stumble or a dropped weapon, once the
+    // attack it spoiled has resolved as a miss.
+    combat_apply_fumble();
 
     // CE (prowl attack reveals; zsogg, 2026-09-24): the first attack from prowl
     // keeps its sneak advantage - the unaware target's, a backstab's damage,
@@ -3067,6 +3082,107 @@ void combat_process_crit_hit(CombatContext* combat)
         temporary, NULL);
 }
 
+// CE (`weapon fumbles`, card FU1; zsogg, 2026-10-27): a fumble that only
+// spoils the attack - a stumble or a drop - waits here until the attack has
+// resolved as a miss, so the weapon is not pulled out of a swing.
+static struct {
+    int64_t attacker_obj;
+    int64_t weapon_obj;
+    FumbleOutcome outcome;
+} combat_fumble_pending;
+
+// CE (`weapon fumbles`): critters lying down from their own fumble, whose
+// getting up costs `FUMBLE_GET_UP_COST`. Not saved: a load mid-fall costs
+// the stock 5.
+#define COMBAT_FUMBLE_FALLS 32
+
+static int64_t combat_fumble_falls[COMBAT_FUMBLE_FALLS];
+static int combat_fumble_fall_next;
+
+// CE (`weapon fumbles`): whether this attack's fumble follows the table -
+// a melee weapon, a bow or bare hands. Thrown weapons follow in F3;
+// firearms keep `firearm fumbles`.
+static bool combat_weapon_fumble_applies(CombatContext* combat)
+{
+    return feature_enabled(FEATURE_WEAPON_FUMBLES)
+        && combat->attacker_obj != OBJ_HANDLE_NULL
+        && obj_type_is_critter(obj_field_int32_get(combat->attacker_obj, OBJ_F_TYPE))
+        && (combat->skill == BASIC_SKILL_MELEE || combat->skill == BASIC_SKILL_BOW);
+}
+
+static void combat_fumble_float(int64_t obj, int num)
+{
+    MesFileEntry mes_file_entry;
+    int tf_type;
+
+    if (obj_field_int32_get(obj, OBJ_F_TYPE) == OBJ_TYPE_PC) {
+        tf_type = TF_TYPE_RED;
+    } else if (critter_pc_leader_get(obj) == player_get_local_pc_obj()) {
+        tf_type = TF_TYPE_YELLOW;
+    } else {
+        tf_type = TF_TYPE_WHITE;
+    }
+    mes_file_entry.num = num;
+    mes_get_msg(combat_mes_file, &mes_file_entry);
+    tf_add(obj, tf_type, mes_file_entry.str);
+}
+
+static void combat_apply_fumble(void)
+{
+    int64_t attacker_obj = combat_fumble_pending.attacker_obj;
+    int64_t weapon_obj = combat_fumble_pending.weapon_obj;
+    FumbleOutcome outcome = combat_fumble_pending.outcome;
+
+    combat_fumble_pending.attacker_obj = OBJ_HANDLE_NULL;
+    if (attacker_obj == OBJ_HANDLE_NULL || critter_is_dead(attacker_obj)) {
+        return;
+    }
+
+    if (outcome == FUMBLE_STUMBLE) {
+        combat_fumble_falls[combat_fumble_fall_next] = attacker_obj;
+        combat_fumble_fall_next = (combat_fumble_fall_next + 1) % COMBAT_FUMBLE_FALLS;
+        anim_goal_knockdown(attacker_obj);
+        combat_fumble_float(attacker_obj, 18); // "Knocked down"
+    } else if (outcome == FUMBLE_DROP && weapon_obj != OBJ_HANDLE_NULL) {
+        item_drop_nearby(weapon_obj);
+        combat_fumble_float(attacker_obj, 19); // "Weapon dropped"
+    }
+}
+
+// CE (`weapon fumbles`): a fumble that turned a ranged attack on its own
+// wielder - the self-hit flag (0x8) and the wielder as target.
+static bool combat_fumble_strikes_at_once(CombatContext* combat)
+{
+    return (combat->flags & 0x8) != 0
+        && (combat->flags & CF_HIT) != 0
+        && combat->target_obj == combat->attacker_obj
+        && combat_weapon_fumble_applies(combat);
+}
+
+// CE (`weapon fumbles`): `obj` is up again; its next fall is its own affair.
+void combat_fumble_fall_clear(int64_t obj)
+{
+    int idx;
+
+    for (idx = 0; idx < COMBAT_FUMBLE_FALLS; idx++) {
+        if (combat_fumble_falls[idx] == obj) {
+            combat_fumble_falls[idx] = OBJ_HANDLE_NULL;
+        }
+    }
+}
+
+static bool combat_fumble_fallen(int64_t obj)
+{
+    int idx;
+
+    for (idx = 0; idx < COMBAT_FUMBLE_FALLS; idx++) {
+        if (obj != OBJ_HANDLE_NULL && combat_fumble_falls[idx] == obj) {
+            return true;
+        }
+    }
+    return false;
+}
+
 // 0x4B6410
 void combat_process_crit_miss(CombatContext* combat)
 {
@@ -3115,6 +3231,30 @@ void combat_process_crit_miss(CombatContext* combat)
         }
     }
 
+    // CE (`weapon fumbles`, card FU1; zsogg, 2026-10-27): a melee, bow or
+    // bare-handed fumble follows zsogg's table. A stumble or a drop spoils the
+    // attack, an ordinary miss, and is applied once it has resolved; a
+    // self-hit is the stock one, critical only on the table's 5%.
+    bool weapon_fumble = !firearm_fumble && combat_weapon_fumble_applies(combat);
+    FumbleOutcome fumble = FUMBLE_SELF_HIT;
+    if (weapon_fumble) {
+        bool armed = combat->weapon_obj != OBJ_HANDLE_NULL
+            && obj_field_int32_get(combat->weapon_obj, OBJ_F_TYPE) == OBJ_TYPE_WEAPON;
+
+        fumble = fumble_rules_outcome(random_between(1, 100),
+            basic_skill_training_get(combat->attacker_obj, combat->skill),
+            armed);
+        if (fumble == FUMBLE_NONE || fumble == FUMBLE_STUMBLE || fumble == FUMBLE_DROP) {
+            combat->flags &= ~CF_CRITICAL;
+            combat_fumble_pending.attacker_obj = combat->attacker_obj;
+            combat_fumble_pending.weapon_obj = armed ? combat->weapon_obj : OBJ_HANDLE_NULL;
+            combat_fumble_pending.outcome = fumble;
+            combat_observe_critical(combat, false, chance, false, crit_miss_type, -1, 0, 0, 0,
+                fumble_rules_outcome_name(fumble));
+            return;
+        }
+    }
+
     combat->flags &= ~CF_AIM;
     combat->flags &= ~CF_CRITICAL;
     combat->flags |= 0x8;
@@ -3123,7 +3263,7 @@ void combat_process_crit_miss(CombatContext* combat)
     combat->target_obj = combat->attacker_obj;
     combat->target_loc = obj_field_int64_get(combat->target_obj, OBJ_F_LOCATION);
 
-    if (random_between(1, 100) <= 50) {
+    if (weapon_fumble ? fumble == FUMBLE_CRITICAL_SELF_HIT : random_between(1, 100) <= 50) {
         combat->flags |= CF_CRITICAL;
         if (crit_miss_type != CRIT_MISS_TYPE_HANDS
             && random_between(1, 100) <= chance + 1) {
@@ -4839,7 +4979,10 @@ int combat_pickup_cost(int64_t obj, int64_t item_obj)
 // time it; lifted all the same so the rebalance tunes it in one place.
 int combat_get_up_cost(int64_t obj)
 {
-    (void)obj;
+    // CE (`weapon fumbles`, card FU1): 6 after the critter's own fumble.
+    if (combat_fumble_fallen(obj)) {
+        return FUMBLE_GET_UP_COST;
+    }
 
     return 5;
 }

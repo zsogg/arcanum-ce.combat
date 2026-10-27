@@ -10753,6 +10753,8 @@ bool AGbeginGetUpAnim(AnimRunInfo* run_info)
         && (combat_turn_based_whos_turn_get() != obj || !combat_consume_action_points(obj, combat_get_up_cost(obj)))) {
         return false;
     }
+    // CE (`weapon fumbles`, card FU1): up, so a later fall is priced afresh.
+    combat_fumble_fall_clear(obj);
 
     art_id = obj_field_int32_get(obj, OBJ_F_CURRENT_AID);
     art_id = tig_art_id_anim_set(art_id, TIG_ART_ANIM_GET_UP);
