@@ -34,6 +34,7 @@
 #include "game/spell_rules.h"
 #include "game/stat.h"
 #include "game/target.h"
+#include "game/tile_block.h"
 #include "game/timeevent.h"
 #include "game/weapon_rules.h"
 #include "ui/called_shot.h"
@@ -269,8 +270,13 @@ typedef enum ReplayKind {
     //       the light level at that critter and the light it carries.
     //   inspect wear [<id>]
     //       each wielded or worn item's durability, the player's by default.
+    // Traps T2 (2026-10-26):
+    //   block <dx> <dy>
+    //       the tile that many tiles from the player made impassable, as the
+    //       editor's tile block does, so a script can build a corridor.
     REPLAY_KIND_PRESS,
     REPLAY_KIND_CLICK,
+    REPLAY_KIND_BLOCK,
 } ReplayKind;
 
 // A cast's target, which is a third shape: the caster, an object or a tile.
@@ -820,8 +826,8 @@ static bool replay_parse_line(const char* text, ReplayCommand* command)
         return index == count;
     }
 
-    if (strcmp(kind, "click") == 0) {
-        command->kind = REPLAY_KIND_CLICK;
+    if (strcmp(kind, "click") == 0 || strcmp(kind, "block") == 0) {
+        command->kind = strcmp(kind, "click") == 0 ? REPLAY_KIND_CLICK : REPLAY_KIND_BLOCK;
         if (!replay_parse_int(tokens[index++], &(command->dx))
             || index >= count
             || !replay_parse_int(tokens[index++], &(command->dy))) {
@@ -1141,7 +1147,7 @@ int replay_ui_count(void)
 bool replay_ui_describe(int index, char* buffer, size_t size)
 {
     const ReplayCommand* command;
-    static const char* kinds[] = { "object", "location", "key", "cast", "wield", "wait", "learn", "give", "throw", "skill", "raise", "prowl", "panel", "save", "inspect", "transfer", "take", "drop", "pickup", "wear", "skill-level", "stat-level", "jam", "afflict", "poison", "use", "xp", "train", "hour", "encounter", "hover", "screenshot", "spawn", "invulnerable", "await-death", "remove", "examine" };
+    static const char* kinds[] = { "object", "location", "key", "cast", "wield", "wait", "learn", "give", "throw", "skill", "raise", "prowl", "panel", "save", "inspect", "transfer", "take", "drop", "pickup", "wear", "skill-level", "stat-level", "jam", "afflict", "poison", "use", "xp", "train", "hour", "encounter", "hover", "screenshot", "spawn", "invulnerable", "await-death", "remove", "examine", "press", "click", "block" };
     int written;
     static const char* casts[] = { "self", "object", "location" };
 
@@ -1186,6 +1192,11 @@ bool replay_ui_describe(int index, char* buffer, size_t size)
     if (command->kind == REPLAY_KIND_SPAWN && written >= 0 && (size_t)written < size) {
         snprintf(buffer + written, size - (size_t)written, " proto=%d dx=%d dy=%d",
             command->proto, command->dx, command->dy);
+    }
+    if ((command->kind == REPLAY_KIND_CLICK || command->kind == REPLAY_KIND_BLOCK)
+        && written >= 0 && (size_t)written < size) {
+        snprintf(buffer + written, size - (size_t)written, " dx=%d dy=%d",
+            command->dx, command->dy);
     }
     return true;
 }
@@ -1857,6 +1868,19 @@ void replay_ui_tick(void)
         tig_message_enqueue(&click);
         tig_debug_printf("Replay: command %d clicked at %d,%d\n", replay_next - 1,
             command->dx, command->dy);
+        return;
+    }
+
+    if (command->kind == REPLAY_KIND_BLOCK) {
+        int64_t loc;
+
+        replay_stall_reported = false;
+        replay_next++;
+        loc = obj_field_int64_get(pc_obj, OBJ_F_LOCATION);
+        loc = location_make(LOCATION_GET_X(loc) + command->dx, LOCATION_GET_Y(loc) + command->dy);
+        tileblock_set_tile_blocked(loc, true);
+        tig_debug_printf("Replay: command %d blocked tile %d,%d\n", replay_next - 1,
+            (int)LOCATION_GET_X(loc), (int)LOCATION_GET_Y(loc));
         return;
     }
 
