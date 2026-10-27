@@ -404,12 +404,12 @@ int background_educate_levels(int educator, int follower, bool uap, int* levels,
         return count;
     }
 
-    // UAP's MasterEducator (0x4C29B1 `jle` -> `jl`, 0x4C29CD `inc` -> `nop`,
-    // 0x4C29D0 `jge` -> `je`, 0x4C29E6 `jl` -> `je`): from Apprentice up; the
-    // follower's own training is set first, unchanged, and the loop repeats
-    // only while the next level equals the educator's. So a follower exactly
-    // one below is raised to equal the educator, and one further below gains
-    // nothing - the patch's behaviour, ported as it is.
+    // UAP (0x4C29B1, 0x4C29CD, 0x4C29D0, 0x4C29E6): MasterEducator, ported as
+    // the patch has it. From Apprentice up; the follower's own training is set
+    // first, unchanged, and the loop repeats only while the next level equals
+    // the educator's, so a follower exactly one below is raised to equal the
+    // educator and one further below gains nothing. The patched instructions:
+    // `jle` -> `jl`, `inc` -> `nop`, `jge` -> `je`, `jl` -> `je`.
     if (educator < TRAINING_APPRENTICE) {
         return 0;
     }
