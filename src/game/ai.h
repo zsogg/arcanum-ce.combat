@@ -236,6 +236,7 @@ void ai_stop_fleeing(int64_t obj);
 void ai_set_no_flee(int64_t obj);
 bool ai_surrendered(int64_t obj, int64_t* danger_source_ptr);
 int ai_can_see(int64_t source_obj, int64_t target_obj);
+bool ai_is_moving(int64_t obj);
 int ai_can_hear(int64_t a1, int64_t a2, int loudness);
 void ai_npc_fighting_toggle(void);
 bool ai_shitlist_has(int64_t npc_obj, int64_t shit_obj);

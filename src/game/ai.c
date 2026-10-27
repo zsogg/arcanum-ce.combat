@@ -5514,6 +5514,35 @@ int ai_perception_distance(int value)
     return value;
 }
 
+// CE (DB-3, sight and hearing): whether `obj` is walking or running
+// somewhere - a move goal at the root of its animation - for the noise it
+// makes by being there (`still is silent`).
+bool ai_is_moving(int64_t obj)
+{
+    static const int move_goals[] = {
+        AG_MOVE_TO_TILE,
+        AG_RUN_TO_TILE,
+        AG_ATTEMPT_MOVE,
+        AG_MOVE_NEAR_TILE,
+        AG_MOVE_NEAR_OBJ,
+        AG_MOVE_STRAIGHT,
+        AG_ATTEMPT_MOVE_STRAIGHT,
+        AG_RUN_NEAR_TILE,
+        AG_RUN_NEAR_OBJ,
+        AG_ATTEMPT_MOVE_NEAR,
+        AG_MOVE_NEAR_OBJ_COMBAT,
+        AG_ATTEMPT_MOVE_NEAR_COMBAT,
+    };
+    size_t idx;
+
+    for (idx = 0; idx < sizeof(move_goals) / sizeof(move_goals[0]); idx++) {
+        if (anim_is_current_goal_type(obj, move_goals[idx], NULL)) {
+            return true;
+        }
+    }
+    return false;
+}
+
 // 0x4AF260
 int ai_can_see(int64_t source_obj, int64_t target_obj)
 {

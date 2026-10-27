@@ -40,6 +40,7 @@ void test_uap_addons_suite(void);
 void test_ce_mods_suite(void);
 void test_install_check_suite(void);
 void test_spell_rules_suite(void);
+void test_sense_rules_suite(void);
 void test_poison_pace_suite(void);
 void test_bsearch_suite(void);
 void test_palette_suite(void);
@@ -122,6 +123,7 @@ int main(void)
     test_ce_mods_suite();
     test_install_check_suite();
     test_spell_rules_suite();
+    test_sense_rules_suite();
     test_poison_pace_suite();
     test_bsearch_suite();
     test_palette_suite();

@@ -96,6 +96,8 @@ set(SRCS
     "src/game/weapon_rules.h"
     "src/game/spell_rules.c"
     "src/game/spell_rules.h"
+    "src/game/sense_rules.c"
+    "src/game/sense_rules.h"
     "src/game/rt_budget.h"
     "src/game/context.h"
     "src/game/criticals.h"

@@ -533,13 +533,18 @@ static void replay_inspect_sight(int64_t observer_obj, int64_t pc_obj, const cha
             p_piece = tig_art_wall_id_p_piece_get(art_id);
         }
     }
-    tig_debug_printf("Replay: sight '%s' dist %d facing %d see %d hear %d hear_silent %d cost %d block %s type %d name %d rotation %d see_through %d shoot_through %d p_piece %d\n",
+    // DB-3 M1: and a loud sound's hearing, and whether the player is moving,
+    // which decides the noise they make by being there under `still is
+    // silent`.
+    tig_debug_printf("Replay: sight '%s' dist %d facing %d see %d hear %d hear_silent %d hear_loud %d moving %d cost %d block %s type %d name %d rotation %d see_through %d shoot_through %d p_piece %d\n",
         name,
         (int)object_dist(observer_obj, pc_obj),
         critter_is_facing_to(observer_obj, pc_obj) ? 1 : 0,
         ai_can_see(observer_obj, pc_obj),
         ai_can_hear(observer_obj, pc_obj, LOUDNESS_NORMAL),
         ai_can_hear(observer_obj, pc_obj, LOUDNESS_SILENT),
+        ai_can_hear(observer_obj, pc_obj, LOUDNESS_LOUD),
+        ai_is_moving(pc_obj) ? 1 : 0,
         cost,
         block,
         block_type,
