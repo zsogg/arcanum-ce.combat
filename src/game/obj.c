@@ -3554,7 +3554,6 @@ bool obj_inst_field_write_mem(Object* object, int idx, ObjectFieldInfo* info)
     return true;
 }
 
-// 0x40A290
 // CE (card RT1): an instance's `num_fields` is the number of fields it carries
 // - one per set change bit - and every later insert grows `data` from it. A
 // record that understates it reads cleanly and then corrupts the heap the
@@ -3586,6 +3585,7 @@ static void obj_inst_num_fields_settle(Object* object, const char* source)
     }
 }
 
+// 0x40A290
 bool object_field_read(Object* object, int idx, ObjectFieldInfo* info)
 {
     ObjDataDescriptor v1;
