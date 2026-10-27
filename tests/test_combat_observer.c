@@ -1001,6 +1001,20 @@ TEST(the_press_click_and_block_rows_load_and_describe)
     CHECK(!load_script("0 block 4 -2 extra\n"));
 }
 
+TEST(the_face_and_inspect_sight_rows_load_and_describe)
+{
+    // DB-3 (2026-10-27), the sight bench: `face` turns an object towards the
+    // player, or to a rotation 0-7; `inspect sight` needs its observer.
+    CHECK(load_script("0 face @w1\n0 face @w1 5\n0 inspect sight @o1\n"));
+    CHECK_INT(replay_ui_count(), 3);
+    CHECK(row_is(0, "turn=0 now=0 kind=face target=@w1 loc=0 aim=0 spell=0 cast=- wait=0 rotation=-1"));
+    CHECK(row_is(1, "turn=0 now=0 kind=face target=@w1 loc=0 aim=0 spell=0 cast=- wait=0 rotation=5"));
+    CHECK(row_is(2, "turn=0 now=0 kind=inspect target=@o1 loc=0 aim=0 spell=0 cast=- wait=0"));
+    CHECK(!load_script("0 face @w1 8\n"));
+    CHECK(!load_script("0 face @w1 5 extra\n"));
+    CHECK(!load_script("0 inspect sight\n"));
+}
+
 TEST(the_poison_row_sets_a_level_on_the_player_or_a_critter)
 {
     // 2026-10-12: a test row for poison's pace; the level is carried as the
@@ -2020,6 +2034,7 @@ void test_combat_observer_suite(void)
     RUN(the_afflict_row_names_a_debuff_critical);
     RUN(the_inspect_light_and_wear_rows_load);
     RUN(the_press_click_and_block_rows_load_and_describe);
+    RUN(the_face_and_inspect_sight_rows_load_and_describe);
     RUN(the_poison_row_sets_a_level_on_the_player_or_a_critter);
     RUN(the_use_row_names_a_prototype_and_perhaps_a_target);
     RUN(the_xp_train_and_inspect_xp_rows_load);

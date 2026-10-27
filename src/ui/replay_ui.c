@@ -274,9 +274,19 @@ typedef enum ReplayKind {
     //   block <dx> <dy>
     //       the tile that many tiles from the player made impassable, as the
     //       editor's tile block does, so a script can build a corridor.
+    // DB-3, the sight bench (2026-10-27):
+    //   face <id> [<rotation>]
+    //       a critter turned to face the player, or any object - a spawned
+    //       wall - turned to that rotation (0-7), so it blocks the tile edge
+    //       a bench means it to.
+    //   inspect sight <id>
+    //       one log line with what `ai_can_see` and `ai_can_hear` make of the
+    //       player from that critter, and the object, if any, the sight line
+    //       stops at.
     REPLAY_KIND_PRESS,
     REPLAY_KIND_CLICK,
     REPLAY_KIND_BLOCK,
+    REPLAY_KIND_FACE,
 } ReplayKind;
 
 // A cast's target, which is a third shape: the caster, an object or a tile.
@@ -314,8 +324,9 @@ typedef struct ReplayCommand {
     int dy;
 } ReplayCommand;
 
-// `spawn`'s critters, by the name later rows give them after `@`.
-#define REPLAY_MAX_SPAWNED 16
+// `spawn`'s critters, by the name later rows give them after `@`. 32 since
+// the sight bench, which spawns a barrier beside each observer.
+#define REPLAY_MAX_SPAWNED 32
 
 static struct {
     char name[REPLAY_IDENTITY_SIZE];
@@ -491,6 +502,52 @@ static void replay_inspect_critter(int64_t critter_obj, const char* who)
     for (index = 0; index < count; index++) {
         replay_inspect_one(obj_arrayfield_handle_get(critter_obj, OBJ_F_CRITTER_INVENTORY_LIST_IDX, index), who);
     }
+}
+
+// `inspect sight <id>` (DB-3, 2026-10-27): what `observer_obj` makes of the
+// player, with what stops its sight line - the line `ai_can_see` walks
+// (`ai_line_of_fire_cost`) - so a bench can tell a wall that hides from one
+// the line slips past. Read-only.
+static void replay_inspect_sight(int64_t observer_obj, int64_t pc_obj, const char* name)
+{
+    int64_t block_obj;
+    int cost;
+    char block[COMBAT_OBSERVER_IDENTITY_SIZE];
+    int block_type = -1;
+    unsigned int block_flags = 0;
+    int block_name = 0;
+    int p_piece = -1;
+    int rotation = -1;
+
+    cost = ai_line_of_fire_cost(observer_obj, obj_field_int64_get(pc_obj, OBJ_F_LOCATION), &block_obj);
+    snprintf(block, sizeof(block), "none");
+    if (block_obj != OBJ_HANDLE_NULL) {
+        tig_art_id_t art_id = obj_field_int32_get(block_obj, OBJ_F_CURRENT_AID);
+
+        combat_observer_object_id(block_obj, block);
+        block_type = obj_field_int32_get(block_obj, OBJ_F_TYPE);
+        block_flags = obj_field_int32_get(block_obj, OBJ_F_FLAGS);
+        block_name = obj_field_int32_get(block_obj, OBJ_F_NAME);
+        rotation = tig_art_id_rotation_get(art_id);
+        if (block_type == OBJ_TYPE_WALL) {
+            p_piece = tig_art_wall_id_p_piece_get(art_id);
+        }
+    }
+    tig_debug_printf("Replay: sight '%s' dist %d facing %d see %d hear %d hear_silent %d cost %d block %s type %d name %d rotation %d see_through %d shoot_through %d p_piece %d\n",
+        name,
+        (int)object_dist(observer_obj, pc_obj),
+        critter_is_facing_to(observer_obj, pc_obj) ? 1 : 0,
+        ai_can_see(observer_obj, pc_obj),
+        ai_can_hear(observer_obj, pc_obj, LOUDNESS_NORMAL),
+        ai_can_hear(observer_obj, pc_obj, LOUDNESS_SILENT),
+        cost,
+        block,
+        block_type,
+        block_name,
+        rotation,
+        (block_flags & OF_SEE_THROUGH) != 0 ? 1 : 0,
+        (block_flags & OF_SHOOT_THROUGH) != 0 ? 1 : 0,
+        p_piece);
 }
 
 // `inspect awareness` (2026-10-12): one log line per critter within 15 tiles
@@ -848,6 +905,16 @@ static bool replay_parse_line(const char* text, ReplayCommand* command)
             replay_copy_target(command, tokens[index++]);
             return index == count;
         }
+        // `inspect sight <id>` (DB-3): `stat` 6, the observer in `target`.
+        if (strcmp(tokens[index], "sight") == 0) {
+            command->stat = 6;
+            index++;
+            if (index >= count) {
+                return false;
+            }
+            replay_copy_target(command, tokens[index++]);
+            return index == count;
+        }
         // `inspect light <id>` and `inspect wear [id]` (card MI1, IN-1 and
         // IN-5): `stat` 4 and 5; wear defaults to the player.
         if (strcmp(tokens[index], "light") == 0 || strcmp(tokens[index], "wear") == 0) {
@@ -868,6 +935,20 @@ static bool replay_parse_line(const char* text, ReplayCommand* command)
             return false;
         }
         index++;
+        return index == count;
+    }
+
+    // `face <id> [<rotation>]` (DB-3): the rotation in `count`, -1 for
+    // towards the player.
+    if (strcmp(kind, "face") == 0) {
+        command->kind = REPLAY_KIND_FACE;
+        command->count = -1;
+        replay_copy_target(command, tokens[index++]);
+        if (index < count
+            && (!replay_parse_int(tokens[index++], &(command->count))
+                || command->count < 0 || command->count > 7)) {
+            return false;
+        }
         return index == count;
     }
 
@@ -1147,7 +1228,7 @@ int replay_ui_count(void)
 bool replay_ui_describe(int index, char* buffer, size_t size)
 {
     const ReplayCommand* command;
-    static const char* kinds[] = { "object", "location", "key", "cast", "wield", "wait", "learn", "give", "throw", "skill", "raise", "prowl", "panel", "save", "inspect", "transfer", "take", "drop", "pickup", "wear", "skill-level", "stat-level", "jam", "afflict", "poison", "use", "xp", "train", "hour", "encounter", "hover", "screenshot", "spawn", "invulnerable", "await-death", "remove", "examine", "press", "click", "block" };
+    static const char* kinds[] = { "object", "location", "key", "cast", "wield", "wait", "learn", "give", "throw", "skill", "raise", "prowl", "panel", "save", "inspect", "transfer", "take", "drop", "pickup", "wear", "skill-level", "stat-level", "jam", "afflict", "poison", "use", "xp", "train", "hour", "encounter", "hover", "screenshot", "spawn", "invulnerable", "await-death", "remove", "examine", "press", "click", "block", "face" };
     int written;
     static const char* casts[] = { "self", "object", "location" };
 
@@ -1192,6 +1273,9 @@ bool replay_ui_describe(int index, char* buffer, size_t size)
     if (command->kind == REPLAY_KIND_SPAWN && written >= 0 && (size_t)written < size) {
         snprintf(buffer + written, size - (size_t)written, " proto=%d dx=%d dy=%d",
             command->proto, command->dx, command->dy);
+    }
+    if (command->kind == REPLAY_KIND_FACE && written >= 0 && (size_t)written < size) {
+        snprintf(buffer + written, size - (size_t)written, " rotation=%d", command->count);
     }
     if ((command->kind == REPLAY_KIND_CLICK || command->kind == REPLAY_KIND_BLOCK)
         && written >= 0 && (size_t)written < size) {
@@ -1501,6 +1585,13 @@ void replay_ui_tick(void)
             } else {
                 replay_inspect_wear(target_obj, command->target[0] != '\0' ? command->target : "the player");
             }
+            return;
+        }
+        if (command->stat == 6) {
+            if (!replay_resolve(command, &target_obj)) {
+                return;
+            }
+            replay_inspect_sight(target_obj, pc_obj, command->target);
             return;
         }
         if (command->stat == 3) {
@@ -1868,6 +1959,23 @@ void replay_ui_tick(void)
         tig_message_enqueue(&click);
         tig_debug_printf("Replay: command %d clicked at %d,%d\n", replay_next - 1,
             command->dx, command->dy);
+        return;
+    }
+
+    if (command->kind == REPLAY_KIND_FACE) {
+        int64_t obj;
+        int rotation;
+
+        replay_stall_reported = false;
+        replay_next++;
+        if (!replay_resolve(command, &obj)) {
+            return;
+        }
+        rotation = command->count >= 0 ? command->count : object_rot(obj, pc_obj);
+        object_set_current_aid(obj,
+            tig_art_id_rotation_set(obj_field_int32_get(obj, OBJ_F_CURRENT_AID), rotation));
+        tig_debug_printf("Replay: command %d turned '%s' to rotation %d\n", replay_next - 1,
+            command->target, rotation);
         return;
     }
 
