@@ -144,5 +144,11 @@ FEATURE(SIDE_VISION, "side vision", false)
 // Troika's script condition "can hear" keeps stock hearing.
 FEATURE(WALLS_STOP_SOUND, "walls stop sound", false)
 FEATURE(STILL_IS_SILENT, "still is silent", false)
+// Sight and hearing, M4 (DB-3), `ai.c`: rule 1, hearing alerts and sight
+// acts - an NPC that hears but cannot see the player (or a victim, a thief,
+// a lit fuse) goes to where the sound came from and looks, once per sound;
+// it attacks, defends or catches a thief only on sight. In a turn-based
+// fight it only turns. An NPC already fighting keeps its target, as stock.
+FEATURE(HEARING_ALERTS, "hearing alerts", false)
 
 // clang-format on

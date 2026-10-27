@@ -1013,6 +1013,10 @@ TEST(the_face_and_inspect_sight_rows_load_and_describe)
     CHECK(!load_script("0 face @w1 8\n"));
     CHECK(!load_script("0 face @w1 5 extra\n"));
     CHECK(!load_script("0 inspect sight\n"));
+    // M4: `stay` takes one critter.
+    CHECK(load_script("0 stay @yeti\n"));
+    CHECK(row_is(0, "turn=0 now=0 kind=stay target=@yeti loc=0 aim=0 spell=0 cast=- wait=0"));
+    CHECK(!load_script("0 stay @yeti extra\n"));
 }
 
 TEST(the_poison_row_sets_a_level_on_the_player_or_a_critter)

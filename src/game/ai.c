@@ -184,6 +184,13 @@ static bool ai_is_indoor_to_outdoor_transition(int64_t portal_obj, int dir);
 static int ai_perception_distance(int value);
 static int ai_line_of_sound_cost(int64_t source_obj, int64_t target_obj);
 static bool ai_check_decoy(int64_t source_obj, int64_t target_obj);
+static bool ai_acts_on(int64_t npc_obj, int64_t target_obj, int loudness, bool deferred);
+static void ai_investigate(int64_t npc_obj, int64_t source_obj);
+
+// CE (`hearing alerts`, DB-3): what target finding heard but could not see,
+// for `ai_update_danger_state` to go and look at. Target finding is also
+// asked whether a target is still valid, so it notes rather than acts.
+static int64_t ai_heard_obj;
 static void ai_shitlist_add_team(int64_t a1, int64_t a2);
 static void ai_shitlist_add(int64_t npc_obj, int64_t shit_obj);
 static void ai_shitlist_remove(int64_t npc_obj, int64_t shit_obj);
@@ -1292,7 +1299,13 @@ void ai_update_danger_state(Ai* ai)
 
     switch (ai->danger_type) {
     case 0:
+        ai_heard_obj = OBJ_HANDLE_NULL;
         danger_source_obj = ai_find_target(ai->obj);
+        // CE (`hearing alerts`, DB-3): nothing seen, something heard - go
+        // and look.
+        if (danger_source_obj == OBJ_HANDLE_NULL && ai_heard_obj != OBJ_HANDLE_NULL) {
+            ai_investigate(ai->obj, ai_heard_obj);
+        }
         if (danger_source_obj != OBJ_HANDLE_NULL) {
             // CE: a hunter turns to prey on its first target's side (combat
             // AI milestone AI-3).
@@ -1782,11 +1795,11 @@ void ai_witness_attack(int64_t npc_obj, int64_t source_obj, int64_t target_obj, 
         }
 
         if (ai_check_protect(npc_obj, target_obj) != AI_PROTECT_NO) {
-            if (ai_can_see(npc_obj, target_obj) == 0 || ai_can_hear(npc_obj, target_obj, loudness) == 0) {
+            if (ai_acts_on(npc_obj, target_obj, loudness, false)) {
                 ai_react_to_threat(npc_obj, source_obj);
             }
         } else if (ai_check_protect(npc_obj, source_obj) != AI_PROTECT_NO) {
-            if (ai_can_see(npc_obj, target_obj) == 0 || ai_can_hear(npc_obj, target_obj, loudness) == 0) {
+            if (ai_acts_on(npc_obj, target_obj, loudness, false)) {
                 ai_react_to_threat(npc_obj, target_obj);
             }
         } else if (critter_social_class_get(npc_obj) != SOCIAL_CLASS_GUARD
@@ -1794,7 +1807,7 @@ void ai_witness_attack(int64_t npc_obj, int64_t source_obj, int64_t target_obj, 
             && !ai_holds_ground(npc_obj)) {
             ai_danger_source(npc_obj, &danger_type, NULL);
             if (danger_type == AI_DANGER_SOURCE_TYPE_NONE
-                && (ai_can_see(npc_obj, target_obj) == 0 || ai_can_hear(npc_obj, target_obj, loudness) == 0)) {
+                && ai_acts_on(npc_obj, target_obj, loudness, false)) {
                 ai_apply_danger_type(npc_obj,
                     AI_DANGER_SOURCE_TYPE_FLEE,
                     source_obj,
@@ -1817,8 +1830,8 @@ void ai_notify_explosion_dynamite(int64_t pc_obj)
         if (!critter_is_dead(node->obj)
             && (obj_field_int32_get(node->obj, OBJ_F_SPELL_FLAGS) & OSF_MIND_CONTROLLED) == 0
             && critter_pc_leader_get(node->obj) != pc_obj
-            && (ai_can_see(node->obj, pc_obj) == 0
-                || ai_can_hear(node->obj, pc_obj, LOUDNESS_SILENT) == 0)) {
+            // CE (`hearing alerts`, DB-3): heard only, it goes to look.
+            && ai_acts_on(node->obj, pc_obj, LOUDNESS_SILENT, false)) {
             ai_attack(pc_obj, node->obj, LOUDNESS_SILENT, 0);
         }
         node = node->next;
@@ -2725,7 +2738,9 @@ int64_t ai_find_target(int64_t critter_obj)
                     v1 = handles[idx];
                 }
 
-                if (ai_check_kos(critter_obj, handles[idx]) != AI_KOS_NO) {
+                // CE (`hearing alerts`): heard only, it is gone to look at.
+                if (ai_check_kos(critter_obj, handles[idx]) != AI_KOS_NO
+                    && ai_acts_on(critter_obj, handles[idx], ai_presence_loudness(handles[idx]), true)) {
                     danger_source_obj = handles[idx];
                     break;
                 }
@@ -2741,8 +2756,7 @@ int64_t ai_find_target(int64_t critter_obj)
                                 && critter_is_monstrous(candidate_obj)
                                 && critter_leader_get(candidate_obj) == OBJ_HANDLE_NULL)) {
                             if (ai_check_upset_attacking(critter_obj, candidate_obj, leader_obj) == AI_UPSET_ATTACKING_NONE) {
-                                if (ai_can_hear(critter_obj, candidate_obj, ai_presence_loudness(candidate_obj)) == 0
-                                    || ai_can_see(critter_obj, candidate_obj) == 0) {
+                                if (ai_acts_on(critter_obj, candidate_obj, ai_presence_loudness(candidate_obj), true)) {
                                     danger_source_obj = candidate_obj;
                                     break;
                                 }
@@ -2754,8 +2768,7 @@ int64_t ai_find_target(int64_t critter_obj)
 
             candidate_obj = ai_avenge_target(critter_obj, handles[idx]);
             if (candidate_obj != OBJ_HANDLE_NULL) {
-                if (ai_can_hear(critter_obj, candidate_obj, ai_presence_loudness(candidate_obj)) == 0
-                    || ai_can_see(critter_obj, candidate_obj) == 0) {
+                if (ai_acts_on(critter_obj, candidate_obj, ai_presence_loudness(candidate_obj), true)) {
                     danger_source_obj = candidate_obj;
                     break;
                 }
@@ -4905,6 +4918,81 @@ int ai_presence_loudness(int64_t obj)
         feature_enabled(FEATURE_STILL_IS_SILENT) && !ai_senses_stock);
 }
 
+// CE (`hearing alerts`, DB-3; zsogg, 2026-10-27): whether `npc_obj` acts on
+// `target_obj` - stock: when it sees or hears it. Under the switch only on
+// sight; a target heard but unseen is gone to look at, at once or, when
+// `deferred`, by the caller.
+static bool ai_acts_on(int64_t npc_obj, int64_t target_obj, int loudness, bool deferred)
+{
+    if (ai_can_see(npc_obj, target_obj) == 0) {
+        return true;
+    }
+    if (ai_can_hear(npc_obj, target_obj, loudness) != 0) {
+        return false;
+    }
+    if (!feature_enabled(FEATURE_HEARING_ALERTS)) {
+        return true;
+    }
+    if (deferred) {
+        if (ai_heard_obj == OBJ_HANDLE_NULL) {
+            ai_heard_obj = target_obj;
+        }
+    } else {
+        ai_investigate(npc_obj, target_obj);
+    }
+    return false;
+}
+
+// CE (`hearing alerts`): the NPCs who went to look, and where - so each
+// sound is looked into once. A sound from a new tile is a new sound.
+#define AI_INVESTIGATIONS 32
+
+static struct {
+    int64_t npc_obj;
+    int64_t loc;
+} ai_investigations[AI_INVESTIGATIONS];
+static int ai_investigation_next;
+
+// CE (`hearing alerts`): `npc_obj` goes to where it heard `source_obj` and
+// looks; if it sees it there, its next round acts. Its idle round - its
+// waypoints and standpoint - takes it back. In a turn-based fight it only
+// turns to look, so the turn order is not walked out of; an NPC already
+// fighting or fleeing does neither (zsogg's rule 6).
+static void ai_investigate(int64_t npc_obj, int64_t source_obj)
+{
+    int64_t loc;
+    int idx;
+    bool walks;
+    int danger_type;
+    char npc[COMBAT_OBSERVER_IDENTITY_SIZE];
+    char source[COMBAT_OBSERVER_IDENTITY_SIZE];
+
+    ai_danger_source(npc_obj, &danger_type, NULL);
+    if (danger_type != AI_DANGER_SOURCE_TYPE_NONE) {
+        return;
+    }
+
+    loc = obj_field_int64_get(source_obj, OBJ_F_LOCATION);
+    for (idx = 0; idx < AI_INVESTIGATIONS; idx++) {
+        if (ai_investigations[idx].npc_obj == npc_obj && ai_investigations[idx].loc == loc) {
+            return;
+        }
+    }
+    ai_investigations[ai_investigation_next].npc_obj = npc_obj;
+    ai_investigations[ai_investigation_next].loc = loc;
+    ai_investigation_next = (ai_investigation_next + 1) % AI_INVESTIGATIONS;
+
+    walks = !combat_turn_based_is_active() && anim_goal_move_near_tile(npc_obj, loc, 1);
+    if (!walks) {
+        anim_goal_rotate(npc_obj, object_rot(npc_obj, source_obj));
+    }
+
+    combat_observer_object_id(npc_obj, npc);
+    combat_observer_object_id(source_obj, source);
+    tig_debug_printf("AI: %s heard %s and %s\n", npc, source,
+        walks ? "goes to look" : "turns to look");
+}
+
 // 0x4ADFF0
 void ai_switch_weapon(int64_t obj)
 {
@@ -5559,8 +5647,9 @@ void ai_notify_portal_container_guards(int64_t critter_obj, int64_t target_obj, 
                 || critter_social_class_get(node->obj) == SOCIAL_CLASS_GUARD)
             && !critter_is_dead(node->obj)
             && (obj_field_int32_get(node->obj, OBJ_F_SPELL_FLAGS) & OSF_MIND_CONTROLLED) == 0
-            && (ai_can_see(node->obj, critter_obj) == 0
-                || ai_can_hear(node->obj, critter_obj, loudness) == 0)) {
+            // CE (`hearing alerts`, DB-3): a guard who only hears the thief
+            // goes to look.
+            && ai_acts_on(node->obj, critter_obj, loudness, false)) {
             if (object_script_execute(critter_obj, node->obj, target_obj, SAP_CATCHING_THIEF_PC, 0) == 1) {
                 if (a3 && !critter_is_sleeping(node->obj)) {
                     reaction_adj(node->obj, pc_obj, -20);

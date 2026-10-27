@@ -283,10 +283,15 @@ typedef enum ReplayKind {
     //       one log line with what `ai_can_see` and `ai_can_hear` make of the
     //       player from that critter, and the object, if any, the sight line
     //       stops at.
+    // DB-3 M4 (2026-10-27):
+    //   stay <id>
+    //       a critter no longer wanders (`ONF_WANDERS` cleared), so it keeps
+    //       its post and its facing while a bench listens for it.
     REPLAY_KIND_PRESS,
     REPLAY_KIND_CLICK,
     REPLAY_KIND_BLOCK,
     REPLAY_KIND_FACE,
+    REPLAY_KIND_STAY,
 } ReplayKind;
 
 // A cast's target, which is a third shape: the caster, an object or a tile.
@@ -959,6 +964,12 @@ static bool replay_parse_line(const char* text, ReplayCommand* command)
 
     // `face <id> [<rotation>]` (DB-3): the rotation in `count`, -1 for
     // towards the player.
+    if (strcmp(kind, "stay") == 0) {
+        command->kind = REPLAY_KIND_STAY;
+        replay_copy_target(command, tokens[index++]);
+        return index == count;
+    }
+
     if (strcmp(kind, "face") == 0) {
         command->kind = REPLAY_KIND_FACE;
         command->count = -1;
@@ -1247,7 +1258,7 @@ int replay_ui_count(void)
 bool replay_ui_describe(int index, char* buffer, size_t size)
 {
     const ReplayCommand* command;
-    static const char* kinds[] = { "object", "location", "key", "cast", "wield", "wait", "learn", "give", "throw", "skill", "raise", "prowl", "panel", "save", "inspect", "transfer", "take", "drop", "pickup", "wear", "skill-level", "stat-level", "jam", "afflict", "poison", "use", "xp", "train", "hour", "encounter", "hover", "screenshot", "spawn", "invulnerable", "await-death", "remove", "examine", "press", "click", "block", "face" };
+    static const char* kinds[] = { "object", "location", "key", "cast", "wield", "wait", "learn", "give", "throw", "skill", "raise", "prowl", "panel", "save", "inspect", "transfer", "take", "drop", "pickup", "wear", "skill-level", "stat-level", "jam", "afflict", "poison", "use", "xp", "train", "hour", "encounter", "hover", "screenshot", "spawn", "invulnerable", "await-death", "remove", "examine", "press", "click", "block", "face", "stay" };
     int written;
     static const char* casts[] = { "self", "object", "location" };
 
@@ -1978,6 +1989,24 @@ void replay_ui_tick(void)
         tig_message_enqueue(&click);
         tig_debug_printf("Replay: command %d clicked at %d,%d\n", replay_next - 1,
             command->dx, command->dy);
+        return;
+    }
+
+    if (command->kind == REPLAY_KIND_STAY) {
+        int64_t obj;
+
+        replay_stall_reported = false;
+        replay_next++;
+        if (!replay_resolve(command, &obj)) {
+            return;
+        }
+        if (obj_field_int32_get(obj, OBJ_F_TYPE) != OBJ_TYPE_NPC) {
+            tig_debug_printf("Replay: command %d: '%s' is not an NPC\n", replay_next - 1, command->target);
+            return;
+        }
+        obj_field_int32_set(obj, OBJ_F_NPC_FLAGS,
+            obj_field_int32_get(obj, OBJ_F_NPC_FLAGS) & ~(ONF_WANDERS | ONF_WANDERS_IN_DARK));
+        tig_debug_printf("Replay: command %d: '%s' stays\n", replay_next - 1, command->target);
         return;
     }
 
