@@ -8,6 +8,9 @@
 //   0x400 only when networked; the original sets it when not.
 // - #129 `anim_knockback_path_blocked` (0x42FD70) had its bit 0x1 test
 //   inverted: set is blocked outright (0x42FD7B), clear runs the checks.
+// - #177 `object_list_all_followers` (0x441260) never advanced through a
+//   follower's own followers, so a party holding a follower with followers
+//   (a summoner's summons, a recruited leader's band) looped forever.
 // - #178 `object_lighting_changed` (0x444690) stored the setting only when
 //   it was out of range, so object lighting stayed off.
 // - #186 `convert_screen_to_world_coords` (0x4B98B0) halved the screen
@@ -35,6 +38,7 @@
 #include "game/item.h"
 #include "game/location.h"
 #include "game/obj.h"
+#include "game/object.h"
 #include "game/settings.h"
 #include "game/skill.h"
 #include "game/target.h"
@@ -305,6 +309,43 @@ static void invalidate_nothing(TigRect* rect)
     (void)rect;
 }
 
+// Before the fix this does not return: the copy of the follower's list never
+// moves past its first node.
+TEST(a_follower_with_followers_is_listed_once_each)
+{
+    ObjectList list;
+    ObjectNode* node;
+    int64_t pc;
+    int64_t follower;
+    int64_t followers_follower;
+    int listed = 0;
+    bool saw_follower = false;
+    bool saw_followers_follower = false;
+
+    CHECK(obj_harness_init());
+    pc = obj_harness_create_proto(OBJ_TYPE_PC);
+    follower = obj_harness_create_proto(OBJ_TYPE_NPC);
+    followers_follower = obj_harness_create_proto(OBJ_TYPE_NPC);
+    obj_arrayfield_obj_set(pc, OBJ_F_CRITTER_FOLLOWER_IDX, 0, follower);
+    obj_arrayfield_obj_set(follower, OBJ_F_CRITTER_FOLLOWER_IDX, 0, followers_follower);
+
+    object_list_all_followers(pc, &list);
+    for (node = list.head; node != NULL; node = node->next) {
+        listed++;
+        saw_follower |= node->obj == follower;
+        saw_followers_follower |= node->obj == followers_follower;
+    }
+    object_list_destroy(&list);
+
+    CHECK_INT(listed, 2);
+    CHECK(saw_follower);
+    CHECK(saw_followers_follower);
+
+    obj_harness_destroy(followers_follower);
+    obj_harness_destroy(follower);
+    obj_harness_destroy(pc);
+}
+
 TEST(the_object_lighting_setting_is_stored)
 {
     IsoInvalidateRectFunc* saved = object_iso_invalidate_rect;
@@ -403,6 +444,7 @@ void test_compare_fixes_suite(void)
     RUN(heal_without_a_healing_item_is_out_of_reach);
     RUN(a_single_player_move_stops_at_blockers);
     RUN(a_knockback_path_is_blocked_only_by_its_bit);
+    RUN(a_follower_with_followers_is_listed_once_each);
     RUN(the_object_lighting_setting_is_stored);
     RUN(an_odd_negative_screen_offset_floors);
     RUN(the_dialogue_box_sits_where_the_patch_puts_it);
