@@ -48,6 +48,7 @@
 #include "game/tech.h"
 #include "game/uap.h"
 #include "game/wallcheck.h"
+#include "ui/anim_ui.h"
 #include "ui/charedit_ui.h"
 #include "ui/dialog_ui.h"
 #include "ui/gameuilib.h"
@@ -95,6 +96,10 @@ static char harness_autoload_slot[TIG_MAX_PATH];
 static int harness_newgame;
 static int harness_run_frames;
 static int harness_frames_run;
+// CE: `-runframes` ends the run on the player's death with this exit code and
+// no save; 1 is taken by observatory's unresolved-replay failure.
+#define HARNESS_EXIT_PLAYER_DIED 3
+static int harness_exit_code = EXIT_SUCCESS;
 
 // CE (card O2): `-untildone[=N]` ends the run when the work is done instead of
 // at a frame count nobody can pick correctly.
@@ -327,6 +332,7 @@ int main(int argc, char** argv)
     pch = strstr(lpCmdLine, "-runframes=");
     if (pch != NULL) {
         harness_run_frames = (int)strtol(pch + strlen("-runframes="), NULL, 10);
+        anim_ui_death_ends_run = harness_run_frames > 0;
     }
 
     // CE (card O2): `-untildone[=N]`, N being the quiet-frame count. Two
@@ -733,7 +739,7 @@ int main(int argc, char** argv)
     tig_exit();
     tig_memory_print_stats(TIG_MEMORY_STATS_PRINT_ALL_BLOCKS);
 
-    return EXIT_SUCCESS;
+    return harness_exit_code;
 }
 
 // 0x401560
@@ -848,6 +854,16 @@ void main_loop(void)
                     harness_quiet_frames, harness_frames_run);
                 return;
             }
+        }
+
+        // CE: `-runframes`. A dead player would otherwise reset to the main
+        // menu, where this loop stops and the run hangs until killed.
+        if (anim_ui_player_died) {
+            tig_debug_printf("Harness: the player died at frame %d,"
+                             " exiting without a save\n",
+                harness_frames_run);
+            harness_exit_code = HARNESS_EXIT_PLAYER_DIED;
+            return;
         }
 
         // CE: `-runframes=N`. The save is taken from the same point every time.

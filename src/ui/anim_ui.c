@@ -32,6 +32,12 @@ static int anim_ui_event_match_type = -1;
 // 0x5CB410
 static int anim_ui_event_match_param = -1;
 
+// CE: set by `-runframes` (main.c). The death reset goes to the main menu and
+// a measuring run never gets past it, so under the harness the reset is
+// skipped and `main_loop` reads `anim_ui_player_died` to end the run itself.
+bool anim_ui_death_ends_run;
+bool anim_ui_player_died;
+
 // 0x57D240
 bool anim_ui_init(GameInitInfo* init_info)
 {
@@ -158,6 +164,10 @@ bool anim_ui_bkg_process_callback(TimeEvent* timeevent)
         break;
     case ANIM_UI_EVENT_TYPE_END_DEATH:
         if (critter_is_dead(player_get_local_pc_obj())) {
+            if (anim_ui_death_ends_run) {
+                anim_ui_player_died = true;
+                break;
+            }
             if (inven_ui_drag_item_obj_get() != OBJ_HANDLE_NULL) {
                 inven_ui_drop_dragged_item();
             }

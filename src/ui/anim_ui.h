@@ -32,4 +32,7 @@ void anim_ui_event_remove(int type, int param);
 void ambient_lighting_enable(void);
 void ambient_lighting_disable(void);
 
+extern bool anim_ui_death_ends_run;
+extern bool anim_ui_player_died;
+
 #endif /* ARCANUM_UI_ANIM_UI_H_ */
