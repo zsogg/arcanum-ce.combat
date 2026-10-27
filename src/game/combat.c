@@ -70,6 +70,7 @@ static void combat_process_crit_hit(CombatContext* combat);
 static void combat_process_crit_miss(CombatContext* combat);
 static void combat_apply_fumble(void);
 static bool combat_fumble_strikes_at_once(CombatContext* combat);
+static bool combat_fumble_keeps_throw(CombatContext* combat);
 static int combat_random_hit_loc(void);
 static bool combat_consume_ammo(int64_t weapon_obj, int64_t critter_obj, int cnt, bool destroy);
 static void combat_calc_dmg(CombatContext* combat);
@@ -1260,7 +1261,7 @@ int combat_attack(CombatContext* combat)
         // 2026-10-27: `projectile.ended` "abandoned", no damage).
         if (combat_fumble_strikes_at_once(combat)) {
             combat_process_attack_result(combat);
-        } else {
+        } else if (!combat_fumble_keeps_throw(combat)) {
             combat_process_ranged_attack(combat);
         }
     } else {
@@ -3088,6 +3089,7 @@ void combat_process_crit_hit(CombatContext* combat)
 static struct {
     int64_t attacker_obj;
     int64_t weapon_obj;
+    int skill;
     FumbleOutcome outcome;
 } combat_fumble_pending;
 
@@ -3100,14 +3102,39 @@ static int64_t combat_fumble_falls[COMBAT_FUMBLE_FALLS];
 static int combat_fumble_fall_next;
 
 // CE (`weapon fumbles`): whether this attack's fumble follows the table -
-// a melee weapon, a bow or bare hands. Thrown weapons follow in F3;
-// firearms keep `firearm fumbles`.
+// a melee weapon, a bow, a thrown weapon or bare hands. Firearms keep
+// `firearm fumbles`.
 static bool combat_weapon_fumble_applies(CombatContext* combat)
 {
     return feature_enabled(FEATURE_WEAPON_FUMBLES)
         && combat->attacker_obj != OBJ_HANDLE_NULL
         && obj_type_is_critter(obj_field_int32_get(combat->attacker_obj, OBJ_F_TYPE))
-        && (combat->skill == BASIC_SKILL_MELEE || combat->skill == BASIC_SKILL_BOW);
+        && (combat->skill == BASIC_SKILL_MELEE
+            || combat->skill == BASIC_SKILL_BOW
+            || combat->skill == BASIC_SKILL_THROWING);
+}
+
+// CE (`weapon fumbles`): a thrown item that goes off where it lands - an
+// item spell on `Parent_Atks_Location`, as every grenade, Molotov and gas
+// canister has.
+static bool combat_item_bursts_on_landing(int64_t item_obj)
+{
+    int slot;
+    int spell;
+
+    if (item_obj == OBJ_HANDLE_NULL) {
+        return false;
+    }
+    for (slot = 0; slot < 5; slot++) {
+        spell = obj_field_int32_get(item_obj, OBJ_F_ITEM_SPELL_1 + slot);
+        if (spell == 10000) {
+            break;
+        }
+        if ((mt_item_triggers(spell) & MT_ITEM_TRIG_PARENT_ATKS_LOCATION) != 0) {
+            return true;
+        }
+    }
+    return false;
 }
 
 static void combat_fumble_float(int64_t obj, int num)
@@ -3144,7 +3171,13 @@ static void combat_apply_fumble(void)
         anim_goal_knockdown(attacker_obj);
         combat_fumble_float(attacker_obj, 18); // "Knocked down"
     } else if (outcome == FUMBLE_DROP && weapon_obj != OBJ_HANDLE_NULL) {
-        item_drop_nearby(weapon_obj);
+        // A thrown weapon lands at the thrower's feet; a held one is dropped
+        // as a critical drops it, a few tiles off.
+        if (combat_fumble_pending.skill == BASIC_SKILL_THROWING) {
+            item_drop_ex(weapon_obj, 0);
+        } else {
+            item_drop_nearby(weapon_obj);
+        }
         combat_fumble_float(attacker_obj, 19); // "Weapon dropped"
     }
 }
@@ -3157,6 +3190,16 @@ static bool combat_fumble_strikes_at_once(CombatContext* combat)
         && (combat->flags & CF_HIT) != 0
         && combat->target_obj == combat->attacker_obj
         && combat_weapon_fumble_applies(combat);
+}
+
+// CE (`weapon fumbles`): a thrown weapon dropped by its thrower's fumble is
+// not thrown at all.
+static bool combat_fumble_keeps_throw(CombatContext* combat)
+{
+    return combat_fumble_pending.attacker_obj == combat->attacker_obj
+        && combat_fumble_pending.attacker_obj != OBJ_HANDLE_NULL
+        && combat_fumble_pending.outcome == FUMBLE_DROP
+        && combat_fumble_pending.skill == BASIC_SKILL_THROWING;
 }
 
 // CE (`weapon fumbles`): `obj` is up again; its next fall is its own affair.
@@ -3237,6 +3280,24 @@ void combat_process_crit_miss(CombatContext* combat)
     // self-hit is the stock one, critical only on the table's 5%.
     bool weapon_fumble = !firearm_fumble && combat_weapon_fumble_applies(combat);
     FumbleOutcome fumble = FUMBLE_SELF_HIT;
+    if (weapon_fumble
+        && combat->skill == BASIC_SKILL_THROWING
+        && combat_item_bursts_on_landing(combat->weapon_obj)) {
+        // A fumbled grenade flies a tile in a random direction and goes off
+        // there, under `grenade blasts` with its thrower a tile from the
+        // centre (zsogg, 2026-10-27). A hit on the tile, so the throw does not
+        // scatter it again; not a self-hit, so training does not spare it.
+        location_in_range(obj_field_int64_get(combat->attacker_obj, OBJ_F_LOCATION),
+            random_between(0, 7),
+            1,
+            &(combat->target_loc));
+        combat->target_obj = OBJ_HANDLE_NULL;
+        combat->flags &= ~CF_CRITICAL;
+        combat->flags |= CF_HIT;
+        combat_observe_critical(combat, false, chance, false, crit_miss_type, -1, 0, 0, 0,
+            "grenade_flies");
+        return;
+    }
     if (weapon_fumble) {
         bool armed = combat->weapon_obj != OBJ_HANDLE_NULL
             && obj_field_int32_get(combat->weapon_obj, OBJ_F_TYPE) == OBJ_TYPE_WEAPON;
@@ -3248,6 +3309,7 @@ void combat_process_crit_miss(CombatContext* combat)
             combat->flags &= ~CF_CRITICAL;
             combat_fumble_pending.attacker_obj = combat->attacker_obj;
             combat_fumble_pending.weapon_obj = armed ? combat->weapon_obj : OBJ_HANDLE_NULL;
+            combat_fumble_pending.skill = combat->skill;
             combat_fumble_pending.outcome = fumble;
             combat_observe_critical(combat, false, chance, false, crit_miss_type, -1, 0, 0, 0,
                 fumble_rules_outcome_name(fumble));
