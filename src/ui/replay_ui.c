@@ -545,8 +545,9 @@ static void replay_inspect_sight(int64_t observer_obj, int64_t pc_obj, const cha
     }
     // DB-3 M1: and a loud sound's hearing, and whether the player is moving,
     // which decides the noise they make by being there under `still is
-    // silent`.
-    tig_debug_printf("Replay: sight '%s' dist %d facing %d see %d hear %d hear_silent %d hear_loud %d moving %d cost %d block %s type %d name %d rotation %d see_through %d shoot_through %d p_piece %d sight_block %s\n",
+    // silent`. M3: the hearing of that noise (`hear_presence`, what target
+    // finding uses) and the loudness of the player's wielded weapon's strike.
+    tig_debug_printf("Replay: sight '%s' dist %d facing %d see %d hear %d hear_silent %d hear_loud %d moving %d hear_presence %d strike %d cost %d block %s type %d name %d rotation %d see_through %d shoot_through %d p_piece %d sight_block %s\n",
         name,
         (int)object_dist(observer_obj, pc_obj),
         critter_is_facing_to(observer_obj, pc_obj) ? 1 : 0,
@@ -555,6 +556,8 @@ static void replay_inspect_sight(int64_t observer_obj, int64_t pc_obj, const cha
         ai_can_hear(observer_obj, pc_obj, LOUDNESS_SILENT),
         ai_can_hear(observer_obj, pc_obj, LOUDNESS_LOUD),
         ai_is_moving(pc_obj) ? 1 : 0,
+        ai_can_hear(observer_obj, pc_obj, ai_presence_loudness(pc_obj)),
+        combat_weapon_loudness(item_wield_get(pc_obj, ITEM_INV_LOC_WEAPON)),
         cost,
         block,
         block_type,

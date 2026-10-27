@@ -238,6 +238,8 @@ bool ai_surrendered(int64_t obj, int64_t* danger_source_ptr);
 int ai_can_see(int64_t source_obj, int64_t target_obj);
 bool ai_is_moving(int64_t obj);
 int ai_can_see_stock(int64_t source_obj, int64_t target_obj);
+int ai_can_hear_stock(int64_t source_obj, int64_t target_obj, int loudness);
+int ai_presence_loudness(int64_t obj);
 int64_t ai_sight_block(int64_t source_obj, int64_t target_loc);
 int ai_can_hear(int64_t a1, int64_t a2, int loudness);
 void ai_npc_fighting_toggle(void);

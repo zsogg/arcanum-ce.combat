@@ -136,6 +136,8 @@ int combat_action_points_get(void);
 bool combat_check_action_points(int64_t obj, int required_action_points);
 bool combat_check_move_to(int64_t source_obj, int64_t target_loc);
 bool combat_check_attack(int64_t source_obj, int64_t target_obj);
+// CE (DB-3): exported for `inspect sight`, which reads a strike's loudness.
+int combat_weapon_loudness(int64_t weapon_obj);
 bool combat_check_use_obj(int64_t source_obj, int64_t target_obj);
 bool combat_check_pick_item(int64_t source_obj, int64_t target_obj);
 bool combat_check_cast_spell(int64_t source_obj);

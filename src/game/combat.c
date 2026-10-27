@@ -41,6 +41,7 @@
 #include "game/reload.h"
 #include "game/resistance.h"
 #include "game/script.h"
+#include "game/sense_rules.h"
 #include "game/sfx.h"
 #include "game/skill.h"
 #include "game/spell.h"
@@ -57,7 +58,6 @@ static void turn_based_changed(void);
 static void fast_turn_based_changed(void);
 static void combat_create_projectile(CombatContext* combat, int64_t loc, int a3, int a4, tig_art_id_t proj_aid);
 static void combat_projectile_end(int64_t proj_obj, int64_t a2, int64_t a3, CombatContext* combat, bool a5);
-static int combat_weapon_loudness(int64_t weapon_obj);
 static void combat_process_attack_result(CombatContext* combat);
 static void combat_process_melee_attack(CombatContext* combat);
 static void combat_process_ranged_attack(CombatContext* combat);
@@ -688,6 +688,12 @@ int combat_weapon_loudness(int64_t weapon_obj)
         if ((weapon_flags & OWF_SILENT) != 0) {
             return LOUDNESS_SILENT;
         }
+        // CE (`walls stop sound`, DB-3; zsogg, 2026-10-27): a blunt strike is
+        // loud - a weapon the weapon table gives StoppedToFatigue, which it
+        // reads under `armor penetration`.
+        return sense_rules_weapon_loudness(LOUDNESS_NORMAL,
+            weapon_rules_stopped_to_fatigue(weapon_obj) > 0,
+            feature_enabled(FEATURE_WALLS_STOP_SOUND));
     }
 
     return LOUDNESS_NORMAL;

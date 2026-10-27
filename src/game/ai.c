@@ -2649,7 +2649,6 @@ int64_t ai_find_target(int64_t critter_obj)
     int64_t leader_obj;
     int candidate_danger_type;
     int64_t candidate_obj;
-    bool concealed;
     int obj_type;
     int64_t danger_source_obj = OBJ_HANDLE_NULL;
     int64_t v1 = OBJ_HANDLE_NULL;
@@ -2718,8 +2717,7 @@ int64_t ai_find_target(int64_t critter_obj)
         }
 
         for (idx = 0; idx < cnt; idx++) {
-            concealed = critter_is_concealed(handles[idx]);
-            if (ai_can_hear(critter_obj, handles[idx], concealed_to_loudness(concealed)) == 0
+            if (ai_can_hear(critter_obj, handles[idx], ai_presence_loudness(handles[idx])) == 0
                 || ai_can_see(critter_obj, handles[idx]) == 0) {
                 obj_type = obj_field_int32_get(handles[idx], OBJ_F_TYPE);
                 if (obj_type == OBJ_TYPE_PC
@@ -2743,8 +2741,7 @@ int64_t ai_find_target(int64_t critter_obj)
                                 && critter_is_monstrous(candidate_obj)
                                 && critter_leader_get(candidate_obj) == OBJ_HANDLE_NULL)) {
                             if (ai_check_upset_attacking(critter_obj, candidate_obj, leader_obj) == AI_UPSET_ATTACKING_NONE) {
-                                concealed = critter_is_concealed(candidate_obj);
-                                if (ai_can_hear(critter_obj, candidate_obj, concealed_to_loudness(concealed)) == 0
+                                if (ai_can_hear(critter_obj, candidate_obj, ai_presence_loudness(candidate_obj)) == 0
                                     || ai_can_see(critter_obj, candidate_obj) == 0) {
                                     danger_source_obj = candidate_obj;
                                     break;
@@ -2757,8 +2754,7 @@ int64_t ai_find_target(int64_t critter_obj)
 
             candidate_obj = ai_avenge_target(critter_obj, handles[idx]);
             if (candidate_obj != OBJ_HANDLE_NULL) {
-                concealed = critter_is_concealed(candidate_obj);
-                if (ai_can_hear(critter_obj, candidate_obj, concealed_to_loudness(concealed)) == 0
+                if (ai_can_hear(critter_obj, candidate_obj, ai_presence_loudness(candidate_obj)) == 0
                     || ai_can_see(critter_obj, candidate_obj) == 0) {
                     danger_source_obj = candidate_obj;
                     break;
@@ -4888,6 +4884,27 @@ int ai_can_see_stock(int64_t source_obj, int64_t target_obj)
     return rc;
 }
 
+// CE (DB-3): `ai_can_hear` as stock, whatever the overhaul's switches say.
+int ai_can_hear_stock(int64_t source_obj, int64_t target_obj, int loudness)
+{
+    int rc;
+
+    ai_senses_stock = true;
+    rc = ai_can_hear(source_obj, target_obj, loudness);
+    ai_senses_stock = false;
+    return rc;
+}
+
+// CE (`still is silent`, DB-3; zsogg, 2026-10-27): the noise a critter makes
+// by being there - silent prowling and, under the switch, standing still;
+// normal otherwise. Stock: silent prowling, normal otherwise.
+int ai_presence_loudness(int64_t obj)
+{
+    return sense_rules_presence_loudness(critter_is_concealed(obj),
+        ai_is_moving(obj),
+        feature_enabled(FEATURE_STILL_IS_SILENT) && !ai_senses_stock);
+}
+
 // 0x4ADFF0
 void ai_switch_weapon(int64_t obj)
 {
@@ -5783,7 +5800,17 @@ int ai_can_hear(int64_t source_obj, int64_t target_obj, int loudness)
         perception += perception * diff / -100;
     }
 
-    hear_dist = (ai_loudness_radius_tbl[loudness] - ai_loudness_radius_tbl[LOUDNESS_SILENT] + ai_perception_distance(perception - 4)) / 2 - ai_line_of_sound_cost(source_obj, target_obj);
+    hear_dist = (ai_loudness_radius_tbl[loudness] - ai_loudness_radius_tbl[LOUDNESS_SILENT] + ai_perception_distance(perception - 4)) / 2;
+    // CE (`walls stop sound`, DB-3; zsogg, 2026-10-27): a wall or closed door
+    // between stops a sound that is not loud, and a loud one carries a third
+    // of its open range. Stock subtracts what lies between.
+    hear_dist = sense_rules_hear_distance(hear_dist,
+        ai_line_of_sound_cost(source_obj, target_obj),
+        loudness == LOUDNESS_LOUD,
+        feature_enabled(FEATURE_WALLS_STOP_SOUND) && !ai_senses_stock);
+    if (hear_dist < 0) {
+        return 1000;
+    }
     if ((int)dist > hear_dist) {
         return (int)dist - hear_dist;
     }

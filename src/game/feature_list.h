@@ -137,5 +137,12 @@ FEATURE(GRENADE_BLASTS, "grenade blasts", false)
 // the container check keep stock sight. arcanum-work `tasks/DB3-sight-and-hearing.md`.
 FEATURE(SEE_THROUGH_WINDOWS, "see through windows", false)
 FEATURE(SIDE_VISION, "side vision", false)
+// Sight and hearing, M3 (DB-3), `ai.c` and `combat.c`: rule 2, a wall or
+// closed door stops silent and normal sound, a loud one carries a third of its
+// range, and a blunt strike (StoppedToFatigue in the weapon table) is loud;
+// rule 3, a critter standing still makes no more noise than a prowler.
+// Troika's script condition "can hear" keeps stock hearing.
+FEATURE(WALLS_STOP_SOUND, "walls stop sound", false)
+FEATURE(STILL_IS_SILENT, "still is silent", false)
 
 // clang-format on

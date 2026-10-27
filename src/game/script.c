@@ -1645,7 +1645,8 @@ int script_execute_condition(ScriptCondition* condition, int line, ScriptState* 
 
         objs[0] = script_get_obj(condition->op_type[0], condition->op_value[0], state);
         objs[1] = script_get_obj(condition->op_type[1], condition->op_value[1], state);
-        if (ai_can_hear(objs[0], objs[1], LOUDNESS_NORMAL) == 0) {
+        // CE (DB-3): stock hearing, as "can see" keeps stock sight.
+        if (ai_can_hear_stock(objs[0], objs[1], LOUDNESS_NORMAL) == 0) {
             rc = script_execute_action(&(condition->action), line, state);
         } else {
             rc = script_execute_action(&(condition->els), line, state);
