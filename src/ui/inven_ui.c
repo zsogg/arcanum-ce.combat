@@ -599,7 +599,9 @@ bool inven_ui_can_open(int64_t pc_obj, int64_t target_obj, int mode)
         old_art_id = obj_field_int32_get(pc_obj, OBJ_F_CURRENT_AID);
         new_art_id = tig_art_id_rotation_set(old_art_id, rot);
         object_set_current_aid(pc_obj, new_art_id);
-        if (ai_can_see(pc_obj, target_obj) != 0) {
+        // CE (DB-3): stock sight, so `see through windows` lets no one loot
+        // through a shop window.
+        if (ai_can_see_stock(pc_obj, target_obj) != 0) {
             object_set_current_aid(pc_obj, old_art_id);
             return false;
         }

@@ -37,6 +37,7 @@
 #include "game/rt_budget.h"
 #include "game/script.h"
 #include "game/sector.h"
+#include "game/sense_rules.h"
 #include "game/sfx.h"
 #include "game/skill.h"
 #include "game/spell.h"
@@ -4780,6 +4781,113 @@ int ai_line_of_fire_cost(int64_t source_obj, int64_t target_loc, int64_t* block_
     return cost;
 }
 
+// CE (DB-3, sight and hearing): set while a caller that keeps stock senses -
+// Troika's script conditions (zsogg's rule 7) and the container check - asks,
+// so the overhaul's switches pass it by.
+static bool ai_senses_stock;
+
+// CE (`see through windows`, DB-3; zsogg, 2026-10-27): whether sight passes
+// `obj` though a shot would not - anything marked see-through (a glass door,
+// a window, a fence) and a wall's own window pieces, the ones the projectile
+// line stops on a diagonal.
+static bool ai_sees_through(int64_t obj)
+{
+    int p_piece;
+
+    if ((obj_field_int32_get(obj, OBJ_F_FLAGS) & OF_SEE_THROUGH) != 0) {
+        return true;
+    }
+    if (obj_field_int32_get(obj, OBJ_F_TYPE) != OBJ_TYPE_WALL) {
+        return false;
+    }
+    p_piece = tig_art_wall_id_p_piece_get(obj_field_int32_get(obj, OBJ_F_CURRENT_AID));
+    return p_piece == 10
+        || p_piece == 13
+        || p_piece == 14
+        || p_piece == 17
+        || p_piece == 18
+        || p_piece == 19;
+}
+
+// CE (`see through windows`): the projectile line `ai_line_of_fire_cost`
+// walks, but a see-through blocker lets it go on. shortcut: one blocker is
+// read per step, so a see-through object and a solid one on the same tile
+// edge read as the first; look at every object of the step if a map shows it.
+static int64_t ai_line_of_sight_block(int64_t source_obj, int64_t target_loc)
+{
+    int64_t source_loc;
+    int64_t source_loc_x;
+    int64_t source_loc_y;
+    int cnt;
+    int8_t offsets[200];
+    unsigned int flags;
+    int offset_x;
+    int offset_y;
+    int idx;
+    int64_t new_loc;
+    int64_t block_obj;
+    int block_obj_type;
+
+    source_loc = obj_field_int64_get(source_obj, OBJ_F_LOCATION);
+    if (source_loc == target_loc) {
+        return OBJ_HANDLE_NULL;
+    }
+
+    cnt = path_make_straight(source_loc, target_loc, offsets);
+    flags = OBJ_TRAVERSAL_IGNORE_CRITTERS | OBJ_TRAVERSAL_PROJECTILE;
+    offset_x = obj_field_int32_get(source_obj, OBJ_F_OFFSET_X);
+    offset_y = obj_field_int32_get(source_obj, OBJ_F_OFFSET_Y);
+    location_xy(source_loc, &source_loc_x, &source_loc_y);
+
+    for (idx = 0; idx < cnt; idx += 2) {
+        if (source_loc == target_loc) {
+            break;
+        }
+
+        offset_x += offsets[idx];
+        offset_y += offsets[idx + 1];
+        location_at(source_loc_x + offset_x + 40, source_loc_y + offset_y + 20, &new_loc);
+        if (new_loc != source_loc) {
+            if (new_loc == target_loc) {
+                flags |= OBJ_TRAVERSAL_SKIP_OBJECTS;
+            }
+
+            object_calc_traversal_cost(OBJ_HANDLE_NULL, source_loc, location_rot(source_loc, new_loc), flags, &block_obj, &block_obj_type, NULL);
+            if (block_obj != OBJ_HANDLE_NULL && !ai_sees_through(block_obj)) {
+                return block_obj;
+            }
+
+            source_loc = new_loc;
+        }
+    }
+
+    return OBJ_HANDLE_NULL;
+}
+
+// CE (DB-3): the object that hides `target_loc` from `source_obj`, or none:
+// stock's projectile line, or under `see through windows` the sight line.
+int64_t ai_sight_block(int64_t source_obj, int64_t target_loc)
+{
+    int64_t block_obj;
+
+    if (feature_enabled(FEATURE_SEE_THROUGH_WINDOWS) && !ai_senses_stock) {
+        return ai_line_of_sight_block(source_obj, target_loc);
+    }
+    ai_line_of_fire_cost(source_obj, target_loc, &block_obj);
+    return block_obj;
+}
+
+// CE (DB-3): `ai_can_see` as stock, whatever the overhaul's switches say.
+int ai_can_see_stock(int64_t source_obj, int64_t target_obj)
+{
+    int rc;
+
+    ai_senses_stock = true;
+    rc = ai_can_see(source_obj, target_obj);
+    ai_senses_stock = false;
+    return rc;
+}
+
 // 0x4ADFF0
 void ai_switch_weapon(int64_t obj)
 {
@@ -5597,6 +5705,15 @@ int ai_can_see(int64_t source_obj, int64_t target_obj)
 
     perception = ai_perception_distance(perception);
 
+    // CE (`side vision`, DB-3; zsogg, 2026-10-27): the two outer directions
+    // of the view see half as far. The facing check above has passed.
+    if (feature_enabled(FEATURE_SIDE_VISION) && !ai_senses_stock) {
+        perception = sense_rules_sight_range(perception,
+            object_rot(source_obj, target_obj)
+                - tig_art_id_rotation_get(obj_field_int32_get(source_obj, OBJ_F_CURRENT_AID)),
+            true);
+    }
+
     dist = object_dist(source_obj, target_obj);
     if (dist > 1000) {
         return 1000;
@@ -5608,7 +5725,8 @@ int ai_can_see(int64_t source_obj, int64_t target_obj)
     }
 
     target_loc = obj_field_int64_get(target_obj, OBJ_F_LOCATION);
-    ai_line_of_fire_cost(source_obj, target_loc, &block_obj);
+    // CE (`see through windows`): the sight line rather than the shot's.
+    block_obj = ai_sight_block(source_obj, target_loc);
     if (block_obj != OBJ_HANDLE_NULL) {
         extra_dist++;
     }

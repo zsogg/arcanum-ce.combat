@@ -518,9 +518,19 @@ static void replay_inspect_sight(int64_t observer_obj, int64_t pc_obj, const cha
     int block_name = 0;
     int p_piece = -1;
     int rotation = -1;
+    int64_t sight_block_obj;
+    char sight_block[COMBAT_OBSERVER_IDENTITY_SIZE];
 
     cost = ai_line_of_fire_cost(observer_obj, obj_field_int64_get(pc_obj, OBJ_F_LOCATION), &block_obj);
     snprintf(block, sizeof(block), "none");
+    // DB-3 M2: what hides the player from the observer under the sight
+    // switches - the shot's line's blocker, or under `see through windows`
+    // the sight line's.
+    sight_block_obj = ai_sight_block(observer_obj, obj_field_int64_get(pc_obj, OBJ_F_LOCATION));
+    snprintf(sight_block, sizeof(sight_block), "none");
+    if (sight_block_obj != OBJ_HANDLE_NULL) {
+        combat_observer_object_id(sight_block_obj, sight_block);
+    }
     if (block_obj != OBJ_HANDLE_NULL) {
         tig_art_id_t art_id = obj_field_int32_get(block_obj, OBJ_F_CURRENT_AID);
 
@@ -536,7 +546,7 @@ static void replay_inspect_sight(int64_t observer_obj, int64_t pc_obj, const cha
     // DB-3 M1: and a loud sound's hearing, and whether the player is moving,
     // which decides the noise they make by being there under `still is
     // silent`.
-    tig_debug_printf("Replay: sight '%s' dist %d facing %d see %d hear %d hear_silent %d hear_loud %d moving %d cost %d block %s type %d name %d rotation %d see_through %d shoot_through %d p_piece %d\n",
+    tig_debug_printf("Replay: sight '%s' dist %d facing %d see %d hear %d hear_silent %d hear_loud %d moving %d cost %d block %s type %d name %d rotation %d see_through %d shoot_through %d p_piece %d sight_block %s\n",
         name,
         (int)object_dist(observer_obj, pc_obj),
         critter_is_facing_to(observer_obj, pc_obj) ? 1 : 0,
@@ -552,7 +562,8 @@ static void replay_inspect_sight(int64_t observer_obj, int64_t pc_obj, const cha
         rotation,
         (block_flags & OF_SEE_THROUGH) != 0 ? 1 : 0,
         (block_flags & OF_SHOOT_THROUGH) != 0 ? 1 : 0,
-        p_piece);
+        p_piece,
+        sight_block);
 }
 
 // `inspect awareness` (2026-10-12): one log line per critter within 15 tiles

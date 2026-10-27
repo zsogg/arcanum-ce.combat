@@ -1632,7 +1632,9 @@ int script_execute_condition(ScriptCondition* condition, int line, ScriptState* 
 
         objs[0] = script_get_obj(condition->op_type[0], condition->op_value[0], state);
         objs[1] = script_get_obj(condition->op_type[1], condition->op_value[1], state);
-        if (ai_can_see(objs[0], objs[1]) == 0) {
+        // CE (DB-3): stock sight, whatever the overhaul's switches (zsogg's
+        // rule 7): quests and dialogue were written against it.
+        if (ai_can_see_stock(objs[0], objs[1]) == 0) {
             rc = script_execute_action(&(condition->action), line, state);
         } else {
             rc = script_execute_action(&(condition->els), line, state);

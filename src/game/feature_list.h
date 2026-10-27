@@ -130,5 +130,12 @@ FEATURE(TRAP_SPOTTING, "trap spotting", false)
 // own critical, 15% at the centre and 5% one tile out, for 20% more damage and
 // a knockdown. Followers count the player before throwing (`ai.c`).
 FEATURE(GRENADE_BLASTS, "grenade blasts", false)
+// Sight and hearing (zsogg, 2026-10-27; DB-3), `ai.c`: rule 4, sight passes
+// anything marked see-through - glass doors, windows, fences - and a wall's
+// window pieces, though shots do not; rule 5, the two outer directions of a
+// critter's view see half as far. Troika's script condition "can see" and
+// the container check keep stock sight. arcanum-work `tasks/DB3-sight-and-hearing.md`.
+FEATURE(SEE_THROUGH_WINDOWS, "see through windows", false)
+FEATURE(SIDE_VISION, "side vision", false)
 
 // clang-format on
