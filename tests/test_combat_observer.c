@@ -959,6 +959,19 @@ TEST(the_hurt_row_sets_wounds_on_the_player_or_a_critter)
     CHECK(!load_script("0 hurt 1 1 @h now\n"));
 }
 
+TEST(the_order_row_gives_a_follower_the_menus_orders)
+{
+    // AI-6 F2 (2026-10-28): Attack, Wait Here and Back Off from a script.
+    CHECK(load_script("0 order @f attack @wolf\n0 order @f wait\n0 order @f backoff\n"));
+    CHECK_INT(replay_ui_count(), 3);
+    CHECK(row_is(0, "turn=0 now=0 kind=order target=@f loc=0 aim=0 spell=0 cast=- wait=0 order=0 whom=@wolf"));
+    CHECK(row_is(1, "turn=0 now=0 kind=order target=@f loc=0 aim=0 spell=0 cast=- wait=0 order=1 whom="));
+    CHECK(row_is(2, "turn=0 now=0 kind=order target=@f loc=0 aim=0 spell=0 cast=- wait=0 order=2 whom="));
+    CHECK(!load_script("0 order @f attack\n")); // whom
+    CHECK(!load_script("0 order @f wait @wolf\n")); // Wait Here takes no one
+    CHECK(!load_script("0 order @f charge\n"));
+}
+
 TEST(the_examine_row_names_the_object_it_shows)
 {
     // Creature profiles (2026-10-22): the examine panel a pointer resting on
@@ -2047,6 +2060,7 @@ void test_combat_observer_suite(void)
     RUN(the_remove_row_names_the_object_it_takes_off_the_map);
     RUN(the_skill_stat_and_training_rows_take_an_optional_critter);
     RUN(the_hurt_row_sets_wounds_on_the_player_or_a_critter);
+    RUN(the_order_row_gives_a_follower_the_menus_orders);
     RUN(the_examine_row_names_the_object_it_shows);
     RUN(the_afflict_row_names_a_debuff_critical);
     RUN(the_inspect_light_and_wear_rows_load);

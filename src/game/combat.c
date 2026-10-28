@@ -1618,6 +1618,9 @@ void combat_critter_toggle_combat_mode(int64_t obj)
             // CE (criticals, a CR-2 repair): the fight is over for the
             // player, so the opening shot's memory clears.
             crit_guard_engaged_clear();
+            // CE (combat AI, milestone AI-6): and so does which follower has
+            // declined to defend the player against whom.
+            ai_conduct_refusals_forget();
         }
 
         if ((obj_field_int32_get(obj, OBJ_F_SPELL_FLAGS) & OSF_INVISIBLE) != 0

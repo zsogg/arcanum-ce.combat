@@ -171,5 +171,11 @@ FEATURE(FOLLOWER_CASTING, "follower casting", false)
 // patient is at half health or below; and no White Necromancy heal that would
 // fail 75% of the time or more.
 FEATURE(FOLLOWER_HEALING, "follower healing", false)
+// Combat AI AI-6 F2 (zsogg, 2026-10-28), for a follower of the player: it never
+// flees as a bystander from a fight between others (`ai_witness_attack`); Back
+// Off gives way when someone outside the party attacks it (`ai_attack`); and
+// when it will not defend the player against an attacker (a good one, its own
+// origin or faction) it says so once per attacker per fight.
+FEATURE(FOLLOWER_CONDUCT, "follower conduct", false)
 
 // clang-format on

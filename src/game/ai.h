@@ -289,6 +289,17 @@ void ai_heal_patient_order(const int hp_pct[], int count, int order[]);
 // Necromancy on a badly hurt patient). Under `follower healing` a follower of
 // the player is refused even a waived heal from 75.
 int ai_failure_refusal_threshold(bool white_heal_waived, bool futile_cut);
+// CE: AI-6 F2. Whether the leash refuses a follower's target: the distance is
+// counted from its leader (stock and `ai follower leash`) or, under the leash
+// for a follower on Wait Here, from itself (`dist_from_self`); under the leash
+// a target the player ordered it to attack is never refused. Pure.
+bool ai_follower_leash_refuses(bool leash_on, bool waiting, bool ordered,
+    int dist_from_leader, int dist_from_self, int reach);
+// CE: AI-6 F2, `follower conduct`. Whether `follower_obj` has not yet said it
+// will not defend the player against `attacker_obj` this fight, noting that it
+// now has; `ai_conduct_refusals_forget` starts the next fight afresh.
+bool ai_conduct_refusal_first(int64_t follower_obj, int64_t attacker_obj);
+void ai_conduct_refusals_forget(void);
 // CE: AI-5. Whether a spell centred on its caster (`centred_radius`, -1 for any
 // other spell) cannot reach a target `dist` tiles away. Jolt is one: taken by
 // the AI against a distant foe, its cast never happens and the turn is lost.

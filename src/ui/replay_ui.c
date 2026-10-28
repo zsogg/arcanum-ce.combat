@@ -318,6 +318,11 @@ typedef enum ReplayKind {
     //       outright, so a healing bench starts from exact wounds rather than
     //       from whoever the enemies happened to bite. No combat event.
     REPLAY_KIND_HURT,
+    // Follower conduct, AI-6 F2 (2026-10-28):
+    //   order <id> attack <target> / order <id> wait / order <id> backoff
+    //       a follower given the follower menu's Attack, Wait Here or Back Off,
+    //       through the calls the menu's broadcast makes.
+    REPLAY_KIND_ORDER,
 } ReplayKind;
 
 // A cast's target, which is a third shape: the caster, an object or a tile.
@@ -353,6 +358,8 @@ typedef struct ReplayCommand {
     // `spawn`: the tiles from the player.
     int dx;
     int dy;
+    // `order attack`: whom.
+    char target2[REPLAY_IDENTITY_SIZE];
 } ReplayCommand;
 
 // `spawn`'s critters, by the name later rows give them after `@`. 32 since
@@ -1039,10 +1046,10 @@ static bool replay_parse_line(const char* text, ReplayCommand* command)
     // `npc <id> <key> <a> [b]`: `stat` 0 college (a college, b level),
     // 1 level, 2 packet, 3 cast-highest, 4 magick, 5 forced (a follower
     // recruited by dialogue's `jo 0` is not forced, so it can leave), 6 tech
-    // (tech points, which with magick set the aptitude); the values in `dx`
-    // and `dy`.
+    // (tech points, which with magick set the aptitude), 7 align (its
+    // alignment); the values in `dx` and `dy`.
     if (strcmp(kind, "npc") == 0) {
-        static const char* keys[] = { "college", "level", "packet", "cast-highest", "magick", "forced", "tech" };
+        static const char* keys[] = { "college", "level", "packet", "cast-highest", "magick", "forced", "tech", "align" };
         int key;
 
         command->kind = REPLAY_KIND_NPC;
@@ -1050,9 +1057,9 @@ static bool replay_parse_line(const char* text, ReplayCommand* command)
         if (index >= count) {
             return false;
         }
-        for (key = 0; key < 7 && strcmp(tokens[index], keys[key]) != 0; key++) {
+        for (key = 0; key < 8 && strcmp(tokens[index], keys[key]) != 0; key++) {
         }
-        if (key == 7) {
+        if (key == 8) {
             return false;
         }
         index++;
@@ -1062,6 +1069,33 @@ static bool replay_parse_line(const char* text, ReplayCommand* command)
         }
         if (key == 0 && (index >= count || !replay_parse_int(tokens[index++], &(command->dy)) || command->dx < 0 || command->dx >= COLLEGE_COUNT || command->dy < 0 || command->dy > 5)) {
             return false;
+        }
+        return index == count;
+    }
+
+    if (strcmp(kind, "order") == 0) {
+        static const char* orders[] = { "attack", "wait", "backoff" };
+        int order;
+
+        command->kind = REPLAY_KIND_ORDER;
+        replay_copy_target(command, tokens[index++]);
+        if (index >= count) {
+            return false;
+        }
+        for (order = 0; order < 3 && strcmp(tokens[index], orders[order]) != 0; order++) {
+        }
+        if (order == 3) {
+            return false;
+        }
+        index++;
+        command->stat = order;
+        if (order == 0) {
+            if (index >= count) {
+                return false;
+            }
+            strncpy(command->target2, tokens[index], sizeof(command->target2) - 1);
+            command->target2[sizeof(command->target2) - 1] = '\0';
+            index++;
         }
         return index == count;
     }
@@ -1372,7 +1406,7 @@ int replay_ui_count(void)
 bool replay_ui_describe(int index, char* buffer, size_t size)
 {
     const ReplayCommand* command;
-    static const char* kinds[] = { "object", "location", "key", "cast", "wield", "wait", "learn", "give", "throw", "skill", "raise", "prowl", "panel", "save", "inspect", "transfer", "take", "drop", "pickup", "wear", "skill-level", "stat-level", "jam", "afflict", "poison", "use", "xp", "train", "hour", "encounter", "hover", "screenshot", "spawn", "invulnerable", "await-death", "remove", "examine", "press", "click", "block", "face", "stay", "run", "recruit", "npc", "hurt" };
+    static const char* kinds[] = { "object", "location", "key", "cast", "wield", "wait", "learn", "give", "throw", "skill", "raise", "prowl", "panel", "save", "inspect", "transfer", "take", "drop", "pickup", "wear", "skill-level", "stat-level", "jam", "afflict", "poison", "use", "xp", "train", "hour", "encounter", "hover", "screenshot", "spawn", "invulnerable", "await-death", "remove", "examine", "press", "click", "block", "face", "stay", "run", "recruit", "npc", "hurt", "order" };
     int written;
     static const char* casts[] = { "self", "object", "location" };
 
@@ -1417,6 +1451,10 @@ bool replay_ui_describe(int index, char* buffer, size_t size)
     if (command->kind == REPLAY_KIND_SPAWN && written >= 0 && (size_t)written < size) {
         snprintf(buffer + written, size - (size_t)written, " proto=%d dx=%d dy=%d",
             command->proto, command->dx, command->dy);
+    }
+    if (command->kind == REPLAY_KIND_ORDER && written >= 0 && (size_t)written < size) {
+        snprintf(buffer + written, size - (size_t)written, " order=%d whom=%s",
+            command->stat, command->target2);
     }
     if (command->kind == REPLAY_KIND_FACE && written >= 0 && (size_t)written < size) {
         snprintf(buffer + written, size - (size_t)written, " rotation=%d", command->count);
@@ -2179,6 +2217,9 @@ void replay_ui_tick(void)
         case 6:
             stat_base_set(obj, STAT_TECH_POINTS, command->dx);
             break;
+        case 7:
+            stat_base_set(obj, STAT_ALIGNMENT, command->dx);
+            break;
         case 5:
             obj_field_int32_set(obj, OBJ_F_NPC_FLAGS,
                 command->dx != 0
@@ -2197,6 +2238,46 @@ void replay_ui_tick(void)
             stat_level_get(obj, STAT_LEVEL), obj_field_int32_get(obj, OBJ_F_NPC_AI_DATA),
             (obj_field_int32_get(obj, OBJ_F_NPC_FLAGS) & ONF_CAST_HIGHEST) != 0 ? 1 : 0,
             stat_level_get(obj, STAT_MAGICK_TECH_APTITUDE));
+        tig_debug_printf("Replay: command %d: '%s' alignment %d\n",
+            replay_next - 1, command->target, stat_level_get(obj, STAT_ALIGNMENT));
+        return;
+    }
+
+    if (command->kind == REPLAY_KIND_ORDER) {
+        int64_t obj;
+        int64_t target_obj = OBJ_HANDLE_NULL;
+        static const char* orders[] = { "attack", "wait", "backoff" };
+
+        replay_stall_reported = false;
+        replay_next++;
+        if (!replay_resolve(command, &obj)) {
+            return;
+        }
+        if (command->stat == 0) {
+            ReplayCommand whom = *command;
+
+            memcpy(whom.target, command->target2, sizeof(whom.target));
+            if (!replay_resolve(&whom, &target_obj)) {
+                return;
+            }
+        }
+        switch (command->stat) {
+        case 0:
+            // As `broadcast_msg_client`'s Attack: allowed again, then ordered.
+            ai_allow_attacking(obj);
+            ai_attack(obj, target_obj, LOUDNESS_LOUD, 0x4);
+            break;
+        case 1:
+            ai_npc_wait(obj);
+            break;
+        default:
+            ai_stop_attacking(obj);
+            break;
+        }
+        ai_process(obj);
+        tig_debug_printf("Replay: command %d: '%s' ordered to %s%s%s\n",
+            replay_next - 1, command->target, orders[command->stat],
+            command->stat == 0 ? " " : "", command->stat == 0 ? command->target2 : "");
         return;
     }
 

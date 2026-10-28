@@ -132,6 +132,7 @@ static int64_t ai_choose_target_steady(int64_t attacker_obj, int64_t current_obj
 static void ai_engage_or_flee(int64_t a1, int64_t a2);
 static bool ai_should_flee(int64_t source_obj, int64_t target_obj);
 static bool ai_holds_ground(int64_t obj);
+static bool ai_follower_conduct_applies(int64_t obj);
 static int64_t ai_find_target(int64_t a1);
 static bool ai_is_valid_target(int64_t a1, int64_t a2);
 static void ai_choose_action(Ai* ai);
@@ -1632,6 +1633,17 @@ void ai_attack(int64_t source_obj, int64_t target_obj, int loudness, unsigned in
                 npc_flags = obj_field_int32_get(target_obj, OBJ_F_NPC_FLAGS);
                 npc_flags &= ~ONF_KOS_OVERRIDE;
                 obj_field_int32_set(target_obj, OBJ_F_NPC_FLAGS, npc_flags);
+
+                // CE (combat AI, milestone AI-6): under `follower conduct`
+                // Back Off gives way to self-defence. A follower of the player
+                // attacked by someone outside the party may fight again, so
+                // its reaction below is not silenced; it is then back in the
+                // fight generally, as after an Attack order.
+                if ((npc_flags & ONF_NO_ATTACK) != 0
+                    && ai_follower_conduct_applies(target_obj)
+                    && !critter_party_same(source_obj, target_obj)) {
+                    ai_allow_attacking(target_obj);
+                }
             }
 
             if ((flags & 0x02) == 0) {
@@ -1809,6 +1821,29 @@ void ai_follower_react_to_attack(int64_t follower_obj, int64_t leader_obj, int64
 
         rc = ai_check_upset_attacking(follower_obj, target_obj, leader_obj);
         if (rc != 0) {
+            // CE (combat AI, milestone AI-6): under `follower conduct` a
+            // follower that will not defend the player says why, once per
+            // attacker per fight, with no reaction penalty. Stock was silent
+            // on this path, so it seemed simply to stand there.
+            if (!allow_complaint
+                && !suppress_reaction
+                && rc != AI_UPSET_ATTACKING_PARTY
+                && obj_field_int32_get(leader_obj, OBJ_F_TYPE) == OBJ_TYPE_PC
+                && ai_follower_conduct_applies(follower_obj)
+                && ai_float_line_func != NULL
+                && critter_is_active(follower_obj)
+                && ai_conduct_refusal_first(follower_obj, target_obj)) {
+                char follower_id[COMBAT_OBSERVER_IDENTITY_SIZE];
+                char attacker_id[COMBAT_OBSERVER_IDENTITY_SIZE];
+
+                dialog_copy_npc_upset_attacking_msg(follower_obj, leader_obj, rc, str, &speech_id);
+                ai_float_line_func(follower_obj, leader_obj, str, speech_id);
+                combat_observer_object_id(follower_obj, follower_id);
+                combat_observer_object_id(target_obj, attacker_id);
+                tig_debug_printf("AI: %s will not defend the player against %s (reason %d): \"%s\"\n",
+                    follower_id, attacker_id, rc, str);
+            }
+
             if (allow_complaint
                 && !combat_critter_is_combat_mode_active(target_obj)
                 && !suppress_reaction
@@ -1928,7 +1963,12 @@ void ai_witness_attack(int64_t npc_obj, int64_t source_obj, int64_t target_obj, 
             }
         } else if (critter_social_class_get(npc_obj) != SOCIAL_CLASS_GUARD
             && (obj_field_int32_get(npc_obj, OBJ_F_CRITTER_FLAGS) & OCF_NO_FLEE) == 0
-            && !ai_holds_ground(npc_obj)) {
+            && !ai_holds_ground(npc_obj)
+            // CE (combat AI, milestone AI-6): under `follower conduct` a
+            // follower of the player does not flee from a fight between
+            // others; stock's flight turned to surrender, and a surrendered
+            // follower sat out the rest of the fight.
+            && !ai_follower_conduct_applies(npc_obj)) {
             ai_danger_source(npc_obj, &danger_type, NULL);
             if (danger_type == AI_DANGER_SOURCE_TYPE_NONE
                 && ai_acts_on(npc_obj, target_obj, loudness, false)) {
@@ -2240,6 +2280,12 @@ void ai_npc_wait(int64_t obj)
         if (wait < 6) {
             datetime = ai_wait_durations[wait];
             timeevent.type = TIMEEVENT_TYPE_NPC_WAIT_HERE;
+            // FIX (porting bug #372): the event names the waiting follower,
+            // as the original's does (0x4AA86B-0x4AA86F store `obj` in the
+            // first parameter). CE left it unset, so the event carried a
+            // stack handle: a crash when added, or a timeout that reached no
+            // one.
+            timeevent.params[0].object_value = obj;
             timeevent_add_delay(&timeevent, &datetime);
         }
     }
@@ -2761,6 +2807,72 @@ int ai_follower_reach(int64_t obj, int64_t leader_obj)
     return 20;
 }
 
+// CE: AI-6 F2, see ai.h. Under `ai follower leash` (zsogg, 2026-10-28): an
+// ordered target sticks, and a follower on Wait Here guards its own post.
+bool ai_follower_leash_refuses(bool leash_on, bool waiting, bool ordered,
+    int dist_from_leader, int dist_from_self, int reach)
+{
+    if (!leash_on) {
+        return dist_from_leader > reach;
+    }
+
+    if (ordered) {
+        return false;
+    }
+
+    return (waiting ? dist_from_self : dist_from_leader) > reach;
+}
+
+// CE (combat AI, milestone AI-6): whether `follower conduct` changes how this
+// NPC behaves - a follower of the player, with the switch on.
+static bool ai_follower_conduct_applies(int64_t obj)
+{
+    return feature_enabled(FEATURE_FOLLOWER_CONDUCT)
+        && obj_field_int32_get(obj, OBJ_F_TYPE) == OBJ_TYPE_NPC
+        && critter_pc_leader_get(obj) != OBJ_HANDLE_NULL;
+}
+
+// CE: AI-6 F2. Who has already declined to defend the player against whom,
+// this fight. A party is a handful and a fight a few attackers.
+#define AI_CONDUCT_REFUSALS_MAX 32
+
+static struct {
+    int64_t follower_obj;
+    int64_t attacker_obj;
+} ai_conduct_refusals[AI_CONDUCT_REFUSALS_MAX];
+static int ai_conduct_refusals_count;
+
+// CE: AI-6 F2, see ai.h. A full table forgets the oldest refusal, so at
+// worst a line is said twice.
+bool ai_conduct_refusal_first(int64_t follower_obj, int64_t attacker_obj)
+{
+    int idx;
+
+    for (idx = 0; idx < ai_conduct_refusals_count; idx++) {
+        if (ai_conduct_refusals[idx].follower_obj == follower_obj
+            && ai_conduct_refusals[idx].attacker_obj == attacker_obj) {
+            return false;
+        }
+    }
+
+    if (ai_conduct_refusals_count == AI_CONDUCT_REFUSALS_MAX) {
+        memmove(&ai_conduct_refusals[0], &ai_conduct_refusals[1],
+            sizeof(ai_conduct_refusals[0]) * (AI_CONDUCT_REFUSALS_MAX - 1));
+        ai_conduct_refusals_count--;
+    }
+    ai_conduct_refusals[ai_conduct_refusals_count].follower_obj = follower_obj;
+    ai_conduct_refusals[ai_conduct_refusals_count].attacker_obj = attacker_obj;
+    ai_conduct_refusals_count++;
+
+    return true;
+}
+
+// CE: AI-6 F2, see ai.h.
+void ai_conduct_refusals_forget(void)
+{
+    ai_conduct_refusals_count = 0;
+}
+
 // 0x4AB400
 int ai_object_hp_ratio(int64_t obj)
 {
@@ -3013,10 +3125,22 @@ bool ai_is_valid_target(int64_t source_obj, int64_t target_obj)
 
     // CE: `ai_follower_reach` is 20, the stock distance, except under `ai
     // follower leash` for a Defensive follower of a PC (combat AI milestones
-    // AI-3 and AI-4).
-    if (source_leader_obj != OBJ_HANDLE_NULL
-        && object_dist(source_leader_obj, target_obj) > ai_follower_reach(source_obj, source_leader_obj)) {
-        return false;
+    // AI-3 and AI-4). Under the leash (AI-6, zsogg 2026-10-28) a target the
+    // player ordered attacked - the only thing that locks one - is never
+    // refused, and a follower of the player on Wait Here counts from itself.
+    if (source_leader_obj != OBJ_HANDLE_NULL) {
+        bool leash_on = feature_enabled(FEATURE_AI_FOLLOWER_LEASH)
+            && obj_field_int32_get(source_leader_obj, OBJ_F_TYPE) == OBJ_TYPE_PC;
+        bool ordered = (obj_field_int32_get(source_obj, OBJ_F_CRITTER_FLAGS2) & OCF2_TARGET_LOCK) != 0
+            && obj_field_handle_get(source_obj, OBJ_F_NPC_COMBAT_FOCUS) == target_obj;
+        bool waiting = (obj_field_int32_get(source_obj, OBJ_F_NPC_FLAGS) & ONF_AI_WAIT_HERE) != 0;
+
+        if (ai_follower_leash_refuses(leash_on, waiting, ordered,
+                (int)object_dist(source_leader_obj, target_obj),
+                (int)object_dist(source_obj, target_obj),
+                ai_follower_reach(source_obj, source_leader_obj))) {
+            return false;
+        }
     }
 
     if (obj_type_is_critter(target_obj_type)
