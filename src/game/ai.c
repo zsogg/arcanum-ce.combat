@@ -949,10 +949,86 @@ void ai_setup(Ai* ai, int64_t obj)
     ai->considered_count = 0;
 }
 
+// CE (combat AI, milestone AI-6): whether `follower healing` changes how this
+// NPC heals - a follower of the player, with the switch on.
+static bool ai_follower_healing_applies(int64_t obj)
+{
+    return feature_enabled(FEATURE_FOLLOWER_HEALING)
+        && obj_field_int32_get(obj, OBJ_F_TYPE) == OBJ_TYPE_NPC
+        && critter_pc_leader_get(obj) != OBJ_HANDLE_NULL;
+}
+
+// CE: AI-6, see ai.h. A stable insertion sort; a party is a handful.
+void ai_heal_patient_order(const int hp_pct[], int count, int order[])
+{
+    int idx;
+    int pos;
+
+    for (idx = 0; idx < count; idx++) {
+        for (pos = idx; pos > 0 && hp_pct[order[pos - 1]] > hp_pct[idx]; pos--) {
+            order[pos] = order[pos - 1];
+        }
+        order[pos] = idx;
+    }
+}
+
+// CE: AI-6, see ai.h.
+int ai_failure_refusal_threshold(bool white_heal_waived, bool futile_cut)
+{
+    if (!white_heal_waived) {
+        return 38;
+    }
+
+    return futile_cut ? 75 : -1;
+}
+
+// CE (combat AI, milestone AI-6): `ai_heal`'s patients for a follower of the
+// player under `follower healing` - itself, its leader and the leader's other
+// followers, as stock - tried worst hurt first instead of in that order.
+#define AI_HEAL_PATIENTS_MAX 32
+
+static bool ai_heal_worst_first(Ai* ai, int64_t leader_obj, bool force)
+{
+    int64_t patients[AI_HEAL_PATIENTS_MAX];
+    int hp_pct[AI_HEAL_PATIENTS_MAX];
+    int order[AI_HEAL_PATIENTS_MAX];
+    int count = 0;
+    int idx;
+    ObjectList objects;
+    ObjectNode* node;
+
+    patients[count++] = ai->obj;
+    patients[count++] = leader_obj;
+
+    // shortcut: a party past 32 has its last members left out, which no
+    // party in the game reaches; grow the arrays if summons ever do.
+    object_list_all_followers(leader_obj, &objects);
+    for (node = objects.head; node != NULL && count < AI_HEAL_PATIENTS_MAX; node = node->next) {
+        if (node->obj != ai->obj) {
+            patients[count++] = node->obj;
+        }
+    }
+    object_list_destroy(&objects);
+
+    for (idx = 0; idx < count; idx++) {
+        hp_pct[idx] = ai_object_hp_ratio(patients[idx]);
+    }
+    ai_heal_patient_order(hp_pct, count, order);
+
+    for (idx = 0; idx < count; idx++) {
+        if (ai_heal_func(ai, patients[order[idx]], force)) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
 // 0x4A8940
 bool ai_heal(Ai* ai)
 {
     bool force;
+    bool follower_rules;
     AiParams ai_params;
     int64_t leader_obj;
     ObjectList objects;
@@ -967,12 +1043,22 @@ bool ai_heal(Ai* ai)
     }
 
     force = true;
+    follower_rules = ai_follower_healing_applies(ai->obj);
 
     if (combat_critter_is_combat_mode_active(ai->obj)) {
         ai_copy_params(ai->obj, &ai_params);
-        if (random_between(1, 100) > ai_params.field_38) {
+        // CE (combat AI, milestone AI-6): under `follower healing` a follower
+        // of the player does not roll for a patient above 30% while the
+        // player is at half health or below: every patient is considered.
+        if (follower_rules && ai_object_hp_ratio(critter_pc_leader_get(ai->obj)) <= 50) {
+            // No roll.
+        } else if (random_between(1, 100) > ai_params.field_38) {
             force = false;
         }
+    }
+
+    if (follower_rules) {
+        return ai_heal_worst_first(ai, critter_pc_leader_get(ai->obj), force);
     }
 
     if (ai_heal_func(ai, ai->obj, force)) {
@@ -1010,6 +1096,25 @@ bool ai_heal(Ai* ai)
     return true;
 }
 
+// `ai_heal_func`'s fatigue step: the fatigue-restoring list, aimed at `obj`.
+// CE split it out so AI-6 can take it after the heals.
+static bool ai_heal_fatigue_recover(Ai* ai, int64_t obj)
+{
+    S4ABF10 v1;
+    MagicTechAi magictech_ai;
+    bool chosen;
+
+    mt_ai_create(&magictech_ai, ai->obj, MAGICTECH_AI_ACTION_FATIGUE_RECOVER);
+    v1.flags = 0x8;
+    v1.entries = magictech_ai.actions[MAGICTECH_AI_ACTION_FATIGUE_RECOVER].entries;
+    v1.cnt = magictech_ai.actions[MAGICTECH_AI_ACTION_FATIGUE_RECOVER].cnt;
+    v1.obj = obj;
+    chosen = ai_choose_action_from_list(ai, &v1);
+    mt_ai_destroy(&magictech_ai);
+
+    return chosen;
+}
+
 // 0x4A8AA0
 bool ai_heal_func(Ai* ai, int64_t obj, bool a3)
 {
@@ -1017,6 +1122,7 @@ bool ai_heal_func(Ai* ai, int64_t obj, bool a3)
     MagicTechAi magictech_ai;
     int hp_ratio;
     int64_t item_obj;
+    bool fatigue_after_heals = false;
 
     // NOTE: This read `ONF_NO_ATTACK`, which is a *NPC*-flags constant that
     // happens to share bit 0x20000000 with `OCF_MECHANICAL`. The generated
@@ -1054,18 +1160,20 @@ bool ai_heal_func(Ai* ai, int64_t obj, bool a3)
     }
 
     if (ai->danger_type != AI_DANGER_SOURCE_TYPE_NONE) {
-        if (ai_critter_fatigue_ratio(ai->obj) < ai_fatigue_config_get()->recover_below_pct) {
-            mt_ai_create(&magictech_ai, ai->obj, MAGICTECH_AI_ACTION_FATIGUE_RECOVER);
-            v1.flags = 0x8;
-            v1.entries = magictech_ai.actions[MAGICTECH_AI_ACTION_FATIGUE_RECOVER].entries;
-            v1.cnt = magictech_ai.actions[MAGICTECH_AI_ACTION_FATIGUE_RECOVER].cnt;
-            v1.obj = obj;
-            if (ai_choose_action_from_list(ai, &v1)) {
-                mt_ai_destroy(&magictech_ai);
+        // NOTE: stock tests the healer's fatigue and restores the patient's
+        // (0x4A8BF8 passes `ai->obj`, 0x4A8C3C targets the patient, and so
+        // does the patched exe), so a tired healer can restore a dying
+        // player's fatigue instead of their health.
+        // CE (combat AI, milestone AI-6): under `follower healing` a follower
+        // of the player tests the patient's fatigue, and with the patient at
+        // half health or below restores it only after the heals.
+        bool follower_rules = ai_follower_healing_applies(ai->obj);
+        if (ai_critter_fatigue_ratio(follower_rules ? obj : ai->obj) < ai_fatigue_config_get()->recover_below_pct) {
+            if (follower_rules && hp_ratio <= 50) {
+                fatigue_after_heals = true;
+            } else if (ai_heal_fatigue_recover(ai, obj)) {
                 return true;
             }
-
-            mt_ai_destroy(&magictech_ai);
         }
     } else {
         if (hp_ratio < 90) {
@@ -1136,6 +1244,10 @@ bool ai_heal_func(Ai* ai, int64_t obj, bool a3)
         }
 
         mt_ai_destroy(&magictech_ai);
+    }
+
+    if (fatigue_after_heals && ai_heal_fatigue_recover(ai, obj)) {
+        return true;
     }
 
     return false;
@@ -5410,12 +5522,20 @@ int ai_check_use_spell(int64_t attacker_obj, int64_t item_obj, int64_t target_ob
             return 2;
         }
 
-        if (target_obj != OBJ_HANDLE_NULL
-            && (COLLEGE_FROM_SPELL(spell) != COLLEGE_NECROMANTIC_WHITE
-                || (ai_object_hp_ratio(target_obj) > 30
-                    && ai_critter_fatigue_ratio(attacker_obj) < fatigue_cfg->white_necro_item_skip_pct))
-            && magictech_use_item_fail_chance(attacker_obj, item_obj, target_obj) >= 38) {
-            return 8;
+        // CE (combat AI, milestone AI-6): stock waives the check for a White
+        // Necromancy item on a patient at 30% or below (or a tired user);
+        // under `follower healing` a follower of the player still refuses one
+        // failing 75% of the time or more.
+        if (target_obj != OBJ_HANDLE_NULL) {
+            int threshold = ai_failure_refusal_threshold(
+                COLLEGE_FROM_SPELL(spell) == COLLEGE_NECROMANTIC_WHITE
+                    && !(ai_object_hp_ratio(target_obj) > 30
+                        && ai_critter_fatigue_ratio(attacker_obj) < fatigue_cfg->white_necro_item_skip_pct),
+                ai_follower_healing_applies(attacker_obj));
+            if (threshold >= 0
+                && magictech_use_item_fail_chance(attacker_obj, item_obj, target_obj) >= threshold) {
+                return 8;
+            }
         }
     } else {
         if (!spell_is_known(attacker_obj, spell)) {
@@ -5482,11 +5602,20 @@ int ai_check_use_spell(int64_t attacker_obj, int64_t item_obj, int64_t target_ob
             return 4;
         }
 
-        if (target_obj != OBJ_HANDLE_NULL
-            && (COLLEGE_FROM_SPELL(spell) != COLLEGE_NECROMANTIC_WHITE
-                || ai_object_hp_ratio(target_obj) > 30)
-            && magictech_cast_spell_fail_chance(attacker_obj, target_obj, spell) >= 38) {
-            return 8;
+        // CE (combat AI, milestone AI-6): stock waives the check for White
+        // Necromancy on a patient at 30% or below, so a heal into a strongly
+        // technological player was cast until the healer fainted; under
+        // `follower healing` a follower of the player refuses one failing 75%
+        // of the time or more.
+        if (target_obj != OBJ_HANDLE_NULL) {
+            int threshold = ai_failure_refusal_threshold(
+                COLLEGE_FROM_SPELL(spell) == COLLEGE_NECROMANTIC_WHITE
+                    && ai_object_hp_ratio(target_obj) <= 30,
+                ai_follower_healing_applies(attacker_obj));
+            if (threshold >= 0
+                && magictech_cast_spell_fail_chance(attacker_obj, target_obj, spell) >= threshold) {
+                return 8;
+            }
         }
     }
 

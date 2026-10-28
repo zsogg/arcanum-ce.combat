@@ -164,5 +164,12 @@ FEATURE(WEAPON_FUMBLES, "weapon fumbles", false)
 // `ONF_CAST_HIGHEST` no longer limits a follower of the player to each
 // college's highest spell (Arronax).
 FEATURE(FOLLOWER_CASTING, "follower casting", false)
+// Combat AI AI-6 (zsogg, 2026-10-28), read by `ai_heal`, `ai_heal_func` and
+// `ai_check_use_spell` for a follower of the player: no healing roll while the
+// player is at half health or below; the most badly hurt healed first; a tired
+// patient, not a tired healer, gets the fatigue step, after the heals when the
+// patient is at half health or below; and no White Necromancy heal that would
+// fail 75% of the time or more.
+FEATURE(FOLLOWER_HEALING, "follower healing", false)
 
 // clang-format on

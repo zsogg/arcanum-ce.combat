@@ -280,6 +280,15 @@ int ai_spell_chance_rule(bool has_leader, bool player_leader, int own_hp_pct,
 // highest spell: always in stock; under `follower casting`, not for a follower
 // of the player.
 bool ai_cast_highest_applies(unsigned int npc_flags, bool player_follower, bool follower_casting);
+// CE: AI-6, `follower healing`. The order a follower of the player tries its
+// patients in: by health percentage, worst first, ties in stock order (itself,
+// its leader, then the other followers). Pure; `order` gets `count` indices.
+void ai_heal_patient_order(const int hp_pct[], int count, int order[]);
+// CE: AI-6. The failure chance at or above which `ai_check_use_spell` refuses a
+// spell or item (code 8): 38, or -1 for no check when stock waives it (White
+// Necromancy on a badly hurt patient). Under `follower healing` a follower of
+// the player is refused even a waived heal from 75.
+int ai_failure_refusal_threshold(bool white_heal_waived, bool futile_cut);
 // CE: AI-5. Whether a spell centred on its caster (`centred_radius`, -1 for any
 // other spell) cannot reach a target `dist` tiles away. Jolt is one: taken by
 // the AI against a distant foe, its cast never happens and the turn is lost.

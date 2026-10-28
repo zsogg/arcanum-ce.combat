@@ -312,6 +312,12 @@ typedef enum ReplayKind {
     //       spell of a critter with none).
     REPLAY_KIND_RECRUIT,
     REPLAY_KIND_NPC,
+    // Follower healing, AI-6 (2026-10-28):
+    //   hurt <hp damage> <fatigue damage> [id]
+    //       the player's (or that critter's) hit-point and fatigue damage set
+    //       outright, so a healing bench starts from exact wounds rather than
+    //       from whoever the enemies happened to bite. No combat event.
+    REPLAY_KIND_HURT,
 } ReplayKind;
 
 // A cast's target, which is a third shape: the caster, an object or a tile.
@@ -1032,10 +1038,11 @@ static bool replay_parse_line(const char* text, ReplayCommand* command)
 
     // `npc <id> <key> <a> [b]`: `stat` 0 college (a college, b level),
     // 1 level, 2 packet, 3 cast-highest, 4 magick, 5 forced (a follower
-    // recruited by dialogue's `jo 0` is not forced, so it can leave); the
-    // values in `dx` and `dy`.
+    // recruited by dialogue's `jo 0` is not forced, so it can leave), 6 tech
+    // (tech points, which with magick set the aptitude); the values in `dx`
+    // and `dy`.
     if (strcmp(kind, "npc") == 0) {
-        static const char* keys[] = { "college", "level", "packet", "cast-highest", "magick", "forced" };
+        static const char* keys[] = { "college", "level", "packet", "cast-highest", "magick", "forced", "tech" };
         int key;
 
         command->kind = REPLAY_KIND_NPC;
@@ -1043,9 +1050,9 @@ static bool replay_parse_line(const char* text, ReplayCommand* command)
         if (index >= count) {
             return false;
         }
-        for (key = 0; key < 6 && strcmp(tokens[index], keys[key]) != 0; key++) {
+        for (key = 0; key < 7 && strcmp(tokens[index], keys[key]) != 0; key++) {
         }
-        if (key == 6) {
+        if (key == 7) {
             return false;
         }
         index++;
@@ -1055,6 +1062,18 @@ static bool replay_parse_line(const char* text, ReplayCommand* command)
         }
         if (key == 0 && (index >= count || !replay_parse_int(tokens[index++], &(command->dy)) || command->dx < 0 || command->dx >= COLLEGE_COUNT || command->dy < 0 || command->dy > 5)) {
             return false;
+        }
+        return index == count;
+    }
+
+    if (strcmp(kind, "hurt") == 0) {
+        command->kind = REPLAY_KIND_HURT;
+        if (!replay_parse_int(tokens[index++], &(command->dx)) || command->dx < 0 || index >= count
+            || !replay_parse_int(tokens[index++], &(command->dy)) || command->dy < 0) {
+            return false;
+        }
+        if (index < count) {
+            replay_copy_target(command, tokens[index++]);
         }
         return index == count;
     }
@@ -1353,7 +1372,7 @@ int replay_ui_count(void)
 bool replay_ui_describe(int index, char* buffer, size_t size)
 {
     const ReplayCommand* command;
-    static const char* kinds[] = { "object", "location", "key", "cast", "wield", "wait", "learn", "give", "throw", "skill", "raise", "prowl", "panel", "save", "inspect", "transfer", "take", "drop", "pickup", "wear", "skill-level", "stat-level", "jam", "afflict", "poison", "use", "xp", "train", "hour", "encounter", "hover", "screenshot", "spawn", "invulnerable", "await-death", "remove", "examine", "press", "click", "block", "face", "stay", "run", "recruit", "npc" };
+    static const char* kinds[] = { "object", "location", "key", "cast", "wield", "wait", "learn", "give", "throw", "skill", "raise", "prowl", "panel", "save", "inspect", "transfer", "take", "drop", "pickup", "wear", "skill-level", "stat-level", "jam", "afflict", "poison", "use", "xp", "train", "hour", "encounter", "hover", "screenshot", "spawn", "invulnerable", "await-death", "remove", "examine", "press", "click", "block", "face", "stay", "run", "recruit", "npc", "hurt" };
     int written;
     static const char* casts[] = { "self", "object", "location" };
 
@@ -1402,7 +1421,8 @@ bool replay_ui_describe(int index, char* buffer, size_t size)
     if (command->kind == REPLAY_KIND_FACE && written >= 0 && (size_t)written < size) {
         snprintf(buffer + written, size - (size_t)written, " rotation=%d", command->count);
     }
-    if ((command->kind == REPLAY_KIND_CLICK || command->kind == REPLAY_KIND_BLOCK || command->kind == REPLAY_KIND_RUN)
+    if ((command->kind == REPLAY_KIND_CLICK || command->kind == REPLAY_KIND_BLOCK || command->kind == REPLAY_KIND_RUN
+            || command->kind == REPLAY_KIND_HURT)
         && written >= 0 && (size_t)written < size) {
         snprintf(buffer + written, size - (size_t)written, " dx=%d dy=%d",
             command->dx, command->dy);
@@ -2156,6 +2176,9 @@ void replay_ui_tick(void)
         case 4:
             stat_base_set(obj, STAT_MAGICK_POINTS, command->dx);
             break;
+        case 6:
+            stat_base_set(obj, STAT_TECH_POINTS, command->dx);
+            break;
         case 5:
             obj_field_int32_set(obj, OBJ_F_NPC_FLAGS,
                 command->dx != 0
@@ -2169,10 +2192,28 @@ void replay_ui_tick(void)
                     : obj_field_int32_get(obj, OBJ_F_NPC_FLAGS) & ~ONF_CAST_HIGHEST);
             break;
         }
-        tig_debug_printf("Replay: command %d: '%s' npc %d %d %d: level %d, packet %d, cast-highest %d\n",
+        tig_debug_printf("Replay: command %d: '%s' npc %d %d %d: level %d, packet %d, cast-highest %d, aptitude %d\n",
             replay_next - 1, command->target, command->stat, command->dx, command->dy,
             stat_level_get(obj, STAT_LEVEL), obj_field_int32_get(obj, OBJ_F_NPC_AI_DATA),
-            (obj_field_int32_get(obj, OBJ_F_NPC_FLAGS) & ONF_CAST_HIGHEST) != 0 ? 1 : 0);
+            (obj_field_int32_get(obj, OBJ_F_NPC_FLAGS) & ONF_CAST_HIGHEST) != 0 ? 1 : 0,
+            stat_level_get(obj, STAT_MAGICK_TECH_APTITUDE));
+        return;
+    }
+
+    if (command->kind == REPLAY_KIND_HURT) {
+        int64_t who_obj = pc_obj;
+
+        replay_stall_reported = false;
+        replay_next++;
+        if (command->target[0] != '\0' && !replay_resolve(command, &who_obj)) {
+            return;
+        }
+        object_hp_damage_set(who_obj, command->dx);
+        critter_fatigue_damage_set(who_obj, command->dy);
+        tig_debug_printf("Replay: command %d hurt: hp %d/%d fatigue %d/%d\n",
+            replay_next - 1,
+            object_hp_current(who_obj), object_hp_max(who_obj),
+            critter_fatigue_current(who_obj), critter_fatigue_max(who_obj));
         return;
     }
 

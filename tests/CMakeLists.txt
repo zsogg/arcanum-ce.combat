@@ -29,6 +29,7 @@ add_executable(arcanum-tests
     "test_penetration.c"
     "test_ai_targeting.c"
     "test_ai_follower_casting.c"
+    "test_ai_follower_healing.c"
     "test_text_filter.c"
     "test_followers.c"
     "test_carried_lights.c"
