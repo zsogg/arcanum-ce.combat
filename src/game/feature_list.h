@@ -180,5 +180,11 @@ FEATURE(FOLLOWER_HEALING, "follower healing", false)
 // backup replaced once out of combat (`reload_prep_tick`), and picks up
 // nothing idly.
 FEATURE(FOLLOWER_CONDUCT, "follower conduct", false)
+// Combat music (zsogg, 2026-10-28), read by `gsound_start_combat_music` and
+// `gsound_update`: a fight plays the area tracks in random order instead of
+// looping `CombatMusic.mp3` (a copy of `DwarvenMusic.mp3`), never the track the
+// area was playing and never the same track twice running. The opening sting
+// is stock.
+FEATURE(COMBAT_MUSIC_SHUFFLE, "combat music shuffle", false)
 
 // clang-format on

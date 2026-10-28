@@ -26,6 +26,9 @@ tig_sound_handle_t gsound_play_music_once(const char* path, int fade_duration);
 tig_sound_handle_t gsound_play_music_indefinitely(const char* path, int fade_duration);
 void gsound_start_combat_music(int64_t obj);
 void gsound_stop_combat_music(int64_t obj);
+// CE: `combat music shuffle`. Which of `count` tracks plays next: `roll` spread
+// over the tracks that are neither `area` nor `last` (-1 for none). Pure.
+int gsound_combat_shuffle_pick(int count, int area, int last, unsigned int roll);
 void gsound_lock(void);
 void gsound_unlock(void);
 void gsound_listener_set(int64_t location);

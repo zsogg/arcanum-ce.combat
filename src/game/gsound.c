@@ -3,6 +3,8 @@
 #include <math.h>
 #include <stdio.h>
 
+#include <SDL3/SDL_stdinc.h>
+
 #include "game/feature.h"
 #include "game/gamelib.h"
 #include "game/hrp.h"
@@ -115,6 +117,8 @@ static tig_sound_handle_t gsound_play_sfx_at_loc_ex(int id, int loops, int64_t l
 static void gsound_scheme_stop(int fade_duration, int index);
 static void gsound_scheme_stop_all(int fade_duration);
 static void gsound_update(void);
+static int gsound_combat_shuffle_area_track(void);
+static void gsound_combat_shuffle_next(void);
 static void gsound_scheme_path(const char* name, char* buffer, size_t maxlen);
 static bool gsound_scheme_is_active(int scheme_idx, int* index_ptr);
 static void gsound_scheme_load(int scheme_idx);
@@ -339,6 +343,42 @@ static int64_t sound_maximum_radius[TIG_SOUND_SIZE_COUNT];
  * 0x5D55D8
  */
 static int gsound_combat_music_active;
+
+// CE (`combat music shuffle`): the tracks a fight draws from, every music file
+// the stock schemes play plus `Interlude`. Not saved: a fight resumed from a
+// save is silent, as stock.
+static const char* gsound_combat_shuffle_tracks[] = {
+    "Arcanum",
+    "Caladon",
+    "Caladon_Catacombs",
+    "Cities",
+    "Dungeons",
+    "DwarvenMusic",
+    "Interlude",
+    "Isle_of_Despair",
+    "Kerghan",
+    "Mines",
+    "Qintara",
+    "Tarant",
+    "Tarant_Sewers",
+    "Towns",
+    "Tulla",
+    "Vendegoth",
+    "Villages",
+    "Void",
+    "Wilderness",
+};
+
+#define GSOUND_COMBAT_SHUFFLE_TRACKS ((int)(sizeof(gsound_combat_shuffle_tracks) / sizeof(*gsound_combat_shuffle_tracks)))
+
+// CE: whether `gsound_update` keeps a shuffled track playing, whether the
+// current track has been heard playing (tig starts a stream on its next tick,
+// so not playing before then is not finished), the track the area was playing
+// when the fight began and the track last played (-1: none).
+static bool gsound_combat_shuffle_on;
+static bool gsound_combat_shuffle_heard;
+static int gsound_combat_shuffle_area = -1;
+static int gsound_combat_shuffle_last = -1;
 
 /**
  * Cached Y-axis coordinate of gsound_origin_location.
@@ -648,6 +688,8 @@ void gsound_reset(void)
     gsound_origin_x = 0;
     gsound_origin_y = 0;
     gsound_combat_music_active = false;
+    // CE (`combat music shuffle`): `gsound_stop_all` ends the track too.
+    gsound_combat_shuffle_on = false;
     gsound_lock_cnt = 0;
     gsound_stop_all(0);
 }
@@ -1198,6 +1240,17 @@ void gsound_update(void)
     char path[TIG_MAX_PATH];
     int volume;
     int extra_volume;
+
+    // CE (`combat music shuffle`): a finished combat track gives way to the
+    // next. A track that never started (sound locked) is retried.
+    if (gsound_combat_shuffle_on) {
+        if (tig_sound_is_playing(gsound_combat_music_handle)) {
+            gsound_combat_shuffle_heard = true;
+        } else if (gsound_combat_shuffle_heard || gsound_combat_music_handle == TIG_SOUND_HANDLE_INVALID) {
+            tig_sound_destroy(gsound_combat_music_handle);
+            gsound_combat_shuffle_next();
+        }
+    }
 
     hour = datetime_current_hour();
 
@@ -1776,6 +1829,14 @@ void gsound_start_combat_music(int64_t obj)
         }
     }
 
+    // CE (`combat music shuffle`): note the area's track before it stops.
+    gsound_combat_shuffle_on = feature_enabled(FEATURE_COMBAT_MUSIC_SHUFFLE);
+    if (gsound_combat_shuffle_on) {
+        gsound_combat_shuffle_area = gsound_combat_shuffle_area_track();
+        tig_debug_printf("gsound: combat shuffle skips the area's %s\n",
+            gsound_combat_shuffle_area >= 0 ? gsound_combat_shuffle_tracks[gsound_combat_shuffle_area] : "(none playing)");
+    }
+
     // Fade out any currently playing ambient/music scheme.
     gsound_scheme_stop_all(GSOUND_SCHEME_FADE_MS);
 
@@ -1784,7 +1845,12 @@ void gsound_start_combat_music(int64_t obj)
     // Play a randomly chosen tension stinger, then loop the main combat track.
     snprintf(path, sizeof(path), "sound\\music\\combat %d.mp3", random_between(1, GSOUND_COMBAT_MUSIC_TRACKS));
     gsound_combat_tension_handle = gsound_play_music_once(path, 0);
-    gsound_combat_music_handle = gsound_play_music_indefinitely("sound\\music\\combatmusic.mp3", 0);
+    if (gsound_combat_shuffle_on) {
+        // CE: the first track, alongside the sting as stock's loop is.
+        gsound_combat_shuffle_next();
+    } else {
+        gsound_combat_music_handle = gsound_play_music_indefinitely("sound\\music\\combatmusic.mp3", 0);
+    }
     // CE (release 1, R1): say so, so a run can show music starting or not.
     tig_debug_printf("gsound: combat music on (%s)\n", path);
 }
@@ -1817,9 +1883,95 @@ void gsound_stop_combat_music(int64_t obj)
     tig_sound_destroy(gsound_combat_music_handle);
 
     gsound_combat_music_active = false;
+    gsound_combat_shuffle_on = false;
 
     // Resume the scheme that was playing before combat started.
     gsound_play_scheme(gsound_pre_combat_scheme_idxs[0], gsound_pre_combat_scheme_idxs[1]);
+}
+
+// CE (`combat music shuffle`): the next track, `roll` taken modulo the tracks
+// left once `area` and `last` are skipped, so each is equally likely.
+int gsound_combat_shuffle_pick(int count, int area, int last, unsigned int roll)
+{
+    int candidates;
+    int index;
+
+    candidates = count;
+    if (area >= 0 && area < count) {
+        candidates--;
+    }
+    if (last >= 0 && last < count && last != area) {
+        candidates--;
+    }
+
+    // Every track excluded: repeat rather than fall silent.
+    if (candidates <= 0) {
+        return last >= 0 && last < count ? last : 0;
+    }
+
+    roll %= (unsigned int)candidates;
+    for (index = 0; index < count; index++) {
+        if (index != area && index != last) {
+            if (roll == 0) {
+                break;
+            }
+            roll--;
+        }
+    }
+
+    return index;
+}
+
+// CE (`combat music shuffle`): the shuffle track a stock scheme is playing as
+// its song, or -1.
+static int gsound_combat_shuffle_area_track(void)
+{
+    int type;
+    int idx;
+    Sound* sound;
+    const char* name;
+    int track;
+    char file[TIG_MAX_PATH];
+
+    for (type = 0; type < GSOUND_SCHEME_SLOTS; type++) {
+        for (idx = 0; idx < gsound_active_schemes[type].count; idx++) {
+            sound = &(gsound_active_schemes[type].sounds[idx]);
+            if (sound->song && tig_sound_is_playing(sound->sound_handle)) {
+                name = strrchr(sound->path, '\\');
+                name = name != NULL ? name + 1 : sound->path;
+                for (track = 0; track < GSOUND_COMBAT_SHUFFLE_TRACKS; track++) {
+                    snprintf(file, sizeof(file), "%s.mp3", gsound_combat_shuffle_tracks[track]);
+                    if (SDL_strcasecmp(name, file) == 0) {
+                        return track;
+                    }
+                }
+            }
+        }
+    }
+
+    return -1;
+}
+
+// CE (`combat music shuffle`): starts the next track, played once.
+static void gsound_combat_shuffle_next(void)
+{
+    char path[TIG_MAX_PATH];
+    int track;
+
+    // Not `random_between`: a draw timed by the music would move the game's
+    // random sequence mid-fight, and replays with it.
+    track = gsound_combat_shuffle_pick(GSOUND_COMBAT_SHUFFLE_TRACKS,
+        gsound_combat_shuffle_area,
+        gsound_combat_shuffle_last,
+        SDL_rand_bits());
+    snprintf(path, sizeof(path), "sound\\music\\%s.mp3", gsound_combat_shuffle_tracks[track]);
+    gsound_combat_music_handle = gsound_play_music_once(path, 0);
+    gsound_combat_shuffle_heard = false;
+    gsound_combat_shuffle_last = track;
+
+    if (gsound_combat_music_handle != TIG_SOUND_HANDLE_INVALID) {
+        tig_debug_printf("gsound: combat track %s\n", path);
+    }
 }
 
 /**
