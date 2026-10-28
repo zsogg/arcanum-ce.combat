@@ -28,6 +28,7 @@
 #include "game/object_node.h"
 #include "game/player.h"
 #include "game/proto.h"
+#include "game/reaction.h"
 #include "game/reload.h"
 #include "game/skill.h"
 #include "game/spell.h"
@@ -975,6 +976,16 @@ static bool replay_parse_line(const char* text, ReplayCommand* command)
             replay_copy_target(command, tokens[index++]);
             return index == count;
         }
+        // `inspect follower <id>` (follower AI survey, 2026-10-28): `stat` 8.
+        if (strcmp(tokens[index], "follower") == 0) {
+            command->stat = 8;
+            index++;
+            if (index >= count) {
+                return false;
+            }
+            replay_copy_target(command, tokens[index++]);
+            return index == count;
+        }
         // `inspect sight <id>` (DB-3): `stat` 6, the observer in `target`.
         if (strcmp(tokens[index], "sight") == 0) {
             command->stat = 6;
@@ -1020,9 +1031,11 @@ static bool replay_parse_line(const char* text, ReplayCommand* command)
     }
 
     // `npc <id> <key> <a> [b]`: `stat` 0 college (a college, b level),
-    // 1 level, 2 packet, 3 cast-highest, 4 magick; the values in `dx` and `dy`.
+    // 1 level, 2 packet, 3 cast-highest, 4 magick, 5 forced (a follower
+    // recruited by dialogue's `jo 0` is not forced, so it can leave); the
+    // values in `dx` and `dy`.
     if (strcmp(kind, "npc") == 0) {
-        static const char* keys[] = { "college", "level", "packet", "cast-highest", "magick" };
+        static const char* keys[] = { "college", "level", "packet", "cast-highest", "magick", "forced" };
         int key;
 
         command->kind = REPLAY_KIND_NPC;
@@ -1030,9 +1043,9 @@ static bool replay_parse_line(const char* text, ReplayCommand* command)
         if (index >= count) {
             return false;
         }
-        for (key = 0; key < 5 && strcmp(tokens[index], keys[key]) != 0; key++) {
+        for (key = 0; key < 6 && strcmp(tokens[index], keys[key]) != 0; key++) {
         }
-        if (key == 5) {
+        if (key == 6) {
             return false;
         }
         index++;
@@ -1720,6 +1733,28 @@ void replay_ui_tick(void)
                 object_hp_current(target_obj), object_hp_max(target_obj),
                 obj_type_is_critter(obj_field_int32_get(target_obj, OBJ_F_TYPE)) ? critter_fatigue_current(target_obj) : 0,
                 obj_type_is_critter(obj_field_int32_get(target_obj, OBJ_F_TYPE)) ? critter_fatigue_max(target_obj) : 0);
+        } else if (command->stat == 8) {
+            unsigned int npc_flags;
+            int64_t leader_obj;
+
+            // Follower AI survey (2026-10-28): whether it still follows the
+            // player, its reaction to them, and the flags that decide leaving.
+            if (!replay_resolve(command, &target_obj)) {
+                return;
+            }
+            if (obj_field_int32_get(target_obj, OBJ_F_TYPE) != OBJ_TYPE_NPC) {
+                tig_debug_printf("Replay: command %d: '%s' is not an NPC\n", replay_next - 1, command->target);
+                return;
+            }
+            npc_flags = obj_field_int32_get(target_obj, OBJ_F_NPC_FLAGS);
+            leader_obj = critter_leader_get(target_obj);
+            tig_debug_printf("Replay: command %d: '%s' follower: leader %s, reaction %d, jilted %d, forced %d, fighting %d\n",
+                replay_next - 1, command->target,
+                leader_obj == pc_obj ? "player" : (leader_obj == OBJ_HANDLE_NULL ? "none" : "other"),
+                reaction_get(target_obj, pc_obj),
+                (npc_flags & ONF_JILTED) != 0 ? 1 : 0,
+                (npc_flags & ONF_FORCED_FOLLOWER) != 0 ? 1 : 0,
+                (npc_flags & ONF_FIGHTING) != 0 ? 1 : 0);
         } else if (command->stat == 1) {
             replay_inspect_awareness(pc_obj);
         } else if (command->stat == 7) {
@@ -2120,6 +2155,12 @@ void replay_ui_tick(void)
             break;
         case 4:
             stat_base_set(obj, STAT_MAGICK_POINTS, command->dx);
+            break;
+        case 5:
+            obj_field_int32_set(obj, OBJ_F_NPC_FLAGS,
+                command->dx != 0
+                    ? obj_field_int32_get(obj, OBJ_F_NPC_FLAGS) | ONF_FORCED_FOLLOWER
+                    : obj_field_int32_get(obj, OBJ_F_NPC_FLAGS) & ~ONF_FORCED_FOLLOWER);
             break;
         default:
             obj_field_int32_set(obj, OBJ_F_NPC_FLAGS,
