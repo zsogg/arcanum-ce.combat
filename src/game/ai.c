@@ -3659,8 +3659,12 @@ bool ai_choose_action_from_list(Ai* ai, S4ABF10* a2)
 
         // CE (combat AI, milestone AI-0): each spell weighed is kept for
         // `ai.decided`, in the same calls and order as the original's test.
+        // "Already under it" reads 13, outside `ai_check_use_spell`'s codes:
+        // until 2026-10-28 it read 9, which MG-1 had also given to "not
+        // enough AP", so a caster out of AP after a buff seemed to refuse a
+        // foe as already under its spells.
         int code = magictech_is_under_influence_of(obj, entry->spell)
-            ? 9
+            ? 13
             : ai_check_use_spell(ai->obj, entry->item_obj, obj, entry->spell);
         if (ai->considered_count < COMBAT_OBSERVER_AI_CONSIDERED_MAX) {
             ai->considered[ai->considered_count][0] = entry->spell;
@@ -5357,7 +5361,8 @@ int ai_check_use_skill(int64_t source_obj, int64_t target_obj, int64_t item_obj,
 // 6 an aptitude restriction, 7 willpower, 8 failure chance at or above 38%, and
 // CE's 9 (magic, milestone MG-1) not enough AP for it this turn, 10 (MG-2)
 // Unfocused, 11 (MG-3) a copy already on the target under `spell no stacking`,
-// 12 (AI-5) a spell centred on the caster that cannot reach the target -
+// 12 (AI-5) a spell centred on the caster that cannot reach the target, and
+// 13 is taken: `ai.decided`'s "already under it", tested by the caller -
 // but those are inferred from the code rather than attested anywhere, and
 // CE's single caller only tests `== 0`, so naming them would dress up a guess
 // as a fact for no benefit.
