@@ -1342,7 +1342,11 @@ does the same. These are the ones a player can meet.
 
 - **Hexed items can always be taken off.** The "cannot remove a hexed item"
   message is never shown.
-- **Heavy encumbrance never stops you running.**
+- **A second run order ignores encumbrance.** From significant encumbrance
+  (60% of the carry limit) up, an order to run makes you walk; order it
+  again while you are still walking and you run, however heavy the load.
+  Encumbrance stops at its severe level (90%): carrying more than the limit
+  is no worse than carrying 90% of it.
 - **Cone-shaped targeting** covers a square around its origin, not a cone.
 
 **World and interface**
