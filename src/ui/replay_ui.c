@@ -287,11 +287,17 @@ typedef enum ReplayKind {
     //   stay <id>
     //       a critter no longer wanders (`ONF_WANDERS` cleared), so it keeps
     //       its post and its facing while a bench listens for it.
+    // Encumbrance (2026-10-27):
+    //   run <dx> <dy>
+    //       a run to the tile that far from the player, through
+    //       `anim_goal_run_to_tile` as Ctrl-click does; `now run` while a
+    //       run is under way is the re-click.
     REPLAY_KIND_PRESS,
     REPLAY_KIND_CLICK,
     REPLAY_KIND_BLOCK,
     REPLAY_KIND_FACE,
     REPLAY_KIND_STAY,
+    REPLAY_KIND_RUN,
 } ReplayKind;
 
 // A cast's target, which is a third shape: the caster, an object or a tile.
@@ -572,6 +578,31 @@ static void replay_inspect_sight(int64_t observer_obj, int64_t pc_obj, const cha
         (block_flags & OF_SHOOT_THROUGH) != 0 ? 1 : 0,
         p_piece,
         sight_block);
+}
+
+// `inspect run` (encumbrance, 2026-10-27): the player's move goal, whether
+// its slot has the running flag (0x40) that `anim_try_run` and the run-to-tile
+// re-target set, the encumbrance level, Speed and the tile. Read-only.
+static void replay_inspect_run(int64_t pc_obj)
+{
+    AnimID anim_id;
+    AnimRunInfo* run_info;
+    const char* goal = "none";
+    int running = -1;
+    int64_t loc;
+
+    if (anim_is_current_goal_type(pc_obj, AG_RUN_TO_TILE, &anim_id)) {
+        goal = "run-to-tile";
+    } else if (anim_is_current_goal_type(pc_obj, AG_MOVE_TO_TILE, &anim_id)) {
+        goal = "move-to-tile";
+    }
+    if (strcmp(goal, "none") != 0 && anim_id_to_run_info(&anim_id, &run_info)) {
+        running = (run_info->flags & 0x40) != 0 ? 1 : 0;
+    }
+    loc = obj_field_int64_get(pc_obj, OBJ_F_LOCATION);
+    tig_debug_printf("Replay: run goal %s running %d encumbrance %d speed %d at %d,%d\n",
+        goal, running, critter_encumbrance_level_get(pc_obj), stat_level_get(pc_obj, STAT_SPEED),
+        (int)LOCATION_GET_X(loc), (int)LOCATION_GET_Y(loc));
 }
 
 // `inspect awareness` (2026-10-12): one log line per critter within 15 tiles
@@ -907,8 +938,10 @@ static bool replay_parse_line(const char* text, ReplayCommand* command)
         return index == count;
     }
 
-    if (strcmp(kind, "click") == 0 || strcmp(kind, "block") == 0) {
-        command->kind = strcmp(kind, "click") == 0 ? REPLAY_KIND_CLICK : REPLAY_KIND_BLOCK;
+    if (strcmp(kind, "click") == 0 || strcmp(kind, "block") == 0 || strcmp(kind, "run") == 0) {
+        command->kind = strcmp(kind, "click") == 0 ? REPLAY_KIND_CLICK
+            : strcmp(kind, "block") == 0           ? REPLAY_KIND_BLOCK
+                                                   : REPLAY_KIND_RUN;
         if (!replay_parse_int(tokens[index++], &(command->dx))
             || index >= count
             || !replay_parse_int(tokens[index++], &(command->dy))) {
@@ -953,6 +986,9 @@ static bool replay_parse_line(const char* text, ReplayCommand* command)
         // the player, for prowling. `stat` tells the two apart.
         if (strcmp(tokens[index], "awareness") == 0) {
             command->stat = 1;
+        } else if (strcmp(tokens[index], "run") == 0) {
+            // `inspect run` (encumbrance, 2026-10-27): `stat` 7.
+            command->stat = 7;
         } else if (strcmp(tokens[index], "xp") == 0) {
             command->stat = 2;
         } else if (strcmp(tokens[index], "guns") != 0) {
@@ -1258,7 +1294,7 @@ int replay_ui_count(void)
 bool replay_ui_describe(int index, char* buffer, size_t size)
 {
     const ReplayCommand* command;
-    static const char* kinds[] = { "object", "location", "key", "cast", "wield", "wait", "learn", "give", "throw", "skill", "raise", "prowl", "panel", "save", "inspect", "transfer", "take", "drop", "pickup", "wear", "skill-level", "stat-level", "jam", "afflict", "poison", "use", "xp", "train", "hour", "encounter", "hover", "screenshot", "spawn", "invulnerable", "await-death", "remove", "examine", "press", "click", "block", "face", "stay" };
+    static const char* kinds[] = { "object", "location", "key", "cast", "wield", "wait", "learn", "give", "throw", "skill", "raise", "prowl", "panel", "save", "inspect", "transfer", "take", "drop", "pickup", "wear", "skill-level", "stat-level", "jam", "afflict", "poison", "use", "xp", "train", "hour", "encounter", "hover", "screenshot", "spawn", "invulnerable", "await-death", "remove", "examine", "press", "click", "block", "face", "stay", "run" };
     int written;
     static const char* casts[] = { "self", "object", "location" };
 
@@ -1307,7 +1343,7 @@ bool replay_ui_describe(int index, char* buffer, size_t size)
     if (command->kind == REPLAY_KIND_FACE && written >= 0 && (size_t)written < size) {
         snprintf(buffer + written, size - (size_t)written, " rotation=%d", command->count);
     }
-    if ((command->kind == REPLAY_KIND_CLICK || command->kind == REPLAY_KIND_BLOCK)
+    if ((command->kind == REPLAY_KIND_CLICK || command->kind == REPLAY_KIND_BLOCK || command->kind == REPLAY_KIND_RUN)
         && written >= 0 && (size_t)written < size) {
         snprintf(buffer + written, size - (size_t)written, " dx=%d dy=%d",
             command->dx, command->dy);
@@ -1635,6 +1671,8 @@ void replay_ui_tick(void)
                 command->target, (int)location_get_x(loc), (int)location_get_y(loc));
         } else if (command->stat == 1) {
             replay_inspect_awareness(pc_obj);
+        } else if (command->stat == 7) {
+            replay_inspect_run(pc_obj);
         } else if (command->stat == 2) {
             replay_inspect_xp(pc_obj);
         } else {
@@ -2024,6 +2062,21 @@ void replay_ui_tick(void)
             tig_art_id_rotation_set(obj_field_int32_get(obj, OBJ_F_CURRENT_AID), rotation));
         tig_debug_printf("Replay: command %d turned '%s' to rotation %d\n", replay_next - 1,
             command->target, rotation);
+        return;
+    }
+
+    if (command->kind == REPLAY_KIND_RUN) {
+        int64_t loc;
+        bool ok;
+
+        replay_stall_reported = false;
+        replay_next++;
+        loc = obj_field_int64_get(pc_obj, OBJ_F_LOCATION);
+        loc = location_make(LOCATION_GET_X(loc) + command->dx, LOCATION_GET_Y(loc) + command->dy);
+        ok = anim_goal_run_to_tile(pc_obj, loc);
+        tig_debug_printf("Replay: command %d run to %d,%d: %s, encumbrance %d\n", replay_next - 1,
+            (int)LOCATION_GET_X(loc), (int)LOCATION_GET_Y(loc), ok ? "accepted" : "refused",
+            critter_encumbrance_level_get(pc_obj));
         return;
     }
 
