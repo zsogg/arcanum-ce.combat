@@ -4155,16 +4155,35 @@ void magictech_register_cur_attack(void)
     }
 }
 
+// CE (`grenade blasts`; zsogg, 2026-10-28): the `ai_attack` flags for a
+// spell or blast hit. A hit between members of one party is accidental
+// (0x01), as a stray shot is: the victim complains ("watch it!") instead of
+// turning on the attacker. Stock registers every spell victim as deliberately
+// attacked, and a follower deliberately hit by its leader has its reaction
+// set to 0 and leaves once the fight is over; stock grenades never reached
+// the party, but under the switch they do (follower AI survey, finding 1).
+int magictech_attack_flags(int64_t attacker_obj, int64_t target_obj)
+{
+    if (feature_enabled(FEATURE_GRENADE_BLASTS)
+        && obj_type_is_critter(obj_field_int32_get(attacker_obj, OBJ_F_TYPE))
+        && obj_type_is_critter(obj_field_int32_get(target_obj, OBJ_F_TYPE))
+        && critter_party_same(attacker_obj, target_obj)) {
+        return 0x01;
+    }
+    return 0;
+}
+
 // 0x453F20
 void magictech_register_attack(int64_t a1, int64_t a2)
 {
     if (magictech_last_attack_target != a2) {
         magictech_last_attack_target = a2;
-        ai_attack(a1, a2, 1, 0);
+        ai_attack(a1, a2, 1, magictech_attack_flags(a1, a2));
 
         if (magictech_cur_run_info->attacker_obj.obj != OBJ_HANDLE_NULL
             && a1 != magictech_cur_run_info->attacker_obj.obj) {
-            ai_attack(magictech_cur_run_info->attacker_obj.obj, a2, LOUDNESS_NORMAL, 0);
+            ai_attack(magictech_cur_run_info->attacker_obj.obj, a2, LOUDNESS_NORMAL,
+                magictech_attack_flags(magictech_cur_run_info->attacker_obj.obj, a2));
         }
     }
 }

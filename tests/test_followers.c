@@ -12,6 +12,7 @@
 #include "game/critter.h"
 #include "game/feature.h"
 #include "game/gamelib.h"
+#include "game/magictech.h"
 #include "game/obj.h"
 #include "game/obj_flags.h"
 #include "game/reaction.h"
@@ -251,6 +252,40 @@ TEST(heal_refuses_by_the_healer_stock_and_by_the_patient_under_the_switch)
     followers_end();
 }
 
+// Follower AI survey, finding 1 (zsogg, 2026-10-28): under `grenade blasts`
+// a spell or blast hit within the player's party is registered as accidental,
+// so a follower caught in the player's grenade does not turn on them and
+// leave. Stock flags every spell victim as deliberately attacked.
+TEST(a_party_hit_by_a_spell_or_blast_is_accidental_under_grenade_blasts)
+{
+    int64_t second;
+    int64_t stranger;
+
+    CHECK(followers_begin());
+    second = obj_harness_create_proto(OBJ_TYPE_NPC);
+    stranger = obj_harness_create_proto(OBJ_TYPE_NPC);
+    obj_field_int32_set(second, OBJ_F_NPC_FLAGS, 0);
+    obj_field_int32_set(stranger, OBJ_F_NPC_FLAGS, 0);
+    critter_leader_set(followers_npc, followers_pc);
+    critter_leader_set(second, followers_pc);
+
+    CHECK_INT(magictech_attack_flags(followers_pc, followers_npc), 0);
+    CHECK_INT(magictech_attack_flags(followers_npc, followers_pc), 0);
+
+    followers_switch(FEATURE_GRENADE_BLASTS, true);
+    CHECK_INT(magictech_attack_flags(followers_pc, followers_npc), 0x01);
+    CHECK_INT(magictech_attack_flags(followers_npc, followers_pc), 0x01);
+    CHECK_INT(magictech_attack_flags(followers_npc, second), 0x01);
+    CHECK_INT(magictech_attack_flags(followers_pc, stranger), 0);
+    CHECK_INT(magictech_attack_flags(stranger, followers_npc), 0);
+    followers_switch(FEATURE_GRENADE_BLASTS, false);
+
+    critter_leader_set(second, OBJ_HANDLE_NULL);
+    obj_harness_destroy(stranger);
+    obj_harness_destroy(second);
+    followers_end();
+}
+
 void test_followers_suite(void)
 {
     RUN(the_strict_packet_lets_a_matching_npc_join);
@@ -262,4 +297,5 @@ void test_followers_suite(void)
     RUN(the_charisma_follower_limit_stays);
     RUN(a_master_persuader_is_still_held_to_the_charisma_limit);
     RUN(heal_refuses_by_the_healer_stock_and_by_the_patient_under_the_switch);
+    RUN(a_party_hit_by_a_spell_or_blast_is_accidental_under_grenade_blasts);
 }

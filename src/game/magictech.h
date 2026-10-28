@@ -359,6 +359,9 @@ int magictech_aoe_radius_get(int magictech);
 // on its caster (its begin AoE takes `Tgt_Self` with `Tgt_Obj_Radius`: Jolt,
 // Nightmare), or -1 for any other spell.
 int magictech_caster_centred_radius(int magictech);
+// CE (`grenade blasts`): the `ai_attack` flags for a spell or blast hit; 0x01,
+// accidental, between members of one party.
+int magictech_attack_flags(int64_t attacker_obj, int64_t target_obj);
 int magictech_min_intelligence(int magictech);
 int magictech_min_willpower(int magictech);
 int magictech_get_cost(int magictech);
