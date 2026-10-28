@@ -135,6 +135,10 @@ bool item_unequip(int64_t item_obj);
 int item_check_wield(int64_t a1, int a2, int64_t a3);
 tig_art_id_t item_wield_art_id(int64_t obj);
 void item_wield_best(int64_t critter_obj, int inventory_location, int64_t target_obj);
+// CE: combat AI AI-6 F3. Whether the best weapon that reaches the target wins
+// over the best overall: always in stock; under `ai armor aware` only with a
+// positive score, i.e. a wielder trained with it. Pure.
+bool item_reaching_weapon_wins(bool armor_aware, int reaching_worth);
 void item_wield_best_all(int64_t critter_obj, int64_t target_obj);
 void item_rewield(int64_t obj);
 bool item_in_rewield(void);

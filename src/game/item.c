@@ -3175,6 +3175,43 @@ tig_art_id_t item_wield_attack_art_id(int64_t critter_obj)
 // against plate where a Hammer scored 23.5% higher).
 #define ITEM_WIELD_COMMIT_PERCENT 117
 
+// CE: combat AI AI-6 F3, see item.h.
+bool item_reaching_weapon_wins(bool armor_aware, int reaching_worth)
+{
+    return !armor_aware || reaching_worth > 0;
+}
+
+// CE (combat AI, milestone AI-6 F3): whether a follower of the player, under
+// `follower conduct`, can go on using what it holds in `inventory_location`:
+// it can wield it, and a weapon has ammunition, a shot loaded, a jam to clear
+// or ammunition to load.
+static bool item_follower_keeps(int64_t critter_obj, int64_t item_obj, int inventory_location)
+{
+    int ammo_type;
+
+    if (item_check_wield(item_obj, inventory_location, critter_obj) != ITEM_CANNOT_OK) {
+        return false;
+    }
+
+    if (inventory_location != ITEM_INV_LOC_WEAPON
+        || obj_field_int32_get(item_obj, OBJ_F_TYPE) != OBJ_TYPE_WEAPON) {
+        return true;
+    }
+
+    ammo_type = item_weapon_ammo_type(item_obj);
+    if (ammo_type == 10000) {
+        return true;
+    }
+
+    if (reload_applies(critter_obj, item_obj)) {
+        return reload_loaded_get(item_obj) > 0
+            || reload_jammed(item_obj)
+            || reload_can_load_quiet(critter_obj, item_obj);
+    }
+
+    return weapon_rules_ammo_per_shot(item_obj) <= item_ammo_quantity_get(critter_obj, ammo_type);
+}
+
 // 0x465170
 void item_wield_best(int64_t critter_obj, int inventory_location, int64_t target_obj)
 {
@@ -3204,6 +3241,18 @@ void item_wield_best(int64_t critter_obj, int inventory_location, int64_t target
     cnt = obj_field_int32_get(critter_obj, OBJ_F_CRITTER_INVENTORY_NUM);
     equipped_item_obj = item_wield_get(critter_obj, inventory_location);
     held_obj = equipped_item_obj;
+
+    // CE (combat AI, milestone AI-6 F3): under `follower conduct` a follower
+    // of the player keeps what it holds while it can use it - the player's
+    // choice, which stock re-picked on every inventory change and at every
+    // fight's start. Only an empty or unusable slot is chosen for.
+    if (equipped_item_obj != OBJ_HANDLE_NULL
+        && feature_enabled(FEATURE_FOLLOWER_CONDUCT)
+        && obj_field_int32_get(critter_obj, OBJ_F_TYPE) == OBJ_TYPE_NPC
+        && critter_pc_leader_get(critter_obj) != OBJ_HANDLE_NULL
+        && item_follower_keeps(critter_obj, equipped_item_obj, inventory_location)) {
+        return;
+    }
     armor_aware = feature_enabled(FEATURE_AI_ARMOR_AWARE)
         && inventory_location == ITEM_INV_LOC_WEAPON
         && obj_field_int32_get(critter_obj, OBJ_F_TYPE) == OBJ_TYPE_NPC
@@ -3367,6 +3416,15 @@ void item_wield_best(int64_t critter_obj, int inventory_location, int64_t target
                 }
             }
         }
+    }
+
+    // CE (combat AI, milestone AI-6 F3): under `ai armor aware` a weapon that
+    // reaches the target wins only if its wielder is trained with it (a
+    // positive score). Stock took any that reached, so a melee NPC carrying a
+    // bow it cannot use stood and shot at a distant foe instead of closing.
+    if (best_ranged_weapon_obj != OBJ_HANDLE_NULL
+        && !item_reaching_weapon_wins(armor_aware, best_ranged_weapon_worth)) {
+        best_ranged_weapon_obj = OBJ_HANDLE_NULL;
     }
 
     if (best_ranged_weapon_obj != OBJ_HANDLE_NULL) {

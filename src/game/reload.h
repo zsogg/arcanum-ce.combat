@@ -142,6 +142,15 @@ int reload_clear_progress_get(int64_t weapon_obj);
 // 5). True when it has acted and must not attack.
 bool reload_ai_act(int64_t critter_obj, int64_t enemy_obj);
 
+// Combat AI AI-6 F3 (zsogg, 2026-10-28): the gun a melee backup replaced, per
+// critter, so that under `follower conduct` - where a follower of the player
+// keeps what it holds - the gun goes back into its hands once out of combat,
+// to load itself there. Held for the session only: after a save and load the
+// follower keeps the backup. `reload_backup_gun` is the noted gun or NULL.
+void reload_backup_note(int64_t critter_obj, int64_t gun_obj);
+int64_t reload_backup_gun(int64_t critter_obj);
+void reload_backup_forget(int64_t critter_obj);
+
 // Session 4: automatic loading outside combat, from `timeevent_ping`. The
 // player's and each follower's wielded listed gun, while the player and it are
 // out of combat mode, loads one shot each time its loading cost passes as time

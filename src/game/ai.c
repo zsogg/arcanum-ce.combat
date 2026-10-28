@@ -4073,7 +4073,10 @@ void ai_action_perform_non_combat(Ai* ai)
         anim_make_room_for_critter(ai->obj);
     }
 
-    if (!critter_is_sleeping(ai->obj)) {
+    // CE (combat AI, milestone AI-6 F3): under `follower conduct` a follower
+    // of the player takes up nothing idly, so it leaves what the player
+    // drops. The roll is skipped with it.
+    if (!critter_is_sleeping(ai->obj) && !ai_follower_conduct_applies(ai->obj)) {
         if (ui_inven_target_obj_get() == OBJ_HANDLE_NULL && random_between(1, 100) == 1) {
             ai_look_for_item_func(ai->obj, OBJ_TM_ITEM);
         }

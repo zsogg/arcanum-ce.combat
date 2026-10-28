@@ -5,6 +5,8 @@
 // attacker per fight.
 
 #include "game/ai.h"
+#include "game/item.h"
+#include "game/reload.h"
 
 #include "test_harness.h"
 
@@ -63,6 +65,37 @@ TEST(a_full_memory_forgets_its_oldest_refusal)
     ai_conduct_refusals_forget();
 }
 
+// F3 (8a): a reaching weapon must be one its wielder is trained with.
+TEST(stock_takes_any_weapon_that_reaches)
+{
+    CHECK(item_reaching_weapon_wins(false, -40));
+    CHECK(item_reaching_weapon_wins(false, 900));
+}
+
+TEST(armor_aware_takes_a_reaching_weapon_only_with_a_positive_score)
+{
+    CHECK(item_reaching_weapon_wins(true, 1));
+    CHECK(!item_reaching_weapon_wins(true, 0));
+    CHECK(!item_reaching_weapon_wins(true, -40));
+}
+
+// F3 (8b-i): the gun a melee backup replaced, remembered per critter.
+TEST(a_backup_remembers_the_gun_it_replaced)
+{
+    CHECK(reload_backup_gun(7) == OBJ_HANDLE_NULL);
+    reload_backup_note(7, 70);
+    reload_backup_note(8, 80);
+    CHECK(reload_backup_gun(7) == 70);
+    CHECK(reload_backup_gun(8) == 80);
+    // A second backup for the same critter replaces the first.
+    reload_backup_note(7, 71);
+    CHECK(reload_backup_gun(7) == 71);
+    reload_backup_forget(7);
+    CHECK(reload_backup_gun(7) == OBJ_HANDLE_NULL);
+    CHECK(reload_backup_gun(8) == 80);
+    reload_backup_forget(8);
+}
+
 void test_ai_follower_conduct_suite(void)
 {
     RUN(stock_measures_twenty_from_the_leader_ordered_or_not);
@@ -71,4 +104,7 @@ void test_ai_follower_conduct_suite(void)
     RUN(a_waiting_follower_counts_from_itself);
     RUN(a_refusal_is_said_once_per_attacker_per_fight);
     RUN(a_full_memory_forgets_its_oldest_refusal);
+    RUN(stock_takes_any_weapon_that_reaches);
+    RUN(armor_aware_takes_a_reaching_weapon_only_with_a_positive_score);
+    RUN(a_backup_remembers_the_gun_it_replaced);
 }

@@ -641,6 +641,93 @@ static int64_t reload_melee_backup(int64_t critter_obj)
     return best_obj;
 }
 
+// AI-6 F3: the guns melee backups replaced. A party is a handful.
+#define RELOAD_BACKUPS_MAX 16
+
+static struct {
+    int64_t critter_obj;
+    int64_t gun_obj;
+} reload_backups[RELOAD_BACKUPS_MAX];
+
+void reload_backup_note(int64_t critter_obj, int64_t gun_obj)
+{
+    int index;
+    int free_index = -1;
+
+    for (index = 0; index < RELOAD_BACKUPS_MAX; index++) {
+        if (reload_backups[index].critter_obj == critter_obj) {
+            reload_backups[index].gun_obj = gun_obj;
+            return;
+        }
+        if (free_index < 0 && reload_backups[index].critter_obj == OBJ_HANDLE_NULL) {
+            free_index = index;
+        }
+    }
+
+    // shortcut: past 16 critters with a backup in hand, a new one is not
+    // noted, and that follower keeps its backup until the player re-equips
+    // it; grow the table if a party ever outnumbers it.
+    if (free_index >= 0) {
+        reload_backups[free_index].critter_obj = critter_obj;
+        reload_backups[free_index].gun_obj = gun_obj;
+    }
+}
+
+int64_t reload_backup_gun(int64_t critter_obj)
+{
+    int index;
+
+    for (index = 0; index < RELOAD_BACKUPS_MAX; index++) {
+        if (reload_backups[index].critter_obj == critter_obj) {
+            return reload_backups[index].gun_obj;
+        }
+    }
+
+    return OBJ_HANDLE_NULL;
+}
+
+void reload_backup_forget(int64_t critter_obj)
+{
+    int index;
+
+    for (index = 0; index < RELOAD_BACKUPS_MAX; index++) {
+        if (reload_backups[index].critter_obj == critter_obj) {
+            reload_backups[index].critter_obj = OBJ_HANDLE_NULL;
+            reload_backups[index].gun_obj = OBJ_HANDLE_NULL;
+        }
+    }
+}
+
+// AI-6 F3: under `follower conduct`, a follower out of combat takes back the
+// gun its backup replaced, if it still carries it. The pack is searched for
+// the noted handle, so a gun since sold or dropped is never touched.
+static void reload_backup_restore(int64_t critter_obj)
+{
+    int64_t gun_obj;
+    int count;
+    int index;
+
+    if (!feature_enabled(FEATURE_FOLLOWER_CONDUCT)) {
+        return;
+    }
+
+    gun_obj = reload_backup_gun(critter_obj);
+    if (gun_obj == OBJ_HANDLE_NULL) {
+        return;
+    }
+
+    reload_backup_forget(critter_obj);
+    count = obj_field_int32_get(critter_obj, OBJ_F_CRITTER_INVENTORY_NUM);
+    for (index = 0; index < count; index++) {
+        if (obj_arrayfield_handle_get(critter_obj, OBJ_F_CRITTER_INVENTORY_LIST_IDX, index) == gun_obj) {
+            if (item_wield_set(gun_obj, ITEM_INV_LOC_WEAPON)) {
+                tig_debug_printf("reload: a follower takes back the gun its backup replaced\n");
+            }
+            return;
+        }
+    }
+}
+
 bool reload_ai_act(int64_t critter_obj, int64_t enemy_obj)
 {
     int64_t weapon_obj;
@@ -666,6 +753,7 @@ bool reload_ai_act(int64_t critter_obj, int64_t enemy_obj)
             && object_dist(critter_obj, enemy_obj) <= 1) {
             melee_obj = reload_melee_backup(critter_obj);
             if (melee_obj != OBJ_HANDLE_NULL && item_wield_set(melee_obj, ITEM_INV_LOC_WEAPON)) {
+                reload_backup_note(critter_obj, weapon_obj);
                 tig_debug_printf("reload: an NPC with a jammed gun takes a melee backup\n");
                 return false; // attack with it now
             }
@@ -707,6 +795,7 @@ bool reload_ai_act(int64_t critter_obj, int64_t enemy_obj)
         && object_dist(critter_obj, enemy_obj) <= 1) {
         melee_obj = reload_melee_backup(critter_obj);
         if (melee_obj != OBJ_HANDLE_NULL && item_wield_set(melee_obj, ITEM_INV_LOC_WEAPON)) {
+            reload_backup_note(critter_obj, weapon_obj);
             tig_debug_printf("reload: an NPC takes a melee backup\n");
             return false; // attack with it now
         }
@@ -830,6 +919,7 @@ void reload_prep_tick(int delta_ms)
         reload_prep_one(pc_obj, delta_ms);
         object_list_all_followers(pc_obj, &objects);
         for (node = objects.head; node != NULL; node = node->next) {
+            reload_backup_restore(node->obj);
             reload_prep_one(node->obj, delta_ms);
         }
         object_list_destroy(&objects);

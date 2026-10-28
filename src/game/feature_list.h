@@ -175,7 +175,10 @@ FEATURE(FOLLOWER_HEALING, "follower healing", false)
 // flees as a bystander from a fight between others (`ai_witness_attack`); Back
 // Off gives way when someone outside the party attacks it (`ai_attack`); and
 // when it will not defend the player against an attacker (a good one, its own
-// origin or faction) it says so once per attacker per fight.
+// origin or faction) it says so once per attacker per fight. F3: it keeps what
+// it holds while it can use it (`item_wield_best`), takes back a gun its melee
+// backup replaced once out of combat (`reload_prep_tick`), and picks up
+// nothing idly.
 FEATURE(FOLLOWER_CONDUCT, "follower conduct", false)
 
 // clang-format on
