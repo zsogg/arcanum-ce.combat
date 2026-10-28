@@ -910,7 +910,7 @@ void combat_observer_critical_rolled(const char* attacker, const char* target,
 void combat_observer_ai_decided(const char* actor, const char* target,
     const char* danger, const char* origin, const char* action, int spell,
     const char* item, const char* weapon, int cast_chance, int cast_roll,
-    const int considered[][2], int considered_count, bool desperate)
+    const int considered[][2], int considered_count, bool desperate, bool waived)
 {
     char line[2048];
     char action_id[32];
@@ -931,12 +931,12 @@ void combat_observer_ai_decided(const char* actor, const char* target,
     }
 
     snprintf(line, sizeof(line),
-        "{\"schema\":%d,\"sequence\":%u,\"event\":\"ai.decided\",\"turn\":%u,\"action_id\":%s,\"actor\":\"%s\",\"target\":\"%s\",\"danger\":\"%s\",\"origin\":\"%s\",\"action\":\"%s\",\"spell\":%d,\"item\":\"%s\",\"weapon\":\"%s\",\"cast_chance\":%d,\"cast_roll\":%d,\"considered\":[%s],\"desperate\":%s}",
+        "{\"schema\":%d,\"sequence\":%u,\"event\":\"ai.decided\",\"turn\":%u,\"action_id\":%s,\"actor\":\"%s\",\"target\":\"%s\",\"danger\":\"%s\",\"origin\":\"%s\",\"action\":\"%s\",\"spell\":%d,\"item\":\"%s\",\"weapon\":\"%s\",\"cast_chance\":%d,\"cast_roll\":%d,\"considered\":[%s],\"desperate\":%s,\"waived\":%s}",
         COMBAT_OBSERVER_SCHEMA,
         combat_observer_sequence++, combat_observer_turn,
         combat_observer_action_json(action_id, sizeof(action_id)), actor, target,
         danger, origin, action, spell, item, weapon, cast_chance, cast_roll, list,
-        desperate ? "true" : "false");
+        desperate ? "true" : "false", waived ? "true" : "false");
     combat_observer_write(line);
 }
 

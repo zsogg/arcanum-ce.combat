@@ -265,6 +265,26 @@ void ai_target_unlock(int64_t obj);
 int ai_follower_reach(int64_t obj, int64_t leader_obj);
 bool ai_targeting_prefers_new_attacker(int current_dist, int threat_dist);
 
+// CE: combat AI milestone AI-5, `follower casting`. The chance in 100 that an
+// NPC reaches for its spells on an action, before AI-2's preference: the
+// stock rule (`ai_magictech_chance`, 0x4ABE20) with AI-5's waiver. Stock gives
+// 0 to a critter with a leader while both are above half health and its foe
+// is not stronger; otherwise 50 when its AI set keeps a distance in combat,
+// else 25. Under `follower casting` a caster-type follower of the player is
+// not held back: it gets the 50 or 25, and `*waived` says so. Pure, so the
+// rule is tested without a game.
+int ai_spell_chance_rule(bool has_leader, bool player_leader, int own_hp_pct,
+    int leader_hp_pct, bool foe_stronger, bool caster_type, bool keeps_distance,
+    bool follower_casting, bool* waived);
+// CE: AI-5. Whether `ONF_CAST_HIGHEST` holds a critter to each college's
+// highest spell: always in stock; under `follower casting`, not for a follower
+// of the player.
+bool ai_cast_highest_applies(unsigned int npc_flags, bool player_follower, bool follower_casting);
+// CE: AI-5. Whether a spell centred on its caster (`centred_radius`, -1 for any
+// other spell) cannot reach a target `dist` tiles away. Jolt is one: taken by
+// the AI against a distant foe, its cast never happens and the turn is lost.
+bool ai_caster_centred_out_of_reach(int centred_radius, int dist);
+
 // CE: combat AI milestone AI-3. The animation system reports an NPC whose
 // approach to `target_obj` found no path, so its AI can turn to another target.
 void ai_note_unreachable(int64_t obj, int64_t target_obj);

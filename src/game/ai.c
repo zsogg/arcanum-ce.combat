@@ -93,6 +93,9 @@ typedef struct Ai {
     const char* origin;
     int cast_chance;
     int cast_roll;
+    // CE (combat AI, milestone AI-5): the spell roll was made only because
+    // `follower casting` waived a healthy follower's restraint.
+    bool cast_waived;
     int considered_count;
     int considered[COMBAT_OBSERVER_AI_CONSIDERED_MAX][2];
 } Ai;
@@ -147,6 +150,14 @@ static void ai_action_perform_combat(Ai* ai);
 static void ai_action_perform_baking_off(Ai* ai);
 static void ai_armor_rewield(Ai* ai);
 static bool ai_prefers_spells(Ai* ai);
+static bool ai_is_caster_type(Ai* ai);
+static bool ai_may_be_desperate(int64_t obj);
+static bool ai_choose_magictech_from_lists(Ai* ai);
+
+// CE (combat AI, milestone AI-5): the follower whose spell roll was made only
+// by `follower casting`'s waiver, while its lists are tried; it is not
+// desperate then.
+static int64_t ai_waived_caster = OBJ_HANDLE_NULL;
 static bool ai_may_summon(Ai* ai);
 static bool ai_desperate_now(int64_t obj);
 static bool ai_desperation_rolled(int64_t obj);
@@ -628,7 +639,7 @@ static void ai_observe_decision(Ai* ai, const char* action)
         ai->danger_type >= 0 && ai->danger_type <= 3 ? dangers[ai->danger_type] : "unknown",
         ai->origin, action, ai->spell == 10000 ? -1 : ai->spell, item, weapon,
         ai->cast_chance, ai->cast_roll, (const int (*)[2])ai->considered, ai->considered_count,
-        ai_desperation_rolled(ai->obj));
+        ai_desperation_rolled(ai->obj), ai->cast_waived);
 }
 
 // CE (combat AI, milestone AI-4): `ai.decided` for an item the lists use at
@@ -934,6 +945,7 @@ void ai_setup(Ai* ai, int64_t obj)
     ai->origin = "decide";
     ai->cast_chance = -1;
     ai->cast_roll = -1;
+    ai->cast_waived = false;
     ai->considered_count = 0;
 }
 
@@ -2961,10 +2973,6 @@ void ai_choose_action(Ai* ai)
 // 0x4ABC70
 bool ai_choose_magictech_action(Ai* ai)
 {
-    MagicTechAi magictech_ai;
-    S4ABF10 v3;
-    AiParams ai_params;
-
     if (!ai_npc_fighting_enabled) {
         return false;
     }
@@ -2983,6 +2991,25 @@ bool ai_choose_magictech_action(Ai* ai)
     if (ai->cast_roll > ai->cast_chance) {
         return false;
     }
+
+    // CE (combat AI, milestone AI-5): while the waiver is what lets this
+    // follower cast, it keeps its fatigue reserve (`ai_may_be_desperate`).
+    ai_waived_caster = ai->cast_waived ? ai->obj : OBJ_HANDLE_NULL;
+    if (ai_choose_magictech_from_lists(ai)) {
+        ai_waived_caster = OBJ_HANDLE_NULL;
+        return true;
+    }
+    ai_waived_caster = OBJ_HANDLE_NULL;
+    return false;
+}
+
+// The original's list order, from `ai_choose_magictech_action`; split out so
+// AI-5's waived caster is cleared on every way out.
+static bool ai_choose_magictech_from_lists(Ai* ai)
+{
+    MagicTechAi magictech_ai;
+    S4ABF10 v3;
+    AiParams ai_params;
 
     if (ai_may_summon(ai)) {
         mt_ai_create(&magictech_ai, ai->obj, MAGICTECH_AI_ACTION_SUMMON);
@@ -3042,12 +3069,18 @@ bool ai_choose_magictech_action(Ai* ai)
 // nothing castable the NPC still attacks.
 bool ai_prefers_spells(Ai* ai)
 {
+    return feature_enabled(FEATURE_AI_SPELLCASTING) && ai_is_caster_type(ai);
+}
+
+// CE (combat AI, milestones AI-2 and AI-5): AI-2's test for a caster, apart
+// from its switch so `follower casting` can use it alone.
+bool ai_is_caster_type(Ai* ai)
+{
     AiParams ai_params;
     int64_t weapon_obj;
     int expected;
 
-    if (!feature_enabled(FEATURE_AI_SPELLCASTING)
-        || obj_field_int32_get(ai->obj, OBJ_F_TYPE) != OBJ_TYPE_NPC) {
+    if (obj_field_int32_get(ai->obj, OBJ_F_TYPE) != OBJ_TYPE_NPC) {
         return false;
     }
 
@@ -3176,6 +3209,15 @@ bool ai_desperate_now(int64_t obj)
         ai_desperation[slot].desperate = random_between(1, 100) <= AI_DESPERATION_CHANCE;
     }
     return ai_desperation[slot].desperate;
+}
+
+// CE (combat AI, milestone AI-5): AI-2's desperation, except for a follower
+// whose cast is allowed only by `follower casting`'s waiver - it keeps its
+// reserve while the party is healthy (zsogg, 2026-10-27). No roll is drawn
+// for it, so its turn's roll is still to come if someone is hurt later.
+bool ai_may_be_desperate(int64_t obj)
+{
+    return obj != ai_waived_caster && ai_desperate_now(obj);
 }
 
 // Whether `obj` is desperate this turn by a roll already made - for the
@@ -3492,17 +3534,55 @@ static int64_t ai_hunter_choose(int64_t obj, int64_t target_obj)
 int ai_magictech_chance(Ai* ai)
 {
     AiParams ai_params;
-
-    if (ai->leader_obj != OBJ_HANDLE_NULL
-        && ai_object_hp_ratio(ai->obj) > 50
-        && ai_object_hp_ratio(ai->leader_obj) > 50
-        && !ai_is_stronger(ai->obj, ai->danger_source)) {
-        return 0;
-    }
+    bool has_leader = ai->leader_obj != OBJ_HANDLE_NULL;
+    bool follower_casting = feature_enabled(FEATURE_FOLLOWER_CASTING);
 
     ai_copy_params(ai->obj, &ai_params);
 
-    return ai_params.field_3C > 1 ? 50 : 25;
+    // CE (combat AI, milestone AI-5): the rule is `ai_spell_chance_rule`, the
+    // stock one when `follower casting` is off. The hit-point ratios are read
+    // only with a leader, as the original reads them; the caster test only
+    // when the waiver could apply.
+    return ai_spell_chance_rule(has_leader,
+        has_leader && obj_field_int32_get(ai->leader_obj, OBJ_F_TYPE) == OBJ_TYPE_PC,
+        has_leader ? ai_object_hp_ratio(ai->obj) : 0,
+        has_leader ? ai_object_hp_ratio(ai->leader_obj) : 0,
+        has_leader && ai_is_stronger(ai->obj, ai->danger_source),
+        follower_casting && has_leader && ai_is_caster_type(ai),
+        ai_params.field_3C > 1,
+        follower_casting,
+        &(ai->cast_waived));
+}
+
+// CE (combat AI, milestone AI-5): see `ai.h`.
+int ai_spell_chance_rule(bool has_leader, bool player_leader, int own_hp_pct,
+    int leader_hp_pct, bool foe_stronger, bool caster_type, bool keeps_distance,
+    bool follower_casting, bool* waived)
+{
+    *waived = false;
+    if (has_leader && own_hp_pct > 50 && leader_hp_pct > 50 && !foe_stronger) {
+        // zsogg, 2026-10-27: caster followers cast while the party is
+        // healthy. Only the player's: an enemy caster that follows an NPC
+        // leader keeps the stock restraint.
+        if (!(follower_casting && player_leader && caster_type)) {
+            return 0;
+        }
+        *waived = true;
+    }
+
+    return keeps_distance ? 50 : 25;
+}
+
+// CE (combat AI, milestone AI-5): see `ai.h`.
+bool ai_caster_centred_out_of_reach(int centred_radius, int dist)
+{
+    return centred_radius >= 0 && dist > centred_radius;
+}
+
+// CE (combat AI, milestone AI-5): see `ai.h`.
+bool ai_cast_highest_applies(unsigned int npc_flags, bool player_follower, bool follower_casting)
+{
+    return (npc_flags & ONF_CAST_HIGHEST) != 0 && !(follower_casting && player_follower);
 }
 
 // 0x4ABEB0
@@ -5276,7 +5356,8 @@ int ai_check_use_skill(int64_t source_obj, int64_t target_obj, int64_t item_obj,
 // 4 not the college's highest under ONF_CAST_HIGHEST, 5 no line of fire,
 // 6 an aptitude restriction, 7 willpower, 8 failure chance at or above 38%, and
 // CE's 9 (magic, milestone MG-1) not enough AP for it this turn, 10 (MG-2)
-// Unfocused, 11 (MG-3) a copy already on the target under `spell no stacking` -
+// Unfocused, 11 (MG-3) a copy already on the target under `spell no stacking`,
+// 12 (AI-5) a spell centred on the caster that cannot reach the target -
 // but those are inferred from the code rather than attested anywhere, and
 // CE's single caller only tests `== 0`, so naming them would dress up a guess
 // as a fact for no benefit.
@@ -5338,16 +5419,24 @@ int ai_check_use_spell(int64_t attacker_obj, int64_t item_obj, int64_t target_ob
 
         if (attacker_obj_type == OBJ_TYPE_NPC) {
             int fatigue_ratio = ai_critter_fatigue_ratio(attacker_obj);
+            // CE (combat AI, milestone AI-5): a follower casting only by
+            // `follower casting`'s waiver keeps the floor an NPC without a
+            // leader keeps (20% stock), its reserve for when someone is hurt.
+            // A follower's own floor is 0: stock never needed one, since a
+            // follower cast only once someone was.
+            int follower_floor = attacker_obj == ai_waived_caster
+                ? fatigue_cfg->min_cast_pct_leaderless
+                : fatigue_cfg->min_cast_pct_follower;
 
             // CE (combat AI, milestone AI-2): a desperate caster ignores its
             // fatigue floor this turn (`ai_desperate_now`).
             if (critter_pc_leader_get(attacker_obj) == OBJ_HANDLE_NULL) {
                 if (fatigue_ratio < fatigue_cfg->min_cast_pct_leaderless
-                    && !ai_desperate_now(attacker_obj)) {
+                    && !ai_may_be_desperate(attacker_obj)) {
                     return 2;
                 }
-            } else if (fatigue_ratio < fatigue_cfg->min_cast_pct_follower
-                && !ai_desperate_now(attacker_obj)) {
+            } else if (fatigue_ratio < follower_floor
+                && !ai_may_be_desperate(attacker_obj)) {
                 return 2;
             }
 
@@ -5365,7 +5454,7 @@ int ai_check_use_spell(int64_t attacker_obj, int64_t item_obj, int64_t target_ob
             // reserve, but the cost must still be chargeable, so the cast
             // completes before exhaustion can interrupt it.
             if (!(attacker_obj_type == OBJ_TYPE_NPC
-                    && ai_desperate_now(attacker_obj)
+                    && ai_may_be_desperate(attacker_obj)
                     && magictech_can_charge_spell_fatigue(attacker_obj, spell))) {
                 return 2;
             }
@@ -5379,7 +5468,11 @@ int ai_check_use_spell(int64_t attacker_obj, int64_t item_obj, int64_t target_ob
             return 7;
         }
 
-        if ((obj_field_int32_get(attacker_obj, OBJ_F_NPC_FLAGS) & ONF_CAST_HIGHEST) != 0
+        // CE (combat AI, milestone AI-5): under `follower casting` the flag no
+        // longer binds a follower of the player (Arronax, zsogg 2026-10-27).
+        if (ai_cast_highest_applies(obj_field_int32_get(attacker_obj, OBJ_F_NPC_FLAGS),
+                attacker_obj_type == OBJ_TYPE_NPC && critter_pc_leader_get(attacker_obj) != OBJ_HANDLE_NULL,
+                feature_enabled(FEATURE_FOLLOWER_CASTING))
             && spell_college_level_get(attacker_obj, COLLEGE_FROM_SPELL(spell)) + 5 * COLLEGE_FROM_SPELL(spell) - 1 != spell) {
             return 4;
         }
@@ -5390,6 +5483,21 @@ int ai_check_use_spell(int64_t attacker_obj, int64_t item_obj, int64_t target_ob
             && magictech_cast_spell_fail_chance(attacker_obj, target_obj, spell) >= 38) {
             return 8;
         }
+    }
+
+    // CE (combat AI, milestone AI-5): under `follower casting` a follower of
+    // the player does not take a spell centred on itself against a foe beyond
+    // its radius (code 12). Clearing Arronax's ONF_CAST_HIGHEST gave him Jolt,
+    // which he then chose against distant wolves: nothing was cast and his
+    // turn passed (measured 2026-10-27).
+    if (feature_enabled(FEATURE_FOLLOWER_CASTING)
+        && attacker_obj_type == OBJ_TYPE_NPC
+        && critter_pc_leader_get(attacker_obj) != OBJ_HANDLE_NULL
+        && target_obj != OBJ_HANDLE_NULL
+        && target_obj != attacker_obj
+        && ai_caster_centred_out_of_reach(magictech_caster_centred_radius(spell),
+            (int)object_dist(attacker_obj, target_obj))) {
+        return 12;
     }
 
     if (attacker_obj != target_obj && target_obj != OBJ_HANDLE_NULL) {

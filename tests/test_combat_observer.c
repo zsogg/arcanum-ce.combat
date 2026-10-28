@@ -132,9 +132,9 @@ TEST(an_ai_decision_lists_what_it_weighed)
     clean();
     CHECK(combat_observer_open(TRACE_FILE));
     combat_observer_ai_decided("mage", "fighter", "combat", "decide", "cast",
-        40, "NULL", "NULL", 50, 17, considered, 3, true);
+        40, "NULL", "NULL", 50, 17, considered, 3, true, false);
     combat_observer_ai_decided("guard", "fighter", "combat", "decide", "attack",
-        -1, "NULL", "G_SWORD", 25, -1, many, COMBAT_OBSERVER_AI_CONSIDERED_MAX + 3, false);
+        -1, "NULL", "G_SWORD", 25, -1, many, COMBAT_OBSERVER_AI_CONSIDERED_MAX + 3, false, true);
     combat_observer_close();
 
     CHECK(read_trace(trace, sizeof(trace)));
@@ -143,11 +143,11 @@ TEST(an_ai_decision_lists_what_it_weighed)
                         "\"origin\":\"decide\",\"action\":\"cast\",\"spell\":40,")
         != NULL);
     CHECK(strstr(trace, "\"cast_chance\":50,\"cast_roll\":17,\"considered\":[[11,2],[25,9],[40,0]],"
-                        "\"desperate\":true}")
+                        "\"desperate\":true,\"waived\":false}")
         != NULL);
     CHECK(strstr(trace, "\"weapon\":\"G_SWORD\",\"cast_chance\":25,\"cast_roll\":-1,") != NULL);
     // No more than the cap is written, however many are passed.
-    CHECK(strstr(trace, "[0,0],[0,0],[0,0],[0,0],[0,0],[0,0],[0,0],[0,0]],\"desperate\":false}") != NULL);
+    CHECK(strstr(trace, "[0,0],[0,0],[0,0],[0,0],[0,0],[0,0],[0,0],[0,0]],\"desperate\":false,\"waived\":true}") != NULL);
     CHECK(strstr(trace, "[0,0],[0,0],[0,0],[0,0],[0,0],[0,0],[0,0],[0,0],[0,0]") == NULL);
 }
 

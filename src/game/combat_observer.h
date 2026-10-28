@@ -346,11 +346,13 @@ void combat_observer_damage_committed(const char* attacker,
 // the target is already under it). In real time only a changed decision is
 // written. `desperate` (milestone AI-2) is true when the NPC's desperation
 // roll for this turn passed, letting it cast below its fatigue floor.
+// `waived` (milestone AI-5) is true when the spell roll was made only because
+// `follower casting` waived a healthy follower's restraint.
 #define COMBAT_OBSERVER_AI_CONSIDERED_MAX 8
 void combat_observer_ai_decided(const char* actor, const char* target,
     const char* danger, const char* origin, const char* action, int spell,
     const char* item, const char* weapon, int cast_chance, int cast_roll,
-    const int considered[][2], int considered_count, bool desperate);
+    const int considered[][2], int considered_count, bool desperate, bool waived);
 
 // CE (combat AI, milestone AI-1): an NPC choosing its weapon under `ai armor
 // aware`. `candidates` lists each weapon weighed as [description, score,

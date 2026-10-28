@@ -298,6 +298,19 @@ typedef enum ReplayKind {
     REPLAY_KIND_FACE,
     REPLAY_KIND_STAY,
     REPLAY_KIND_RUN,
+    // Follower casting, AI-5 (2026-10-27):
+    //   recruit <id>
+    //       the critter becomes the player's follower (`critter_follow`,
+    //       forced past its follow checks), as a recruiting dialogue does.
+    //   npc <id> college <college> <level> / level <n> / packet <n> /
+    //       cast-highest <0|1> / magick <n>
+    //       one of an NPC's map-instance fields set, so a bench can build a
+    //       character such as Arronax from a spawned critter: a spell
+    //       college's level, its level, its AI parameter set, and the
+    //       `ONF_CAST_HIGHEST` flag, and its magick points (the AI lists no
+    //       spell of a critter with none).
+    REPLAY_KIND_RECRUIT,
+    REPLAY_KIND_NPC,
 } ReplayKind;
 
 // A cast's target, which is a third shape: the caster, an object or a tile.
@@ -1000,6 +1013,39 @@ static bool replay_parse_line(const char* text, ReplayCommand* command)
 
     // `face <id> [<rotation>]` (DB-3): the rotation in `count`, -1 for
     // towards the player.
+    if (strcmp(kind, "recruit") == 0) {
+        command->kind = REPLAY_KIND_RECRUIT;
+        replay_copy_target(command, tokens[index++]);
+        return index == count;
+    }
+
+    // `npc <id> <key> <a> [b]`: `stat` 0 college (a college, b level),
+    // 1 level, 2 packet, 3 cast-highest, 4 magick; the values in `dx` and `dy`.
+    if (strcmp(kind, "npc") == 0) {
+        static const char* keys[] = { "college", "level", "packet", "cast-highest", "magick" };
+        int key;
+
+        command->kind = REPLAY_KIND_NPC;
+        replay_copy_target(command, tokens[index++]);
+        if (index >= count) {
+            return false;
+        }
+        for (key = 0; key < 5 && strcmp(tokens[index], keys[key]) != 0; key++) {
+        }
+        if (key == 5) {
+            return false;
+        }
+        index++;
+        command->stat = key;
+        if (index >= count || !replay_parse_int(tokens[index++], &(command->dx))) {
+            return false;
+        }
+        if (key == 0 && (index >= count || !replay_parse_int(tokens[index++], &(command->dy)) || command->dx < 0 || command->dx >= COLLEGE_COUNT || command->dy < 0 || command->dy > 5)) {
+            return false;
+        }
+        return index == count;
+    }
+
     if (strcmp(kind, "stay") == 0) {
         command->kind = REPLAY_KIND_STAY;
         replay_copy_target(command, tokens[index++]);
@@ -1294,7 +1340,7 @@ int replay_ui_count(void)
 bool replay_ui_describe(int index, char* buffer, size_t size)
 {
     const ReplayCommand* command;
-    static const char* kinds[] = { "object", "location", "key", "cast", "wield", "wait", "learn", "give", "throw", "skill", "raise", "prowl", "panel", "save", "inspect", "transfer", "take", "drop", "pickup", "wear", "skill-level", "stat-level", "jam", "afflict", "poison", "use", "xp", "train", "hour", "encounter", "hover", "screenshot", "spawn", "invulnerable", "await-death", "remove", "examine", "press", "click", "block", "face", "stay", "run" };
+    static const char* kinds[] = { "object", "location", "key", "cast", "wield", "wait", "learn", "give", "throw", "skill", "raise", "prowl", "panel", "save", "inspect", "transfer", "take", "drop", "pickup", "wear", "skill-level", "stat-level", "jam", "afflict", "poison", "use", "xp", "train", "hour", "encounter", "hover", "screenshot", "spawn", "invulnerable", "await-death", "remove", "examine", "press", "click", "block", "face", "stay", "run", "recruit", "npc" };
     int written;
     static const char* casts[] = { "self", "object", "location" };
 
@@ -1667,8 +1713,13 @@ void replay_ui_tick(void)
                 return;
             }
             loc = obj_field_int64_get(target_obj, OBJ_F_LOCATION);
-            tig_debug_printf("Replay: command %d: '%s' is at %d,%d\n", replay_next - 1,
-                command->target, (int)location_get_x(loc), (int)location_get_y(loc));
+            // AI-5 (2026-10-27): with its health and fatigue, so a bench can
+            // see who a spell hurt when no fight - and no damage event - began.
+            tig_debug_printf("Replay: command %d: '%s' is at %d,%d hp %d/%d fatigue %d/%d\n", replay_next - 1,
+                command->target, (int)location_get_x(loc), (int)location_get_y(loc),
+                object_hp_current(target_obj), object_hp_max(target_obj),
+                obj_type_is_critter(obj_field_int32_get(target_obj, OBJ_F_TYPE)) ? critter_fatigue_current(target_obj) : 0,
+                obj_type_is_critter(obj_field_int32_get(target_obj, OBJ_F_TYPE)) ? critter_fatigue_max(target_obj) : 0);
         } else if (command->stat == 1) {
             replay_inspect_awareness(pc_obj);
         } else if (command->stat == 7) {
@@ -2027,6 +2078,60 @@ void replay_ui_tick(void)
         tig_message_enqueue(&click);
         tig_debug_printf("Replay: command %d clicked at %d,%d\n", replay_next - 1,
             command->dx, command->dy);
+        return;
+    }
+
+    if (command->kind == REPLAY_KIND_RECRUIT) {
+        int64_t obj;
+        bool ok;
+
+        replay_stall_reported = false;
+        replay_next++;
+        if (!replay_resolve(command, &obj)) {
+            return;
+        }
+        ok = obj_field_int32_get(obj, OBJ_F_TYPE) == OBJ_TYPE_NPC && critter_follow(obj, pc_obj, true);
+        tig_debug_printf("Replay: command %d: '%s' %s\n", replay_next - 1, command->target,
+            ok ? "now follows the player" : "was not recruited");
+        return;
+    }
+
+    if (command->kind == REPLAY_KIND_NPC) {
+        int64_t obj;
+
+        replay_stall_reported = false;
+        replay_next++;
+        if (!replay_resolve(command, &obj)) {
+            return;
+        }
+        if (obj_field_int32_get(obj, OBJ_F_TYPE) != OBJ_TYPE_NPC) {
+            tig_debug_printf("Replay: command %d: '%s' is not an NPC\n", replay_next - 1, command->target);
+            return;
+        }
+        switch (command->stat) {
+        case 0:
+            spell_college_level_set(obj, command->dx, command->dy);
+            break;
+        case 1:
+            stat_base_set(obj, STAT_LEVEL, command->dx);
+            break;
+        case 2:
+            obj_field_int32_set(obj, OBJ_F_NPC_AI_DATA, command->dx);
+            break;
+        case 4:
+            stat_base_set(obj, STAT_MAGICK_POINTS, command->dx);
+            break;
+        default:
+            obj_field_int32_set(obj, OBJ_F_NPC_FLAGS,
+                command->dx != 0
+                    ? obj_field_int32_get(obj, OBJ_F_NPC_FLAGS) | ONF_CAST_HIGHEST
+                    : obj_field_int32_get(obj, OBJ_F_NPC_FLAGS) & ~ONF_CAST_HIGHEST);
+            break;
+        }
+        tig_debug_printf("Replay: command %d: '%s' npc %d %d %d: level %d, packet %d, cast-highest %d\n",
+            replay_next - 1, command->target, command->stat, command->dx, command->dy,
+            stat_level_get(obj, STAT_LEVEL), obj_field_int32_get(obj, OBJ_F_NPC_AI_DATA),
+            (obj_field_int32_get(obj, OBJ_F_NPC_FLAGS) & ONF_CAST_HIGHEST) != 0 ? 1 : 0);
         return;
     }
 

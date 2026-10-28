@@ -355,6 +355,10 @@ char* magictech_spell_name(int num);
 void magictech_cheat_mode_on(void);
 int magictech_get_range(int magictech);
 int magictech_aoe_radius_get(int magictech);
+// CE (combat AI, milestone AI-5): the radius of a spell whose area is centred
+// on its caster (its begin AoE takes `Tgt_Self` with `Tgt_Obj_Radius`: Jolt,
+// Nightmare), or -1 for any other spell.
+int magictech_caster_centred_radius(int magictech);
 int magictech_min_intelligence(int magictech);
 int magictech_min_willpower(int magictech);
 int magictech_get_cost(int magictech);

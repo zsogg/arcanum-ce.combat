@@ -26,6 +26,7 @@ void test_creature_rules_suite(void);
 void test_trap_spotting_suite(void);
 void test_penetration_suite(void);
 void test_ai_targeting_suite(void);
+void test_ai_follower_casting_suite(void);
 void test_followers_suite(void);
 void test_carried_lights_suite(void);
 void test_schematic_cap_suite(void);
@@ -110,6 +111,7 @@ int main(void)
     test_trap_spotting_suite();
     test_penetration_suite();
     test_ai_targeting_suite();
+    test_ai_follower_casting_suite();
     test_followers_suite();
     test_carried_lights_suite();
     test_schematic_cap_suite();

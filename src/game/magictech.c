@@ -1616,6 +1616,23 @@ int magictech_aoe_radius_get(int magictech)
     }
 }
 
+// CE (combat AI, milestone AI-5): see `magictech.h`.
+int magictech_caster_centred_radius(int magictech)
+{
+    const TargetParams* params;
+
+    if (!magictech_initialized || magictech < 0 || magictech >= MT_SPELL_COUNT) {
+        return -1;
+    }
+
+    params = &(magictech_spells[magictech].target_params[MAGICTECH_ACTION_BEGIN]);
+    if ((params->tgt & TGT_SELF) == 0 || (params->tgt & TGT_OBJ_RADIUS) == 0) {
+        return -1;
+    }
+
+    return params->radius;
+}
+
 // 0x4502E0
 int magictech_min_intelligence(int magictech)
 {

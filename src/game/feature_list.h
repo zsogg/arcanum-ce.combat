@@ -158,5 +158,11 @@ FEATURE(HEARING_ALERTS, "hearing alerts", false)
 // themselves, and a Master of Bow or Throwing never fumbles, as one of Melee.
 // Firearms keep `firearm fumbles`.
 FEATURE(WEAPON_FUMBLES, "weapon fumbles", false)
+// Combat AI AI-5 (zsogg, 2026-10-27), read by `ai_magictech_chance` and
+// `ai_check_use_spell`: a caster follower of the player casts while it and the
+// player are healthy, keeping its fatigue reserve until someone is hurt; and
+// `ONF_CAST_HIGHEST` no longer limits a follower of the player to each
+// college's highest spell (Arronax).
+FEATURE(FOLLOWER_CASTING, "follower casting", false)
 
 // clang-format on
