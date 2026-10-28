@@ -3846,6 +3846,40 @@ bool ai_is_stronger(int64_t attacker_obj, int64_t target_obj)
     return target_level >= attacker_level;
 }
 
+// CE (combat AI, milestone AI-6 F4): the player a caster follower should
+// protect - its PC leader, when some critter outside the party within 20
+// tiles has the player as its combat focus - or NULL.
+static int64_t ai_player_under_attack(int64_t follower_obj)
+{
+    int64_t pc_obj;
+    int64_t found = OBJ_HANDLE_NULL;
+    ObjectList objects;
+    ObjectNode* node;
+
+    if (!feature_enabled(FEATURE_FOLLOWER_CASTING)
+        || obj_field_int32_get(follower_obj, OBJ_F_TYPE) != OBJ_TYPE_NPC) {
+        return OBJ_HANDLE_NULL;
+    }
+
+    pc_obj = critter_pc_leader_get(follower_obj);
+    if (pc_obj == OBJ_HANDLE_NULL) {
+        return OBJ_HANDLE_NULL;
+    }
+
+    ai_objects_in_radius(pc_obj, 20, &objects, OBJ_TM_NPC);
+    for (node = objects.head; node != NULL; node = node->next) {
+        if (!critter_is_dead(node->obj)
+            && obj_field_handle_get(node->obj, OBJ_F_NPC_COMBAT_FOCUS) == pc_obj
+            && !critter_party_same(node->obj, pc_obj)) {
+            found = pc_obj;
+            break;
+        }
+    }
+    object_list_destroy(&objects);
+
+    return found;
+}
+
 // 0x4ABF10
 bool ai_choose_action_from_list(Ai* ai, S4ABF10* a2)
 {
@@ -3853,6 +3887,12 @@ bool ai_choose_action_from_list(Ai* ai, S4ABF10* a2)
     int base;
     int idx;
     MagicTechAiActionListEntry* entry;
+    // CE (combat AI, milestone AI-6 F4): under `follower casting`, while an
+    // enemy targets the player, a follower's defensive spell that can go on
+    // another goes on the player; refused there, on itself as stock.
+    int64_t protect_obj = (a2->flags & 0x4) != 0
+        ? ai_player_under_attack(ai->obj)
+        : OBJ_HANDLE_NULL;
 
     if (a2->cnt <= 0) {
         return false;
@@ -3893,16 +3933,38 @@ bool ai_choose_action_from_list(Ai* ai, S4ABF10* a2)
             return true;
         }
 
+        // CE (combat AI, milestone AI-6 F4): the player first, as above. Its
+        // weighing is kept for `ai.decided` too, before the caster's own.
+        bool on_player = false;
+        if (protect_obj != OBJ_HANDLE_NULL
+            && obj == ai->obj
+            && magictech_spell_reaches_others(entry->spell)) {
+            int protect_code = magictech_is_under_influence_of(protect_obj, entry->spell)
+                ? 13
+                : ai_check_use_spell(ai->obj, entry->item_obj, protect_obj, entry->spell);
+            if (ai->considered_count < COMBAT_OBSERVER_AI_CONSIDERED_MAX) {
+                ai->considered[ai->considered_count][0] = entry->spell;
+                ai->considered[ai->considered_count][1] = protect_code;
+                ai->considered_count++;
+            }
+            if (protect_code == 0) {
+                obj = protect_obj;
+                on_player = true;
+            }
+        }
+
         // CE (combat AI, milestone AI-0): each spell weighed is kept for
         // `ai.decided`, in the same calls and order as the original's test.
         // "Already under it" reads 13, outside `ai_check_use_spell`'s codes:
         // until 2026-10-28 it read 9, which MG-1 had also given to "not
         // enough AP", so a caster out of AP after a buff seemed to refuse a
         // foe as already under its spells.
-        int code = magictech_is_under_influence_of(obj, entry->spell)
+        int code = on_player
+            ? 0
+            : magictech_is_under_influence_of(obj, entry->spell)
             ? 13
             : ai_check_use_spell(ai->obj, entry->item_obj, obj, entry->spell);
-        if (ai->considered_count < COMBAT_OBSERVER_AI_CONSIDERED_MAX) {
+        if (!on_player && ai->considered_count < COMBAT_OBSERVER_AI_CONSIDERED_MAX) {
             ai->considered[ai->considered_count][0] = entry->spell;
             ai->considered[ai->considered_count][1] = code;
             ai->considered_count++;

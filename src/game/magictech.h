@@ -359,6 +359,11 @@ int magictech_aoe_radius_get(int magictech);
 // on its caster (its begin AoE takes `Tgt_Self` with `Tgt_Obj_Radius`: Jolt,
 // Nightmare), or -1 for any other spell.
 int magictech_caster_centred_radius(int magictech);
+// CE (combat AI, milestone AI-6 F4): whether a spell's begin targets (`tgt`)
+// take a critter other than its caster - the player among them - rather than
+// only the caster (`Tgt_Self`, Blur Sight). Pure; the second asks it of a spell.
+bool magictech_tgt_reaches_others(uint64_t tgt);
+bool magictech_spell_reaches_others(int magictech);
 // CE (`grenade blasts`): the `ai_attack` flags for a spell or blast hit; 0x01,
 // accidental, between members of one party.
 int magictech_attack_flags(int64_t attacker_obj, int64_t target_obj);

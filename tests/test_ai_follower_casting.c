@@ -5,7 +5,9 @@
 // not held back. Pure, so each part is pinned before it is seen in a fight.
 
 #include "game/ai.h"
+#include "game/magictech.h"
 #include "game/obj_flags.h"
+#include "game/target.h"
 
 #include "test_harness.h"
 
@@ -104,6 +106,28 @@ TEST(a_spell_centred_on_its_caster_reaches_only_its_radius)
     CHECK(!ai_caster_centred_out_of_reach(-1, 30));
 }
 
+// AI-6 F4 (7a): which buffs can go on the player, by the spell's begin
+// targets in rules/spelllist.mes.
+TEST(a_buff_on_any_critter_can_go_on_the_player)
+{
+    // Agility of Fire, Shield of Protection: [Begin]AoE: Tgt_Obj_T_Critter |
+    // Tgt_Obj_No_ST_Critter_Dead (and the loader's no-invulnerable).
+    CHECK(magictech_tgt_reaches_others(TGT_OBJ_T_CRITTER | TGT_OBJ_NO_ST_CRITTER_DEAD | TGT_OBJ_NO_INVULNERABLE));
+    // Reflection Shield: AoE: Tgt_Object.
+    CHECK(magictech_tgt_reaches_others(TGT_OBJECT));
+}
+
+TEST(a_self_only_buff_stays_on_its_caster)
+{
+    // Blur Sight: AoE: Tgt_Self.
+    CHECK(!magictech_tgt_reaches_others(TGT_SELF));
+    // Jolt-like: centred on the caster.
+    CHECK(!magictech_tgt_reaches_others(TGT_SELF | TGT_OBJ_RADIUS | TGT_OBJ_T_CRITTER));
+    // A critter spell that excludes the player.
+    CHECK(!magictech_tgt_reaches_others(TGT_OBJ_T_CRITTER | TGT_OBJ_NO_T_PC));
+    CHECK(!magictech_tgt_reaches_others(TGT_NONE));
+}
+
 void test_ai_follower_casting_suite(void)
 {
     RUN(a_leaderless_npc_has_the_stock_chance);
@@ -115,4 +139,6 @@ void test_ai_follower_casting_suite(void)
     RUN(a_waiver_is_reported_only_when_it_is_what_allowed_the_roll);
     RUN(cast_highest_binds_all_but_a_follower_of_the_player_under_the_switch);
     RUN(a_spell_centred_on_its_caster_reaches_only_its_radius);
+    RUN(a_buff_on_any_critter_can_go_on_the_player);
+    RUN(a_self_only_buff_stays_on_its_caster);
 }

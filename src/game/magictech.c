@@ -1633,6 +1633,24 @@ int magictech_caster_centred_radius(int magictech)
     return params->radius;
 }
 
+// CE (combat AI, milestone AI-6 F4): see `magictech.h`.
+bool magictech_tgt_reaches_others(uint64_t tgt)
+{
+    return (tgt & TGT_SELF) == 0
+        && (tgt & TGT_OBJ_NO_T_PC) == 0
+        && (tgt & (TGT_OBJECT | TGT_OBJ_T_CRITTER | TGT_OBJ_T_PC)) != 0;
+}
+
+// CE (combat AI, milestone AI-6 F4): see `magictech.h`.
+bool magictech_spell_reaches_others(int magictech)
+{
+    if (!magictech_initialized || magictech < 0 || magictech >= MT_SPELL_COUNT) {
+        return false;
+    }
+
+    return magictech_tgt_reaches_others(magictech_spells[magictech].target_params[MAGICTECH_ACTION_BEGIN].tgt);
+}
+
 // 0x4502E0
 int magictech_min_intelligence(int magictech)
 {
