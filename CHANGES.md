@@ -1139,13 +1139,14 @@ All of UAP 2.0.2's fixes to the game program are part of Arcanum CE, and on.
 - **Half-elves** take the elven Beauty cap as well as the elven Dexterity
   cap.
 
-**UAP's four optional extras**, all on:
+**UAP's four optional extras**, three on:
 
 - **Levels up to 100** (the original stops at 50).
 - **No experience per hit:** a kill gives its full experience instead.
 - **Master Educator:** the Educator background trains followers for any
   character. A follower one training step below you is raised to your level.
-- **No combat music.**
+- **No combat music** is off: CE's combat music shuffle (below) is on in its
+  place.
 
 **Followers**
 
@@ -1192,6 +1193,13 @@ All of UAP 2.0.2's fixes to the game program are part of Arcanum CE, and on.
   lower, matching UAP's tab art.
 
 ### 4.2 CE's own rules, always on
+
+- **Varied combat music** (`combat music shuffle`, new since release 1). The
+  original loops one track through every fight, a copy of the dwarven theme.
+  Now a fight opens with the usual sting, then plays the game's area music in
+  random order: never the track the area was playing, never the same track
+  twice running. Release 1 turned combat music off instead (UAP's option),
+  which is now off.
 
 - **NPCs heal only living patients** (`heal living patients`, new since
   release 1). An NPC's first aid, on itself, on its allies or when it offers

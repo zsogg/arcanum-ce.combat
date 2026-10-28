@@ -100,12 +100,13 @@ to play the same game. Where it differs, it is on purpose:
   - several drawing errors.
 - **Safe saving.** A failed or interrupted save no longer damages the save it
   was replacing.
-- **The Unofficial Arcanum Patch's fixes**, all of them, and its four
+- **The Unofficial Arcanum Patch's fixes**, all of them, and three of its
   options:
   - levels up to 100;
   - the Master Educator;
-  - no experience per hit (a kill gives its full worth instead);
-  - no combat music.
+  - no experience per hit (a kill gives its full worth instead).
+- **Varied combat music.** A fight plays the game's area music in random
+  order instead of looping one track.
 - **Your own save folder, specific to CE** (see Saves, below).
 - **Native on Linux and Windows**, using the High Resolution Patch's resolution,
   in a window or full screen.
