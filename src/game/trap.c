@@ -1,5 +1,7 @@
 #include "game/trap.h"
 
+#include <stdio.h>
+
 #include "game/ai.h"
 #include "game/animfx.h"
 #include "game/combat.h"

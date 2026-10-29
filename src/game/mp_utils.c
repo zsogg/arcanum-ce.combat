@@ -17,6 +17,7 @@
 #include "game/proto.h"
 #include "game/random.h"
 #include "game/roof.h"
+#include "game/scroll.h"
 #include "game/sector.h"
 #include "game/sector_object_list.h"
 #include "game/spell.h"
