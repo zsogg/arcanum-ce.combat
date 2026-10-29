@@ -323,6 +323,14 @@ typedef enum ReplayKind {
     //       a follower given the follower menu's Attack, Wait Here or Back Off,
     //       through the calls the menu's broadcast makes.
     REPLAY_KIND_ORDER,
+    // Playtest tools, the shop census (2026-10-29):
+    //   restock <id> <set> <times>
+    //       that container's (or critter's) inventory source set to an
+    //       `InvenSource.mes` set and
+    //       restocked that many times through `item_inventory_restock_contents`,
+    //       as a shop is; one log line per item description (the number the
+    //       file lists) with the number of restocks it appeared in.
+    REPLAY_KIND_RESTOCK,
 } ReplayKind;
 
 // A cast's target, which is a third shape: the caster, an object or a tile.
@@ -1112,6 +1120,17 @@ static bool replay_parse_line(const char* text, ReplayCommand* command)
         return index == count;
     }
 
+    if (strcmp(kind, "restock") == 0) {
+        command->kind = REPLAY_KIND_RESTOCK;
+        replay_copy_target(command, tokens[index++]);
+        if (index + 2 != count
+            || !replay_parse_int(tokens[index++], &(command->count)) || command->count <= 0
+            || !replay_parse_int(tokens[index++], &(command->dx)) || command->dx <= 0) {
+            return false;
+        }
+        return true;
+    }
+
     if (strcmp(kind, "stay") == 0) {
         command->kind = REPLAY_KIND_STAY;
         replay_copy_target(command, tokens[index++]);
@@ -1406,7 +1425,7 @@ int replay_ui_count(void)
 bool replay_ui_describe(int index, char* buffer, size_t size)
 {
     const ReplayCommand* command;
-    static const char* kinds[] = { "object", "location", "key", "cast", "wield", "wait", "learn", "give", "throw", "skill", "raise", "prowl", "panel", "save", "inspect", "transfer", "take", "drop", "pickup", "wear", "skill-level", "stat-level", "jam", "afflict", "poison", "use", "xp", "train", "hour", "encounter", "hover", "screenshot", "spawn", "invulnerable", "await-death", "remove", "examine", "press", "click", "block", "face", "stay", "run", "recruit", "npc", "hurt", "order" };
+    static const char* kinds[] = { "object", "location", "key", "cast", "wield", "wait", "learn", "give", "throw", "skill", "raise", "prowl", "panel", "save", "inspect", "transfer", "take", "drop", "pickup", "wear", "skill-level", "stat-level", "jam", "afflict", "poison", "use", "xp", "train", "hour", "encounter", "hover", "screenshot", "spawn", "invulnerable", "await-death", "remove", "examine", "press", "click", "block", "face", "stay", "run", "recruit", "npc", "hurt", "order", "restock" };
     int written;
     static const char* casts[] = { "self", "object", "location" };
 
@@ -1455,6 +1474,10 @@ bool replay_ui_describe(int index, char* buffer, size_t size)
     if (command->kind == REPLAY_KIND_ORDER && written >= 0 && (size_t)written < size) {
         snprintf(buffer + written, size - (size_t)written, " order=%d whom=%s",
             command->stat, command->target2);
+    }
+    if (command->kind == REPLAY_KIND_RESTOCK && written >= 0 && (size_t)written < size) {
+        snprintf(buffer + written, size - (size_t)written, " set=%d times=%d",
+            command->count, command->dx);
     }
     if (command->kind == REPLAY_KIND_FACE && written >= 0 && (size_t)written < size) {
         snprintf(buffer + written, size - (size_t)written, " rotation=%d", command->count);
@@ -2297,6 +2320,78 @@ void replay_ui_tick(void)
             replay_next - 1,
             object_hp_current(who_obj), object_hp_max(who_obj),
             critter_fatigue_current(who_obj), critter_fatigue_max(who_obj));
+        return;
+    }
+
+    if (command->kind == REPLAY_KIND_RESTOCK) {
+        int64_t obj;
+        int protos[256];
+        int seen[256];
+        int last_round[256];
+        int distinct = 0;
+        int source_fld;
+        int num_fld;
+        int list_fld;
+        int round;
+        int index;
+        int known;
+
+        replay_stall_reported = false;
+        replay_next++;
+        if (!replay_resolve(command, &obj)) {
+            return;
+        }
+        // A container, as a shop's stock is: a critter refuses what it
+        // cannot carry, so most of a long list never reaches one.
+        if (obj_field_int32_get(obj, OBJ_F_TYPE) == OBJ_TYPE_CONTAINER) {
+            source_fld = OBJ_F_CONTAINER_INVENTORY_SOURCE;
+            num_fld = OBJ_F_CONTAINER_INVENTORY_NUM;
+            list_fld = OBJ_F_CONTAINER_INVENTORY_LIST_IDX;
+            obj_field_int32_set(obj, OBJ_F_CONTAINER_FLAGS,
+                obj_field_int32_get(obj, OBJ_F_CONTAINER_FLAGS) & ~OCOF_INVEN_SPAWN_ONCE);
+        } else if (obj_type_is_critter(obj_field_int32_get(obj, OBJ_F_TYPE))) {
+            source_fld = OBJ_F_CRITTER_INVENTORY_SOURCE;
+            num_fld = OBJ_F_CRITTER_INVENTORY_NUM;
+            list_fld = OBJ_F_CRITTER_INVENTORY_LIST_IDX;
+        } else {
+            tig_debug_printf("Replay: command %d: '%s' holds no inventory\n", replay_next - 1, command->target);
+            return;
+        }
+        obj_field_int32_set(obj, source_fld, command->count);
+        for (round = 0; round < command->dx; round++) {
+            int count;
+
+            item_inventory_restock_contents(obj);
+            count = obj_field_int32_get(obj, num_fld);
+            for (index = 0; index < count; index++) {
+                int64_t item_obj = obj_arrayfield_handle_get(obj, list_fld, index);
+                // The description number, which is what InvenSource.mes
+                // lists (not the replay rows' prototype, 20 above it).
+                int proto = obj_field_int32_get(item_obj, OBJ_F_DESCRIPTION);
+
+                for (known = 0; known < distinct && protos[known] != proto; known++) {
+                }
+                if (known == distinct) {
+                    if (distinct == 256) {
+                        continue;
+                    }
+                    protos[distinct] = proto;
+                    last_round[distinct] = -1;
+                    seen[distinct++] = 0;
+                }
+                // Count a restock once per prototype, however many it held.
+                if (last_round[known] != round) {
+                    last_round[known] = round;
+                    seen[known]++;
+                }
+            }
+        }
+        tig_debug_printf("Replay: command %d restock: set %d, %d restocks, %d prototype(s)\n",
+            replay_next - 1, command->count, command->dx, distinct);
+        for (known = 0; known < distinct; known++) {
+            tig_debug_printf("Replay: restock set %d description %d in %d of %d\n",
+                command->count, protos[known], seen[known], command->dx);
+        }
         return;
     }
 

@@ -959,6 +959,19 @@ TEST(the_hurt_row_sets_wounds_on_the_player_or_a_critter)
     CHECK(!load_script("0 hurt 1 1 @h now\n"));
 }
 
+TEST(the_restock_row_restocks_a_critter_from_a_set)
+{
+    // Playtest tools (2026-10-29): the shop census restocks one inventory
+    // many times from a chosen InvenSource.mes set.
+    CHECK(load_script("0 restock @s 7 400\n"));
+    CHECK_INT(replay_ui_count(), 1);
+    CHECK(row_is(0, "turn=0 now=0 kind=restock target=@s loc=0 aim=0 spell=0 cast=- wait=0 set=7 times=400"));
+    CHECK(!load_script("0 restock @s 7\n")); // how many times
+    CHECK(!load_script("0 restock @s 0 10\n")); // set 0 is no source
+    CHECK(!load_script("0 restock @s 7 0\n"));
+    CHECK(!load_script("0 restock @s 7 10 now\n"));
+}
+
 TEST(the_order_row_gives_a_follower_the_menus_orders)
 {
     // AI-6 F2 (2026-10-28): Attack, Wait Here and Back Off from a script.
@@ -2060,6 +2073,7 @@ void test_combat_observer_suite(void)
     RUN(the_remove_row_names_the_object_it_takes_off_the_map);
     RUN(the_skill_stat_and_training_rows_take_an_optional_critter);
     RUN(the_hurt_row_sets_wounds_on_the_player_or_a_critter);
+    RUN(the_restock_row_restocks_a_critter_from_a_set);
     RUN(the_order_row_gives_a_follower_the_menus_orders);
     RUN(the_examine_row_names_the_object_it_shows);
     RUN(the_afflict_row_names_a_debuff_critical);
