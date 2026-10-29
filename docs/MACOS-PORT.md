@@ -135,6 +135,21 @@ and see output:
 
 `-window` runs in a window; without it the game is fullscreen.
 
+**Testing downloaded builds from Terminal (developers only).** A build you
+compile yourself is not quarantined and runs as it is. A build downloaded
+from the CI runner or a release is quarantined, and macOS blocks its
+unsigned binary. Instead of running `xattr` on every new download, you can
+let Terminal run such binaries (macOS 13 Ventura or later): **System
+Settings > Privacy & Security > Developer Tools**, add Terminal, turn it
+on, and restart Terminal.
+
+The trade-off: every program started from that Terminal then skips
+Gatekeeper's check, not just this game. Use it on a development machine
+you are comfortable with, or turn it off again after testing. It does not
+help players: it covers only programs started from Terminal, not an app
+opened in Finder, and it does not stop App Translocation (below). Players
+still use **Open Anyway** or `xattr`.
+
 ## Where macOS is likely to differ
 
 This is where to look first, roughly from the most to the least likely. None
