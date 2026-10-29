@@ -106,6 +106,80 @@ few ready shots and must be reloaded.
 - **Followers on Defensive** fight within 8 tiles of you.
 - **Potions:** an enemy drinks at most two a fight, and drinking costs 6 AP.
 
+**Followers** (new since release 1)
+
+*Casting*
+
+- **Caster followers cast from the start of a fight.** In the original a
+  follower rolled no chance at all to cast while it and you were above half
+  health, unless its foe outranked it, so a mage such as Arronax (level 50,
+  so almost nothing outranks him) or Raven punched through most fights. Now
+  a follower that keeps its distance, carries no weapon, or has one that
+  barely gets through the foe's armour summons, protects and attacks with
+  its spells like any other caster. Fighters who know a spell or two keep
+  the original rule.
+- **A reserve while everyone is healthy:** such a follower stops casting
+  below a fifth of its fatigue and never risks fainting. Once you or it are
+  hurt, it may spend everything, as other casters do.
+- **Arronax casts every spell he knows** - all seven, not only the highest
+  of each college, as his map entry otherwise insists.
+- **No wasted turns on spells that cannot reach:** a follower does not cast
+  Jolt or Nightmare, which work only around the caster, at a foe out of
+  their reach.
+- **Protections go on you first** while an enemy is attacking you: Agility
+  of Fire, Shield of Protection, the Water and Earth bodies and the like,
+  unless you already have them or are too technological for them to work.
+  Otherwise it protects itself, as before.
+- A follower's area spells already spared you and the party in the
+  original, so there is no friendly fire to avoid.
+
+*Healing*
+
+- **Every patient, every turn, once you are hurt:** with you at half health
+  or below, a healer (Virgil, Raven, Dante and others) looks at everyone it
+  could heal every turn. In the original a healer already in the fight
+  looked at anyone above 30% health only one turn in five.
+- **The worst hurt first,** rather than itself, then you, then the others.
+- **A tired healer still heals you.** In the original a healer short of
+  fatigue gave its patient a Fatigue Restorer, even a dying player, in place
+  of a heal. Now it restores fatigue only to a patient who is the tired one,
+  and only after healing a badly hurt one.
+- **No heals that cannot work:** a White Necromancy heal, spell or item,
+  that would fail three times in four or more on a strongly technological
+  character is not tried. The original kept casting it into a dying
+  technologist until the healer fainted.
+
+*Orders and conduct*
+
+- **An attack order holds:** a follower you order to attack goes after its
+  target however far away it is. Before, the 8-tile leash called it back.
+- **Wait Here is a post:** a follower left waiting defends itself and
+  whatever comes within 8 tiles of where it stands, instead of measuring
+  from you.
+- **No running from other people's fights:** in the original a follower who
+  saw a stranger attacked fled, then surrendered, and sat the rest of the
+  fight out.
+- **Back Off is not a vow of martyrdom:** a follower told to back off still
+  fights anyone outside the party who attacks it, and is then back in the
+  fight.
+- **A refusal is said:** a good follower who will not fight a good attacker,
+  or one of its own people or faction, now tells you so, once per attacker,
+  instead of standing there.
+
+*Gear*
+
+- **Your gear choices stick:** what you put in a follower's hands or on its
+  back stays there while it can use it. In the original it re-chose its
+  weapon by damage, and its armour and rings by price, at every change to
+  its pack and at every fight. To let it choose, empty the slot.
+- **The gun comes back:** a gunman follower who switched to its melee
+  backup when out of ammunition or with an enemy beside it has the gun back
+  in its hands after the fight.
+- **It leaves what you drop:** an idle follower no longer picks up nearby
+  items.
+- **Trained weapons first, for everyone:** an NPC, follower or enemy,
+  prefers a weapon that reaches its target only if it is trained with it.
+
 **Creatures** (new since release 1)
 
 - **A critical hit does what suits the body it lands on.** Six kinds of body:
@@ -168,6 +242,84 @@ few ready shots and must be reloaded.
 - **The Throwing Dagger**, wielded and thrown, keeps its target and can hurt
   it. (In the original a wielded thrown weapon injured nobody.)
 - **A throw under way** plays out.
+
+**Fumbles** (new since release 1)
+
+A fumble with a melee weapon, a bow, a thrown weapon or bare hands no
+longer always strikes its wielder:
+
+| what happens | chance | |
+|---|---|---|
+| **Knocked down** | 50% | you stumble and fall; getting up costs 6 AP in turn-based (other knockdowns, 5) |
+| you hit yourself | 30% | for the weapon's full damage |
+| **Weapon dropped** | 15% | it lands beside you; bare hands stumble instead |
+| you hit yourself critically | 5% | with a critical's effects |
+
+- **Training protects:** at Expert in the weapon's skill a self-hit becomes
+  a stumble, and a Master of Melee, Bow or Throwing never fumbles.
+- **A thrown weapon you drop** lands at your feet, unthrown.
+- **A fumbled grenade** (or Molotov, or gas) flies a tile in a random
+  direction and goes off there, with you a tile from the blast.
+- **A bow's or thrown weapon's self-hit lands.** In the original it was
+  aimed at your own feet and vanished, so a fumbled grenade never went off.
+- **Followers and enemies** fumble by the same table.
+- Firearms keep their own table (Jams, above).
+
+**Grenades** (new since release 1)
+
+Where a grenade lands now decides what it does. This covers the Explosive,
+Electrocution and Concussion grenades and the Grenade Launcher's burst,
+each a 2-tile blast.
+
+- **Everyone in the blast is hurt, you and your followers included.** The
+  original spared the thrower's party, whoever threw (an enemy's grenade
+  already hurt its own side). The blast's knockback reaches you too, so a
+  grenade at your own feet throws you back.
+- **Damage falls off fast:** full on the tile where it lands, half one tile
+  away and a fifth at the edge, for health and fatigue alike, before armour
+  and resistance.
+- **Each victim rolls its own critical:** 15% at the centre, 5% one tile out,
+  never at the edge. A blast critical does 20% more damage and knocks the
+  victim down; someone just back up from a critical resists it.
+- **Your blast does not offend your followers.** A blast or spell that
+  catches your own party counts as an accident, as a stray shot does, so a
+  follower may complain but stays. In the original a follower caught in
+  your grenade left the party after the fight.
+- **Followers throw with care:** a follower will not throw a grenade where
+  you or another ally would be inside the blast.
+- **A missed throw scatters as before:** (20 - Throwing) / 5 + 1 tiles in a
+  random direction, 5 at no skill and 1 at full, never further than the
+  throw itself.
+- Mustard gas, fire (the Molotov), the poison explosion and the placed bombs
+  (dynamite, the time bomb) keep their original rules.
+
+**Sight and hearing** (new since release 1)
+
+NPCs notice you less easily, above all through walls. Quest and dialogue
+scripts keep the original checks, so no quest changes.
+
+- **Walls and closed doors stop ordinary noise:** walking, talking, a
+  sword's or dagger's blow and a picked lock are not heard through them. In
+  the original, hearing went through a wall at the cost of 2 tiles of range.
+  Loud sounds - a blunt weapon's blow (the mace, hammers, clubs, staves) and
+  any firearm but the hushed ones - carry a third of their range through.
+  An open door is open air, and in the open hearing is as before.
+- **Standing still makes no noise:** an NPC hears someone standing still no
+  further than a prowler, about 2 tiles; walking or running, about 5, as
+  before.
+- **Being heard only draws a look.** In the original a heard target was
+  treated as seen. Now an NPC that hears you but cannot see you walks to
+  where the sound came from and looks, once per sound; it attacks you,
+  defends a victim or catches you at a lock only once it sees you. In a
+  turn-based fight a bystander only turns to look, and an NPC already
+  fighting you keeps track of you, as before.
+- **Windows, glass doors and fences don't hide you:** an NPC now sees
+  through anything see-through, where the original treated them as walls.
+  Shots are still stopped by them, walls and wooden doors still hide you,
+  and you still cannot open a container you see only through a window.
+- **The edge of a view sees half as far:** straight ahead and one step to
+  either side an NPC sees its full range, at the two outer steps half of it,
+  and behind it nothing, as before.
 
 **The opening, poison and prowling**
 
@@ -559,6 +711,8 @@ the game now plays as the original here.
   reputation file was misread and they had no effect. (#96)
 - A follower told to wait now waits for a charismatic leader and eventually
   gives up on an ordinary one; in release 1 it was the other way round. (#80)
+- A follower's Wait Here order that runs out now ends that follower's wait;
+  in release 1 it named no follower, and could crash the game. (#372)
 - Followers now judge an enemy's strength by the original level bands; in
   release 1 they treated any equal-level foe as stronger and cast spells at
   it. (#81)
