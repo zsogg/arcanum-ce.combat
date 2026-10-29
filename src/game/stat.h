@@ -85,13 +85,21 @@ bool stat_poison_timeevent_process(TimeEvent* timeevent);
 // Outside combat it keeps the stock clock.
 #define STAT_POISON_TURNS_PER_TICK 2
 #define STAT_POISON_TURN_LENGTHS_PER_TICK 2
-// Pure: a turn of a poisoned critter has come round; true when it ticks.
-bool stat_poison_turn_counts(int* turns);
+// Pure: a turn of a poisoned critter has come round; true when it ticks, every
+// `per_tick` turns.
+bool stat_poison_turn_counts(int* turns, int per_tick);
 // Pure: `delta_ms` of real-time combat passed; how many ticks fall due.
 int stat_poison_time_counts(unsigned int* ms, int delta_ms, int period_ms);
 // The engine side: `obj`'s turn-based turn has come round.
 void stat_poison_turn_reached(int64_t obj);
 // Real milliseconds while the game is not paused.
 void stat_poison_tick(int delta_ms);
+// CE (poison retune; zsogg, 2026-10-28). Pure: a tick's damage at `level` -
+// stock 1, 2 from 200 and 3 from 550; under `poison every turn` in combat,
+// `scaled`, 1 + level / 100.
+int stat_poison_tick_damage(int level, bool scaled);
+// Pure: `poison dose cap` - the level after a hit of `dose` lands on `level`:
+// at most four times the dose, and never lower than before.
+int stat_poison_dose_capped(int level, int dose);
 
 #endif /* ARCANUM_GAME_STAT_H_ */

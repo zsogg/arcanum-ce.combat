@@ -60,6 +60,16 @@ FEATURE(SPELL_NO_STACKING, "spell no stacking", false)
 FEATURE(SUMMONING_SICKNESS, "summoning sickness", false)
 FEATURE(OPENING_SAFEGUARD, "opening safeguard", false)
 FEATURE(POISON_PER_TURN, "poison per turn", false)
+// Poison retune (zsogg, 2026-10-28), in `stat.c`; the options are in the
+// design record. `poison every turn`: in combat a tick on every turn (every
+// turn length in real time) of 1 + level / 100, and it paces poison by turns
+// with or without `poison per turn`. `poison short tail`: out of combat each
+// tick also lowers the level by the poison recovery rate (Constitution), in
+// place of the 120-game-second recovery. `poison dose cap` (`combat_dmg`): a
+// hit raises the poison level to at most four times its own dose.
+FEATURE(POISON_EVERY_TURN, "poison every turn", false)
+FEATURE(POISON_SHORT_TAIL, "poison short tail", false)
+FEATURE(POISON_DOSE_CAP, "poison dose cap", false)
 FEATURE(PROWL_ATTACK_REVEALS, "prowl attack reveals", false)
 FEATURE(PROWL_FOLLOWERS_NEED_SKILL, "prowl followers need skill", false)
 FEATURE(PROWL_IN_COMBAT_MASTER_ONLY, "prowl in combat master only", false)

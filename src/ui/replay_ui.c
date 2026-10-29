@@ -1786,11 +1786,13 @@ void replay_ui_tick(void)
             loc = obj_field_int64_get(target_obj, OBJ_F_LOCATION);
             // AI-5 (2026-10-27): with its health and fatigue, so a bench can
             // see who a spell hurt when no fight - and no damage event - began.
-            tig_debug_printf("Replay: command %d: '%s' is at %d,%d hp %d/%d fatigue %d/%d\n", replay_next - 1,
+            // The poison retune (2026-10-28): and its poison level.
+            tig_debug_printf("Replay: command %d: '%s' is at %d,%d hp %d/%d fatigue %d/%d poison %d\n", replay_next - 1,
                 command->target, (int)location_get_x(loc), (int)location_get_y(loc),
                 object_hp_current(target_obj), object_hp_max(target_obj),
                 obj_type_is_critter(obj_field_int32_get(target_obj, OBJ_F_TYPE)) ? critter_fatigue_current(target_obj) : 0,
-                obj_type_is_critter(obj_field_int32_get(target_obj, OBJ_F_TYPE)) ? critter_fatigue_max(target_obj) : 0);
+                obj_type_is_critter(obj_field_int32_get(target_obj, OBJ_F_TYPE)) ? critter_fatigue_max(target_obj) : 0,
+                obj_type_is_critter(obj_field_int32_get(target_obj, OBJ_F_TYPE)) ? stat_base_get(target_obj, STAT_POISON_LEVEL) : 0);
         } else if (command->stat == 8) {
             unsigned int npc_flags;
             int64_t leader_obj;

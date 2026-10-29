@@ -172,8 +172,16 @@ few ready shots and must be reloaded.
 **The opening, poison and prowling**
 
 - **The opening:** at most one enemy acts before your first turn.
-- **Poison** ticks every second turn in combat (every 4 seconds in real
-  time). In the original it ticked once in fifteen turn-based rounds.
+- **Poison** ticks every turn in combat (every 2 seconds in real time), for
+  1 plus a hundredth of the poison level, so it bites during the fight. In
+  the original it ticked once in fifteen turn-based rounds, for 1 to 3. (New
+  since release 1; release 1 ticked every second turn.)
+- **Poison wears off quickly after a fight** (new since release 1): out of
+  combat each tick lowers the poison level by your Constitution. In the
+  original a poisoning carried on for minutes after the fight, often for
+  more damage than the fight itself.
+- **A poisoned hit raises poison to at most four times its own dose** (new
+  since release 1), so many weak bites no longer build into a deadly dose.
 - **Prowling:**
   - attacking from prowl ends it;
   - followers prowl with you only if they have some Prowling skill, and an

@@ -2228,6 +2228,13 @@ void combat_dmg(CombatContext* combat)
         }
 
         int poison = stat_base_get(combat->target_obj, STAT_POISON_LEVEL) + combat->dam[DAMAGE_TYPE_POISON];
+        // CE (`poison dose cap`; zsogg, 2026-10-28): a hit raises the level to
+        // at most four times its own dose, after resistance, so weak poisons
+        // stop stacking.
+        if (feature_enabled(FEATURE_POISON_DOSE_CAP) && combat->dam[DAMAGE_TYPE_POISON] > 0) {
+            poison = stat_poison_dose_capped(stat_base_get(combat->target_obj, STAT_POISON_LEVEL),
+                combat->dam[DAMAGE_TYPE_POISON]);
+        }
         if (poison < 0) {
             poison = 0;
         }
@@ -4441,6 +4448,11 @@ bool combat_turn_based_begin_turn(void)
         combat_whos_turn_node = combat_whos_turn_node->next;
     }
 
+    // CE (poison per turn): a poison tick ended the encounter.
+    if (!combat_turn_based_active) {
+        return false;
+    }
+
     if (combat_whos_turn_node == NULL) {
         if (critter_is_active(pc_obj)) {
             combat_turn_index = 0;
@@ -4485,6 +4497,13 @@ bool combat_turn_based_critter_skip(ObjectNode* object_node)
     // CE (poison per turn): poison ticks on every second turn that comes
     // round, taken or skipped.
     stat_poison_turn_reached(object_node->obj);
+
+    // CE (poison per turn): a tick that kills can end the encounter, which
+    // frees the list `object_node` is in; the callers stop on a null turn.
+    if (!combat_turn_based_active) {
+        combat_whos_turn_node = NULL;
+        return true;
+    }
 
     // CE (magic, milestone MG-3): this critter's turn has come round, taken
     // or skipped, so the creatures it summoned are ready.
@@ -4569,6 +4588,10 @@ void combat_turn_based_next_subturn(void)
             if (!combat_turn_based_critter_skip(combat_whos_turn_node)) {
                 break;
             }
+        }
+        // CE (poison per turn): a poison tick ended the encounter.
+        if (!combat_turn_based_active) {
+            return;
         }
         if (combat_whos_turn_node == NULL) {
             combat_turn_based_end_turn();

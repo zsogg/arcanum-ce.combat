@@ -1054,15 +1054,46 @@ static struct {
     unsigned int ms;
 } stat_poison_pace[STAT_POISON_PACE_MAX];
 
-bool stat_poison_turn_counts(int* turns)
+bool stat_poison_turn_counts(int* turns, int per_tick)
 {
     (*turns)++;
-    if (*turns < STAT_POISON_TURNS_PER_TICK) {
+    if (*turns < per_tick) {
         return false;
     }
 
     *turns = 0;
     return true;
+}
+
+int stat_poison_tick_damage(int level, bool scaled)
+{
+    if (level <= 0) {
+        return 0;
+    }
+    if (scaled) {
+        return 1 + level / 100;
+    }
+    return level >= 550 ? 3 : (level >= 200 ? 2 : 1);
+}
+
+int stat_poison_dose_capped(int level, int dose)
+{
+    int capped = level + dose;
+
+    if (dose <= 0) {
+        return level;
+    }
+    if (capped > 4 * dose) {
+        capped = 4 * dose;
+    }
+    return capped > level ? capped : level;
+}
+
+// Whether poison is paced by combat turns at all: `poison every turn` paces
+// it too, so it is never a switch that does nothing alone.
+static bool stat_poison_per_turn(void)
+{
+    return feature_enabled(FEATURE_POISON_PER_TURN) || feature_enabled(FEATURE_POISON_EVERY_TURN);
 }
 
 int stat_poison_time_counts(unsigned int* ms, int delta_ms, int period_ms)
@@ -1094,11 +1125,11 @@ static bool stat_poison_in_real_time_combat(int64_t obj)
         && (obj_field_int32_get(obj, OBJ_F_NPC_FLAGS) & ONF_FIGHTING) != 0;
 }
 
-// Whether `obj`'s poison is paced by combat now rather than by game time.
-static bool stat_poison_paced(int64_t obj)
+// Whether `obj` is in a fight: held by the turn-based encounter, or in a
+// real-time one.
+static bool stat_poison_in_combat(int64_t obj)
 {
-    if (!feature_enabled(FEATURE_POISON_PER_TURN)
-        || !obj_type_is_critter(obj_field_int32_get(obj, OBJ_F_TYPE))) {
+    if (!obj_type_is_critter(obj_field_int32_get(obj, OBJ_F_TYPE))) {
         return false;
     }
 
@@ -1107,6 +1138,12 @@ static bool stat_poison_paced(int64_t obj)
     }
 
     return stat_poison_in_real_time_combat(obj);
+}
+
+// Whether `obj`'s poison is paced by combat now rather than by game time.
+static bool stat_poison_paced(int64_t obj)
+{
+    return stat_poison_per_turn() && stat_poison_in_combat(obj);
 }
 
 static bool stat_poison_pace_live(int64_t obj);
@@ -1175,7 +1212,7 @@ static void stat_poison_pace_damage(int64_t obj)
     }
 
     combat_context_init(OBJ_HANDLE_NULL, obj, &combat);
-    combat.dam[DAMAGE_TYPE_NORMAL] = poison >= 550 ? 3 : (poison >= 200 ? 2 : 1);
+    combat.dam[DAMAGE_TYPE_NORMAL] = stat_poison_tick_damage(poison, feature_enabled(FEATURE_POISON_EVERY_TURN));
     combat.flags |= 0x80;
     combat_dmg(&combat);
 
@@ -1201,14 +1238,16 @@ void stat_poison_turn_reached(int64_t obj)
 {
     int slot;
 
-    if (!feature_enabled(FEATURE_POISON_PER_TURN)
+    if (!stat_poison_per_turn()
         || obj == OBJ_HANDLE_NULL
         || !stat_poison_pace_live(obj)) {
         return;
     }
 
     slot = stat_poison_pace_find(obj, true);
-    if (slot != -1 && stat_poison_turn_counts(&(stat_poison_pace[slot].turns))) {
+    if (slot != -1
+        && stat_poison_turn_counts(&(stat_poison_pace[slot].turns),
+            feature_enabled(FEATURE_POISON_EVERY_TURN) ? 1 : STAT_POISON_TURNS_PER_TICK)) {
         stat_poison_pace_damage(obj);
     }
 }
@@ -1219,7 +1258,7 @@ void stat_poison_tick(int delta_ms)
     int ticks;
     int64_t obj;
 
-    if (!feature_enabled(FEATURE_POISON_PER_TURN) || combat_turn_based_is_active()) {
+    if (!stat_poison_per_turn() || combat_turn_based_is_active()) {
         return;
     }
 
@@ -1236,7 +1275,7 @@ void stat_poison_tick(int delta_ms)
         }
 
         ticks = stat_poison_time_counts(&(stat_poison_pace[slot].ms), delta_ms,
-            STAT_POISON_TURN_LENGTHS_PER_TICK * rt_budget_pace_ms_now());
+            (feature_enabled(FEATURE_POISON_EVERY_TURN) ? 1 : STAT_POISON_TURN_LENGTHS_PER_TICK) * rt_budget_pace_ms_now());
         while (ticks-- > 0) {
             stat_poison_pace_damage(obj);
         }
@@ -1288,6 +1327,17 @@ bool stat_poison_timeevent_process(TimeEvent* timeevent)
                 combat.dam[DAMAGE_TYPE_NORMAL] = damage;
                 combat.flags |= 0x80;
                 combat_dmg(&combat);
+
+                // CE (`poison short tail`; zsogg, 2026-10-28): out of combat
+                // each tick also wears the poison down by the recovery rate,
+                // in place of the 120-second step below.
+                if (feature_enabled(FEATURE_POISON_SHORT_TAIL) && !stat_poison_in_combat(obj)) {
+                    poison -= stat_level_get(obj, STAT_POISON_RECOVERY);
+                    if (poison < 0) {
+                        poison = 0;
+                    }
+                    stat_base_set(obj, STAT_POISON_LEVEL, poison);
+                }
             }
 
             // Add blood splotch effect if applicable.
@@ -1306,7 +1356,10 @@ bool stat_poison_timeevent_process(TimeEvent* timeevent)
         break;
     case POISON_EVENT_RECOVERY:
         if (poison > 0) {
-            if ((obj_field_int32_get(obj, OBJ_F_FLAGS) & OF_OFF) == 0) {
+            // CE (`poison short tail`): out of combat the ticks wear it down
+            // instead; the step still reschedules, for a fight later.
+            if ((obj_field_int32_get(obj, OBJ_F_FLAGS) & OF_OFF) == 0
+                && !(feature_enabled(FEATURE_POISON_SHORT_TAIL) && !stat_poison_in_combat(obj))) {
                 // Reduce poison level based on recovery stat.
                 poison -= stat_level_get(obj, STAT_POISON_RECOVERY);
                 if (poison < 0) {
