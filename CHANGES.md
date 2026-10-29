@@ -651,6 +651,10 @@ the game now plays as the original here.
   release 1 you needed the training. (#94)
 - Healing crippled legs now cures the legs; in release 1 it cured blindness
   instead and left the legs crippled. (#101)
+- A critical hit with a magic melee weapon, after its magic took hold, now
+  rolls its extra damage and lasting effects from the original's odds; in
+  release 1 they came from a leftover value, often far too likely or never.
+  Found by the first macOS build's compiler. (#373)
 - A crushing blow to the head can no longer blind; in release 1 it could when
   the helmet stayed on or there was none. (#103)
 - In turn-based combat your followers act after the enemies again; in release
