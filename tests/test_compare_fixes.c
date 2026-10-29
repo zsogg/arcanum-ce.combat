@@ -29,16 +29,22 @@
 //   against the per-art cap, so no slot ever matched and capped eye candy
 //   (blood splotches, weapon effects) stacked without bound. The original
 //   counts copies of the entry's own art (0x4cd0ee).
+// - #373 `combat_process_crit_hit` (0x4B5F40) left its effect chance unset
+//   on a hit whose magic-target roll set 0x20000. The original rolls from 0
+//   (0x4B602D `jne 0x4B6069`, `xor eax,eax`). Found by Apple clang's
+//   -Wsometimes-uninitialized on the first macOS build.
 
 #include <string.h>
 
 #include "game/anim_private.h"
 #include "game/animfx.h"
+#include "game/combat.h"
 #include "game/gamelib.h"
 #include "game/item.h"
 #include "game/location.h"
 #include "game/obj.h"
 #include "game/object.h"
+#include "game/random.h"
 #include "game/settings.h"
 #include "game/skill.h"
 #include "game/target.h"
@@ -56,6 +62,9 @@ extern int64_t inven_ui_drag_source_obj;
 extern int64_t inven_ui_pc_obj;
 extern int64_t inven_ui_target_obj;
 bool inven_ui_gamble_check(int64_t obj, bool a2);
+
+// `static` in combat.c, reached through combat_test_globalized.o.
+void combat_process_crit_hit(CombatContext* combat);
 
 // `static` in anim.c, object.c and location.c, reached the same way.
 void anim_goal_turn_on_stop_at_blockers(AnimID anim_id);
@@ -436,8 +445,65 @@ TEST(the_dialogue_box_sits_where_the_patch_puts_it)
     tc_iso_window_rect = saved_rect;
 }
 
+// Fills the stack below the caller with VALUE, so that a local the next call
+// leaves unset reads it rather than whatever happened to be there.
+static void spray_stack(int value)
+{
+    volatile int junk[1024];
+    int index;
+
+    for (index = 0; index < 1024; index++) {
+        junk[index] = value;
+    }
+}
+
+TEST(a_magic_target_critical_rolls_its_effects_from_zero)
+{
+    int64_t attacker;
+    int64_t target;
+    int64_t weapon;
+    CombatContext combat;
+    int trial;
+    int top = 0;
+
+    CHECK(obj_harness_init());
+    attacker = obj_harness_create_proto(OBJ_TYPE_NPC);
+    target = obj_harness_create_proto(OBJ_TYPE_NPC);
+    weapon = obj_harness_create_proto(OBJ_TYPE_WEAPON);
+    CHECK(attacker != OBJ_HANDLE_NULL);
+    CHECK(target != OBJ_HANDLE_NULL);
+    CHECK(weapon != OBJ_HANDLE_NULL);
+
+    random_seed(373);
+    for (trial = 0; trial < 400; trial++) {
+        obj_field_int32_set(target, OBJ_F_CRITTER_FLAGS, 0);
+        obj_field_int32_set(target, OBJ_F_CRITTER_FLAGS2, 0);
+        memset(&combat, 0, sizeof(combat));
+        combat.attacker_obj = attacker;
+        combat.target_obj = target;
+        combat.weapon_obj = weapon;
+        combat.skill = SKILL_MELEE;
+        combat.flags = 0x20000;
+        spray_stack(1000);
+        combat_process_crit_hit(&combat);
+        if ((combat.dam_flags & CDF_BONUS_DAM_200) != 0) {
+            top++;
+        }
+    }
+
+    // From 0, the triple-damage bonus is a 1-in-10 roll (`<= chance + 10`).
+    // Read from a stack holding 1000, it landed on every trial.
+    CHECK(top > 0);
+    CHECK(top < 100);
+
+    obj_harness_destroy(weapon);
+    obj_harness_destroy(target);
+    obj_harness_destroy(attacker);
+}
+
 void test_compare_fixes_suite(void)
 {
+    RUN(a_magic_target_critical_rolls_its_effects_from_zero);
     RUN(a_radius_2_wall_is_5_tiles_along_its_rotation);
     RUN(capped_eye_candy_stops_stacking_past_its_cap);
     RUN(the_gamble_gates_read_the_pcs_training);

@@ -670,6 +670,7 @@ add_dependencies(arcanum-tests arcanum-ai-test-obj)
 # for the suite; the oracle keeps its own copies above.
 set(COMBAT_TEST_STATICS
     combat_order_summons
+    combat_process_crit_hit
 )
 set(COMBAT_TEST_DATA
     combat_critter_list

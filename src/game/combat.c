@@ -2894,6 +2894,12 @@ void combat_process_crit_hit(CombatContext* combat)
             // stock bonus as stock scales it.
             chance = weapon_rules_crit_effect_for(combat->weapon_obj,
                 combat->attacker_obj);
+        } else {
+            // FIX (porting bug #373): a hit whose magic-target roll set
+            // 0x20000 rolls its effects from 0 (0x4B602D `jne 0x4B6069`,
+            // `xor eax,eax`), keeping the weapon's chart; CE left `chance`
+            // unset, so they rolled from whatever the stack held.
+            chance = 0;
         }
     } else {
         crit_hit_type = CRIT_HIT_TYPE_CRUSHING;
