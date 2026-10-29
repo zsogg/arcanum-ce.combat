@@ -51,8 +51,8 @@ the original game, quirks included. So:
 |---|---|
 | Origin | Upstream ([alexbatalov/arcanum-ce](https://github.com/alexbatalov/arcanum-ce)) supports macOS: the presets, the app bundle and the `Info.plist` are its. |
 | This fork's changes | Many engine changes since (see `CHANGES.md`). A search found no Linux-only code in `src/` or `first_party/tig`, but no Mac has run them. |
-| Build | Our workflow, `.github/workflows/macos-build.yml`, builds the universal Release app, signs it ad hoc and checks it on a GitHub runner; its runs are the only evidence. |
-| Tests | The same workflow builds and runs the C suite with Apple clang, without the 13 test files that need GNU tools (below). |
+| Build | Our workflow, `.github/workflows/macos-build.yml`, builds the universal Release app, signs it ad hoc and checks it on a GitHub runner; its runs are the only evidence. First green on 2026-10-29 with Xcode 16.4 and the macOS 15.5 SDK, targeting 10.13: both slices, a valid ad-hoc signature, system libraries only. The executable inside the app is `arcanum-ce`. It runs on GitHub's Intel image, because the Apple Silicon runners were not available. |
+| Tests | The same workflow builds and runs the C suite with Apple clang, without the 13 test files that need GNU tools (below): all passed on 2026-10-29, as x86_64. Apple clang found three missing declarations that glibc's headers had hidden, fixed. It also warns of 23 variables that may be used uninitialized on some path, which GCC does not report; they are not yet reviewed against the original. |
 | Play | **Not tested at all.** |
 | Signing | Ad-hoc only (`codesign -s -`), not notarized. |
 
