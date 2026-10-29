@@ -1,0 +1,106 @@
+# The macOS build of this fork: an app for Apple Silicon and Intel, built on
+# GitHub's runner because nobody maintaining the fork has a Mac. The app is
+# untested; docs/MACOS-PORT.md says what is known and how to help.
+#
+# It runs when started by hand, on a push to the macos-build branch, and on a
+# pull request. Release packages take the app job's zip unchanged, checked
+# against the sha256 the job prints.
+name: macOS build
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - macos-build
+  pull_request:
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  app:
+    name: App (universal, Release)
+    runs-on: macos-14
+
+    steps:
+      - name: Clone
+        uses: actions/checkout@v5
+
+      - name: Cache
+        uses: actions/cache@v5
+        with:
+          path: out/build/macos
+          key: macos-release-cmake-v1
+
+      - name: Configure
+        run: cmake --preset macos
+
+      - name: Build
+        run: cmake --build --preset macos-release
+
+      # An arm64 binary must carry a signature to run at all. Ad-hoc only: the
+      # app is not notarized (an Apple Developer certificate names a person).
+      - name: Sign (ad hoc)
+        run: |
+          app="out/build/macos/Release/Arcanum Community Edition.app"
+          codesign --force --deep -s - "$app"
+          codesign --verify --deep --strict --verbose=2 "$app"
+
+      - name: Check the binary
+        run: |
+          bin="out/build/macos/Release/Arcanum Community Edition.app/Contents/MacOS/Arcanum Community Edition"
+          archs="$(lipo -archs "$bin")"
+          echo "architectures: $archs"
+          case " $archs " in *" x86_64 "*) ;; *) echo "::error::no x86_64 slice"; exit 1 ;; esac
+          case " $archs " in *" arm64 "*) ;; *) echo "::error::no arm64 slice"; exit 1 ;; esac
+          otool -L "$bin"
+          # A universal binary prints one header per slice; the libraries are the indented lines.
+          if otool -L "$bin" | grep -E '^\s' | grep -v -E '^\s+(/usr/lib/|/System/Library/)'; then
+            echo "::error::links a library outside the system"; exit 1
+          fi
+          if strings "$bin" | grep -E '/Users/|/home/'; then
+            echo "::error::a home path in the binary"; exit 1
+          fi
+
+      # upload-artifact drops permissions and symlinks from loose files, so the
+      # bundle travels only inside ditto's zip.
+      - name: Zip
+        run: |
+          cd out/build/macos/Release
+          ditto -c -k --keepParent "Arcanum Community Edition.app" "$GITHUB_WORKSPACE/arcanum-ce-macos.zip"
+          cd "$GITHUB_WORKSPACE"
+          shasum -a 256 arcanum-ce-macos.zip | tee arcanum-ce-macos.zip.sha256
+
+      - name: Upload
+        uses: actions/upload-artifact@v6
+        with:
+          name: arcanum-ce-macos
+          path: |
+            arcanum-ce-macos.zip
+            arcanum-ce-macos.zip.sha256
+          retention-days: 30
+
+  tests:
+    name: C suite (Apple clang)
+    runs-on: macos-14
+
+    steps:
+      - name: Clone
+        uses: actions/checkout@v5
+
+      # A single-config generator (the preset's Xcode generator is
+      # multi-config). ARCANUM_TESTS_GNU_LINK is off on Apple: the tests that
+      # need GNU objcopy or ld --wrap are left out (tests/CMakeLists.txt).
+      - name: Configure
+        run: cmake -S . -B out/build/mac-tests -DCMAKE_BUILD_TYPE=Debug -DARCANUM_BUILD_TESTS=ON
+
+      - name: Build
+        run: cmake --build out/build/mac-tests --target arcanum-tests -j "$(sysctl -n hw.ncpu)"
+
+      - name: Unit tests
+        working-directory: out/build/mac-tests/tests
+        run: ./arcanum-tests

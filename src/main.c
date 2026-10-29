@@ -157,6 +157,17 @@ int main(int argc, char** argv)
     const char* combat_observer_path = NULL;
     const char* replay_path = NULL;
 
+    // CE (macOS): `ARCANUM_CE_GAME_DIR` names the game folder, so a build
+    // that does not sit in it (a Mac app in its build folder, which the app's
+    // `parent` base directory would otherwise make the game folder) can run.
+    // Applied first, so the install check below reads that folder too. Unset
+    // or empty, nothing changes on any platform.
+    const char* game_dir = SDL_getenv("ARCANUM_CE_GAME_DIR");
+    if (game_dir != NULL && game_dir[0] != '\0' && chdir(game_dir) != 0) {
+        fprintf(stderr, "ARCANUM_CE_GAME_DIR: cannot change to %s\n", game_dir);
+        return EXIT_FAILURE;
+    }
+
     // CE (card S1): `-features` prints what this binary was built with and
     // exits, before anything is initialised, so it needs no display and no
     // installation.
@@ -211,13 +222,15 @@ int main(int argc, char** argv)
         }
     }
 
+    if (game_dir == NULL || game_dir[0] == '\0') {
 #if SDL_PLATFORM_MACOS
-    chdir(SDL_GetBasePath());
+        chdir(SDL_GetBasePath());
 #elif SDL_PLATFORM_IOS
-    chdir(SDL_GetUserFolder(SDL_FOLDER_DOCUMENTS));
+        chdir(SDL_GetUserFolder(SDL_FOLDER_DOCUMENTS));
 #elif SDL_PLATFORM_ANDROID
-    chdir(SDL_GetPrefPath("com.alexbatalov", "arcanumce"));
+        chdir(SDL_GetPrefPath("com.alexbatalov", "arcanumce"));
 #endif
+    }
 
     // Convert args array to WinMain-like lpCmdLine.
     char lpCmdLine[260];
