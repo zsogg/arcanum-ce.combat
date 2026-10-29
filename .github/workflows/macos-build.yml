@@ -9,6 +9,10 @@ name: macOS build
 
 on:
   workflow_dispatch:
+    inputs:
+      runner:
+        description: "GitHub's macOS runner image (the default when started any other way: macos-15-intel)"
+        default: macos-15-intel
   push:
     branches:
       - macos-build
@@ -17,6 +21,12 @@ on:
 permissions:
   contents: read
 
+# The first two runs (2026-10-29) on macos-14, Apple Silicon, were never given
+# a runner: "not acquired ... even after multiple attempts", under GitHub's
+# notice of arm64 capacity constraints. The Intel image builds the same
+# universal app (Xcode builds the arm64 slice there too); the C suite then
+# runs as x86_64. A run started by hand can name another image.
+
 defaults:
   run:
     shell: bash
@@ -24,7 +34,7 @@ defaults:
 jobs:
   app:
     name: App (universal, Release)
-    runs-on: macos-14
+    runs-on: ${{ inputs.runner || 'macos-15-intel' }}
 
     steps:
       - name: Clone
@@ -96,7 +106,7 @@ jobs:
 
   tests:
     name: C suite (Apple clang)
-    runs-on: macos-14
+    runs-on: ${{ inputs.runner || 'macos-15-intel' }}
 
     steps:
       - name: Clone
