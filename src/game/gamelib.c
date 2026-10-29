@@ -2189,6 +2189,11 @@ bool gamelib_load_module_data(const char* module_name)
         }
     }
 
+    // CE (release 2): the bundles' module-level files, above the archives
+    // they override and below the module folder, which must stay on top
+    // because the game writes there.
+    ce_mods_mount_module();
+
     path1[end] = '\0';
 
     if (tig_file_is_directory(path1)) {
@@ -2211,6 +2216,8 @@ bool gamelib_load_module_data(const char* module_name)
 
     tig_debug_printf("gamelib_mod_load(): error creating folder %s\n", path1);
 
+    ce_mods_unmount_module();
+
     if (gamelib_mod_dat_path[0] != '\0') {
         tig_file_repository_remove(gamelib_mod_dat_path);
     }
@@ -2224,6 +2231,8 @@ void gamelib_unload_module_data(void)
     int index;
 
     tig_file_repository_remove(gamelib_mod_dir_path);
+
+    ce_mods_unmount_module();
 
     if (gamelib_mod_install_dir_path[0] != '\0') {
         tig_file_repository_remove(gamelib_mod_install_dir_path);

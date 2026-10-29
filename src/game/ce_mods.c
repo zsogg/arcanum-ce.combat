@@ -15,6 +15,9 @@
 static char ce_mods_enabled[CE_MODS_MAX][CE_MODS_ID_MAX];
 static int ce_mods_enabled_count;
 
+// Which enabled bundles' `module/` folders are mounted now.
+static bool ce_mods_module_mounted[CE_MODS_MAX];
+
 bool ce_mods_id_valid(const char* id)
 {
     size_t length;
@@ -176,6 +179,41 @@ void ce_mods_mount(void)
         snprintf(path, sizeof(path), "%s\\%s", CE_MODS_DIR, ce_mods_enabled[index]);
         if (tig_file_repository_add(path)) {
             tig_debug_printf("ce mods: %s mounted\n", path);
+        }
+    }
+}
+
+static void ce_mods_module_path(int index, char* path, size_t size)
+{
+    snprintf(path, size, "%s\\%s\\module", CE_MODS_DIR, ce_mods_enabled[index]);
+}
+
+void ce_mods_mount_module(void)
+{
+    char path[TIG_MAX_PATH];
+    int index;
+
+    for (index = 0; index < ce_mods_enabled_count; index++) {
+        ce_mods_module_path(index, path, sizeof(path));
+        if (!ce_mods_module_mounted[index]
+            && tig_file_is_directory(path)
+            && tig_file_repository_add(path)) {
+            ce_mods_module_mounted[index] = true;
+            tig_debug_printf("ce mods: %s mounted above the module's archives\n", path);
+        }
+    }
+}
+
+void ce_mods_unmount_module(void)
+{
+    char path[TIG_MAX_PATH];
+    int index;
+
+    for (index = ce_mods_enabled_count - 1; index >= 0; index--) {
+        if (ce_mods_module_mounted[index]) {
+            ce_mods_module_path(index, path, sizeof(path));
+            tig_file_repository_remove(path);
+            ce_mods_module_mounted[index] = false;
         }
     }
 }

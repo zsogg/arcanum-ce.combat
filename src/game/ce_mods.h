@@ -14,6 +14,12 @@
 // sets the bundle's switches for the session - never writing them into the
 // config - and mounts the folder above `ce-data`, so turning the mod off is
 // one line and leaves nothing behind. The original exe knows neither folder.
+//
+// A file the module's own archives carry (`modules/Arcanum.dat` and its
+// patches, mounted after the bundles) would hide the bundle's copy, so a
+// bundle puts such files under `module/` (`module/rules/wmap_rnd.mes`). That
+// folder is mounted with the module, above its archives and below its folder:
+// the module folder stays on top, where the game writes saves.
 
 #define CE_MODS_DIR "ce-mods"
 #define CE_MODS_MAX 16
@@ -34,5 +40,12 @@ void ce_mods_init(void);
 
 // From `gamelib_load_data`, after `ce-data`: mount the enabled bundles.
 void ce_mods_mount(void);
+
+// From `gamelib_load_module_data`, after the module's archives and before its
+// folder: mount each enabled bundle's `module/` folder, if it has one.
+void ce_mods_mount_module(void);
+
+// With the module's data: unmount what `ce_mods_mount_module` mounted.
+void ce_mods_unmount_module(void);
 
 #endif /* ARCANUM_GAME_CE_MODS_H_ */
