@@ -53,17 +53,28 @@ TEST(poison_every_turn_deals_one_plus_a_hundredth)
 TEST(a_dose_raises_the_level_to_four_times_itself)
 {
     // Venom Hound bites of 12: 12, 24, 36, 48, then held at 48.
-    CHECK_INT(stat_poison_dose_capped(0, 12), 12);
-    CHECK_INT(stat_poison_dose_capped(36, 12), 48);
-    CHECK_INT(stat_poison_dose_capped(48, 12), 48);
+    CHECK_INT(stat_poison_dose_capped(0, 12, STAT_POISON_DOSE_CAP), 12);
+    CHECK_INT(stat_poison_dose_capped(36, 12, STAT_POISON_DOSE_CAP), 48);
+    CHECK_INT(stat_poison_dose_capped(48, 12, STAT_POISON_DOSE_CAP), 48);
     // A bigger bite lifts the ceiling to its own.
-    CHECK_INT(stat_poison_dose_capped(48, 15), 60);
+    CHECK_INT(stat_poison_dose_capped(48, 15, STAT_POISON_DOSE_CAP), 60);
     // A weak dose never lowers a level a strong one left.
-    CHECK_INT(stat_poison_dose_capped(186, 5), 186);
+    CHECK_INT(stat_poison_dose_capped(186, 5, STAT_POISON_DOSE_CAP), 186);
     // Under the ceiling a dose adds in full.
-    CHECK_INT(stat_poison_dose_capped(100, 62), 162);
-    CHECK_INT(stat_poison_dose_capped(200, 62), 248);
-    CHECK_INT(stat_poison_dose_capped(70, 0), 70);
+    CHECK_INT(stat_poison_dose_capped(100, 62, STAT_POISON_DOSE_CAP), 162);
+    CHECK_INT(stat_poison_dose_capped(200, 62, STAT_POISON_DOSE_CAP), 248);
+    CHECK_INT(stat_poison_dose_capped(70, 0, STAT_POISON_DOSE_CAP), 70);
+}
+
+// A weapon's hit (option W1): eight times its dose.
+TEST(a_weapon_dose_raises_the_level_to_eight_times_itself)
+{
+    // The arena's Envenomed Sword: 77 then a dose of 15 holds at four times,
+    // climbs to 92 at eight.
+    CHECK_INT(stat_poison_dose_capped(77, 15, STAT_POISON_DOSE_CAP), 77);
+    CHECK_INT(stat_poison_dose_capped(77, 15, STAT_POISON_WEAPON_DOSE_CAP), 92);
+    CHECK_INT(stat_poison_dose_capped(270, 35, STAT_POISON_WEAPON_DOSE_CAP), 280);
+    CHECK_INT(stat_poison_dose_capped(280, 10, STAT_POISON_WEAPON_DOSE_CAP), 280);
 }
 
 TEST(poison_ticks_every_two_turn_lengths_in_real_time)
@@ -90,4 +101,5 @@ void test_poison_pace_suite(void)
     RUN(stock_tick_damage_steps_at_200_and_550);
     RUN(poison_every_turn_deals_one_plus_a_hundredth);
     RUN(a_dose_raises_the_level_to_four_times_itself);
+    RUN(a_weapon_dose_raises_the_level_to_eight_times_itself);
 }

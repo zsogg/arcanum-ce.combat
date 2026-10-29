@@ -1076,15 +1076,15 @@ int stat_poison_tick_damage(int level, bool scaled)
     return level >= 550 ? 3 : (level >= 200 ? 2 : 1);
 }
 
-int stat_poison_dose_capped(int level, int dose)
+int stat_poison_dose_capped(int level, int dose, int multiple)
 {
     int capped = level + dose;
 
     if (dose <= 0) {
         return level;
     }
-    if (capped > 4 * dose) {
-        capped = 4 * dose;
+    if (capped > multiple * dose) {
+        capped = multiple * dose;
     }
     return capped > level ? capped : level;
 }

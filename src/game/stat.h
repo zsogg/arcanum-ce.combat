@@ -99,7 +99,11 @@ void stat_poison_tick(int delta_ms);
 // `scaled`, 1 + level / 100.
 int stat_poison_tick_damage(int level, bool scaled);
 // Pure: `poison dose cap` - the level after a hit of `dose` lands on `level`:
-// at most four times the dose, and never lower than before.
-int stat_poison_dose_capped(int level, int dose);
+// at most `multiple` times the dose, and never lower than before. Four times
+// for bites, spells, traps and scripts; eight for a weapon's hit (zsogg,
+// 2026-10-28, option W1).
+#define STAT_POISON_DOSE_CAP 4
+#define STAT_POISON_WEAPON_DOSE_CAP 8
+int stat_poison_dose_capped(int level, int dose, int multiple);
 
 #endif /* ARCANUM_GAME_STAT_H_ */

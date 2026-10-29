@@ -181,7 +181,8 @@ few ready shots and must be reloaded.
   original a poisoning carried on for minutes after the fight, often for
   more damage than the fight itself.
 - **A poisoned hit raises poison to at most four times its own dose** (new
-  since release 1), so many weak bites no longer build into a deadly dose.
+  since release 1), so many weak bites no longer build into a deadly dose; a
+  poisoned weapon's hit, to eight times.
 - **Backstab** (new since release 1) deals the weapon's damage twice plus 3
   per Backstab skill level, and a critical no longer multiplies the skill's
   part: a Master's dagger backstab averages about 66 instead of about 130, and a

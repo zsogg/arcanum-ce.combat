@@ -2248,10 +2248,16 @@ void combat_dmg(CombatContext* combat)
         int poison = stat_base_get(combat->target_obj, STAT_POISON_LEVEL) + combat->dam[DAMAGE_TYPE_POISON];
         // CE (`poison dose cap`; zsogg, 2026-10-28): a hit raises the level to
         // at most four times its own dose, after resistance, so weak poisons
-        // stop stacking.
+        // stop stacking; a weapon's hit - a weapon in hand, not a spell, tick
+        // or trap (0x80, CF_TRAP) - to eight times (option W1).
         if (feature_enabled(FEATURE_POISON_DOSE_CAP) && combat->dam[DAMAGE_TYPE_POISON] > 0) {
+            bool weapon_hit = combat->weapon_obj != OBJ_HANDLE_NULL
+                && obj_field_int32_get(combat->weapon_obj, OBJ_F_TYPE) == OBJ_TYPE_WEAPON
+                && (combat->flags & (0x80 | CF_TRAP)) == 0;
+
             poison = stat_poison_dose_capped(stat_base_get(combat->target_obj, STAT_POISON_LEVEL),
-                combat->dam[DAMAGE_TYPE_POISON]);
+                combat->dam[DAMAGE_TYPE_POISON],
+                weapon_hit ? STAT_POISON_WEAPON_DOSE_CAP : STAT_POISON_DOSE_CAP);
         }
         if (poison < 0) {
             poison = 0;

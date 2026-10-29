@@ -66,7 +66,8 @@ FEATURE(POISON_PER_TURN, "poison per turn", false)
 // with or without `poison per turn`. `poison short tail`: out of combat each
 // tick also lowers the level by the poison recovery rate (Constitution), in
 // place of the 120-game-second recovery. `poison dose cap` (`combat_dmg`): a
-// hit raises the poison level to at most four times its own dose.
+// hit raises the poison level to at most four times its own dose, a weapon's
+// hit to eight times.
 FEATURE(POISON_EVERY_TURN, "poison every turn", false)
 FEATURE(POISON_SHORT_TAIL, "poison short tail", false)
 FEATURE(POISON_DOSE_CAP, "poison dose cap", false)
