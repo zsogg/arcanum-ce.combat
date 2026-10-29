@@ -30,6 +30,7 @@ void test_ai_follower_casting_suite(void);
 void test_ai_follower_healing_suite(void);
 void test_ai_follower_conduct_suite(void);
 void test_gsound_shuffle_suite(void);
+void test_backstab_rules_suite(void);
 void test_followers_suite(void);
 void test_carried_lights_suite(void);
 void test_schematic_cap_suite(void);
@@ -118,6 +119,7 @@ int main(void)
     test_ai_follower_healing_suite();
     test_ai_follower_conduct_suite();
     test_gsound_shuffle_suite();
+    test_backstab_rules_suite();
     test_followers_suite();
     test_carried_lights_suite();
     test_schematic_cap_suite();

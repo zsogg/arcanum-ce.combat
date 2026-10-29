@@ -76,6 +76,7 @@ static bool combat_consume_ammo(int64_t weapon_obj, int64_t critter_obj, int cnt
 static void combat_calc_dmg(CombatContext* combat);
 static void combat_apply_resistance(CombatContext* combat);
 static int combat_armor_resolve(CombatContext* combat);
+static int combat_backstab_bonus_of(CombatContext* combat);
 static bool combat_phantom_ward(CombatContext* combat);
 static int combat_creature_firearm_scale(CombatContext* combat);
 static int combat_play_hit_fx(CombatContext* combat);
@@ -1811,11 +1812,23 @@ void combat_dmg(CombatContext* combat)
         }
     }
 
+    // CE (`backstab rules`): the backstab's level bonus as resistance leaves
+    // it - normal damage's share - so the critical below can pass over it.
+    int backstab_normal = combat->dam[DAMAGE_TYPE_NORMAL];
+    int backstab_bonus = combat_backstab_bonus_of(combat);
+
     combat_apply_resistance(combat);
+
+    if (backstab_bonus > 0 && backstab_normal > 0) {
+        backstab_bonus = backstab_bonus * combat->dam[DAMAGE_TYPE_NORMAL] / backstab_normal;
+    } else {
+        backstab_bonus = 0;
+    }
 
     dam_flags = combat->dam_flags;
     if ((dam_flags & (CDF_FULL | CDF_DEATH)) != 0) {
         dam = object_hp_current(combat->target_obj);
+        backstab_bonus = 0;
     } else {
         dam = combat->dam[DAMAGE_TYPE_NORMAL]
             + combat->dam[DAMAGE_TYPE_ELECTRICAL]
@@ -1838,13 +1851,17 @@ void combat_dmg(CombatContext* combat)
         switch (combat->game_difficulty) {
         case GAME_DIFFICULTY_EASY:
             dam += dam / 2;
+            backstab_bonus += backstab_bonus / 2;
             break;
         case GAME_DIFFICULTY_HARD:
             dam -= dam / 4;
+            backstab_bonus -= backstab_bonus / 4;
             break;
         }
     }
 
+    // CE (`backstab rules`): a critical multiplies the rest, not the bonus.
+    dam -= backstab_bonus;
     if ((dam_flags & CDF_BONUS_DAM_200) != 0) {
         dam *= 3;
     } else if ((dam_flags & CDF_BONUS_DAM_100) != 0) {
@@ -1852,6 +1869,7 @@ void combat_dmg(CombatContext* combat)
     } else if ((dam_flags & CDF_BONUS_DAM_50) != 0) {
         dam += dam / 2;
     }
+    dam += backstab_bonus;
 
     if (armor_normal >= 0) {
         combat->dam[DAMAGE_TYPE_NORMAL] = armor_normal;
@@ -3472,7 +3490,14 @@ void combat_calc_dmg(CombatContext* combat)
             switch (damage_type) {
             case DAMAGE_TYPE_NORMAL:
                 if ((combat->flags & 0x8000) != 0) {
-                    damage += basic_skill_level(combat->attacker_obj, BASIC_SKILL_BACKSTAB) * 5;
+                    // CE (`backstab rules`): the weapon's damage twice plus 3 x
+                    // level, in place of 5 x level.
+                    if (feature_enabled(FEATURE_BACKSTAB_RULES)) {
+                        damage = combat_backstab_damage(damage,
+                            basic_skill_level(combat->attacker_obj, BASIC_SKILL_BACKSTAB));
+                    } else {
+                        damage += basic_skill_level(combat->attacker_obj, BASIC_SKILL_BACKSTAB) * 5;
+                    }
                 } else if ((combat->flags & 0x4000) != 0) {
                     damage += basic_skill_level(combat->attacker_obj, BASIC_SKILL_BACKSTAB);
                 }
@@ -3752,6 +3777,7 @@ static int combat_armor_resolve(CombatContext* combat)
     int stopped_fatigue;
     int fatigue_added = 0;
     int crit_bonus;
+    int backstab_bonus;
     int damage;
     char attacker[COMBAT_OBSERVER_IDENTITY_SIZE] = "NULL";
     char target[COMBAT_OBSERVER_IDENTITY_SIZE] = "NULL";
@@ -3776,16 +3802,24 @@ static int combat_armor_resolve(CombatContext* combat)
     // The normal damage as `combat_dmg` scales the rest: the player's
     // difficulty, then the critical bonus.
     damage = combat->dam[DAMAGE_TYPE_NORMAL];
+    // CE (`backstab rules`): a critical multiplies the rest, not the bonus.
+    backstab_bonus = combat_backstab_bonus_of(combat);
+    if (backstab_bonus > damage) {
+        backstab_bonus = damage;
+    }
     if (player_is_pc_obj(combat->attacker_obj)) {
         switch (gamelib_game_difficulty_get()) {
         case GAME_DIFFICULTY_EASY:
             damage += damage / 2;
+            backstab_bonus += backstab_bonus / 2;
             break;
         case GAME_DIFFICULTY_HARD:
             damage -= damage / 4;
+            backstab_bonus -= backstab_bonus / 4;
             break;
         }
     }
+    damage -= backstab_bonus;
     if ((combat->dam_flags & CDF_BONUS_DAM_200) != 0) {
         damage *= 3;
     } else if ((combat->dam_flags & CDF_BONUS_DAM_100) != 0) {
@@ -3793,6 +3827,7 @@ static int combat_armor_resolve(CombatContext* combat)
     } else if ((combat->dam_flags & CDF_BONUS_DAM_50) != 0) {
         damage += damage / 2;
     }
+    damage += backstab_bonus;
 
     hit.hit_loc = combat->hit_loc;
     hit.worn.helmet = combat_armor_piece(combat->target_obj, ITEM_INV_LOC_HELMET);
@@ -4881,6 +4916,29 @@ int combat_move_cost(int64_t source_obj, int64_t target_loc, bool adjacent)
 int combat_required_action_points_get(void)
 {
     return combat_required_action_points;
+}
+
+int combat_backstab_bonus(int level)
+{
+    return 3 * level;
+}
+
+int combat_backstab_damage(int roll, int level)
+{
+    return 2 * roll + combat_backstab_bonus(level);
+}
+
+// CE (`backstab rules`): this hit's backstab level bonus, before resistance or
+// armor; 0 unless the switch is on and the hit is a full backstab.
+static int combat_backstab_bonus_of(CombatContext* combat)
+{
+    if (!feature_enabled(FEATURE_BACKSTAB_RULES)
+        || (combat->flags & 0x8000) == 0
+        || combat->attacker_obj == OBJ_HANDLE_NULL) {
+        return 0;
+    }
+
+    return combat_backstab_bonus(basic_skill_level(combat->attacker_obj, BASIC_SKILL_BACKSTAB));
 }
 
 // 0x4B7C30

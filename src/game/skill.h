@@ -180,6 +180,10 @@ int tech_skill_training_set(int64_t obj, int ts, int training);
 char* tech_skill_name(int ts);
 char* tech_skill_description(int ts);
 int training_min_skill_level_required(int training);
+// CE (`backstab rules`; zsogg, 2026-10-28). Pure: the least critical bonus a
+// full backstab at Backstab `level` gives - 8 from level 4 (one point), 14 from
+// level 8 (two points), else none.
+int skill_backstab_crit_floor(int level);
 char* training_name(int training);
 int tech_skill_money(int ts, int skill_level, int training);
 int tech_skill_effectiveness(int64_t obj, int ts, int64_t target_obj);

@@ -70,6 +70,15 @@ FEATURE(POISON_PER_TURN, "poison per turn", false)
 FEATURE(POISON_EVERY_TURN, "poison every turn", false)
 FEATURE(POISON_SHORT_TAIL, "poison short tail", false)
 FEATURE(POISON_DOSE_CAP, "poison dose cap", false)
+// Backstab rebalance (zsogg, 2026-10-28). `backstab rules`: a full backstab
+// deals the weapon's damage twice plus 3 x Backstab level, the level bonus not
+// multiplied by a critical (`combat_calc_dmg`, `combat_dmg`,
+// `combat_armor_resolve`); its critical bonus, 2 x level - the target's level,
+// is at least 8 from level 4 and 14 from level 8 (`skill.c`). `prowl in combat
+// costs ap`: starting to prowl in combat mode costs 4 AP in turn-based
+// (`skill_ui.c`).
+FEATURE(BACKSTAB_RULES, "backstab rules", false)
+FEATURE(PROWL_IN_COMBAT_COSTS_AP, "prowl in combat costs ap", false)
 FEATURE(PROWL_ATTACK_REVEALS, "prowl attack reveals", false)
 FEATURE(PROWL_FOLLOWERS_NEED_SKILL, "prowl followers need skill", false)
 FEATURE(PROWL_IN_COMBAT_MASTER_ONLY, "prowl in combat master only", false)

@@ -182,12 +182,19 @@ few ready shots and must be reloaded.
   more damage than the fight itself.
 - **A poisoned hit raises poison to at most four times its own dose** (new
   since release 1), so many weak bites no longer build into a deadly dose.
+- **Backstab** (new since release 1) deals the weapon's damage twice plus 3
+  per Backstab skill level, and a critical no longer multiplies the skill's
+  part: a Master's dagger backstab averages about 66 instead of about 130, and a
+  better weapon now matters. Its critical chance is never below +8 at one
+  point and +14 at two, where the original could fall below an ordinary
+  blow's against a stronger target.
 - **Prowling:**
   - attacking from prowl ends it;
   - followers prowl with you only if they have some Prowling skill, and an
     attack on one reveals only that follower;
   - starting to prowl in combat needs Master training (prowling started
-    before combat carries into it);
+    before combat carries into it), and costs 4 AP (new since release 1), so
+    a backstabber cannot hide again between strikes for nothing;
   - darkness helps against being seen, up to 30, unless you carry a light or
     the watcher sees in the dark;
   - open ground halves your prowling below Expert, instead of a flat 50

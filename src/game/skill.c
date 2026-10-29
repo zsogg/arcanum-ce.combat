@@ -1263,6 +1263,18 @@ char* tech_skill_description(int ts)
     return tech_skill_descriptions[ts];
 }
 
+// CE (`backstab rules`).
+int skill_backstab_crit_floor(int level)
+{
+    if (level >= 8) {
+        return 14;
+    }
+    if (level >= 4) {
+        return 8;
+    }
+    return 0;
+}
+
 /**
  * Retrieves the minimum skill level required for a training tier.
  *
@@ -2184,8 +2196,19 @@ bool skill_invocation_check_crit_hit(int roll, int effectiveness, SkillInvocatio
         // backstab effective level (range 0-40) and target level (1-51). This
         // effectively means that even with the maxed backstab you'll get a
         // penalty trying to backstab high-level critters.
-        chance += 2 * basic_skill_level(skill_invocation->source.obj, BASIC_SKILL_BACKSTAB);
-        chance -= stat_level_get(skill_invocation->target.obj, STAT_LEVEL);
+        // CE (`backstab rules`; zsogg, 2026-10-28): never less than the floor
+        // for the attacker's level, so a backstab at one or two points is not
+        // less critical than an ordinary blow.
+        if (feature_enabled(FEATURE_BACKSTAB_RULES)) {
+            int level = basic_skill_level(skill_invocation->source.obj, BASIC_SKILL_BACKSTAB);
+            int bonus = 2 * level - stat_level_get(skill_invocation->target.obj, STAT_LEVEL);
+            int floor = skill_backstab_crit_floor(level);
+
+            chance += bonus > floor ? bonus : floor;
+        } else {
+            chance += 2 * basic_skill_level(skill_invocation->source.obj, BASIC_SKILL_BACKSTAB);
+            chance -= stat_level_get(skill_invocation->target.obj, STAT_LEVEL);
+        }
 
         // The master of backstabbing "gains enourmous increase to his chance of
         // scoring a critical success" (from the manual).

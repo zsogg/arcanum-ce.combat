@@ -32,6 +32,7 @@ add_executable(arcanum-tests
     "test_ai_follower_healing.c"
     "test_ai_follower_conduct.c"
     "test_gsound_shuffle.c"
+    "test_backstab_rules.c"
     "test_text_filter.c"
     "test_followers.c"
     "test_carried_lights.c"

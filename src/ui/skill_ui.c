@@ -215,6 +215,17 @@ void skill_ui_preprocess(int64_t obj, int type)
             tig_debug_printf("Prowl: refused: not a master prowler, in combat mode\n");
             break;
         }
+        // CE (`prowl in combat costs ap`; zsogg, 2026-10-28): starting to prowl
+        // in combat mode costs AP, so a backstabber cannot hide again between
+        // strikes for nothing. Turn-based only: the call charges nothing
+        // outside it.
+        if (feature_enabled(FEATURE_PROWL_IN_COMBAT_COSTS_AP)
+            && !critter_is_concealed(obj)
+            && combat_critter_is_combat_mode_active(obj)
+            && !combat_consume_action_points(obj, COMBAT_PROWL_COST)) {
+            tig_debug_printf("Prowl: refused: %d AP to prowl in combat mode\n", COMBAT_PROWL_COST);
+            break;
+        }
         critter_set_concealed(obj, !critter_is_concealed(obj));
         break;
     case 1:

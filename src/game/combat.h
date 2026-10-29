@@ -149,6 +149,13 @@ int combat_required_action_points_get(void);
 // action the player's AP bar previews, or 0 when it would not step in.
 int combat_exertion_preview_fatigue(void);
 int combat_attack_cost(int64_t obj);
+// CE (`backstab rules`; zsogg, 2026-10-28). Pure: a full backstab's normal
+// damage from the weapon's `roll` at Backstab `level` - the roll twice, plus
+// `combat_backstab_bonus` - and that bonus, which a critical does not multiply.
+int combat_backstab_damage(int roll, int level);
+int combat_backstab_bonus(int level);
+// CE (`prowl in combat costs ap`): what starting to prowl in combat mode costs.
+#define COMBAT_PROWL_COST 4
 int combat_weapon_attack_cost(int64_t obj, int64_t weapon_obj);
 int combat_throw_cost(int64_t obj);
 int combat_cast_cost(int64_t obj, int spell);
