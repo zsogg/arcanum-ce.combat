@@ -39,9 +39,9 @@ cd arcanum-ce-*-linux-x64
 
 Setup then:
 
-- asks yes or no for each of the three optional mods: Called Shots,
-  Real-Time Pacing and the Combat Rebalance. The answer is no unless you
-  say yes;
+- asks yes or no for each of the nine optional mods, from Called Shots to
+  Encounter Variety ("Optional mods" below lists them). The answer is no
+  unless you say yes;
 - unpacks both installers;
 - lays down UAP's standard components and the High Resolution Patch;
 - installs Arcanum CE beside them and checks the result;
@@ -114,14 +114,14 @@ arcanum-ce-CHANGES.md), with what each optional mod does.
 
 ## Optional mods
 
-Three mods come with Arcanum CE.
+Nine mods come with Arcanum CE, all off unless you turn them on.
 
 - **Turning them on:** setup asks about each one. Afterwards each corresponds to one line
   in `arcanum-ce.cfg`.
   - Change its `0` to `1` and restart the game to turn it on.
   - Change it back to `0` to turn it off (needs restart).
 
-**The three mods:**
+**The combat mods:**
 
 - `mod combat-rebalance`, the **Combat Rebalance (preview)**:
   - **press Q to reload a gun.** Guns hold a few ready shots and must be
@@ -130,9 +130,14 @@ Three mods come with Arcanum CE.
     penetration;
   - smarter opponents: pick weapons they can afford, cast spells, choose
     targets and drink potions;
+  - followers who heal the worst hurt first, cast while the party is
+    healthy, and hold their orders and their gear;
+  - grenades that hurt everyone near the blast;
+  - sight and hearing: walls stop sound, enemies see less to the sides;
   - criticals and fumbles, more variety for both;
   - magic costs, and spells that no longer stack;
-  - poison per turn, and prowling.
+  - poison that bites in a fight and wears off after it; prowling and
+    backstab reined in.
 
   It is a preview: the balance is still being tuned.
 - `mod real-time-pacing`, **Real-Time Pacing**: in real-time combat, every
@@ -145,13 +150,31 @@ Three mods come with Arcanum CE.
   - Aimed attacks are harder to land, and more likely to leave a lasting
     effect when they are critical.
 
+**The other mods** (new in this release; apart from Starting Gold, not yet
+tested in a game):
+
+- `mod followers`, **Followers**: alignment and level no longer stop an NPC
+  joining you or make a follower leave, and low reaction no longer stops one
+  joining.
+- `mod initiative-awareness`, **Initiative and Awareness**: turn-based fights
+  in initiative order, random encounters you can spot and avoid, and
+  ambushes in which at most one enemy acts first.
+- `mod better-shops`, **Better Shops**: schematics in stock more often,
+  specialist components sold and easier to use, and Conjure Spirit scrolls
+  in every magic shop.
+- `mod starting-gold`, **Starting Gold**: a new character starts with three
+  times the gold.
+- `mod brighter-lanterns`, **Brighter Lanterns**: carried lights light a
+  wider, brighter circle.
+- `mod encounter-variety`, **Encounter Variety**: an experimental draft with
+  more frequent and more varied random encounters.
+
 **Saves and mods:**
 
 - **Keep the Combat Rebalance on for a save made with it.** The save
   remembers its items and rules, and loading it with the mod off can go
   wrong.
-- Real-Time Pacing and Called Shots save nothing, so they can be turned on or
-  off with any save.
+- Every other mod can be turned on or off with any save.
 
 ## Saves
 
@@ -167,6 +190,8 @@ Three mods come with Arcanum CE.
 
 - **A beta.** The engine has been tested a great deal. Please report anything odd.
 - **No multiplayer.**
+- **macOS is untested.** The macOS package is built on GitHub's machines and
+  nobody making this release has run it; please report what happens.
 - **The Unofficial Arcanum Patch's other optional content** (the beta areas,
   the Riddlers) is untested with Arcanum CE.
 - **The original's own quirks** are mostly kept on purpose; only those listed

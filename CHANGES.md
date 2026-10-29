@@ -22,16 +22,19 @@ Obscura*.
     the original (sections 3.2 and 3.3).
 - The original's own quirks are kept on purpose. The ones a player can meet
   are listed in section 6.
-- Release 1 came out on 2026-10-18. Everything marked "in release 1" below
-  is what that release did; the rest of this catalogue is what the game does
-  now.
+- Release 1 came out on 2026-10-18; this is release 2. Everything marked
+  "in release 1" below is what that release did, and "new since release 1"
+  marks what release 2 adds. The rest of this catalogue is what the game
+  does now.
 
 **Contents:**
-1. The combat mods: Combat Rebalance, Real-Time Pacing, Called Shots
+1. The optional mods: Combat Rebalance, Real-Time Pacing, Called Shots,
+   Followers, Initiative and Awareness, Better Shops, Starting Gold, Brighter
+   Lanterns, Encounter Variety
 2. Highlights: the bugs worth a story, and the quirks left alone
 3. Bug fixes: the original game's bugs, the decompilation's mistakes, safety
 4. Changes to game mechanics: the Unofficial Arcanum Patch, CE's own rules,
-   mods built since release 1
+   what is built but in no mod
 5. Running the game
 6. The original's quirks, kept on purpose
 
@@ -39,16 +42,17 @@ Within each category, changes are listed from the largest effect on play to
 the smallest. A number such as (#58) is the fix's entry in the project's
 ledger of decompilation mistakes.
 
-## 1. The combat mods
+## 1. The optional mods
 
-Three optional mods come with Arcanum CE, all off unless you turn them on.
+Nine optional mods come with Arcanum CE, all off unless you turn them on.
+Six are new since release 1 (sections 1.4 to 1.9); apart from Starting Gold,
+none of the six has been tested in a game yet.
 
 - **Turning them on:** setup asks about each one. Afterwards each is one line
   in `arcanum-ce.cfg`: change its `0` to `1` and restart the game to turn it
   on, back to `0` to turn it off.
-- **Saves:** keep the Combat Rebalance on for a save made with it. Real-Time
-  Pacing and Called Shots save nothing, so they can be turned on or off with
-  any save.
+- **Saves:** keep the Combat Rebalance on for a save made with it. Every
+  other mod can be turned on or off with any save.
 
 ### 1.1 Combat Rebalance (preview) - `mod combat-rebalance`
 
@@ -398,6 +402,61 @@ matter in real time as they do turn by turn.
 - **Arcanum's own rules:** an aimed attack is harder to land (-50 for the
   head, -30 for a limb) and, when it is a critical, more likely to leave a
   lasting effect (+10). The panel changes no number.
+
+### 1.4 Followers - `mod followers`
+
+New since release 1; not yet tested in a game.
+
+- **Alignment and level** no longer stop an NPC joining you, or make a
+  follower leave.
+- **Low reaction** no longer stops one joining. A follower treated badly
+  enough still leaves.
+- **Turned off,** the stock checks return, and a follower who would not have
+  joined under them may leave at its next check.
+
+### 1.5 Initiative and Awareness - `mod initiative-awareness`
+
+New since release 1; not yet tested in a game.
+
+- **Initiative:** turn-based fights follow rolled initiative (Dexterity plus
+  1 to 10) instead of the party always acting last.
+- **Awareness:** on the world map the party may spot a random encounter
+  coming and avoid it, or meet it further off.
+- **Ambushes:** an unspotted encounter is an ambush, in which at most one
+  enemy acts first.
+
+### 1.6 Better Shops - `mod better-shops`
+
+New since release 1; not yet tested in a game. Three changes to what shops
+sell, in one mod because they edit the same file:
+
+- **Schematics in stock:** every schematic a shop sells is in stock at least
+  30% of the time after a restock, where most were 3 to 10%.
+- **Tech specialists:** components outside a schematic's own discipline need
+  at most Associate, so an explosives expert need not become a Chemistry
+  Professor to put Strong Poison in a grenade. The hard-to-make components
+  are sold.
+- **Conjure Spirit scrolls** in every magic shop, where only the Tarant
+  magick shop carried them.
+
+A shop's new stock appears from its next restock: leave it and rest a day.
+
+### 1.7 Starting Gold - `mod starting-gold`
+
+New since release 1. A new character starts with three times the gold their
+background gives. An existing character keeps the gold it has.
+
+### 1.8 Brighter Lanterns - `mod brighter-lanterns`
+
+New since release 1; chosen from screenshots, not yet tested in play.
+Lanterns, the Electric Light and light helmets throw a wider, brighter
+circle, and the Electric Light glows warm.
+
+### 1.9 Encounter Variety - `mod encounter-variety`
+
+**Experimental:** a rough first draft, new since release 1 and not yet tested
+in a game. More frequent and more varied random encounters, rare families at
+night, and from level 22 the creatures geography otherwise hides.
 
 ## 2. Highlights
 
@@ -1377,33 +1436,8 @@ All of UAP 2.0.2's fixes to the game program are part of Arcanum CE, and on.
   The original instead stopped undead and mechanical healers, and let a
   living one heal robots. Your own Heal skill is unchanged.
 
-### 4.3 Built since release 1, not in this package yet
+### 4.3 Built, but in no mod yet
 
-These mods are built and checked outside the game. They are not part of this
-release; most are not yet tested in a game.
-
-- **Initiative and Awareness:** turn-based fights follow rolled initiative
-  (Dexterity plus 1 to 10) instead of the party always acting last; on the
-  world map the party may spot a random encounter coming and avoid it, or
-  meet it further off; an unspotted one is an ambush, in which at most one
-  enemy acts first.
-- **Followers:** alignment and level no longer stop an NPC joining you or
-  make a follower leave, and low reaction no longer stops one joining; a
-  follower treated badly enough still leaves.
-- **Encounter Variety** (a rough first draft): more frequent and more varied
-  random encounters, rare families at night, and from level 22 the creatures
-  geography otherwise hides.
-- **Tech Specialists:** components outside a schematic's own discipline need
-  at most Associate, so an explosives expert need not become a Chemistry
-  Professor to put Strong Poison in a grenade.
-- **Schematics in Shops:** every schematic a shop sells is in stock at least
-  30% of the time after a restock, where most were 3 to 10%.
-- **Starting Gold:** a new character starts with three times the gold their
-  background gives.
-- **Conjure Spirit Scrolls:** the Scroll of Conjure Spirit in every magic
-  shop, where only the Tarant magick shop carried it.
-- **Brighter Lanterns:** lanterns, the Electric Light and light helmets throw
-  a wider, brighter circle, and the Electric Light glows warm.
 - **Aimed throws** (`called shot throws`): built, but in no mod and not yet
   playtested.
 
@@ -1412,6 +1446,9 @@ release; most are not yet tested in a game.
 **Platform**
 
 - **Native on Linux and Windows**, through SDL3 instead of DirectX.
+- **macOS, untested** (new since release 1): a package built on GitHub's
+  macOS machines from the same source, which nobody making this release has
+  run. Reports from Mac players are the first test.
 - **A resizable window or full screen**, at the High Resolution Patch's
   resolution.
 - **Save thumbnails** are centred and smoothed at any resolution.
