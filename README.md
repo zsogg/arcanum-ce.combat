@@ -86,6 +86,11 @@ The unit tests build with `linux-x64-debug` (or `linux-x64-release-tests`)
 and run as `tests/arcanum-tests` in the build folder. macOS, Android, iOS
 and ARM presets come from upstream; they are not built or tested here.
 
+The macOS build is experimental: it is compiled on a CI runner and has not
+been played. If you have a Mac and want to help,
+[docs/MACOS-PORT.md](docs/MACOS-PORT.md) is the guide, written to be handed
+to an AI coding assistant as well.
+
 ## Reporting a problem
 
 Open an [issue](https://github.com/zsogg/arcanum-ce.combat/issues/new?template=bug_report.md)
