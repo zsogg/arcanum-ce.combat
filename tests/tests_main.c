@@ -20,7 +20,9 @@ void test_idxtable_suite(void);
 void test_art_id_suite(void);
 void test_color_suite(void);
 void test_called_shot_suite(void);
+#if ARCANUM_TESTS_GNU_LINK
 void test_combat_observer_suite(void);
+#endif
 void test_armor_rules_suite(void);
 void test_creature_rules_suite(void);
 void test_trap_spotting_suite(void);
@@ -65,10 +67,14 @@ void test_debug_suite(void);
 void test_draw_suite(void);
 void test_kb_suite(void);
 void test_window_suite(void);
+#if ARCANUM_TESTS_GNU_LINK
 void test_video_suite(void);
+#endif
 void test_guid_suite(void);
 void test_dialog_shutdown_suite(void);
+#if ARCANUM_TESTS_GNU_LINK
 void test_dialog_options_suite(void);
+#endif
 void test_random_suite(void);
 void test_stat_suite(void);
 void test_skill_suite(void);
@@ -81,25 +87,35 @@ void test_feature_suite(void);
 void test_obj_id_suite(void);
 void test_reaction_suite(void);
 void test_effect_parse_suite(void);
+#if ARCANUM_TESTS_GNU_LINK
 void test_dialog_conditions_suite(void);
+#endif
 void test_rules_fixes_suite(void);
+#if ARCANUM_TESTS_GNU_LINK
 void test_compare_fixes_suite(void);
+#endif
 void test_compat_suite(void);
 void test_magitech_suite(void);
 void test_determinism_suite(void);
+#if ARCANUM_TESTS_GNU_LINK
 void test_script_suite(void);
 void test_save_slot_suite(void);
 void test_save_bounds_suite(void);
+#endif
 void test_mod_format_bounds_suite(void);
 void test_module_paths_suite(void);
+#if ARCANUM_TESTS_GNU_LINK
 void test_ai_memo_suite(void);
 void test_combat_order_suite(void);
 void test_proto_suite(void);
 void test_text_filter_suite(void);
+#endif
 void test_fatigue_suite(void);
 void test_area_suite(void);
 void test_provenance_suite(void);
+#if ARCANUM_TESTS_GNU_LINK
 void test_eye_candy_sound_suite(void);
+#endif
 
 int main(void)
 {
@@ -109,7 +125,9 @@ int main(void)
     test_art_id_suite();
     test_color_suite();
     test_called_shot_suite();
+#if ARCANUM_TESTS_GNU_LINK
     test_combat_observer_suite();
+#endif
     test_armor_rules_suite();
     test_creature_rules_suite();
     test_trap_spotting_suite();
@@ -161,10 +179,14 @@ int main(void)
     test_draw_suite();
     test_kb_suite();
     test_window_suite();
+#if ARCANUM_TESTS_GNU_LINK
     test_video_suite();
+#endif
     test_guid_suite();
     test_dialog_shutdown_suite();
+#if ARCANUM_TESTS_GNU_LINK
     test_dialog_options_suite();
+#endif
     test_random_suite();
     test_stat_suite();
     test_skill_suite();
@@ -177,23 +199,33 @@ int main(void)
     test_obj_id_suite();
     test_reaction_suite();
     test_effect_parse_suite();
+#if ARCANUM_TESTS_GNU_LINK
     test_dialog_conditions_suite();
+#endif
     test_rules_fixes_suite();
+#if ARCANUM_TESTS_GNU_LINK
     test_compare_fixes_suite();
+#endif
     test_compat_suite();
     test_magitech_suite();
     test_determinism_suite();
+#if ARCANUM_TESTS_GNU_LINK
     test_script_suite();
     test_save_slot_suite();
     test_save_bounds_suite();
+#endif
     test_mod_format_bounds_suite();
     test_module_paths_suite();
+#if ARCANUM_TESTS_GNU_LINK
     test_ai_memo_suite();
     test_combat_order_suite();
     test_proto_suite();
     test_text_filter_suite();
+#endif
     test_fatigue_suite();
+#if ARCANUM_TESTS_GNU_LINK
     test_eye_candy_sound_suite();
+#endif
     test_area_suite();
     test_provenance_suite();
 

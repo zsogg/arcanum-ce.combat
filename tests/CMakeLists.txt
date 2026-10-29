@@ -13,6 +13,19 @@
 # into the test binary. That is what makes game-side suites cheap to add: write
 # `test_foo.c`, call its runner from `tests_main.c`, and the module comes in.
 
+# CE (macOS): most of this file needs GNU binutils - `objcopy
+# --globalize-symbol` for the test-only objects and `ld --wrap` for fault
+# injection. Apple's toolchain has neither, so there the suite builds without
+# the 13 test files that need them (and without the emulation differential and
+# the script suite, which are made of them). Everywhere else nothing changes.
+if(APPLE)
+    set(_arcanum_tests_gnu_link_default OFF)
+else()
+    set(_arcanum_tests_gnu_link_default ON)
+endif()
+option(ARCANUM_TESTS_GNU_LINK "Build the tests that need GNU objcopy and ld --wrap"
+    ${_arcanum_tests_gnu_link_default})
+
 add_executable(arcanum-tests
     "test_harness.c"
     "test_harness.h"
@@ -22,7 +35,6 @@ add_executable(arcanum-tests
     "test_art_id.c"
     "test_color.c"
     "test_called_shot.c"
-    "test_combat_observer.c"
     "test_armor_rules.c"
     "test_creature_rules.c"
     "test_trap_spotting.c"
@@ -33,7 +45,6 @@ add_executable(arcanum-tests
     "test_ai_follower_conduct.c"
     "test_gsound_shuffle.c"
     "test_backstab_rules.c"
-    "test_text_filter.c"
     "test_followers.c"
     "test_carried_lights.c"
     "test_schematic_cap.c"
@@ -69,8 +80,6 @@ add_executable(arcanum-tests
     "test_kb.c"
     "test_guid.c"
     "test_dialog_shutdown.c"
-    "test_dialog_options.c"
-    "test_eye_candy_sound.c"
     "test_random.c"
     "test_stat.c"
     "test_skill.c"
@@ -83,25 +92,16 @@ add_executable(arcanum-tests
     "test_obj_id.c"
     "test_reaction.c"
     "test_effect_parse.c"
-    "test_dialog_conditions.c"
     "test_rules_fixes.c"
-    "test_compare_fixes.c"
     "test_compat.c"
     "test_magitech.c"
-    "test_proto.c"
     "test_fatigue.c"
     "test_window.c"
-    "test_video.c"
     "test_area.c"
     "test_provenance.c"
     "test_determinism.c"
-    "test_script.c"
-    "test_save_slot.c"
-    "test_save_bounds.c"
     "test_mod_format_bounds.c"
     "test_module_paths.c"
-    "test_ai_memo.c"
-    "test_combat_order.c"
     "obj_harness.c"
     "obj_harness.h"
     "tests_main.c"
@@ -118,6 +118,24 @@ target_link_libraries(arcanum-tests PRIVATE
 )
 
 add_test(NAME arcanum-tests COMMAND arcanum-tests)
+
+if(ARCANUM_TESTS_GNU_LINK)
+target_compile_definitions(arcanum-tests PRIVATE ARCANUM_TESTS_GNU_LINK=1)
+target_sources(arcanum-tests PRIVATE
+    "test_combat_observer.c"
+    "test_save_slot.c"
+    "test_save_bounds.c"
+    "test_ai_memo.c"
+    "test_combat_order.c"
+    "test_compare_fixes.c"
+    "test_dialog_conditions.c"
+    "test_dialog_options.c"
+    "test_eye_candy_sound.c"
+    "test_proto.c"
+    "test_script.c"
+    "test_text_filter.c"
+    "test_video.c"
+)
 
 # The CE half of the emulation differential. Driven by
 # `arcanum-work/harness/emudiff`, which runs the same functions out of the
@@ -1039,6 +1057,7 @@ target_link_options(arcanum-tests PRIVATE
     "-Wl,--wrap=tf_add"
     "-Wl,--wrap=combat_observer_attack_started"
 )
+endif() # ARCANUM_TESTS_GNU_LINK
 
 # The CE half of the archive differential. `arcanum-work/scripts/verify_dbmaker.py`
 # compares its output against Troika's own `dbmaker.exe`, which is the only
