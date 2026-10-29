@@ -51,15 +51,18 @@ the original game, quirks included. So:
 |---|---|
 | Origin | Upstream ([alexbatalov/arcanum-ce](https://github.com/alexbatalov/arcanum-ce)) supports macOS: the presets, the app bundle and the `Info.plist` are its. |
 | This fork's changes | Many engine changes since (see `CHANGES.md`). A search found no Linux-only code in `src/` or `first_party/tig`, but no Mac has run them. |
-| Build | The CI runner's results are the only evidence; see the release notes. |
+| Build | Our workflow, `.github/workflows/macos-build.yml`, builds the universal Release app, signs it ad hoc and checks it on a GitHub runner; its runs are the only evidence. |
+| Tests | The same workflow builds and runs the C suite with Apple clang, without the 13 test files that need GNU tools (below). |
 | Play | **Not tested at all.** |
 | Signing | Ad-hoc only (`codesign -s -`), not notarized. |
 
 ## Building on a Mac
 
 You need Xcode (or its command line tools) and CMake 3.25 or later
-(`brew install cmake`; `CMakePresets.json` is format version 6). The libraries (SDL3, SDL3_mixer, zlib, fpattern) are
-under `third_party/` and built with the game.
+(`brew install cmake`; `CMakePresets.json` is format version 6). The
+libraries (SDL3, SDL3_mixer, zlib, fpattern) are built with the game:
+`third_party/` pins their versions, and CMake fetches them from GitHub the
+first time you configure, so that step needs the network.
 
 ```console
 cmake --preset macos                    # Xcode project, x86_64 + arm64, macOS 10.13+
@@ -67,7 +70,9 @@ cmake --build --preset macos-release    # or macos-debug
 ```
 
 The app is `Arcanum Community Edition.app` under `out/build/macos/`, in a
-`Release` or `Debug` folder. For a quicker build of one architecture while
+`Release` or `Debug` folder. Its executable's name is the bundle's
+`CFBundleExecutable` (`CMakeLists.txt` sets the output name and Xcode's
+executable name apart), so the commands below use a wildcard for it. For a quicker build of one architecture while
 fixing, configure your own folder:
 
 ```console
@@ -88,11 +93,19 @@ The suite links the real game code, so it is the cheapest check that Apple's
 compiler and C library agree with Linux's. A test that passes on Linux and
 fails here is a real finding: report it with its output.
 
+On a Mac the suite is smaller. Thirteen test files reach `static` functions
+through objects that GNU `objcopy --globalize-symbol` makes, or inject faults
+with GNU `ld --wrap`; Apple's toolchain has neither, so
+`ARCANUM_TESTS_GNU_LINK` is off on APPLE and leaves them out, with the
+emulation differential and the script suite. Measured on Linux with the
+option off: 693 cases of the full suite's 871. Do not turn the option on to
+"fix" a Mac build.
+
 **Checks on a built app:**
 
 ```console
-lipo -archs "Arcanum Community Edition.app/Contents/MacOS/Arcanum Community Edition"   # x86_64 arm64
-otool -L "Arcanum Community Edition.app/Contents/MacOS/Arcanum Community Edition"      # system libraries only
+lipo -archs "Arcanum Community Edition.app"/Contents/MacOS/*   # x86_64 arm64
+otool -L "Arcanum Community Edition.app"/Contents/MacOS/*      # system libraries only
 codesign --verify --deep --strict --verbose=2 "Arcanum Community Edition.app"
 ```
 
@@ -116,6 +129,15 @@ folder that contains the app and reads everything from there. The release
 package's setup script does this, and adds UAP and CE's own files. When you
 are fixing, a plain GOG folder should be enough to reach the main menu.
 
+**Running your build without copying it.** Set `ARCANUM_CE_GAME_DIR` to the
+game folder and CE uses that folder instead, whatever folder the app is in
+(`src/main.c`; on every platform, and nothing changes when it is unset):
+
+```console
+ARCANUM_CE_GAME_DIR=~/Games/arcanum-ce \
+    out/build/mac-arm64/"Arcanum Community Edition.app"/Contents/MacOS/* -window
+```
+
 **What CE reads and writes, all in the game folder:**
 
 | | |
@@ -130,7 +152,7 @@ are fixing, a plain GOG folder should be enough to reach the main menu.
 and see output:
 
 ```console
-"Arcanum Community Edition.app/Contents/MacOS/Arcanum Community Edition" -window
+"Arcanum Community Edition.app"/Contents/MacOS/* -window
 ```
 
 `-window` runs in a window; without it the game is fullscreen.
@@ -211,7 +233,9 @@ Open an issue or a pull request on
   `~/Library/Logs/DiagnosticReports/`);
 - the save's four files from `modules/Arcanum/SaveCE/` if the problem is in a
   game;
-- for a fix: which of the build, test and play steps above you ran.
+- for a fix: which of the build, test and play steps above you ran, and
+  that `clang-format` (the repository's `.clang-format`) leaves your change
+  as it is.
 
 The maintainers test every change on Linux and Windows before it ships, so a
 macOS fix must leave those builds unchanged. That is why rule 2 above asks

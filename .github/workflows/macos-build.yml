@@ -42,17 +42,27 @@ jobs:
       - name: Build
         run: cmake --build --preset macos-release
 
+      # The app's and its executable's names come from the bundle itself
+      # (CMakeLists.txt sets OUTPUT_NAME and Xcode's EXECUTABLE_NAME apart).
+      - name: Locate the app
+        run: |
+          app="$(find out/build/macos/Release -maxdepth 1 -name '*.app' -type d | head -1)"
+          [ -n "$app" ] || { echo "::error::no app under out/build/macos/Release"; exit 1; }
+          exe="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$app/Contents/Info.plist")"
+          echo "app: $app"; echo "executable: $exe"
+          echo "APP=$app" >> "$GITHUB_ENV"
+          echo "BIN=$app/Contents/MacOS/$exe" >> "$GITHUB_ENV"
+
       # An arm64 binary must carry a signature to run at all. Ad-hoc only: the
       # app is not notarized (an Apple Developer certificate names a person).
       - name: Sign (ad hoc)
         run: |
-          app="out/build/macos/Release/Arcanum Community Edition.app"
-          codesign --force --deep -s - "$app"
-          codesign --verify --deep --strict --verbose=2 "$app"
+          codesign --force --deep -s - "$APP"
+          codesign --verify --deep --strict --verbose=2 "$APP"
 
       - name: Check the binary
         run: |
-          bin="out/build/macos/Release/Arcanum Community Edition.app/Contents/MacOS/Arcanum Community Edition"
+          bin="$BIN"
           archs="$(lipo -archs "$bin")"
           echo "architectures: $archs"
           case " $archs " in *" x86_64 "*) ;; *) echo "::error::no x86_64 slice"; exit 1 ;; esac
@@ -70,8 +80,8 @@ jobs:
       # bundle travels only inside ditto's zip.
       - name: Zip
         run: |
-          cd out/build/macos/Release
-          ditto -c -k --keepParent "Arcanum Community Edition.app" "$GITHUB_WORKSPACE/arcanum-ce-macos.zip"
+          cd "$(dirname "$APP")"
+          ditto -c -k --keepParent "$(basename "$APP")" "$GITHUB_WORKSPACE/arcanum-ce-macos.zip"
           cd "$GITHUB_WORKSPACE"
           shasum -a 256 arcanum-ce-macos.zip | tee arcanum-ce-macos.zip.sha256
 

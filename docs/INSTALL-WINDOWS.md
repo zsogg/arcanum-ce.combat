@@ -210,3 +210,6 @@ Open an issue at https://github.com/zsogg/arcanum-ce.combat/issues with (ideally
 2. **The save**, if the problem is in a game: the four files of its slot in
    `modules/Arcanum/SaveCE` (for example every `Slot0003...` file).
 3. **What happened**, and what you did just before.
+4. **On a Mac**, the macOS version, the chip (Apple Silicon or Intel), and
+   the crash report if there is one (Console, or
+   `~/Library/Logs/DiagnosticReports`).

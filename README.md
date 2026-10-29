@@ -28,7 +28,9 @@ You need Arcanum from GOG and the Unofficial Arcanum Patch 2.0.2
 (`UAP2.0.2.exe`). Download the package for your system from
 [Releases](https://github.com/zsogg/arcanum-ce.combat/releases). Each comes with a README covering installation,
 playing, the optional mods and removal; the same guides are here to read
-first: [Windows](docs/INSTALL-WINDOWS.md) and [Linux](docs/INSTALL-LINUX.md).
+first: [Windows](docs/INSTALL-WINDOWS.md), [Linux](docs/INSTALL-LINUX.md) and
+[macOS](docs/INSTALL-MACOS.md) (**untested**: built on GitHub's runner, never
+run by the maintainers).
 
 - **Windows:** install GOG Arcanum and UAP the usual way, unzip the package,
   and run `setup.bat`. Setup changes nothing outside the game folder.
@@ -83,11 +85,12 @@ cmake --build --preset windows-x64-mingw        # out/build/windows-x64-mingw/ar
 ```
 
 The unit tests build with `linux-x64-debug` (or `linux-x64-release-tests`)
-and run as `tests/arcanum-tests` in the build folder. macOS, Android, iOS
-and ARM presets come from upstream; they are not built or tested here.
+and run as `tests/arcanum-tests` in the build folder. Android, iOS and ARM
+presets come from upstream; they are not built or tested here.
 
-The macOS build is experimental: it is compiled on a CI runner and has not
-been played. If you have a Mac and want to help,
+The macOS build is experimental: our workflow
+(`.github/workflows/macos-build.yml`) compiles it and runs the C suite on a
+GitHub runner, and it has not been played. If you have a Mac and want to help,
 [docs/MACOS-PORT.md](docs/MACOS-PORT.md) is the guide, written to be handed
 to an AI coding assistant as well.
 
