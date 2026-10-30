@@ -4,8 +4,13 @@
 > Coding was done nearly entirely using LLM tools, Claude, Astra and Deepseek.
 >
 > **My grateful acknowledgement to Messrs. Tim Cain, Leonard Boyarsky and Tim Anderson, Troika Games, Mr.
-> Drog Black Tooth, Alex Batalov, the Terra-Arcanum team, and Kababji - who introduced this lonely
-> schoolboy to Arcanum all those years ago.**
+> Drog Black Tooth, Alex Batalov, the Terra-Arcanum team, and Kababji.**
+>
+> This project is aimed at improving the vanilla Arcanum experience, and by design the changes it makes are modest.
+>
+> For a more ambitious and exciting project, may I recommend TechErrorCode's: Arcanum-CE-Restored.
+> I am not in any way affiliated with that team, but there is imaginative and impressive work being done here (Discord Link):
+> https://discord.com/channels/1533612094522658966/1533656825616928869
 
 > [!IMPORTANT]
 > **This is a modified version of [Arcanum Community Edition](https://github.com/alexbatalov/arcanum-ce)
@@ -32,7 +37,8 @@ first: [Windows](docs/INSTALL-WINDOWS.md), [Linux](docs/INSTALL-LINUX.md) and
 [macOS](docs/INSTALL-MACOS.md) (**untested**: built on GitHub's runner, never
 run by the maintainers).
 
-- **Windows:** install GOG Arcanum and UAP the usual way, unzip the package,
+- **Windows:** install GOG Arcanum and UAP: Do not install Arcanum into your Program Files directory, as this mod will be unable to write there.
+- After installing Arcanum and the UAP patch, unzip this package - downloads below,
   and run `setup.bat`. Setup changes nothing outside the game folder.
 - **Linux:** setup builds the game folder from GOG's offline installer and
   `UAP2.0.2.exe` with `innoextract` and `7z`. No Wine is used.
