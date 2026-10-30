@@ -60,8 +60,7 @@ ledger of decompilation mistakes.
 ## 1. The optional mods
 
 Nine optional mods come with Arcanum CE, all off unless you turn them on.
-Six are new since release 1 (sections 1.4 to 1.9). Starting Gold has been
-played; the other five are as yet untested in play.
+Six are new since release 1 (sections 1.4 to 1.9).
 
 - **Turning them on:** setup asks about each one. Afterwards each is one line
   in `arcanum-ce.cfg`: change its `0` to `1` and restart the game to turn it
@@ -71,38 +70,38 @@ played; the other five are as yet untested in play.
 
 ### 1.1 Combat Rebalance (preview) - `mod combat-rebalance`
 
-A rework of combat, built and tuned piece by piece. **A preview:** the balance
-is still being tuned.
+A rework of combat, built and tuned in a test arena.
 
-**Press Q to reload a gun.** With the Combat Rebalance on, guns hold only a
-few ready shots and must be reloaded.
+**Press Q to reload a gun.** With the Combat Rebalance on, guns have a
+magazine/cylinder mechanic and must be reloaded.
 
 **Firearms**
 
-- **Reloading.** A gun holds ready shots, and **Q** reloads:
+- **Reloading.** A gun holds ready shots, and pressing '**Q**' reloads:
   - pistols and revolvers 6, rifles and muzzle-loaders 1, repeaters 7, heavy
     guns 2;
-  - one shot at a time, though some guns refill a whole magazine;
+  - one shot reloads at a time, topping off, though some guns refill a whole
+    magazine;
   - in turn-based combat, unfinished loading carries over to the next turn;
-  - in real time you stand still while loading;
-  - followers and enemies reload, top up and switch to a melee backup too;
-  - outside combat, guns load themselves.
-- **Every gun retuned by its class** (all 41 firearms): damage, firing and
+  - in real time you must stand still while loading;
+  - followers and enemies reload, top up and switch to a melee backup if
+    necessary
+  - outside combat, press 'Q' to reload
+- **Every gun revised by its class** (all 41 firearms): damage, firing and
   loading cost, range and price.
-  - Muzzle-loaders hit hard and load slowly.
-  - Rifles and repeaters stay accurate further out.
-  - Pistols are quick, and lose accuracy and penetration with distance.
-  - The rare guns each have a role: the Acid Gun eats armor, the Tranquilizer
-    Gun knocks out, and the Grenade Launcher's explosion lands.
+  - Muzzle-loaders hit hard and load slowly, shorter ranged
+  - Rifles and repeaters stay accurate further out, most versatile
+  - Pistols are quick, they lose accuracy and penetration with distance.
+  - The rare guns each have a specialized role and effect.
 - **The ammunition counter shows the gun's state** (new since release 1):
   ready shots over capacity, then spare rounds, such as `3/7 24`, or
   `JAM 24` while the gun is jammed.
-- **Gun criticals by kind:** pistols critical often, rifles find gaps in
-  armor, muzzle-loaders and heavy guns knock down.
+- **Gun criticals by kind:** pistols critical more often, rifles penetrate
+  armor, muzzle-loaders and heavy guns knock down enemies and cause fatigue
+  damage.
 - **Jams:** a firearm's fumble jams it. Clearing the jam costs reload work,
-  and the gun keeps its rounds. (In the original, every fumble shot its
-  shooter.)
-- **An easier first shot** at a critter that has not noticed you.
+  the gun keeps its ammo. (In the original, every fumble shot the shooter)
+- **An easier first shot** at an enemy that has not yet noticed you.
 
 **Armor**
 
