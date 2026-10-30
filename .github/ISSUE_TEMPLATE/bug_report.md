@@ -7,7 +7,10 @@ labels: bug
 
 **Your build**
 The first line of `arcanum-ce.log` in your game folder (for example
-`Arcanum CE 861447f`), and whether you play on Windows or Linux.
+`Arcanum CE 861447f`), and whether you play on Windows, Linux or a Mac. On a
+Mac, also the macOS version, the chip (Apple Silicon or Intel), and the crash
+report if there is one (Console > Crash Reports, or
+`~/Library/Logs/DiagnosticReports`).
 
 **What happened**
 What you saw, and what you expected instead.

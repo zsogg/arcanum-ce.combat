@@ -37,7 +37,7 @@ In Terminal:
 ```console
 tar xf arcanum-ce-*-macos.tar.gz
 cd arcanum-ce-*-macos
-./setup.sh --gog ~/Downloads/setup_arcanum_*.exe --uap ~/Downloads/UAP2.0.2.exe
+bash setup.sh --gog ~/Downloads/setup_arcanum_*.exe --uap ~/Downloads/UAP2.0.2.exe
 ```
 
 Setup then:
