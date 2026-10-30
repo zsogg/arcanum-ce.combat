@@ -628,10 +628,12 @@ add_dependencies(arcanum-tests arcanum-dialog-test-obj)
 
 # The same trick for `ai.c`: the per-fight memo tables (review 2026-10-22,
 # finding 6) are reached only through these two `static` entry points, which
-# the combat observer reads by name inside the engine.
+# the combat observer reads by name inside the engine; and the spell check
+# (2026-10-30), for its second ask on a likely-to-fail estimate.
 set(AI_TEST_STATICS
     ai_desperate_now
     ai_desperation_rolled
+    ai_check_use_spell
 )
 set(AI_TEST_OBJ "${CMAKE_CURRENT_BINARY_DIR}/ai_globalized.o")
 set(_ai_globalize_args "")

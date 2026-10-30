@@ -5801,8 +5801,17 @@ int ai_check_use_spell(int64_t attacker_obj, int64_t item_obj, int64_t target_ob
                 COLLEGE_FROM_SPELL(spell) == COLLEGE_NECROMANTIC_WHITE
                     && ai_object_hp_ratio(target_obj) <= 30,
                 ai_follower_healing_applies(attacker_obj));
+            // CE (combat AI, `ai spellcasting`, 2026-10-30): the estimate
+            // pre-rolls the target's saving throw, so against a target the
+            // spell would usually hit it is refused about one time in seven,
+            // and a mage with nothing else castable attacks with its fists
+            // (Arronax, the demonstration battle). A second ask: a target
+            // that resists in earnest is refused twice running, a bad roll
+            // is not.
             if (threshold >= 0
-                && magictech_cast_spell_fail_chance(attacker_obj, target_obj, spell) >= threshold) {
+                && magictech_cast_spell_fail_chance(attacker_obj, target_obj, spell) >= threshold
+                && (!feature_enabled(FEATURE_AI_SPELLCASTING)
+                    || magictech_cast_spell_fail_chance(attacker_obj, target_obj, spell) >= threshold)) {
                 return 8;
             }
         }

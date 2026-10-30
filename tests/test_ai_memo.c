@@ -14,15 +14,22 @@
 // The armour-aware and restorative tables take the same rule through the
 // same helper; they are reached only from inside an AI pass, so they have
 // no case here.
+#include <stdlib.h>
+
 #include "game/feature.h"
+#include "game/magictech.h"
 #include "game/obj.h"
 #include "game/obj_flags.h"
+#include "game/random.h"
+#include "game/spell.h"
+#include "game/stat.h"
 #include "obj_harness.h"
 #include "test_harness.h"
 
 // Public in ai.c, declared in no header: the observer reads them by name.
 bool ai_desperate_now(int64_t obj);
 bool ai_desperation_rolled(int64_t obj);
+int ai_check_use_spell(int64_t attacker_obj, int64_t item_obj, int64_t target_obj, int spell);
 
 // A caster in a fight: `ai_desperate_now` rolls only for an NPC that is
 // fighting, which the flag says without a combat.
@@ -76,8 +83,68 @@ TEST(dead_casters_free_their_desperation_slots)
     feature_clear_overrides();
 }
 
+// A spell the estimate flickers on. The harness loads no spell list, so the
+// case gives `magictech_spells` a table of its own in which this spell resists
+// on Strength at +0 with no damage flag: the estimate then answers 100 when
+// the target's throw holds, else the target's magic resistance, 0, and
+// against Strength 10 the answer is a coin. The stock single ask refuses one
+// decision in two; the case checks that premise first, so a changed estimate
+// fails here rather than passing on nothing.
+#define FLICKERING_SPELL 22
+#define FLICKERING_TRIES 400
+
+static int refusals(int64_t caster, int64_t target)
+{
+    int count = 0;
+    int tries;
+
+    random_seed(20261030);
+    for (tries = 0; tries < FLICKERING_TRIES; tries++) {
+        if (ai_check_use_spell(caster, OBJ_HANDLE_NULL, target, FLICKERING_SPELL) == 8) {
+            count++;
+        }
+    }
+    return count;
+}
+
+TEST(a_likely_to_fail_refusal_takes_two_bad_estimates_under_spellcasting)
+{
+    int64_t caster = obj_harness_create_proto(OBJ_TYPE_NPC);
+    int64_t target = obj_harness_create_proto(OBJ_TYPE_NPC);
+    int stock;
+    int twice;
+
+    // The demonstration battle (2026-10-30): the estimate pre-rolls the
+    // target's saving throw, and one bad roll on each of Arronax's two spells
+    // sent him in with his fists.
+    magictech_spells = (MagicTechInfo*)calloc(MT_SPELL_COUNT, sizeof(MagicTechInfo));
+    magictech_spells[FLICKERING_SPELL].resistance.stat = STAT_STRENGTH;
+    spell_college_level_set(caster, COLLEGE_FROM_SPELL(FLICKERING_SPELL), 5);
+    stat_base_set(caster, STAT_INTELLIGENCE, 20);
+    stat_base_set(caster, STAT_WILLPOWER, 20);
+    stat_base_set(target, STAT_STRENGTH, 10);
+
+    feature_override(FEATURE_AI_SPELLCASTING, false);
+    stock = refusals(caster, target);
+    CHECK(stock > FLICKERING_TRIES * 35 / 100);
+    CHECK(stock < FLICKERING_TRIES * 65 / 100);
+
+    feature_override(FEATURE_AI_SPELLCASTING, true);
+    twice = refusals(caster, target);
+    // A quarter, give or take: well under the stock half, and never none.
+    CHECK(twice < stock * 70 / 100);
+    CHECK(twice > 0);
+
+    obj_harness_destroy(caster);
+    obj_harness_destroy(target);
+    free(magictech_spells);
+    magictech_spells = NULL;
+    feature_clear_overrides();
+}
+
 void test_ai_memo_suite(void)
 {
     CHECK(obj_harness_init());
     RUN(dead_casters_free_their_desperation_slots);
+    RUN(a_likely_to_fail_refusal_takes_two_bad_estimates_under_spellcasting);
 }
