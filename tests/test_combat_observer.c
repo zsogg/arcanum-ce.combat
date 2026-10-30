@@ -985,6 +985,16 @@ TEST(the_order_row_gives_a_follower_the_menus_orders)
     CHECK(!load_script("0 order @f charge\n"));
 }
 
+TEST(the_attack_row_names_the_fighter_and_its_target)
+{
+    // The demonstration battle (2026-10-30): a leaderless NPC set on another.
+    CHECK(load_script("0 attack @g @h\n"));
+    CHECK_INT(replay_ui_count(), 1);
+    CHECK(row_is(0, "turn=0 now=0 kind=attack target=@g loc=0 aim=0 spell=0 cast=- wait=0 whom=@h"));
+    CHECK(!load_script("0 attack @g\n")); // whom
+    CHECK(!load_script("0 attack @g @h now\n"));
+}
+
 TEST(the_examine_row_names_the_object_it_shows)
 {
     // Creature profiles (2026-10-22): the examine panel a pointer resting on

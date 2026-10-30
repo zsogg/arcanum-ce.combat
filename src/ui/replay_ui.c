@@ -323,6 +323,13 @@ typedef enum ReplayKind {
     //       a follower given the follower menu's Attack, Wait Here or Back Off,
     //       through the calls the menu's broadcast makes.
     REPLAY_KIND_ORDER,
+    // The demonstration battle (2026-10-30):
+    //   attack <id> <target>
+    //       that critter fights the target as if the target had just attacked
+    //       it: `ai_attack` with the two reversed, so it needs no leader
+    //       (`order`'s Attack reaches only a follower) and witnesses react as
+    //       they would to any attack.
+    REPLAY_KIND_ATTACK,
     // Playtest tools, the shop census (2026-10-29):
     //   restock <id> <set> <times>
     //       that container's (or critter's) inventory source set to an
@@ -1108,6 +1115,18 @@ static bool replay_parse_line(const char* text, ReplayCommand* command)
         return index == count;
     }
 
+    if (strcmp(kind, "attack") == 0) {
+        command->kind = REPLAY_KIND_ATTACK;
+        replay_copy_target(command, tokens[index++]);
+        if (index >= count) {
+            return false;
+        }
+        strncpy(command->target2, tokens[index], sizeof(command->target2) - 1);
+        command->target2[sizeof(command->target2) - 1] = '\0';
+        index++;
+        return index == count;
+    }
+
     if (strcmp(kind, "hurt") == 0) {
         command->kind = REPLAY_KIND_HURT;
         if (!replay_parse_int(tokens[index++], &(command->dx)) || command->dx < 0 || index >= count
@@ -1425,7 +1444,7 @@ int replay_ui_count(void)
 bool replay_ui_describe(int index, char* buffer, size_t size)
 {
     const ReplayCommand* command;
-    static const char* kinds[] = { "object", "location", "key", "cast", "wield", "wait", "learn", "give", "throw", "skill", "raise", "prowl", "panel", "save", "inspect", "transfer", "take", "drop", "pickup", "wear", "skill-level", "stat-level", "jam", "afflict", "poison", "use", "xp", "train", "hour", "encounter", "hover", "screenshot", "spawn", "invulnerable", "await-death", "remove", "examine", "press", "click", "block", "face", "stay", "run", "recruit", "npc", "hurt", "order", "restock" };
+    static const char* kinds[] = { "object", "location", "key", "cast", "wield", "wait", "learn", "give", "throw", "skill", "raise", "prowl", "panel", "save", "inspect", "transfer", "take", "drop", "pickup", "wear", "skill-level", "stat-level", "jam", "afflict", "poison", "use", "xp", "train", "hour", "encounter", "hover", "screenshot", "spawn", "invulnerable", "await-death", "remove", "examine", "press", "click", "block", "face", "stay", "run", "recruit", "npc", "hurt", "order", "attack", "restock" };
     int written;
     static const char* casts[] = { "self", "object", "location" };
 
@@ -1474,6 +1493,9 @@ bool replay_ui_describe(int index, char* buffer, size_t size)
     if (command->kind == REPLAY_KIND_ORDER && written >= 0 && (size_t)written < size) {
         snprintf(buffer + written, size - (size_t)written, " order=%d whom=%s",
             command->stat, command->target2);
+    }
+    if (command->kind == REPLAY_KIND_ATTACK && written >= 0 && (size_t)written < size) {
+        snprintf(buffer + written, size - (size_t)written, " whom=%s", command->target2);
     }
     if (command->kind == REPLAY_KIND_RESTOCK && written >= 0 && (size_t)written < size) {
         snprintf(buffer + written, size - (size_t)written, " set=%d times=%d",
@@ -2265,6 +2287,23 @@ void replay_ui_tick(void)
             stat_level_get(obj, STAT_MAGICK_TECH_APTITUDE));
         tig_debug_printf("Replay: command %d: '%s' alignment %d\n",
             replay_next - 1, command->target, stat_level_get(obj, STAT_ALIGNMENT));
+        return;
+    }
+
+    if (command->kind == REPLAY_KIND_ATTACK) {
+        int64_t obj;
+        int64_t target_obj;
+        ReplayCommand whom = *command;
+
+        replay_stall_reported = false;
+        replay_next++;
+        memcpy(whom.target, command->target2, sizeof(whom.target));
+        if (!replay_resolve(command, &obj) || !replay_resolve(&whom, &target_obj)) {
+            return;
+        }
+        ai_attack(target_obj, obj, LOUDNESS_LOUD, 0);
+        tig_debug_printf("Replay: command %d: '%s' attacks %s\n",
+            replay_next - 1, command->target, command->target2);
         return;
     }
 
