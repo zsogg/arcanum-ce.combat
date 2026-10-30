@@ -5,8 +5,8 @@
 > Coding was done nearly entirely using LLM tools, Claude, Astra and Deepseek.
 >
 > **My grateful acknowledgement to Messrs. Tim Cain, Leonard Boyarsky and Tim Anderson, Troika Games, Mr.
-> Drog Black Tooth, Alex Batalov, the Terra-Arcanum team, and Kababji - who introduced this lonely
-> schoolboy to Arcanum all those years ago.**
+> Drog Black Tooth, Alex Batalov, the Terra-Arcanum team, and Kababji, who introduced me to this game's
+> demo disc all those years ago.**
 
 Arcanum CE runs *Arcanum: Of Steamworks and Magick Obscura* natively on
 Linux.
