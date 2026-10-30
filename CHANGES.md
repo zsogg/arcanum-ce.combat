@@ -5,50 +5,42 @@
 > Coding was done nearly entirely using LLM tools, Claude, Astra and Deepseek.
 >
 > **My grateful acknowledgement to Messrs. Tim Cain, Leonard Boyarsky and Tim Anderson, Troika Games, Mr.
-> Drog Black Tooth, Alex Batalov, the Terra-Arcanum team, and Kababji - who introduced this lonely
-> schoolboy to Arcanum all those years ago.**
+> Drog Black Tooth, Alex Batalov, the Terra-Arcanum team, and Kababji, who introduced me to this game's
+> demo disc all those years ago.**
 
-Arcanum CE is a rebuilt engine for *Arcanum: Of Steamworks and Magick
-Obscura*.
+Arcanum CE is a rebuilt engine plus mods for *Arcanum: Of Steamworks and
+Magick Obscura*.
 
-- It runs over GOG's Arcanum 1.0.7.4 with the Unofficial Arcanum Patch (UAP)
-  2.0.2 and its High Resolution Patch.
-- It is built on Arcanum Community Edition
+- It runs over Arcanum 1.0.7.4 from GOG (Good Old Games), with the
+  Unofficial Arcanum Patch (UAP) 2.0.2 and its High Resolution Patch.
+- It builds on and extends Arcanum Community Edition
   (github.com/alexbatalov/arcanum-ce), a decompilation of the original game.
-  The bug fixes come in two kinds, kept apart below:
-  - **bugs of the original 2001 game**, which CE fixes (section 3.1);
-  - **mistakes in the decompilation**, places where its code did not do what
-    the original game does. These are put right so that the game plays as
-    the original (sections 3.2 and 3.3).
-- The original's own quirks are kept on purpose. The ones a player can meet
-  are listed in section 6.
-- Release 1 came out on 2026-10-18; this is release 2. Everything marked
-  "in release 1" below is what that release did, and "new since release 1"
-  marks what release 2 adds. The rest of this catalogue is what the game
-  does now.
+- Bug fixes divide into 2 types:
+  - **Bugfixes for bugs which shipped in the original 2001 game** (Section
+    3.1)
+  - **Bugfixes for Arcanum Community Edition's decompilation** (Sections 3.2
+    and 3.3).
+- The original's 'quirks' are kept on purpose. Section 6 lists reachable
+  quirks.
 
-**Release 2 in brief.** Release 1 made the game run. Release 2 asked a
-harder question: does it run *the same*? From 20 to 24 October every
-function of the engine was set beside the original program's, one at a time,
-and that review found more than two hundred places where the rebuilt code
-had drifted from what Troika shipped (section 3.2). Some were small: a
-newspaper reply that never went away, a jump that started on the wrong
-frame. Some changed the game: a stun barely held, an encounter table only
-ever rolled its first line, healing crippled legs cured blindness instead,
-and the moon ran fourteen hours fast every month. All are put right, so that
-a fight, a conversation or a journey across the world map behaves as it did
-in 2001.
+**Release 2 in brief.** Release 1 came out on 2026-10-18; release 2 is a
+beta. Progress in release 2 focused on bugfixes to both vanilla Arcanum and
+to the CE engine rebuild (section 3.2), and expanded combat overhaul
+features. The Combat Rebalance (section 1.1) covers:
 
-The other half of the work is optional. The Combat Rebalance grew from guns
-and armour into a whole second pass over a fight: followers who cast and heal
-as if they meant it, creatures whose bodies decide what a critical does,
-traps a trained eye sees coming, grenades that hurt whoever stands in the
-blast, fumbles that are not always self-inflicted, and NPCs who hear through
-a closed door only what a door lets through. Six smaller mods join it, each
-a single switch you can try and take back (sections 1.4 to 1.9). And for the
-first time there is a macOS package, built by GitHub's machines from the
-same source. Nobody making this release owns a Mac, so its first players
-are its first testers.
+- Guns and armor
+- Follower AI fixes/extensions focused on magic casting and healing
+- Critical combat events overhaul
+- Traps and traps skill overhaul
+- Grenade damage revision
+- Fumbles revision
+- Sight and hearing revision
+- Prowling/stealth revision, vanilla implementation made sneaking very
+  difficult
+
+Other smaller mods are in sections 1.2 to 1.9. Mac package - as yet
+untested, I am working on it. What release 2 adds is marked "new since
+release 1".
 
 **Contents:**
 1. The optional mods: Combat Rebalance, Real-Time Pacing, Called Shots,
@@ -68,10 +60,8 @@ ledger of decompilation mistakes.
 ## 1. The optional mods
 
 Nine optional mods come with Arcanum CE, all off unless you turn them on.
-Six are new since release 1 (sections 1.4 to 1.9). Of those, Starting Gold
-has been played. The other five have been checked in the running game, by
-screenshots, measurements or scripted runs, but nobody has yet played a game
-with them; say so if one surprises you.
+Six are new since release 1 (sections 1.4 to 1.9). Starting Gold has been
+played; the other five are as yet untested in play.
 
 - **Turning them on:** setup asks about each one. Afterwards each is one line
   in `arcanum-ce.cfg`: change its `0` to `1` and restart the game to turn it
@@ -430,15 +420,14 @@ matter in real time as they do turn by turn.
 
 ### 1.4 Followers - `mod followers`
 
-New since release 1; not yet played.
+New since release 1; as yet untested in play.
 
-Arcanum's companions are choosy. Almost every one carries alignment and
-level limits of its own: Magnus joins only a player of alignment 0 or better
-and level 7 or more, Geoffrey only one of 0 or worse, Raven only one of +9 or
-better and level 31. Most other NPCs refuse when your alignment and theirs
-are about 100 points apart, or when they are 2 or more levels above you, and
-a follower keeps weighing all of this for as long as it follows you. With
-this mod:
+In the stock game almost every companion has alignment and level limits of its
+own: Magnus joins only a player of alignment 0 or better and level 7 or more,
+Geoffrey only one of 0 or worse, Raven only one of +9 or better and level 31.
+Most other NPCs refuse when your alignment and theirs are about 100 points
+apart, or when they are 2 or more levels above you, and a follower keeps
+weighing all of this for as long as it follows you. With this mod:
 
 - **Alignment and level** no longer stop an NPC joining you, or make a
   follower leave or complain about your conduct.
@@ -452,7 +441,7 @@ this mod:
 
 ### 1.5 Initiative and Awareness - `mod initiative-awareness`
 
-New since release 1; measured in the game, not yet played.
+New since release 1; as yet untested in play.
 
 - **Initiative:** in the original turn-based game the party acts last in
   every round, however quick it is. With this mod every combatant rolls
@@ -470,10 +459,8 @@ New since release 1; measured in the game, not yet played.
 
 ### 1.6 Better Shops - `mod better-shops`
 
-New since release 1; measured in the game, not yet played. A technologist's
-progress hangs on schematics and components, and in the stock game most of
-them are in a shop's stock only one restock in ten, or rarer. Three changes
-to what shops sell, in one mod because they edit the same file:
+New since release 1; as yet untested in play. Three changes to what shops
+sell, in one mod because they edit the same file:
 
 - **Schematics in stock:** every schematic a shop sells is in stock at least
   30% of the time after a restock, where most were 3 to 10%.
@@ -499,12 +486,11 @@ loot are unchanged, and an existing character keeps the gold it has.
 
 ### 1.8 Brighter Lanterns - `mod brighter-lanterns`
 
-New since release 1; chosen from screenshots, not yet played. The stock
-lantern lights little more than its bearer's boots. With this mod the
-Lantern, the Electric Light, the Helm of Light and the Miner's Helmet light
-about four times the area at midnight, and the bright core about ten times
-more, on anyone who carries them, NPCs included. Each keeps its own warm
-colour, and the Electric Light's hard white becomes a warm cream.
+New since release 1; chosen from screenshots, as yet untested in play. With
+this mod the Lantern, the Electric Light, the Helm of Light and the Miner's
+Helmet light about four times the area at midnight, and the bright core about
+ten times more, on anyone who carries them, NPCs included. Each keeps its own
+warm colour, and the Electric Light's hard white becomes a warm cream.
 
 - **With the Combat Rebalance:** darkness hides a prowler, and a carried
   light gives you away, so a brighter lantern gives you away further.
@@ -513,9 +499,9 @@ colour, and the Electric Light's hard white becomes a warm cream.
 
 ### 1.9 Encounter Variety - `mod encounter-variety`
 
-**Experimental:** a rough first draft, new since release 1 and not yet
-played. Its numbers come from a model of the encounter tables, not from
-play. Late in the stock game the world map goes quiet: many encounters stop
+**Experimental:** a rough first draft, new since release 1 and as yet
+untested in play. Its numbers come from a model of the encounter tables, not
+from play. In the stock game many encounters stop
 at level 10, 15 or 25 with nothing in their place, so at level 30 about two
 checks in five find nothing, and along the main roads more than half. This
 mod changes the encounter file in five ways:
@@ -568,6 +554,7 @@ creatures it always did.
 - **Stunned enemies kept fighting.** A stun barely held them. (#77)
 - **The dice game vanished.** Gamblers could never offer "Roll the dice".
   (#70)
+
 **Bugs of the original game, now fixed**
 
 - **A failed save could destroy the one it replaced.** A failed or
@@ -1530,9 +1517,9 @@ All of UAP 2.0.2's fixes to the game program are part of Arcanum CE, and on.
 **Platform**
 
 - **Native on Linux and Windows**, through SDL3 instead of DirectX.
-- **macOS, untested** (new since release 1): a package built on GitHub's
-  macOS machines from the same source, which nobody making this release has
-  run. Reports from Mac players are the first test.
+- **macOS, as yet untested** (new since release 1): a package built on
+  GitHub's macOS machines from the same source. I am working on it; reports
+  from Mac players are welcome.
 - **A resizable window or full screen**, at the High Resolution Patch's
   resolution.
 - **Save thumbnails** are centred and smoothed at any resolution.
@@ -1598,7 +1585,7 @@ every start (the original's patch fixed them when it was installed):
 - **Movies play only on Windows**, through the game's own Bink library. On
   Linux and macOS the logos, the intro, the ending and the in-game
   cinematics are skipped.
-- **Multiplayer** is not supported.
+- **Multiplayer** is not supported at present.
 
 ## 6. The original's quirks, kept on purpose
 
