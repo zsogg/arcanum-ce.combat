@@ -27,6 +27,29 @@ Obscura*.
   marks what release 2 adds. The rest of this catalogue is what the game
   does now.
 
+**Release 2 in brief.** Release 1 made the game run. Release 2 asked a
+harder question: does it run *the same*? From 20 to 24 October every
+function of the engine was set beside the original program's, one at a time,
+and that review found more than two hundred places where the rebuilt code
+had drifted from what Troika shipped (section 3.2). Some were small: a
+newspaper reply that never went away, a jump that started on the wrong
+frame. Some changed the game: a stun barely held, an encounter table only
+ever rolled its first line, healing crippled legs cured blindness instead,
+and the moon ran fourteen hours fast every month. All are put right, so that
+a fight, a conversation or a journey across the world map behaves as it did
+in 2001.
+
+The other half of the work is optional. The Combat Rebalance grew from guns
+and armour into a whole second pass over a fight: followers who cast and heal
+as if they meant it, creatures whose bodies decide what a critical does,
+traps a trained eye sees coming, grenades that hurt whoever stands in the
+blast, fumbles that are not always self-inflicted, and NPCs who hear through
+a closed door only what a door lets through. Six smaller mods join it, each
+a single switch you can try and take back (sections 1.4 to 1.9). And for the
+first time there is a macOS package, built by GitHub's machines from the
+same source. Nobody making this release owns a Mac, so its first players
+are its first testers.
+
 **Contents:**
 1. The optional mods: Combat Rebalance, Real-Time Pacing, Called Shots,
    Followers, Initiative and Awareness, Better Shops, Starting Gold, Brighter
@@ -45,8 +68,10 @@ ledger of decompilation mistakes.
 ## 1. The optional mods
 
 Nine optional mods come with Arcanum CE, all off unless you turn them on.
-Six are new since release 1 (sections 1.4 to 1.9); apart from Starting Gold,
-none of the six has been tested in a game yet.
+Six are new since release 1 (sections 1.4 to 1.9). Of those, Starting Gold
+has been played. The other five have been checked in the running game, by
+screenshots, measurements or scripted runs, but nobody has yet played a game
+with them; say so if one surprises you.
 
 - **Turning them on:** setup asks about each one. Afterwards each is one line
   in `arcanum-ce.cfg`: change its `0` to `1` and restart the game to turn it
@@ -405,30 +430,50 @@ matter in real time as they do turn by turn.
 
 ### 1.4 Followers - `mod followers`
 
-New since release 1; not yet tested in a game.
+New since release 1; not yet played.
+
+Arcanum's companions are choosy. Almost every one carries alignment and
+level limits of its own: Magnus joins only a player of alignment 0 or better
+and level 7 or more, Geoffrey only one of 0 or worse, Raven only one of +9 or
+better and level 31. Most other NPCs refuse when your alignment and theirs
+are about 100 points apart, or when they are 2 or more levels above you, and
+a follower keeps weighing all of this for as long as it follows you. With
+this mod:
 
 - **Alignment and level** no longer stop an NPC joining you, or make a
-  follower leave.
+  follower leave or complain about your conduct.
 - **Low reaction** no longer stops one joining. A follower treated badly
-  enough still leaves.
+  enough still warns you, and then leaves.
+- **Unchanged:** a companion's own dialogue can still set terms (Weldo asks
+  how he feels about you, Sogg Mead-Mug looks at your Charisma, Thorvald at
+  your Persuasion), and Charisma still limits how many followers you lead.
 - **Turned off,** the stock checks return, and a follower who would not have
   joined under them may leave at its next check.
 
 ### 1.5 Initiative and Awareness - `mod initiative-awareness`
 
-New since release 1; not yet tested in a game.
+New since release 1; measured in the game, not yet played.
 
-- **Initiative:** turn-based fights follow rolled initiative (Dexterity plus
-  1 to 10) instead of the party always acting last.
-- **Awareness:** on the world map the party may spot a random encounter
-  coming and avoid it, or meet it further off.
-- **Ambushes:** an unspotted encounter is an ambush, in which at most one
-  enemy acts first.
+- **Initiative:** in the original turn-based game the party acts last in
+  every round, however quick it is. With this mod every combatant rolls
+  Dexterity plus 1 to 10 when the fight starts and keeps it for the fight;
+  turns go highest first, and ties go to the party.
+- **Awareness:** before a random encounter appears, the party's sharpest
+  member (best Perception plus Intelligence, you or a conscious follower) may
+  spot it coming: "Virgil spots Lesser Boar ahead." You then choose to
+  **avoid** it, and travel on as if nothing happened, or **engage**, and the
+  monsters appear about 12 tiles off instead of 6, with time to prepare. A
+  party whose best member has Perception plus Intelligence 16 spots an easy
+  encounter about 85% of the time, an average one 60%, a powerful one 35%.
+- **Ambushes:** an encounter you did not spot starts about 4 tiles away, and
+  in its opening round at most one enemy acts before your party.
 
 ### 1.6 Better Shops - `mod better-shops`
 
-New since release 1; not yet tested in a game. Three changes to what shops
-sell, in one mod because they edit the same file:
+New since release 1; measured in the game, not yet played. A technologist's
+progress hangs on schematics and components, and in the stock game most of
+them are in a shop's stock only one restock in ten, or rarer. Three changes
+to what shops sell, in one mod because they edit the same file:
 
 - **Schematics in stock:** every schematic a shop sells is in stock at least
   30% of the time after a restock, where most were 3 to 10%.
@@ -440,23 +485,58 @@ sell, in one mod because they edit the same file:
   magick shop carried them.
 
 A shop's new stock appears from its next restock: leave it and rest a day.
+Measured over 200 restocks of every shop list in the game, every item came
+in as often as the mod's model predicts, and Conjure Spirit scrolls were in every
+magic shop's stock every time.
 
 ### 1.7 Starting Gold - `mod starting-gold`
 
-New since release 1. A new character starts with three times the gold their
-background gives. An existing character keeps the gold it has.
+New since release 1, and played. A new character starts with three times
+the gold their background gives: 1,200 instead of 400 for most, and the
+others in proportion, so each background keeps its place against the rest.
+The seven backgrounds that start with nothing still do. Prices, rewards and
+loot are unchanged, and an existing character keeps the gold it has.
 
 ### 1.8 Brighter Lanterns - `mod brighter-lanterns`
 
-New since release 1; chosen from screenshots, not yet tested in play.
-Lanterns, the Electric Light and light helmets throw a wider, brighter
-circle, and the Electric Light glows warm.
+New since release 1; chosen from screenshots, not yet played. The stock
+lantern lights little more than its bearer's boots. With this mod the
+Lantern, the Electric Light, the Helm of Light and the Miner's Helmet light
+about four times the area at midnight, and the bright core about ten times
+more, on anyone who carries them, NPCs included. Each keeps its own warm
+colour, and the Electric Light's hard white becomes a warm cream.
+
+- **With the Combat Rebalance:** darkness hides a prowler, and a carried
+  light gives you away, so a brighter lantern gives you away further.
+- **A light used against its aptitude** (a technological light in a mage's hand, say)
+  is still smaller, as in the original.
 
 ### 1.9 Encounter Variety - `mod encounter-variety`
 
-**Experimental:** a rough first draft, new since release 1 and not yet tested
-in a game. More frequent and more varied random encounters, rare families at
-night, and from level 22 the creatures geography otherwise hides.
+**Experimental:** a rough first draft, new since release 1 and not yet
+played. Its numbers come from a model of the encounter tables, not from
+play. Late in the stock game the world map goes quiet: many encounters stop
+at level 10, 15 or 25 with nothing in their place, so at level 30 about two
+checks in five find nothing, and along the main roads more than half. This
+mod changes the encounter file in five ways:
+
+- **No dry spells:** each table takes on its terrain's stronger encounters
+  from the level where its own run out.
+- **Rare creatures at night:** jungle, swamp, snow and powerful elven-forest creatures,
+  which the main roads almost never cross, may appear in average forest and
+  grassland after dark, up to level 21.
+- **Dead spots mended:** a table around Stillwater held only a one-time
+  quest encounter and silenced a region 4,800 tiles wide; it now covers 1,600
+  tiles. The easy swamp, jungle, desert and snow tables, which no area used,
+  feed their creatures into the average ones.
+- **A little more often:** about one encounter every 4 days of travel on the
+  main roads, instead of 6.
+- **From level 22, the rare families anywhere:** Krags, gorillas and the
+  Tiger, Slime Demons and the Swamp Ape, Polar Bears, Hell Beasts and the
+  Lethe Wyvern among them, about a quarter of every table.
+
+Quest encounters still need their story flag, and each encounter holds the
+creatures it always did.
 
 ## 2. Highlights
 
@@ -510,7 +590,7 @@ night, and from level 22 the creatures geography otherwise hides.
   see the leg cursor. The blow still goes where you aimed.
 - **The Grenade Launcher's explosion can hit you** and anyone beside you.
 - **Every melee, bow and thrown fumble hits its wielder**, half the time
-  critically.
+  critically, unless the Combat Rebalance is on.
 - **Everyone swings high at dwarves and halflings**, because every character
   counts as human-sized.
 - **Mirror reflects no damage.**
@@ -1515,8 +1595,9 @@ every start (the original's patch fixed them when it was installed):
 
 **Not supported**
 
-- **Movies do not play on Linux.** The logos, the intro, the ending and the
-  in-game cinematics are skipped.
+- **Movies play only on Windows**, through the game's own Bink library. On
+  Linux and macOS the logos, the intro, the ending and the in-game
+  cinematics are skipped.
 - **Multiplayer** is not supported.
 
 ## 6. The original's quirks, kept on purpose
@@ -1529,8 +1610,6 @@ does the same. These are the ones a player can meet.
 
 **Combat**
 
-- **Every melee, bow and thrown fumble hits its wielder**, half the time
-  critically. (With the Combat Rebalance, a gun's fumble jams it instead.)
 - **A fumble's critical effects are rolled twice** on the wielder.
 - **Dodge is rolled after every hit**, by the target, at twice their Dodge.
 - **The Grenade Launcher's explosion can hit you and your followers**: you
@@ -1597,6 +1676,8 @@ changes each one (section 1).
 - **A weapon's on-hit spell is charged as a cast**, so in turn-based combat
   the Grenade Launcher's explosion never lands. Combat Rebalance.
 - **Every firearm fumble shoots its wielder.** Combat Rebalance.
+- **Every melee, bow and thrown fumble hits its wielder**, half the time
+  critically. Combat Rebalance (weapon fumbles).
 - **Poison ticks once in fifteen turn-based rounds.** Combat Rebalance.
 - **A wielded thrown weapon injures nobody**: in shipped data, the Throwing
   Dagger. Combat Rebalance.
