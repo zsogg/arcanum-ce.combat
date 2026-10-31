@@ -44,7 +44,10 @@ jobs:
         uses: actions/cache@v5
         with:
           path: out/build/macos
-          key: macos-release-cmake-v1
+          # One cache per runner image: an Apple Silicon run that restored an
+          # Intel run's CMakeCache.txt (key v1, shared) found Intel Homebrew's
+          # git at /usr/local/bin and failed to configure (run 41249431579).
+          key: macos-release-cmake-v2-${{ inputs.runner || 'macos-15-intel' }}
 
       - name: Configure
         run: cmake --preset macos
