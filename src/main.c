@@ -220,6 +220,13 @@ int main(int argc, char** argv)
         if (strncmp(argv[arg], prefix, strlen(prefix)) == 0) {
             replay_path = argv[arg] + strlen(prefix);
         }
+        // CE (the demonstration battle, 2026-10-30): `-observer-limit=N`, the
+        // observer's semantic-event budget. Its 10,000 default lasts a duel;
+        // seventy-three fighters spend it in two minutes.
+        prefix = "-observer-limit=";
+        if (strncmp(argv[arg], prefix, strlen(prefix)) == 0) {
+            combat_observer_test_set_event_limit((unsigned int)strtoul(argv[arg] + strlen(prefix), NULL, 10));
+        }
     }
 
     if (game_dir == NULL || game_dir[0] == '\0') {
