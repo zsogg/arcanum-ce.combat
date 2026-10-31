@@ -983,6 +983,11 @@ TEST(the_order_row_gives_a_follower_the_menus_orders)
     CHECK(!load_script("0 order @f attack\n")); // whom
     CHECK(!load_script("0 order @f wait @wolf\n")); // Wait Here takes no one
     CHECK(!load_script("0 order @f charge\n"));
+    // The stances (the demonstration battle, 2026-10-30): Spread Out, Stay Close.
+    CHECK(load_script("0 order @f spread\n0 order @f close\n"));
+    CHECK(row_is(0, "turn=0 now=0 kind=order target=@f loc=0 aim=0 spell=0 cast=- wait=0 order=3 whom="));
+    CHECK(row_is(1, "turn=0 now=0 kind=order target=@f loc=0 aim=0 spell=0 cast=- wait=0 order=4 whom="));
+    CHECK(!load_script("0 order @f spread @wolf\n"));
 }
 
 TEST(the_attack_row_names_the_fighter_and_its_target)

@@ -319,7 +319,8 @@ typedef enum ReplayKind {
     //       from whoever the enemies happened to bite. No combat event.
     REPLAY_KIND_HURT,
     // Follower conduct, AI-6 F2 (2026-10-28):
-    //   order <id> attack <target> / order <id> wait / order <id> backoff
+    //   order <id> attack <target> / order <id> wait / order <id> backoff /
+    //   order <id> spread / order <id> close
     //       a follower given the follower menu's Attack, Wait Here or Back Off,
     //       through the calls the menu's broadcast makes.
     REPLAY_KIND_ORDER,
@@ -1089,7 +1090,7 @@ static bool replay_parse_line(const char* text, ReplayCommand* command)
     }
 
     if (strcmp(kind, "order") == 0) {
-        static const char* orders[] = { "attack", "wait", "backoff" };
+        static const char* orders[] = { "attack", "wait", "backoff", "spread", "close" };
         int order;
 
         command->kind = REPLAY_KIND_ORDER;
@@ -1097,9 +1098,9 @@ static bool replay_parse_line(const char* text, ReplayCommand* command)
         if (index >= count) {
             return false;
         }
-        for (order = 0; order < 3 && strcmp(tokens[index], orders[order]) != 0; order++) {
+        for (order = 0; order < 5 && strcmp(tokens[index], orders[order]) != 0; order++) {
         }
-        if (order == 3) {
+        if (order == 5) {
             return false;
         }
         index++;
@@ -2310,7 +2311,7 @@ void replay_ui_tick(void)
     if (command->kind == REPLAY_KIND_ORDER) {
         int64_t obj;
         int64_t target_obj = OBJ_HANDLE_NULL;
-        static const char* orders[] = { "attack", "wait", "backoff" };
+        static const char* orders[] = { "attack", "wait", "backoff", "spread", "close" };
 
         replay_stall_reported = false;
         replay_next++;
@@ -2334,8 +2335,16 @@ void replay_ui_tick(void)
         case 1:
             ai_npc_wait(obj);
             break;
-        default:
+        case 2:
             ai_stop_attacking(obj);
+            break;
+        case 3:
+            // The demonstration battle (2026-10-30): Spread Out and Stay
+            // Close, the stances (AI-4), as the menu's broadcast gives them.
+            critter_spread_out(obj);
+            break;
+        default:
+            critter_stay_close(obj);
             break;
         }
         ai_process(obj);
