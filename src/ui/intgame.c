@@ -3667,6 +3667,14 @@ bool intgame_mode_action(const char* action)
         return true;
     }
 
+    // The centre-on-player key, for a script (the demonstration battle,
+    // 2026-10-31): a `run` row moves the player without the view following,
+    // so a film of the fight showed the empty start area.
+    if (strcmp(action, "center") == 0) {
+        intgame_center_on_player();
+        return true;
+    }
+
     return false;
 }
 
