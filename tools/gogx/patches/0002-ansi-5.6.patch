@@ -1,0 +1,39 @@
+Arcanum CE patch 2 of 3 for innospect 0.2.0 (gogx, 2026-10-31).
+
+Strings are UTF-16 for a (u) marker or from 6.3.0, not from 5.6.0: Inno
+Setup 5.6.x still had ANSI builds, and innoextract's version table lists
+(5.6.0) and the (5.6.2) pre-release GOG used in both forms
+(setup/version.cpp). Review findings H1 and L1.
+
+--- a/src/util/encoding.rs
++++ b/src/util/encoding.rs
+@@ -90,20 +90,16 @@
+ /// Decides whether a given `Version` uses UTF-16LE strings on the
+ /// wire.
+ ///
+-/// The marker's `(u)` suffix is the most explicit signal but it is
+-/// inconsistent in practice: HeidiSQL 6.4.0.1 ships an ANSI marker
+-/// yet stores all strings as UTF-16LE. Inno Setup has been
+-/// Unicode-by-default since 5.6 - we treat that as the rule and
+-/// the marker `(u)` as an informational hint.
++/// The marker's `(u)` suffix marks a Unicode build, and from 6.3.0 every
++/// build is Unicode whatever its marker (HeidiSQL 6.4.0.1 ships an ANSI
++/// marker yet stores all strings as UTF-16LE).
++///
++/// Arcanum CE patch (gogx, 2026-10-31): the rule was `at_least(5, 6, 0)`,
++/// but 5.6.x still had ANSI builds, `(5.6.0)` and the `(5.6.2)` pre-release
++/// that GOG used; innoextract's version table lists both forms and makes an
++/// unmarked version Unicode only from 6.3.0 (setup/version.cpp).
+ pub(crate) fn is_unicode_for_version(version: &Version) -> bool {
+-    if version.is_unicode() {
+-        return true;
+-    }
+-    // Inno Setup 5.6 (release 2017) made the Unicode build the
+-    // default; legacy ANSI builds shipped only for 5.5 and earlier.
+-    // For 5.6+ we treat the wire as Unicode regardless of the marker
+-    // suffix.
+-    version.at_least(5, 6, 0)
++    version.is_unicode() || version.at_least(6, 3, 0)
+ }
+ 
+ /// Decodes a Windows-1252 byte slice losslessly into a Rust `String`.

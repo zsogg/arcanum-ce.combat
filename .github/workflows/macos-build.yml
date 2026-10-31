@@ -79,7 +79,7 @@ jobs:
           case " $archs " in *" arm64 "*) ;; *) echo "::error::no arm64 slice"; exit 1 ;; esac
           otool -L "$bin"
           # A universal binary prints one header per slice; the libraries are the indented lines.
-          if otool -L "$bin" | grep -E '^\s' | grep -v -E '^\s+(/usr/lib/|/System/Library/)'; then
+          if otool -L "$bin" | grep -E '^[[:space:]]' | grep -v -E '^[[:space:]]+(/usr/lib/|/System/Library/)'; then
             echo "::error::links a library outside the system"; exit 1
           fi
           if strings "$bin" | grep -E '/Users/|/home/'; then
@@ -124,3 +124,130 @@ jobs:
       - name: Unit tests
         working-directory: out/build/mac-tests/tests
         run: ./arcanum-tests
+
+  # The two unpackers setup.sh needs, so a Mac player needs no package
+  # manager (Homebrew refuses Intel Macs since 2026-09): gogx for GOG's
+  # installer (tools/gogx, Rust) and 7-Zip's 7zz for UAP's (tools/7zip, from
+  # 7-Zip's source, since its prebuilt Intel slice needs macOS 10.15). Both
+  # universal, ad-hoc signed, for macOS 10.13 (Intel) and 11.0 (Apple
+  # Silicon). The release package takes this job's zip unchanged, checked
+  # against the sha256 it prints.
+  tools:
+    name: Setup tools (gogx, 7zz)
+    runs-on: ${{ inputs.runner || 'macos-15-intel' }}
+
+    steps:
+      - name: Clone
+        uses: actions/checkout@v5
+
+      # The toolchain and both Mac targets named in tools/gogx/rust-toolchain.toml.
+      - name: Rust
+        run: |
+          command -v rustup >/dev/null || curl -fsSL --retry 3 https://sh.rustup.rs | sh -s -- -y --profile minimal --default-toolchain none
+          export PATH="$HOME/.cargo/bin:$PATH"
+          channel="$(sed -n 's/^channel = "\(.*\)"$/\1/p' tools/gogx/rust-toolchain.toml)"
+          rustup toolchain install "$channel" --profile minimal --target x86_64-apple-darwin,aarch64-apple-darwin
+          echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+          rustc +"$channel" --version
+
+      - name: Build gogx
+        run: tools/gogx/build.sh --mac
+
+      - name: Test gogx
+        working-directory: tools/gogx
+        run: cargo test --release --locked
+
+      - name: Build 7zz
+        run: tools/7zip/build.sh
+
+      # The app job's checks, plus the oldest macOS each slice accepts:
+      # LC_BUILD_VERSION's minos, or LC_VERSION_MIN_MACOSX's version, which
+      # the linker writes for targets before 10.14.
+      - name: Check the binaries
+        run: |
+          fail=0
+          for bin in tools/gogx/target/gogx tools/7zip/build/7zz; do
+            echo "== $bin"
+            archs="$(lipo -archs "$bin")"; echo "architectures: $archs"
+            case " $archs " in *" x86_64 "*) ;; *) echo "::error::$bin has no x86_64 slice"; fail=1 ;; esac
+            case " $archs " in *" arm64 "*) ;; *) echo "::error::$bin has no arm64 slice"; fail=1 ;; esac
+            codesign --verify --strict --verbose=2 "$bin" || fail=1
+            otool -L "$bin"
+            if otool -L "$bin" | grep -E '^[[:space:]]' | grep -v -E '^[[:space:]]+(/usr/lib/|/System/Library/)'; then
+              echo "::error::$bin links a library outside the system"; fail=1
+            fi
+            if strings "$bin" | grep -E '/Users/|/home/'; then
+              echo "::error::a home path in $bin"; fail=1
+            fi
+            for pair in x86_64:10.13 arm64:11.0; do
+              arch="${pair%%:*}"; want="${pair#*:}"
+              # Captured first: awk stopping early would cut otool off (SIGPIPE).
+              commands="$(otool -arch "$arch" -l "$bin")"
+              got="$(awk '/cmd LC_BUILD_VERSION/{b=1} /cmd LC_VERSION_MIN_MACOSX/{v=1} !found&&b&&$1=="minos"{found=$2} !found&&v&&$1=="version"{found=$2} END{print found}' <<< "$commands")"
+              echo "$arch: macOS $got and later"
+              [ "${got%.0}" = "${want%.0}" ] || { echo "::error::$bin's $arch slice targets macOS $got, not $want"; fail=1; }
+            done
+          done
+          exit "$fail"
+
+      # Run on this runner's own architecture (x86_64 on macos-15-intel), and
+      # the Intel slice under Rosetta as well when the runner is Apple
+      # Silicon and Rosetta is there. Pinned inputs: Inno Setup's own 6.4.3
+      # installer for gogx, and Notepad++ 8.9.7's NSIS installer (solid LZMA,
+      # as UAP's is) for 7zz.
+      - name: Smoke test
+        run: |
+          mkdir -p smoke && cd smoke
+          curl -fsSL --retry 3 -o inno.exe https://github.com/jrsoftware/issrc/releases/download/is-6_4_3/innosetup-6.4.3.exe
+          echo "f3c42116542c4cc57263c5ba6c4feabfc49fe771f2f98a79d2f7628b8762723b  inno.exe" | shasum -a 256 -c -
+          curl -fsSL --retry 3 -o nsis.exe https://github.com/notepad-plus-plus/notepad-plus-plus/releases/download/v8.9.7/npp.8.9.7.Installer.x64.exe
+          echo "1884e093bae261c4942210334e1f2eae71354913e4ded3cc1a4a18c5320741ec  nsis.exe" | shasum -a 256 -c -
+          gogx="$GITHUB_WORKSPACE/tools/gogx/target/gogx"
+          sevenzz="$GITHUB_WORKSPACE/tools/7zip/build/7zz"
+          runs=("")
+          if [ "$(uname -m)" = arm64 ] && arch -x86_64 /usr/bin/true 2>/dev/null; then runs+=("arch -x86_64"); fi
+          for prefix in "${runs[@]}"; do
+            echo "== ${prefix:-native}"
+            $prefix "$gogx" --version
+            $prefix "$gogx" --test inno.exe
+            rm -rf inno && $prefix "$gogx" inno.exe inno
+            n="$(find inno -type f | wc -l | tr -d ' ')"
+            [ "$n" = 101 ] || { echo "::error::gogx wrote $n files from Inno Setup 6.4.3's installer, not 101"; exit 1; }
+            formats="$($prefix "$sevenzz" i)"
+            grep -qw Nsis <<< "$formats" || { echo "::error::7zz has no NSIS handler"; exit 1; }
+            $prefix "$sevenzz" t -bd nsis.exe
+            rm -rf nsis && $prefix "$sevenzz" x -y -bd -onsis nsis.exe > /dev/null
+            n="$(find nsis -type f | wc -l | tr -d ' ')"
+            [ "$n" -ge 250 ] || { echo "::error::7zz unpacked $n files from the NSIS installer"; exit 1; }
+          done
+
+      # gogx's crates' licence notices, 7-Zip's licence and unRAR's
+      # restriction, and what each binary was built from.
+      - name: Zip
+        run: |
+          rm -rf stage && mkdir -p stage/tools
+          cp tools/gogx/target/gogx tools/7zip/build/7zz stage/tools/
+          {
+            echo "# gogx"; echo
+            (cd tools/gogx && python3 licenses.py)
+            echo; echo "# 7-Zip (7zz)"; echo
+            cat tools/7zip/build/License.txt
+            echo; cat tools/7zip/build/unRarLicense.txt
+          } > stage/tools/NOTICES.txt
+          {
+            echo "gogx: Arcanum CE's tools/gogx at $GITHUB_SHA, $(cd tools/gogx && rustc --version), with innospect 0.2.0 and tools/gogx/patches/."
+            cat tools/7zip/build/SOURCE.txt
+            echo "Both built on $(sw_vers -productName) $(sw_vers -productVersion), $(xcodebuild -version | head -1)."
+          } > stage/tools/SOURCES.txt
+          cat stage/tools/SOURCES.txt
+          (cd stage && ditto -c -k --norsrc --noextattr --noacl --keepParent tools "$GITHUB_WORKSPACE/arcanum-ce-macos-tools.zip")
+          shasum -a 256 arcanum-ce-macos-tools.zip | tee arcanum-ce-macos-tools.zip.sha256
+
+      - name: Upload
+        uses: actions/upload-artifact@v6
+        with:
+          name: arcanum-ce-macos-tools
+          path: |
+            arcanum-ce-macos-tools.zip
+            arcanum-ce-macos-tools.zip.sha256
+          retention-days: 30

@@ -55,11 +55,14 @@ the original game, quirks included. So:
 | Tests | The same workflow builds and runs the C suite with Apple clang, without the 13 test files that need GNU tools (below): all passed on 2026-10-29, as x86_64. Apple clang found three missing declarations that glibc's headers had hidden, fixed. It also warns of 23 variables that may be used uninitialized on some path, which GCC does not report; they are not yet reviewed against the original. |
 | Play | **Not tested at all.** |
 | Signing | Ad-hoc only (`codesign -s -`), not notarized. |
+| Setup tools | The package's two unpackers, `tools/gogx` (GOG's installer) and `tools/7zip` (7-Zip's `7zz`, for UAP's), built by the same workflow's `tools` job, added 2026-10-31 and not yet run there. gogx's output equals innoextract's on GOG's 1.0.7.4 installer, checked on Linux ([tools/README.md](../tools/README.md)). |
 
 ## Building on a Mac
 
-You need Xcode (or its command line tools) and CMake 3.25 or later
-(`brew install cmake`; `CMakePresets.json` is format version 6). The
+You need Xcode (or its command line tools) and CMake 3.25 or later, from
+cmake.org's macOS download or MacPorts (`sudo port install cmake`);
+`CMakePresets.json` is format version 6. Homebrew's installer refuses Intel
+Macs since September 2026. The
 libraries (SDL3, SDL3_mixer, zlib, fpattern) are built with the game:
 `third_party/` pins their versions, and CMake fetches them from GitHub the
 first time you configure, so that step needs the network.
@@ -118,11 +121,14 @@ The game's data is not in this repository. You need GOG's *Arcanum*
 (1.0.7.4) and, for the usual setup, the Unofficial Arcanum Patch 2.0.2.
 
 ```console
-brew install innoextract sevenzip
-innoextract -d ~/Games/arcanum-gog setup_arcanum_*.exe
+tools/gogx/build.sh       # needs Rust, from rustup.rs; see tools/README.md
+tools/gogx/target/release/gogx setup_arcanum_*.exe ~/Games/arcanum-gog
 ```
 
-GOG's game folder is the `app` folder inside. Put the app **in the game
+`gogx` is the unpacker the release package carries; innoextract, from
+MacPorts, writes the same files. For GOG's 1.0.7.4 build (77721) the game
+files sit at the top of that folder; an `app` folder beside them holds only
+an icon and a web cache. Put the app **in the game
 folder**, beside `Arcanum.exe` and `modules/`: its `Info.plist` sets
 `SDL_FILESYSTEM_BASE_DIR_TYPE` to `parent`, so `src/main.c` changes to the
 folder that contains the app and reads everything from there. The release

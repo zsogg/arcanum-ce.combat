@@ -1,0 +1,21 @@
+Arcanum CE patch 1 of 1 for 7-Zip 26.05 (tools/7zip, 2026-10-31).
+
+7-Zip's own Mac build targets macOS 10.15 because of one call, timespec_get(),
+which Apple added in 10.15. Excluding Apple from that branch falls back to
+clock_gettime(), in macOS since 10.12, so 7zz runs on 10.13 and 10.14.
+
+--- a/CPP/Windows/TimeUtils.cpp
++++ b/CPP/Windows/TimeUtils.cpp
+@@ -260,7 +260,11 @@
+       Cygwin 2.9, mingw, MSVC 14, Android 9.0.
+   Android NDK defines TIME_UTC but doesn't have the timespec_get().
+ */
+-#if defined(TIME_UTC) && !defined(__ANDROID__)
++// Arcanum CE patch (tools/7zip, 2026-10-31): not on macOS either. Its SDKs
++// define TIME_UTC whatever the deployment target, but timespec_get() is
++// only in macOS 10.15 and later; built for 10.13 the call would be weakly
++// linked and crash on 10.13 and 10.14. clock_gettime() is in 10.12.
++#if defined(TIME_UTC) && !defined(__ANDROID__) && !defined(__APPLE__)
+ #define ZIP7_USE_timespec_get
+ // #pragma message("ZIP7_USE_timespec_get")
+ #elif defined(CLOCK_REALTIME)

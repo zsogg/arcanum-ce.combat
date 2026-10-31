@@ -23,22 +23,39 @@ macOS, as one app for Apple Silicon and Intel Macs.
 ## What you need
 
 - **Arcanum from GOG**: the offline installer, `setup_arcanum_*.exe`, from
-  your GOG library (and its `.bin` file, if GOG gives you one).
+  your GOG library.
 - **The Unofficial Arcanum Patch 2.0.2**: `UAP2.0.2.exe`.
-- **innoextract** and **7-Zip**, from Homebrew (https://brew.sh):
-  `brew install innoextract sevenzip`
 - macOS 10.13 or later, on Apple Silicon or Intel.
-- About 2 GB free.
+- About 3 GB free, and 2 GB of memory while setup unpacks the game.
+
+Nothing else: the two programs that unpack the installers are in this
+package's `tools` folder (`gogx` for GOG's installer, 7-Zip's `7zz` for
+UAP's), so no package manager such as Homebrew is needed.
+
+If GOG gives you a `.bin` file beside the installer, that installer keeps
+its data in a form `gogx` cannot read. Then install Arcanum with GOG's
+installer on a Windows PC, copy the game folder (the one holding
+`Arcanum.exe` and `modules`) to the Mac, and run setup with it in place of
+the installer:
+
+```console
+ARCANUM_SETUP_GOG_DIR=~/Downloads/arcanum-gog bash setup.sh --uap ~/Downloads/UAP2.0.2.exe
+```
 
 ## Installing
 
 In Terminal:
 
 ```console
-tar xf arcanum-ce-*-macos.tar.gz
-cd arcanum-ce-*-macos
+cd ~/Downloads
+tar xf arcanum-ce-VERSION-macos.tar.gz
+cd arcanum-ce-VERSION-macos
 bash setup.sh --gog ~/Downloads/setup_arcanum_*.exe --uap ~/Downloads/UAP2.0.2.exe
 ```
+
+with VERSION as in your download's name (Tab completes it). Remove any older
+`arcanum-ce-` download from Downloads first, so the old package's setup is
+not the one that runs.
 
 Setup then:
 
@@ -61,8 +78,9 @@ Setup then:
 ## The first launch
 
 The app is signed ad hoc, not notarized by Apple, so macOS does not know who
-made it. Setup clears the app's quarantine flag, which is usually enough. If
-macOS still refuses to open it:
+made it. Setup clears the quarantine flag of the app, and of the two tools
+before it runs them, which is usually enough. If macOS still refuses to open
+the app:
 
 - open **System Settings > Privacy & Security**, scroll to the message about
   Arcanum Community Edition, and choose **Open Anyway**; or

@@ -1,0 +1,5 @@
+# The toolchain gogx is built and checked with; the macOS workflow reads it.
+[toolchain]
+channel = "1.99.1"
+profile = "minimal"
+targets = ["x86_64-apple-darwin", "aarch64-apple-darwin"]

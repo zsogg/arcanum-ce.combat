@@ -1,0 +1,3 @@
+# 7-Zip's sources use CRLF line ends, so a patch's hunks carry them; keep
+# them byte for byte, or the patch stops applying.
+*.patch -text whitespace=cr-at-eol

@@ -1,0 +1,26 @@
+Arcanum CE patch 1 of 3 for innospect 0.2.0 (gogx, 2026-10-31).
+
+A chunk whose data entry lacks ChunkCompressed is stored, whatever the
+installer's compression method; innospect decoded every chunk with the
+installer's method. innoextract decides it in setup/data.cpp. Without it
+GOG's Arcanum 1.0.7.4 installer fails on 191 of 317 entries with
+"invalid LZMA2 dictionary property 120". Review finding E1:
+arcanum-work audits/review-20261031-innospect.
+
+--- a/src/extract/chunk.rs
++++ b/src/extract/chunk.rs
+@@ -103,6 +103,14 @@
+     // For encrypted chunks, an EncryptionContext is required.
+     // Without one, surface `Error::Encrypted` so the caller can
+     // react (typically by re-parsing with a candidate password).
++    // Arcanum CE patch (gogx, 2026-10-31): a chunk without ChunkCompressed
++    // is stored, whatever the installer's method, as innoextract decides in
++    // setup/data.cpp. GOG's installers store their .dat archives this way.
++    let compression = if data.flags.contains(&DataFlag::ChunkCompressed) {
++        compression
++    } else {
++        CompressMethod::Stored
++    };
+     let chunk_is_encrypted = data.flags.contains(&DataFlag::ChunkEncrypted);
+     if chunk_is_encrypted && encryption.is_none() {
+         return Err(Error::Encrypted);

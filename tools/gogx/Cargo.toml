@@ -1,0 +1,24 @@
+[package]
+name = "gogx"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.88"
+publish = false
+description = "Unpacks GOG.com's offline game installers for Arcanum CE's macOS setup"
+
+[dependencies]
+# Pinned exactly: prepare.py fetches this version and applies patches/.
+innospect = "=0.2.0"
+# The same versions and backend innospect itself uses.
+flate2 = { version = "1.1.10", default-features = false, features = ["zlib-rs"] }
+md-5 = "0.11.0"
+memmap2 = "0.9"
+
+[profile.release]
+codegen-units = 1
+strip = true
+
+# innospect 0.2.0 with Arcanum CE's three fixes (patches/, README.md).
+# Run `python3 prepare.py` first; it writes this folder.
+[patch.crates-io]
+innospect = { path = "vendor/innospect-0.2.0" }
