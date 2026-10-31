@@ -211,6 +211,7 @@ int main(int argc, char** argv)
     // was truncated as well. Neither showed up when the switch was built,
     // because the script it was tested with happened to sit under an
     // all-lowercase path.
+    unsigned int harness_observer_limit = 0;
     for (int arg = 1; arg < argc; arg++) {
         const char* prefix = "--combat-observe=";
         if (strncmp(argv[arg], prefix, strlen(prefix)) == 0) {
@@ -225,7 +226,7 @@ int main(int argc, char** argv)
         // seventy-three fighters spend it in two minutes.
         prefix = "-observer-limit=";
         if (strncmp(argv[arg], prefix, strlen(prefix)) == 0) {
-            combat_observer_test_set_event_limit((unsigned int)strtoul(argv[arg] + strlen(prefix), NULL, 10));
+            harness_observer_limit = (unsigned int)strtoul(argv[arg] + strlen(prefix), NULL, 10);
         }
     }
 
@@ -586,6 +587,11 @@ int main(int argc, char** argv)
     if (combat_observer_path != NULL
         && combat_observer_open(combat_observer_path)) {
         atexit(combat_observer_close);
+        // After the open, which resets the budget to its default: the first
+        // battle run with the switch truncated all the same.
+        if (harness_observer_limit != 0) {
+            combat_observer_test_set_event_limit(harness_observer_limit);
+        }
     }
 
     // CE (card O2): `-untildone` reads the duel's end from the observer, so
