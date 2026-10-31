@@ -44,18 +44,32 @@ ARCANUM_SETUP_GOG_DIR=~/Downloads/arcanum-gog bash setup.sh --uap ~/Downloads/UA
 
 ## Installing
 
-In Terminal:
+1. Put GOG's installer and `UAP2.0.2.exe` in your Downloads folder.
+2. Open the Arcanum CE folder you downloaded (Safari usually unpacks it;
+   otherwise double-click the `.tar.gz`).
+3. Double-click **Install Arcanum CE**. The first time, macOS refuses it,
+   because it is not from an identified developer: open **System Settings >
+   Privacy & Security**, choose **Open Anyway** at the bottom, and
+   double-click it again. (On macOS 14 and earlier you can instead
+   right-click it, choose Open, then Open.)
+
+It opens a Terminal window and says what it does at each step: it finds the
+two installers (or opens a Finder window to choose them), checks the space
+and the folder, then runs setup, which asks about the optional mods (Return
+alone means no). At the end it offers to start the game. If anything stops
+it, it says why, and shows its log in Finder: what it and setup printed,
+the choices made and this Mac's macOS version and model, ready to attach to
+a bug report. The logs stay in `~/Library/Logs/Arcanum CE/`, with your home
+folder's name replaced by `~` and every time in UTC.
+
+**From Terminal instead**, which is what the installer runs:
 
 ```console
-cd ~/Downloads
-tar xf arcanum-ce-VERSION-macos.tar.gz
-cd arcanum-ce-VERSION-macos
+cd ~/Downloads/arcanum-ce-VERSION-macos
 bash setup.sh --gog ~/Downloads/setup_arcanum_*.exe --uap ~/Downloads/UAP2.0.2.exe
 ```
 
-with VERSION as in your download's name (Tab completes it). Remove any older
-`arcanum-ce-` download from Downloads first, so the old package's setup is
-not the one that runs.
+with VERSION as in your download's name (Tab completes it).
 
 Setup then:
 
