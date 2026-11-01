@@ -887,8 +887,10 @@ static bool replay_parse_line(const char* text, ReplayCommand* command)
 
     if (strcmp(kind, "learn") == 0) {
         command->kind = REPLAY_KIND_LEARN;
+        // Past the table, `learn 80 force` wrote a mastery slot and 85 a tech
+        // degree (review 2026-10-31, E2-5).
         if (!replay_parse_int(tokens[index++], &(command->spell))
-            || command->spell < 0) {
+            || command->spell < 0 || command->spell >= SPELL_COUNT) {
             return false;
         }
         // CE (magic, milestone MG-1): `learn <spell> force`, a test row,
@@ -1436,7 +1438,7 @@ static bool replay_parse_line(const char* text, ReplayCommand* command)
     if (strcmp(kind, "cast") == 0) {
         command->kind = REPLAY_KIND_CAST;
         if (!replay_parse_int(tokens[index++], &(command->spell))
-            || command->spell < 0 || index >= count) {
+            || command->spell < 0 || command->spell >= SPELL_COUNT || index >= count) {
             return false;
         }
         if (strcmp(tokens[index], "self") == 0) {

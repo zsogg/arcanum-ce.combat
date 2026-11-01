@@ -1148,6 +1148,8 @@ TEST(a_row_the_parser_cannot_read_refuses_the_whole_file)
     CHECK(!load_script("zero key combat-mode\n"));
     CHECK(!load_script("0 learn\n"));
     CHECK(!load_script("0 learn harm\n"));
+    CHECK(!load_script("0 learn 80 force\n")); // past the spells: a mastery slot
+    CHECK(!load_script("0 cast 80 self\n"));
     // Magic MG-1: `force` is the only word that may follow.
     CHECK(load_script("0 learn 59 force\n"));
     CHECK_INT(replay_ui_count(), 1);
