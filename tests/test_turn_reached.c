@@ -7,19 +7,24 @@
 // The two side effects and `gamelib_in_load` are wrapped at link time
 // (`ld --wrap`), so the case counts calls rather than building a poisoned
 // critter and a summon; the walk's function and its turn pointer are `static`
-// in combat.c and globalized for the suite.
+// in combat.c and globalized for the suite. The suite also holds the
+// fumble get-up cost, which needs the same globalized combat.c.
 #include <stdbool.h>
 #include <stdint.h>
 #include <string.h>
 
+#include "game/combat.h"
+#include "game/fumble_rules.h"
 #include "game/obj.h"
 #include "game/object_node.h"
+#include "game/stat.h"
 #include "obj_harness.h"
 #include "test_harness.h"
 
 // Globalized out of combat.c by the build; in no header.
 extern ObjectNode* combat_whos_turn_node;
 extern int combat_turn_based_active;
+extern int64_t combat_fumble_falls[];
 bool combat_turn_based_critter_skip(ObjectNode* object_node);
 
 static bool forced_in_load;
@@ -88,9 +93,39 @@ TEST(a_load_walking_to_the_saved_turn_reaches_neither)
     CHECK_INT(summons_calls, 0);
 }
 
+// Review 2026-10-31, finding 6: a fumble's get-up cost 6 even for a critter
+// whose whole turn is 5, which then lay down for the rest of the fight. The
+// fall is planted in the table `combat_apply_fumble` fills.
+static int get_up_cost_at_speed(int speed)
+{
+    int64_t obj = obj_harness_create_proto(OBJ_TYPE_NPC);
+    int cost;
+
+    stat_base_set(obj, STAT_DEXTERITY, speed);
+    combat_fumble_falls[0] = obj;
+    cost = combat_get_up_cost(obj);
+    combat_fumble_fall_clear(obj);
+    obj_harness_destroy(obj);
+    return cost;
+}
+
+TEST(a_fumble_get_up_never_costs_more_than_a_whole_turn)
+{
+    CHECK_INT(get_up_cost_at_speed(5), 5);
+    CHECK_INT(get_up_cost_at_speed(3), 5);
+}
+
+TEST(a_fumble_get_up_costs_six_to_a_critter_with_six_a_turn)
+{
+    CHECK_INT(get_up_cost_at_speed(6), FUMBLE_GET_UP_COST);
+    CHECK_INT(get_up_cost_at_speed(12), FUMBLE_GET_UP_COST);
+}
+
 void test_turn_reached_suite(void)
 {
     CHECK(obj_harness_init());
     RUN(a_turn_coming_round_reaches_poison_and_summons);
     RUN(a_load_walking_to_the_saved_turn_reaches_neither);
+    RUN(a_fumble_get_up_never_costs_more_than_a_whole_turn);
+    RUN(a_fumble_get_up_costs_six_to_a_critter_with_six_a_turn);
 }

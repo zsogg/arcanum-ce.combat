@@ -680,6 +680,7 @@ set(COMBAT_TEST_DATA
     combat_critter_list
     combat_whos_turn_node
     combat_turn_based_active
+    combat_fumble_falls
 )
 set(COMBAT_TEST_OBJ "${CMAKE_CURRENT_BINARY_DIR}/combat_test_globalized.o")
 set(_combat_test_globalize_args "")

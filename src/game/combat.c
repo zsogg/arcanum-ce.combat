@@ -5144,9 +5144,14 @@ int combat_pickup_cost(int64_t obj, int64_t item_obj)
 // time it; lifted all the same so the rebalance tunes it in one place.
 int combat_get_up_cost(int64_t obj)
 {
-    // CE (`weapon fumbles`, card FU1): 6 after the critter's own fumble.
+    // CE (`weapon fumbles`, card FU1; review 2026-10-31, finding 6): 6 after
+    // the critter's own fumble, but never more than a whole turn, or a critter
+    // with the minimum 5 a turn (Speed 5 or less, or anyone under the player's
+    // Tempus Fugit) could never get up in turn-based.
     if (combat_fumble_fallen(obj)) {
-        return FUMBLE_GET_UP_COST;
+        int per_turn = combat_action_points_per_turn(obj);
+
+        return per_turn < FUMBLE_GET_UP_COST ? per_turn : FUMBLE_GET_UP_COST;
     }
 
     return 5;
