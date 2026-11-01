@@ -26,6 +26,7 @@
 #include "test_harness.h"
 #include "tig/file.h"
 #include "tig/video.h"
+#include "ui/wmap_ui.h"
 
 #ifdef _WIN32
 #include <direct.h>
@@ -283,6 +284,58 @@ static void write_gsi(int pc_size, const char* pc_name, int description_size, co
     write_fixture(REPO "/Save/Slot0001.gsi");
 }
 
+// -- world-map notes (review 2026-10-31, finding 1) ---------------------------
+
+// One note before its string: id, flags, x, y, a four-int rect, then type.
+#define WMAP_NOTE_HEAD_SIZE (4 * 4 + 4 * 4 + 4)
+
+static void put_note(int type)
+{
+    put_zeros(4 * 4 + 4 * 4); // id, flags, coords, rect
+    put_int(type);
+    put_int(0); // an empty string
+}
+
+// The world notes and the town notes share one reader since finding 1, so
+// this count case guards the town file's count too.
+TEST(a_note_count_past_the_array_is_refused_before_any_note)
+{
+    int position = 0;
+
+    put_int(201);
+    put_note(0);
+    write_fixture(FIXTURE);
+
+    CHECK(!load_fixture(wmap_ui_load, &position));
+    CHECK_INT(position, 4);
+}
+
+TEST(a_note_type_past_the_table_is_refused_at_the_type)
+{
+    int position = 0;
+
+    // Two notes, the second cut short: the previous reader took the first
+    // note whole and failed only at the truncated second one.
+    put_int(2);
+    put_note(8);
+    write_fixture(FIXTURE);
+
+    CHECK(!load_fixture(wmap_ui_load, &position));
+    CHECK_INT(position, 4 + WMAP_NOTE_HEAD_SIZE);
+}
+
+TEST(a_negative_note_type_is_refused_at_the_type)
+{
+    int position = 0;
+
+    put_int(2);
+    put_note(-1);
+    write_fixture(FIXTURE);
+
+    CHECK(!load_fixture(wmap_ui_load, &position));
+    CHECK_INT(position, 4 + WMAP_NOTE_HEAD_SIZE);
+}
+
 TEST(a_well_formed_gsi_loads)
 {
     GameSaveInfo info;
@@ -393,6 +446,9 @@ void test_save_bounds_suite(void)
     RUN(a_magictech_count_past_the_array_is_refused_before_anything_is_read);
     RUN(a_negative_time_event_type_is_refused_at_the_type);
     RUN(a_time_event_type_at_the_count_is_refused_at_the_type);
+    RUN(a_note_count_past_the_array_is_refused_before_any_note);
+    RUN(a_note_type_past_the_table_is_refused_at_the_type);
+    RUN(a_negative_note_type_is_refused_at_the_type);
     RUN(a_well_formed_gsi_loads);
     RUN(a_gsi_with_an_oversized_player_name_is_refused);
     RUN(a_gsi_with_an_oversized_description_is_refused);

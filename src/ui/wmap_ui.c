@@ -268,6 +268,7 @@ static void wmap_ui_discover_area(int64_t pc_obj, int64_t loc);
 static void wmap_ui_coords_to_known_loc(WmapCoords* coords, int64_t* loc_ptr);
 static int64_t wmap_ui_travel_time_calc(WmapCoords* a1, WmapCoords* a2, DateTime* datetime);
 static void wmap_ui_town_notes_load(void);
+static bool wmap_ui_notes_read(WmapNote* notes, int cnt, TigFile* stream);
 static void wmap_ui_town_notes_flush(void);
 static int wmap_ui_compass_arrow_frame_calc(WmapCoords* a, WmapCoords* b);
 static void wmap_ui_compass_arrow_frame_set(int frame);
@@ -1055,7 +1056,6 @@ bool wmap_ui_load(GameLoadInfo* load_info)
 {
     int mode;
     int cnt;
-    int note;
     int64_t loc;
     int64_t sector_id;
 
@@ -1073,27 +1073,19 @@ bool wmap_ui_load(GameLoadInfo* load_info)
 
             tig_debug_printf("WMapUI: Reading Saved Notes: %d.\n", cnt);
 
-            // FIX: the count indexes a 200-entry array and came out of the
-            // stream unchecked (review 2026-10-22, finding 2).
-            if (cnt < 0 || cnt > WMAP_UI_NOTES_MAX) {
-                tig_debug_printf("WMapUI: Load: refusing implausible note count %d.\n", cnt);
-                return false;
-            }
-
             if (wmap_ui_mode_info[mode].num_notes == NULL) {
                 tig_debug_printf("WMapUI: Load: ERROR: Note Data Doesn't Match!\n");
                 exit(EXIT_FAILURE);
             }
 
-            *wmap_ui_mode_info[mode].num_notes = cnt;
-
-            for (note = 0; note < cnt; note++) {
-                tig_debug_printf("WMapUI: Reading Individual Note: %d.\n", note);
-
-                if (!wmap_ui_town_note_load(&(wmap_ui_mode_info[mode].notes[note]), load_info->stream)) {
-                    return false;
-                }
+            // FIX: the count indexes a 200-entry array and came out of the
+            // stream unchecked (review 2026-10-22, finding 2); the notes are
+            // read by the reader the town notes share.
+            if (!wmap_ui_notes_read(wmap_ui_mode_info[mode].notes, cnt, load_info->stream)) {
+                return false;
             }
+
+            *wmap_ui_mode_info[mode].num_notes = cnt;
         }
     }
 
@@ -1117,6 +1109,12 @@ bool wmap_ui_town_note_load(WmapNote* note, TigFile* stream)
     if (tig_file_fread(&(note->coords.y), sizeof(note->coords.y), 1, stream) != 1) return false;
     if (!wmap_ui_rect_read(&(note->field_18), stream)) return false;
     if (tig_file_fread(&(note->type), sizeof(note->type), 1, stream) != 1) return false;
+
+    // FIX: the type indexes the 8-entry note type table when the note is
+    // drawn and hit-tested, and came out of the stream unchecked (review
+    // 2026-10-31, finding 1).
+    if (note->type < 0 || note->type >= WMAP_NOTE_TYPE_COUNT) return false;
+
     if (tig_file_fread(&size, sizeof(size), 1, stream) != 1) return false;
 
     // FIX: the length is bounded by the 250-byte field it fills (review
@@ -1125,6 +1123,28 @@ bool wmap_ui_town_note_load(WmapNote* note, TigFile* stream)
 
     memset(note->str, 0, sizeof(note->str));
     if (tig_file_fread(note->str, 1, size, stream) != size) return false;
+
+    return true;
+}
+
+// CE: the world notes in the save stream and the town notes in
+// `Save\Current\<town>.tmn` are both a count and then that many notes into a
+// 200-entry array; one reader refuses a count the array cannot hold (review
+// 2026-10-22 finding 2 bounded the world count only; 2026-10-31 finding 1).
+static bool wmap_ui_notes_read(WmapNote* notes, int cnt, TigFile* stream)
+{
+    int note;
+
+    if (cnt < 0 || cnt > WMAP_UI_NOTES_MAX) {
+        tig_debug_printf("WMapUI: Load: refusing implausible note count %d.\n", cnt);
+        return false;
+    }
+
+    for (note = 0; note < cnt; note++) {
+        if (!wmap_ui_town_note_load(&(notes[note]), stream)) {
+            return false;
+        }
+    }
 
     return true;
 }
@@ -4160,7 +4180,7 @@ void wmap_ui_town_notes_load(void)
 {
     char path[TIG_MAX_PATH];
     TigFile* stream;
-    int index;
+    int cnt;
     bool success = true;
 
     if (wmap_ui_loaded_townmap != wmap_ui_townmap) {
@@ -4179,15 +4199,15 @@ void wmap_ui_town_notes_load(void)
             return;
         }
 
-        if (tig_file_fread(&wmap_ui_num_town_notes, sizeof(wmap_ui_num_town_notes), 1, stream) == 1
-            && tig_file_fread(&(wmap_ui_mode_info[WMAP_UI_MODE_TOWN].field_194), sizeof(wmap_ui_mode_info[WMAP_UI_MODE_TOWN].field_194), 1, stream) == 1) {
-            for (index = 0; index < wmap_ui_num_town_notes; index++) {
-                if (!wmap_ui_town_note_load(&(wmap_ui_town_notes[index]), stream)) {
-                    success = false;
-                    break;
-                }
-            }
+        // FIX: the count came out of the file unchecked and indexed a
+        // 200-entry array (review 2026-10-31, finding 1). A file refused
+        // part-way leaves no notes rather than a count over unread ones.
+        if (tig_file_fread(&cnt, sizeof(cnt), 1, stream) == 1
+            && tig_file_fread(&(wmap_ui_mode_info[WMAP_UI_MODE_TOWN].field_194), sizeof(wmap_ui_mode_info[WMAP_UI_MODE_TOWN].field_194), 1, stream) == 1
+            && wmap_ui_notes_read(wmap_ui_town_notes, cnt, stream)) {
+            wmap_ui_num_town_notes = cnt;
         } else {
+            wmap_ui_num_town_notes = 0;
             success = false;
         }
 
