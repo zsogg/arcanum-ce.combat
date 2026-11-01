@@ -6416,6 +6416,12 @@ bool art_read_header(TigArtHeader* hdr, TigFile* stream)
     if (tig_file_fread(&(hdr->action_frame), sizeof(hdr->action_frame), 1, stream) != 1) return false;
     if (tig_file_fread(&(hdr->num_frames), sizeof(hdr->num_frames), 1, stream) != 1) return false;
 
+    // FIX: the count sizes the frame tables `tig_art_file_read` allocates and
+    // then reads, so a negative or absurd one wrote through NULL or past the
+    // block (review 2026-10-31, finding 5). The shipped art tops out at 639
+    // frames (`art/facade/tullatower-05.art`, of 15,638 files).
+    if (hdr->num_frames < 0 || hdr->num_frames > 0xFFFF) return false;
+
     // Skip frames table, actual values are ignored.
     if (tig_file_fseek(stream, 4 * MAX_ROTATIONS, SEEK_CUR) != 0) return false;
 

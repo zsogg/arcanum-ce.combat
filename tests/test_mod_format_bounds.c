@@ -5,8 +5,10 @@
 // the public entry point. Against the previous readers these cases crashed
 // or returned true for nonsense: a `.dat` whose names overrun its name
 // table, a facade grid of 2^40 cells, a blocked-sector count of -1, a
-// terrain a billion tiles wide. The `.art` decoder's bound (`art.c`) has no
-// case here: it sits behind the art cache, which needs the video layer.
+// terrain a billion tiles wide. The `.art` decoder's run-length bound
+// (`art.c`) has no case here: it sits behind the art cache, which needs the
+// video layer. The header's frame count does (review 2026-10-31, finding 5),
+// through the header reader the GNU-link build globalizes.
 #include <stdio.h>
 #include <string.h>
 
@@ -254,6 +256,7 @@ static void erase_fixture_dir(void)
 {
     remove(REPO "/bounds.dat");
     remove(REPO "/art/Facade/facwalk.01");
+    remove(REPO "/art/frames.art");
     remove(REPO "/cur/map.sbf");
     remove(REPO "/base/terrain.tdf");
     tig_file_rmdir(REPO "/art/Facade");
@@ -262,6 +265,50 @@ static void erase_fixture_dir(void)
     tig_file_rmdir(REPO "/base");
     tig_file_rmdir(REPO);
 }
+
+#if ARCANUM_TESTS_GNU_LINK
+// `art_read_header` is `static` in art.c and its header struct is private
+// there; the case hands it a zeroed buffer at least as large and reads back
+// only its answer.
+bool art_read_header(void* hdr, TigFile* stream);
+
+// flags, fps, bpp, four palette words, action frame, frame count, the
+// skipped frame table, eight data sizes, the skipped pixel table.
+static bool art_header_with_frames(int frames)
+{
+    long long hdr[64];
+    TigFile* stream;
+    bool ok;
+
+    put_zeros(8); // flags, fps
+    put_int(8); // bpp
+    put_zeros(20); // four palette words, action frame
+    put_int(frames);
+    put_zeros(32 + 32 + 32); // frame table, data sizes, pixel table
+    write_fixture(REPO "/art/frames.art");
+
+    memset(hdr, 0, sizeof(hdr));
+    stream = tig_file_fopen(REPO "/art/frames.art", "rb");
+    CHECK(stream != NULL);
+    if (stream == NULL) {
+        return false;
+    }
+    ok = art_read_header(hdr, stream);
+    tig_file_fclose(stream);
+    return ok;
+}
+
+TEST(an_art_frame_count_below_zero_or_past_any_art_is_refused)
+{
+    CHECK(!art_header_with_frames(-1));
+    CHECK(!art_header_with_frames(0x10000));
+}
+
+TEST(an_art_frame_count_the_shipped_art_uses_reads)
+{
+    CHECK(art_header_with_frames(639));
+}
+#endif
 
 void test_mod_format_bounds_suite(void)
 {
@@ -284,6 +331,10 @@ void test_mod_format_bounds_suite(void)
     RUN(a_terrain_a_billion_tiles_wide_is_refused);
     RUN(a_terrain_of_negative_height_is_refused);
     RUN(a_plausible_terrain_header_still_opens);
+#if ARCANUM_TESTS_GNU_LINK
+    RUN(an_art_frame_count_below_zero_or_past_any_art_is_refused);
+    RUN(an_art_frame_count_the_shipped_art_uses_reads);
+#endif
 
     CHECK(tig_file_repository_remove(REPO));
     erase_fixture_dir();

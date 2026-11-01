@@ -879,6 +879,42 @@ add_custom_target(arcanum-text-filter-test-obj DEPENDS "${TEXT_FILTER_TEST_OBJ}"
 target_link_libraries(arcanum-tests PRIVATE "${TEXT_FILTER_TEST_OBJ}")
 add_dependencies(arcanum-tests arcanum-text-filter-test-obj)
 
+# `art.c`'s header reader, for the `.art` frame-count bound (review
+# 2026-10-31, finding 5). It is `static`, and the rest of the reader sits
+# behind the art cache and the video layer, so the suite reads a crafted
+# header through it directly. art.c lives in `tig`, not `arcanum-game`.
+set(ART_TEST_STATICS
+    art_read_header
+)
+set(ART_TEST_OBJ "${CMAKE_CURRENT_BINARY_DIR}/art_test_globalized.o")
+set(_art_test_globalize_args "")
+foreach(sym ${ART_TEST_STATICS})
+    list(APPEND _art_test_globalize_args "--globalize-symbol=${sym}")
+endforeach()
+
+file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/arttestobj")
+
+add_custom_command(
+    OUTPUT "${ART_TEST_OBJ}"
+    COMMAND "${CMAKE_AR}" x "$<TARGET_FILE:tig>" art.c${CMAKE_C_OUTPUT_EXTENSION}
+    COMMAND "${CMAKE_OBJCOPY}" ${_art_test_globalize_args} art.c${CMAKE_C_OUTPUT_EXTENSION} "${ART_TEST_OBJ}"
+    COMMAND "${CMAKE_COMMAND}" -E rm -f art.c${CMAKE_C_OUTPUT_EXTENSION}
+    COMMAND "${CMAKE_COMMAND}"
+        "-DOBJ=${ART_TEST_OBJ}"
+        "-DSYMS=${ART_TEST_STATICS}"
+        "-DDATA_SYMS="
+        "-DNM=${CMAKE_NM}"
+        -P "${CMAKE_CURRENT_SOURCE_DIR}/verify_globalized.cmake"
+    WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/arttestobj"
+    DEPENDS tig
+    COMMENT "tests: globalizing art.c's header reader (no source change)"
+    VERBATIM
+)
+
+add_custom_target(arcanum-art-test-obj DEPENDS "${ART_TEST_OBJ}")
+target_link_libraries(arcanum-tests PRIVATE "${ART_TEST_OBJ}")
+add_dependencies(arcanum-tests arcanum-art-test-obj)
+
 # `inven_ui.c`. `inven_ui_gamble_check` (0x579840, porting bug #262) and the
 # three handles it reads are `static`; `test_compare_fixes.c` sets the handles
 # and calls the check directly.
