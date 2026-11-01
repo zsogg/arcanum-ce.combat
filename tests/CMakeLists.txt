@@ -127,6 +127,7 @@ target_sources(arcanum-tests PRIVATE
     "test_save_bounds.c"
     "test_ai_memo.c"
     "test_combat_order.c"
+    "test_turn_reached.c"
     "test_compare_fixes.c"
     "test_dialog_conditions.c"
     "test_dialog_options.c"
@@ -673,9 +674,12 @@ add_dependencies(arcanum-tests arcanum-ai-test-obj)
 set(COMBAT_TEST_STATICS
     combat_order_summons
     combat_process_crit_hit
+    combat_turn_based_critter_skip
 )
 set(COMBAT_TEST_DATA
     combat_critter_list
+    combat_whos_turn_node
+    combat_turn_based_active
 )
 set(COMBAT_TEST_OBJ "${CMAKE_CURRENT_BINARY_DIR}/combat_test_globalized.o")
 set(_combat_test_globalize_args "")
@@ -1059,6 +1063,10 @@ target_link_options(arcanum-tests PRIVATE
     "-Wl,--wrap=mes_get_msg"
     "-Wl,--wrap=tf_add"
     "-Wl,--wrap=combat_observer_attack_started"
+    # test_turn_reached: count a turn's side effects, force a load.
+    "-Wl,--wrap=gamelib_in_load"
+    "-Wl,--wrap=stat_poison_turn_reached"
+    "-Wl,--wrap=magictech_summons_turn_reached"
 )
 endif() # ARCANUM_TESTS_GNU_LINK
 

@@ -4542,8 +4542,12 @@ bool combat_turn_based_critter_skip(ObjectNode* object_node)
     }
 
     // CE (poison per turn): poison ticks on every second turn that comes
-    // round, taken or skipped.
-    stat_poison_turn_reached(object_node->obj);
+    // round, taken or skipped. A load rebuilds the encounter and walks to
+    // whose turn it was, which is not a turn coming round: no tick (review
+    // 2026-10-31, finding 2).
+    if (!gamelib_in_load()) {
+        stat_poison_turn_reached(object_node->obj);
+    }
 
     // CE (poison per turn): a tick that kills can end the encounter, which
     // frees the list `object_node` is in; the callers stop on a null turn.
@@ -4553,8 +4557,11 @@ bool combat_turn_based_critter_skip(ObjectNode* object_node)
     }
 
     // CE (magic, milestone MG-3): this critter's turn has come round, taken
-    // or skipped, so the creatures it summoned are ready.
-    magictech_summons_turn_reached(object_node->obj);
+    // or skipped, so the creatures it summoned are ready - not on a load's
+    // walk to the saved turn (finding 2 above).
+    if (!gamelib_in_load()) {
+        magictech_summons_turn_reached(object_node->obj);
+    }
 
     if (!critter_is_active(object_node->obj)) {
         anim_advance_stun_goal(object_node->obj);
