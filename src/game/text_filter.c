@@ -224,6 +224,14 @@ void text_filter_sleeping_process(const char* src, char** dst)
             continue;
         }
 
+        // FIX: with an empty message 0 the original divides by zero here
+        // (0x4F6CB7 `idiv`) and the game dies on a sleeping PC's first
+        // letter; CE keeps the letter as typed.
+        if (text_filter_sleeping_replacement_length == 0) {
+            *out++ = *in++;
+            continue;
+        }
+
         *out++ = text_filter_sleeping_replacement_str[text_filter_sleeping_replacement_index];
         text_filter_sleeping_replacement_index = (text_filter_sleeping_replacement_index + 1) % text_filter_sleeping_replacement_length;
         in++;

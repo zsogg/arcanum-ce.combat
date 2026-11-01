@@ -48,6 +48,20 @@ TEST(letters_are_mumbled_and_the_rest_is_kept)
     free(out);
 }
 
+TEST(an_empty_replacement_keeps_the_letters)
+{
+    static char empty[] = "";
+    char* out;
+
+    // A mod's `{0}{}` divided by zero in the original, killing the game.
+    set_up();
+    text_filter_sleeping_replacement_str = empty;
+    text_filter_sleeping_replacement_length = 0;
+    out = filter("ab, c");
+    CHECK_STR(out, "ab, c");
+    free(out);
+}
+
 TEST(the_replacement_index_carries_over_between_lines)
 {
     char* out;
@@ -84,6 +98,7 @@ void test_text_filter_suite(void)
 {
     RUN(letters_are_mumbled_and_the_rest_is_kept);
     RUN(the_replacement_index_carries_over_between_lines);
+    RUN(an_empty_replacement_keeps_the_letters);
     RUN(protected_strings_survive_in_any_case);
     RUN(a_protected_string_ending_the_line_stops_at_its_end);
 }
