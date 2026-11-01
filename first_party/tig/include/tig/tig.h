@@ -24,6 +24,7 @@
 #include "tig/mouse.h"
 #include "tig/movie.h"
 #include "tig/palette.h"
+#include "tig/qsort.h"
 #include "tig/rect.h"
 #include "tig/sound.h"
 #include "tig/str_parse.h"

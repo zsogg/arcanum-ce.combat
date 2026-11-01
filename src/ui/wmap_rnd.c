@@ -970,7 +970,7 @@ void wmap_rnd_encounter_chart_exit(WmapRndEncounterChart* chart)
  */
 void wmap_rnd_encounter_chart_sort(WmapRndEncounterChart* chart)
 {
-    qsort(chart->entries, chart->num_entries, sizeof(*chart->entries), wmap_rnd_encounter_entry_compare);
+    tig_qsort(chart->entries, chart->num_entries, sizeof(*chart->entries), wmap_rnd_encounter_entry_compare);
 }
 
 /**

@@ -212,7 +212,7 @@ bool mt_ai_action_list_fill(MagicTechAiActionList* list, const char* name)
             }
         }
 
-        qsort(list->entries, list->cnt, sizeof(*list->entries), mt_ai_spell_priority_compare);
+        tig_qsort(list->entries, list->cnt, sizeof(*list->entries), mt_ai_spell_priority_compare);
     } else {
         list->entries = NULL;
     }

@@ -16892,7 +16892,7 @@ void proto_id_list_create(int** proto_ids_ptr, int* cnt_ptr)
         }
 
         if (cnt != 0) {
-            qsort(proto_ids, cnt, sizeof(*proto_ids), proto_id_list_sort);
+            tig_qsort(proto_ids, cnt, sizeof(*proto_ids), proto_id_list_sort);
         }
     } else {
         proto_ids = NULL;

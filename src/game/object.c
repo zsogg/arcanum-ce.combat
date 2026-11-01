@@ -4994,7 +4994,7 @@ void object_flush_pending_blits(void)
         return;
     }
 
-    qsort(object_pending_blits, object_blit_queue_size, sizeof(*object_pending_blits), object_compare_blits);
+    tig_qsort(object_pending_blits, object_blit_queue_size, sizeof(*object_pending_blits), object_compare_blits);
 
     for (index = 0; index < object_blit_queue_size; index++) {
         object_pending_blits[index].blit_info.src_rect = &(object_pending_rects[object_pending_blits[index].rect_index].src_rect);

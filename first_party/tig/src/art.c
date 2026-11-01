@@ -12,6 +12,7 @@
 #include "tig/file.h"
 #include "tig/memory.h"
 #include "tig/palette.h"
+#include "tig/qsort.h"
 #include "tig/timer.h"
 #include "tig/video.h"
 
@@ -5749,7 +5750,7 @@ void tig_art_cache_check_fullness(void)
         tgt = (art_size_t)((double)tig_art_total_video_memory * tig_art_cache_video_memory_fullness);
 
         // Sort cache entries by last access time, earliest first.
-        qsort(tig_art_cache_entries,
+        tig_qsort(tig_art_cache_entries,
             tig_art_cache_entries_length,
             sizeof(TigArtCacheEntry),
             tig_art_cache_entry_compare_time);
@@ -5775,7 +5776,7 @@ void tig_art_cache_check_fullness(void)
         tgt = (art_size_t)((double)tig_art_total_system_memory * 0.3f);
 
         // Sort cache entries by last access time, earliest first.
-        qsort(tig_art_cache_entries,
+        tig_qsort(tig_art_cache_entries,
             tig_art_cache_entries_length,
             sizeof(TigArtCacheEntry),
             tig_art_cache_entry_compare_time);
@@ -5813,7 +5814,7 @@ void tig_art_cache_check_fullness(void)
 
     // Sort back cache entries by name (as `tig_art_cache_find` uses binary
     // search by name).
-    qsort(tig_art_cache_entries,
+    tig_qsort(tig_art_cache_entries,
         tig_art_cache_entries_length,
         sizeof(TigArtCacheEntry),
         tig_art_cache_entry_compare_name);

@@ -8,6 +8,7 @@
 
 #include "tig/compat.h"
 #include "tig/database.h"
+#include "tig/qsort.h"
 
 #define INSTALL_CHECK_MAX_ARCHIVES 32
 #define INSTALL_CHECK_BACKUP_DIR "data/proto-shadowing-backup"
@@ -114,7 +115,7 @@ static void install_check_open_archives(void)
     }
     SDL_free(names);
 
-    qsort(install_check_archives, (size_t)install_check_archive_count,
+    tig_qsort(install_check_archives, (size_t)install_check_archive_count,
         sizeof(install_check_archives[0]), install_check_compare_names);
     for (index = 0; index < install_check_archive_count; index++) {
         install_check_archives[index].database = tig_database_open(install_check_archives[index].name);

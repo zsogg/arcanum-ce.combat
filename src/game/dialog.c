@@ -2840,7 +2840,7 @@ void dialog_load_internal(DialogFile* dialog)
     dialog_file_fclose(stream);
 
     if (dialog->entries_length != 0) {
-        qsort(dialog->entries,
+        tig_qsort(dialog->entries,
             dialog->entries_length,
             sizeof(*dialog->entries),
             dialog_entry_compare);

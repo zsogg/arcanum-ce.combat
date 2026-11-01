@@ -2953,6 +2953,82 @@ static void o_tig_art_header_num_rotations(const int64_t* a, int64_t* out)
 int tig_art_blt_flags_convert(unsigned int art_blt_flags, unsigned int* vb_blt_flags_ptr);
 int tig_art_build_path(unsigned int art_id, char* path, size_t maxlen);
 
+/* tig_qsort against the original's qsort (0x58A548): what is compared is the
+ * order equal keys come out in. Both sides build the same array from
+ * (seed, count, span, shape), sort 24-byte items on the int32 at offset 8 and
+ * hash the resulting order of the tags at offset 16 - the original side with
+ * 0x558D20 as its comparator, which is exactly that comparison. The arrays
+ * are generated rather than passed because the protocol carries integers. */
+#define ORACLE_QSORT_MAX 400
+
+typedef struct OracleQsortItem {
+    int32_t pad0;
+    int32_t pad1;
+    int32_t key;
+    int32_t pad3;
+    int32_t tag;
+    int32_t pad5;
+} OracleQsortItem;
+
+static int oracle_qsort_compare(const void* va, const void* vb)
+{
+    const OracleQsortItem* a = (const OracleQsortItem*)va;
+    const OracleQsortItem* b = (const OracleQsortItem*)vb;
+
+    return (a->key > b->key) - (a->key < b->key);
+}
+
+/* The harness's `_qsort_key` computes the same. */
+static int32_t oracle_qsort_key(uint32_t* state, int i, int n, int span, int shape)
+{
+    switch (shape) {
+    case 1: /* ascending */
+        return (int32_t)((int64_t)i * span / n);
+    case 2: /* descending */
+        return (int32_t)((int64_t)(n - 1 - i) * span / n);
+    case 3: /* all equal */
+        return 0;
+    case 4: /* up, then down */
+        return (int32_t)((int64_t)(i < n / 2 ? i : n - 1 - i) * span / n);
+    default:
+        *state = *state * 1103515245u + 12345u;
+        return (int32_t)((*state >> 16) % (uint32_t)span);
+    }
+}
+
+static void o_tig_qsort(const int64_t* a, int64_t* out)
+{
+    static OracleQsortItem items[ORACLE_QSORT_MAX];
+    uint32_t state = (uint32_t)a[0];
+    int n = (int)a[1];
+    int span = (int)a[2];
+    int shape = (int)a[3];
+    uint32_t h = 2166136261u;
+    int i;
+
+    if (n < 0 || n > ORACLE_QSORT_MAX || span < 1) {
+        out[0] = -1;
+        return;
+    }
+
+    for (i = 0; i < n; i++) {
+        memset(&items[i], 0, sizeof(items[i]));
+        items[i].key = oracle_qsort_key(&state, i, n, span, shape);
+        items[i].tag = i;
+    }
+
+    tig_qsort(items, (size_t)n, sizeof(*items), oracle_qsort_compare);
+
+    /* FNV-1a over the tags, two bytes each, low first. */
+    for (i = 0; i < n; i++) {
+        h ^= (uint32_t)(items[i].tag & 0xFF);
+        h *= 16777619u;
+        h ^= (uint32_t)((items[i].tag >> 8) & 0xFF);
+        h *= 16777619u;
+    }
+    out[0] = (int64_t)(uint64_t)h;
+}
+
 static void o_tig_art_blt_flags_convert(const int64_t* a, int64_t* out)
 {
     unsigned int vb_flags = (unsigned int)a[1];
@@ -3623,6 +3699,7 @@ static const OracleEntry oracle_entries[] = {
     { "tig_art_header_num_rotations", 1, 1, o_tig_art_header_num_rotations },
     { "tig_art_blt_flags_convert", 2, 2, o_tig_art_blt_flags_convert },
     { "tig_art_build_path", 2, 2, o_tig_art_build_path },
+    { "tig_qsort", 4, 1, o_tig_qsort },
     { "tig_art_cache_entry_blit", 5, 2, o_tig_art_cache_entry_blit },
     { "tig_color_rgb_to_grayscale", 1, 1, o_tig_color_rgb_to_grayscale },
     { "art_blit", 15, 2, o_art_blit },

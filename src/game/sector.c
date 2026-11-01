@@ -2311,7 +2311,7 @@ void sector_art_cache_reset(void)
 // 0x4D2F90
 void sector_art_cache_sort(void)
 {
-    qsort(sector_art_cache, sector_art_cache_size, sizeof(*sector_art_cache), sector_art_cache_compare);
+    tig_qsort(sector_art_cache, sector_art_cache_size, sizeof(*sector_art_cache), sector_art_cache_compare);
 }
 
 // 0x4D2FB0

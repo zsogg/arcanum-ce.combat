@@ -610,7 +610,7 @@ int quest_get_logbook_data(int64_t obj, QuestLogbookEntry* logbook_entries)
     }
 
     // Sort entries by timestamp.
-    qsort(logbook_entries, cnt, sizeof(*logbook_entries), quest_logbook_entry_compare);
+    tig_qsort(logbook_entries, cnt, sizeof(*logbook_entries), quest_logbook_entry_compare);
 
     return cnt;
 }

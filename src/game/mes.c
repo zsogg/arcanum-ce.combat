@@ -425,7 +425,7 @@ void mes_merge(mes_file_handle_t dst, mes_file_handle_t src)
 
     // Sort the combined entries (since all lookups use binary search).
     if (dst_mes_file->num_entries != 0) {
-        qsort(dst_mes_file->entries,
+        tig_qsort(dst_mes_file->entries,
             dst_mes_file->num_entries,
             sizeof(MesFileEntry),
             compare_mes_file_entry);
@@ -533,7 +533,7 @@ void mes_load_internal(MesFile* mes_file)
 
     // Sort entries by number (since all lookups use binary search).
     if (mes_file->num_entries != 0) {
-        qsort(mes_file->entries,
+        tig_qsort(mes_file->entries,
             mes_file->num_entries,
             sizeof(MesFileEntry),
             compare_mes_file_entry);

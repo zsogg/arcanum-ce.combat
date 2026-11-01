@@ -4,6 +4,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+#include "tig/qsort.h"
+
 #define START_GUARD_BYTE 0xAA
 #define START_GUARD_SIZE ((int)sizeof(void*))
 #define END_GUARD_BYTE 0xBB
@@ -366,7 +368,7 @@ void tig_memory_print_stats(TigMemoryPrintStatsOptions opts)
         // behaviour. The original passes the literal 4 alongside a
         // `count * 4` allocation (`push 0x4` at 0x4FE8E9, `lea edx,[ecx*4]` at
         // 0x4FE8B2), which is its pointer width.
-        qsort(array, tig_memory_current_blocks, sizeof(*array), tig_memory_sort_blocks);
+        tig_qsort(array, tig_memory_current_blocks, sizeof(*array), tig_memory_sort_blocks);
 
         allocated = 0;
         blocks = 0;

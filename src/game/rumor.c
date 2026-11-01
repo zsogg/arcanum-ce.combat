@@ -394,7 +394,7 @@ int rumor_get_logbook_data(int64_t obj, RumorLogbookEntry* logbook_entries)
     }
 
     // Sort entries by timestamp.
-    qsort(logbook_entries, cnt, sizeof(*logbook_entries), rumor_logbook_entry_compare);
+    tig_qsort(logbook_entries, cnt, sizeof(*logbook_entries), rumor_logbook_entry_compare);
 
     return cnt;
 }

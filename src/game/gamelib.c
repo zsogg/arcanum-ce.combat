@@ -1640,10 +1640,10 @@ void gamelib_savelist_sort(GameSaveList* save_list, GameSaveListOrder order, boo
 
     switch (order) {
     case GAME_SAVE_LIST_ORDER_DATE:
-        qsort(entries, save_list->count, sizeof(*entries), game_save_entry_compare_by_date);
+        tig_qsort(entries, save_list->count, sizeof(*entries), game_save_entry_compare_by_date);
         break;
     case GAME_SAVE_LIST_ORDER_NAME:
-        qsort(entries, save_list->count, sizeof(*entries), game_save_entry_compare_by_name);
+        tig_qsort(entries, save_list->count, sizeof(*entries), game_save_entry_compare_by_name);
         break;
     }
 

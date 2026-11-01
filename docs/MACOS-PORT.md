@@ -52,7 +52,7 @@ the original game, quirks included. So:
 | Origin | Upstream ([alexbatalov/arcanum-ce](https://github.com/alexbatalov/arcanum-ce)) supports macOS: the presets, the app bundle and the `Info.plist` are its. |
 | This fork's changes | Many engine changes since (see `CHANGES.md`). A search found no Linux-only code in `src/` or `first_party/tig`, but no Mac has run them. |
 | Build | Our workflow, `.github/workflows/macos-build.yml`, builds the universal Release app, signs it ad hoc and checks it on a GitHub runner; its runs are the only evidence. First green on 2026-10-29 with Xcode 16.4 and the macOS 15.5 SDK, targeting 10.13: both slices, a valid ad-hoc signature, system libraries only. The executable inside the app is `arcanum-ce`. It runs on GitHub's Intel image, because the Apple Silicon runners were not available. |
-| Tests | The same workflow builds and runs the C suite with Apple clang, without the 13 test files that need GNU tools (below): all passed on 2026-10-29, as x86_64. Apple clang found three missing declarations that glibc's headers had hidden, fixed. It also warns of 23 variables that may be used uninitialized on some path, which GCC does not report; they are not yet reviewed against the original. |
+| Tests | The same workflow builds and runs the C suite with Apple clang, without the 13 test files that need GNU tools (below): all passed on 2026-10-29, as x86_64. Apple clang found three missing declarations that glibc's headers had hidden, fixed. It also warns of 23 variables that may be used uninitialized on some path, which GCC does not report; all were settled on 2026-10-29: one was a real bug, fixed (porting bug #373), and the rest are unreachable. |
 | Play | **Not tested at all.** |
 | Signing | Ad-hoc only (`codesign -s -`), not notarized. |
 | Setup tools | The package's two unpackers, `tools/gogx` (GOG's installer) and `tools/7zip` (7-Zip's `7zz`, for UAP's), built by the same workflow's `tools` job, added 2026-10-31 and not yet run there. gogx's output equals innoextract's on GOG's 1.0.7.4 installer, checked on Linux ([tools/README.md](../tools/README.md)). |
@@ -209,12 +209,11 @@ of it is confirmed.
      not Ctrl.
    - Cmd-Q arrives as a quit event (`first_party/tig/src/message.c`).
      Check that it neither loses a save nor leaves a half-written one.
-5. **Ties in sorting.** The engine calls the C library's `qsort` in 17
-   places. Where two items compare equal, macOS's library may order them
-   differently from glibc or Windows: an inventory or a list in a
-   different order, or a different choice where the game takes "the first".
-   Linux already differs from the original's Windows here. Report a
-   difference with the save that shows it; do not "fix" it alone.
+5. **Ties in sorting.** Settled 2026-11-01: the engine sorts with
+   `tig_qsort` (`first_party/tig/src/qsort.c`), the original's own
+   algorithm, so equal items come out in the original's order on every
+   platform rather than in the C library's. The AI's spell choices and the
+   world map's encounter charts read that order (porting bug #374).
 6. **Compiler.** Apple's clang may warn where GCC did not (`-Wall -Wextra`
    are on for the game). A warning in transcribed code is usually faithful
    to the original; report it rather than rewrite it.

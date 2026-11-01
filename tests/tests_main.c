@@ -17,6 +17,7 @@
 void test_str_parse_suite(void);
 void test_rect_suite(void);
 void test_idxtable_suite(void);
+void test_tig_qsort_suite(void);
 void test_art_id_suite(void);
 void test_color_suite(void);
 void test_called_shot_suite(void);
@@ -123,6 +124,7 @@ int main(void)
     test_str_parse_suite();
     test_rect_suite();
     test_idxtable_suite();
+    test_tig_qsort_suite();
     test_art_id_suite();
     test_color_suite();
     test_called_shot_suite();
