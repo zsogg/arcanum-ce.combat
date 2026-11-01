@@ -34,9 +34,9 @@ UAP's), so no package manager such as Homebrew is needed.
 
 If GOG gives you a `.bin` file beside the installer, that installer keeps
 its data in a form `gogx` cannot read. Then install Arcanum with GOG's
-installer on a Windows PC, copy the game folder (the one holding
-`Arcanum.exe` and `modules`) to the Mac, and run setup with it in place of
-the installer:
+installer on a Windows PC and copy the game folder (the one holding
+`Arcanum.exe` and `tig.dat`) to the Mac. The installer offers to take it
+(**Choose a game folder**), or from Terminal:
 
 ```console
 ARCANUM_SETUP_GOG_DIR=~/Downloads/arcanum-gog bash setup.sh --uap ~/Downloads/UAP2.0.2.exe
@@ -48,18 +48,28 @@ ARCANUM_SETUP_GOG_DIR=~/Downloads/arcanum-gog bash setup.sh --uap ~/Downloads/UA
 2. Open the Arcanum CE folder you downloaded (Safari usually unpacks it;
    otherwise double-click the `.tar.gz`).
 3. Double-click **Install Arcanum CE**. The first time, macOS refuses it,
-   because it is not from an identified developer: open **System Settings >
-   Privacy & Security**, choose **Open Anyway** at the bottom, and
-   double-click it again. (On macOS 14 and earlier you can instead
-   right-click it, choose Open, then Open.)
+   because it is not from an identified developer. On macOS 14 and
+   earlier, right-click it, choose Open, then Open. On macOS 15 and later,
+   open **System Settings > Privacy & Security**, choose **Open Anyway** at
+   the bottom, and double-click it again.
 
-It opens a Terminal window and says what it does at each step: it finds the
-two installers (or opens a Finder window to choose them), checks the space
-and the folder, then runs setup, which asks about the optional mods (Return
-alone means no). At the end it offers to start the game. If anything stops
-it, it says why, and shows its log in Finder: what it and setup printed,
-the choices made and this Mac's macOS version and model, ready to attach to
-a bug report. The logs stay in `~/Library/Logs/Arcanum CE/`, with your home
+It opens a Terminal window and says what it does, in six steps. Its
+questions are dialogs; nothing has to be typed.
+
+- It finds the two installers, or offers a Finder window to choose them.
+- It picks a new game folder and checks the space. An existing folder is
+  never changed.
+- It lists the optional mods with what each does, and asks which to turn
+  on (none means the game as it was, only fixed), then asks to install.
+- It runs setup, offers to copy saves from an earlier Arcanum CE folder,
+  and offers to start the game.
+
+Ctrl-C stops it. Until the app is in place, setup removes what it had
+copied; after that it keeps the folder and says how to remove it. If
+anything stops it, it
+says why, and shows its log in Finder: what it and setup printed, the
+choices made and this Mac's macOS version and model, ready to attach to a
+bug report. The logs stay in `~/Library/Logs/Arcanum CE/`, with your home
 folder's name replaced by `~` and every time in UTC.
 
 **From Terminal instead**, which is what the installer runs:
@@ -96,8 +106,10 @@ made it. Setup clears the quarantine flag of the app, and of the two tools
 before it runs them, which is usually enough. If macOS still refuses to open
 the app:
 
-- open **System Settings > Privacy & Security**, scroll to the message about
-  Arcanum Community Edition, and choose **Open Anyway**; or
+- on macOS 14 and earlier, right-click the app, choose Open, then Open;
+- on macOS 15 and later, open **System Settings > Privacy & Security**,
+  scroll to the message about Arcanum Community Edition, and choose **Open
+  Anyway**; or
 - in Terminal: `xattr -dr com.apple.quarantine ~/Games/arcanum-ce/"Arcanum Community Edition.app"`
 
 If the game quits at once or says files are missing, the app was probably run
@@ -112,11 +124,15 @@ the game folder.
   `~/Games/arcanum-ce/"Arcanum Community Edition.app"/Contents/MacOS/* -window`
 - Settings are in `arcanum-ce.cfg`.
 - The screen size and the High Resolution Patch's options are in
-  `HighRes/config.ini`.
+  `HighRes/config.ini`. `Windowed = 1` there plays in a window.
 - The same program with `-check-install` reports on the installation.
 - Movies do not play on macOS.
 
 ## Removing
+
+Double-click **Uninstall Arcanum CE** in the game folder. It asks whether to
+remove Arcanum CE only (the game files and saves stay) or the whole folder,
+and asks again before deleting saves. From Terminal:
 
 ```console
 ~/Games/arcanum-ce/arcanum-ce-uninstall.sh          # Arcanum CE only; the game and saves stay

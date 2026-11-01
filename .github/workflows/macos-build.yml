@@ -38,10 +38,10 @@ jobs:
 
     steps:
       - name: Clone
-        uses: actions/checkout@v5
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09  # v5.1.0
 
       - name: Cache
-        uses: actions/cache@v5
+        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25  # v5.1.0
         with:
           path: out/build/macos
           # One cache per runner image: an Apple Silicon run that restored an
@@ -99,7 +99,7 @@ jobs:
           shasum -a 256 arcanum-ce-macos.zip | tee arcanum-ce-macos.zip.sha256
 
       - name: Upload
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f  # v6.0.0
         with:
           name: arcanum-ce-macos
           path: |
@@ -113,7 +113,7 @@ jobs:
 
     steps:
       - name: Clone
-        uses: actions/checkout@v5
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09  # v5.1.0
 
       # A single-config generator (the preset's Xcode generator is
       # multi-config). ARCANUM_TESTS_GNU_LINK is off on Apple: the tests that
@@ -141,12 +141,14 @@ jobs:
 
     steps:
       - name: Clone
-        uses: actions/checkout@v5
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09  # v5.1.0
 
       # The toolchain and both Mac targets named in tools/gogx/rust-toolchain.toml.
       - name: Rust
         run: |
-          command -v rustup >/dev/null || curl -fsSL --retry 3 https://sh.rustup.rs | sh -s -- -y --profile minimal --default-toolchain none
+          # GitHub's macOS images carry rustup; a runner without it stops here
+          # rather than running a script fetched from the network.
+          command -v rustup >/dev/null || [ -x "$HOME/.cargo/bin/rustup" ] || { echo "::error::rustup is not on this runner"; exit 1; }
           export PATH="$HOME/.cargo/bin:$PATH"
           channel="$(sed -n 's/^channel = "\(.*\)"$/\1/p' tools/gogx/rust-toolchain.toml)"
           rustup toolchain install "$channel" --profile minimal --target x86_64-apple-darwin,aarch64-apple-darwin
@@ -247,7 +249,7 @@ jobs:
           shasum -a 256 arcanum-ce-macos-tools.zip | tee arcanum-ce-macos-tools.zip.sha256
 
       - name: Upload
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f  # v6.0.0
         with:
           name: arcanum-ce-macos-tools
           path: |
