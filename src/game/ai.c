@@ -6287,6 +6287,7 @@ int ai_can_hear(int64_t source_obj, int64_t target_obj, int loudness)
     int64_t dist;
     int perception;
     int hear_dist;
+    bool walls_stop;
 
     critter_flags = obj_field_int32_get(source_obj, OBJ_F_CRITTER_FLAGS);
     if ((critter_flags & OCF_STUNNED) != 0) {
@@ -6333,18 +6334,13 @@ int ai_can_hear(int64_t source_obj, int64_t target_obj, int loudness)
     // CE (`walls stop sound`, DB-3; zsogg, 2026-10-27): a wall or closed door
     // between stops a sound that is not loud, and a loud one carries a third
     // of its open range. Stock subtracts what lies between.
+    walls_stop = feature_enabled(FEATURE_WALLS_STOP_SOUND) && !ai_senses_stock;
     hear_dist = sense_rules_hear_distance(hear_dist,
         ai_line_of_sound_cost(source_obj, target_obj),
         loudness == LOUDNESS_LOUD,
-        feature_enabled(FEATURE_WALLS_STOP_SOUND) && !ai_senses_stock);
-    if (hear_dist < 0) {
-        return 1000;
-    }
-    if ((int)dist > hear_dist) {
-        return (int)dist - hear_dist;
-    }
+        walls_stop);
 
-    return 0;
+    return sense_rules_hear_shortfall((int)dist, hear_dist, walls_stop);
 }
 
 // How much the scenery between two critters muffles sound - the hearing

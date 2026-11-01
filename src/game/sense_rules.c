@@ -13,6 +13,14 @@ int sense_rules_hear_distance(int open_range, int sound_cost, bool loud, bool wa
     return open_range / SENSE_LOUD_THROUGH_WALL_DIVISOR;
 }
 
+int sense_rules_hear_shortfall(int dist, int hear_dist, bool walls_stop)
+{
+    if (walls_stop && hear_dist < 0) {
+        return 1000;
+    }
+    return dist > hear_dist ? dist - hear_dist : 0;
+}
+
 int sense_rules_sight_range(int range, int facing_delta, bool side_vision)
 {
     int delta = ((facing_delta % 8) + 8) % 8;

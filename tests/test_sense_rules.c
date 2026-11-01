@@ -27,6 +27,20 @@ TEST(a_wall_stops_ordinary_sound_and_lets_a_third_of_a_loud_one_through)
     CHECK_INT(sense_rules_hear_distance(8, 1, true, true), 2);
 }
 
+TEST(stock_hearing_through_a_wall_grows_with_distance_and_never_reads_1000)
+{
+    // Review 2026-10-31, finding 9: with every switch off, a door that took
+    // the hearing distance below zero made `ai_can_hear` answer 1000 - the
+    // prowl indicator's "Safe" - where stock answered the distance past it.
+    CHECK_INT(sense_rules_hear_shortfall(2, -1, false), 3);
+    CHECK_INT(sense_rules_hear_shortfall(0, -3, false), 3);
+    CHECK_INT(sense_rules_hear_shortfall(2, 4, false), 0);
+    CHECK_INT(sense_rules_hear_shortfall(6, 4, false), 2);
+    // Under `walls stop sound`, -1 is "not heard at any distance".
+    CHECK_INT(sense_rules_hear_shortfall(2, -1, true), 1000);
+    CHECK_INT(sense_rules_hear_shortfall(6, 4, true), 2);
+}
+
 TEST(the_side_of_the_view_sees_half_as_far_and_the_back_sees_nothing)
 {
     int delta;
@@ -74,6 +88,7 @@ TEST(standing_still_is_silent_only_under_the_rule)
 void test_sense_rules_suite(void)
 {
     RUN(a_wall_stops_ordinary_sound_and_lets_a_third_of_a_loud_one_through);
+    RUN(stock_hearing_through_a_wall_grows_with_distance_and_never_reads_1000);
     RUN(the_side_of_the_view_sees_half_as_far_and_the_back_sees_nothing);
     RUN(a_blunt_strike_is_loud_only_under_the_rule);
     RUN(standing_still_is_silent_only_under_the_rule);

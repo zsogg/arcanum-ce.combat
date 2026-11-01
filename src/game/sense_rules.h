@@ -19,6 +19,13 @@
 // heard at any distance.
 int sense_rules_hear_distance(int open_range, int sound_cost, bool loud, bool walls_stop);
 
+// Pure: how far outside its hearing distance a sound is (0: heard), as
+// `ai_can_hear` returns it. Stock subtracts what lies between, so its distance
+// can go below zero and the answer simply grows; only under `walls_stop` does
+// a -1 from `sense_rules_hear_distance` mean "never heard", 1000 (review
+// 2026-10-31, finding 9: the 1000 had reached the stock build too).
+int sense_rules_hear_shortfall(int dist, int hear_dist, bool walls_stop);
+
 // Pure: how far a critter sees towards something `facing_delta` steps of
 // rotation (0-7) from where it faces. `range` is its sight range in tiles.
 // Stock sees the full range within two steps either side and nothing beyond;
