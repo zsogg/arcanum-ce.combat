@@ -47,7 +47,9 @@ jobs:
           # One cache per runner image: an Apple Silicon run that restored an
           # Intel run's CMakeCache.txt (key v1, shared) found Intel Homebrew's
           # git at /usr/local/bin and failed to configure (run 41249431579).
-          key: macos-release-cmake-v2-${{ inputs.runner || 'macos-15-intel' }}
+          # A hit is never saved again, so the key names what the cached
+          # third-party build depends on (review 2026-10-31, finding 19).
+          key: macos-release-cmake-v3-${{ inputs.runner || 'macos-15-intel' }}-${{ hashFiles('CMakeLists.txt', 'CMakePresets.json', '**/CMakeLists.txt', 'cmake/**', 'third_party/**') }}
 
       - name: Configure
         run: cmake --preset macos
@@ -72,6 +74,22 @@ jobs:
         run: |
           codesign --force --deep -s - "$APP"
           codesign --verify --deep --strict --verbose=2 "$APP"
+
+      # Starts the executable: `-features` prints the build's switches and
+      # exits before any window, sound or game data (main.c), so this proves
+      # only that the binary loads and runs. The runner's own slice, and the
+      # Intel one under Rosetta on Apple Silicon (review 2026-10-31,
+      # finding 19).
+      - name: Start the binary
+        run: |
+          runs=("")
+          if [ "$(uname -m)" = arm64 ] && arch -x86_64 /usr/bin/true 2>/dev/null; then runs+=("arch -x86_64"); fi
+          for prefix in "${runs[@]}"; do
+            out="$($prefix "$BIN" -features)"
+            first="$(head -1 <<< "$out")"
+            echo "${prefix:-native}: $first, $(($(wc -l <<< "$out") - 1)) switches"
+            [ "$first" = "schema 1" ] || { echo "::error::${prefix:-native}: -features printed '$first'"; exit 1; }
+          done
 
       - name: Check the binary
         run: |
