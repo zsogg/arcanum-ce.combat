@@ -2258,7 +2258,6 @@ static TargetParams* magictech_blast_params(TargetParams* params, TargetParams* 
     return scratch;
 }
 
-// 0x4510F0
 // CE (magic, milestone MG-2): under `spell criticals`, whether the spell now
 // beginning is critical on the current target: 5% + 2% per spell the caster
 // knows in its college (zsogg, 2026-10-11, option A), rolled once per target
@@ -2390,6 +2389,7 @@ static void magictech_apply_critical(bool* refunded)
     }
 }
 
+// 0x4510F0
 void magictech_process(void)
 {
     int idx;

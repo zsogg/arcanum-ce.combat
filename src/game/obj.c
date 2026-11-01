@@ -4479,6 +4479,11 @@ bool convert_id_to_handle(void* entry, int index)
     return true;
 }
 
+bool obj_file_type_has_field_count(int type)
+{
+    return type >= 0 && type < OBJECT_FIELDS_COUNT_PER_TYPE_COUNT;
+}
+
 /**
  * Number of 32-bit words in `object_type`'s change/presence bitmap arrays
  * (`changed`/`dif`): the change_array_idx of the type's last field,
@@ -4496,11 +4501,6 @@ bool convert_id_to_handle(void* entry, int index)
  *
  * 0x40C030
  */
-bool obj_file_type_has_field_count(int type)
-{
-    return type >= 0 && type < OBJECT_FIELDS_COUNT_PER_TYPE_COUNT;
-}
-
 int obj_type_change_array_len(ObjectType object_type)
 {
     int v1;

@@ -380,13 +380,6 @@ void background_generate_inventory(int64_t obj)
     }
 }
 
-/**
- * Handles "Educator" background.
- *
- * Called when the specified PC's level or skill training have changed.
- *
- * 0x4C2950
- */
 int background_educate_levels(int educator, int follower, bool uap, int* levels, int max)
 {
     int count = 0;
@@ -426,6 +419,13 @@ int background_educate_levels(int educator, int follower, bool uap, int* levels,
     return count;
 }
 
+/**
+ * Handles "Educator" background.
+ *
+ * Called when the specified PC's level or skill training have changed.
+ *
+ * 0x4C2950
+ */
 void background_educate_followers(int64_t obj)
 {
     ObjectList followers;

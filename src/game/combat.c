@@ -3555,7 +3555,6 @@ void combat_calc_dmg(CombatContext* combat)
     }
 }
 
-// 0x4B6860
 // CE (turn-based rebalance, armor milestone 3): the armor rules
 // (`penetration.h`) for one weapon hit's normal damage, under `armor
 // penetration`. Returns the normal damage that gets through - with the
@@ -3924,6 +3923,7 @@ static int combat_armor_resolve(CombatContext* combat)
     return result.damage;
 }
 
+// 0x4B6860
 void combat_apply_resistance(CombatContext* combat)
 {
     int damage_type;
