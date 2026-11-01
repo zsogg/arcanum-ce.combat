@@ -460,9 +460,20 @@ static bool replay_key_action(const char* action)
 // `anim_goal_data_init_no_interrupt`. That defect is the engine's and is
 // recorded separately; what belongs here is that no player could have made
 // this click, so no recording can contain it and no replay should submit it.
+// A handle still names the object it was issued for: its pool slot has not
+// been freed or reused (a map change frees them all), and the object is neither
+// destroyed nor off. A `@name` from before a `remove` or a `teleport` failed
+// none of the other checks (review 2026-10-31, E2-4).
+static bool replay_handle_is_present(int64_t obj)
+{
+    return obj != OBJ_HANDLE_NULL
+        && obj_handle_is_valid(obj)
+        && (obj_field_int32_get(obj, OBJ_F_FLAGS) & (OF_DESTROYED | OF_OFF)) == 0;
+}
+
 static bool replay_target_is_live(int64_t obj)
 {
-    if (obj == OBJ_HANDLE_NULL) {
+    if (!replay_handle_is_present(obj)) {
         return false;
     }
 
@@ -1637,11 +1648,16 @@ static bool replay_resolve(const ReplayCommand* command, int64_t* obj_ptr)
         return true;
     }
 
-    // A critter a `spawn` row made, by its name.
+    // A critter a `spawn` row made, by its name; the newest of that name.
     if (command->target[0] == '@') {
-        for (index = 0; index < replay_spawned_count; index++) {
+        for (index = replay_spawned_count - 1; index >= 0; index--) {
             if (strcmp(replay_spawned[index].name, command->target + 1) == 0) {
                 *obj_ptr = replay_spawned[index].obj;
+                if (!replay_handle_is_present(*obj_ptr)) {
+                    tig_debug_printf("Replay: command %d targets '%s', absent from this run\n",
+                        replay_next, command->target);
+                    return false;
+                }
                 return true;
             }
         }
