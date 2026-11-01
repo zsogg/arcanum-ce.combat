@@ -35,6 +35,7 @@
 #include "game/spell_rules.h"
 #include "game/stat.h"
 #include "game/target.h"
+#include "game/teleport.h"
 #include "game/tile_block.h"
 #include "game/timeevent.h"
 #include "game/weapon_rules.h"
@@ -339,6 +340,12 @@ typedef enum ReplayKind {
     //       as a shop is; one log line per item description (the number the
     //       file lists) with the number of restocks it appeared in.
     REPLAY_KIND_RESTOCK,
+    // The playtest kit (2026-11-01):
+    //   teleport <map> <x> <y>
+    //       the player, and the party with it, to that map (numbered from 5000
+    //       as `maplist.mes` and scripts number them) and tile, as a script's
+    //       teleport does; the map in `count`, the tile in `dx` and `dy`.
+    REPLAY_KIND_TELEPORT,
 } ReplayKind;
 
 // A cast's target, which is a third shape: the caster, an object or a tile.
@@ -376,6 +383,8 @@ typedef struct ReplayCommand {
     int dy;
     // `order attack`: whom.
     char target2[REPLAY_IDENTITY_SIZE];
+    // `save`: what Load Game shows; "replay" when the line gives none.
+    char description[REPLAY_IDENTITY_SIZE];
 } ReplayCommand;
 
 // `spawn`'s critters, by the name later rows give them after `@`. 32 since
@@ -932,7 +941,15 @@ static bool replay_parse_line(const char* text, ReplayCommand* command)
             return false; // the archive pair is named from eight characters
         }
         replay_copy_target(command, tokens[index++]);
-        return index == count;
+        // CE (playtest kit, 2026-11-01): the rest of the line names the save,
+        // so a prepared save reads as what it is in Load Game.
+        while (index < count) {
+            size_t used = strlen(command->description);
+
+            snprintf(command->description + used, sizeof(command->description) - used,
+                "%s%s", used != 0 ? " " : "", tokens[index++]);
+        }
+        return true;
     }
 
     if (strcmp(kind, "jam") == 0) {
@@ -1138,6 +1155,17 @@ static bool replay_parse_line(const char* text, ReplayCommand* command)
             replay_copy_target(command, tokens[index++]);
         }
         return index == count;
+    }
+
+    if (strcmp(kind, "teleport") == 0) {
+        command->kind = REPLAY_KIND_TELEPORT;
+        if (index + 3 != count
+            || !replay_parse_int(tokens[index++], &(command->count)) || command->count < 5000
+            || !replay_parse_int(tokens[index++], &(command->dx)) || command->dx < 0
+            || !replay_parse_int(tokens[index++], &(command->dy)) || command->dy < 0) {
+            return false;
+        }
+        return true;
     }
 
     if (strcmp(kind, "restock") == 0) {
@@ -1445,7 +1473,7 @@ int replay_ui_count(void)
 bool replay_ui_describe(int index, char* buffer, size_t size)
 {
     const ReplayCommand* command;
-    static const char* kinds[] = { "object", "location", "key", "cast", "wield", "wait", "learn", "give", "throw", "skill", "raise", "prowl", "panel", "save", "inspect", "transfer", "take", "drop", "pickup", "wear", "skill-level", "stat-level", "jam", "afflict", "poison", "use", "xp", "train", "hour", "encounter", "hover", "screenshot", "spawn", "invulnerable", "await-death", "remove", "examine", "press", "click", "block", "face", "stay", "run", "recruit", "npc", "hurt", "order", "attack", "restock" };
+    static const char* kinds[] = { "object", "location", "key", "cast", "wield", "wait", "learn", "give", "throw", "skill", "raise", "prowl", "panel", "save", "inspect", "transfer", "take", "drop", "pickup", "wear", "skill-level", "stat-level", "jam", "afflict", "poison", "use", "xp", "train", "hour", "encounter", "hover", "screenshot", "spawn", "invulnerable", "await-death", "remove", "examine", "press", "click", "block", "face", "stay", "run", "recruit", "npc", "hurt", "order", "attack", "restock", "teleport" };
     int written;
     static const char* casts[] = { "self", "object", "location" };
 
@@ -1469,6 +1497,14 @@ bool replay_ui_describe(int index, char* buffer, size_t size)
         && written >= 0 && (size_t)written < size) {
         snprintf(buffer + written, size - (size_t)written, " proto=%d count=%d",
             command->proto, command->count);
+    }
+    if (command->kind == REPLAY_KIND_TELEPORT && written >= 0 && (size_t)written < size) {
+        snprintf(buffer + written, size - (size_t)written, " map=%d x=%d y=%d",
+            command->count, command->dx, command->dy);
+    }
+    if (command->kind == REPLAY_KIND_SAVE && command->description[0] != '\0'
+        && written >= 0 && (size_t)written < size) {
+        snprintf(buffer + written, size - (size_t)written, " description=%s", command->description);
     }
     if (command->kind == REPLAY_KIND_SKILL && written >= 0 && (size_t)written < size) {
         snprintf(buffer + written, size - (size_t)written, " skill=%d", command->skill);
@@ -1797,7 +1833,10 @@ void replay_ui_tick(void)
         replay_stall_reported = false;
         replay_next++;
         tig_debug_printf("Replay: command %d save %s: %s\n", replay_next - 1,
-            command->target, gamelib_save(command->target, "replay") ? "saved" : "FAILED");
+            command->target,
+            gamelib_save(command->target, command->description[0] != '\0' ? command->description : "replay")
+                ? "saved"
+                : "FAILED");
         return;
     }
 
@@ -2029,6 +2068,21 @@ void replay_ui_tick(void)
         tig_debug_printf("Replay: command %d encounter from table %d: %s\n",
             replay_next - 1, command->count,
             wmap_rnd_force_encounter(command->count, command->aim) ? "spawned" : "nothing spawned");
+        return;
+    }
+
+    if (command->kind == REPLAY_KIND_TELEPORT) {
+        TeleportData teleport_data;
+
+        replay_stall_reported = false;
+        replay_next++;
+        memset(&teleport_data, 0, sizeof(teleport_data));
+        teleport_data.obj = pc_obj;
+        teleport_data.loc = location_make(command->dx, command->dy);
+        teleport_data.map = command->count - 4999;
+        tig_debug_printf("Replay: command %d teleports to map %d (%d, %d): %s\n",
+            replay_next - 1, command->count, command->dx, command->dy,
+            teleport_do(&teleport_data) ? "begun" : "refused");
         return;
     }
 

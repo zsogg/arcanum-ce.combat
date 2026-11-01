@@ -864,6 +864,13 @@ TEST(the_persistence_rows_load_into_what_they_say)
     CHECK(row_is(5, "turn=0 now=0 kind=pickup target= loc=0 aim=0 spell=0 cast=- wait=0 proto=6101 count=0"));
 
     CHECK(!load_script("0 save Slot00099\n")); // more than eight characters
+    // 2026-11-01: the playtest kit moves the party, and names its saves.
+    CHECK(load_script("0 teleport 5000 62182 65662\n"));
+    CHECK(row_is(0, "turn=0 now=0 kind=teleport target= loc=0 aim=0 spell=0 cast=- wait=0 map=5000 x=62182 y=65662"));
+    CHECK(!load_script("0 teleport 21 62182 65662\n")); // maps are numbered from 5000
+    CHECK(!load_script("0 teleport 5000 62182\n"));
+    CHECK(load_script("0 save Slot0029 Playtest kit - town\n"));
+    CHECK(row_is(0, "turn=0 now=0 kind=save target=Slot0029 loc=0 aim=0 spell=0 cast=- wait=0 description=Playtest kit - town"));
     CHECK(!load_script("0 inspect\n"));
     CHECK(!load_script("0 inspect everything\n"));
     // 2026-10-12: `inspect awareness`, for prowling.
