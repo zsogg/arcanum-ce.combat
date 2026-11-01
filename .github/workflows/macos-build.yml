@@ -91,6 +91,31 @@ jobs:
             [ "$first" = "schema 1" ] || { echo "::error::${prefix:-native}: -features printed '$first'"; exit 1; }
           done
 
+      # Opens the window: a game folder holding only a one-entry tig.dat gets
+      # the engine past the file layer to SDL's window and renderer, which it
+      # names ("TIG Video: Using 'opengl' driver"); it then stops at the mouse
+      # module for want of cursor art. No game data is involved. The archive
+      # is laid out as tests/test_mod_format_bounds.c writes one.
+      - name: Open the window
+        run: |
+          game="$RUNNER_TEMP/ce-game"
+          mkdir -p "$game"
+          python3 - "$game/tig.dat" <<'PY'
+          import struct, sys
+          # Payload size 0 and one empty entry; then the footer: fourcc,
+          # name-table size, and the table less its first word plus 12.
+          name = b"readme\0"
+          table = struct.pack("<iii", 0, 1, len(name)) + name + bytes(4) + struct.pack("<iiii", 0, 0, 0, 0)
+          open(sys.argv[1], "wb").write(table + b" TAD" + struct.pack("<ii", 16, len(table) - 4 + 12))
+          PY
+          runs=("")
+          if [ "$(uname -m)" = arm64 ] && arch -x86_64 /usr/bin/true 2>/dev/null; then runs+=("arch -x86_64"); fi
+          for prefix in "${runs[@]}"; do
+            out="$(cd "$game" && ARCANUM_CE_GAME_DIR="$game" $prefix "$BIN" -window 2>&1 || true)"
+            printf '%s\n' "$out" | grep -E "TIG (File|Video)|Error initializing" | sed "s/^/${prefix:-native}: /"
+            grep -q "TIG Video: Using '" <<< "$out" || { echo "::error::${prefix:-native}: no window or renderer was created"; exit 1; }
+          done
+
       - name: Check the binary
         run: |
           bin="$BIN"
