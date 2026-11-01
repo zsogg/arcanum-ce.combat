@@ -5,9 +5,12 @@
 // attacker per fight.
 
 #include "game/ai.h"
+#include "game/critter.h"
 #include "game/item.h"
+#include "game/obj.h"
 #include "game/reload.h"
 
+#include "obj_harness.h"
 #include "test_harness.h"
 
 TEST(stock_measures_twenty_from_the_leader_ordered_or_not)
@@ -79,21 +82,85 @@ TEST(armor_aware_takes_a_reaching_weapon_only_with_a_positive_score)
     CHECK(!item_reaching_weapon_wins(true, -40));
 }
 
-// F3 (8b-i): the gun a melee backup replaced, remembered per critter.
+// The guns are only remembered, never read, so plain numbers stand in for them.
+static int64_t follower_of(int64_t pc)
+{
+    int64_t npc = obj_harness_create_proto(OBJ_TYPE_NPC);
+
+    critter_leader_set(npc, pc);
+    return npc;
+}
+
+// F3 (8b-i): the gun a melee backup replaced, remembered per follower.
 TEST(a_backup_remembers_the_gun_it_replaced)
 {
-    CHECK(reload_backup_gun(7) == OBJ_HANDLE_NULL);
-    reload_backup_note(7, 70);
-    reload_backup_note(8, 80);
-    CHECK(reload_backup_gun(7) == 70);
-    CHECK(reload_backup_gun(8) == 80);
+    int64_t pc = obj_harness_create_proto(OBJ_TYPE_PC);
+    int64_t a = follower_of(pc);
+    int64_t b = follower_of(pc);
+
+    CHECK(reload_backup_gun(a) == OBJ_HANDLE_NULL);
+    reload_backup_note(a, 70);
+    reload_backup_note(b, 80);
+    CHECK(reload_backup_gun(a) == 70);
+    CHECK(reload_backup_gun(b) == 80);
     // A second backup for the same critter replaces the first.
-    reload_backup_note(7, 71);
-    CHECK(reload_backup_gun(7) == 71);
-    reload_backup_forget(7);
-    CHECK(reload_backup_gun(7) == OBJ_HANDLE_NULL);
-    CHECK(reload_backup_gun(8) == 80);
-    reload_backup_forget(8);
+    reload_backup_note(a, 71);
+    CHECK(reload_backup_gun(a) == 71);
+    reload_backup_forget(a);
+    CHECK(reload_backup_gun(a) == OBJ_HANDLE_NULL);
+    CHECK(reload_backup_gun(b) == 80);
+    reload_backup_forget(b);
+    obj_harness_destroy(a);
+    obj_harness_destroy(b);
+    obj_harness_destroy(pc);
+}
+
+// Review 2026-10-31, finding 3: every NPC that swapped to a backup was noted
+// and only followers were forgotten, so 16 enemy gunmen filled the memory
+// for good and a follower's gun was no longer given back.
+TEST(enemies_never_fill_the_backup_memory)
+{
+    int64_t pc = obj_harness_create_proto(OBJ_TYPE_PC);
+    int64_t follower = follower_of(pc);
+    int64_t enemy;
+    int index;
+
+    for (index = 0; index < 20; index++) {
+        enemy = obj_harness_create_proto(OBJ_TYPE_NPC);
+        reload_backup_note(enemy, 90);
+        CHECK(reload_backup_gun(enemy) == OBJ_HANDLE_NULL);
+        obj_harness_destroy(enemy);
+    }
+    reload_backup_note(follower, 70);
+    CHECK(reload_backup_gun(follower) == 70);
+    reload_backup_forget(follower);
+    obj_harness_destroy(follower);
+    obj_harness_destroy(pc);
+}
+
+TEST(a_follower_that_left_frees_its_slot)
+{
+    int64_t pc = obj_harness_create_proto(OBJ_TYPE_PC);
+    int64_t gone[16];
+    int64_t newcomer;
+    int index;
+
+    for (index = 0; index < 16; index++) {
+        gone[index] = follower_of(pc);
+        reload_backup_note(gone[index], 90 + index);
+        critter_leader_set(gone[index], OBJ_HANDLE_NULL);
+    }
+    newcomer = follower_of(pc);
+    reload_backup_note(newcomer, 70);
+    CHECK(reload_backup_gun(newcomer) == 70);
+
+    reload_backup_forget(newcomer);
+    obj_harness_destroy(newcomer);
+    for (index = 0; index < 16; index++) {
+        reload_backup_forget(gone[index]);
+        obj_harness_destroy(gone[index]);
+    }
+    obj_harness_destroy(pc);
 }
 
 void test_ai_follower_conduct_suite(void)
@@ -106,5 +173,8 @@ void test_ai_follower_conduct_suite(void)
     RUN(a_full_memory_forgets_its_oldest_refusal);
     RUN(stock_takes_any_weapon_that_reaches);
     RUN(armor_aware_takes_a_reaching_weapon_only_with_a_positive_score);
+    CHECK(obj_harness_init());
     RUN(a_backup_remembers_the_gun_it_replaced);
+    RUN(enemies_never_fill_the_backup_memory);
+    RUN(a_follower_that_left_frees_its_slot);
 }

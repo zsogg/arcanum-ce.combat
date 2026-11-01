@@ -12,6 +12,7 @@
 #include "game/feature.h"
 #include "game/item.h"
 #include "game/obj.h"
+#include "game/obj_pool.h"
 #include "game/object.h"
 #include "game/object_node.h"
 #include "game/player.h"
@@ -649,22 +650,39 @@ static struct {
     int64_t gun_obj;
 } reload_backups[RELOAD_BACKUPS_MAX];
 
+// CE (AI-6 F3; review 2026-10-31, finding 3): a slot whose critter is gone,
+// dead or no longer the player's follower is free. Every NPC that swapped to
+// a backup used to be noted and only followers were ever forgotten, so after
+// 16 enemy gunmen the table was full for good.
+static bool reload_backup_entry_free(int64_t critter_obj)
+{
+    return critter_obj == OBJ_HANDLE_NULL
+        || !obj_handle_is_valid(critter_obj)
+        || critter_is_dead(critter_obj)
+        || critter_pc_leader_get(critter_obj) == OBJ_HANDLE_NULL;
+}
+
 void reload_backup_note(int64_t critter_obj, int64_t gun_obj)
 {
     int index;
     int free_index = -1;
+
+    // Only a follower ever takes its gun back (`reload_backup_restore`).
+    if (critter_pc_leader_get(critter_obj) == OBJ_HANDLE_NULL) {
+        return;
+    }
 
     for (index = 0; index < RELOAD_BACKUPS_MAX; index++) {
         if (reload_backups[index].critter_obj == critter_obj) {
             reload_backups[index].gun_obj = gun_obj;
             return;
         }
-        if (free_index < 0 && reload_backups[index].critter_obj == OBJ_HANDLE_NULL) {
+        if (free_index < 0 && reload_backup_entry_free(reload_backups[index].critter_obj)) {
             free_index = index;
         }
     }
 
-    // shortcut: past 16 critters with a backup in hand, a new one is not
+    // shortcut: past 16 followers with a backup in hand, a new one is not
     // noted, and that follower keeps its backup until the player re-equips
     // it; grow the table if a party ever outnumbers it.
     if (free_index >= 0) {
