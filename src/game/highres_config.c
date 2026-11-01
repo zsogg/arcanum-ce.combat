@@ -9,6 +9,7 @@
 #include <SDL3/SDL_stdinc.h>
 
 #include "game/ce_parse.h"
+#include "tig/strcase.h"
 
 static void highres_config_reset(void);
 static void highres_config_parse_line(char* line);
@@ -124,27 +125,27 @@ void highres_config_parse_line(char* line)
         return;
     }
 
-    if (SDL_strcasecmp(key_start, "Width") == 0) {
+    if (tig_strcasecmp(key_start, "Width") == 0) {
         if (value >= 800) {
             highres_config.width = value;
         }
-    } else if (SDL_strcasecmp(key_start, "Height") == 0) {
+    } else if (tig_strcasecmp(key_start, "Height") == 0) {
         if (value >= 600) {
             highres_config.height = value;
         }
-    } else if (SDL_strcasecmp(key_start, "Windowed") == 0) {
+    } else if (tig_strcasecmp(key_start, "Windowed") == 0) {
         highres_config.windowed = value != 0;
-    } else if (SDL_strcasecmp(key_start, "ShowFPS") == 0) {
+    } else if (tig_strcasecmp(key_start, "ShowFPS") == 0) {
         highres_config.show_fps = value != 0;
-    } else if (SDL_strcasecmp(key_start, "ScrollFPS") == 0) {
+    } else if (tig_strcasecmp(key_start, "ScrollFPS") == 0) {
         if (value > 0) {
             highres_config.scroll_fps = value;
         }
-    } else if (SDL_strcasecmp(key_start, "ScrollDist") == 0) {
+    } else if (tig_strcasecmp(key_start, "ScrollDist") == 0) {
         if (value >= 0) {
             highres_config.scroll_dist = value;
         }
-    } else if (SDL_strcasecmp(key_start, "PreloadLimit") == 0) {
+    } else if (tig_strcasecmp(key_start, "PreloadLimit") == 0) {
         // The high resolution patch pokes both of these into the exe with
         // WRITE_BYTE, so its own documented ceiling is 255. Out-of-range values
         // are ignored here rather than wrapped, which is the one place this
@@ -152,29 +153,29 @@ void highres_config_parse_line(char* line)
         if (value >= 1 && value <= 255) {
             highres_config.preload_limit = value;
         }
-    } else if (SDL_strcasecmp(key_start, "BroadcastLimit") == 0) {
+    } else if (tig_strcasecmp(key_start, "BroadcastLimit") == 0) {
         if (value >= 0 && value <= 255) {
             highres_config.broadcast_limit = value;
         }
-    } else if (SDL_strcasecmp(key_start, "MenuPosition") == 0) {
+    } else if (tig_strcasecmp(key_start, "MenuPosition") == 0) {
         if (value >= HIGHRES_MENU_POSITION_TOP && value <= HIGHRES_MENU_POSITION_BOTTOM) {
             highres_config.menu_position = value;
         }
-    } else if (SDL_strcasecmp(key_start, "Options") == 0) {
+    } else if (tig_strcasecmp(key_start, "Options") == 0) {
         highres_config.options_compact = value != 0;
-    } else if (SDL_strcasecmp(key_start, "SpriteMirroring") == 0) {
+    } else if (tig_strcasecmp(key_start, "SpriteMirroring") == 0) {
         highres_config.sprite_mirroring = value != 0;
-    } else if (SDL_strcasecmp(key_start, "LogbookFont") == 0) {
+    } else if (tig_strcasecmp(key_start, "LogbookFont") == 0) {
         if (value >= 0 && value <= 1) {
             highres_config.logbook_font = value;
         }
-    } else if (SDL_strcasecmp(key_start, "DialogFont") == 0) {
+    } else if (tig_strcasecmp(key_start, "DialogFont") == 0) {
         if (value >= 0 && value <= 2) {
             highres_config.dialog_font = value;
         }
-    } else if (SDL_strcasecmp(key_start, "Logos") == 0) {
+    } else if (tig_strcasecmp(key_start, "Logos") == 0) {
         highres_config.logos = value != 0;
-    } else if (SDL_strcasecmp(key_start, "Intro") == 0) {
+    } else if (tig_strcasecmp(key_start, "Intro") == 0) {
         highres_config.intro = value != 0;
     }
 }

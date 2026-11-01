@@ -28,6 +28,7 @@
 #include "tig/rect.h"
 #include "tig/sound.h"
 #include "tig/str_parse.h"
+#include "tig/strcase.h"
 #include "tig/timer.h"
 #include "tig/video.h"
 #include "tig/window.h"

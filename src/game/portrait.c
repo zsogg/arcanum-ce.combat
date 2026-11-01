@@ -187,7 +187,7 @@ void portrait_draw_func(int64_t obj, int num, tig_window_handle_t window_handle,
         // requested and if so, fallback to normal size portrait.
         if (strlen(path) >= 6) {
             pch = &(path[strlen(path) - 6]);
-            if (SDL_strcasecmp(pch, "_b.bmp") == 0) {
+            if (tig_strcasecmp(pch, "_b.bmp") == 0) {
                 *pch = '\0';
                 strcat(path, ".bmp");
                 rc = tig_video_buffer_load_from_bmp(path, &video_buffer, 0x01);
@@ -469,19 +469,19 @@ bool portrait_is_valid(int64_t obj, const char* str)
             portrait_gender_specifiers[gender]);
 
         // Check if portrait file name starts with the race-gender specifiers.
-        if (SDL_strncasecmp(buffer, str, 3) == 0) {
+        if (tig_strncasecmp(buffer, str, 3) == 0) {
             return true;
         }
 
         // Special case - portraits prefixed with "ANY" are suitable for any
         // critter.
-        if (SDL_strncasecmp("ANY", str, 3) == 0) {
+        if (tig_strncasecmp("ANY", str, 3) == 0) {
             return true;
         }
 
         // Special case - portraits prefixed with "NPC" are suitable for NPCs.
         if (obj_field_int32_get(obj, OBJ_F_TYPE) == OBJ_TYPE_NPC
-            && SDL_strncasecmp("NPC", str, 3) == 0) {
+            && tig_strncasecmp("NPC", str, 3) == 0) {
             return true;
         }
     }

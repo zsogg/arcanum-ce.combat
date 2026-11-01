@@ -9,6 +9,7 @@
 #include "tig/compat.h"
 #include "tig/database.h"
 #include "tig/qsort.h"
+#include "tig/strcase.h"
 
 #define INSTALL_CHECK_MAX_ARCHIVES 32
 #define INSTALL_CHECK_BACKUP_DIR "data/proto-shadowing-backup"
@@ -30,8 +31,8 @@ bool install_check_is_main_archive(const char* name)
     }
     length = strlen(name);
     return length >= 11
-        && SDL_strncasecmp(name, "arcanum", 7) == 0
-        && SDL_strcasecmp(name + length - 4, ".dat") == 0;
+        && tig_strncasecmp(name, "arcanum", 7) == 0
+        && tig_strcasecmp(name + length - 4, ".dat") == 0;
 }
 
 static bool install_check_exists(const char* path)
@@ -60,7 +61,7 @@ static bool install_check_find(const char* dir, const char* name, char* out, siz
         return false;
     }
     for (index = 0; index < count; index++) {
-        if (SDL_strcasecmp(names[index], name) == 0) {
+        if (tig_strcasecmp(names[index], name) == 0) {
             if (dir[0] == '.' && dir[1] == '\0') {
                 snprintf(out, size, "%s", names[index]);
             } else {
@@ -88,7 +89,7 @@ static void install_check_report(const char* what, bool present, const char* not
 
 static int install_check_compare_names(const void* a, const void* b)
 {
-    return SDL_strcasecmp(((const InstallCheckArchive*)a)->name,
+    return tig_strcasecmp(((const InstallCheckArchive*)a)->name,
         ((const InstallCheckArchive*)b)->name);
 }
 

@@ -899,7 +899,7 @@ bool auto_level_process_rule(int64_t obj, const char* str)
 
         // Check if the token matches a stat.
         for (index = 0; index < LEVEL_SCHEME_STATS_MAX; index++) {
-            if (SDL_strcasecmp(tok, level_scheme_stats[index]) == 0) {
+            if (tig_strcasecmp(tok, level_scheme_stats[index]) == 0) {
                 if (auto_level_stat(obj, index, score) == AUTO_LEVEL_INSUFFIICIENT_POINTS) {
                     return false;
                 }
@@ -910,7 +910,7 @@ bool auto_level_process_rule(int64_t obj, const char* str)
 
         // Check if the token matches a basic skill.
         for (index = 0; index < LEVEL_SCHEME_BASIC_SKILLS_MAX; index++) {
-            if (SDL_strcasecmp(tok, level_scheme_basic_skills[index]) == 0) {
+            if (tig_strcasecmp(tok, level_scheme_basic_skills[index]) == 0) {
                 if (auto_level_basic_skill(obj, index, score) == AUTO_LEVEL_INSUFFIICIENT_POINTS) {
                     return false;
                 }
@@ -921,7 +921,7 @@ bool auto_level_process_rule(int64_t obj, const char* str)
 
         // Check if the token matches a tech skill.
         for (index = 0; index < LEVEL_SCHEME_TECH_SKILLS_MAX; index++) {
-            if (SDL_strcasecmp(tok, level_scheme_tech_skills[index]) == 0) {
+            if (tig_strcasecmp(tok, level_scheme_tech_skills[index]) == 0) {
                 if (auto_level_tech_skill(obj, index, score) == AUTO_LEVEL_INSUFFIICIENT_POINTS) {
                     return false;
                 }
@@ -932,7 +932,7 @@ bool auto_level_process_rule(int64_t obj, const char* str)
 
         // Check if the token matches a spell college.
         for (index = 0; index < LEVEL_SCHEME_SPELLS_MAX; index++) {
-            if (SDL_strcasecmp(tok, level_scheme_spells[index]) == 0) {
+            if (tig_strcasecmp(tok, level_scheme_spells[index]) == 0) {
                 if (auto_level_spell(obj, index, score) == AUTO_LEVEL_INSUFFIICIENT_POINTS) {
                     return false;
                 }
@@ -943,7 +943,7 @@ bool auto_level_process_rule(int64_t obj, const char* str)
 
         // Check if the token matches a tech discipline.
         for (index = 0; index < LEVEL_SCHEME_TECH_MAX; index++) {
-            if (SDL_strcasecmp(tok, level_scheme_tech[index]) == 0) {
+            if (tig_strcasecmp(tok, level_scheme_tech[index]) == 0) {
                 if (auto_level_tech(obj, index, score) == AUTO_LEVEL_INSUFFIICIENT_POINTS) {
                     return false;
                 }
@@ -954,7 +954,7 @@ bool auto_level_process_rule(int64_t obj, const char* str)
 
         // Check if the token matches a miscellaneous attribute.
         for (index = 0; index < LEVEL_SCHEME_MISC_MAX; index++) {
-            if (SDL_strcasecmp(tok, level_scheme_misc[index]) == 0) {
+            if (tig_strcasecmp(tok, level_scheme_misc[index]) == 0) {
                 if (auto_level_misc(obj, index, score) == AUTO_LEVEL_INSUFFIICIENT_POINTS) {
                     return false;
                 }

@@ -33,6 +33,7 @@ add_executable(arcanum-tests
     "test_rect.c"
     "test_idxtable.c"
     "test_tig_qsort.c"
+    "test_tig_strcase.c"
     "test_art_id.c"
     "test_color.c"
     "test_called_shot.c"

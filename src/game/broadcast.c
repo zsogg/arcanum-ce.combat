@@ -166,7 +166,7 @@ int broadcast_match_str_to_base_type(const char* str)
     int index;
 
     for (index = 0; index < BROADCAST_CMD_TYPE_COUNT; index++) {
-        if (SDL_strcasecmp(str, broadcast_cmd_type_lookup[index]) == 0) {
+        if (tig_strcasecmp(str, broadcast_cmd_type_lookup[index]) == 0) {
             return index;
         }
     }
@@ -243,7 +243,7 @@ void broadcast_msg_client(int64_t pc_obj, Broadcast* bcast)
                         if (bcast_str[0] == '#') {
                             found = true;
                             pos = 1;
-                        } else if (SDL_strncasecmp(bcast_str, candidate_follower_name, pos) == 0) {
+                        } else if (tig_strncasecmp(bcast_str, candidate_follower_name, pos) == 0) {
                             found = true;
                             done = true;
                         }
@@ -408,7 +408,7 @@ void broadcast_msg_client(int64_t pc_obj, Broadcast* bcast)
                     if (*bcast_str == '#') {
                         found = true;
                         pos = 1;
-                    } else if (SDL_strncasecmp(bcast_str, candidate_pc_name, pos) == 0) {
+                    } else if (tig_strncasecmp(bcast_str, candidate_pc_name, pos) == 0) {
                         found = true;
                         done = true;
                     }
@@ -482,7 +482,7 @@ int broadcast_match_str_to_cmd_type(const char* str)
     }
 
     for (index = 0; index < num_broadcast_commands; index++) {
-        if (SDL_strcasecmp(str, broadcast_commands[index].str) == 0) {
+        if (tig_strcasecmp(str, broadcast_commands[index].str) == 0) {
             return broadcast_commands[index].type;
         }
     }

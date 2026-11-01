@@ -1941,7 +1941,7 @@ static int gsound_combat_shuffle_area_track(void)
                 name = name != NULL ? name + 1 : sound->path;
                 for (track = 0; track < GSOUND_COMBAT_SHUFFLE_TRACKS; track++) {
                     snprintf(file, sizeof(file), "%s.mp3", gsound_combat_shuffle_tracks[track]);
-                    if (SDL_strcasecmp(name, file) == 0) {
+                    if (tig_strcasecmp(name, file) == 0) {
                         return track;
                     }
                 }

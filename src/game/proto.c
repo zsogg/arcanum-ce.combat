@@ -16495,7 +16495,7 @@ bool proto_parse_field(const char* str, int* fld_ptr, int* a3, int* a4, int* a5)
 
     for (fld = 0; fld < PROTO_F_COUNT; fld++) {
         pos = strlen(proto_field_names[fld]) + 1;
-        if (SDL_strncasecmp(str, proto_field_names[fld], pos - 1) == 0) {
+        if (tig_strncasecmp(str, proto_field_names[fld], pos - 1) == 0) {
             break;
         }
     }
@@ -16548,7 +16548,7 @@ bool proto_parse_field(const char* str, int* fld_ptr, int* a3, int* a4, int* a5)
         for (stat = STAT_STRENGTH; stat <= STAT_CHARISMA; stat++) {
             name = stat_name(stat);
             pos = strlen(name);
-            if (SDL_strncasecmp(str, name, pos) == 0) {
+            if (tig_strncasecmp(str, name, pos) == 0) {
                 *a3 = stat;
                 *a4 = atoi(str + pos);
                 return true;
@@ -16557,7 +16557,7 @@ bool proto_parse_field(const char* str, int* fld_ptr, int* a3, int* a4, int* a5)
         for (stat = STAT_MAGICK_POINTS; stat <= STAT_RACE; stat++) {
             name = stat_name(stat);
             pos = strlen(name);
-            if (SDL_strncasecmp(str, name, pos) == 0) {
+            if (tig_strncasecmp(str, name, pos) == 0) {
                 *a3 = stat;
                 *a4 = atoi(str + pos);
                 return true;
@@ -16569,7 +16569,7 @@ bool proto_parse_field(const char* str, int* fld_ptr, int* a3, int* a4, int* a5)
         for (spl = 0; spl < SPELL_COUNT; spl++) {
             name = spell_name(spl);
             pos = strlen(name);
-            if (SDL_strncasecmp(str, name, pos) == 0) {
+            if (tig_strncasecmp(str, name, pos) == 0) {
                 *a3 = spl;
                 *a4 = atoi(str + pos);
                 return true;
@@ -16600,7 +16600,7 @@ int proto_parse_flag(const char* str, const char** identifiers, int size)
     int index;
 
     for (index = 0; index < size; index++) {
-        if (SDL_strncasecmp(str, identifiers[index], strlen(identifiers[index])) == 0) {
+        if (tig_strncasecmp(str, identifiers[index], strlen(identifiers[index])) == 0) {
             return 1 << index;
         }
     }

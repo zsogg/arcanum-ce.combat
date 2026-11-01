@@ -388,7 +388,7 @@ static void effect_parse(int num, char* text)
             case 0:
                 // Check stats.
                 for (index = 0; index < STAT_COUNT; index++) {
-                    if (SDL_strcasecmp(tok, effect_stat_lookup_tbl[index]) == 0) {
+                    if (tig_strcasecmp(tok, effect_stat_lookup_tbl[index]) == 0) {
                         effect_info = &(effect_stat_effects[num]);
                         effect_info->ids[effect_info->count] = index;
                         break;
@@ -398,7 +398,7 @@ static void effect_parse(int num, char* text)
             case 1:
                 // Check basic skills.
                 for (index = 0; index < BASIC_SKILL_COUNT; index++) {
-                    if (SDL_strcasecmp(tok, effect_basic_skill_lookup_tbl[index]) == 0) {
+                    if (tig_strcasecmp(tok, effect_basic_skill_lookup_tbl[index]) == 0) {
                         effect_info = &(effect_basic_skill_effects[num]);
                         effect_info->ids[effect_info->count] = index;
                         break;
@@ -408,7 +408,7 @@ static void effect_parse(int num, char* text)
             case 2:
                 // Check tech skills.
                 for (index = 0; index < TECH_SKILL_COUNT; index++) {
-                    if (SDL_strcasecmp(tok, effect_tech_skill_lookup_tbl[index]) == 0) {
+                    if (tig_strcasecmp(tok, effect_tech_skill_lookup_tbl[index]) == 0) {
                         effect_info = &(effect_tech_skill_effects[num]);
                         effect_info->ids[effect_info->count] = index;
                         break;
@@ -418,7 +418,7 @@ static void effect_parse(int num, char* text)
             case 3:
                 // Check resistance types.
                 for (index = 0; index < RESISTANCE_TYPE_COUNT; index++) {
-                    if (SDL_strcasecmp(tok, effect_resistance_lookup_tbl[index]) == 0) {
+                    if (tig_strcasecmp(tok, effect_resistance_lookup_tbl[index]) == 0) {
                         effect_info = &(effect_resistance_effects[num]);
                         effect_info->ids[effect_info->count] = index;
                         break;
@@ -428,7 +428,7 @@ static void effect_parse(int num, char* text)
             case 4:
                 // Check tech disciplines.
                 for (index = 0; index < TECH_COUNT; index++) {
-                    if (SDL_strcasecmp(tok, effect_tech_discipline_lookup_tbl[index]) == 0) {
+                    if (tig_strcasecmp(tok, effect_tech_discipline_lookup_tbl[index]) == 0) {
                         effect_info = &(effect_tech_effects[num]);
                         effect_info->ids[effect_info->count] = index;
                         break;
@@ -438,7 +438,7 @@ static void effect_parse(int num, char* text)
             case 5:
                 // Check special attributes.
                 for (index = 0; index < EFFECT_SPECIAL_COUNT; index++) {
-                    if (SDL_strcasecmp(tok, effect_special_attributes_lookup_tbl[index]) == 0) {
+                    if (tig_strcasecmp(tok, effect_special_attributes_lookup_tbl[index]) == 0) {
                         effect_info = &(effect_special_effects[num]);
                         effect_info->ids[effect_info->count] = index;
                         break;
@@ -456,7 +456,7 @@ static void effect_parse(int num, char* text)
 
         // Parse operator and associated parameter.
         tok = strtok(NULL, " ,");
-        if (SDL_strcasecmp(tok, "min") == 0 || SDL_strcasecmp(tok, "max") == 0) {
+        if (tig_strcasecmp(tok, "min") == 0 || tig_strcasecmp(tok, "max") == 0) {
             // FIX: Force lowercase.
             if (SDL_tolower(tok[1]) == 'i') {
                 effect_info->operators[effect_info->count] = EFFECT_OPERATOR_MIN;

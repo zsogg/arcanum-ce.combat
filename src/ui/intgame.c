@@ -6203,7 +6203,7 @@ void intgame_message_history_add(UiMessage* ui_message)
         if (intgame_message_history_size != 0
             && (ui_message->type == UI_MSG_TYPE_EXCLAMATION
                 || ui_message->type == UI_MSG_TYPE_QUESTION)
-            && SDL_strcasecmp(ui_message->str, intgame_message_history[prev_idx].str) == 0) {
+            && tig_strcasecmp(ui_message->str, intgame_message_history[prev_idx].str) == 0) {
             intgame_message_history_end = prev_idx;
             intgame_message_history_curr = prev_idx;
             intgame_message_refresh(true);

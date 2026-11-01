@@ -317,7 +317,7 @@ bool build_tile_file_name(const char* name1, const char* name2, int a3, int a4, 
         a4 -= 8;
     }
 
-    if (a3 == 15 || SDL_strcasecmp(name1, name2) == 0) {
+    if (a3 == 15 || tig_strcasecmp(name1, name2) == 0) {
         snprintf(fname, maxlen,
             "art\\tile\\%sbse%c%c.art",
             name1,
@@ -408,28 +408,28 @@ bool a_name_tile_fname_to_aid(const char* name, tig_art_id_t* art_id_ptr)
     int index;
 
     for (index = 0; index < num_outdoor_flippable_names; index++) {
-        if (SDL_strcasecmp(outdoor_flippable_tile_names[index], name) == 0) {
+        if (tig_strcasecmp(outdoor_flippable_tile_names[index], name) == 0) {
             tig_art_tile_id_create(index, index, 15, 0, 1, 1, 1, 0, art_id_ptr);
             return true;
         }
     }
 
     for (index = 0; index < num_outdoor_non_flippable_names; index++) {
-        if (SDL_strcasecmp(outdoor_non_flippable_tile_names[index], name) == 0) {
+        if (tig_strcasecmp(outdoor_non_flippable_tile_names[index], name) == 0) {
             tig_art_tile_id_create(index, index, 15, 0, 1, 0, 0, 0, art_id_ptr);
             return true;
         }
     }
 
     for (index = 0; index < num_indoor_flippable_names; index++) {
-        if (SDL_strcasecmp(indoor_flippable_tile_names[index], name) == 0) {
+        if (tig_strcasecmp(indoor_flippable_tile_names[index], name) == 0) {
             tig_art_tile_id_create(index, index, 15, 0, 0, 1, 1, 0, art_id_ptr);
             return true;
         }
     }
 
     for (index = 0; index < num_indoor_non_flippable_names; index++) {
-        if (SDL_strcasecmp(indoor_non_flippable_tile_names[index], name) == 0) {
+        if (tig_strcasecmp(indoor_non_flippable_tile_names[index], name) == 0) {
             tig_art_tile_id_create(index, index, 15, 0, 0, 0, 0, 0, art_id_ptr);
             return true;
         }
@@ -643,14 +643,14 @@ bool a_name_outdoor_tile_find(const char* name, int* index_ptr)
     int index = 0;
 
     for (index = 0; index < num_outdoor_flippable_names; index++) {
-        if (SDL_strcasecmp(outdoor_flippable_tile_names[index], name) == 0) {
+        if (tig_strcasecmp(outdoor_flippable_tile_names[index], name) == 0) {
             *index_ptr = index;
             return true;
         }
     }
 
     for (index = 0; index < num_outdoor_non_flippable_names; index++) {
-        if (SDL_strcasecmp(outdoor_non_flippable_tile_names[index], name) == 0) {
+        if (tig_strcasecmp(outdoor_non_flippable_tile_names[index], name) == 0) {
             *index_ptr = num_outdoor_flippable_names + index;
             return true;
         }
@@ -1378,7 +1378,7 @@ int a_name_portal_num_from_fname(const char* fname)
     mes_file_entry.num = 0;
     mes_get_msg(portal_mes_file, &mes_file_entry);
     do {
-        if (SDL_strcasecmp(mes_file_entry.str, fname) == 0) {
+        if (tig_strcasecmp(mes_file_entry.str, fname) == 0) {
             return mes_file_entry.num;
         }
     } while (mes_find_next(portal_mes_file, &mes_file_entry));
@@ -1779,7 +1779,7 @@ int a_name_wall_name_find(const char* str)
     int index;
 
     for (index = 0; index < num_wall_file_names; index++) {
-        if (SDL_strcasecmp(wall_file_names[index], str) == 0) {
+        if (tig_strcasecmp(wall_file_names[index], str) == 0) {
             return index;
         }
     }
@@ -1830,14 +1830,14 @@ void parse_wall_structure(char* str, int index)
     wall_structures[index].exterior = a_name_wall_name_find(tok);
 
     tok = strtok(NULL, " ");
-    if (SDL_strcasecmp(tok, "nul") != 0) {
+    if (tig_strcasecmp(tok, "nul") != 0) {
         a_name_tile_fname_to_aid(tok, &(wall_structures[index].tile_art_id));
     } else {
         wall_structures[index].tile_art_id = TIG_ART_ID_INVALID;
     }
 
     tok = strtok(NULL, " ");
-    if (SDL_strcasecmp(tok, "nul") != 0) {
+    if (tig_strcasecmp(tok, "nul") != 0) {
         a_name_roof_fname_to_aid(tok, &(wall_structures[index].roof_art_id));
     } else {
         wall_structures[index].roof_art_id = TIG_ART_ID_INVALID;
@@ -1847,11 +1847,11 @@ void parse_wall_structure(char* str, int index)
 
     tok = strtok(NULL, " ");
     while (tok != NULL) {
-        if (SDL_strcasecmp(tok, "/nowindows") == 0) {
+        if (tig_strcasecmp(tok, "/nowindows") == 0) {
             wall_structures[index].flags |= WS_NOWINDOWS;
-        } else if (SDL_strcasecmp(tok, "/nodoors") == 0) {
+        } else if (tig_strcasecmp(tok, "/nodoors") == 0) {
             wall_structures[index].flags |= WS_NODOORS;
-        } else if (SDL_strcasecmp(tok, "/fence") == 0) {
+        } else if (tig_strcasecmp(tok, "/fence") == 0) {
             wall_structures[index].flags |= WS_FENCE;
         }
     }
@@ -1955,7 +1955,7 @@ bool a_name_roof_fname_to_aid(const char* fname, tig_art_id_t* aid_ptr)
     int index;
 
     for (index = 0; index < num_roof_file_names; index++) {
-        if (SDL_strcasecmp(fname, roof_file_names[index]) == 0) {
+        if (tig_strcasecmp(fname, roof_file_names[index]) == 0) {
             tig_art_roof_id_create(index, 0, 0, 0, aid_ptr);
             return true;
         }

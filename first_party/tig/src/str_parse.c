@@ -5,6 +5,7 @@
 #include <string.h>
 
 #include "tig/debug.h"
+#include "tig/strcase.h"
 
 #define DEFAULT_LIST_SEPARATOR ','
 
@@ -261,7 +262,7 @@ void tig_str_parse_complex_str_value(char** str, int delim, const char** list, i
         // NOTE: This approach is slightly wrong. When the entry is malformed
         // (identifier without value, i.e. "(foo)"), this approach consider
         // closing paren to be part of the identifier.
-        if (SDL_strcasecmp(list[index], *str) == 0) {
+        if (tig_strcasecmp(list[index], *str) == 0) {
             *value1 = index;
             break;
         }
@@ -305,7 +306,7 @@ void tig_str_match_str_to_list(char** str, const char** list, int list_length, i
 
     int index;
     for (index = 0; index < list_length; index++) {
-        if (SDL_strcasecmp(list[index], *str) == 0) {
+        if (tig_strcasecmp(list[index], *str) == 0) {
             *value = index;
             break;
         }
@@ -357,7 +358,7 @@ void tig_str_parse_flag_list(char** str, const char** keys, const unsigned int* 
 
         int index;
         for (index = 0; index < length; index++) {
-            if (SDL_strcasecmp(keys[index], *str) == 0) {
+            if (tig_strcasecmp(keys[index], *str) == 0) {
                 *value |= values[index];
                 break;
             }
@@ -445,7 +446,7 @@ void tig_str_parse_flag_list_64(char** str, const char** keys, const uint64_t* v
 
         int index;
         for (index = 0; index < length; index++) {
-            if (SDL_strcasecmp(keys[index], *str) == 0) {
+            if (tig_strcasecmp(keys[index], *str) == 0) {
                 *value |= values[index];
                 break;
             }
@@ -805,7 +806,7 @@ void tig_str_parse_flag_list_direct(char** str, const char** keys, int length, u
 
         int index;
         for (index = 0; index < length; index++) {
-            if (SDL_strcasecmp(keys[index], *str) == 0) {
+            if (tig_strcasecmp(keys[index], *str) == 0) {
                 *value |= 1 << index;
                 break;
             }

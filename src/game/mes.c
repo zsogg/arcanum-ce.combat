@@ -451,7 +451,7 @@ bool find_mes_file(const char* path, int* index_ptr)
     // first free slot.
     for (index = 0; index < mes_files_capacity; index++) {
         if (mes_files[index].refcount != 0) {
-            if (SDL_strcasecmp(path, mes_files[index].path) == 0) {
+            if (tig_strcasecmp(path, mes_files[index].path) == 0) {
                 *index_ptr = index;
                 return true;
             }

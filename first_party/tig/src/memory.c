@@ -5,6 +5,7 @@
 #include <stdlib.h>
 
 #include "tig/qsort.h"
+#include "tig/strcase.h"
 
 #define START_GUARD_BYTE 0xAA
 #define START_GUARD_SIZE ((int)sizeof(void*))
@@ -377,7 +378,7 @@ void tig_memory_print_stats(TigMemoryPrintStatsOptions opts)
             blocks++;
 
             if (index == tig_memory_current_blocks - 1
-                || SDL_strcasecmp(array[index]->file, array[index + 1]->file) != 0
+                || tig_strcasecmp(array[index]->file, array[index + 1]->file) != 0
                 || array[index]->line != array[index + 1]->line) {
                 // NOTE: Format is slightly modified for VS Code to recognize
                 // file path.
@@ -404,7 +405,7 @@ int tig_memory_sort_blocks(const void* va, const void* vb)
     const TigMemoryBlock* block2 = *(const TigMemoryBlock**)vb;
     int cmp;
 
-    cmp = SDL_strcasecmp(block1->file, block2->file);
+    cmp = tig_strcasecmp(block1->file, block2->file);
     if (cmp == 0) {
         cmp = block1->line - block2->line;
     }

@@ -1557,7 +1557,7 @@ bool dialog_check_conditions(DialogState* a1, char* a2)
 
         value = atoi(pch);
         for (cond = 0; cond < DIALOG_COND_COUNT; cond++) {
-            if (SDL_strcasecmp(dialog_cond_codes[cond], code) == 0) {
+            if (tig_strcasecmp(dialog_cond_codes[cond], code) == 0) {
                 break;
             }
         }
@@ -2063,7 +2063,7 @@ bool dialog_perform_actions(DialogState* a1, char* a2, int a3)
 
         value = atoi(pch);
         for (act = 0; act < DIALOG_ACTION_COUNT; act++) {
-            if (SDL_strcasecmp(dialog_action_codes[act], code) == 0) {
+            if (tig_strcasecmp(dialog_action_codes[act], code) == 0) {
                 break;
             }
         }
@@ -2458,7 +2458,7 @@ bool dialog_build_npc_reply(DialogState* a1, bool a2)
         dialog_perform_actions(a1, entry.actions, 0);
     }
 
-    if (SDL_strncasecmp(entry.str, "g:", 2) == 0) {
+    if (tig_strncasecmp(entry.str, "g:", 2) == 0) {
         dialog_build_greeting(a1, &(entry.str[2]));
 
         if (a1->status) {
@@ -2468,12 +2468,12 @@ bool dialog_build_npc_reply(DialogState* a1, bool a2)
         return true;
     }
 
-    if (SDL_strcasecmp(entry.str, "i:") == 0) {
+    if (tig_strcasecmp(entry.str, "i:") == 0) {
         dialog_copy_npc_race_specific_msg(a1->reply, a1, 1000);
         return true;
     }
 
-    if (SDL_strncasecmp(entry.str, "m:", 2) == 0) {
+    if (tig_strncasecmp(entry.str, "m:", 2) == 0) {
         char* pch;
         int v2;
         int v3;
@@ -2495,7 +2495,7 @@ bool dialog_build_npc_reply(DialogState* a1, bool a2)
         return false;
     }
 
-    if (SDL_strncasecmp(entry.str, "r:", 2) == 0) {
+    if (tig_strncasecmp(entry.str, "r:", 2) == 0) {
         char* pch;
         int cost;
         int cnt;
@@ -2564,9 +2564,9 @@ void dialog_substitute_names(char* dst, char* src, DialogState* a3)
             break;
         }
         *end = '\0';
-        if (SDL_strcasecmp(start + 1, "pcname") == 0) {
+        if (tig_strcasecmp(start + 1, "pcname") == 0) {
             object_examine(a3->pc_obj, OBJ_HANDLE_NULL, dst + strlen(dst));
-        } else if (SDL_strcasecmp(start + 1, "npcname") == 0) {
+        } else if (tig_strcasecmp(start + 1, "npcname") == 0) {
             // FIX (porting bug #69): the NPC describes itself. The original
             // pushes the NPC handle for both arguments (0x416BB8-0x416BBC);
             // CE described the PC, so every `@npcname@` printed the player's
@@ -2605,10 +2605,10 @@ bool dialog_build_pc_option(int a1, int a2, DialogState* a3)
     entry.num = a1;
     dialog_search(a3->dlg, &entry);
 
-    if (SDL_strcasecmp(entry.str, "a:") == 0) {
+    if (tig_strcasecmp(entry.str, "a:") == 0) {
         dialog_copy_pc_class_specific_msg(a3->options[a2], a3, 1000);
         dialog_response_val_decode(entry.response_val, &(a3->option_response_types[a2]), &(a3->option_response_nums[a2]));
-    } else if (SDL_strcasecmp(entry.str, "b:") == 0) {
+    } else if (tig_strcasecmp(entry.str, "b:") == 0) {
         if (critter_leader_get(a3->npc_obj) == a3->pc_obj) {
             dialog_copy_pc_generic_msg(a3->options[a2], a3, 1600, 1699);
         } else {
@@ -2616,11 +2616,11 @@ bool dialog_build_pc_option(int a1, int a2, DialogState* a3)
         }
         a3->option_response_types[a2] = DIALOG_RESPONSE_BARTER;
         a3->option_response_nums[a2] = entry.response_val;
-    } else if (SDL_strncasecmp(entry.str, "c:", 2) == 0) {
+    } else if (tig_strncasecmp(entry.str, "c:", 2) == 0) {
         dialog_copy_pc_story_msg(a3->options[a2], a3);
         a3->option_response_types[a2] = DIALOG_RESPONSE_CHECK_STORY;
         a3->option_response_nums[a2] = entry.response_val;
-    } else if (SDL_strncasecmp(entry.str, "d:", 2) == 0) {
+    } else if (tig_strncasecmp(entry.str, "d:", 2) == 0) {
         pch = strchr(entry.str, ',');
         cnt = dialog_parse_params(values, pch + 1);
         if (filter_unknown_areas(a3->pc_obj, values, cnt) == 0) {
@@ -2633,67 +2633,67 @@ bool dialog_build_pc_option(int a1, int a2, DialogState* a3)
         a3->option_response_types[a2] = DIALOG_RESPONSE_OFFER_DIRECTIONS;
         a3->option_response_nums[a2] = entry.response_val;
         a3->option_response_extras[a2] = 0;
-    } else if (SDL_strcasecmp(entry.str, "e:") == 0) {
+    } else if (tig_strcasecmp(entry.str, "e:") == 0) {
         dialog_copy_pc_generic_msg(a3->options[a2], a3, 400, 499);
         dialog_response_val_decode(entry.response_val, &(a3->option_response_types[a2]), &(a3->option_response_nums[a2]));
-    } else if (SDL_strcasecmp(entry.str, "f:") == 0) {
+    } else if (tig_strcasecmp(entry.str, "f:") == 0) {
         dialog_copy_pc_generic_msg(a3->options[a2], a3, 800, 899);
         dialog_response_val_decode(entry.response_val, &(a3->option_response_types[a2]), &(a3->option_response_nums[a2]));
-    } else if (SDL_strcasecmp(entry.str, "h:") == 0) {
+    } else if (tig_strcasecmp(entry.str, "h:") == 0) {
         dialog_copy_pc_generic_msg(a3->options[a2], a3, 700, 799);
         a3->option_response_types[a2] = DIALOG_RESPONSE_OFFER_HEALING;
         a3->option_response_nums[a2] = entry.response_val;
-    } else if (SDL_strcasecmp(entry.str, "i:") == 0) {
+    } else if (tig_strcasecmp(entry.str, "i:") == 0) {
         dialog_response_val_decode(entry.response_val, &v2, &v3);
         dialog_build_pc_insult_option(a2, v2, v3, a3);
-    } else if (SDL_strcasecmp(entry.str, "k:") == 0) {
+    } else if (tig_strcasecmp(entry.str, "k:") == 0) {
         dialog_copy_pc_generic_msg(a3->options[a2], a3, 1500, 1599);
         dialog_response_val_decode(entry.response_val, &(a3->option_response_types[a2]), &(a3->option_response_nums[a2]));
-    } else if (SDL_strcasecmp(entry.str, "l:") == 0) {
+    } else if (tig_strcasecmp(entry.str, "l:") == 0) {
         dialog_copy_pc_generic_msg(a3->options[a2], a3, 2300, 2399);
         a3->option_response_types[a2] = DIALOG_RESPONSE_WORLDMAP;
         a3->option_response_nums[a2] = entry.response_val;
-    } else if (SDL_strcasecmp(entry.str, "n:") == 0) {
+    } else if (tig_strcasecmp(entry.str, "n:") == 0) {
         dialog_copy_pc_generic_msg(a3->options[a2], a3, 100, 199);
         dialog_response_val_decode(entry.response_val, &(a3->option_response_types[a2]), &(a3->option_response_nums[a2]));
-    } else if (SDL_strcasecmp(entry.str, "p:") == 0) {
+    } else if (tig_strcasecmp(entry.str, "p:") == 0) {
         dialog_copy_pc_generic_msg(a3->options[a2], a3, 1900, 1999);
         a3->option_response_types[a2] = DIALOG_RESPONSE_ASK_ABOUT_NEWSPAPERS;
         a3->option_response_nums[a2] = entry.response_val;
-    } else if (SDL_strncasecmp(entry.str, "q:", 2) == 0) {
+    } else if (tig_strncasecmp(entry.str, "q:", 2) == 0) {
         v4 = quest_dialog_line(a3->pc_obj, a3->npc_obj, atoi(entry.str + 2));
         if (v4 != -1) {
             return dialog_build_pc_option(v4, a2, a3);
         }
         return false;
-    } else if (SDL_strncasecmp(entry.str, "r:", 2) == 0) {
+    } else if (tig_strncasecmp(entry.str, "r:", 2) == 0) {
         dialog_copy_pc_class_specific_msg(a3->options[a2], a3, 2000);
 
         pch = a3->options[a2];
         strcpy(&(pch[strlen(pch) + 1]), entry.str + 2);
         a3->option_response_types[a2] = DIALOG_RESPONSE_ASK_MONEY_FOR_RUMOR;
         a3->option_response_nums[a2] = entry.response_val;
-    } else if (SDL_strcasecmp(entry.str, "s:") == 0) {
+    } else if (tig_strcasecmp(entry.str, "s:") == 0) {
         dialog_copy_pc_generic_msg(a3->options[a2], a3, 200, 299);
         dialog_response_val_decode(entry.response_val, &(a3->option_response_types[a2]), &(a3->option_response_nums[a2]));
-    } else if (SDL_strncasecmp(entry.str, "t:", 2) == 0) {
+    } else if (tig_strncasecmp(entry.str, "t:", 2) == 0) {
         dialog_copy_pc_generic_msg(a3->options[a2], a3, 500, 599);
 
         pch = a3->options[a2];
         strcpy(&(pch[strlen(pch) + 1]), entry.str + 2);
         a3->option_response_types[a2] = DIALOG_RESPONSE_OFFER_TRAINING;
         a3->option_response_nums[a2] = entry.response_val;
-    } else if (SDL_strncasecmp(entry.str, "u:", 2) == 0) {
+    } else if (tig_strncasecmp(entry.str, "u:", 2) == 0) {
         v4 = atoi(entry.str + 2);
         if (ai_check_use_skill(a3->npc_obj, a3->pc_obj, skill_supplementary_item(a3->npc_obj, v4), v4) != AI_USE_SKILL_OK) {
             return false;
         }
 
         dialog_build_use_skill_option(a2, v4, entry.response_val, a3);
-    } else if (SDL_strcasecmp(entry.str, "w:") == 0) {
+    } else if (tig_strcasecmp(entry.str, "w:") == 0) {
         dialog_copy_pc_generic_msg(a3->options[a2], a3, 1800, 1899);
         dialog_response_val_decode(entry.response_val, &(a3->option_response_types[a2]), &(a3->option_response_nums[a2]));
-    } else if (SDL_strncasecmp(entry.str, "x:", 2) == 0) {
+    } else if (tig_strncasecmp(entry.str, "x:", 2) == 0) {
         pch = strchr(entry.str, ',');
         cnt = dialog_parse_params(values, pch + 1);
         if (filter_unknown_areas(a3->pc_obj, values, cnt) == 0) {
@@ -2706,10 +2706,10 @@ bool dialog_build_pc_option(int a1, int a2, DialogState* a3)
         a3->option_response_types[a2] = DIALOG_RESPONSE_OFFER_MARK_AREA;
         a3->option_response_nums[a2] = entry.response_val;
         a3->option_response_extras[a2] = 0;
-    } else if (SDL_strcasecmp(entry.str, "y:") == 0) {
+    } else if (tig_strcasecmp(entry.str, "y:") == 0) {
         dialog_copy_pc_generic_msg(a3->options[a2], a3, 1, 99);
         dialog_response_val_decode(entry.response_val, &(a3->option_response_types[a2]), &(a3->option_response_nums[a2]));
-    } else if (SDL_strncasecmp(entry.str, "z:", 2) == 0) {
+    } else if (tig_strncasecmp(entry.str, "z:", 2) == 0) {
         dialog_build_use_spell_option(a2, atoi(entry.str + 2), entry.response_val, a3);
     } else {
         dialog_substitute_names(a3->options[a2], entry.str, a3);
@@ -2765,7 +2765,7 @@ bool find_dialog(const char* path, int* index_ptr)
     int index;
 
     for (index = 0; index < dialog_files_capacity; index++) {
-        if (SDL_strcasecmp(path, dialog_files[index].path) == 0) {
+        if (tig_strcasecmp(path, dialog_files[index].path) == 0) {
             *index_ptr = index;
             return true;
         }

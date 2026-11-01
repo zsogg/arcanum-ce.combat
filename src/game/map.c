@@ -1705,11 +1705,11 @@ void map_load_extension(const char* base_path)
         tig_str_parse_set_separator(':');
         tig_str_parse_str_value(&str, key);
 
-        if (SDL_strcasecmp(key, "LightScheme") == 0) {
+        if (tig_strcasecmp(key, "LightScheme") == 0) {
             tig_str_parse_value(&str, &light_scheme);
             light_scheme_set_map_default(light_scheme);
             light_scheme_set(LIGHT_SCHEME_MAP_DEFAULT, light_scheme_get_hour());
-        } else if (SDL_strcasecmp(key, "SoundScheme") == 0) {
+        } else if (tig_strcasecmp(key, "SoundScheme") == 0) {
             tig_str_parse_set_separator(',');
             tig_str_parse_value(&str, &music_scheme_idx);
             tig_str_parse_value(&str, &ambient_scheme_idx);
@@ -1823,19 +1823,19 @@ void map_apply_obj_patch(int64_t obj, char* str)
     str++;
 
     while (map_read_token(&str, key)) {
-        if (SDL_strcasecmp(key, "internal_name") == 0) {
+        if (tig_strcasecmp(key, "internal_name") == 0) {
             map_read_token(&str, value);
             obj_field_int32_set(obj, OBJ_F_NAME, atoi(value));
-        } else if (SDL_strcasecmp(key, "known_name") == 0) {
+        } else if (tig_strcasecmp(key, "known_name") == 0) {
             map_read_token(&str, value);
             obj_field_int32_set(obj, OBJ_F_DESCRIPTION, atoi(value));
-        } else if (SDL_strcasecmp(key, "alignment") == 0) {
+        } else if (tig_strcasecmp(key, "alignment") == 0) {
             map_read_token(&str, value);
             stat_base_set(obj, STAT_ALIGNMENT, atoi(value));
-        } else if (SDL_strcasecmp(key, "origin") == 0) {
+        } else if (tig_strcasecmp(key, "origin") == 0) {
             map_read_token(&str, value);
             obj_field_int32_set(obj, OBJ_F_NPC_ORIGIN, atoi(value));
-        } else if (SDL_strcasecmp(key, "notify_npc") == 0) {
+        } else if (tig_strcasecmp(key, "notify_npc") == 0) {
             map_read_token(&str, value);
             switch (obj_field_int32_get(obj, OBJ_F_TYPE)) {
             case OBJ_TYPE_PORTAL:
@@ -1845,126 +1845,126 @@ void map_apply_obj_patch(int64_t obj, char* str)
                 obj_field_int32_set(obj, OBJ_F_CONTAINER_NOTIFY_NPC, atoi(value));
                 break;
             }
-        } else if (SDL_strcasecmp(key, "magic_hit_adjust") == 0) {
+        } else if (tig_strcasecmp(key, "magic_hit_adjust") == 0) {
             map_read_token(&str, value);
             obj_field_int32_set(obj, OBJ_F_WEAPON_MAGIC_HIT_ADJ, atoi(value));
-        } else if (SDL_strcasecmp(key, "obj_flag") == 0) {
+        } else if (tig_strcasecmp(key, "obj_flag") == 0) {
             flags = obj_field_int32_get(obj, OBJ_F_FLAGS);
             map_read_token(&str, value);
             if (value[0] == '!') {
                 for (index = 0; index < OF_COUNT; index++) {
-                    if (SDL_strcasecmp(&(value[1]), obj_flags_of[index]) == 0) {
+                    if (tig_strcasecmp(&(value[1]), obj_flags_of[index]) == 0) {
                         flags &= ~(1 << index);
                         break;
                     }
                 }
             } else {
                 for (index = 0; index < OF_COUNT; index++) {
-                    if (SDL_strcasecmp(value, obj_flags_of[index]) == 0) {
+                    if (tig_strcasecmp(value, obj_flags_of[index]) == 0) {
                         flags |= 1 << index;
                         break;
                     }
                 }
             }
             obj_field_int32_set(obj, OBJ_F_FLAGS, flags);
-        } else if (SDL_strcasecmp(key, "portal_flag") == 0) {
+        } else if (tig_strcasecmp(key, "portal_flag") == 0) {
             flags = obj_field_int32_get(obj, OBJ_F_PORTAL_FLAGS);
             map_read_token(&str, value);
             if (value[0] == '!') {
                 for (index = 0; index < OPF_COUNT; index++) {
-                    if (SDL_strcasecmp(&(value[1]), obj_flags_opf[index]) == 0) {
+                    if (tig_strcasecmp(&(value[1]), obj_flags_opf[index]) == 0) {
                         flags &= ~(1 << index);
                         break;
                     }
                 }
             } else {
                 for (index = 0; index < OPF_COUNT; index++) {
-                    if (SDL_strcasecmp(value, obj_flags_opf[index]) == 0) {
+                    if (tig_strcasecmp(value, obj_flags_opf[index]) == 0) {
                         flags |= 1 << index;
                         break;
                     }
                 }
             }
             obj_field_int32_set(obj, OBJ_F_PORTAL_FLAGS, flags);
-        } else if (SDL_strcasecmp(key, "item_flag") == 0) {
+        } else if (tig_strcasecmp(key, "item_flag") == 0) {
             flags = obj_field_int32_get(obj, OBJ_F_ITEM_FLAGS);
             map_read_token(&str, value);
             if (value[0] == '!') {
                 for (index = 0; index < OIF_COUNT; index++) {
-                    if (SDL_strcasecmp(&(value[1]), obj_flags_oif[index]) == 0) {
+                    if (tig_strcasecmp(&(value[1]), obj_flags_oif[index]) == 0) {
                         flags &= ~(1 << index);
                         break;
                     }
                 }
             } else {
                 for (index = 0; index < OIF_COUNT; index++) {
-                    if (SDL_strcasecmp(value, obj_flags_oif[index]) == 0) {
+                    if (tig_strcasecmp(value, obj_flags_oif[index]) == 0) {
                         flags |= 1 << index;
                         break;
                     }
                 }
             }
             obj_field_int32_set(obj, OBJ_F_ITEM_FLAGS, flags);
-        } else if (SDL_strcasecmp(key, "critter_flag") == 0) {
+        } else if (tig_strcasecmp(key, "critter_flag") == 0) {
             flags = obj_field_int32_get(obj, OBJ_F_CRITTER_FLAGS);
             map_read_token(&str, value);
             if (value[0] == '!') {
                 for (index = 0; index < OCF_COUNT; index++) {
-                    if (SDL_strcasecmp(&(value[1]), obj_flags_ocf[index]) == 0) {
+                    if (tig_strcasecmp(&(value[1]), obj_flags_ocf[index]) == 0) {
                         flags &= ~(1 << index);
                         break;
                     }
                 }
             } else {
                 for (index = 0; index < OCF_COUNT; index++) {
-                    if (SDL_strcasecmp(value, obj_flags_ocf[index]) == 0) {
+                    if (tig_strcasecmp(value, obj_flags_ocf[index]) == 0) {
                         flags |= 1 << index;
                         break;
                     }
                 }
             }
             obj_field_int32_set(obj, OBJ_F_CRITTER_FLAGS, flags);
-        } else if (SDL_strcasecmp(key, "npc_flag") == 0) {
+        } else if (tig_strcasecmp(key, "npc_flag") == 0) {
             flags = obj_field_int32_get(obj, OBJ_F_NPC_FLAGS);
             map_read_token(&str, value);
             if (value[0] == '!') {
                 for (index = 0; index < ONF_COUNT; index++) {
-                    if (SDL_strcasecmp(&(value[1]), obj_flags_onf[index]) == 0) {
+                    if (tig_strcasecmp(&(value[1]), obj_flags_onf[index]) == 0) {
                         flags &= ~(1 << index);
                         break;
                     }
                 }
             } else {
                 for (index = 0; index < ONF_COUNT; index++) {
-                    if (SDL_strcasecmp(value, obj_flags_onf[index]) == 0) {
+                    if (tig_strcasecmp(value, obj_flags_onf[index]) == 0) {
                         flags |= 1 << index;
                         break;
                     }
                 }
             }
             obj_field_int32_set(obj, OBJ_F_NPC_FLAGS, flags);
-        } else if (SDL_strcasecmp(key, "training") == 0) {
+        } else if (tig_strcasecmp(key, "training") == 0) {
             int training;
 
             map_read_token(&str, value);
             for (training = 0; training < TRAINING_COUNT; training++) {
-                if (SDL_strcasecmp(value, training_lookup_keys_tbl[training]) == 0) {
+                if (tig_strcasecmp(value, training_lookup_keys_tbl[training]) == 0) {
                     map_read_token(&str, value);
 
                     for (index = 0; index < BASIC_SKILL_COUNT; index++) {
-                        if (SDL_strcasecmp(value, basic_skill_lookup_keys_tbl[index]) == 0) {
+                        if (tig_strcasecmp(value, basic_skill_lookup_keys_tbl[index]) == 0) {
                             basic_skill_training_set(obj, index, training);
                         }
                     }
 
                     for (index = 0; index < TECH_SKILL_COUNT; index++) {
-                        if (SDL_strcasecmp(value, tech_skill_lookup_keys_tbl[index]) == 0) {
+                        if (tig_strcasecmp(value, tech_skill_lookup_keys_tbl[index]) == 0) {
                             tech_skill_training_set(obj, index, training);
                         }
                     }
                 }
             }
-        } else if (SDL_strcasecmp(key, "script") == 0) {
+        } else if (tig_strcasecmp(key, "script") == 0) {
             Script scr;
             int sap;
 
@@ -1977,7 +1977,7 @@ void map_apply_obj_patch(int64_t obj, char* str)
             if (script_load_hdr(&scr)) {
                 obj_arrayfield_script_set(obj, OBJ_F_SCRIPTS_IDX, sap, &scr);
             }
-        } else if (SDL_strcasecmp(key, "daystand") == 0) {
+        } else if (tig_strcasecmp(key, "daystand") == 0) {
             int64_t x;
             int64_t y;
 
@@ -1988,7 +1988,7 @@ void map_apply_obj_patch(int64_t obj, char* str)
             y = SDL_strtoll(value, NULL, 10);
 
             obj_field_int64_set(obj, OBJ_F_NPC_STANDPOINT_DAY, LOCATION_MAKE(x, y));
-        } else if (SDL_strcasecmp(key, "nightstand") == 0) {
+        } else if (tig_strcasecmp(key, "nightstand") == 0) {
             int64_t x;
             int64_t y;
 
@@ -1999,13 +1999,13 @@ void map_apply_obj_patch(int64_t obj, char* str)
             y = SDL_strtoll(value, NULL, 10);
 
             obj_field_int64_set(obj, OBJ_F_NPC_STANDPOINT_NIGHT, LOCATION_MAKE(x, y));
-        } else if (SDL_strcasecmp(key, "magic_tech_complexity") == 0) {
+        } else if (tig_strcasecmp(key, "magic_tech_complexity") == 0) {
             map_read_token(&str, value);
             obj_field_int32_set(obj, OBJ_F_ITEM_MAGIC_TECH_COMPLEXITY, atoi(value));
-        } else if (SDL_strcasecmp(key, "level_scheme") == 0) {
+        } else if (tig_strcasecmp(key, "level_scheme") == 0) {
             map_read_token(&str, value);
             obj_field_int32_set(obj, OBJ_F_CRITTER_AUTO_LEVEL_SCHEME, atoi(value));
-        } else if (SDL_strcasecmp(key, "faction") == 0) {
+        } else if (tig_strcasecmp(key, "faction") == 0) {
             map_read_token(&str, value);
             obj_field_int32_set(obj, OBJ_F_NPC_FACTION, atoi(value));
         } else {
@@ -2187,7 +2187,7 @@ bool map_list_info_load(void)
 int map_list_info_find(const char* name)
 {
     for (int index = 0; index < map_list_info_count; index++) {
-        if (SDL_strcasecmp(map_list_info[index].name, name) == 0) {
+        if (tig_strcasecmp(map_list_info[index].name, name) == 0) {
             return index;
         }
     }

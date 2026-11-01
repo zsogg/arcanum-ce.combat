@@ -3029,6 +3029,60 @@ static void o_tig_qsort(const int64_t* a, int64_t* out)
     out[0] = (int64_t)(uint64_t)h;
 }
 
+/* tig_strcasecmp and tig_strncasecmp against the original's _stricmp
+ * (0x58ADB0) and _strnicmp (0x595AA0). Both sides build the same two strings
+ * from (seed, length, mode, n): mode 0 two independent strings, mode 1 the
+ * second a copy of the first with letters' case flipped and maybe cut short.
+ * The alphabet holds case pairs, the punctuation between 'Z' and 'a', and
+ * Windows-1252 letters, which the original compares as bytes. The harness's
+ * `_strcase_strings` builds the same. */
+static const unsigned char oracle_strcase_alphabet[] = "aAbBzZ09_[]^`@{\xe9\xc9\xe8\xc4\xe4\x92\x80\xff\x7f";
+
+static void oracle_strcase_strings(uint32_t state, int len, int mode, char* a, char* b)
+{
+    const int count = (int)sizeof(oracle_strcase_alphabet) - 1;
+    int i;
+    int len_b;
+
+    for (i = 0; i < len; i++) {
+        state = state * 1103515245u + 12345u;
+        a[i] = (char)oracle_strcase_alphabet[(state >> 16) % (uint32_t)count];
+    }
+    a[len] = '\0';
+    state = state * 1103515245u + 12345u;
+    len_b = (int)((state >> 16) % (uint32_t)(len + 2));
+    if (mode == 0) {
+        for (i = 0; i < len_b; i++) {
+            state = state * 1103515245u + 12345u;
+            b[i] = (char)oracle_strcase_alphabet[(state >> 16) % (uint32_t)count];
+        }
+        b[len_b] = '\0';
+        return;
+    }
+    for (i = 0; i < len; i++) {
+        unsigned char c = (unsigned char)a[i];
+
+        state = state * 1103515245u + 12345u;
+        b[i] = (char)((((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')) && ((state >> 16) & 1)) ? c ^ 0x20 : c);
+    }
+    b[len_b < len ? len_b : len] = '\0';
+}
+
+static void o_tig_strcase(const int64_t* a, int64_t* out)
+{
+    char s1[40];
+    char s2[40];
+    int len = (int)a[1];
+
+    if (len < 0 || len > 30) {
+        out[0] = out[1] = 99;
+        return;
+    }
+    oracle_strcase_strings((uint32_t)a[0], len, (int)a[2], s1, s2);
+    out[0] = tig_strcasecmp(s1, s2);
+    out[1] = tig_strncasecmp(s1, s2, (size_t)a[3]);
+}
+
 static void o_tig_art_blt_flags_convert(const int64_t* a, int64_t* out)
 {
     unsigned int vb_flags = (unsigned int)a[1];
@@ -3700,6 +3754,7 @@ static const OracleEntry oracle_entries[] = {
     { "tig_art_blt_flags_convert", 2, 2, o_tig_art_blt_flags_convert },
     { "tig_art_build_path", 2, 2, o_tig_art_build_path },
     { "tig_qsort", 4, 1, o_tig_qsort },
+    { "tig_strcase", 4, 2, o_tig_strcase },
     { "tig_art_cache_entry_blit", 5, 2, o_tig_art_cache_entry_blit },
     { "tig_color_rgb_to_grayscale", 1, 1, o_tig_color_rgb_to_grayscale },
     { "art_blit", 15, 2, o_art_blit },

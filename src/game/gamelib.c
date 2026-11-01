@@ -672,7 +672,7 @@ void gamelib_modlist_create(GameModuleList* module_list, int type)
         is_file = false;
         dot = strrchr(file_list.entries[file_index].path, '.');
         if (dot != NULL) {
-            if (SDL_strcasecmp(dot, ".dat") == 0
+            if (tig_strcasecmp(dot, ".dat") == 0
                 && (file_list.entries[file_index].attributes & TIG_FILE_ATTRIBUTE_SUBDIR) == 0) {
                 *dot = '\0';
                 is_file = true;
@@ -686,7 +686,7 @@ void gamelib_modlist_create(GameModuleList* module_list, int type)
             found = false;
             module_index = module_list->count;
             while (module_index > 0) {
-                if (SDL_strcasecmp(file_list.entries[file_index].path, module_list->paths[module_index - 1]) == 0) {
+                if (tig_strcasecmp(file_list.entries[file_index].path, module_list->paths[module_index - 1]) == 0) {
                     found = true;
                     break;
                 }
@@ -708,7 +708,7 @@ void gamelib_modlist_create(GameModuleList* module_list, int type)
                     module_list->paths = (char**)REALLOC(module_list->paths, sizeof(module_list->paths) * (module_list->count + 1));
                     module_list->paths[module_list->count] = STRDUP(file_list.entries[file_index].path);
 
-                    if (SDL_strcasecmp(gamelib_loaded_mod_name, file_list.entries[file_index].path) == 0) {
+                    if (tig_strcasecmp(gamelib_loaded_mod_name, file_list.entries[file_index].path) == 0) {
                         module_list->selected = module_list->count;
                     }
 
@@ -1399,7 +1399,7 @@ bool gamelib_delete(const char* name)
 {
     char path[TIG_MAX_PATH];
 
-    if (SDL_strcasecmp(name, "SlotAutoAuto-Save") == 0) {
+    if (tig_strcasecmp(name, "SlotAutoAuto-Save") == 0) {
         return false;
     }
 
@@ -1457,11 +1457,11 @@ bool gamelib_save_name_resolve(const char* slot, char* name, size_t size)
     bool valid;
 
     if (slot == NULL || name == NULL || size == 0 || strlen(slot) != 8
-        || SDL_strncasecmp(slot, "Slot", 4) != 0) {
+        || tig_strncasecmp(slot, "Slot", 4) != 0) {
         return false;
     }
 
-    valid = SDL_strcasecmp(slot, "SlotAuto") == 0;
+    valid = tig_strcasecmp(slot, "SlotAuto") == 0;
     if (!valid) {
         valid = true;
         for (index = 4; index < 8; index++) {
@@ -1477,7 +1477,7 @@ bool gamelib_save_name_resolve(const char* slot, char* name, size_t size)
 
     gamelib_savelist_create(&save_list);
     for (index = 0; index < save_list.count; index++) {
-        if (SDL_strncasecmp(save_list.names[index], slot, 8) != 0) {
+        if (tig_strncasecmp(save_list.names[index], slot, 8) != 0) {
             continue;
         }
         if (match != NULL || strlen(save_list.names[index]) >= size) {
@@ -1541,7 +1541,7 @@ void gamelib_savelist_create(GameSaveList* save_list)
 
     for (index = 0; index < file_list.count; index++) {
         compat_splitpath(file_list.entries[index].path, NULL, NULL, fname, ext);
-        if (SDL_strcasecmp(ext, ".gsi") == 0) {
+        if (tig_strcasecmp(ext, ".gsi") == 0) {
             save_list->names = (char**)REALLOC(save_list->names, sizeof(save_list->names) * (save_list->count + 1));
             save_list->names[save_list->count++] = STRDUP(fname);
         }
@@ -1570,7 +1570,7 @@ void gamelib_savelist_create_module(const char* module, GameSaveList* save_list)
 
     for (index = 0; index < file_list.count; index++) {
         compat_splitpath(file_list.entries[index].path, NULL, NULL, fname, ext);
-        if (SDL_strcasecmp(ext, ".gsi") == 0) {
+        if (tig_strcasecmp(ext, ".gsi") == 0) {
             save_list->names = (char**)REALLOC(save_list->names, sizeof(save_list->names) * (save_list->count + 1));
             save_list->names[save_list->count++] = STRDUP(fname);
         }
@@ -1685,7 +1685,7 @@ int game_save_entry_compare_by_name(const void* va, const void* vb)
     const GameSaveEntry* a = (const GameSaveEntry*)va;
     const GameSaveEntry* b = (const GameSaveEntry*)vb;
 
-    return -SDL_strncasecmp(a->path, b->path, 8);
+    return -tig_strncasecmp(a->path, b->path, 8);
 }
 
 // 0x403DD0
