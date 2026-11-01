@@ -108,11 +108,13 @@ jobs:
           table = struct.pack("<iii", 0, 1, len(name)) + name + bytes(4) + struct.pack("<iiii", 0, 0, 0, 0)
           open(sys.argv[1], "wb").write(table + b" TAD" + struct.pack("<ii", 16, len(table) - 4 + 12))
           PY
+          bin="$PWD/$BIN" # the run below starts in the game folder
           runs=("")
           if [ "$(uname -m)" = arm64 ] && arch -x86_64 /usr/bin/true 2>/dev/null; then runs+=("arch -x86_64"); fi
           for prefix in "${runs[@]}"; do
-            out="$(cd "$game" && ARCANUM_CE_GAME_DIR="$game" $prefix "$BIN" -window 2>&1 || true)"
-            printf '%s\n' "$out" | grep -E "TIG (File|Video)|Error initializing" | sed "s/^/${prefix:-native}: /"
+            out="$(cd "$game" && ARCANUM_CE_GAME_DIR="$game" $prefix "$bin" -window 2>&1 || true)"
+            # For the log only; with no such line, the last few say why.
+            { grep -E "TIG (File|Video)|Error initializing" <<< "$out" || tail -5 <<< "$out"; } | sed "s/^/${prefix:-native}: /"
             grep -q "TIG Video: Using '" <<< "$out" || { echo "::error::${prefix:-native}: no window or renderer was created"; exit 1; }
           done
 
