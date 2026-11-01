@@ -49,6 +49,18 @@ Other smaller mods, please see [CHANGES.md](CHANGES.md).
 
 Mac package - as yet untested, I am working on it.
 
+## A demonstration
+
+![Sixty rifle guards against ten Sir Garrick Stouts, two Elder Joachims and Arronax](docs/media/demo-battle.webp)
+
+A test battle in real time, all nine optional mods on: sixty Tarant guards
+with rifles against ten Sir Garrick Stouts, two Elder Joachims and Arronax.
+Twelve seconds of it:
+
+- the guards firing and reloading under the Combat Rebalance;
+- the casters' fire spells;
+- the heroes fighting as one party, spread out.
+
 ## Playing
 
 You need Arcanum from GOG (Good Old Games) and the Unofficial Arcanum Patch
