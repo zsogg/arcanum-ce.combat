@@ -87,8 +87,12 @@ TEST(a_complete_trace_has_ordered_control_and_semantic_events)
     combat_observer_ap_checked("fighter", 4, 8, true);
     combat_observer_ap_committed("fighter", 4, 8, 4, true, 0, 0);
     action = combat_observer_attack_started("fighter", "opponent", 2, 0, 0, false);
-    combat_observer_skill_roll("fighter", "opponent", 2,
-        55, 0, 40, 99, 2, true, false);
+    // IN-6 (2026-11-02): the difficulty's terms; `other` is the rest (0 less 27).
+    {
+        CombatObserverRollTerms terms = { 0, -5, 10, -30, 0, 6, 24, 0, 3, 0, 0, 0, -35 };
+        combat_observer_skill_roll("fighter", "opponent", 2,
+            55, 0, 40, 99, 2, true, false, &terms);
+    }
     combat_observer_critical_rolled("fighter", "opponent", true, 1, 10,
         true, false, 0, 0, CDF_BONUS_DAM_100 | CDF_STUN, CDF_KNOCKDOWN, true,
         CRIT_EFFECT_STAGGERED, NULL, 7, 14);
@@ -109,6 +113,7 @@ TEST(a_complete_trace_has_ordered_control_and_semantic_events)
     CHECK(strstr(trace, "\"weapon_description\":6056") != NULL);
     CHECK(strstr(trace, "\"weapon_skill_level\":3,\"weapon_training\":0,\"weapon_speed\":10") != NULL);
     CHECK(strstr(trace, "\"critical_roll\":99,\"critical_chance\":2,\"success\":true,\"critical\":false") != NULL);
+    CHECK(strstr(trace, "\"critical\":false,\"terms\":{\"base\":0,\"weapon\":-5,\"strength\":10,\"awareness\":-30,\"aim\":0,\"armor\":6,\"range\":24,\"cover\":0,\"light\":3,\"injury\":0,\"accuracy\":0,\"effects\":0,\"opening\":-35,\"other\":27}}") != NULL);
     // Criticals, milestone CR-0: the effects by name, in their flags' order.
     CHECK(strstr(trace, "\"event\":\"critical.rolled\"") != NULL);
     CHECK(strstr(trace, "\"kind\":\"hit\",\"hit_location\":1,\"effect_bonus\":10,\"aimed\":true,\"player_spared\":false") != NULL);
@@ -578,7 +583,7 @@ TEST(observation_does_not_advance_the_combat_rng)
     CHECK(combat_observer_open(TRACE_FILE));
     combat_observer_turn_started("fighter", 8);
     combat_observer_skill_roll("fighter", "opponent", 2,
-        50, 0, 10, 10, 2, true, true);
+        50, 0, 10, 10, 2, true, true, NULL);
     combat_observer_close();
     second_with = random_rand();
 

@@ -807,20 +807,32 @@ void combat_observer_budget(const char* event, const char* actor,
 
 void combat_observer_skill_roll(const char* source, const char* target,
     int skill, int effectiveness, int difficulty, int roll,
-    int critical_roll, int critical_chance, bool success, bool critical)
+    int critical_roll, int critical_chance, bool success, bool critical,
+    const CombatObserverRollTerms* terms)
 {
-    char line[704];
+    char line[1024];
     char action[32];
+    char terms_field[384] = "";
 
     if (combat_observer_current_action == 0
         || !combat_observer_begin_semantic()) return;
+    if (terms != NULL) {
+        int named = terms->base + terms->weapon + terms->strength + terms->awareness + terms->aim
+            + terms->armor + terms->range + terms->cover + terms->light + terms->injury
+            + terms->accuracy + terms->effects + terms->opening;
+        snprintf(terms_field, sizeof(terms_field),
+            ",\"terms\":{\"base\":%d,\"weapon\":%d,\"strength\":%d,\"awareness\":%d,\"aim\":%d,\"armor\":%d,\"range\":%d,\"cover\":%d,\"light\":%d,\"injury\":%d,\"accuracy\":%d,\"effects\":%d,\"opening\":%d,\"other\":%d}",
+            terms->base, terms->weapon, terms->strength, terms->awareness, terms->aim, terms->armor,
+            terms->range, terms->cover, terms->light, terms->injury, terms->accuracy, terms->effects,
+            terms->opening, difficulty - named);
+    }
     snprintf(line, sizeof(line),
-        "{\"schema\":%d,\"sequence\":%u,\"event\":\"skill.roll\",\"turn\":%u,\"action_id\":%s,\"source\":\"%s\",\"target\":\"%s\",\"skill\":%d,\"effectiveness\":%d,\"difficulty\":%d,\"roll\":%d,\"critical_roll\":%d,\"critical_chance\":%d,\"success\":%s,\"critical\":%s}",
+        "{\"schema\":%d,\"sequence\":%u,\"event\":\"skill.roll\",\"turn\":%u,\"action_id\":%s,\"source\":\"%s\",\"target\":\"%s\",\"skill\":%d,\"effectiveness\":%d,\"difficulty\":%d,\"roll\":%d,\"critical_roll\":%d,\"critical_chance\":%d,\"success\":%s,\"critical\":%s%s}",
         COMBAT_OBSERVER_SCHEMA,
         combat_observer_sequence++, combat_observer_turn,
         combat_observer_action_json(action, sizeof(action)), source, target,
         skill, effectiveness, difficulty, roll, critical_roll, critical_chance,
-        success ? "true" : "false", critical ? "true" : "false");
+        success ? "true" : "false", critical ? "true" : "false", terms_field);
     combat_observer_write(line);
 }
 

@@ -304,9 +304,32 @@ void combat_observer_budget(const char* event, const char* actor,
 // `critical_chance` (criticals, milestone CR-0) is what `critical_roll` was
 // compared with: the critical-hit chance on a success, the critical-miss chance
 // on a failure, -1 when neither was rolled.
+//
+// `terms` (IN-6, 2026-11-02), NULL for none: what `skill_invocation_difficulty`
+// added to the difficulty, term by term, so a shot's range penalty can be read
+// apart from the target's awareness or an opening shot. The event's `other` is
+// the difficulty less every named term (a skill's own modifiers, an
+// out-of-range or blocked shot's 1000000).
+typedef struct CombatObserverRollTerms {
+    int base;
+    int weapon;
+    int strength;
+    int awareness;
+    int aim;
+    int armor;
+    int range;
+    int cover;
+    int light;
+    int injury;
+    int accuracy;
+    int effects;
+    int opening;
+} CombatObserverRollTerms;
+
 void combat_observer_skill_roll(const char* source, const char* target,
     int skill, int effectiveness, int difficulty, int roll,
-    int critical_roll, int critical_chance, bool success, bool critical);
+    int critical_roll, int critical_chance, bool success, bool critical,
+    const CombatObserverRollTerms* terms);
 
 // CE (criticals, milestone CR-0): one critical, after its effects are rolled.
 // `kind` is "hit" or "miss"; `effect_bonus` is the weapon's critical-effect

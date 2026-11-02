@@ -46,6 +46,10 @@ static bool skill_invocation_check_crit_miss(int roll, int effectiveness, SkillI
 // CE (criticals, milestone CR-0): the chance the last critical roll was
 // compared with, for `skill.roll`; -1 when neither check ran.
 static int skill_invocation_last_critical_chance = -1;
+
+// CE (IN-6, 2026-11-02): the terms the last `skill_invocation_difficulty`
+// added, for `skill.roll`. Recording only: nothing reads them back.
+static CombatObserverRollTerms skill_roll_terms;
 static bool is_controlled_by_local_pc(int64_t obj);
 
 /**
@@ -1597,6 +1601,8 @@ bool skill_invocation_run(SkillInvocation* skill_invocation)
     // Calculate the situational difficulty and add difficulty modifier from
     // invocation details.
     difficulty = skill_invocation_difficulty(skill_invocation) + skill_invocation->modifier;
+    CombatObserverRollTerms terms = skill_roll_terms;
+    terms.base += skill_invocation->modifier;
 
     // Add some randomness for difficulty. Gambling is a special case - the roll
     // is still random, but it's saved as a part of the game to prevent retries
@@ -2143,7 +2149,7 @@ bool skill_invocation_run(SkillInvocation* skill_invocation)
         combat_observer_object_id(target_obj, target);
         combat_observer_skill_roll(source, target, skill, effectiveness,
             difficulty, rnd_difficulty_roll, crit_roll,
-            skill_invocation_last_critical_chance, is_success, is_critical);
+            skill_invocation_last_critical_chance, is_success, is_critical, &terms);
     }
 
     return true;
@@ -2454,6 +2460,8 @@ int skill_invocation_difficulty(SkillInvocation* skill_invocation)
 
     // Initialize difficulty with the base modifier from the skill invocation.
     difficulty = skill_invocation->modifier;
+    memset(&skill_roll_terms, 0, sizeof(skill_roll_terms));
+    skill_roll_terms.base = difficulty;
 
     // Set the target location if a target object is provided.
     if (target_obj != OBJ_HANDLE_NULL) {
@@ -2477,12 +2485,14 @@ int skill_invocation_difficulty(SkillInvocation* skill_invocation)
 
         // Reduce difficulty by the weapon's to-hit bonus.
         difficulty -= to_hit;
+        skill_roll_terms.weapon = -to_hit;
 
         // Apply a penalty if the source's strength is below the weapon's
         // minimum requirement.
         strength_difference = stat_level_get(source_obj, STAT_STRENGTH) - item_weapon_min_strength(item_obj, source_obj);
         if (strength_difference < 0) {
             difficulty += -strength_difference * 5;
+            skill_roll_terms.strength = -strength_difference * 5;
             skill_invocation->flags |= SKILL_INVOCATION_PENALTY_MSR;
         }
     }
@@ -2498,6 +2508,7 @@ int skill_invocation_difficulty(SkillInvocation* skill_invocation)
         && target_obj != OBJ_HANDLE_NULL
         && obj_type_is_critter(target_type)) {
         unsigned int critter_flags = obj_field_int32_get(target_obj, OBJ_F_CRITTER_FLAGS);
+        int before = difficulty;
 
         // Reduce the difficulty for incapacitated targets.
         if ((critter_flags & OCF_PARALYZED) != 0) {
@@ -2516,6 +2527,7 @@ int skill_invocation_difficulty(SkillInvocation* skill_invocation)
             // Target is not in combat mode and does not hear or see source.
             difficulty -= 30;
         }
+        skill_roll_terms.awareness = difficulty - before;
     }
 
     // Apply hit location modifiers for skills that involve targeting specific
@@ -2533,13 +2545,15 @@ int skill_invocation_difficulty(SkillInvocation* skill_invocation)
             // Penalty is already negative, so subtracting penalty actually
             // increases difficulty.
             difficulty -= penalty;
+            skill_roll_terms.aim = -penalty;
         }
 
         // Increase difficulty by target's armor class (a backstab apprentice
         // bypasses).
         if ((skill_invocation->flags & SKILL_INVOCATION_BACKSTAB) == 0
             || basic_skill_training_get(source_obj, BASIC_SKILL_BACKSTAB) == TRAINING_NONE) {
-            difficulty += effectiveness * (object_get_ac(target_obj, false) / 2) / 100;
+            skill_roll_terms.armor = effectiveness * (object_get_ac(target_obj, false) / 2) / 100;
+            difficulty += skill_roll_terms.armor;
         }
     }
 
@@ -2587,7 +2601,8 @@ int skill_invocation_difficulty(SkillInvocation* skill_invocation)
             int extra_dist = (int)dist - stat_level_get(source_obj, STAT_PERCEPTION) / 2
                 - weapon_rules_accurate_tiles(item_obj, 0);
             if (extra_dist > 0) {
-                difficulty += weapon_rules_range_penalty(item_obj, 5) * extra_dist;
+                skill_roll_terms.range = weapon_rules_range_penalty(item_obj, 5) * extra_dist;
+                difficulty += skill_roll_terms.range;
                 skill_invocation->flags |= SKILL_INVOCATION_PENALTY_PERCEPTION;
             }
         }
@@ -2602,6 +2617,7 @@ int skill_invocation_difficulty(SkillInvocation* skill_invocation)
         } else if (v2 > 0) {
             // TODO: Unclear.
             difficulty += v2;
+            skill_roll_terms.cover = v2;
             skill_invocation->flags |= SKILL_INVOCATION_PENALTY_COVER;
         }
     }
@@ -2669,6 +2685,7 @@ int skill_invocation_difficulty(SkillInvocation* skill_invocation)
 
             if (penalty > 0) {
                 difficulty += penalty;
+                skill_roll_terms.light = penalty;
                 skill_invocation->flags |= SKILL_INVOCATION_PENALTY_LIGHT;
             }
         }
@@ -2678,6 +2695,7 @@ int skill_invocation_difficulty(SkillInvocation* skill_invocation)
     if ((skill_flags[skill] & SKILL_USE_EYES) != 0
         && (critter_flags & OCF_BLINDED) != 0) {
         difficulty += 30;
+        skill_roll_terms.injury += 30;
         skill_invocation->flags |= SKILL_INVOCATION_PENALTY_INJURY;
     }
 
@@ -2685,9 +2703,11 @@ int skill_invocation_difficulty(SkillInvocation* skill_invocation)
     if ((skill_flags[skill] & SKILL_USE_ARMS) != 0) {
         if ((critter_flags & OCF_CRIPPLED_ARMS_BOTH) != 0) {
             difficulty += 50;
+            skill_roll_terms.injury += 50;
             skill_invocation->flags |= SKILL_INVOCATION_PENALTY_INJURY;
         } else if ((critter_flags & OCF_CRIPPLED_ARMS_ONE) != 0) {
             difficulty += 20;
+            skill_roll_terms.injury += 20;
             skill_invocation->flags |= SKILL_INVOCATION_PENALTY_INJURY;
         }
     }
@@ -2696,6 +2716,7 @@ int skill_invocation_difficulty(SkillInvocation* skill_invocation)
     if ((skill_flags[skill] & SKILL_USE_LEGS) != 0) {
         if ((critter_flags & OCF_CRIPPLED_LEGS_BOTH) != 0) {
             difficulty += 30;
+            skill_roll_terms.injury += 30;
             skill_invocation->flags |= SKILL_INVOCATION_PENALTY_INJURY;
         }
     }
@@ -2859,6 +2880,7 @@ int skill_invocation_difficulty(SkillInvocation* skill_invocation)
         int chance = effectiveness - difficulty;
         if (accuracy != 100 && chance > 0) {
             difficulty += chance - chance * accuracy / 100;
+            skill_roll_terms.accuracy = chance - chance * accuracy / 100;
         }
     }
 
@@ -2866,14 +2888,18 @@ int skill_invocation_difficulty(SkillInvocation* skill_invocation)
     // critter is harder, under `critical effects`; a firearm's opening shot
     // easier, under `opening shot`.
     if (skill_is_attack(skill)) {
+        int before = difficulty;
+
         difficulty += crit_effects_to_hit_penalty(source_obj);
         // CE (magic, milestone MG-2): an attack on an Exposed critter is
         // easier, under `spell criticals`.
         if (target_obj != OBJ_HANDLE_NULL) {
             difficulty -= crit_effects_to_be_hit_bonus(target_obj);
         }
+        skill_roll_terms.effects = difficulty - before;
         if (skill_opening_shot(skill_invocation)) {
             difficulty -= SKILL_OPENING_SHOT_TO_HIT;
+            skill_roll_terms.opening = -SKILL_OPENING_SHOT_TO_HIT;
         }
     }
 
