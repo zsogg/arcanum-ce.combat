@@ -16,6 +16,7 @@
 #include "game/creature_rules.h"
 #include "game/crit_effects.h"
 #include "game/critter.h"
+#include "game/dialog.h"
 #include "game/gamelib.h"
 #include "game/item.h"
 #include "game/level.h"
@@ -302,9 +303,12 @@ typedef enum ReplayKind {
     REPLAY_KIND_STAY,
     REPLAY_KIND_RUN,
     // Follower casting, AI-5 (2026-10-27):
-    //   recruit <id>
+    //   recruit <id> [join]
     //       the critter becomes the player's follower (`critter_follow`,
     //       forced past its follow checks), as a recruiting dialogue does.
+    //       With `join` (playtest gaps, 2026-11-02) it goes through the
+    //       dialogue's own `jo` instead: `ai_check_follow`, then a join that
+    //       is not forced, and a refusal is logged with its reason.
     //   npc <id> college <college> <level> / level <n> / packet <n> /
     //       cast-highest <0|1> / magick <n>
     //       one of an NPC's map-instance fields set, so a bench can build a
@@ -1092,6 +1096,10 @@ static bool replay_parse_line(const char* text, ReplayCommand* command)
     if (strcmp(kind, "recruit") == 0) {
         command->kind = REPLAY_KIND_RECRUIT;
         replay_copy_target(command, tokens[index++]);
+        if (index < count && strcmp(tokens[index], "join") == 0) {
+            command->stat = 1;
+            index++;
+        }
         return index == count;
     }
 
@@ -1556,6 +1564,9 @@ bool replay_ui_describe(int index, char* buffer, size_t size)
     if (command->kind == REPLAY_KIND_RESTOCK && written >= 0 && (size_t)written < size) {
         snprintf(buffer + written, size - (size_t)written, " set=%d times=%d",
             command->count, command->dx);
+    }
+    if (command->kind == REPLAY_KIND_RECRUIT && command->stat == 1 && written >= 0 && (size_t)written < size) {
+        snprintf(buffer + written, size - (size_t)written, " join");
     }
     if (command->kind == REPLAY_KIND_FACE && written >= 0 && (size_t)written < size) {
         snprintf(buffer + written, size - (size_t)written, " rotation=%d", command->count);
@@ -2313,6 +2324,26 @@ void replay_ui_tick(void)
         replay_stall_reported = false;
         replay_next++;
         if (!replay_resolve(command, &obj)) {
+            return;
+        }
+        if (command->stat == 1 && obj_field_int32_get(obj, OBJ_F_TYPE) == OBJ_TYPE_NPC) {
+            static const char* reasons[] = { "ok", "too good", "too bad", "dislike", "already in a group",
+                "limit reached", "not allowed", "low level" };
+            char reply[1000];
+            int speech_id;
+            int rc;
+
+            // As DIALOG_ACTION_JO with `jo 0`: the check, then a join that is not forced.
+            rc = ai_check_follow(obj, pc_obj, false);
+            if (rc == AI_FOLLOW_OK) {
+                ok = critter_follow(obj, pc_obj, false);
+                tig_debug_printf("Replay: command %d: '%s' join check: ok, %s\n", replay_next - 1,
+                    command->target, ok ? "now follows the player" : "but was not recruited");
+            } else {
+                dialog_copy_npc_wont_follow_msg(obj, pc_obj, rc, reply, &speech_id);
+                tig_debug_printf("Replay: command %d: '%s' join check: refused, %s: \"%s\"\n", replay_next - 1,
+                    command->target, rc >= 0 && rc <= AI_FOLLOW_LOW_LEVEL ? reasons[rc] : "?", reply);
+            }
             return;
         }
         ok = obj_field_int32_get(obj, OBJ_F_TYPE) == OBJ_TYPE_NPC && critter_follow(obj, pc_obj, true);

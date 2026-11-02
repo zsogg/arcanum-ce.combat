@@ -1084,6 +1084,13 @@ TEST(the_face_and_inspect_sight_rows_load_and_describe)
     CHECK(load_script("0 stay @yeti\n"));
     CHECK(row_is(0, "turn=0 now=0 kind=stay target=@yeti loc=0 aim=0 spell=0 cast=- wait=0"));
     CHECK(!load_script("0 stay @yeti extra\n"));
+    // Playtest gaps (2026-11-02): `recruit` forces the join; `join` asks
+    // the dialogue's follow check instead.
+    CHECK(load_script("0 recruit @f\n0 recruit @f join\n"));
+    CHECK(row_is(0, "turn=0 now=0 kind=recruit target=@f loc=0 aim=0 spell=0 cast=- wait=0"));
+    CHECK(row_is(1, "turn=0 now=0 kind=recruit target=@f loc=0 aim=0 spell=0 cast=- wait=0 join"));
+    CHECK(!load_script("0 recruit @f force\n"));
+    CHECK(!load_script("0 recruit @f join extra\n"));
 }
 
 TEST(the_poison_row_sets_a_level_on_the_player_or_a_critter)
