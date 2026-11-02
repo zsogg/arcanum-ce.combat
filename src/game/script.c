@@ -851,6 +851,16 @@ static bool script_execute_file(ScriptInvocation* invocation,
     return run_default;
 }
 
+// CE (card PG1): every script run, counted, so a caller that keeps an
+// answer across code that may run one (`ai_find_target`) can tell when it
+// went stale: a script can change anything.
+static unsigned int script_execute_runs;
+
+unsigned int script_execute_count(void)
+{
+    return script_execute_runs;
+}
+
 // 0x4449B0
 bool script_execute(ScriptInvocation* invocation)
 {
@@ -861,6 +871,8 @@ bool script_execute(ScriptInvocation* invocation)
     ScriptState state;
     ScriptFile* script_file;
     bool run_default;
+
+    script_execute_runs++;
 
     if (tig_net_is_active()
         && !tig_net_is_host()) {

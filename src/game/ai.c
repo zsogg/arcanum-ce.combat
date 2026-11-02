@@ -2885,6 +2885,43 @@ int ai_critter_fatigue_ratio(int64_t obj)
     return 100 * critter_fatigue_current(obj) / critter_fatigue_max(obj);
 }
 
+// CE (card PG1): the searching critter's own unconsciousness and Perception,
+// which the hearing and sight checks ask for every candidate, kept for the
+// length of one search. They can change only through a script, and
+// `ai_check_kos` runs the target's SAP_WILL_KOS one, so a kept answer holds
+// only while `script_execute_count` has not moved. Unconsciousness is read
+// where the original first read it, not at the start: reading Willpower
+// refreshes the cached light colour of a critter afraid of the dark, which
+// a later to-hit roll reads (`light_obj_grayscale_get`), so an extra read
+// could move a fight. Perception the search reads at the start anyway.
+static int64_t ai_search_obj = OBJ_HANDLE_NULL;
+static unsigned int ai_search_scripts;
+static int ai_search_unconscious; // -1 until first asked
+static int ai_search_perception;
+
+static bool ai_search_kept(int64_t obj)
+{
+    return obj != OBJ_HANDLE_NULL
+        && obj == ai_search_obj
+        && ai_search_scripts == script_execute_count();
+}
+
+static bool ai_source_unconscious(int64_t obj)
+{
+    if (!ai_search_kept(obj)) {
+        return critter_is_unconscious(obj);
+    }
+    if (ai_search_unconscious < 0) {
+        ai_search_unconscious = critter_is_unconscious(obj);
+    }
+    return ai_search_unconscious != 0;
+}
+
+static int ai_source_perception(int64_t obj)
+{
+    return ai_search_kept(obj) ? ai_search_perception : stat_level_get(obj, STAT_PERCEPTION);
+}
+
 // 0x4AB460
 int64_t ai_find_target(int64_t critter_obj)
 {
@@ -2920,7 +2957,12 @@ int64_t ai_find_target(int64_t critter_obj)
 
     in_find_target = true;
 
-    radius = ai_perception_distance(stat_level_get(critter_obj, STAT_PERCEPTION));
+    ai_search_obj = critter_obj;
+    ai_search_scripts = script_execute_count();
+    ai_search_unconscious = -1;
+    ai_search_perception = stat_level_get(critter_obj, STAT_PERCEPTION);
+
+    radius = ai_perception_distance(ai_search_perception);
 
     cnt = 0;
     ai_objects_in_radius(critter_obj, radius, &objects, OBJ_TM_CRITTER);
@@ -3019,6 +3061,7 @@ int64_t ai_find_target(int64_t critter_obj)
         }
     }
 
+    ai_search_obj = OBJ_HANDLE_NULL;
     in_find_target = false;
 
     return danger_source_obj;
@@ -6222,7 +6265,7 @@ int ai_can_see(int64_t source_obj, int64_t target_obj)
         return 1000;
     }
 
-    if (critter_is_unconscious(source_obj)) {
+    if (ai_source_unconscious(source_obj)) {
         return 1000;
     }
 
@@ -6237,7 +6280,7 @@ int ai_can_see(int64_t source_obj, int64_t target_obj)
         return 1000;
     }
 
-    perception = stat_level_get(source_obj, STAT_PERCEPTION);
+    perception = ai_source_perception(source_obj);
 
     if (critter_is_concealed(target_obj)) {
         SkillInvocation skill_invocation;
@@ -6306,7 +6349,7 @@ int ai_can_hear(int64_t source_obj, int64_t target_obj, int loudness)
         return 1000;
     }
 
-    if (critter_is_unconscious(source_obj)) {
+    if (ai_source_unconscious(source_obj)) {
         return 1000;
     }
 
@@ -6315,7 +6358,7 @@ int ai_can_hear(int64_t source_obj, int64_t target_obj, int loudness)
         return 1000;
     }
 
-    perception = stat_level_get(source_obj, STAT_PERCEPTION);
+    perception = ai_source_perception(source_obj);
     if ((critter_flags & OCF_SLEEPING) != 0) {
         perception /= 2;
     }
