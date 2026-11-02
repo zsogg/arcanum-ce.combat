@@ -20,8 +20,8 @@
 // - it means these tests see base values, not values filtered through Troika's
 // racial and equipment modifiers, which is what makes them readable.
 
-#include "game/item.h"
 #include "game/critter.h"
+#include "game/item.h"
 #include "game/obj.h"
 #include "game/skill.h"
 #include "game/stat.h"

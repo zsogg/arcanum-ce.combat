@@ -218,7 +218,7 @@ void tig_video_set_scale_mode(int mode)
 
     tig_debug_printf("TIG Video: scale mode %d (%s)\n",
         (int)tig_video_scale_mode,
-        tig_video_scale_mode == SDL_SCALEMODE_LINEAR ? "linear"
+        tig_video_scale_mode == SDL_SCALEMODE_LINEAR         ? "linear"
             : tig_video_scale_mode == SDL_SCALEMODE_PIXELART ? "pixel art"
                                                              : "nearest");
 }
