@@ -77,10 +77,11 @@ static bool tig_video_initialized;
 static bool tig_video_show_fps;
 
 // CE: how the frame is filtered when the screen texture is scaled to the
-// window - SDL's own scale modes, 0 nearest, 1 linear, 2 pixel art. Nearest
-// by default, so no pixel is blended with its neighbours (zsogg, card PG1);
-// the game's `scale mode` setting changes it.
-static SDL_ScaleMode tig_video_scale_mode = SDL_SCALEMODE_NEAREST;
+// window - SDL's own scale modes, 0 nearest, 1 linear, 2 pixel art. Linear
+// by default, SDL's own and what CE always drew: zsogg compared the three
+// on a battle frame and chose it (card PG1). The game's `scale mode`
+// setting changes it.
+static SDL_ScaleMode tig_video_scale_mode = SDL_SCALEMODE_LINEAR;
 
 // 0x6103A4
 static int dword_6103A4;
@@ -204,12 +205,12 @@ void tig_video_display_fps(void)
     }
 }
 
-// CE: see `tig_video_scale_mode`. A value outside SDL's three is nearest.
+// CE: see `tig_video_scale_mode`. A value outside SDL's three is linear.
 void tig_video_set_scale_mode(int mode)
 {
-    tig_video_scale_mode = mode == SDL_SCALEMODE_LINEAR || mode == SDL_SCALEMODE_PIXELART
+    tig_video_scale_mode = mode == SDL_SCALEMODE_NEAREST || mode == SDL_SCALEMODE_PIXELART
         ? (SDL_ScaleMode)mode
-        : SDL_SCALEMODE_NEAREST;
+        : SDL_SCALEMODE_LINEAR;
 
     if (tig_video_state.texture != NULL) {
         SDL_SetTextureScaleMode(tig_video_state.texture, tig_video_scale_mode);

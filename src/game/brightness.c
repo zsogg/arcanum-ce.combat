@@ -19,8 +19,8 @@ bool brightness_init(GameInitInfo* init_info)
     brightness_changed();
 
     // CE: `scale mode`, how the screen is filtered when it is scaled to the
-    // window: 0 nearest (the default), 1 linear, 2 pixel art (card PG1).
-    settings_register(&settings, SCALE_MODE_KEY, "0", scale_mode_changed);
+    // window: 0 nearest, 1 linear (the default), 2 pixel art (card PG1).
+    settings_register(&settings, SCALE_MODE_KEY, "1", scale_mode_changed);
     scale_mode_changed();
 
     return true;
