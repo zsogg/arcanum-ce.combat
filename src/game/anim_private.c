@@ -2,8 +2,10 @@
 
 #include "game/anim.h"
 #include "game/critter.h"
+#include "game/feature.h"
 #include "game/gamelib.h"
 #include "game/item.h"
+#include "game/magictech.h"
 #include "game/map.h"
 #include "game/obj_private.h"
 #include "game/player.h"
@@ -1084,6 +1086,37 @@ bool anim_interrupt_timeevent_match(TimeEvent* timeevent)
     return timeevent->params[0].integer_value == anim_interrupt_match_slot;
 }
 
+// CE (`interrupted casts end`, quirk 68): the throw-spell goals release their
+// spell's run only on their own failure step (`anim_cleanup_spell`); their
+// cancel entry, the one an interrupt runs, restores the stand animation and
+// nothing else, so an interrupted cast left its run active on the target. A
+// run already begun (0x08, `anim_begin_spell`) ends itself and is left alone.
+void anim_interrupted_cast_end(AnimRunInfo* run_info, int goal)
+{
+    int spell;
+    int idx;
+
+    if (!feature_enabled(FEATURE_INTERRUPTED_CASTS_END)
+        || (run_info->goals[goal].type != AG_THROW_SPELL
+            && run_info->goals[goal].type != AG_THROW_SPELL_W_CAST_ANIM)
+        || (run_info->flags & 0x08) != 0) {
+        return;
+    }
+
+    spell = run_info->goals[goal].params[AGDATA_SPELL_DATA].data;
+    if (spell == -1) {
+        return;
+    }
+
+    // Unpaid: the spell never happened (`anim_cleanup_spell` charges with 0x1).
+    magictech_release(spell, 0);
+    for (idx = 0; idx <= run_info->current_goal; idx++) {
+        if (run_info->goals[idx].params[AGDATA_SPELL_DATA].data == spell) {
+            run_info->goals[idx].params[AGDATA_SPELL_DATA].data = -1;
+        }
+    }
+}
+
 // 0x44E2C0
 bool anim_interrupt(AnimID* anim_id, int priority)
 {
@@ -1158,6 +1191,7 @@ bool anim_interrupt(AnimID* anim_id, int priority)
                         goal_node->subnodes[14].func(run_info);
                     }
                 }
+                anim_interrupted_cast_end(run_info, idx);
             }
         }
     }

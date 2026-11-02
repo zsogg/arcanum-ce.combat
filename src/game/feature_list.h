@@ -206,5 +206,11 @@ FEATURE(FOLLOWER_CONDUCT, "follower conduct", false)
 // area was playing and never the same track twice running. The opening sting
 // is stock.
 FEATURE(COMBAT_MUSIC_SHUFFLE, "combat music shuffle", false)
+// Quirk 68 (zsogg, 2026-11-02), read by `anim_interrupt`: a cast interrupted
+// while it is still `AG_THROW_SPELL` or `AG_THROW_SPELL_W_CAST_ANIM` (turn-based
+// combat starting, or a new goal) releases its spell's run, unpaid; stock left
+// the run on its target for good, so the AI never weighed that spell for that
+// target again (a healer stopped healing the player).
+FEATURE(INTERRUPTED_CASTS_END, "interrupted casts end", false)
 
 // clang-format on

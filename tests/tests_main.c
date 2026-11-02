@@ -36,6 +36,9 @@ void test_ai_follower_conduct_suite(void);
 void test_gsound_shuffle_suite(void);
 void test_backstab_rules_suite(void);
 void test_followers_suite(void);
+#if ARCANUM_TESTS_GNU_LINK
+void test_interrupted_cast_suite(void);
+#endif
 void test_carried_lights_suite(void);
 void test_schematic_cap_suite(void);
 void test_initiative_suite(void);
@@ -144,6 +147,9 @@ int main(void)
     test_gsound_shuffle_suite();
     test_backstab_rules_suite();
     test_followers_suite();
+#if ARCANUM_TESTS_GNU_LINK
+    test_interrupted_cast_suite();
+#endif
     test_carried_lights_suite();
     test_schematic_cap_suite();
     test_initiative_suite();

@@ -134,6 +134,7 @@ target_sources(arcanum-tests PRIVATE
     "test_dialog_conditions.c"
     "test_dialog_options.c"
     "test_eye_candy_sound.c"
+    "test_interrupted_cast.c"
     "test_proto.c"
     "test_script.c"
     "test_text_filter.c"
@@ -1106,6 +1107,8 @@ target_link_options(arcanum-tests PRIVATE
     "-Wl,--wrap=gamelib_in_load"
     "-Wl,--wrap=stat_poison_turn_reached"
     "-Wl,--wrap=magictech_summons_turn_reached"
+    # test_interrupted_cast: see the release an interrupted cast makes.
+    "-Wl,--wrap=magictech_release"
 )
 endif() # ARCANUM_TESTS_GNU_LINK
 

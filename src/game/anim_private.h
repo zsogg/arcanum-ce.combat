@@ -427,6 +427,9 @@ bool anim_recover_handles(AnimRunInfo* run_info, AnimGoalSubNode* goal_subnode);
 void anim_interrupt_attack_on_obj_or_follower(int64_t a1, int64_t a2);
 void anim_interrupt_attack_on_obj(int64_t a1, int64_t a2);
 bool anim_force_interrupt(AnimID* anim_id);
+// CE (`interrupted casts end`, quirk 68): called by `anim_interrupt` for each
+// goal it cancels; public for the suite.
+void anim_interrupted_cast_end(AnimRunInfo* run_info, int goal);
 bool anim_interrupt(AnimID* anim_id, int priority);
 bool anim_find_first_of_type(int64_t obj, int type, AnimID* anim_id);
 bool anim_find_next_of_type(int64_t obj, int type, AnimID* anim_id);
