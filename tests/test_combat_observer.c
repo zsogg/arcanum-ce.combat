@@ -2106,6 +2106,7 @@ void test_combat_observer_suite(void)
     RUN(the_hurt_row_sets_wounds_on_the_player_or_a_critter);
     RUN(the_restock_row_restocks_a_critter_from_a_set);
     RUN(the_order_row_gives_a_follower_the_menus_orders);
+    RUN(the_attack_row_names_the_fighter_and_its_target);
     RUN(the_examine_row_names_the_object_it_shows);
     RUN(the_afflict_row_names_a_debuff_critical);
     RUN(the_inspect_light_and_wear_rows_load);
