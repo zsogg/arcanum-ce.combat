@@ -168,6 +168,33 @@ void tig_video_display_fps(void)
             prev = curr;
             counter = 0;
         }
+
+        // CE: a log line once a real second, the frames presented and the
+        // longest of them. Read from SDL's clock, not `tig_timer_now`: under
+        // the virtual clock every frame lasts 1/60 s, so the counter above
+        // reads 60 in every observed run however slow the frames are.
+        static Uint64 log_second_start;
+        static Uint64 log_last_frame;
+        static Uint64 log_longest;
+        static int log_frames;
+        Uint64 now = SDL_GetTicksNS();
+
+        if (log_last_frame != 0 && now - log_last_frame > log_longest) {
+            log_longest = now - log_last_frame;
+        }
+        log_last_frame = now;
+        log_frames++;
+
+        if (log_second_start == 0) {
+            log_second_start = now;
+        } else if (now - log_second_start >= SDL_NS_PER_SECOND) {
+            tig_debug_printf("TIG Video: %d fps, longest frame %.1f ms\n",
+                log_frames,
+                (double)log_longest / SDL_NS_PER_MS);
+            log_second_start = now;
+            log_longest = 0;
+            log_frames = 0;
+        }
     }
 }
 
