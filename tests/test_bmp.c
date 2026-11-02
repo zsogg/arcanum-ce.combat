@@ -20,6 +20,7 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "game/portrait.h"
 #include "tig/bmp.h"
 #include "tig/color.h"
 #include "tig/file.h"
@@ -430,8 +431,33 @@ TEST(destroy_is_safe_when_there_are_no_pixels)
     CHECK(bmp.pixels == NULL);
 }
 
+// Card PG1: a portrait is decoded once and kept, so a file gone from disk is
+// still drawn from the kept copy; a repository change - here one mounted and
+// unmounted - forgets it, and the next ask decodes again and finds nothing.
+TEST(a_portrait_is_decoded_once_until_a_repository_changes)
+{
+    unsigned char rows[6] = { 0x00, 0x00, 0xFF, 0x00, 0xFF, 0x00 };
+    TigVideoBuffer* first;
+
+    bmp_use_argb8888();
+    bmp_fixture_dir();
+    bmp_write(24, 2, 1, 0, NULL, rows, 6);
+
+    first = portrait_buffer_get(BMP_PATH);
+    CHECK(first != NULL);
+    remove(BMP_PATH);
+    CHECK(portrait_buffer_get(BMP_PATH) == first);
+
+    CHECK(tig_file_repository_add(BMP_DIR));
+    tig_file_repository_remove(BMP_DIR);
+    CHECK(portrait_buffer_get(BMP_PATH) == NULL);
+
+    bmp_remove();
+}
+
 void test_bmp_suite(void)
 {
+    RUN(a_portrait_is_decoded_once_until_a_repository_changes);
     RUN(a_null_bmp_is_refused);
     RUN(a_missing_file_reports_an_io_error);
     RUN(a_file_that_is_not_a_bmp_is_refused);

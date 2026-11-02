@@ -1,13 +1,18 @@
 #include "game/portrait.h"
 
 #include <stdio.h>
+#include <string.h>
 
 #include "game/mes.h"
 #include "game/multiplayer.h"
 #include "game/player.h"
 #include "game/stat.h"
+#include "tig/file.h"
+#include "tig/memory.h"
+#include "tig/video.h"
 
 static void portrait_draw_func(int64_t obj, int num, tig_window_handle_t window_handle, int x, int y, int width, int height);
+static void portrait_cache_clear(void);
 static bool portrait_is_valid(int64_t obj, const char* str);
 
 /**
@@ -83,6 +88,8 @@ bool portrait_init(GameInitInfo* init_info)
  */
 void portrait_exit(void)
 {
+    portrait_cache_clear();
+
     mes_unload(portrait_mes_file);
 
     if (portrait_have_user_mes_file) {
@@ -150,6 +157,75 @@ void portrait_draw_native(int64_t obj, int num, tig_window_handle_t window_handl
     portrait_draw_func(obj, num, window_handle, x, y, 0, 0);
 }
 
+// CE: decoded portraits are kept by path. The follower panel redraws every
+// follower's portrait whenever one's hit points or fatigue change, and each
+// draw decoded its BMP from the archive and threw it away: 8.7% of the
+// demonstration battle's busiest seconds (card PG1). A repository change
+// forgets them, as it does `tig_art_exists`'s answers.
+// shortcut: a portrait file replaced while the game runs is drawn from the
+// kept copy until a repository changes; restart the game after editing one.
+#define PORTRAIT_CACHE_SIZE 32
+
+typedef struct PortraitCacheEntry {
+    char* path;
+    TigVideoBuffer* video_buffer;
+} PortraitCacheEntry;
+
+static PortraitCacheEntry portrait_cache[PORTRAIT_CACHE_SIZE];
+static int portrait_cache_next;
+static unsigned int portrait_cache_changes;
+
+static void portrait_cache_clear(void)
+{
+    int index;
+
+    for (index = 0; index < PORTRAIT_CACHE_SIZE; index++) {
+        if (portrait_cache[index].path != NULL) {
+            FREE(portrait_cache[index].path);
+            tig_video_buffer_destroy(portrait_cache[index].video_buffer);
+            portrait_cache[index].path = NULL;
+            portrait_cache[index].video_buffer = NULL;
+        }
+    }
+    portrait_cache_next = 0;
+}
+
+// The decoded portrait at `path`, loaded on first use, or NULL when it does
+// not load. The cache owns it; when full, the oldest entry makes room.
+TigVideoBuffer* portrait_buffer_get(const char* path)
+{
+    PortraitCacheEntry* entry;
+    TigVideoBuffer* video_buffer;
+    int index;
+
+    if (portrait_cache_changes != tig_file_repository_changes()) {
+        portrait_cache_clear();
+        portrait_cache_changes = tig_file_repository_changes();
+    }
+
+    for (index = 0; index < PORTRAIT_CACHE_SIZE; index++) {
+        if (portrait_cache[index].path != NULL
+            && strcmp(portrait_cache[index].path, path) == 0) {
+            return portrait_cache[index].video_buffer;
+        }
+    }
+
+    if (tig_video_buffer_load_from_bmp(path, &video_buffer, 0x01) != TIG_OK) {
+        return NULL;
+    }
+
+    entry = &(portrait_cache[portrait_cache_next]);
+    portrait_cache_next = (portrait_cache_next + 1) % PORTRAIT_CACHE_SIZE;
+    if (entry->path != NULL) {
+        FREE(entry->path);
+        tig_video_buffer_destroy(entry->video_buffer);
+    }
+    entry->path = STRDUP(path);
+    entry->video_buffer = video_buffer;
+
+    return video_buffer;
+}
+
 /**
  * CE: The original code uses TIG BMP API. This implementation prefers to load
  * portrait directly into the video buffer.
@@ -161,7 +237,6 @@ void portrait_draw_func(int64_t obj, int num, tig_window_handle_t window_handle,
     char path[TIG_MAX_PATH];
     TigVideoBuffer* video_buffer;
     TigVideoBufferData video_buffer_data;
-    int rc;
     char* pch;
     TigRect src_rect;
     TigRect dst_rect;
@@ -181,8 +256,8 @@ void portrait_draw_func(int64_t obj, int num, tig_window_handle_t window_handle,
     }
 
     // Load bitmap from the portrait path.
-    rc = tig_video_buffer_load_from_bmp(path, &video_buffer, 0x01);
-    if (rc != TIG_OK) {
+    video_buffer = portrait_buffer_get(path);
+    if (video_buffer == NULL) {
         // Something wrong was with the portrait. Check if a big portrait was
         // requested and if so, fallback to normal size portrait.
         if (strlen(path) >= 6) {
@@ -190,17 +265,16 @@ void portrait_draw_func(int64_t obj, int num, tig_window_handle_t window_handle,
             if (tig_strcasecmp(pch, "_b.bmp") == 0) {
                 *pch = '\0';
                 strcat(path, ".bmp");
-                rc = tig_video_buffer_load_from_bmp(path, &video_buffer, 0x01);
+                video_buffer = portrait_buffer_get(path);
             }
         }
     }
 
-    if (rc != TIG_OK) {
+    if (video_buffer == NULL) {
         return;
     }
 
     if (tig_video_buffer_data(video_buffer, &video_buffer_data) != TIG_OK) {
-        tig_video_buffer_destroy(video_buffer);
         return;
     }
 
@@ -232,7 +306,6 @@ void portrait_draw_func(int64_t obj, int num, tig_window_handle_t window_handle,
     blit_info.dst_rect = &dst_rect;
     blit_info.dst_window_handle = window_handle;
     tig_window_blit(&blit_info);
-    tig_video_buffer_destroy(video_buffer);
 }
 
 /**

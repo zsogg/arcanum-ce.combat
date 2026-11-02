@@ -14,5 +14,6 @@ bool portrait_find_next(int64_t obj, int* portrait_ptr);
 bool portrait_find_last(int64_t obj, int* portrait_ptr);
 bool portrait_find_prev(int64_t obj, int* portrait_ptr);
 int portrait_get(int64_t obj);
+TigVideoBuffer* portrait_buffer_get(const char* path);
 
 #endif /* ARCANUM_GAME_PORTRAIT_H_ */
