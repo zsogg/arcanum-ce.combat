@@ -93,6 +93,11 @@ static TigFileIgnore* off_62B2A8;
 // 0x62B2AC
 static TigFileRepository* tig_file_repositories_head;
 
+// CE: counts every change to what a lookup can find - a repository added,
+// moved to the front, removed, or an ignore rule added - so a cache of
+// answers (`tig_art_exists`) knows when to forget them.
+static unsigned int tig_file_repositories_changes;
+
 // 0x62B2B0
 static TigFileIgnore* tig_file_ignore_head;
 
@@ -742,6 +747,8 @@ bool tig_file_repository_add_native(const char* path)
     TigDatabase* database;
     char cache_path[TIG_MAX_PATH];
 
+    tig_file_repositories_changes++;
+
     prev = NULL;
     curr = tig_file_repositories_head;
     while (curr != NULL && SDL_strcasecmp(curr->path, path) != 0) {
@@ -829,6 +836,8 @@ bool tig_file_repository_remove_native(const char* file_name)
     bool removed = false;
     char path[TIG_MAX_PATH];
 
+    tig_file_repositories_changes++;
+
     prev = NULL;
     repo = tig_file_repositories_head;
     while (repo != NULL) {
@@ -867,6 +876,8 @@ bool tig_file_repository_remove_all(void)
     TigFileRepository* curr;
     TigFileRepository* next;
     char path[TIG_MAX_PATH];
+
+    tig_file_repositories_changes++;
 
     curr = tig_file_repositories_head;
     while (curr != NULL) {
@@ -999,6 +1010,8 @@ void tig_file_ignore(const char* path, unsigned int flags)
     TigFileIgnore* ignore;
     size_t path_length;
     char* pch;
+
+    tig_file_repositories_changes++;
 
     if ((flags & (TIG_FILE_DATABASE | TIG_FILE_PLAIN)) != 0) {
         if (fpattern_isvalid(path)) {
@@ -2511,6 +2524,11 @@ bool tig_file_unarchive(const char* src, const char* dst)
     compat_resolve_path(native_dst);
 
     return tig_file_unarchive_native(native_src, native_dst);
+}
+
+unsigned int tig_file_repository_changes(void)
+{
+    return tig_file_repositories_changes;
 }
 
 bool tig_file_repository_add(const char* path)

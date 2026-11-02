@@ -38,6 +38,7 @@
 #endif
 #include <unistd.h>
 
+#include "tig/art.h"
 #include "tig/file.h"
 
 #include "test_harness.h"
@@ -49,6 +50,8 @@
 #define DIR_PATH "./arcanum_test_repo_dir"
 #define DIR_RULES DIR_PATH "/rules"
 #define DIR_HELLO DIR_RULES "/hello.txt"
+#define DIR_ART DIR_PATH "/art"
+#define DIR_MOUSE DIR_ART "/mouse.art"
 
 // Everything any test here creates, files before the directories holding them.
 // Explicit rather than a recursive delete through `tig_file_empty_directory`,
@@ -68,6 +71,8 @@ static const char* const FIXTURE_PATHS[] = {
     DIR_PATH "/Arcanum4.dat",
     DIR_PATH "/ArcanumXbar.dat",
     DIR_PATH "/ArcanumZfoo.dat",
+    DIR_MOUSE,
+    DIR_ART,
     DIR_RULES,
     DIR_PATH,
 };
@@ -168,6 +173,34 @@ static void make_dir_repo(void)
 {
     tig_file_mkdir(DIR_PATH);
     tig_file_mkdir(DIR_RULES);
+}
+
+// Card PG1: `tig_art_exists` keeps each path's answer, a miss as well as a
+// hit, so a file appearing or going under a mounted directory is not seen;
+// any repository change - here re-adding one, which moves it to the front -
+// makes it ask again. The system mouse needs no name tables to find its path.
+TEST(art_existence_is_remembered_until_a_repository_changes)
+{
+    tig_art_id_t mouse;
+
+    CHECK_INT(tig_art_misc_id_create(TIG_ART_SYSTEM_MOUSE, 0, &mouse), TIG_OK);
+    make_dir_repo();
+    tig_file_mkdir(DIR_ART);
+    CHECK(tig_file_repository_add(DIR_PATH));
+
+    CHECK(tig_art_exists(mouse) != TIG_OK);
+    CHECK(write_text(DIR_MOUSE, "art"));
+    CHECK(tig_art_exists(mouse) != TIG_OK);
+
+    CHECK(tig_file_repository_add(DIR_PATH));
+    CHECK_INT(tig_art_exists(mouse), TIG_OK);
+    remove(DIR_MOUSE);
+    CHECK_INT(tig_art_exists(mouse), TIG_OK);
+
+    tig_file_repository_remove(DIR_PATH);
+    CHECK(tig_art_exists(mouse) != TIG_OK);
+
+    remove_fixtures();
 }
 
 // Mounting prepends, so the archive added last is searched first. This is the
@@ -1277,6 +1310,7 @@ void test_file_suite(void)
     RUN(the_save_folder_redirect_rewrites_only_a_leading_save_component);
     RUN(rmdir_answers_whether_the_directory_went);
     RUN(rmdir_ex_removes_under_every_directory_repository);
+    RUN(art_existence_is_remembered_until_a_repository_changes);
     RUN(the_archive_mounted_last_wins);
     RUN(an_archive_guid_is_found_by_either_spelling_of_its_path);
     RUN(reversing_the_mount_order_reverses_the_answer);

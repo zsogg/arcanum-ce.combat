@@ -4,6 +4,7 @@
 #include <math.h>
 #include <stddef.h>
 #include <stdio.h>
+#include <string.h>
 
 #include "tig/bmp.h"
 #include "tig/color.h"
@@ -224,6 +225,7 @@ static void tig_art_cache_entry_video_buffers_free(int cache_entry_index);
 static int tig_art_file_read(tig_art_id_t art_id, const char* filename, TigArtHeader* hdr, TigPalette** palettes, int a5, art_size_t* size_ptr);
 static int tig_art_header_num_rotations(TigArtHeader* hdr);
 static void tig_art_load_cleanup(TigFile* stream, TigArtHeader* hdr, TigPalette** palette_tbl);
+static void tig_art_exists_cache_clear(void);
 static void tig_art_header_pixels_free(TigArtHeader* hdr);
 static bool art_read_header(TigArtHeader* hdr, TigFile* stream);
 
@@ -537,6 +539,8 @@ void tig_art_exit(void)
             tig_art_cache_entries_capacity = 0;
         }
 
+        tig_art_exists_cache_clear();
+
         tig_art_initialized = false;
     }
 }
@@ -603,15 +607,86 @@ void tig_art_flush(void)
     tig_art_cache_entries_length = 0;
 }
 
+// CE: `tig_art_exists` remembers each path's answer. Asking the file layer
+// lists whole directories, once per directory repository (SDL's glob, and on
+// Linux `compat_resolve_path` for every path component), and the game asks
+// many times a frame - eye candy, wieldable weapons, weapon effects: 16% of
+// the demonstration battle's busiest seconds (card PG1). Only a change to
+// the repositories or ignore rules can change an answer, and
+// `tig_file_repository_changes` counts those.
+// shortcut: art copied into a mounted directory while the game runs is not
+// seen until a repository changes; restart the game after adding art.
+#define TIG_ART_EXISTS_CACHE_SIZE 4096 // slots, a power of two
+
+typedef struct TigArtExistsEntry {
+    char* path;
+    bool exists;
+} TigArtExistsEntry;
+
+static TigArtExistsEntry tig_art_exists_cache[TIG_ART_EXISTS_CACHE_SIZE];
+static int tig_art_exists_cache_count;
+static unsigned int tig_art_exists_cache_changes;
+
+static void tig_art_exists_cache_clear(void)
+{
+    int index;
+
+    for (index = 0; index < TIG_ART_EXISTS_CACHE_SIZE; index++) {
+        if (tig_art_exists_cache[index].path != NULL) {
+            FREE(tig_art_exists_cache[index].path);
+            tig_art_exists_cache[index].path = NULL;
+        }
+    }
+    tig_art_exists_cache_count = 0;
+}
+
+// The slot holding `path`, or the empty slot where it belongs.
+static TigArtExistsEntry* tig_art_exists_cache_slot(const char* path)
+{
+    unsigned int hash = 2166136261u;
+    const char* pch;
+
+    for (pch = path; *pch != '\0'; pch++) {
+        hash = (hash ^ (unsigned char)*pch) * 16777619u;
+    }
+
+    while (tig_art_exists_cache[hash & (TIG_ART_EXISTS_CACHE_SIZE - 1)].path != NULL
+        && strcmp(tig_art_exists_cache[hash & (TIG_ART_EXISTS_CACHE_SIZE - 1)].path, path) != 0) {
+        hash++;
+    }
+
+    return &(tig_art_exists_cache[hash & (TIG_ART_EXISTS_CACHE_SIZE - 1)]);
+}
+
 // 0x502220
 int tig_art_exists(tig_art_id_t art_id)
 {
     char path[TIG_MAX_PATH];
+    TigArtExistsEntry* entry;
+
     if (tig_art_build_path(art_id, path, sizeof(path)) != TIG_OK) {
         return TIG_ERR_GENERIC;
     }
 
-    if (!tig_file_exists(path, NULL)) {
+    if (tig_art_exists_cache_changes != tig_file_repository_changes()) {
+        tig_art_exists_cache_clear();
+        tig_art_exists_cache_changes = tig_file_repository_changes();
+    }
+
+    entry = tig_art_exists_cache_slot(path);
+    if (entry->path == NULL) {
+        // Kept under three quarters full, so a probe always ends.
+        if (tig_art_exists_cache_count >= TIG_ART_EXISTS_CACHE_SIZE / 4 * 3) {
+            tig_art_exists_cache_clear();
+            entry = tig_art_exists_cache_slot(path);
+        }
+
+        entry->path = STRDUP(path);
+        entry->exists = tig_file_exists(path, NULL);
+        tig_art_exists_cache_count++;
+    }
+
+    if (!entry->exists) {
         return TIG_ERR_GENERIC;
     }
 
