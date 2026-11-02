@@ -385,6 +385,16 @@ TEST(a_cast_is_identified_by_its_spell_not_by_its_cost)
     CHECK(strstr(trace, "\"event\":\"spell.critical\"") != NULL);
     CHECK(strstr(trace, "\"caster\":\"mage\",\"target\":\"opponent\",\"spell\":33,\"critical\":\"long_stun\",\"bonus\":25,\"chance\":13,\"roll\":7}") != NULL);
     CHECK(strstr(trace, "\"critical\":\"refund\",\"bonus\":0,\"chance\":7,\"roll\":0}") != NULL);
+    // LE-3 (2026-11-02): every roll, a miss included, as its own event.
+    clean();
+    CHECK(combat_observer_open(TRACE_FILE));
+    combat_observer_spell_critical_rolled("mage", "opponent", 33, 13, 40, false);
+    combat_observer_spell_critical_rolled("mage", "opponent", 33, 13, 13, true);
+    combat_observer_close();
+    CHECK(read_trace(trace, sizeof(trace)));
+    CHECK(strstr(trace, "\"event\":\"spell.critical_rolled\"") != NULL);
+    CHECK(strstr(trace, "\"spell\":33,\"chance\":13,\"roll\":40,\"critical\":false}") != NULL);
+    CHECK(strstr(trace, "\"spell\":33,\"chance\":13,\"roll\":13,\"critical\":true}") != NULL);
     // Magic milestone MG-3: summoning sickness, and its end.
     clean();
     CHECK(combat_observer_open(TRACE_FILE));

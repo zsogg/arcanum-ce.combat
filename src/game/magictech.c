@@ -2320,19 +2320,19 @@ static bool magictech_roll_critical(int64_t target_obj)
                 * spell_college_level_get(caster_obj, COLLEGE_FROM_SPELL(magictech_cur_run_info->spell));
     }
 
-    if (crit_guard_debug_forces(caster_obj, target_obj)) {
-        roll = 0;
-    } else {
-        roll = random_between(1, 100);
-        if (roll > chance) {
-            return false;
-        }
+    roll = crit_guard_debug_forces(caster_obj, target_obj) ? 0 : random_between(1, 100);
+    if (combat_observer_is_enabled()) {
+        combat_observer_object_id(caster_obj, caster);
+        combat_observer_object_id(target_obj, target);
+        combat_observer_spell_critical_rolled(caster, target, magictech_cur_run_info->spell,
+            chance, roll, roll <= chance);
+    }
+    if (roll > chance) {
+        return false;
     }
 
     magictech_cur_critical = true;
     if (combat_observer_is_enabled()) {
-        combat_observer_object_id(caster_obj, caster);
-        combat_observer_object_id(target_obj, target);
         combat_observer_spell_critical(caster, target, magictech_cur_run_info->spell,
             spell_rules_critical_name(magictech_cur_critical_kind),
             magictech_cur_critical_bonus, chance, roll);

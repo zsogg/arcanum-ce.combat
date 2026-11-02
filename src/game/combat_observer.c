@@ -638,6 +638,23 @@ void combat_observer_spell_critical(const char* caster, const char* target,
     combat_observer_write(line);
 }
 
+void combat_observer_spell_critical_rolled(const char* caster, const char* target,
+    int spell, int chance, int roll, bool critical)
+{
+    char line[320];
+    char action[32];
+
+    if (!combat_observer_begin_semantic()) return;
+
+    snprintf(line, sizeof(line),
+        "{\"schema\":%d,\"sequence\":%u,\"event\":\"spell.critical_rolled\",\"turn\":%u,\"action_id\":%s,"
+        "\"caster\":\"%s\",\"target\":\"%s\",\"spell\":%d,\"chance\":%d,\"roll\":%d,\"critical\":%s}",
+        COMBAT_OBSERVER_SCHEMA, combat_observer_sequence++, combat_observer_turn,
+        combat_observer_action_json(action, sizeof(action)), caster, target, spell,
+        chance, roll, critical ? "true" : "false");
+    combat_observer_write(line);
+}
+
 void combat_observer_summon_sick(const char* summoner, const char* summon, bool turn_based)
 {
     char line[320];

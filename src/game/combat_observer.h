@@ -238,6 +238,12 @@ void combat_observer_projectile_ended(const char* source, const char* target,
 void combat_observer_spell_cast(const char* caster, const char* source,
     const char* target, int spell, bool free, int ap_cost);
 
+// CE (loose end LE-3, 2026-11-02): every spell critical roll, hit or miss, so
+// the natural frequency is read as criticals over rolls; `spell.critical`
+// follows a hit as before. `roll` 0 when `debug criticals` forced it.
+void combat_observer_spell_critical_rolled(const char* caster, const char* target,
+    int spell, int chance, int roll, bool critical);
+
 // CE (magic, milestone MG-2): a spell's critical on one target. `critical`
 // is what it did - "stun", "knockdown", "long_stun", "refund", "exposed",
 // "unfocused", "dazzled", "hobbled"; `bonus` the damage percent, `chance` and
