@@ -55,6 +55,8 @@ bool critter_is_active(int64_t obj);
 bool critter_is_unconscious(int64_t obj);
 bool critter_is_sleeping(int64_t obj);
 bool critter_is_dead(int64_t obj);
+void critter_memo_begin(void);
+void critter_memo_end(void);
 void critter_kill(int64_t obj);
 void critter_notify_killed(int64_t victim_obj, int64_t killer_obj, int anim);
 void critter_alignment_adjust(int64_t source_obj, int64_t target_obj, bool full_adjustment);

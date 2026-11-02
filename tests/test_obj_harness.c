@@ -21,6 +21,7 @@
 // racial and equipment modifiers, which is what makes them readable.
 
 #include "game/item.h"
+#include "game/critter.h"
 #include "game/obj.h"
 #include "game/skill.h"
 #include "game/stat.h"
@@ -364,8 +365,30 @@ TEST(a_wall_prototype_default_is_unaffected_by_the_portal_fix)
     obj_harness_destroy(obj);
 }
 
+// Card PG1: while a target search has the memo open, a critter's dead and
+// unconscious answers are kept after their first asking, so a change made
+// while it is open is not seen until it closes. (A script run also empties
+// it; the harness has no script layer to show that with.)
+TEST(the_search_memo_keeps_a_critter_s_state_until_it_closes)
+{
+    int64_t obj = obj_harness_create_proto(OBJ_TYPE_NPC);
+
+    CHECK(!critter_is_dead(obj));
+
+    critter_memo_begin();
+    CHECK(!critter_is_dead(obj));
+    obj_field_int32_set(obj, OBJ_F_HP_DAMAGE, 32000);
+    CHECK(!critter_is_dead(obj));
+    critter_memo_end();
+
+    CHECK(critter_is_dead(obj));
+
+    obj_harness_destroy(obj);
+}
+
 void test_obj_harness_suite(void)
 {
+    RUN(the_search_memo_keeps_a_critter_s_state_until_it_closes);
     RUN(the_harness_creates_a_usable_object);
     RUN(objects_are_distinct_and_independent);
     RUN(fields_round_trip_through_the_object);

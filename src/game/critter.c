@@ -586,6 +586,72 @@ bool critter_is_active(int64_t obj)
         && (obj_field_int32_get(obj, OBJ_F_SPELL_FLAGS) & OSF_STONED) == 0;
 }
 
+// CE (card PG1): while a target search runs (`ai_find_target` opens this),
+// each critter's dead and unconscious answers are kept after their first
+// asking. The search asks them again and again - the decoy, avenge and
+// valid-target checks, and every line walk for each critter it passes - and
+// each asking recomputes hit points or fatigue through the effect tables.
+// Only a script can change them during a search (the target's SAP_WILL_KOS
+// runs inside it), so a moved `script_execute_count` empties the memo. The
+// first asking stays where it was, which keeps the light-cache refresh that
+// a Strength or Willpower read can make (`stat_level_get`) where it was.
+#define CRITTER_MEMO_SIZE 128
+
+typedef struct CritterMemo {
+    int64_t obj;
+    signed char dead; // -1 until asked
+    signed char unconscious; // -1 until asked
+} CritterMemo;
+
+static CritterMemo critter_memo[CRITTER_MEMO_SIZE];
+static int critter_memo_count;
+static bool critter_memo_open;
+static unsigned int critter_memo_scripts;
+
+void critter_memo_begin(void)
+{
+    critter_memo_open = true;
+    critter_memo_count = 0;
+    critter_memo_scripts = script_execute_count();
+}
+
+void critter_memo_end(void)
+{
+    critter_memo_open = false;
+    critter_memo_count = 0;
+}
+
+// The memo entry for `obj`, made on first use; NULL when no search has the
+// memo open or it is full.
+static CritterMemo* critter_memo_entry(int64_t obj)
+{
+    int index;
+
+    if (!critter_memo_open) {
+        return NULL;
+    }
+
+    if (critter_memo_scripts != script_execute_count()) {
+        critter_memo_scripts = script_execute_count();
+        critter_memo_count = 0;
+    }
+
+    for (index = 0; index < critter_memo_count; index++) {
+        if (critter_memo[index].obj == obj) {
+            return &(critter_memo[index]);
+        }
+    }
+
+    if (critter_memo_count == CRITTER_MEMO_SIZE) {
+        return NULL;
+    }
+
+    critter_memo[critter_memo_count].obj = obj;
+    critter_memo[critter_memo_count].dead = -1;
+    critter_memo[critter_memo_count].unconscious = -1;
+    return &(critter_memo[critter_memo_count++]);
+}
+
 /**
  * Checks if a critter is unconscious.
  *
@@ -593,10 +659,31 @@ bool critter_is_active(int64_t obj)
  */
 bool critter_is_unconscious(int64_t obj)
 {
-    return obj == OBJ_HANDLE_NULL
-        || !obj_type_is_critter(obj_field_int32_get(obj, OBJ_F_TYPE))
+    CritterMemo* memo;
+    bool unconscious;
+
+    if (obj == OBJ_HANDLE_NULL) {
+        return true;
+    }
+
+    // CE (card PG1): kept for the length of a target search.
+    memo = critter_memo_entry(obj);
+    if (memo != NULL && memo->unconscious >= 0) {
+        return memo->unconscious != 0;
+    }
+
+    unconscious = !obj_type_is_critter(obj_field_int32_get(obj, OBJ_F_TYPE))
         || ((obj_field_int32_get(obj, OBJ_F_CRITTER_FLAGS) & OCF_UNDEAD) == 0
             && critter_fatigue_current(obj) <= 0);
+
+    // Asked again: the asking above can run nothing that moves the count,
+    // but the entry pointer must not outlive a reset it did not see.
+    memo = critter_memo_entry(obj);
+    if (memo != NULL) {
+        memo->unconscious = unconscious;
+    }
+
+    return unconscious;
 }
 
 /**
@@ -618,11 +705,27 @@ bool critter_is_sleeping(int64_t obj)
  */
 bool critter_is_dead(int64_t obj)
 {
-    if (obj != OBJ_HANDLE_NULL) {
-        return object_hp_current(obj) <= 0;
-    } else {
+    CritterMemo* memo;
+    bool dead;
+
+    if (obj == OBJ_HANDLE_NULL) {
         return true;
     }
+
+    // CE (card PG1): kept for the length of a target search.
+    memo = critter_memo_entry(obj);
+    if (memo != NULL && memo->dead >= 0) {
+        return memo->dead != 0;
+    }
+
+    dead = object_hp_current(obj) <= 0;
+
+    memo = critter_memo_entry(obj);
+    if (memo != NULL) {
+        memo->dead = dead;
+    }
+
+    return dead;
 }
 
 /**
