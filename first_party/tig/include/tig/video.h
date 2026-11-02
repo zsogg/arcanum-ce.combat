@@ -123,6 +123,7 @@ int tig_video_3d_end_scene(void);
 int tig_video_check_gamma_control(void);
 int tig_video_fade(tig_color_t color, int steps, float duration, TigFadeFlags flags);
 int tig_video_set_gamma(float gamma);
+void tig_video_set_scale_mode(int mode);
 int tig_video_buffer_create(TigVideoBufferCreateInfo* vb_create_info, TigVideoBuffer** video_buffer);
 int tig_video_buffer_destroy(TigVideoBuffer* video_buffer);
 int tig_video_buffer_data(TigVideoBuffer* video_buffer, TigVideoBufferData* video_buffer_data);

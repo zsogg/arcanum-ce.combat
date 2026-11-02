@@ -15,6 +15,7 @@
 #define FOLLOWER_SKILLS_KEY "follower skills"
 
 #define BRIGHTNESS_KEY "brightness"
+#define SCALE_MODE_KEY "scale mode"
 #define TEXT_DURATION_KEY "text duration"
 #define TEXT_FLOATERS_KEY "text floaters"
 #define FLOAT_SPEED_KEY "float speed"

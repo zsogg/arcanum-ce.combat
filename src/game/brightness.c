@@ -3,6 +3,7 @@
 #include "game/gamelib.h"
 
 static void brightness_changed(void);
+static void scale_mode_changed(void);
 
 /**
  * Called when the game is initialized.
@@ -16,6 +17,11 @@ bool brightness_init(GameInitInfo* init_info)
     // Register `brightness` setting and initialize it.
     settings_register(&settings, BRIGHTNESS_KEY, "0", brightness_changed);
     brightness_changed();
+
+    // CE: `scale mode`, how the screen is filtered when it is scaled to the
+    // window: 0 nearest (the default), 1 linear, 2 pixel art (card PG1).
+    settings_register(&settings, SCALE_MODE_KEY, "0", scale_mode_changed);
+    scale_mode_changed();
 
     return true;
 }
@@ -64,4 +70,10 @@ void brightness_changed(void)
 
         changing = false;
     }
+}
+
+// CE: see `brightness_init`.
+void scale_mode_changed(void)
+{
+    tig_video_set_scale_mode(settings_get_value(&settings, SCALE_MODE_KEY));
 }

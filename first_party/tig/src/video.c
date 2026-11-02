@@ -76,6 +76,12 @@ static bool tig_video_initialized;
 // 0x6103A0
 static bool tig_video_show_fps;
 
+// CE: how the frame is filtered when the screen texture is scaled to the
+// window - SDL's own scale modes, 0 nearest, 1 linear, 2 pixel art. Nearest
+// by default, so no pixel is blended with its neighbours (zsogg, card PG1);
+// the game's `scale mode` setting changes it.
+static SDL_ScaleMode tig_video_scale_mode = SDL_SCALEMODE_NEAREST;
+
 // 0x6103A4
 static int dword_6103A4;
 
@@ -196,6 +202,24 @@ void tig_video_display_fps(void)
             log_frames = 0;
         }
     }
+}
+
+// CE: see `tig_video_scale_mode`. A value outside SDL's three is nearest.
+void tig_video_set_scale_mode(int mode)
+{
+    tig_video_scale_mode = mode == SDL_SCALEMODE_LINEAR || mode == SDL_SCALEMODE_PIXELART
+        ? (SDL_ScaleMode)mode
+        : SDL_SCALEMODE_NEAREST;
+
+    if (tig_video_state.texture != NULL) {
+        SDL_SetTextureScaleMode(tig_video_state.texture, tig_video_scale_mode);
+    }
+
+    tig_debug_printf("TIG Video: scale mode %d (%s)\n",
+        (int)tig_video_scale_mode,
+        tig_video_scale_mode == SDL_SCALEMODE_LINEAR ? "linear"
+            : tig_video_scale_mode == SDL_SCALEMODE_PIXELART ? "pixel art"
+                                                             : "nearest");
 }
 
 // 0x51F600
@@ -1459,6 +1483,8 @@ bool tig_video_window_create(TigInitInfo* init_info)
         SDL_DestroyWindow(window);
         return false;
     }
+
+    SDL_SetTextureScaleMode(texture, tig_video_scale_mode);
 
     SDL_PropertiesID texture_props = SDL_GetTextureProperties(texture);
     SDL_PixelFormat format = (SDL_PixelFormat)SDL_GetNumberProperty(texture_props, SDL_PROP_TEXTURE_FORMAT_NUMBER, 0);
