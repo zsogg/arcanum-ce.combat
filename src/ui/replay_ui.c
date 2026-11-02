@@ -254,9 +254,10 @@ typedef enum ReplayKind {
     //       a key pressed and released, by its SDL name (`L`, `Escape`,
     //       `Return`, `F7`), enqueued as two keyboard messages so it meets the
     //       same handlers a real key does - the logbook, the save screen.
-    //   click <x> <y>
+    //   click <x> <y> [right]
     //       a left click at that screen pixel, enqueued as `panel` enqueues
-    //       its click, for a control or a tile no other row reaches.
+    //       its click, for a control or a tile no other row reaches; `right`
+    //       makes it a right click (card MI1: the follower menu opens on one).
     //   inspect location <id>
     //       one log line with that object's tile, so a script can see where a
     //       move stopped or a knockback landed.
@@ -1020,6 +1021,11 @@ static bool replay_parse_line(const char* text, ReplayCommand* command)
             || !replay_parse_int(tokens[index++], &(command->dy))) {
             return false;
         }
+        // Card MI1: `right` makes a click a right click; `stat` 1 says so.
+        if (command->kind == REPLAY_KIND_CLICK && index < count && strcmp(tokens[index], "right") == 0) {
+            command->stat = 1;
+            index++;
+        }
         return index == count;
     }
 
@@ -1557,8 +1563,9 @@ bool replay_ui_describe(int index, char* buffer, size_t size)
     if ((command->kind == REPLAY_KIND_CLICK || command->kind == REPLAY_KIND_BLOCK || command->kind == REPLAY_KIND_RUN
             || command->kind == REPLAY_KIND_HURT)
         && written >= 0 && (size_t)written < size) {
-        snprintf(buffer + written, size - (size_t)written, " dx=%d dy=%d",
-            command->dx, command->dy);
+        snprintf(buffer + written, size - (size_t)written, " dx=%d dy=%d%s",
+            command->dx, command->dy,
+            command->kind == REPLAY_KIND_CLICK && command->stat == 1 ? " right" : "");
     }
     return true;
 }
@@ -2285,11 +2292,16 @@ void replay_ui_tick(void)
         click.type = TIG_MESSAGE_MOUSE;
         click.data.mouse.x = command->dx;
         click.data.mouse.y = command->dy;
-        click.data.mouse.event = TIG_MESSAGE_MOUSE_LEFT_BUTTON_DOWN;
+        click.data.mouse.event = command->stat == 1
+            ? TIG_MESSAGE_MOUSE_RIGHT_BUTTON_DOWN
+            : TIG_MESSAGE_MOUSE_LEFT_BUTTON_DOWN;
         tig_message_enqueue(&click);
-        click.data.mouse.event = TIG_MESSAGE_MOUSE_LEFT_BUTTON_UP;
+        click.data.mouse.event = command->stat == 1
+            ? TIG_MESSAGE_MOUSE_RIGHT_BUTTON_UP
+            : TIG_MESSAGE_MOUSE_LEFT_BUTTON_UP;
         tig_message_enqueue(&click);
-        tig_debug_printf("Replay: command %d clicked at %d,%d\n", replay_next - 1,
+        tig_debug_printf("Replay: command %d %s at %d,%d\n", replay_next - 1,
+            command->stat == 1 ? "right-clicked" : "clicked",
             command->dx, command->dy);
         return;
     }
@@ -2599,9 +2611,20 @@ void replay_ui_tick(void)
         tig_message_enqueue(&click);
         click.data.mouse.event = TIG_MESSAGE_MOUSE_LEFT_BUTTON_UP;
         tig_message_enqueue(&click);
+        // Card MI1, IN-4: how many missiles are in the air as the click goes,
+        // so a script can show it landed mid-flight. A projectile object
+        // exists only while it flies.
+        ObjectList missiles;
+        ObjectNode* missile_node;
+        int in_flight = 0;
+        object_list_vicinity(pc_obj, OBJ_TM_PROJECTILE, &missiles);
+        for (missile_node = missiles.head; missile_node != NULL; missile_node = missile_node->next) {
+            in_flight++;
+        }
+        object_list_destroy(&missiles);
         tig_debug_printf("Replay: command %d clicked the called-shot panel at"
-                         " %d,%d for limb %d\n",
-            replay_next - 1, x, y, command->aim);
+                         " %d,%d for limb %d, %d missile(s) in flight\n",
+            replay_next - 1, x, y, command->aim, in_flight);
         return;
     }
 

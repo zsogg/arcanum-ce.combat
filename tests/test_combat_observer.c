@@ -1059,6 +1059,13 @@ TEST(the_press_click_and_block_rows_load_and_describe)
     CHECK(row_is(2, "turn=0 now=0 kind=block target= loc=0 aim=0 spell=0 cast=- wait=0 dx=4 dy=-2"));
     CHECK(!load_script("0 block 4\n"));
     CHECK(!load_script("0 block 4 -2 extra\n"));
+    // MI1 (2026-11-02): `right` makes a click a right click, for the
+    // follower menu; only `click` takes it, and nothing may follow it.
+    CHECK(load_script("0 click 31 74 right\n"));
+    CHECK(row_is(0, "turn=0 now=0 kind=click target= loc=0 aim=0 spell=0 cast=- wait=0 dx=31 dy=74 right"));
+    CHECK(!load_script("0 click 31 74 left\n"));
+    CHECK(!load_script("0 click 31 74 right extra\n"));
+    CHECK(!load_script("0 block 4 -2 right\n"));
 }
 
 TEST(the_face_and_inspect_sight_rows_load_and_describe)
