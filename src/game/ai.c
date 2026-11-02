@@ -5298,9 +5298,15 @@ int ai_can_hear_stock(int64_t source_obj, int64_t target_obj, int loudness)
 // normal otherwise. Stock: silent prowling, normal otherwise.
 int ai_presence_loudness(int64_t obj)
 {
-    return sense_rules_presence_loudness(critter_is_concealed(obj),
-        ai_is_moving(obj),
-        feature_enabled(FEATURE_STILL_IS_SILENT) && !ai_senses_stock);
+    bool concealed = critter_is_concealed(obj);
+    bool still_is_silent = feature_enabled(FEATURE_STILL_IS_SILENT) && !ai_senses_stock;
+
+    // The rule reads `moving` only for a critter in plain view under `still
+    // is silent`, so it is looked up only then: it costs a scan of the
+    // animation slots, and a target search asks for every candidate (PG1).
+    return sense_rules_presence_loudness(concealed,
+        !concealed && still_is_silent && ai_is_moving(obj),
+        still_is_silent);
 }
 
 // CE (`hearing alerts`, DB-3; zsogg, 2026-10-27): whether `npc_obj` acts on
@@ -6188,6 +6194,12 @@ bool ai_is_moving(int64_t obj)
         AG_ATTEMPT_MOVE_NEAR_COMBAT,
     };
     size_t idx;
+
+    // Each lookup below scans all 216 animation slots and is false when the
+    // critter has none running: one scan answers that case (card PG1).
+    if (anim_find_first(obj) == -1) {
+        return false;
+    }
 
     for (idx = 0; idx < sizeof(move_goals) / sizeof(move_goals[0]); idx++) {
         if (anim_is_current_goal_type(obj, move_goals[idx], NULL)) {

@@ -85,8 +85,28 @@ TEST(standing_still_is_silent_only_under_the_rule)
     CHECK_INT(sense_rules_presence_loudness(true, true, true), LOUDNESS_SILENT);
 }
 
+// Card PG1: `ai_presence_loudness` looks `moving` up only for a critter in
+// plain view under the rule, because the rule reads it nowhere else. Should
+// the rule change to read it elsewhere, this fails and the shortcut with it.
+TEST(moving_matters_only_in_plain_view_under_the_rule)
+{
+    int concealed;
+    int moving;
+    int still_is_silent;
+
+    for (concealed = 0; concealed <= 1; concealed++) {
+        for (moving = 0; moving <= 1; moving++) {
+            for (still_is_silent = 0; still_is_silent <= 1; still_is_silent++) {
+                CHECK_INT(sense_rules_presence_loudness(concealed, !concealed && still_is_silent && moving, still_is_silent),
+                    sense_rules_presence_loudness(concealed, moving, still_is_silent));
+            }
+        }
+    }
+}
+
 void test_sense_rules_suite(void)
 {
+    RUN(moving_matters_only_in_plain_view_under_the_rule);
     RUN(a_wall_stops_ordinary_sound_and_lets_a_third_of_a_loud_one_through);
     RUN(stock_hearing_through_a_wall_grows_with_distance_and_never_reads_1000);
     RUN(the_side_of_the_view_sees_half_as_far_and_the_back_sees_nothing);
