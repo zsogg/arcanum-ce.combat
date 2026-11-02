@@ -2442,13 +2442,32 @@ void object_set_current_aid(int64_t obj, tig_art_id_t aid)
 {
     TigRect dirty_rect;
     TigRect update_rect;
+    tig_art_id_t old_aid;
+    unsigned int render_flags;
+    ObjectRenderColors colors;
 
     if ((obj_field_int32_get(obj, OBJ_F_FLAGS) & OF_DESTROYED) == 0) {
         object_get_rect(obj, 0x7, &dirty_rect);
+        old_aid = obj_field_int32_get(obj, OBJ_F_CURRENT_AID);
         obj_field_int32_set(obj, OBJ_F_CURRENT_AID, aid);
-        obj_field_int32_set(obj,
-            OBJ_F_RENDER_FLAGS,
-            obj_field_int32_get(obj, OBJ_F_RENDER_FLAGS) & ~ORF_08000000);
+        render_flags = obj_field_int32_get(obj, OBJ_F_RENDER_FLAGS) & ~ORF_08000000;
+        obj_field_int32_set(obj, OBJ_F_RENDER_FLAGS, render_flags);
+
+        // FIX: a tinted palette is built from the art's own palette
+        // (`object_render_colors_calc`) and kept until the light changes.
+        // The original swaps the art here (0x43eb69-0x43eb82) and keeps the
+        // palette, so a corpse stripped of its jacket in a lit room drew the
+        // underwear art through the jacket art's palette, in a few wrong
+        // colours (card PG1, zsogg, Shrouded Hills). Rebuilt for the new art
+        // file from the colour already worked out: nothing is re-lit, so
+        // the colour a to-hit roll reads stays as it was. Frames and
+        // rotations share a file and keep theirs.
+        if ((render_flags & TIG_ART_BLT_PALETTE_OVERRIDE) != 0
+            && (render_flags & ORF_40000000) == 0
+            && tig_art_id_frame_set(tig_art_id_rotation_set(old_aid, 0), 0)
+                != tig_art_id_frame_set(tig_art_id_rotation_set(aid, 0), 0)) {
+            object_render_colors_calc(obj, &colors);
+        }
         object_get_rect(obj, 0x7, &update_rect);
         tig_rect_union(&dirty_rect, &update_rect, &dirty_rect);
         object_iso_invalidate_rect(&dirty_rect);
