@@ -41,6 +41,7 @@ add_executable(arcanum-tests
     "test_creature_rules.c"
     "test_trap_spotting.c"
     "test_penetration.c"
+    "test_combat_feedback.c"
     "test_ai_targeting.c"
     "test_ai_follower_casting.c"
     "test_ai_follower_healing.c"

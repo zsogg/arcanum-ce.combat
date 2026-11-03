@@ -83,6 +83,8 @@ set(SRCS
     "src/game/armor_rules.h"
     "src/game/penetration.c"
     "src/game/penetration.h"
+    "src/game/combat_feedback.c"
+    "src/game/combat_feedback.h"
     "src/game/reload.c"
     "src/game/reload.h"
     "src/game/creature_rules.c"

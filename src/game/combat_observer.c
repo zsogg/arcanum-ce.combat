@@ -638,6 +638,21 @@ void combat_observer_spell_critical(const char* caster, const char* target,
     combat_observer_write(line);
 }
 
+void combat_observer_feedback(const char* target, const char* text)
+{
+    char line[320];
+    char action[32];
+
+    if (!combat_observer_begin_semantic()) return;
+
+    snprintf(line, sizeof(line),
+        "{\"schema\":%d,\"sequence\":%u,\"event\":\"combat.feedback\",\"turn\":%u,\"action_id\":%s,"
+        "\"target\":\"%s\",\"text\":\"%s\"}",
+        COMBAT_OBSERVER_SCHEMA, combat_observer_sequence++, combat_observer_turn,
+        combat_observer_action_json(action, sizeof(action)), target, text);
+    combat_observer_write(line);
+}
+
 void combat_observer_spell_critical_rolled(const char* caster, const char* target,
     int spell, int chance, int roll, bool critical)
 {

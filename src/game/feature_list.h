@@ -212,5 +212,11 @@ FEATURE(COMBAT_MUSIC_SHUFFLE, "combat music shuffle", false)
 // the run on its target for good, so the AI never weighed that spell for that
 // target again (a healer stopped healing the player).
 FEATURE(INTERRUPTED_CASTS_END, "interrupted casts end", false)
+// Card FB1 (zsogg, 2026-11-02), read by `combat_attack` and `combat_dmg`:
+// floating text that tells a plain miss from a dodge ("Miss"), says when armor
+// took all or more than half of a weapon hit's normal damage ("Stopped",
+// "Glancing", under `armor penetration`), and gives a hit's damage in one line,
+// "4 HT, 7 FT" (`combat_feedback.h`). Each respects the Options' Floats.
+FEATURE(COMBAT_FEEDBACK, "combat feedback", false)
 
 // clang-format on

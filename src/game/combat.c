@@ -13,6 +13,7 @@
 #include "game/animfx.h"
 #include "game/armor_rules.h"
 #include "game/ci.h"
+#include "game/combat_feedback.h"
 #include "game/creature_rules.h"
 #include "game/criticals.h"
 #include "game/critter.h"
@@ -75,7 +76,8 @@ static int combat_random_hit_loc(void);
 static bool combat_consume_ammo(int64_t weapon_obj, int64_t critter_obj, int cnt, bool destroy);
 static void combat_calc_dmg(CombatContext* combat);
 static void combat_apply_resistance(CombatContext* combat);
-static int combat_armor_resolve(CombatContext* combat);
+static int combat_armor_resolve(CombatContext* combat, int* before);
+static void combat_feedback_observe(int64_t target_obj, const char* text);
 static int combat_backstab_bonus_of(CombatContext* combat);
 static bool combat_phantom_ward(CombatContext* combat);
 static int combat_creature_firearm_scale(CombatContext* combat);
@@ -1019,6 +1021,7 @@ void combat_observer_snapshot_obj(int64_t obj)
 int combat_attack(CombatContext* combat)
 {
     bool was_in_bed = false;
+    bool dodged = false;
     int sound_id;
     int aptitude_crit_failure_chance;
     int attack_result;
@@ -1223,6 +1226,7 @@ int combat_attack(CombatContext* combat)
                     mes_file_entry.num = 11; // "Dodge!"
                     mes_get_msg(combat_mes_file, &mes_file_entry);
                     tf_add(combat->target_obj, 0, mes_file_entry.str);
+                    dodged = true;
 
                     combat->flags &= ~(CF_HIT | CF_CRITICAL);
 
@@ -1253,6 +1257,17 @@ int combat_attack(CombatContext* combat)
     if ((combat->flags & CF_HIT) == 0
         && (combat->flags & CF_CRITICAL) != 0) {
         combat_process_crit_miss(combat);
+    }
+
+    // CE (`combat feedback`, card FB1): a plain miss says so, apart from
+    // "Dodge!" and the critical miss's own text.
+    if (feature_enabled(FEATURE_COMBAT_FEEDBACK)
+        && (combat->flags & (CF_HIT | CF_CRITICAL)) == 0
+        && !dodged
+        && combat->target_obj != OBJ_HANDLE_NULL
+        && obj_type_is_critter(obj_field_int32_get(combat->target_obj, OBJ_F_TYPE))) {
+        tf_add(combat->target_obj, TF_TYPE_WHITE, COMBAT_FEEDBACK_MISS);
+        combat_feedback_observe(combat->target_obj, COMBAT_FEEDBACK_MISS);
     }
 
     if ((combat->flags & CF_RANGED) != 0) {
@@ -1793,7 +1808,8 @@ void combat_dmg(CombatContext* combat)
     // difficulty scaling and the critical bonus already in it (zsogg's decision
     // 3). It is set aside here and added back after the multipliers below,
     // which then scale only the elemental damage.
-    int armor_normal = combat_armor_resolve(combat);
+    int armor_before = 0;
+    int armor_normal = combat_armor_resolve(combat, &armor_before);
     if (armor_normal >= 0) {
         combat->dam[DAMAGE_TYPE_NORMAL] = 0;
     }
@@ -2241,7 +2257,25 @@ void combat_dmg(CombatContext* combat)
             }
         }
 
-        if (tf_level_get() == TF_LEVEL_VERBOSE && str[0] != '\0') {
+        // CE (`combat feedback`, card FB1): what armor did, and the damage in
+        // one line, in place of the stock float.
+        if (feature_enabled(FEATURE_COMBAT_FEEDBACK)) {
+            MesFileEntry hp_word;
+            MesFileEntry fatigue_word;
+
+            hp_word.num = 1; // "HT"
+            mes_get_msg(combat_mes_file, &hp_word);
+            fatigue_word.num = 10; // "FT"
+            mes_get_msg(combat_mes_file, &fatigue_word);
+            combat_feedback_hit_text(combat_feedback_armor(armor_before, armor_normal),
+                dam,
+                (critter_flags & OCF_FATIGUE_IMMUNE) == 0 ? combat->dam[DAMAGE_TYPE_FATIGUE] : 0,
+                tf_level_get(), hp_word.str, fatigue_word.str, str, sizeof(str));
+            if (str[0] != '\0') {
+                tf_add(combat->target_obj, tf_type, str);
+                combat_feedback_observe(combat->target_obj, str);
+            }
+        } else if (tf_level_get() == TF_LEVEL_VERBOSE && str[0] != '\0') {
             tf_add(combat->target_obj, tf_type, str);
         }
 
@@ -3779,7 +3813,7 @@ static int combat_creature_firearm_scale(CombatContext* combat)
     return creature_rules_firearm_scale(combat->target_obj);
 }
 
-static int combat_armor_resolve(CombatContext* combat)
+static int combat_armor_resolve(CombatContext* combat, int* before)
 {
     PenetrationHit hit = { 0 };
     PenetrationResult result;
@@ -3884,6 +3918,7 @@ static int combat_armor_resolve(CombatContext* combat)
     hit.variation_percent = random_between(PENETRATION_VARIATION_MIN, PENETRATION_VARIATION_MAX);
     hit.damage = damage;
     result = penetration_resolve(&hit);
+    *before = damage;
 
     // A monster's natural attack: part of what armor stopped lands as fatigue
     // (zsogg, 2026-10-04: monsters still threaten a player in plate). Added
@@ -6291,5 +6326,16 @@ void pc_switch_weapon(int64_t pc_obj, int64_t target_obj)
         && obj_field_int32_get(pc_obj, OBJ_F_TYPE) == OBJ_TYPE_PC
         && combat_auto_switch_weapons_get(pc_obj)) {
         item_wield_best(pc_obj, ITEM_INV_LOC_WEAPON, target_obj);
+    }
+}
+
+// CE (`combat feedback`, card FB1): the float just drawn, for the observer.
+static void combat_feedback_observe(int64_t target_obj, const char* text)
+{
+    char target[COMBAT_OBSERVER_IDENTITY_SIZE] = "NULL";
+
+    if (combat_observer_is_enabled()) {
+        combat_observer_object_id(target_obj, target);
+        combat_observer_feedback(target, text);
     }
 }
