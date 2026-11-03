@@ -1,7 +1,5 @@
 # Arcanum CE — Introduction
 
-**base** Arcanum 1.0.7.4 (GOG) · **patch** UAP 2.0.2 + Hi-Res · **upstream** alexbatalov/arcanum-ce · **platforms** Linux, Windows; macOS untested
-
 Arcanum CE-Combat is an open source rebuild of Troika’s 2001 *Arcanum*, with optional mods focused on bugfixes and combat rebalance.
 
 - Installation builds upon Arcanum 1.0.7.4 from GOG (Good Old Games), with the UAP (Unofficial Arcanum Patch) 2.0.2 and its High Resolution Patch.
@@ -224,11 +222,6 @@ Tightly coupled with the prowling overhaul. NPCs notice you less easily, above a
 
 A test battle in real time, all nine optional mods on: sixty Tarant guards
 with rifles against ten Sir Garrick Stouts, two Elder Joachims and Arronax.
-Twelve seconds of it:
-
-- the guards firing and reloading under the Combat Rebalance;
-- the casters' fire spells;
-- the heroes fighting as one party, spread out.
 
 ## Playing
 
@@ -252,17 +245,6 @@ Arcanum CE keeps its own saves (`modules/Arcanum/SaveCE`) and settings
 
 **Not supported:** movies play only on Windows (they are skipped on Linux
 and macOS), multiplayer is not supported at present.
-
-## How it is checked against the original
-
-- **Function by function.** Small engine functions are run twice on the same
-  inputs: once as CE's C code, and once as the original program's own machine
-  code, in an emulator.
-- **Save by save.** A set of saves from real games is loaded, and saved again
-  by the original under Wine (Windows emulation) and by CE, and the two
-  results are compared.
-- **Run by run.** The same save, run for a stretch of play with the same
-  random seed, must play each step the same.
 
 ## Building from source
 
@@ -293,18 +275,6 @@ The macOS build is experimental: our workflow
 GitHub runner. If you have a Mac and want to help,
 [docs/MACOS-PORT.md](docs/MACOS-PORT.md) is the guide, written to be handed
 to an LLM assistant as well.
-
-## Reporting a problem
-
-Open an [issue](https://github.com/zsogg/arcanum-ce.combat/issues/new?template=bug_report.md)
-with:
-
-1. **The log**, `arcanum-ce.log` in the game folder. A new one is written
-   each time the game starts, so copy it right after the problem. Its first
-   line names your build.
-2. **The save**, if the problem is in a game: the four files of its slot in
-   `modules/Arcanum/SaveCE`.
-3. **Please narrate what happened**, and what you did just before.
 
 ## License
 
