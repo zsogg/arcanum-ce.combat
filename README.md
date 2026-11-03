@@ -1,4 +1,4 @@
-# Arcanum CE — Introduction
+# Arcanum CE Combat — Introduction
 
 Arcanum CE-Combat is an open source rebuild of Troika’s 2001 *Arcanum*, with optional mods focused on bugfixes and combat rebalance.
 
