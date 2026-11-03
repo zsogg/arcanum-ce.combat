@@ -218,5 +218,14 @@ FEATURE(INTERRUPTED_CASTS_END, "interrupted casts end", false)
 // "Glancing", under `armor penetration`), and gives a hit's damage in one line,
 // "4 HT, 7 FT" (`combat_feedback.h`). Each respects the Options' Floats.
 FEATURE(COMBAT_FEEDBACK, "combat feedback", false)
+// Combat AI AI-7 (zsogg, 2026-11-02), read by `ai_choose_magictech_action` and
+// `ai_check_use_spell` for an NPC with no leader in the player's party: it puts
+// up a defensive spell not already on it before anything else; it refuses an
+// area spell whose effect would take one of its allies unless it also takes two
+// or more of the target's side (code 14); and a disabling spell (`Control` in
+// `rules/spells.mes`) goes on no target already disabled (15) or just recovered
+// (16), and a group-wide one only from a creature the sheet marks `Specialist`
+// (17).
+FEATURE(CASTER_TACTICS, "caster tactics", false)
 
 // clang-format on

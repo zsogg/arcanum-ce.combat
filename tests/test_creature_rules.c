@@ -101,6 +101,20 @@ TEST(values_are_clamped)
     CHECK_INT(rule.firearm_scale, 0);
 }
 
+TEST(a_specialist_is_marked_on_its_own)
+{
+    CreatureRule rule;
+
+    // Combat AI AI-7, zsogg 2026-11-02: group-wide control only by a specialist.
+    CHECK(creature_rule_parse(14520, "Specialist: 1", &rule));
+    CHECK(rule.specialist);
+    CHECK_INT(rule.profile, CREATURE_RULE_UNSET);
+    CHECK(creature_rule_parse(28341, "Profile: skeletal", &rule));
+    CHECK(!rule.specialist);
+    CHECK(!creature_rule_parse(14520, "Specialist: 2", &rule));
+    CHECK(!creature_rule_parse(14520, "Specialist: yes", &rule));
+}
+
 TEST(an_unlisted_creature_takes_the_profile_its_flags_give)
 {
     CHECK_INT(creature_profile_default(0, 0, CRIT_BODY_TYPE_BIPED), CREATURE_PROFILE_LIVING);
@@ -210,6 +224,7 @@ TEST(the_new_effects_have_their_names)
 void test_creature_rules_suite(void)
 {
     RUN(an_entry_takes_any_of_its_keys);
+    RUN(a_specialist_is_marked_on_its_own);
     RUN(every_profile_and_chart_has_its_name);
     RUN(only_a_phantom_says_what_hurts_it_when_examined);
     RUN(malformed_entries_are_refused_and_change_nothing);

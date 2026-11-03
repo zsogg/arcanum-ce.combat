@@ -22,6 +22,10 @@
 // `NoStack: 1`, read under `spell no stacking` (magic, milestone MG-3; zsogg,
 // 2026-10-11): a second copy of the spell on the same target is refused before
 // its caster pays anything. The sheet marks every buff, and Drain Will.
+// `Control: 1`, read under `caster tactics` (combat AI, milestone AI-7;
+// zsogg, 2026-11-02): a disabling spell, the sheet's role `disable`, which an
+// NPC caster keeps off a target already disabled or just recovered.
+//
 // Like the weapon table, it changes no game data.
 
 // The spells the table may list: the 16 colleges' 80.
@@ -50,10 +54,12 @@ typedef struct SpellRule {
     int critical_bonus;
     // MG-3: `NoStack: 1`.
     bool no_stack;
+    // AI-7: `Control: 1`.
+    bool control;
 } SpellRule;
 
-// Pure: reads one entry's text - `APCost`, `Critical` and `NoStack`, any of them.
-// `NoStack` takes 0 or 1.
+// Pure: reads one entry's text - `APCost`, `Critical`, `NoStack` and `Control`,
+// any of them. `NoStack` and `Control` take 0 or 1.
 // False, with `rule` untouched, for anything else, an AP below 4 or above 10,
 // a damage critical without its bonus or another critical with one - so a bad
 // entry changes nothing rather than a guessed rule.
@@ -77,6 +83,9 @@ int spell_rules_ap(int spell);
 SpellCritical spell_rules_critical(int spell, int* bonus);
 // MG-3: whether the table refuses a second copy of the spell on a target.
 bool spell_rules_no_stack(int spell);
+
+// AI-7: whether the table marks the spell as disabling (`Control: 1`).
+bool spell_rules_control(int spell);
 // MG-2: a critical's name for `spell.critical` - "stun", "refund" ...
 const char* spell_rules_critical_name(SpellCritical critical);
 

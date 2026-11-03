@@ -11,6 +11,7 @@
 #include "game/ce_parse.h"
 #include "game/combat.h"
 #include "game/combat_observer.h"
+#include "game/creature_rules.h"
 #include "game/crit_effects.h"
 #include "game/critter.h"
 #include "game/descriptions.h"
@@ -41,6 +42,7 @@
 #include "game/sfx.h"
 #include "game/skill.h"
 #include "game/spell.h"
+#include "game/spell_rules.h"
 #include "game/stat.h"
 #include "game/teleport.h"
 #include "game/tf.h"
@@ -192,6 +194,11 @@ static void ai_calc_party_size_and_level_internal(int64_t obj, int* cnt_ptr, int
 static int ai_check_protect(int64_t source_obj, int64_t target_obj);
 static int64_t ai_avenge_target(int64_t obj, int64_t ally_obj);
 static int ai_check_use_spell(int64_t attacker_obj, int64_t item_obj, int64_t target_obj, int spell);
+static bool ai_tactics_applies(int64_t obj);
+static bool ai_protect_first(Ai* ai);
+static int ai_tactics_refusal(int64_t caster_obj, int64_t target_obj, int spell);
+static void ai_tactics_note_if_disabled(int64_t caster_obj, int64_t target_obj, int spell);
+static int ai_desperation_key(void);
 static bool ai_is_indoor_to_outdoor_transition(int64_t portal_obj, int dir);
 static int ai_perception_distance(int value);
 static int ai_line_of_sound_cost(int64_t source_obj, int64_t target_obj);
@@ -3251,6 +3258,11 @@ bool ai_choose_magictech_action(Ai* ai)
     if (ai->cast_chance > 0 && ai_prefers_spells(ai)) {
         ai->cast_chance = 100;
     }
+    // CE (`caster tactics`, card AI-7, rule 1): a protection not already on
+    // it comes first, past both the cast roll and AI parameter 13's.
+    if (ai_protect_first(ai)) {
+        return true;
+    }
     if (ai->cast_roll > ai->cast_chance) {
         return false;
     }
@@ -3991,6 +4003,11 @@ bool ai_choose_action_from_list(Ai* ai, S4ABF10* a2)
             : magictech_is_under_influence_of(obj, entry->spell)
             ? 13
             : ai_check_use_spell(ai->obj, entry->item_obj, obj, entry->spell);
+        // CE (`caster tactics`, card AI-7, rule 3): a target held by this very
+        // spell is disabled too, and is remembered as such for its recovery.
+        if (code == 13) {
+            ai_tactics_note_if_disabled(ai->obj, obj, entry->spell);
+        }
         if (!on_player && ai->considered_count < COMBAT_OBSERVER_AI_CONSIDERED_MAX) {
             ai->considered[ai->considered_count][0] = entry->spell;
             ai->considered[ai->considered_count][1] = code;
@@ -5726,6 +5743,15 @@ int ai_check_use_spell(int64_t attacker_obj, int64_t item_obj, int64_t target_ob
         return 11;
     }
 
+    // CE (`caster tactics`, card AI-7): friendly fire (14) and crowd control's
+    // restraint (15-17).
+    if (ai_tactics_applies(attacker_obj)) {
+        int tactics_code = ai_tactics_refusal(attacker_obj, target_obj, spell);
+        if (tactics_code != 0) {
+            return tactics_code;
+        }
+    }
+
     if (feature_enabled(FEATURE_SPELL_COSTS)
         && combat_turn_based_is_active()
         && combat_turn_based_whos_turn_get() == attacker_obj
@@ -6636,4 +6662,218 @@ void ai_target_unlock(int64_t obj)
             obj_field_int32_set(obj, OBJ_F_CRITTER_FLAGS2, flags & ~OCF2_TARGET_LOCK);
         }
     }
+}
+
+// CE (combat AI, milestone AI-7, `caster tactics`; zsogg, 2026-11-02). The
+// rules bind an NPC with no leader in the player's party: followers keep AI-5
+// and AI-6's casting rules.
+bool ai_tactics_area_refuses(int allies, int enemies)
+{
+    return allies > 0 && enemies < 2;
+}
+
+bool ai_tactics_just_recovered(int disabled_key, int now_key)
+{
+    int apart = now_key - disabled_key;
+
+    return apart >= -1 && apart <= 1;
+}
+
+static bool ai_tactics_applies(int64_t obj)
+{
+    return feature_enabled(FEATURE_CASTER_TACTICS)
+        && obj_field_int32_get(obj, OBJ_F_TYPE) == OBJ_TYPE_NPC
+        && critter_pc_leader_get(obj) == OBJ_HANDLE_NULL;
+}
+
+// Rule 1: the caster's own defensive spells, in their priority order, the
+// first it can cast that is not already on it.
+static bool ai_protect_first(Ai* ai)
+{
+    MagicTechAi magictech_ai;
+    MagicTechAiActionListEntry* entry;
+    int idx;
+    int code;
+    bool chosen = false;
+
+    if (!ai_tactics_applies(ai->obj)) {
+        return false;
+    }
+
+    mt_ai_create(&magictech_ai, ai->obj, MAGICTECH_AI_ACTION_DEFENSIVE);
+    for (idx = 0; idx < magictech_ai.actions[MAGICTECH_AI_ACTION_DEFENSIVE].cnt && !chosen; idx++) {
+        entry = &(magictech_ai.actions[MAGICTECH_AI_ACTION_DEFENSIVE].entries[idx]);
+        if (entry->spell == -1
+            || entry->item_obj != OBJ_HANDLE_NULL
+            || mt_ai_spell_defensive_targets_enemy(entry->spell)) {
+            continue;
+        }
+
+        code = magictech_is_under_influence_of(ai->obj, entry->spell)
+            ? 13
+            : ai_check_use_spell(ai->obj, OBJ_HANDLE_NULL, ai->obj, entry->spell);
+        if (ai->considered_count < COMBAT_OBSERVER_AI_CONSIDERED_MAX) {
+            ai->considered[ai->considered_count][0] = entry->spell;
+            ai->considered[ai->considered_count][1] = code;
+            ai->considered_count++;
+        }
+        if (code == 0) {
+            ai->action_type = AI_ACTION_TYPE_CAST_SPELL;
+            ai->spell = entry->spell;
+            ai->danger_source = ai->obj;
+            ai->item_obj = OBJ_HANDLE_NULL;
+            chosen = true;
+        }
+    }
+    mt_ai_destroy(&magictech_ai);
+    return chosen;
+}
+
+// Whose side `obj` is on, seen from `anchor_obj`: the player's party as one
+// side; otherwise itself, its leader or followers, and whoever it protects
+// (`ai_check_protect`: its faction, a guard's town).
+static bool ai_tactics_same_side(int64_t anchor_obj, int64_t obj)
+{
+    if (obj == anchor_obj
+        || critter_leader_get(obj) == anchor_obj
+        || critter_leader_get(anchor_obj) == obj) {
+        return true;
+    }
+    if (player_is_pc_obj(anchor_obj) || critter_pc_leader_get(anchor_obj) != OBJ_HANDLE_NULL) {
+        return player_is_pc_obj(obj) || critter_pc_leader_get(obj) != OBJ_HANDLE_NULL;
+    }
+    if (player_is_pc_obj(obj) || critter_pc_leader_get(obj) != OBJ_HANDLE_NULL) {
+        return false;
+    }
+    return ai_check_protect(anchor_obj, obj) != AI_PROTECT_NO;
+}
+
+// Rule 2: who an area spell's effect would take, the caster aside (every area
+// spell spares it: `Tgt_Obj_No_Self`). Code 14 when it takes an ally and
+// fewer than two of the target's side.
+static int ai_tactics_friendly_fire(int64_t caster_obj, int64_t target_obj, int spell)
+{
+    bool caster_centred = false;
+    int radius;
+    int64_t centre;
+    ObjectList critters;
+    ObjectNode* node;
+    int allies = 0;
+    int enemies = 0;
+
+    radius = magictech_area_radius(spell, &caster_centred);
+    if (radius < 0 || target_obj == OBJ_HANDLE_NULL || target_obj == caster_obj) {
+        return 0;
+    }
+
+    centre = obj_field_int64_get(caster_centred ? caster_obj : target_obj, OBJ_F_LOCATION);
+    object_list_vicinity(caster_obj, OBJ_TM_PC | OBJ_TM_NPC, &critters);
+    for (node = critters.head; node != NULL; node = node->next) {
+        if (node->obj == caster_obj
+            || critter_is_dead(node->obj)
+            || location_dist(centre, obj_field_int64_get(node->obj, OBJ_F_LOCATION)) > radius) {
+            continue;
+        }
+        if (ai_tactics_same_side(caster_obj, node->obj)) {
+            allies++;
+        } else if (ai_tactics_same_side(target_obj, node->obj)) {
+            enemies++;
+        }
+    }
+    object_list_destroy(&critters);
+
+    return ai_tactics_area_refuses(allies, enemies) ? 14 : 0;
+}
+
+// Rule 3's memo: when each target was last seen disabled, in the turn key
+// `ai_desperation_key` gives (a round, or a real-time turn). A fight's
+// memory only: nothing is saved (the plan's default, 2026-11-02).
+#define AI_CONTROL_MEMO_MAX 32
+
+static struct {
+    int64_t obj;
+    int key;
+} ai_control_memo[AI_CONTROL_MEMO_MAX];
+
+static int ai_control_memo_slot(int64_t obj, bool add)
+{
+    int slot;
+    int free_slot = -1;
+
+    for (slot = 0; slot < AI_CONTROL_MEMO_MAX; slot++) {
+        if (ai_control_memo[slot].obj == obj) {
+            return slot;
+        }
+        if (free_slot < 0 && ai_memo_entry_free(ai_control_memo[slot].obj)) {
+            free_slot = slot;
+        }
+    }
+    if (!add) {
+        return -1;
+    }
+    return free_slot >= 0 ? free_slot : 0;
+}
+
+static bool ai_tactics_disabled(int64_t obj)
+{
+    int spell;
+
+    if (!critter_is_active(obj)
+        || critter_is_prone(obj)
+        || (obj_field_int32_get(obj, OBJ_F_SPELL_FLAGS) & (OSF_CHARMED | OSF_ENTANGLED | OSF_MIND_CONTROLLED)) != 0) {
+        return true;
+    }
+    for (spell = 0; spell < SPELL_RULES_COUNT; spell++) {
+        if (spell_rules_control(spell) && magictech_is_under_influence_of(obj, spell)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+static void ai_tactics_note_if_disabled(int64_t caster_obj, int64_t target_obj, int spell)
+{
+    int slot;
+
+    if (!ai_tactics_applies(caster_obj)
+        || !spell_rules_control(spell)
+        || target_obj == OBJ_HANDLE_NULL
+        || !ai_tactics_disabled(target_obj)) {
+        return;
+    }
+    slot = ai_control_memo_slot(target_obj, true);
+    ai_control_memo[slot].obj = target_obj;
+    ai_control_memo[slot].key = ai_desperation_key();
+}
+
+static int ai_tactics_refusal(int64_t caster_obj, int64_t target_obj, int spell)
+{
+    bool caster_centred;
+    int code;
+    int slot;
+
+    code = ai_tactics_friendly_fire(caster_obj, target_obj, spell);
+    if (code != 0) {
+        return code;
+    }
+
+    if (!spell_rules_control(spell) || target_obj == OBJ_HANDLE_NULL || target_obj == caster_obj) {
+        return 0;
+    }
+
+    if (ai_tactics_disabled(target_obj)) {
+        ai_tactics_note_if_disabled(caster_obj, target_obj, spell);
+        return 15;
+    }
+
+    slot = ai_control_memo_slot(target_obj, false);
+    if (slot >= 0 && ai_tactics_just_recovered(ai_control_memo[slot].key, ai_desperation_key())) {
+        return 16;
+    }
+
+    if (magictech_area_radius(spell, &caster_centred) >= 0 && !creature_rules_specialist(caster_obj)) {
+        return 17;
+    }
+
+    return 0;
 }

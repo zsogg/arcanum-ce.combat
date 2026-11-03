@@ -276,6 +276,14 @@ bool ai_targeting_prefers_new_attacker(int current_dist, int threat_dist);
 int ai_spell_chance_rule(bool has_leader, bool player_leader, int own_hp_pct,
     int leader_hp_pct, bool foe_stronger, bool caster_type, bool keeps_distance,
     bool follower_casting, bool* waived);
+// CE: AI-7, `caster tactics`. Whether an area spell taking `allies` of the
+// caster's side (the caster aside) and `enemies` of the target's is refused:
+// any ally, unless two or more enemies go with it (zsogg, 2026-11-02). Pure.
+bool ai_tactics_area_refuses(int allies, int enemies);
+// CE: AI-7. Whether a target last seen disabled at turn key `disabled_key`
+// has only just recovered at `now_key`: within one turn, either way the key
+// runs (rounds count up; real-time turns down). Pure.
+bool ai_tactics_just_recovered(int disabled_key, int now_key);
 // CE: AI-5. Whether `ONF_CAST_HIGHEST` holds a critter to each college's
 // highest spell: always in stock; under `follower casting`, not for a follower
 // of the player.

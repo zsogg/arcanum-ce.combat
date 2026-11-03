@@ -104,6 +104,7 @@ bool creature_rule_parse(int id, const char* str, CreatureRule* rule)
     parsed.chart = CREATURE_RULE_UNSET;
     parsed.natural = CREATURE_RULE_UNSET;
     parsed.firearm_scale = CREATURE_RULE_UNSET;
+    parsed.specialist = false;
 
     for (part = strtok_r(buffer, ",", &save); part != NULL; part = strtok_r(NULL, ",", &save)) {
         colon = strchr(part, ':');
@@ -134,6 +135,11 @@ bool creature_rule_parse(int id, const char* str, CreatureRule* rule)
                 return false;
             }
             parsed.firearm_scale = creature_rule_clamp(value, CREATURE_RULE_SCALE_MAX);
+        } else if (strcmp(key, "Specialist") == 0) {
+            if (!ce_parse_int(text, &value) || (value != 0 && value != 1)) {
+                return false;
+            }
+            parsed.specialist = value == 1;
         } else {
             return false;
         }
@@ -296,14 +302,11 @@ static bool creature_rules_applies(int64_t obj)
         && obj_type_is_critter(obj_field_int32_get(obj, OBJ_F_TYPE));
 }
 
-static const CreatureRule* creature_rule_for(int64_t obj)
+// The entry listing the critter's prototype, whichever switch reads it.
+static const CreatureRule* creature_rule_listed(int64_t obj)
 {
     int64_t proto_obj;
     int index;
-
-    if (!creature_rules_applies(obj)) {
-        return NULL;
-    }
 
     proto_obj = obj_field_handle_get(obj, OBJ_F_PROTOTYPE_HANDLE);
     for (index = 0; index < creature_rule_count; index++) {
@@ -320,6 +323,11 @@ static const CreatureRule* creature_rule_for(int64_t obj)
     }
 
     return NULL;
+}
+
+static const CreatureRule* creature_rule_for(int64_t obj)
+{
+    return creature_rules_applies(obj) ? creature_rule_listed(obj) : NULL;
 }
 
 CreatureProfile creature_rules_profile(int64_t obj)
@@ -369,4 +377,18 @@ int creature_rules_firearm_scale(int64_t obj)
         return 100;
     }
     return rule->firearm_scale;
+}
+
+bool creature_rules_specialist(int64_t obj)
+{
+    const CreatureRule* rule;
+
+    if (!feature_enabled(FEATURE_CASTER_TACTICS)
+        || obj == OBJ_HANDLE_NULL
+        || !obj_type_is_critter(obj_field_int32_get(obj, OBJ_F_TYPE))) {
+        return false;
+    }
+
+    rule = creature_rule_listed(obj);
+    return rule != NULL && rule->specialist;
 }

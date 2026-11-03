@@ -364,6 +364,11 @@ int magictech_caster_centred_radius(int magictech);
 // only the caster (`Tgt_Self`, Blur Sight). Pure; the second asks it of a spell.
 bool magictech_tgt_reaches_others(uint64_t tgt);
 bool magictech_spell_reaches_others(int magictech);
+
+// CE (combat AI, milestone AI-7): the radius of a spell whose effect takes an
+// area (an object radius or a cone at its start), and whether that area is
+// centred on the caster rather than the target; -1 when it takes no area.
+int magictech_area_radius(int magictech, bool* caster_centred);
 // CE (`grenade blasts`): the `ai_attack` flags for a spell or blast hit; 0x01,
 // accidental, between members of one party.
 int magictech_attack_flags(int64_t attacker_obj, int64_t target_obj);

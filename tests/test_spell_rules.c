@@ -95,6 +95,22 @@ TEST(an_entry_reads_no_stacking)
     CHECK_INT(rule.ap, 6);
 }
 
+TEST(an_entry_reads_a_disabling_spell)
+{
+    SpellRule rule;
+
+    // Combat AI AI-7, zsogg 2026-11-02: the sheet's role `disable`.
+    CHECK(spell_rule_parse("APCost: 5, Control: 1", &rule));
+    CHECK(rule.control);
+    CHECK_INT(rule.ap, 5);
+    CHECK(spell_rule_parse("APCost: 5", &rule));
+    CHECK(!rule.control);
+    CHECK(spell_rule_parse("Control: 0", &rule));
+    CHECK(!rule.control);
+    CHECK(!spell_rule_parse("Control: 2", &rule));
+    CHECK(!spell_rule_parse("Control: yes", &rule));
+}
+
 TEST(a_complete_college_casts_for_one_less_never_below_3)
 {
     // zsogg, 2026-10-10: all five of a college known - 1 AP less, never below 3.
@@ -148,6 +164,7 @@ void test_spell_rules_suite(void)
     RUN(an_entry_reads_its_critical);
     RUN(a_malformed_critical_is_refused_whole);
     RUN(an_entry_reads_no_stacking);
+    RUN(an_entry_reads_a_disabling_spell);
     RUN(a_complete_college_casts_for_one_less_never_below_3);
     RUN(the_aptitude_part_of_scaled_damage_is_30_percent_smaller);
     RUN(a_grenade_blast_falls_off_fast_and_is_critical_only_near_its_centre);
