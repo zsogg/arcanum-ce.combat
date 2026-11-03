@@ -36,6 +36,7 @@
 #include "game/spell_rules.h"
 #include "game/stat.h"
 #include "game/target.h"
+#include "game/tech.h"
 #include "game/teleport.h"
 #include "game/tile_block.h"
 #include "game/timeevent.h"
@@ -351,6 +352,15 @@ typedef enum ReplayKind {
     //       as `maplist.mes` and scripts number them) and tile, as a script's
     //       teleport does; the map in `count`, the tile in `dx` and `dy`.
     REPLAY_KIND_TELEPORT,
+    //   degree <discipline> <degree>
+    //       the player's degree in a technological discipline (0 Herbology ...
+    //       7 Therapeutics) raised to that degree (0-7) one step at a time
+    //       through `tech_degree_inc`, the character screen's rule: refused
+    //       where Intelligence is too low; never lowered. No character points
+    //       are spent. Script-only, like `raise` (2026-11-02, for the Tech
+    //       Specialists' schematic screen); the discipline in `skill`, the
+    //       degree in `count`.
+    REPLAY_KIND_DEGREE,
 } ReplayKind;
 
 // A cast's target, which is a third shape: the caster, an object or a tile.
@@ -1195,6 +1205,18 @@ static bool replay_parse_line(const char* text, ReplayCommand* command)
         return true;
     }
 
+    if (strcmp(kind, "degree") == 0) {
+        command->kind = REPLAY_KIND_DEGREE;
+        if (index + 2 != count
+            || !replay_parse_int(tokens[index++], &(command->skill))
+            || command->skill < 0 || command->skill >= TECH_COUNT
+            || !replay_parse_int(tokens[index++], &(command->count))
+            || command->count < 0 || command->count >= DEGREE_COUNT) {
+            return false;
+        }
+        return true;
+    }
+
     if (strcmp(kind, "restock") == 0) {
         command->kind = REPLAY_KIND_RESTOCK;
         replay_copy_target(command, tokens[index++]);
@@ -1500,7 +1522,7 @@ int replay_ui_count(void)
 bool replay_ui_describe(int index, char* buffer, size_t size)
 {
     const ReplayCommand* command;
-    static const char* kinds[] = { "object", "location", "key", "cast", "wield", "wait", "learn", "give", "throw", "skill", "raise", "prowl", "panel", "save", "inspect", "transfer", "take", "drop", "pickup", "wear", "skill-level", "stat-level", "jam", "afflict", "poison", "use", "xp", "train", "hour", "encounter", "hover", "screenshot", "spawn", "invulnerable", "await-death", "remove", "examine", "press", "click", "block", "face", "stay", "run", "recruit", "npc", "hurt", "order", "attack", "restock", "teleport" };
+    static const char* kinds[] = { "object", "location", "key", "cast", "wield", "wait", "learn", "give", "throw", "skill", "raise", "prowl", "panel", "save", "inspect", "transfer", "take", "drop", "pickup", "wear", "skill-level", "stat-level", "jam", "afflict", "poison", "use", "xp", "train", "hour", "encounter", "hover", "screenshot", "spawn", "invulnerable", "await-death", "remove", "examine", "press", "click", "block", "face", "stay", "run", "recruit", "npc", "hurt", "order", "attack", "restock", "teleport", "degree" };
     int written;
     static const char* casts[] = { "self", "object", "location" };
 
@@ -1524,6 +1546,10 @@ bool replay_ui_describe(int index, char* buffer, size_t size)
         && written >= 0 && (size_t)written < size) {
         snprintf(buffer + written, size - (size_t)written, " proto=%d count=%d",
             command->proto, command->count);
+    }
+    if (command->kind == REPLAY_KIND_DEGREE && written >= 0 && (size_t)written < size) {
+        snprintf(buffer + written, size - (size_t)written, " tech=%d degree=%d",
+            command->skill, command->count);
     }
     if (command->kind == REPLAY_KIND_TELEPORT && written >= 0 && (size_t)written < size) {
         snprintf(buffer + written, size - (size_t)written, " map=%d x=%d y=%d",
@@ -2104,6 +2130,23 @@ void replay_ui_tick(void)
         tig_debug_printf("Replay: command %d encounter from table %d: %s\n",
             replay_next - 1, command->count,
             wmap_rnd_force_encounter(command->count, command->aim) ? "spawned" : "nothing spawned");
+        return;
+    }
+
+    if (command->kind == REPLAY_KIND_DEGREE) {
+        replay_stall_reported = false;
+        replay_next++;
+        while (tech_degree_get(pc_obj, command->skill) < command->count) {
+            int before = tech_degree_get(pc_obj, command->skill);
+            if (tech_degree_inc(pc_obj, command->skill) == before) {
+                break;
+            }
+        }
+        tig_debug_printf("Replay: command %d set technological discipline %d to degree %d%s\n",
+            replay_next - 1, command->skill, tech_degree_get(pc_obj, command->skill),
+            tech_degree_get(pc_obj, command->skill) >= command->count
+                ? ""
+                : " (refused: Intelligence too low for the next degree)");
         return;
     }
 
