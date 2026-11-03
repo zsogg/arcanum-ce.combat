@@ -1117,9 +1117,10 @@ static bool replay_parse_line(const char* text, ReplayCommand* command)
     // 1 level, 2 packet, 3 cast-highest, 4 magick, 5 forced (a follower
     // recruited by dialogue's `jo 0` is not forced, so it can leave), 6 tech
     // (tech points, which with magick set the aptitude), 7 align (its
-    // alignment); the values in `dx` and `dy`.
+    // alignment), 8 faction (2026-11-02, card AI-7: a caster's allies are
+    // its faction); the values in `dx` and `dy`.
     if (strcmp(kind, "npc") == 0) {
-        static const char* keys[] = { "college", "level", "packet", "cast-highest", "magick", "forced", "tech", "align" };
+        static const char* keys[] = { "college", "level", "packet", "cast-highest", "magick", "forced", "tech", "align", "faction" };
         int key;
 
         command->kind = REPLAY_KIND_NPC;
@@ -1127,9 +1128,9 @@ static bool replay_parse_line(const char* text, ReplayCommand* command)
         if (index >= count) {
             return false;
         }
-        for (key = 0; key < 8 && strcmp(tokens[index], keys[key]) != 0; key++) {
+        for (key = 0; key < 9 && strcmp(tokens[index], keys[key]) != 0; key++) {
         }
-        if (key == 8) {
+        if (key == 9) {
             return false;
         }
         index++;
@@ -2426,6 +2427,9 @@ void replay_ui_tick(void)
         case 7:
             stat_base_set(obj, STAT_ALIGNMENT, command->dx);
             break;
+        case 8:
+            critter_faction_set(obj, command->dx);
+            break;
         case 5:
             obj_field_int32_set(obj, OBJ_F_NPC_FLAGS,
                 command->dx != 0
@@ -2444,8 +2448,9 @@ void replay_ui_tick(void)
             stat_level_get(obj, STAT_LEVEL), obj_field_int32_get(obj, OBJ_F_NPC_AI_DATA),
             (obj_field_int32_get(obj, OBJ_F_NPC_FLAGS) & ONF_CAST_HIGHEST) != 0 ? 1 : 0,
             stat_level_get(obj, STAT_MAGICK_TECH_APTITUDE));
-        tig_debug_printf("Replay: command %d: '%s' alignment %d\n",
-            replay_next - 1, command->target, stat_level_get(obj, STAT_ALIGNMENT));
+        tig_debug_printf("Replay: command %d: '%s' alignment %d, faction %d\n",
+            replay_next - 1, command->target, stat_level_get(obj, STAT_ALIGNMENT),
+            critter_faction_get(obj));
         return;
     }
 

@@ -898,6 +898,10 @@ TEST(the_persistence_rows_load_into_what_they_say)
     CHECK(!load_script("0 degree 8 3\n")); // no such discipline
     CHECK(!load_script("0 degree 1 8\n")); // degrees 0-7
     CHECK(!load_script("0 degree 1\n"));
+    // 2026-11-02, card AI-7: an NPC's faction, for a caster's allies.
+    CHECK(load_script("0 npc @m faction 41\n"));
+    CHECK(!load_script("0 npc @m faction\n"));
+    CHECK(!load_script("0 npc @m kinship 41\n"));
     CHECK(load_script("0 save Slot0029 Playtest kit - town\n"));
     CHECK(row_is(0, "turn=0 now=0 kind=save target=Slot0029 loc=0 aim=0 spell=0 cast=- wait=0 description=Playtest kit - town"));
     CHECK(!load_script("0 inspect\n"));
