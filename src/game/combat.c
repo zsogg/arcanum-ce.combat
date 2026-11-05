@@ -4623,12 +4623,23 @@ void combat_recalc_perception_range(void)
 void combat_turn_based_end(void)
 {
     ObjectNode* node;
+    int index;
 
     combat_debug(OBJ_HANDLE_NULL, "TB End");
 
     if (combat_turn_based_active) {
         combat_turn_based_active = false;
-        // CE (card TB1): no group outlives its fight.
+        // CE (card TB1): no group outlives its fight, and nor do its members'
+        // actions. Stock ends a fight with one NPC acting; a member's attack
+        // queued before the player died swung after, put the dead player
+        // back in combat mode and restarted turn-based (2026-11-05).
+        if (!in_combat_reset) {
+            for (index = 0; index < combat_group_count; index++) {
+                if (obj_handle_is_valid(combat_group[index].obj)) {
+                    anim_interrupt_all_goals_of_obj(combat_group[index].obj, 3, 0, 1);
+                }
+            }
+        }
         combat_group_count = 0;
         combat_round_acted_count = 0;
 
