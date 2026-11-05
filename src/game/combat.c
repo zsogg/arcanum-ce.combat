@@ -4432,7 +4432,15 @@ void combat_turn_based_npc_turn(int64_t obj)
     if (combat_turn_based_is_acting(obj)
         && !player_is_pc_obj(obj)
         && !gamelib_in_load()) {
-        if (object_script_execute(obj, obj, OBJ_HANDLE_NULL, SAP_HEARTBEAT, 0) == 1) {
+        CombatGroupMember* member = combat_group_member(obj);
+
+        // A group member with no points left is done. Stock prompts one
+        // critter once more at 0, its action is refused and the refusal
+        // hands the turn on; a member keeps acting until the whole group
+        // ends, so the refusal would only prompt it again, every frame
+        // (the bench's first run, 2026-11-05).
+        if ((member == NULL || member->action_points > 0)
+            && object_script_execute(obj, obj, OBJ_HANDLE_NULL, SAP_HEARTBEAT, 0) == 1) {
             ai_process(obj);
         }
 
