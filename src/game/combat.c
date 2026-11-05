@@ -249,12 +249,22 @@ typedef struct CombatGroupMember {
     bool seen;
     // Stalled: its points are burnt at the next turn-based time event.
     bool stalled;
+    // Its turn was ended (a refused action, a stun, a knockdown): finished,
+    // whatever it is still animating, as stock moves on at once then.
+    bool ended;
 } CombatGroupMember;
 
 // The demonstration battle puts sixty guards on one side.
 #define COMBAT_GROUP_MAX 128
 static CombatGroupMember combat_group[COMBAT_GROUP_MAX];
 static int combat_group_count;
+// The watchdog: turn-based time events in a row in which no member spent a
+// point or finished. A group can wait on nothing for ever only through a
+// case nobody foresaw - two were found by chaos on 2026-11-05 - and a hung
+// turn freezes the player's game, so past the limit the group ends.
+#define COMBAT_GROUP_QUIET_LIMIT 100
+static int combat_group_quiet_ticks;
+static int combat_group_progress;
 // Every critter whose turn has come round this round under the switch, taken
 // in a group or alone: the walk passes them by, so a member pulled forward
 // into a group is not reached again in its own place, and a re-sort mid-round
@@ -5514,7 +5524,10 @@ static void combat_turn_based_turn_over(int64_t obj)
 {
     // A group member is done; the group ends when all are, from the
     // turn-based time event this asks for.
-    if (combat_group_member(obj) != NULL) {
+    CombatGroupMember* member = combat_group_member(obj);
+
+    if (member != NULL) {
+        member->ended = true;
         combat_turn_based_anims_complete();
         return;
     }
@@ -6089,11 +6102,11 @@ ObjectNode* combat_group_run_end(ObjectNode* leader, bool (*joins)(int64_t obj))
     return tail;
 }
 
-// Whether a member is done: gone or dead, or its points spent and nothing
-// left animating. Pure, for the suite.
-bool combat_group_member_finished(bool gone, int action_points, bool idle)
+// Whether a member is done: gone or dead, its turn ended by the engine, or
+// its points spent and nothing left animating. Pure, for the suite.
+bool combat_group_member_finished(bool gone, bool ended, int action_points, bool idle)
 {
-    return gone || (action_points <= 0 && idle);
+    return gone || ended || (action_points <= 0 && idle);
 }
 
 // The stall rule, per member, at each moment every animation has finished:
@@ -6132,6 +6145,7 @@ bool combat_group_add(int64_t obj, int action_points)
     member->last_action_points = 0;
     member->seen = false;
     member->stalled = false;
+    member->ended = false;
     return true;
 }
 
@@ -6260,6 +6274,8 @@ static bool combat_group_turn_start(void)
     }
 
     tig_debug_printf("Combat: group turn: %d member(s)\n", combat_group_count);
+    combat_group_quiet_ticks = 0;
+    combat_group_progress = -1;
 
     // What `combat_turn_based_whos_turn_set` does once for a turn: the last
     // NPC's goals stop, and the player's bar shows nobody's points.
@@ -6383,11 +6399,13 @@ static void combat_group_tick(void)
 {
     CombatGroupMember* member;
     bool finished = true;
+    int progress = 0;
     int index;
 
     for (index = 0; index < combat_group_count && combat_turn_based_active; index++) {
         member = &(combat_group[index]);
         if (combat_group_member_gone(member)) {
+            progress += 1000;
             continue;
         }
 
@@ -6396,7 +6414,9 @@ static void combat_group_tick(void)
             if (member->action_points > 0) {
                 combat_consume_action_points(member->obj, member->action_points);
             }
-        } else if (member->action_points > 0 && combat_group_member_idle(member->obj)) {
+        } else if (!member->ended
+            && member->action_points > 0
+            && combat_group_member_idle(member->obj)) {
             combat_turn_based_npc_turn(member->obj);
         }
 
@@ -6405,10 +6425,25 @@ static void combat_group_tick(void)
             return;
         }
 
-        if (!combat_group_member_finished(combat_group_member_gone(member),
+        if (combat_group_member_finished(combat_group_member_gone(member),
+                member->ended,
                 member->action_points,
                 combat_group_member_idle(member->obj))) {
+            progress += 1000;
+        } else {
             finished = false;
+            progress += member->action_points;
+        }
+    }
+
+    if (!finished && combat_turn_based_active && combat_group_count != 0) {
+        if (progress != combat_group_progress) {
+            combat_group_progress = progress;
+            combat_group_quiet_ticks = 0;
+        } else if (++combat_group_quiet_ticks >= COMBAT_GROUP_QUIET_LIMIT) {
+            tig_debug_printf("Combat: group turn: no progress in %d time events, ended\n",
+                COMBAT_GROUP_QUIET_LIMIT);
+            finished = true;
         }
     }
 

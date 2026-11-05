@@ -118,12 +118,15 @@ TEST(in_an_ambush_s_opening_nobody_is_pulled_past_the_party)
     }
 }
 
-TEST(a_member_is_finished_when_spent_and_idle_or_gone)
+TEST(a_member_is_finished_when_spent_and_idle_ended_or_gone)
 {
-    CHECK(combat_group_member_finished(false, 0, true));
-    CHECK(!combat_group_member_finished(false, 0, false)); // its last swing still falls
-    CHECK(!combat_group_member_finished(false, 3, true)); // points left
-    CHECK(combat_group_member_finished(true, 5, false)); // dead or gone
+    CHECK(combat_group_member_finished(false, false, 0, true));
+    CHECK(!combat_group_member_finished(false, false, 0, false)); // its last swing still falls
+    CHECK(!combat_group_member_finished(false, false, 3, true)); // points left
+    CHECK(combat_group_member_finished(true, false, 5, false)); // dead or gone
+    // Its turn ended by a stun or a knockdown: done, though it lies there
+    // animating (chaos, 2026-11-05: the group waited on it for ever).
+    CHECK(combat_group_member_finished(false, true, 0, false));
 }
 
 TEST(standing_idle_twice_on_the_same_points_is_a_stall)
@@ -227,7 +230,7 @@ void test_group_turn_suite(void)
     RUN(a_run_already_together_is_left_as_it_is);
     RUN(a_lone_npc_is_a_group_of_one);
     RUN(in_an_ambush_s_opening_nobody_is_pulled_past_the_party);
-    RUN(a_member_is_finished_when_spent_and_idle_or_gone);
+    RUN(a_member_is_finished_when_spent_and_idle_ended_or_gone);
     RUN(standing_idle_twice_on_the_same_points_is_a_stall);
     RUN(each_member_pays_from_its_own_pool_and_others_go_free);
     RUN(with_no_group_only_whose_turn_it_is_acts);
