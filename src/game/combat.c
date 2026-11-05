@@ -108,6 +108,7 @@ static void combat_ambush_order(void);
 static bool combat_in_party(int64_t obj);
 static bool combat_group_turn_start(void);
 static void combat_group_turn_end(void);
+static void combat_group_turn_cut_short(void);
 static void combat_group_anims_complete(void);
 static void combat_group_tick(void);
 static bool combat_round_has_acted(int64_t obj);
@@ -1703,6 +1704,10 @@ void combat_critter_toggle_combat_mode(int64_t obj)
             // start - entering combat buys no early turn (agreed 2026-09-18).
             if (combat_turn_based_active
                 && !feature_enabled(FEATURE_TURN_ORDER_INITIATIVE)) {
+                // CE (card TB1): the hand-over cuts the NPC turn running
+                // short; a group turn is cut short whole, so the player's
+                // opening turn is the original's.
+                combat_group_turn_cut_short();
                 combat_turn_based_whos_turn_set(obj);
             }
         }
@@ -6321,6 +6326,16 @@ static void combat_group_turn_end(void)
         if (member->obj != combat_whos_turn_obj) {
             anim_interrupt_all_goals_of_obj(member->obj, 3, 0, 1);
         }
+    }
+}
+
+// The player entering combat mode is handed the turn at once, whatever NPC's
+// turn is running (`combat_critter_toggle_combat_mode`): a group's ends whole.
+static void combat_group_turn_cut_short(void)
+{
+    if (combat_group_count != 0) {
+        tig_debug_printf("Combat: group turn: cut short by the player's hand-over\n");
+        combat_group_turn_end();
     }
 }
 
