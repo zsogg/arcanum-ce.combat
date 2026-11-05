@@ -6076,6 +6076,19 @@ ObjectNode* combat_group_pull_forward(ObjectNode* leader, bool (*joins)(int64_t 
     return tail;
 }
 
+// The run of nodes after `leader` that `joins` accepts, moving nothing:
+// its last node. Pure, for the suite.
+ObjectNode* combat_group_run_end(ObjectNode* leader, bool (*joins)(int64_t obj))
+{
+    ObjectNode* tail = leader;
+
+    while (tail->next != NULL && joins(tail->next->obj)) {
+        tail = tail->next;
+    }
+
+    return tail;
+}
+
 // Whether a member is done: gone or dead, or its points spent and nothing
 // left animating. Pure, for the suite.
 bool combat_group_member_finished(bool gone, int action_points, bool idle)
@@ -6215,7 +6228,14 @@ static bool combat_group_turn_start(void)
     // The walk points the turn at each critter it tests, and the skip test
     // reads it: a stunned critter's stun runs down only on its own turn
     // (`anim_advance_stun_goal`).
-    tail = combat_group_pull_forward(leader, combat_group_joins);
+    //
+    // An ambush's opening round lets at most one critter act before the
+    // party (`ambush safeguard`, which puts the party's best second): there
+    // the group is only the run already behind its first, and nobody is
+    // pulled past the party.
+    tail = combat_ambush_opening && combat_turn_based_turn <= 1
+        ? combat_group_run_end(leader, combat_group_joins)
+        : combat_group_pull_forward(leader, combat_group_joins);
     stop = tail->next;
     for (node = leader->next; node != stop && combat_group_count < COMBAT_GROUP_MAX; node = node->next) {
         bool skipped;

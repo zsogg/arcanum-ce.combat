@@ -102,6 +102,22 @@ TEST(a_lone_npc_is_a_group_of_one)
     CHECK(after[2] == PARTY(2));
 }
 
+TEST(in_an_ambush_s_opening_nobody_is_pulled_past_the_party)
+{
+    // The ambush safeguard's order: one enemy, the party's best, the rest.
+    const int64_t before[5] = { LEADER, NPC(1), PARTY(1), NPC(2), NPC(3) };
+    int64_t after[16];
+    ObjectNode nodes[5];
+    int i;
+
+    chain(nodes, before, 5);
+    CHECK(combat_group_run_end(&nodes[0], joins_npc) == &nodes[1]);
+    CHECK_INT(walk(&nodes[0], after, 16), 5);
+    for (i = 0; i < 5; i++) {
+        CHECK(after[i] == before[i]);
+    }
+}
+
 TEST(a_member_is_finished_when_spent_and_idle_or_gone)
 {
     CHECK(combat_group_member_finished(false, 0, true));
@@ -210,6 +226,7 @@ void test_group_turn_suite(void)
     RUN(later_npcs_are_pulled_up_behind_the_first_in_order);
     RUN(a_run_already_together_is_left_as_it_is);
     RUN(a_lone_npc_is_a_group_of_one);
+    RUN(in_an_ambush_s_opening_nobody_is_pulled_past_the_party);
     RUN(a_member_is_finished_when_spent_and_idle_or_gone);
     RUN(standing_idle_twice_on_the_same_points_is_a_stall);
     RUN(each_member_pays_from_its_own_pool_and_others_go_free);

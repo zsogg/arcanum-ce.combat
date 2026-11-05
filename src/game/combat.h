@@ -138,6 +138,7 @@ int combat_required_action_points_of(int64_t obj);
 // CE (card TB1): the group turn's pure rules and its one entry point for a
 // member, for the suite. See `combat.c`.
 struct ObjectNode* combat_group_pull_forward(struct ObjectNode* leader, bool (*joins)(int64_t obj));
+struct ObjectNode* combat_group_run_end(struct ObjectNode* leader, bool (*joins)(int64_t obj));
 bool combat_group_member_finished(bool gone, int action_points, bool idle);
 bool combat_group_stall_step(int action_points, bool idle, bool* seen, int* last_action_points);
 bool combat_group_add(int64_t obj, int action_points);
