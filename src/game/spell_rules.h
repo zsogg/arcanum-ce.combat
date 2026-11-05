@@ -2,6 +2,7 @@
 #define ARCANUM_GAME_SPELL_RULES_H_
 
 #include <stdbool.h>
+#include <stdint.h>
 
 // CE (magic, milestone MG-1): per-spell rules, read from `rules/spells.mes`,
 // which arcanum-work's `scripts/spell_table.py build` generates from the
@@ -25,6 +26,9 @@
 // `Control: 1`, read under `caster tactics` (combat AI, milestone AI-7;
 // zsogg, 2026-11-02): a disabling spell, the sheet's role `disable`, which an
 // NPC caster keeps off a target already disabled or just recovered.
+// `StunPct: N`, read under `spell stun length` (card AI-7; zsogg,
+// 2026-11-04: "the stun can last maybe 30 to 40% longer"): the stun the
+// spell's own damage gives lasts N percent of the stock length, 100 to 400.
 //
 // Like the weapon table, it changes no game data.
 
@@ -33,6 +37,8 @@
 #define SPELL_RULE_AP_MIN 4
 #define SPELL_RULE_AP_MAX 10
 #define SPELL_RULE_DAMAGE_BONUS_MAX 100
+#define SPELL_RULE_STUN_PERCENT_MIN 100
+#define SPELL_RULE_STUN_PERCENT_MAX 400
 
 typedef enum SpellCritical {
     SPELL_CRITICAL_NONE,
@@ -56,10 +62,13 @@ typedef struct SpellRule {
     bool no_stack;
     // AI-7: `Control: 1`.
     bool control;
+    // AI-7: `StunPct`, 100 when the entry names none.
+    int stun_percent;
 } SpellRule;
 
-// Pure: reads one entry's text - `APCost`, `Critical`, `NoStack` and `Control`,
-// any of them. `NoStack` and `Control` take 0 or 1.
+// Pure: reads one entry's text - `APCost`, `Critical`, `NoStack`, `Control`
+// and `StunPct`, any of them. `NoStack` and `Control` take 0 or 1, `StunPct`
+// 100 to 400.
 // False, with `rule` untouched, for anything else, an AP below 4 or above 10,
 // a damage critical without its bonus or another critical with one - so a bad
 // entry changes nothing rather than a guessed rule.
@@ -86,6 +95,17 @@ bool spell_rules_no_stack(int spell);
 
 // AI-7: whether the table marks the spell as disabling (`Control: 1`).
 bool spell_rules_control(int spell);
+// AI-7: the spell's `StunPct`, 100 when not listed.
+int spell_rules_stun_percent(int spell);
+// AI-7: the spell's damage is about to stun `obj` at `percent` of the stock
+// length; the stun goal takes it as it starts (as a long stun's mark), and
+// the damage path drops one no stun took.
+void spell_rules_mark_stun(int64_t obj, int percent);
+// The marked percent for `obj`, cleared; 100 when `obj` is not marked.
+int spell_rules_take_stun_percent(int64_t obj);
+// Pure: a stun goal's ticks at `percent` of stock, rounded up, so any
+// lengthening of a stun that has ticks adds at least one.
+int spell_rules_stun_ticks(int ticks, int percent);
 // MG-2: a critical's name for `spell.critical` - "stun", "refund" ...
 const char* spell_rules_critical_name(SpellCritical critical);
 

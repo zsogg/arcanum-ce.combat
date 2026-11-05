@@ -111,6 +111,40 @@ TEST(an_entry_reads_a_disabling_spell)
     CHECK(!spell_rule_parse("Control: yes", &rule));
 }
 
+TEST(an_entry_reads_a_longer_stun)
+{
+    SpellRule rule;
+
+    // Card AI-7, zsogg 2026-11-04: the Stun spell's stun, 30 to 40% longer.
+    CHECK(spell_rule_parse("APCost: 4, Critical: Refund, Control: 1, StunPct: 135", &rule));
+    CHECK_INT(rule.stun_percent, 135);
+    CHECK(rule.control);
+    CHECK(spell_rule_parse("APCost: 4", &rule));
+    CHECK_INT(rule.stun_percent, 100);
+    rule.ap = 6;
+    CHECK(!spell_rule_parse("APCost: 4, StunPct: 99", &rule));
+    CHECK(!spell_rule_parse("APCost: 4, StunPct: 401", &rule));
+    CHECK(!spell_rule_parse("APCost: 4, StunPct: long", &rule));
+    CHECK_INT(rule.ap, 6);
+}
+
+TEST(a_longer_stun_rounds_its_ticks_up_and_is_taken_once)
+{
+    // Constitution 9's 5 ticks, each skipped turn taking 3: 135% gives 7, a
+    // third skipped turn's worth. No ticks stay none; 100 is stock.
+    CHECK_INT(spell_rules_stun_ticks(5, 135), 7);
+    CHECK_INT(spell_rules_stun_ticks(6, 135), 9);
+    CHECK_INT(spell_rules_stun_ticks(5, 100), 5);
+    CHECK_INT(spell_rules_stun_ticks(0, 135), 0);
+    CHECK_INT(spell_rules_stun_ticks(-1, 135), -1);
+
+    spell_rules_mark_stun(7, 135);
+    CHECK_INT(spell_rules_take_stun_percent(8), 100);
+    CHECK_INT(spell_rules_take_stun_percent(7), 135);
+    CHECK_INT(spell_rules_take_stun_percent(7), 100);
+    CHECK_INT(spell_rules_take_stun_percent(0), 100);
+}
+
 TEST(a_complete_college_casts_for_one_less_never_below_3)
 {
     // zsogg, 2026-10-10: all five of a college known - 1 AP less, never below 3.
@@ -165,6 +199,8 @@ void test_spell_rules_suite(void)
     RUN(a_malformed_critical_is_refused_whole);
     RUN(an_entry_reads_no_stacking);
     RUN(an_entry_reads_a_disabling_spell);
+    RUN(an_entry_reads_a_longer_stun);
+    RUN(a_longer_stun_rounds_its_ticks_up_and_is_taken_once);
     RUN(a_complete_college_casts_for_one_less_never_below_3);
     RUN(the_aptitude_part_of_scaled_damage_is_30_percent_smaller);
     RUN(a_grenade_blast_falls_off_fast_and_is_critical_only_near_its_centre);

@@ -32,6 +32,7 @@
 #include "game/rt_budget.h"
 #include "game/sfx.h"
 #include "game/skill.h"
+#include "game/spell_rules.h"
 #include "game/stat.h"
 #include "game/teleport.h"
 #include "game/tf.h"
@@ -15248,6 +15249,10 @@ bool anim_goal_animate_stunned(int64_t obj)
     combat_turn_based_end_critter_turn(obj);
 
     goal_data.params[AGDATA_SCRATCH_VAL5].data = (20 - stat_level_get(obj, STAT_CONSTITUTION)) / 2;
+    // CE (`spell stun length`, card AI-7): a spell's `StunPct`, marked by its
+    // damage; the critical's long stun below is added at its own length.
+    goal_data.params[AGDATA_SCRATCH_VAL5].data = spell_rules_stun_ticks(
+        goal_data.params[AGDATA_SCRATCH_VAL5].data, spell_rules_take_stun_percent(obj));
     // CE (magic, milestone MG-2): a spell critical's long stun - one more
     // skipped turn (zsogg, 2026-10-11). Each skipped turn takes 3 off.
     if (crit_effects_take_long_stun(obj)) {

@@ -227,5 +227,10 @@ FEATURE(COMBAT_FEEDBACK, "combat feedback", false)
 // (16), and a group-wide one only from a creature the sheet marks `Specialist`
 // (17).
 FEATURE(CASTER_TACTICS, "caster tactics", false)
+// Card AI-7 (zsogg, 2026-11-04), read by `magictech_process_damage` and
+// `anim_goal_animate_stunned`: a spell whose `rules/spells.mes` entry gives
+// `StunPct` stuns for that percent of the stock length (the Stun spell, 135);
+// a critical's stun and every other stun keep theirs.
+FEATURE(SPELL_STUN_LENGTH, "spell stun length", false)
 
 // clang-format on

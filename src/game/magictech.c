@@ -2837,6 +2837,16 @@ void MTComponentDamage_ProcFunc(void)
             magictech_cur_run_info->spell, victim, dist, type, combat.dam[type], rolled);
     }
 
+    // CE (`spell stun length`, card AI-7; zsogg, 2026-11-04): the stun the
+    // spell's own damage gives - not a critical's - lasts its `StunPct`.
+    // `combat_dmg` starts the stun goal, which takes the mark; one it did not
+    // start (the target already stunned, or knocked down) is dropped below.
+    if (feature_enabled(FEATURE_SPELL_STUN_LENGTH)
+        && (magictech_cur_component->data.damage.damage_flags & CDF_STUN) != 0
+        && spell_rules_stun_percent(magictech_cur_run_info->spell) > 100) {
+        spell_rules_mark_stun(combat.target_obj, spell_rules_stun_percent(magictech_cur_run_info->spell));
+    }
+
     if (magictech_cur_component->data.damage.damage_type < DAMAGE_TYPE_COUNT) {
         if (magictech_cur_run_info->field_144 != 0) {
             if ((combat.dam_flags & CDF_DEATH) == 0) {
@@ -2853,6 +2863,7 @@ void MTComponentDamage_ProcFunc(void)
     } else if (magictech_cur_component->data.damage.damage_type == DAMAGE_TYPE_COUNT) {
         combat_acid_dmg(&combat);
     }
+    spell_rules_take_stun_percent(combat.target_obj);
 
     magictech_scratch_target_flags = obj_field_int32_get(combat.target_obj, OBJ_F_FLAGS);
 

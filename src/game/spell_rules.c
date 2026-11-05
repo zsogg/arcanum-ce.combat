@@ -11,6 +11,10 @@
 // Each spell's rule; `ap` -1 and no critical for one not listed.
 static SpellRule spell_rules_table[SPELL_RULES_COUNT];
 
+// AI-7: the stun a spell's damage is about to start, for the stun goal.
+static int64_t spell_rules_stun_obj;
+static int spell_rules_stun_obj_percent = 100;
+
 static const struct {
     SpellCritical critical;
     const char* word;
@@ -102,6 +106,7 @@ bool spell_rule_parse(const char* str, SpellRule* rule)
     parsed.critical_bonus = 0;
     parsed.no_stack = false;
     parsed.control = false;
+    parsed.stun_percent = 100;
 
     for (part = strtok_r(buffer, ",", &save); part != NULL; part = strtok_r(NULL, ",", &save)) {
         colon = strchr(part, ':');
@@ -133,6 +138,12 @@ bool spell_rule_parse(const char* str, SpellRule* rule)
                 return false;
             }
             parsed.control = value == 1;
+        } else if (strcmp(key, "StunPct") == 0) {
+            if (!ce_parse_int(colon + 1, &value)
+                || value < SPELL_RULE_STUN_PERCENT_MIN || value > SPELL_RULE_STUN_PERCENT_MAX) {
+                return false;
+            }
+            parsed.stun_percent = value;
         } else {
             return false;
         }
@@ -162,7 +173,10 @@ void spell_rules_exit(void)
         spell_rules_table[index].critical_bonus = 0;
         spell_rules_table[index].no_stack = false;
         spell_rules_table[index].control = false;
+        spell_rules_table[index].stun_percent = 100;
     }
+    spell_rules_stun_obj = 0;
+    spell_rules_stun_obj_percent = 100;
 }
 
 void spell_rules_load(void)
@@ -231,6 +245,40 @@ bool spell_rules_no_stack(int spell)
 bool spell_rules_control(int spell)
 {
     return spell >= 0 && spell < SPELL_RULES_COUNT && spell_rules_table[spell].control;
+}
+
+int spell_rules_stun_percent(int spell)
+{
+    return spell >= 0 && spell < SPELL_RULES_COUNT ? spell_rules_table[spell].stun_percent : 100;
+}
+
+void spell_rules_mark_stun(int64_t obj, int percent)
+{
+    spell_rules_stun_obj = obj;
+    spell_rules_stun_obj_percent = percent;
+}
+
+int spell_rules_take_stun_percent(int64_t obj)
+{
+    int percent;
+
+    if (obj == 0 || spell_rules_stun_obj != obj) {
+        return 100;
+    }
+
+    percent = spell_rules_stun_obj_percent;
+    spell_rules_stun_obj = 0;
+    spell_rules_stun_obj_percent = 100;
+    return percent;
+}
+
+int spell_rules_stun_ticks(int ticks, int percent)
+{
+    if (ticks <= 0) {
+        return ticks;
+    }
+
+    return (ticks * percent + 99) / 100;
 }
 
 const char* spell_rules_critical_name(SpellCritical critical)
