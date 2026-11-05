@@ -114,6 +114,7 @@ void test_module_paths_suite(void);
 #if ARCANUM_TESTS_GNU_LINK
 void test_ai_memo_suite(void);
 void test_combat_order_suite(void);
+void test_group_turn_suite(void);
 void test_turn_reached_suite(void);
 void test_proto_suite(void);
 void test_text_filter_suite(void);
@@ -234,6 +235,7 @@ int main(void)
 #if ARCANUM_TESTS_GNU_LINK
     test_ai_memo_suite();
     test_combat_order_suite();
+    test_group_turn_suite();
     test_turn_reached_suite();
     test_proto_suite();
     test_text_filter_suite();

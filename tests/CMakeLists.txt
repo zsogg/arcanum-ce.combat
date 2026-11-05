@@ -131,6 +131,7 @@ target_sources(arcanum-tests PRIVATE
     "test_save_bounds.c"
     "test_ai_memo.c"
     "test_combat_order.c"
+    "test_group_turn.c"
     "test_turn_reached.c"
     "test_compare_fixes.c"
     "test_dialog_conditions.c"
@@ -680,12 +681,19 @@ set(COMBAT_TEST_STATICS
     combat_order_summons
     combat_process_crit_hit
     combat_turn_based_critter_skip
+    combat_round_has_acted
+    combat_round_mark_acted
 )
+# The group turn's pools (card TB1, `test_group_turn.c`).
 set(COMBAT_TEST_DATA
     combat_critter_list
     combat_whos_turn_node
     combat_turn_based_active
     combat_fumble_falls
+    combat_action_points
+    combat_required_action_points
+    combat_group_count
+    combat_round_acted_count
 )
 set(COMBAT_TEST_OBJ "${CMAKE_CURRENT_BINARY_DIR}/combat_test_globalized.o")
 set(_combat_test_globalize_args "")

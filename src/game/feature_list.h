@@ -232,5 +232,11 @@ FEATURE(CASTER_TACTICS, "caster tactics", false)
 // `StunPct` stuns for that percent of the stock length (the Stun spell, 135);
 // a critical's stun and every other stun keep theirs.
 FEATURE(SPELL_STUN_LENGTH, "spell stun length", false)
+// Simultaneous Turns (card TB1; zsogg, 2026-11-05), read by `combat.c`'s turn
+// loop: in a turn-based round the NPC side - everyone outside the player's
+// party - takes one group turn together, each member with its own action
+// points, at the slot of the first of them the round reaches. The party keeps
+// its own turns.
+FEATURE(SIMULTANEOUS_NPC_TURNS, "simultaneous npc turns", false)
 
 // clang-format on

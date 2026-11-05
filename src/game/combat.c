@@ -105,6 +105,13 @@ static void combat_opening_end(void);
 static void combat_initiative_clear(void);
 static void combat_initiative_sort(void);
 static void combat_ambush_order(void);
+static bool combat_in_party(int64_t obj);
+static bool combat_group_turn_start(void);
+static void combat_group_turn_end(void);
+static void combat_group_anims_complete(void);
+static void combat_group_tick(void);
+static bool combat_round_has_acted(int64_t obj);
+static void combat_round_mark_acted(int64_t obj);
 static void pc_switch_weapon(int64_t pc_obj, int64_t target_obj);
 
 // CE (reload prototype session 2): the weapon that last left the player's
@@ -239,12 +246,21 @@ typedef struct CombatGroupMember {
     // `combat_turn_stalled`, kept per member.
     int last_action_points;
     bool seen;
-    bool done;
+    // Stalled: its points are burnt at the next turn-based time event.
+    bool stalled;
 } CombatGroupMember;
 
-#define COMBAT_GROUP_MAX 64
+// The demonstration battle puts sixty guards on one side.
+#define COMBAT_GROUP_MAX 128
 static CombatGroupMember combat_group[COMBAT_GROUP_MAX];
 static int combat_group_count;
+// Every critter whose turn has come round this round under the switch, taken
+// in a group or alone: the walk passes them by, so a member pulled forward
+// into a group is not reached again in its own place, and a re-sort mid-round
+// (`combat_turn_based_add_critter`) cannot give anyone a second turn.
+#define COMBAT_ROUND_ACTED_MAX 256
+static int64_t combat_round_acted[COMBAT_ROUND_ACTED_MAX];
+static int combat_round_acted_count;
 
 // 0x5FC234
 static int combat_action_points;
@@ -4321,6 +4337,14 @@ void combat_turn_based_whos_turn_set(int64_t obj)
         return;
     }
 
+    // CE (card TB1): no turn is handed over during a group turn - an NPC
+    // joining the fight hands it to its target in stock (`ai_start_attacking`);
+    // the target's turn comes in its order.
+    if (combat_group_count != 0) {
+        combat_debug(obj, "Group Turn: Hand-Over Refused");
+        return;
+    }
+
     combat_debug(obj, "Whos Turn Set");
 
     // CE (opening safeguard): the player handed the turn - entering combat
@@ -4439,7 +4463,10 @@ void combat_turn_based_anims_complete(void)
         return;
     }
 
-    if (combat_whos_turn_node != NULL) {
+    // CE (card TB1): a group turn keeps its stall rule per member.
+    if (combat_group_count != 0) {
+        combat_group_anims_complete();
+    } else if (combat_whos_turn_node != NULL) {
         if (player_is_pc_obj(combat_whos_turn_node->obj) && combat_action_points > 0) {
             return;
         }
@@ -4469,6 +4496,12 @@ bool combat_tb_timeevent_process(TimeEvent* timeevent)
     combat_debug(OBJ_HANDLE_NULL, "TimeEvent Process");
 
     if (combat_turn_based_active) {
+        // CE (card TB1): a group turn ends when every member is done.
+        if (combat_group_count != 0) {
+            combat_group_tick();
+            return true;
+        }
+
         if (combat_whos_turn_node != NULL
             && player_is_pc_obj(combat_whos_turn_node->obj)
             && combat_action_points > 0) {
@@ -4505,6 +4538,9 @@ bool combat_turn_based_start(void)
     }
 
     combat_turn_based_turn = 0;
+    // CE (card TB1): a new fight has no group and nobody has acted.
+    combat_group_count = 0;
+    combat_round_acted_count = 0;
     // CE (`turn order initiative`): a new fight rolls initiative anew.
     combat_initiative_clear();
     // CE (`ambush safeguard`): an ambush marked lately makes this fight's
@@ -4569,6 +4605,9 @@ void combat_turn_based_end(void)
 
     if (combat_turn_based_active) {
         combat_turn_based_active = false;
+        // CE (card TB1): no group outlives its fight.
+        combat_group_count = 0;
+        combat_round_acted_count = 0;
 
         anim_all_goals_finished_callback_set(NULL);
 
@@ -4608,6 +4647,8 @@ bool combat_turn_based_begin_turn(void)
 
     sort_combat_list();
     combat_summons_round_began();
+    // CE (card TB1): a new round; nobody's turn has come round yet.
+    combat_round_acted_count = 0;
     // CE (opening safeguard): the opening is the first round only.
     if (combat_turn_based_turn > 1) {
         combat_opening_end();
@@ -4655,6 +4696,12 @@ bool combat_turn_based_begin_turn(void)
 bool combat_turn_based_critter_skip(ObjectNode* object_node)
 {
     if (combat_whos_turn_node == NULL) {
+        return true;
+    }
+
+    // CE (card TB1): its turn came round already this round, in a group or
+    // alone; passed by with nothing its turn coming round does.
+    if (combat_round_has_acted(object_node->obj)) {
         return true;
     }
 
@@ -4710,6 +4757,13 @@ bool combat_turn_based_critter_skip(ObjectNode* object_node)
 void combat_turn_based_subturn_start(void)
 {
     if (combat_whos_turn_node != NULL) {
+        // CE (card TB1): the NPC side's first critter able to act opens a
+        // group turn for the whole side.
+        if (combat_group_turn_start()) {
+            return;
+        }
+        combat_round_mark_acted(combat_whos_turn_node->obj);
+
         combat_debug(combat_whos_turn_node->obj, "SubTurn Start");
         combat_turn_based_whos_turn_set(combat_whos_turn_node->obj);
         combat_check_action_points(combat_whos_turn_node->obj, 0);
@@ -4749,7 +4803,13 @@ void combat_turn_based_next_subturn(void)
     combat_debug(combat_whos_turn_node->obj, "Next SubTurn");
 
     combat_turn_index++;
-    combat_turn_based_subturn_end();
+    // CE (card TB1): a group turn ends for every member; the walk goes on
+    // from the group's first, passing the members by.
+    if (combat_group_count != 0) {
+        combat_group_turn_end();
+    } else {
+        combat_turn_based_subturn_end();
+    }
 
     combat_whos_turn_node = combat_whos_turn_node->next;
     if (combat_whos_turn_node == NULL) {
@@ -5439,7 +5499,12 @@ int combat_throw_cost_for(bool local_pc)
 // turn: the round moves on.
 static void combat_turn_based_turn_over(int64_t obj)
 {
-    (void)obj;
+    // A group member is done; the group ends when all are, from the
+    // turn-based time event this asks for.
+    if (combat_group_member(obj) != NULL) {
+        combat_turn_based_anims_complete();
+        return;
+    }
 
     combat_turn_based_next_subturn();
 }
@@ -5943,6 +6008,370 @@ static void combat_opening_end(void)
     combat_opening_active = false;
     combat_opening_enemy = OBJ_HANDLE_NULL;
     combat_opening_held_count = 0;
+}
+
+// CE (`simultaneous npc turns`, card TB1; zsogg, 2026-11-05): the group turn.
+//
+// When the round reaches the first critter of the NPC side - anyone outside
+// the player's party (`combat_in_party`) - able to act, every other NPC-side
+// critter later in the round's list whose turn has not come round is pulled
+// up behind it, and the whole run of them is reached at once: each that the
+// stock skip test lets act becomes a member with its own action points, and
+// all members' AI is prompted together. Their animations then run as a
+// real-time fight's do; each member's goals re-prompt it as they end, as one
+// NPC's do in stock. The group ends from the turn-based time event once every
+// member has spent its points and stands idle, and the round walks on from
+// the group's first critter, passing the members by. The party keeps its own
+// turns, in its own places.
+
+// Whether a critter at `obj` belongs with the group being gathered.
+static bool combat_group_joins(int64_t obj)
+{
+    return !player_is_pc_obj(obj)
+        && !combat_in_party(obj)
+        && !combat_round_has_acted(obj);
+}
+
+// Moves every node after `leader` that `joins` accepts up behind `leader`, in
+// list order, so the group is one run of nodes from `leader`; the rest keep
+// their order. Returns the run's last node. Pure list surgery, for the suite.
+ObjectNode* combat_group_pull_forward(ObjectNode* leader, bool (*joins)(int64_t obj))
+{
+    ObjectNode* tail = leader;
+    ObjectNode* prev = leader;
+    ObjectNode* node = leader->next;
+    ObjectNode* next;
+
+    while (node != NULL) {
+        next = node->next;
+        if (joins(node->obj)) {
+            if (prev == tail) {
+                tail = node;
+                prev = node;
+            } else {
+                prev->next = next;
+                node->next = tail->next;
+                tail->next = node;
+                tail = node;
+            }
+        } else {
+            prev = node;
+        }
+        node = next;
+    }
+
+    return tail;
+}
+
+// Whether a member is done: gone or dead, or its points spent and nothing
+// left animating. Pure, for the suite.
+bool combat_group_member_finished(bool gone, int action_points, bool idle)
+{
+    return gone || (action_points <= 0 && idle);
+}
+
+// The stall rule, per member, at each moment every animation has finished:
+// standing idle with points it has not spent since the last such moment, it
+// is stalled, and the time event burns them - the single turn's rule
+// (`combat_turn_stalled`). Pure, for the suite.
+bool combat_group_stall_step(int action_points, bool idle, bool* seen, int* last_action_points)
+{
+    if (!idle || action_points <= 0) {
+        return false;
+    }
+
+    if (*seen && *last_action_points == action_points) {
+        return true;
+    }
+
+    *seen = true;
+    *last_action_points = action_points;
+    return false;
+}
+
+// A member with these action points for its turn; false when the group is
+// full. Its points are its own from here (`combat_ap_slot`).
+bool combat_group_add(int64_t obj, int action_points)
+{
+    CombatGroupMember* member;
+
+    if (combat_group_count >= COMBAT_GROUP_MAX) {
+        return false;
+    }
+
+    member = &(combat_group[combat_group_count++]);
+    member->obj = obj;
+    member->action_points = action_points;
+    member->required_action_points = 0;
+    member->last_action_points = 0;
+    member->seen = false;
+    member->stalled = false;
+    return true;
+}
+
+// The points a critter's turn grants, as `combat_turn_based_whos_turn_set`
+// gives them: a Staggered critter's are halved.
+static int combat_turn_action_points(int64_t obj)
+{
+    return crit_effects_turn_action_points(obj, combat_action_points_per_turn(obj));
+}
+
+static bool combat_round_has_acted(int64_t obj)
+{
+    int index;
+
+    for (index = 0; index < combat_round_acted_count; index++) {
+        if (combat_round_acted[index] == obj) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+static void combat_round_mark_acted(int64_t obj)
+{
+    if (feature_enabled(FEATURE_SIMULTANEOUS_NPC_TURNS)
+        && combat_round_acted_count < COMBAT_ROUND_ACTED_MAX
+        && !combat_round_has_acted(obj)) {
+        combat_round_acted[combat_round_acted_count++] = obj;
+    }
+}
+
+// Idle as a turn's end counts it: no animation, or only the fidget that a
+// critter standing still plays (`combat_ui_actor_ready`).
+static bool combat_group_member_idle(int64_t obj)
+{
+    AnimID curr_anim_id;
+    AnimID fidget_anim_id;
+
+    if (!anim_is_busy(obj, &curr_anim_id)) {
+        return true;
+    }
+
+    return anim_is_current_goal_type(obj, AG_ANIM_FIDGET, &fidget_anim_id)
+        && anim_id_is_equal(&curr_anim_id, &fidget_anim_id);
+}
+
+static bool combat_group_member_gone(CombatGroupMember* member)
+{
+    return !obj_handle_is_valid(member->obj) || critter_is_dead(member->obj);
+}
+
+static bool combat_opening_is_held(int64_t obj)
+{
+    int index;
+
+    for (index = 0; index < combat_opening_held_count; index++) {
+        if (combat_opening_held[index] == obj) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+// Opens a group turn at `combat_whos_turn_node`, an NPC-side critter able to
+// act, when the switch is on; false, changing nothing, otherwise.
+static bool combat_group_turn_start(void)
+{
+    ObjectNode* leader = combat_whos_turn_node;
+    ObjectNode* tail;
+    ObjectNode* stop;
+    ObjectNode* node;
+    CombatGroupMember* member;
+    char actor[COMBAT_OBSERVER_IDENTITY_SIZE];
+    int index;
+
+    if (!feature_enabled(FEATURE_SIMULTANEOUS_NPC_TURNS)
+        || combat_group_count != 0
+        || gamelib_in_load()
+        || leader == NULL
+        || player_is_pc_obj(leader->obj)
+        || combat_in_party(leader->obj)) {
+        return false;
+    }
+
+    // The leader's turn came round already (the walk's skip test passed it).
+    combat_group_add(leader->obj, combat_turn_action_points(leader->obj));
+    combat_round_mark_acted(leader->obj);
+
+    // The rest of the NPC side, pulled up behind it and reached in order: as
+    // the walk reaches a critter, its turn comes round - poison, a summon's
+    // readiness, the opening safeguard - taken or skipped.
+    // The walk points the turn at each critter it tests, and the skip test
+    // reads it: a stunned critter's stun runs down only on its own turn
+    // (`anim_advance_stun_goal`).
+    tail = combat_group_pull_forward(leader, combat_group_joins);
+    stop = tail->next;
+    for (node = leader->next; node != stop && combat_group_count < COMBAT_GROUP_MAX; node = node->next) {
+        bool skipped;
+
+        combat_whos_turn_node = node;
+        skipped = combat_turn_based_critter_skip(node);
+        if (!combat_turn_based_active) {
+            // A poison tick ended the encounter, and freed the list.
+            combat_whos_turn_node = NULL;
+            combat_group_count = 0;
+            return true;
+        }
+        combat_whos_turn_node = leader;
+
+        if (!skipped) {
+            combat_group_add(node->obj, combat_turn_action_points(node->obj));
+            combat_round_mark_acted(node->obj);
+        } else if (!combat_opening_is_held(node->obj)) {
+            // Skipped: its turn has come round, for this round.
+            combat_round_mark_acted(node->obj);
+        }
+    }
+
+    tig_debug_printf("Combat: group turn: %d member(s)\n", combat_group_count);
+
+    // What `combat_turn_based_whos_turn_set` does once for a turn: the last
+    // NPC's goals stop, and the player's bar shows nobody's points.
+    if (!player_is_local_pc_obj(combat_whos_turn_obj)) {
+        anim_interrupt_all_goals_of_obj(combat_whos_turn_obj, 3, 0, 1);
+    }
+    combat_action_points = 0;
+    combat_callbacks.field_C(0);
+    ci_update();
+
+    // And per member: the turn started.
+    for (index = 0; index < combat_group_count; index++) {
+        member = &(combat_group[index]);
+        combat_debug(member->obj, "Group Turn Member");
+        if (combat_observer_is_enabled()) {
+            combat_observer_object_id(member->obj, actor);
+            combat_observer_turn_started(actor, member->action_points);
+            combat_observer_snapshot_obj(member->obj);
+        }
+    }
+
+    combat_whos_turn_obj = leader->obj;
+
+    // Every member's AI, prompted together; what `subturn_start` does after.
+    // A member's prompt can kill or disable another, or end the fight.
+    for (index = 0; index < combat_group_count && combat_turn_based_active; index++) {
+        int64_t obj = combat_group[index].obj;
+
+        if (!obj_handle_is_valid(obj)) {
+            continue;
+        }
+        combat_turn_based_npc_turn(obj);
+        combat_check_action_points(obj, 0);
+        crit_guard_turn_started(obj);
+        crit_effects_turn_started(obj);
+    }
+
+    if (ci_lock_count()) {
+        ci_unlock();
+    }
+
+    if (combat_turn_based_active && combat_callbacks.field_10 != NULL) {
+        combat_callbacks.field_10(leader->obj);
+    }
+
+    return true;
+}
+
+// Each member's turn ends, as `combat_turn_based_subturn_end` ends one turn,
+// and its goals stop, as the next turn's `whos_turn_set` stops the last NPC's.
+// `combat_whos_turn_node` stays the group's first.
+static void combat_group_turn_end(void)
+{
+    CombatGroupMember* member;
+    char actor[COMBAT_OBSERVER_IDENTITY_SIZE];
+    char* name;
+    int count = combat_group_count;
+    int index;
+
+    // Nobody is a member from here, so nothing below acts for one.
+    combat_group_count = 0;
+
+    for (index = 0; index < count; index++) {
+        member = &(combat_group[index]);
+        if (!obj_handle_is_valid(member->obj)) {
+            continue;
+        }
+
+        name = NULL;
+        obj_field_string_get(member->obj, OBJ_F_NAME, &name);
+        tig_debug_printf("Combat: group turn: %s done, %d AP left\n",
+            name != NULL ? name : " ", member->action_points);
+        if (name != NULL) {
+            FREE(name);
+        }
+
+        crit_guard_turn_ended(member->obj);
+        crit_effects_turn_ended(member->obj);
+        if (combat_observer_is_enabled()) {
+            combat_observer_object_id(member->obj, actor);
+            combat_observer_turn_ended(actor, member->action_points);
+        }
+        object_script_execute(member->obj, member->obj, OBJ_HANDLE_NULL, SAP_END_COMBAT, 0);
+        if (member->obj != combat_whos_turn_obj) {
+            anim_interrupt_all_goals_of_obj(member->obj, 3, 0, 1);
+        }
+    }
+}
+
+// Every animation has finished, or a member has gone idle: the stall rule.
+static void combat_group_anims_complete(void)
+{
+    int index;
+
+    for (index = 0; index < combat_group_count; index++) {
+        CombatGroupMember* member = &(combat_group[index]);
+
+        if (!combat_group_member_gone(member)
+            && combat_group_stall_step(member->action_points,
+                combat_group_member_idle(member->obj),
+                &(member->seen), &(member->last_action_points))) {
+            member->stalled = true;
+        }
+    }
+}
+
+// The turn-based time event during a group turn: stalled members' points are
+// burnt, a member standing idle with points left is prompted again, and when
+// every member is finished the round moves on.
+static void combat_group_tick(void)
+{
+    CombatGroupMember* member;
+    bool finished = true;
+    int index;
+
+    for (index = 0; index < combat_group_count && combat_turn_based_active; index++) {
+        member = &(combat_group[index]);
+        if (combat_group_member_gone(member)) {
+            continue;
+        }
+
+        if (member->stalled) {
+            member->stalled = false;
+            if (member->action_points > 0) {
+                combat_consume_action_points(member->obj, member->action_points);
+            }
+        } else if (member->action_points > 0 && combat_group_member_idle(member->obj)) {
+            combat_turn_based_npc_turn(member->obj);
+        }
+
+        // The prompt may have ended the fight, or the group.
+        if (combat_group_count == 0) {
+            return;
+        }
+
+        if (!combat_group_member_finished(combat_group_member_gone(member),
+                member->action_points,
+                combat_group_member_idle(member->obj))) {
+            finished = false;
+        }
+    }
+
+    if (finished && combat_turn_based_active && combat_group_count != 0) {
+        combat_turn_based_next_subturn();
+    }
 }
 
 // 0x4B7EB0
