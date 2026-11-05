@@ -369,6 +369,11 @@ bool magictech_spell_reaches_others(int magictech);
 // area (an object radius or a cone at its start), and whether that area is
 // centred on the caster rather than the target; -1 when it takes no area.
 int magictech_area_radius(int magictech, bool* caster_centred);
+// CE (combat AI, `ai spellcasting`, 2026-11-04): whether a cast of a spell
+// from `source_obj` (the caster, or the item cast from) may take `target_obj`
+// by the spell's begin targets - Dominate Will never the player - as the
+// cast's own check decides it. True for a spell that may fall back to a tile.
+bool magictech_spell_can_target(int64_t source_obj, int64_t target_obj, int magictech);
 // CE (`grenade blasts`): the `ai_attack` flags for a spell or blast hit; 0x01,
 // accidental, between members of one party.
 int magictech_attack_flags(int64_t attacker_obj, int64_t target_obj);

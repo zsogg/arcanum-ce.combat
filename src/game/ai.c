@@ -5752,6 +5752,15 @@ int ai_check_use_spell(int64_t attacker_obj, int64_t item_obj, int64_t target_ob
         }
     }
 
+    // CE (combat AI, `ai spellcasting`, 2026-11-04): a spell whose targets
+    // exclude this one - Dominate Will at the player - which the cast would
+    // refuse, losing the turn-based turn (zsogg's Mental-mage playtest).
+    if (feature_enabled(FEATURE_AI_SPELLCASTING)
+        && target_obj != OBJ_HANDLE_NULL
+        && !magictech_spell_can_target(item_obj != OBJ_HANDLE_NULL ? item_obj : attacker_obj, target_obj, spell)) {
+        return 18;
+    }
+
     if (feature_enabled(FEATURE_SPELL_COSTS)
         && combat_turn_based_is_active()
         && combat_turn_based_whos_turn_get() == attacker_obj

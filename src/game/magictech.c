@@ -1669,6 +1669,38 @@ int magictech_area_radius(int magictech, bool* caster_centred)
     return params->radius;
 }
 
+// CE (combat AI, `ai spellcasting`, 2026-11-04): see `magictech.h`. The
+// first test `magictech_invocation_check` makes, as the AI's cast sets it up.
+bool magictech_spell_can_target(int64_t source_obj, int64_t target_obj, int magictech)
+{
+    TargetParams target_params;
+    TargetContext target_ctx;
+
+    if (magictech_spells == NULL || magictech < 0 || magictech >= MT_SPELL_COUNT || target_obj == OBJ_HANDLE_NULL) {
+        return true;
+    }
+
+    target_params_init(&target_params);
+    target_params.tgt = magictech_spells[magictech].target_params[MAGICTECH_ACTION_BEGIN].tgt;
+    target_params.radius = 2;
+
+    // The cast falls back to a tile near the target, which this does not try.
+    if ((target_params.tgt & TGT_TILE) != 0) {
+        return true;
+    }
+
+    target_context_init(&target_ctx, NULL, source_obj);
+    target_ctx.orig_target_loc = 0;
+    target_ctx.target_loc = 0;
+    target_ctx.source_loc = source_obj != OBJ_HANDLE_NULL ? obj_field_int64_get(source_obj, OBJ_F_LOCATION) : 0;
+    target_ctx.orig_target_obj = target_obj;
+    target_ctx.target_obj = target_obj;
+    target_ctx.summoned_obj = OBJ_HANDLE_NULL;
+    target_ctx.params = &target_params;
+
+    return target_context_evaluate(&target_ctx);
+}
+
 // 0x4502E0
 int magictech_min_intelligence(int magictech)
 {

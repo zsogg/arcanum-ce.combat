@@ -142,9 +142,51 @@ TEST(a_likely_to_fail_refusal_takes_two_bad_estimates_under_spellcasting)
     feature_clear_overrides();
 }
 
+// A spell that cannot take the player, as Dominate Will's `Tgt_Obj_No_T_PC`
+// (zsogg's Mental-mage playtest, 2026-11-04): the cast refused it and the
+// mage lost its turn-based turn. Under `ai spellcasting` the AI refuses it
+// first (18); an NPC target is weighed as before, and stock is unchanged.
+#define NOT_THE_PLAYER_SPELL 39
+
+TEST(a_spell_that_cannot_take_its_target_is_refused_under_spellcasting)
+{
+    int64_t caster = obj_harness_create_proto(OBJ_TYPE_NPC);
+    int64_t player = obj_harness_create_proto(OBJ_TYPE_PC);
+    int64_t npc = obj_harness_create_proto(OBJ_TYPE_NPC);
+    int stock_player;
+    int stock_npc;
+
+    magictech_spells = (MagicTechInfo*)calloc(MT_SPELL_COUNT, sizeof(MagicTechInfo));
+    magictech_spells[NOT_THE_PLAYER_SPELL].target_params[MAGICTECH_ACTION_BEGIN].tgt
+        = TGT_OBJECT | TGT_OBJ_T_CRITTER | TGT_OBJ_NO_T_PC;
+    spell_college_level_set(caster, COLLEGE_FROM_SPELL(NOT_THE_PLAYER_SPELL), 5);
+    stat_base_set(caster, STAT_INTELLIGENCE, 20);
+    stat_base_set(caster, STAT_WILLPOWER, 20);
+
+    feature_override(FEATURE_AI_SPELLCASTING, false);
+    random_seed(20261104);
+    stock_player = ai_check_use_spell(caster, OBJ_HANDLE_NULL, player, NOT_THE_PLAYER_SPELL);
+    random_seed(20261104);
+    stock_npc = ai_check_use_spell(caster, OBJ_HANDLE_NULL, npc, NOT_THE_PLAYER_SPELL);
+    CHECK_INT(stock_player, stock_npc);
+
+    feature_override(FEATURE_AI_SPELLCASTING, true);
+    CHECK_INT(ai_check_use_spell(caster, OBJ_HANDLE_NULL, player, NOT_THE_PLAYER_SPELL), 18);
+    random_seed(20261104);
+    CHECK_INT(ai_check_use_spell(caster, OBJ_HANDLE_NULL, npc, NOT_THE_PLAYER_SPELL), stock_npc);
+
+    obj_harness_destroy(caster);
+    obj_harness_destroy(player);
+    obj_harness_destroy(npc);
+    free(magictech_spells);
+    magictech_spells = NULL;
+    feature_clear_overrides();
+}
+
 void test_ai_memo_suite(void)
 {
     CHECK(obj_harness_init());
     RUN(dead_casters_free_their_desperation_slots);
     RUN(a_likely_to_fail_refusal_takes_two_bad_estimates_under_spellcasting);
+    RUN(a_spell_that_cannot_take_its_target_is_refused_under_spellcasting);
 }
