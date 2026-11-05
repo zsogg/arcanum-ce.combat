@@ -3875,7 +3875,7 @@ bool anim_timeevent_process(TimeEvent* timeevent)
             if ((state_change & ANIM_FLOW_TERMINATE) == ANIM_FLOW_TERMINATE) {
                 run_info->flags |= 0x02;
                 if (combat_turn_based_is_active() && !player_is_local_pc_obj(run_info->anim_obj)) {
-                    combat_consume_action_points(run_info->anim_obj, combat_required_action_points_get());
+                    combat_consume_action_points(run_info->anim_obj, combat_required_action_points_of(run_info->anim_obj));
                 }
 
                 for (int idx = 1; idx <= run_info->current_goal; idx++) {
@@ -3955,7 +3955,7 @@ bool anim_timeevent_process(TimeEvent* timeevent)
         // UAP (0x423B96): call retargeted to UAP's relocated
         // `combat_action_points_get` at 0x4B7774; same getter, no behaviour
         // change.
-        if (combat_action_points_get() > 0) {
+        if (combat_action_points_of(anim_obj) > 0) {
             combat_critter_fidget_restart(anim_obj);
         }
 
@@ -5797,7 +5797,7 @@ bool anim_advance_stun_goal(int64_t obj)
     AnimRunInfo* run_info;
 
     if (combat_turn_based_is_active()
-        && combat_turn_based_whos_turn_get() == obj
+        && combat_turn_based_is_acting(obj)
         && (obj_field_int32_get(obj, OBJ_F_CRITTER_FLAGS) & OCF_STUNNED) != 0
         && anim_is_current_goal_type(obj, AG_ANIMATE_STUNNED, &anim_id)
         && anim_id_to_run_info(&anim_id, &run_info)) {
@@ -9336,7 +9336,7 @@ bool AGperformRotateAnim(AnimRunInfo* run_info)
     }
 
     if (combat_turn_based_is_active()
-        && combat_turn_based_whos_turn_get() != obj) {
+        && !combat_turn_based_is_acting(obj)) {
         return true;
     }
 
@@ -10751,7 +10751,7 @@ bool AGbeginGetUpAnim(AnimRunInfo* run_info)
     // turn and was refused the animation on its own.
     if (combat_turn_based_is_active()
         // CE (real-time session C): the shared cost - the original's 5.
-        && (combat_turn_based_whos_turn_get() != obj || !combat_consume_action_points(obj, combat_get_up_cost(obj)))) {
+        && (!combat_turn_based_is_acting(obj) || !combat_consume_action_points(obj, combat_get_up_cost(obj)))) {
         return false;
     }
     // CE (`weapon fumbles`, card FU1): up, so a later fall is priced afresh.
@@ -10958,7 +10958,7 @@ bool AGbeginAnimMove(AnimRunInfo* run_info)
         // UAP (0x42EB4E, 0x42EBBE): both fast-forward reads of
         // `combat_action_points_get` are retargeted from 0x4B7780 to the
         // relocated copy at 0x4B7774. Same getter, no behaviour change.
-        while (combat_action_points_get() > 0) {
+        while (combat_action_points_of(obj) > 0) {
             if (!anim_spend_move_cost(run_info)) {
                 break;
             }
@@ -14028,7 +14028,7 @@ bool anim_goal_rotate(int64_t obj, int rot)
         return true;
     }
 
-    if (combat_turn_based_is_active() && combat_turn_based_whos_turn_get() != obj) {
+    if (combat_turn_based_is_active() && !combat_turn_based_is_acting(obj)) {
         return true;
     }
 
@@ -14189,7 +14189,7 @@ bool anim_can_start_move_goal(int64_t obj)
 {
     return obj != OBJ_HANDLE_NULL
         && critter_is_active(obj)
-        && (!combat_turn_based_is_active() || combat_turn_based_whos_turn_get() == obj)
+        && (!combat_turn_based_is_active() || combat_turn_based_is_acting(obj))
         && (player_is_pc_obj(obj) || !reaction_current_pc_get(obj));
 }
 
@@ -14693,7 +14693,7 @@ bool anim_can_start_goal(int64_t obj, int action_points)
         return true;
     }
 
-    if (combat_turn_based_whos_turn_get() != obj) {
+    if (!combat_turn_based_is_acting(obj)) {
         return false;
     }
 
@@ -14703,7 +14703,7 @@ bool anim_can_start_goal(int64_t obj, int action_points)
 
     // UAP (0x434935): call retargeted to UAP's relocated
     // `combat_action_points_get` at 0x4B7774; same getter, no behaviour change.
-    if (action_points <= combat_action_points_get()) {
+    if (action_points <= combat_action_points_of(obj)) {
         return true;
     }
 
@@ -15541,7 +15541,7 @@ bool anim_goal_wander(int64_t obj, int64_t tether_loc, int radius)
 
     ASSERT(obj_type_is_critter(obj_type)); // 16513, "obj_type_is_critter(objType)"
 
-    if ((!combat_turn_based_is_active() || combat_turn_based_whos_turn_get() == obj)
+    if ((!combat_turn_based_is_active() || combat_turn_based_is_acting(obj))
         && radius > 0
         && obj_type_is_critter(obj_type)
         && critter_is_active(obj)
@@ -15581,7 +15581,7 @@ bool anim_goal_wander_seek_darkness(int64_t obj, int64_t tether_loc, int radius)
 
     ASSERT(obj_type_is_critter(obj_type)); // 16573, "obj_type_is_critter(objType)"
 
-    if ((!combat_turn_based_is_active() || combat_turn_based_whos_turn_get() == obj)
+    if ((!combat_turn_based_is_active() || combat_turn_based_is_acting(obj))
         && radius > 0
         && obj_type_is_critter(obj_type)
         && critter_is_active(obj)

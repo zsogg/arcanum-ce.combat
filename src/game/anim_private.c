@@ -829,7 +829,7 @@ bool anim_goal_add_func(AnimGoalData* goal_data, AnimID* anim_id, bool a3, unsig
     timeevent.params[2].integer_value = 3333;
     datetime_from_milliseconds(&datetime, 5);
 
-    if (!combat_turn_based_is_active() || combat_turn_based_whos_turn_get() == run_info->anim_obj) {
+    if (!combat_turn_based_is_active() || combat_turn_based_is_acting(run_info->anim_obj)) {
         return timeevent_add_delay(&timeevent, &datetime);
     } else {
         return timeevent_add_immediate(&timeevent);

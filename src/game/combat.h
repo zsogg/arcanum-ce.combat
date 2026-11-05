@@ -128,6 +128,13 @@ bool combat_turn_based_set(bool turn_based);
 void combat_turn_based_toggle(void);
 bool combat_turn_based_is_active(void);
 int64_t combat_turn_based_whos_turn_get(void);
+// CE (`simultaneous npc turns`, card TB1): whether `obj` may act now - whose
+// turn it is, or a member of the running group turn - and the action points
+// it has left and its last check required. With no group turn running, the
+// original's whose-turn test and `combat_action_points_get`.
+bool combat_turn_based_is_acting(int64_t obj);
+int combat_action_points_of(int64_t obj);
+int combat_required_action_points_of(int64_t obj);
 void combat_turn_based_whos_turn_set(int64_t obj);
 void combat_turn_based_npc_turn(int64_t obj);
 bool combat_tb_timeevent_process(TimeEvent* timeevent);

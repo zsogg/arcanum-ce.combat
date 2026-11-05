@@ -854,7 +854,7 @@ bool ai_prepare_to_act(Ai* ai)
         object_script_execute(ai->danger_source, ai->obj, OBJ_HANDLE_NULL, SAP_START_COMBAT, 0);
     }
 
-    if (combat_turn_based_is_active() && combat_turn_based_whos_turn_get() != ai->obj) {
+    if (combat_turn_based_is_active() && !combat_turn_based_is_acting(ai->obj)) {
         return false;
     }
 
@@ -4038,7 +4038,7 @@ bool ai_choose_action_from_list(Ai* ai, S4ABF10* a2)
 // 0x4AC180
 void ai_action_perform(Ai* ai)
 {
-    if (!combat_turn_based_is_active() || combat_turn_based_whos_turn_get() == ai->obj) {
+    if (!combat_turn_based_is_active() || combat_turn_based_is_acting(ai->obj)) {
         if ((obj_field_int32_get(ai->obj, OBJ_F_NPC_FLAGS) & ONF_BACKING_OFF) != 0) {
             ai_observe_decision(ai, "back_off");
             ai_action_perform_baking_off(ai);
@@ -5763,8 +5763,8 @@ int ai_check_use_spell(int64_t attacker_obj, int64_t item_obj, int64_t target_ob
 
     if (feature_enabled(FEATURE_SPELL_COSTS)
         && combat_turn_based_is_active()
-        && combat_turn_based_whos_turn_get() == attacker_obj
-        && combat_spell_cast_cost(attacker_obj, spell, item_obj) > combat_action_points_get()) {
+        && combat_turn_based_is_acting(attacker_obj)
+        && combat_spell_cast_cost(attacker_obj, spell, item_obj) > combat_action_points_of(attacker_obj)) {
         return 9;
     }
 

@@ -5626,7 +5626,7 @@ bool magictech_invocation_check(MagicTechInvocation* mt_invocation)
 
     if (mt_invocation->parent_obj.obj != OBJ_HANDLE_NULL
         && combat_turn_based_is_active()
-        && combat_turn_based_whos_turn_get() != mt_invocation->parent_obj.obj
+        && !combat_turn_based_is_acting(mt_invocation->parent_obj.obj)
         && obj_type_is_critter(obj_field_int32_get(mt_invocation->parent_obj.obj, OBJ_F_TYPE))) {
         return false;
     }

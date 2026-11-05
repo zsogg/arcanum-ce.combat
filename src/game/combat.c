@@ -223,6 +223,29 @@ static int64_t combat_opening_enemy;
 static int64_t combat_opening_held[COMBAT_OPENING_HELD_MAX];
 static int combat_opening_held_count;
 
+// CE (`simultaneous npc turns`, card TB1; zsogg, 2026-11-05): the members of
+// a group turn, the NPC side of a round acting at once. The engine has one
+// pool of action points, `combat_action_points`, for whoever's turn it is;
+// a group turn gives each member its own here. Empty unless the switch is on
+// and a group turn is running, and then every AP function reads the member's
+// own: `combat_ap_slot`.
+typedef struct CombatGroupMember {
+    int64_t obj;
+    int action_points;
+    // What the member's last check required: the charge a goal ending pays
+    // (`anim_timeevent_process`), the single turn's `combat_required_action_points`.
+    int required_action_points;
+    // The stall rule, the single turn's `combat_last_action_points` and
+    // `combat_turn_stalled`, kept per member.
+    int last_action_points;
+    bool seen;
+    bool done;
+} CombatGroupMember;
+
+#define COMBAT_GROUP_MAX 64
+static CombatGroupMember combat_group[COMBAT_GROUP_MAX];
+static int combat_group_count;
+
 // 0x5FC234
 static int combat_action_points;
 
@@ -4187,6 +4210,68 @@ bool combat_turn_based_is_active(void)
     return combat_turn_based_active;
 }
 
+// CE (`simultaneous npc turns`, card TB1): `obj`'s entry in the running
+// group turn, or NULL.
+static CombatGroupMember* combat_group_member(int64_t obj)
+{
+    int index;
+
+    for (index = 0; index < combat_group_count; index++) {
+        if (combat_group[index].obj == obj) {
+            return &(combat_group[index]);
+        }
+    }
+
+    return NULL;
+}
+
+// CE (card TB1): the action points that pay for what `obj` does now - a
+// group member's own, the turn's when it is whose turn it is, and none
+// otherwise. None is the stock answer for anyone whose turn it is not: every
+// AP function then lets the action through free. With no group turn running
+// this is exactly the original's `combat_whos_turn_node->obj == obj` test.
+static int* combat_ap_slot(int64_t obj)
+{
+    CombatGroupMember* member = combat_group_member(obj);
+
+    if (member != NULL) {
+        return &(member->action_points);
+    }
+
+    if (combat_whos_turn_node != NULL && combat_whos_turn_node->obj == obj) {
+        return &combat_action_points;
+    }
+
+    return NULL;
+}
+
+// CE (card TB1): whether `obj` may act now in a turn-based fight - whose turn
+// it is, or a member of the running group turn. The engine's "is it my turn"
+// sites ask this instead of comparing with `combat_turn_based_whos_turn_get`.
+bool combat_turn_based_is_acting(int64_t obj)
+{
+    return combat_turn_based_active && combat_ap_slot(obj) != NULL;
+}
+
+// CE (card TB1): the action points `obj` has left - a group member's own,
+// otherwise the turn's, which is what `combat_action_points_get` returns to
+// every caller in stock.
+int combat_action_points_of(int64_t obj)
+{
+    CombatGroupMember* member = combat_group_member(obj);
+
+    return member != NULL ? member->action_points : combat_action_points;
+}
+
+// CE (card TB1): what `obj`'s last action point check required, as
+// `combat_action_points_of`.
+int combat_required_action_points_of(int64_t obj)
+{
+    CombatGroupMember* member = combat_group_member(obj);
+
+    return member != NULL ? member->required_action_points : combat_required_action_points;
+}
+
 // 0x4B6D80
 int64_t combat_turn_based_whos_turn_get(void)
 {
@@ -4319,7 +4404,8 @@ void combat_turn_based_whos_turn_set(int64_t obj)
 // 0x4B7010
 void combat_turn_based_npc_turn(int64_t obj)
 {
-    if (obj == combat_whos_turn_node->obj
+    // CE (card TB1): whose turn it is, or a member of the group turn.
+    if (combat_turn_based_is_acting(obj)
         && !player_is_pc_obj(obj)
         && !gamelib_in_load()) {
         if (object_script_execute(obj, obj, OBJ_HANDLE_NULL, SAP_HEARTBEAT, 0) == 1) {
@@ -4327,7 +4413,11 @@ void combat_turn_based_npc_turn(int64_t obj)
         }
 
         if (!anim_is_busy(obj, NULL)) {
-            combat_action_points = 0;
+            int* action_points = combat_ap_slot(obj);
+
+            // The turn's own pool when `obj` no longer acts - the script or
+            // the AI ended its turn already - as stock zeroes it then too.
+            *(action_points != NULL ? action_points : &combat_action_points) = 0;
             combat_turn_based_anims_complete();
         }
     }
@@ -4767,12 +4857,16 @@ bool combat_check_action_points(int64_t obj, int required_action_points)
 {
     bool is_pc;
     bool accepted;
+    int* available;
+    CombatGroupMember* member;
 
     if (!combat_turn_based_active) {
         return true;
     }
 
-    if (combat_whos_turn_node->obj != obj) {
+    // CE (card TB1): through `obj`'s own pool.
+    available = combat_ap_slot(obj);
+    if (available == NULL) {
         return true;
     }
 
@@ -4795,14 +4889,21 @@ bool combat_check_action_points(int64_t obj, int required_action_points)
         required_action_points = 4;
     }
 
-    combat_required_action_points = required_action_points;
+    // CE (card TB1): a group member's requirement is its own; the turn's
+    // stays the one the player's AP bar previews.
+    member = combat_group_member(obj);
+    if (member != NULL) {
+        member->required_action_points = required_action_points;
+    } else {
+        combat_required_action_points = required_action_points;
+    }
 
     is_pc = player_is_local_pc_obj(obj);
     if (is_pc) {
-        combat_callbacks.field_C(combat_action_points);
+        combat_callbacks.field_C(*available);
     }
 
-    accepted = combat_action_points >= required_action_points
+    accepted = *available >= required_action_points
         || combat_shortfall_accepted(obj, required_action_points);
 
     if (combat_observer_is_enabled()) {
@@ -4810,7 +4911,7 @@ bool combat_check_action_points(int64_t obj, int required_action_points)
 
         combat_observer_object_id(obj, actor);
         combat_observer_ap_checked(actor, required_action_points,
-            combat_action_points, accepted);
+            *available, accepted);
     }
 
     return accepted;
@@ -5334,13 +5435,30 @@ int combat_throw_cost_for(bool local_pc)
     return local_pc ? 0 : 2;
 }
 
+// CE (card TB1): `obj`, whose action points are spent, is done for this
+// turn: the round moves on.
+static void combat_turn_based_turn_over(int64_t obj)
+{
+    (void)obj;
+
+    combat_turn_based_next_subturn();
+}
+
 // 0x4B7C90
 void combat_turn_based_end_critter_turn(int64_t obj)
 {
-    if (combat_turn_based_active
-        && combat_whos_turn_node->obj == obj) {
-        combat_action_points = 0;
-        combat_turn_based_next_subturn();
+    int* action_points;
+
+    if (!combat_turn_based_active) {
+        return;
+    }
+
+    // CE (card TB1): whoever's pool pays for `obj`, a group member's
+    // included.
+    action_points = combat_ap_slot(obj);
+    if (action_points != NULL) {
+        *action_points = 0;
+        combat_turn_based_turn_over(obj);
     }
 }
 
@@ -5350,11 +5468,14 @@ void combat_turn_based_end_critter_turn(int64_t obj)
 // so one that could not be paid for has to be refused first.
 bool combat_can_pay_action_points(int64_t obj, int action_points)
 {
-    if (!combat_turn_based_active || combat_whos_turn_node->obj != obj) {
+    int* available;
+
+    // CE (card TB1): through `obj`'s own pool.
+    if (!combat_turn_based_active || (available = combat_ap_slot(obj)) == NULL) {
         return true;
     }
 
-    return combat_action_points >= action_points
+    return *available >= action_points
         || combat_shortfall_accepted(obj, action_points);
 }
 
@@ -5411,25 +5532,28 @@ bool combat_consume_action_points(int64_t obj, int action_points)
     CombatContext combat;
     int action_points_before;
     int fatigue_before = -1;
+    int* available;
 
     if (!combat_turn_based_active) {
         return true;
     }
 
-    if (combat_whos_turn_node->obj != obj) {
+    // CE (card TB1): through `obj`'s own pool.
+    available = combat_ap_slot(obj);
+    if (available == NULL) {
         return true;
     }
 
     is_pc = player_is_local_pc_obj(obj);
-    action_points_before = combat_action_points;
+    action_points_before = *available;
     if (combat_observer_is_enabled()) {
         fatigue_before = critter_fatigue_damage_get(obj);
     }
-    if (combat_action_points >= action_points) {
-        combat_action_points -= action_points;
+    if (*available >= action_points) {
+        *available -= action_points;
 
         if (is_pc) {
-            combat_callbacks.field_C(combat_action_points);
+            combat_callbacks.field_C(*available);
         }
 
         if (combat_observer_is_enabled()) {
@@ -5437,7 +5561,7 @@ bool combat_consume_action_points(int64_t obj, int action_points)
 
             combat_observer_object_id(obj, actor);
             combat_observer_ap_committed(actor, action_points,
-                action_points_before, combat_action_points, true,
+                action_points_before, *available, true,
                 fatigue_before, critter_fatigue_damage_get(obj));
         }
 
@@ -5448,7 +5572,7 @@ bool combat_consume_action_points(int64_t obj, int action_points)
         if (combat_exertion_covers(obj, action_points)) {
             critter_fatigue_damage_set(obj,
                 critter_fatigue_damage_get(obj) + COMBAT_EXERTION_FATIGUE);
-            combat_action_points = 0;
+            *available = 0;
             combat_callbacks.field_C(0);
             tf_add(obj, TF_TYPE_YELLOW, "Exertion");
             tig_debug_printf("combat: exertion, %d AP short, %d fatigue\n",
@@ -5459,7 +5583,7 @@ bool combat_consume_action_points(int64_t obj, int action_points)
 
                 combat_observer_object_id(obj, actor);
                 combat_observer_ap_committed(actor, action_points,
-                    action_points_before, combat_action_points, true,
+                    action_points_before, *available, true,
                     fatigue_before, critter_fatigue_damage_get(obj));
             }
 
@@ -5477,12 +5601,12 @@ bool combat_consume_action_points(int64_t obj, int action_points)
 
                 combat_observer_object_id(obj, actor);
                 combat_observer_ap_committed(actor, action_points,
-                    action_points_before, combat_action_points, false,
+                    action_points_before, *available, false,
                     fatigue_before, critter_fatigue_damage_get(obj));
             }
             return false;
         }
-    } else if (combat_action_points > 0
+    } else if (*available > 0
         && is_pc
         && critter_fatigue_current(obj) > 1) {
         combat_context_init(OBJ_HANDLE_NULL, obj, &combat);
@@ -5490,7 +5614,7 @@ bool combat_consume_action_points(int64_t obj, int action_points)
         combat.dam[DAMAGE_TYPE_FATIGUE] = 2;
         combat_dmg(&combat);
 
-        combat_action_points = 0;
+        *available = 0;
         combat_callbacks.field_C(0);
 
         if (combat_observer_is_enabled()) {
@@ -5498,23 +5622,23 @@ bool combat_consume_action_points(int64_t obj, int action_points)
 
             combat_observer_object_id(obj, actor);
             combat_observer_ap_committed(actor, action_points,
-                action_points_before, combat_action_points, true,
+                action_points_before, *available, true,
                 fatigue_before, critter_fatigue_damage_get(obj));
         }
 
         return true;
     }
 
-    combat_action_points = 0;
+    *available = 0;
     if (combat_observer_is_enabled()) {
         char actor[COMBAT_OBSERVER_IDENTITY_SIZE];
 
         combat_observer_object_id(obj, actor);
         combat_observer_ap_committed(actor, action_points,
-            action_points_before, combat_action_points, false,
+            action_points_before, *available, false,
             fatigue_before, critter_fatigue_damage_get(obj));
     }
-    combat_turn_based_next_subturn();
+    combat_turn_based_turn_over(obj);
 
     return false;
 }
@@ -6177,7 +6301,9 @@ bool combat_turn_based_critter_can_fastforward(int64_t obj)
         return false;
     }
 
-    if (combat_turn_based_whos_turn_get() != obj) {
+    // CE (card TB1): a group member's moves are fast-forwarded as its own
+    // turn's would be.
+    if (!combat_turn_based_is_acting(obj)) {
         return false;
     }
 

@@ -460,11 +460,11 @@ static bool reload_clear_command(int64_t critter_obj, int64_t weapon_obj)
     progress = reload_clear_progress_get(weapon_obj);
 
     if (combat_turn_based_is_active()) {
-        if (combat_turn_based_whos_turn_get() != critter_obj) {
+        if (!combat_turn_based_is_acting(critter_obj)) {
             return false;
         }
 
-        work = reload_work(cost, progress, combat_action_points_get());
+        work = reload_work(cost, progress, combat_action_points_of(critter_obj));
         if (work.spent == 0 && !work.completed) {
             reload_say(critter_obj, "No action points");
             return false;
@@ -528,11 +528,11 @@ bool reload_command(int64_t critter_obj)
     progress = reload_progress_get(weapon_obj);
 
     if (combat_turn_based_is_active()) {
-        if (combat_turn_based_whos_turn_get() != critter_obj) {
+        if (!combat_turn_based_is_acting(critter_obj)) {
             return false;
         }
 
-        work = reload_work(cost, progress, combat_action_points_get());
+        work = reload_work(cost, progress, combat_action_points_of(critter_obj));
         if (work.spent == 0 && !work.completed) {
             reload_say(critter_obj, "No action points");
             return false;
@@ -778,7 +778,7 @@ bool reload_ai_act(int64_t critter_obj, int64_t enemy_obj)
         }
         if (!reload_command(critter_obj)
             && combat_turn_based_is_active()
-            && combat_turn_based_whos_turn_get() == critter_obj) {
+            && combat_turn_based_is_acting(critter_obj)) {
             // No AP left for the work: the turn is over.
             combat_turn_based_end_critter_turn(critter_obj);
         }
@@ -800,7 +800,7 @@ bool reload_ai_act(int64_t critter_obj, int64_t enemy_obj)
         tig_debug_printf("reload: an NPC tops up, no target in range\n");
         if (!reload_command(critter_obj)
             && combat_turn_based_is_active()
-            && combat_turn_based_whos_turn_get() == critter_obj) {
+            && combat_turn_based_is_acting(critter_obj)) {
             combat_turn_based_end_critter_turn(critter_obj);
         }
         return true;
@@ -822,7 +822,7 @@ bool reload_ai_act(int64_t critter_obj, int64_t enemy_obj)
     if (reload_can_load(critter_obj, weapon_obj)) {
         if (!reload_command(critter_obj)
             && combat_turn_based_is_active()
-            && combat_turn_based_whos_turn_get() == critter_obj) {
+            && combat_turn_based_is_acting(critter_obj)) {
             // No AP left for the work: the turn is over.
             combat_turn_based_end_critter_turn(critter_obj);
         }
