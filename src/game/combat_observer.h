@@ -334,6 +334,15 @@ typedef struct CombatObserverRollTerms {
     int accuracy;
     int effects;
     int opening;
+    // Card DG1: a Dodge roll under `dodge rules` - not difficulty terms but
+    // what made its effectiveness: the stock chance, the body armor's
+    // penalty, the encumbrance level and the weapon's share. Written as the
+    // event's `dodge` only when `dodge` is set.
+    bool dodge;
+    int dodge_stock;
+    int dodge_armor;
+    int dodge_encumbrance;
+    int dodge_share;
 } CombatObserverRollTerms;
 
 void combat_observer_skill_roll(const char* source, const char* target,

@@ -270,6 +270,22 @@ TEST(dodgeable_is_read_and_clamped)
     CHECK_INT(rule.dodgeable, 0);
 }
 
+TEST(dodge_share_is_read_and_clamped)
+{
+    WeaponRule rule;
+
+    // Card DG1, zsogg 2026-11-05: a firearm is dodged at 30%.
+    CHECK(weapon_rule_parse(6060, "DodgeShare: 30", &rule));
+    CHECK_INT(rule.dodge_share, 30);
+    CHECK_INT(rule.dodgeable, WEAPON_RULE_UNSET);
+    CHECK(weapon_rule_parse(6060, "Damage: 5-10", &rule));
+    CHECK_INT(rule.dodge_share, WEAPON_RULE_UNSET);
+    CHECK(weapon_rule_parse(6060, "DodgeShare: 250", &rule));
+    CHECK_INT(rule.dodge_share, 100);
+    CHECK(weapon_rule_parse(6060, "DodgeShare: -5", &rule));
+    CHECK_INT(rule.dodge_share, 0);
+}
+
 TEST(armor_damage_is_read_and_clamped)
 {
     WeaponRule rule;
@@ -340,6 +356,7 @@ void test_weapon_rules_suite(void)
     RUN(clear_ap_is_read_clamped_and_needs_a_capacity);
     RUN(critical_chance_and_style_are_read);
     RUN(dodgeable_is_read_and_clamped);
+    RUN(dodge_share_is_read_and_clamped);
     RUN(armor_damage_is_read_and_clamped);
     RUN(elemental_damage_and_ammunition_per_shot_are_read);
     RUN(a_malformed_entry_changes_nothing);

@@ -845,6 +845,7 @@ void combat_observer_skill_roll(const char* source, const char* target,
     char line[1024];
     char action[32];
     char terms_field[384] = "";
+    char dodge_field[128] = "";
 
     if (combat_observer_current_action == 0
         || !combat_observer_begin_semantic()) return;
@@ -857,14 +858,19 @@ void combat_observer_skill_roll(const char* source, const char* target,
             terms->base, terms->weapon, terms->strength, terms->awareness, terms->aim, terms->armor,
             terms->range, terms->cover, terms->light, terms->injury, terms->accuracy, terms->effects,
             terms->opening, difficulty - named);
+        if (terms->dodge) {
+            snprintf(dodge_field, sizeof(dodge_field),
+                ",\"dodge\":{\"stock\":%d,\"armor\":%d,\"encumbrance\":%d,\"share\":%d}",
+                terms->dodge_stock, terms->dodge_armor, terms->dodge_encumbrance, terms->dodge_share);
+        }
     }
     snprintf(line, sizeof(line),
-        "{\"schema\":%d,\"sequence\":%u,\"event\":\"skill.roll\",\"turn\":%u,\"action_id\":%s,\"source\":\"%s\",\"target\":\"%s\",\"skill\":%d,\"effectiveness\":%d,\"difficulty\":%d,\"roll\":%d,\"critical_roll\":%d,\"critical_chance\":%d,\"success\":%s,\"critical\":%s%s}",
+        "{\"schema\":%d,\"sequence\":%u,\"event\":\"skill.roll\",\"turn\":%u,\"action_id\":%s,\"source\":\"%s\",\"target\":\"%s\",\"skill\":%d,\"effectiveness\":%d,\"difficulty\":%d,\"roll\":%d,\"critical_roll\":%d,\"critical_chance\":%d,\"success\":%s,\"critical\":%s%s%s}",
         COMBAT_OBSERVER_SCHEMA,
         combat_observer_sequence++, combat_observer_turn,
         combat_observer_action_json(action, sizeof(action)), source, target,
         skill, effectiveness, difficulty, roll, critical_roll, critical_chance,
-        success ? "true" : "false", critical ? "true" : "false", terms_field);
+        success ? "true" : "false", critical ? "true" : "false", terms_field, dodge_field);
     combat_observer_write(line);
 }
 

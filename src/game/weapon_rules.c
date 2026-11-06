@@ -106,6 +106,7 @@ bool weapon_rule_parse(int prototype, const char* str, WeaponRule* rule)
     parsed.armor_damage = WEAPON_RULE_UNSET;
     parsed.ammo_per_shot = WEAPON_RULE_UNSET;
     parsed.dodgeable = WEAPON_RULE_UNSET;
+    parsed.dodge_share = WEAPON_RULE_UNSET;
     parsed.whole_magazine = WEAPON_RULE_UNSET;
     parsed.clear_ap = WEAPON_RULE_UNSET;
     parsed.crit_chance = WEAPON_RULE_UNSET;
@@ -234,6 +235,8 @@ bool weapon_rule_parse(int prototype, const char* str, WeaponRule* rule)
             parsed.whole_magazine = weapon_rule_clamp(value, 0, 1);
         } else if (strcmp(key, "Dodgeable") == 0) {
             parsed.dodgeable = weapon_rule_clamp(value, WEAPON_RULE_DODGEABLE_MIN, WEAPON_RULE_DODGEABLE_MAX);
+        } else if (strcmp(key, "DodgeShare") == 0) {
+            parsed.dodge_share = weapon_rule_clamp(value, 0, WEAPON_RULE_PERCENT_MAX);
         } else {
             return false;
         }
@@ -528,6 +531,14 @@ bool weapon_rules_dodgeable(int64_t weapon_obj)
 
     rule = weapon_rules_active_for(weapon_obj);
     return rule == NULL || rule->dodgeable != 0;
+}
+
+int weapon_rules_dodge_share(int64_t weapon_obj)
+{
+    const WeaponRule* rule;
+
+    rule = weapon_rules_active_for(weapon_obj);
+    return rule != NULL && rule->dodge_share != WEAPON_RULE_UNSET ? rule->dodge_share : 100;
 }
 
 int weapon_rules_armor_damage(int64_t weapon_obj, int stock)

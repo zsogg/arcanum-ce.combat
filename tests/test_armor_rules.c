@@ -29,6 +29,23 @@ TEST(a_shield_takes_a_block_chance_too)
     CHECK_INT(rule.block_chance, 18);
 }
 
+TEST(body_armor_takes_a_dodge_penalty_too)
+{
+    ArmorRule rule;
+
+    // Card DG1: plate's 12 (zsogg, 2026-11-05).
+    CHECK(armor_rule_parse(8095, "Protection: 31, DodgePenalty: 12", &rule));
+    CHECK_INT(rule.protection, 31);
+    CHECK_INT(rule.dodge_penalty, 12);
+    CHECK(armor_rule_parse(8094, "Protection: 20", &rule));
+    CHECK_INT(rule.dodge_penalty, ARMOR_RULE_UNSET);
+    CHECK(armor_rule_parse(8095, "Protection: 31, DodgePenalty: 500", &rule));
+    CHECK_INT(rule.dodge_penalty, ARMOR_RULE_CHANCE_MAX);
+    CHECK(!armor_rule_parse(8095, "DodgePenalty: 12", &rule));
+    CHECK(!armor_rule_parse(ARMOR_RULE_KIND_MELEE, "Penetration: 30, DodgePenalty: 12", &rule));
+    CHECK(!armor_rule_parse(ARMOR_RULE_UNDEAD, "NaturalScale: 80, DodgePenalty: 12", &rule));
+}
+
 TEST(a_kind_takes_a_penetration_and_nothing_else)
 {
     ArmorRule rule;
@@ -126,6 +143,7 @@ void test_armor_rules_suite(void)
 {
     RUN(a_piece_takes_a_protection);
     RUN(a_shield_takes_a_block_chance_too);
+    RUN(body_armor_takes_a_dodge_penalty_too);
     RUN(a_kind_takes_a_penetration_and_nothing_else);
     RUN(the_undead_entry_takes_a_natural_scale_and_nothing_else);
     RUN(the_fatigue_entry_takes_its_share_and_nothing_else);

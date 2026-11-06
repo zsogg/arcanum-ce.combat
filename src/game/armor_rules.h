@@ -14,6 +14,7 @@
 //
 //     {8094}{Protection: 20}                    body armor, helmet, gloves or boots
 //     {8201}{Protection: 25, BlockChance: 18}   a shield: block rating and chance
+//     {8095}{Protection: 31, DodgePenalty: 12}  body armor that hinders Dodge
 //     {1}{Penetration: 30}   melee weapons
 //     {2}{Penetration: 30}   bows
 //     {3}{Penetration: 20}   thrown weapons
@@ -56,6 +57,9 @@ typedef struct ArmorRule {
     int penetration;
     int natural_scale;
     int stopped_fatigue;
+    // Card DG1: points body armor takes from its wearer's dodge chance,
+    // under `dodge rules`.
+    int dodge_penalty;
 } ArmorRule;
 
 // Pure: reads one entry into `rule`. False, with `rule` untouched, for
@@ -63,8 +67,8 @@ typedef struct ArmorRule {
 // number, a kind entry (1-5) without Penetration or with anything else, the
 // undead entry without NaturalScale or with anything else, the fatigue entry
 // without StoppedToFatigue or with anything else, a piece without Protection
-// or with any key but BlockChance, an id that is none of them.
-// Values are clamped to 0..1000, BlockChance to 0..100.
+// or with any key but BlockChance and DodgePenalty, an id that is none of
+// them. Values are clamped to 0..1000, BlockChance and DodgePenalty to 0..100.
 bool armor_rule_parse(int id, const char* str, ArmorRule* rule);
 
 void armor_rules_init(void);
@@ -86,5 +90,8 @@ int armor_rules_undead_natural_scale(void);
 // Under `armor penetration`. The percentage of the normal damage armor stops
 // in a monster's natural attack that lands as fatigue, or ARMOR_RULE_UNSET.
 int armor_rules_stopped_to_fatigue(void);
+// Card DG1, under `dodge rules`: the points the armor object takes from its
+// wearer's dodge chance; 0 when it is not listed or names none.
+int armor_rules_dodge_penalty(int64_t armor_obj);
 
 #endif /* ARCANUM_GAME_ARMOR_RULES_H_ */

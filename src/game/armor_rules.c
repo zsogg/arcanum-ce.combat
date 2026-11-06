@@ -71,6 +71,7 @@ bool armor_rule_parse(int id, const char* str, ArmorRule* rule)
     parsed.penetration = ARMOR_RULE_UNSET;
     parsed.natural_scale = ARMOR_RULE_UNSET;
     parsed.stopped_fatigue = ARMOR_RULE_UNSET;
+    parsed.dodge_penalty = ARMOR_RULE_UNSET;
 
     for (part = strtok_r(buffer, ",", &save); part != NULL; part = strtok_r(NULL, ",", &save)) {
         colon = strchr(part, ':');
@@ -99,6 +100,8 @@ bool armor_rule_parse(int id, const char* str, ArmorRule* rule)
             parsed.natural_scale = armor_rule_clamp(value, ARMOR_RULE_VALUE_MAX);
         } else if (strcmp(key, "StoppedToFatigue") == 0) {
             parsed.stopped_fatigue = armor_rule_clamp(value, ARMOR_RULE_VALUE_MAX);
+        } else if (strcmp(key, "DodgePenalty") == 0) {
+            parsed.dodge_penalty = armor_rule_clamp(value, ARMOR_RULE_CHANCE_MAX);
         } else {
             return false;
         }
@@ -106,14 +109,16 @@ bool armor_rule_parse(int id, const char* str, ArmorRule* rule)
 
     // A kind takes a penetration and nothing else, the undead entry a natural
     // scale and nothing else, the fatigue entry its share and nothing else; a
-    // piece takes a protection, a shield also a block chance, and nothing else.
+    // piece takes a protection, a shield also a block chance, body armor a dodge
+    // penalty, and nothing else.
     valid = (kind ? parsed.penetration != ARMOR_RULE_UNSET : parsed.penetration == ARMOR_RULE_UNSET)
         && (undead ? parsed.natural_scale != ARMOR_RULE_UNSET : parsed.natural_scale == ARMOR_RULE_UNSET)
         && (fatigue ? parsed.stopped_fatigue != ARMOR_RULE_UNSET : parsed.stopped_fatigue == ARMOR_RULE_UNSET);
     if (kind || undead || fatigue) {
         valid = valid
             && parsed.protection == ARMOR_RULE_UNSET
-            && parsed.block_chance == ARMOR_RULE_UNSET;
+            && parsed.block_chance == ARMOR_RULE_UNSET
+            && parsed.dodge_penalty == ARMOR_RULE_UNSET;
     } else {
         valid = valid && parsed.protection != ARMOR_RULE_UNSET;
     }
@@ -189,13 +194,13 @@ void armor_rules_load(void)
     tig_debug_printf("armor rules: %d piece(s) listed\n", armor_rule_count);
 }
 
-static const ArmorRule* armor_rule_for(int64_t armor_obj)
+// The armor object's entry, whatever switch asks.
+static const ArmorRule* armor_rule_lookup(int64_t armor_obj)
 {
     int64_t proto_obj;
     int index;
 
-    if (!feature_enabled(FEATURE_ARMOR_PENETRATION)
-        || armor_obj == OBJ_HANDLE_NULL
+    if (armor_obj == OBJ_HANDLE_NULL
         || obj_field_int32_get(armor_obj, OBJ_F_TYPE) != OBJ_TYPE_ARMOR) {
         return NULL;
     }
@@ -215,6 +220,11 @@ static const ArmorRule* armor_rule_for(int64_t armor_obj)
     }
 
     return NULL;
+}
+
+static const ArmorRule* armor_rule_for(int64_t armor_obj)
+{
+    return feature_enabled(FEATURE_ARMOR_PENETRATION) ? armor_rule_lookup(armor_obj) : NULL;
 }
 
 bool armor_rules_protection(int64_t armor_obj, int* protection)
@@ -263,4 +273,15 @@ int armor_rules_stopped_to_fatigue(void)
         return ARMOR_RULE_UNSET;
     }
     return armor_rule_stopped_fatigue;
+}
+
+int armor_rules_dodge_penalty(int64_t armor_obj)
+{
+    const ArmorRule* rule;
+
+    if (!feature_enabled(FEATURE_DODGE_RULES)) {
+        return 0;
+    }
+    rule = armor_rule_lookup(armor_obj);
+    return rule != NULL && rule->dodge_penalty != ARMOR_RULE_UNSET ? rule->dodge_penalty : 0;
 }

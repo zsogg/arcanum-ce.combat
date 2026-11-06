@@ -103,6 +103,10 @@ typedef struct WeaponRule {
     // flamethrower is also dodged quite easily by the level 30 guard, this
     // should not be possible").
     int dodgeable;
+    // Card DG1, under `dodge rules`: the percent of the target's dodge chance
+    // that applies against this weapon (zsogg, 2026-11-05: firearms 30).
+    // Unset: 100, stock.
+    int dodge_share;
     // Against armor's protection, under `armor penetration` (armor milestone
     // 2): the weapon's own; unset takes its kind's default (`armor_rules.h`).
     int penetration;
@@ -198,6 +202,9 @@ int weapon_rules_ammo_per_shot(int64_t weapon_obj);
 // False when the entry says `Dodgeable: 0`: combat then skips the target's
 // Dodge roll for a hit with this weapon. True otherwise, as stock.
 bool weapon_rules_dodgeable(int64_t weapon_obj);
+// Card DG1: the entry's DodgeShare, or 100 when the weapon is not listed or
+// its entry does not name it. Applied by `dodge rules`.
+int weapon_rules_dodge_share(int64_t weapon_obj);
 // True, with `*penetration` set, when the entry names a Penetration. Read
 // under `armor penetration`, not `weapon rules`: it means nothing without the
 // armor rules.

@@ -197,6 +197,9 @@ bool skill_steal_item(int64_t obj, int64_t target_obj, int64_t item_obj);
 bool skill_plant_item(int64_t obj, int64_t target_obj, int64_t item_obj);
 bool skill_disarm_trap(int64_t obj, int a2, int64_t target_obj);
 void skill_invocation_init(SkillInvocation* skill_invocation);
+// Card DG1, under `dodge rules`: the attacking weapon's DodgeShare for the
+// next Dodge roll, which uses it once and goes back to 100.
+void skill_dodge_share_set(int share);
 bool skill_invocation_recover(SkillInvocation* skill_invocation);
 bool skill_invocation_run(SkillInvocation* skill_invocation);
 int skill_invocation_difficulty(SkillInvocation* skill_invocation);

@@ -2,12 +2,14 @@
 
 #include "game/ai.h"
 #include "game/anim.h"
+#include "game/armor_rules.h"
 #include "game/background.h"
 #include "game/combat.h"
 #include "game/combat_observer.h"
 #include "game/crit_effects.h"
 #include "game/crit_guard.h"
 #include "game/critter.h"
+#include "game/dodge_rules.h"
 #include "game/effect.h"
 #include "game/fate.h"
 #include "game/feature.h"
@@ -50,6 +52,9 @@ static int skill_invocation_last_critical_chance = -1;
 // CE (IN-6, 2026-11-02): the terms the last `skill_invocation_difficulty`
 // added, for `skill.roll`. Recording only: nothing reads them back.
 static CombatObserverRollTerms skill_roll_terms;
+
+// Card DG1: the attacking weapon's DodgeShare, for the next Dodge roll only.
+static int skill_dodge_share = 100;
 static bool is_controlled_by_local_pc(int64_t obj);
 
 /**
@@ -1521,6 +1526,12 @@ bool skill_disarm_trap(int64_t obj, int a2, int64_t target_obj)
     return anim_goal_use_skill_on(obj, target_obj, OBJ_HANDLE_NULL, SKILL_DISARM_TRAPS, 2 << a2);
 }
 
+// CE (`dodge rules`, card DG1).
+void skill_dodge_share_set(int share)
+{
+    skill_dodge_share = share;
+}
+
 /**
  * Initializes a `SkillInvocation` structure to default values.
  *
@@ -1603,6 +1614,21 @@ bool skill_invocation_run(SkillInvocation* skill_invocation)
     difficulty = skill_invocation_difficulty(skill_invocation) + skill_invocation->modifier;
     CombatObserverRollTerms terms = skill_roll_terms;
     terms.base += skill_invocation->modifier;
+
+    // CE (`dodge rules`, card DG1; zsogg, 2026-11-05): body armor and
+    // encumbrance hinder Dodge, and against a firearm it is a share of itself.
+    if (skill == SKILL_DODGE && feature_enabled(FEATURE_DODGE_RULES)) {
+        terms.dodge = true;
+        terms.dodge_stock = effectiveness;
+        terms.dodge_armor = armor_rules_dodge_penalty(item_wield_get(source_obj, ITEM_INV_LOC_ARMOR));
+        terms.dodge_encumbrance = critter_encumbrance_level_get(source_obj);
+        terms.dodge_share = skill_dodge_share;
+        effectiveness = dodge_rules_chance(effectiveness, terms.dodge_armor,
+            terms.dodge_encumbrance, terms.dodge_share);
+    }
+    if (skill == SKILL_DODGE) {
+        skill_dodge_share = 100;
+    }
 
     // Add some randomness for difficulty. Gambling is a special case - the roll
     // is still random, but it's saved as a part of the game to prevent retries
@@ -1701,6 +1727,12 @@ bool skill_invocation_run(SkillInvocation* skill_invocation)
         if (critter_is_unconscious(source_obj)
             || (obj_field_int32_get(source_obj, OBJ_F_SPELL_FLAGS) & OSF_STONED) != 0
             || (obj_field_int32_get(source_obj, OBJ_F_CRITTER_FLAGS) & (OCF_PARALYZED | OCF_STUNNED)) != 0) {
+            is_success = false;
+            is_critical = false;
+        }
+        // CE (`dodge rules`, card DG1): nor can one asleep or knocked down.
+        if (feature_enabled(FEATURE_DODGE_RULES)
+            && (critter_is_sleeping(source_obj) || critter_is_prone(source_obj))) {
             is_success = false;
             is_critical = false;
         }

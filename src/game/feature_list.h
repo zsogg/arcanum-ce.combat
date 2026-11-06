@@ -238,5 +238,13 @@ FEATURE(SPELL_STUN_LENGTH, "spell stun length", false)
 // points, at the slot of the first of them the round reaches. The party keeps
 // its own turns.
 FEATURE(SIMULTANEOUS_NPC_TURNS, "simultaneous npc turns", false)
+// Card DG1 (zsogg, 2026-11-05), read by `skill_invocation_run`'s Dodge and
+// `combat_attack`: the dodge chance loses the body armor's `DodgePenalty`
+// (`rules/armor.mes`) and 2 a level of encumbrance (16 at severe), and against
+// a weapon with a `DodgeShare` is that percent of itself; no Dodge asleep or
+// knocked down; no critical dodge, but a dodge makes the attacker fumble 0, 5,
+// 10 or 20% of the time by the dodger's training, and that fumble is always a
+// stumble (`dodge_rules.h`).
+FEATURE(DODGE_RULES, "dodge rules", false)
 
 // clang-format on

@@ -93,6 +93,18 @@ TEST(a_complete_trace_has_ordered_control_and_semantic_events)
         combat_observer_skill_roll("fighter", "opponent", 2,
             55, 0, 40, 99, 2, true, false, &terms);
     }
+    // Card DG1: a Dodge roll under `dodge rules` names what made its chance.
+    {
+        CombatObserverRollTerms terms = { 0 };
+
+        terms.dodge = true;
+        terms.dodge_stock = 40;
+        terms.dodge_armor = 12;
+        terms.dodge_encumbrance = 1;
+        terms.dodge_share = 30;
+        combat_observer_skill_roll("opponent", "fighter", SKILL_DODGE,
+            7, 0, 50, 60, -1, false, false, &terms);
+    }
     combat_observer_critical_rolled("fighter", "opponent", true, 1, 10,
         true, false, 0, 0, CDF_BONUS_DAM_100 | CDF_STUN, CDF_KNOCKDOWN, true,
         CRIT_EFFECT_STAGGERED, NULL, 7, 14);
@@ -114,6 +126,8 @@ TEST(a_complete_trace_has_ordered_control_and_semantic_events)
     CHECK(strstr(trace, "\"weapon_skill_level\":3,\"weapon_training\":0,\"weapon_speed\":10") != NULL);
     CHECK(strstr(trace, "\"critical_roll\":99,\"critical_chance\":2,\"success\":true,\"critical\":false") != NULL);
     CHECK(strstr(trace, "\"critical\":false,\"terms\":{\"base\":0,\"weapon\":-5,\"strength\":10,\"awareness\":-30,\"aim\":0,\"armor\":6,\"range\":24,\"cover\":0,\"light\":3,\"injury\":0,\"accuracy\":0,\"effects\":0,\"opening\":-35,\"other\":27}}") != NULL);
+    CHECK(strstr(trace, "\"other\":0},\"dodge\":{\"stock\":40,\"armor\":12,\"encumbrance\":1,\"share\":30}}") != NULL);
+    CHECK(strstr(trace, "\"opening\":-35,\"other\":27}}") != NULL); // no dodge field on an attack
     // Criticals, milestone CR-0: the effects by name, in their flags' order.
     CHECK(strstr(trace, "\"event\":\"critical.rolled\"") != NULL);
     CHECK(strstr(trace, "\"kind\":\"hit\",\"hit_location\":1,\"effect_bonus\":10,\"aimed\":true,\"player_spared\":false") != NULL);

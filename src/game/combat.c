@@ -18,6 +18,7 @@
 #include "game/criticals.h"
 #include "game/critter.h"
 #include "game/descriptions.h"
+#include "game/dodge_rules.h"
 #include "game/effect.h"
 #include "game/fate.h"
 #include "game/feature.h"
@@ -70,6 +71,7 @@ static void combat_remove_blood_splotch(int64_t loc);
 static void combat_process_crit_hit(CombatContext* combat);
 static void combat_process_crit_miss(CombatContext* combat);
 static void combat_apply_fumble(void);
+static void combat_dodge_stumble(CombatContext* combat);
 static bool combat_fumble_strikes_at_once(CombatContext* combat);
 static bool combat_fumble_keeps_throw(CombatContext* combat);
 static int combat_random_hit_loc(void);
@@ -1072,6 +1074,7 @@ int combat_attack(CombatContext* combat)
 {
     bool was_in_bed = false;
     bool dodged = false;
+    bool dodge_fumble = false;
     int sound_id;
     int aptitude_crit_failure_chance;
     int attack_result;
@@ -1263,6 +1266,7 @@ int combat_attack(CombatContext* combat)
                 skill_invocation_init(&skill_invocation);
                 object_ref_init(combat->target_obj, &(skill_invocation.source));
                 skill_invocation.skill = SKILL_DODGE;
+                skill_dodge_share_set(weapon_rules_dodge_share(combat->weapon_obj));
                 if (!skill_invocation_run(&skill_invocation)) {
                     combat_observer_attack_resolved(observer_action_id,
                         observer_attacker, observer_target, combat->skill,
@@ -1280,7 +1284,17 @@ int combat_attack(CombatContext* combat)
 
                     combat->flags &= ~(CF_HIT | CF_CRITICAL);
 
-                    if ((skill_invocation.flags & SKILL_INVOCATION_CRITICAL) != 0) {
+                    // CE (`dodge rules`, card DG1; zsogg, 2026-11-05): no
+                    // critical dodge; the dodger's training gives the
+                    // attacker a chance to fumble, always a stumble.
+                    if (feature_enabled(FEATURE_DODGE_RULES)) {
+                        int chance = dodge_rules_fumble_chance(
+                            basic_skill_training_get(combat->target_obj, BASIC_SKILL_DODGE));
+                        if (chance > 0 && random_between(1, 100) <= chance) {
+                            combat->flags |= CF_CRITICAL;
+                            dodge_fumble = true;
+                        }
+                    } else if ((skill_invocation.flags & SKILL_INVOCATION_CRITICAL) != 0) {
                         int training = basic_skill_training_get(combat->target_obj, BASIC_SKILL_DODGE);
                         if (random_between(1, 100) <= combat_critical_dodge_chance_tbl[training]) {
                             combat->flags |= CF_CRITICAL;
@@ -1306,7 +1320,11 @@ int combat_attack(CombatContext* combat)
 
     if ((combat->flags & CF_HIT) == 0
         && (combat->flags & CF_CRITICAL) != 0) {
-        combat_process_crit_miss(combat);
+        if (dodge_fumble) {
+            combat_dodge_stumble(combat);
+        } else {
+            combat_process_crit_miss(combat);
+        }
     }
 
     // CE (`combat feedback`, card FB1): a plain miss says so, apart from
@@ -3328,6 +3346,18 @@ static bool combat_fumble_keeps_throw(CombatContext* combat)
         && combat_fumble_pending.attacker_obj != OBJ_HANDLE_NULL
         && combat_fumble_pending.outcome == FUMBLE_DROP
         && combat_fumble_pending.skill == BASIC_SKILL_THROWING;
+}
+
+// CE (`dodge rules`, card DG1): a fumble a dodge caused is a stumble, whatever
+// the attacker's training and the fumble switches; the attack stays a miss.
+static void combat_dodge_stumble(CombatContext* combat)
+{
+    combat->flags &= ~CF_CRITICAL;
+    combat_fumble_pending.attacker_obj = combat->attacker_obj;
+    combat_fumble_pending.weapon_obj = OBJ_HANDLE_NULL;
+    combat_fumble_pending.skill = combat->skill;
+    combat_fumble_pending.outcome = FUMBLE_STUMBLE;
+    combat_observe_critical(combat, false, 0, false, -1, -1, 0, 0, 0, "dodge_stumble");
 }
 
 // CE (`weapon fumbles`): `obj` is up again; its next fall is its own affair.
