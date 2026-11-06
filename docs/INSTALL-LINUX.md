@@ -20,6 +20,12 @@ Linux.
 
 - **Arcanum from GOG**: the offline installer, `setup_arcanum_*.exe`, from
   your GOG library (and its `.bin` file, if GOG gives you one).
+  - **From Steam** instead: the game's files are the same. Give setup the
+    game folder in place of the installer, the `Arcanum` folder inside
+    Steam's `steamapps/common/Arcanum` (installed through Steam on Linux or
+    copied from Windows): `ARCANUM_SETUP_GOG_DIR=PATH/TO/IT ./setup.sh --uap
+    ~/Downloads/UAP2.0.2.exe`. Setup copies it and does not change it, and
+    then innoextract is not needed.
 - **The Unofficial Arcanum Patch 2.0.2**: `UAP2.0.2.exe`.
 - **innoextract** and **7z**, from your distribution:
   - Debian, Ubuntu, Mint: `sudo apt install innoextract p7zip-full`

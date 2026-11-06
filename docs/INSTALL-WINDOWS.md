@@ -18,14 +18,48 @@ Obscura*.
 
 ## What you need
 
-- **Arcanum from GOG**, installed.
+- **Arcanum from GOG or Steam**, installed.
   - GOG's offline installer puts it in `C:\GOG Games\Arcanum`, which is
     ideal.
+  - Steam puts it in its library, one folder down: the game folder is the
+    `Arcanum` folder inside `steamapps\common\Arcanum` ("From Steam",
+    below).
   - **Not under Program Files**: CE keeps its saves and settings in the game
-    folder, and Windows does not let a program write there.
-- **The Unofficial Arcanum Patch 2.0.2** (`UAP2.0.2.exe`), installed into that
-  folder, with the High Resolution Patch selected.
+    folder, and Windows may not let a program write there.
+- **The Unofficial Arcanum Patch 2.0.2** (`UAP2.0.2.exe`), installed into the
+  game folder, with the High Resolution Patch selected.
 - Windows 10 or 11, 64-bit.
+
+## From Steam
+
+The game's files from Steam are the same as GOG's, so everything here works
+the same way. Four things are different:
+
+- **Finding the game folder:** in Steam, right-click Arcanum, then Manage,
+  then Browse local files. That opens the folder with Sierra's launcher; the
+  game is in the `Arcanum` folder inside it. Install UAP into that inner
+  folder. Setup finds it by itself, and steps down to it if you give it the
+  outer one.
+- **If setup says the folder cannot be written to:** Steam's library is under
+  Program Files. In Steam, Settings, Storage, add a library folder elsewhere
+  (for example `C:\SteamLibrary`) and move Arcanum there, then run setup
+  again.
+- **"Verify integrity of game files"** in Steam puts back files that UAP
+  changed. Arcanum CE keeps working, but run `setup.bat` again afterwards: it
+  keeps your settings and saves.
+- **Your old saves** from the game without UAP are copied for CE on its
+  first start. A new game's save from the unpatched game was checked to load
+  and play; UAP itself warns that saves from before it may not carry over
+  well, so if an old save behaves strangely, start a new game.
+
+**Starting Arcanum CE from Steam**, either way:
+
+- Steam's Games menu, "Add a Non-Steam Game to My Library", then Browse to
+  `arcanum-ce.exe` in the game folder. It gets its own entry in the library.
+- Or, so that Arcanum's own Play button starts it: right-click Arcanum,
+  Properties, and under Launch Options type the full path to
+  `arcanum-ce.exe` in quotes, followed by `%command%`, for example
+  `"D:\SteamLibrary\steamapps\common\Arcanum\Arcanum\arcanum-ce.exe" %command%`.
 
 ## Installing
 

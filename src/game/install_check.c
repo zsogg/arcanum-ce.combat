@@ -225,7 +225,7 @@ int install_check_run(bool fix)
     printf("Arcanum CE install check (%s)\n", fix ? "and fix" : "report only");
     printf("folder: %s\n\n", SDL_GetCurrentDirectory());
 
-    printf("The base game (GOG Arcanum 1.0.7.4)\n");
+    printf("The base game (Arcanum 1.0.7.4, from GOG or Steam)\n");
     {
         static const char* required[] = { "tig.dat", "arcanum1.dat", "arcanum2.dat", "arcanum3.dat", "arcanum4.dat" };
         for (index = 0; index < (int)(sizeof(required) / sizeof(required[0])); index++) {
