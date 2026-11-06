@@ -38,7 +38,7 @@ Obscura*.
    - checks that the game and UAP are there;
    - shows a table: what is always on, what each
      mod turns on, and what setup never turns on;
-   - asks yes or no for each of the nine optional mods, from Called Shots
+   - asks yes or no for each of the ten optional mods, from Called Shots
      to Encounter Variety (README's "Optional mods" lists them).
    - installs Arcanum CE into the folder and runs a check.
 
@@ -116,7 +116,7 @@ arcanum-ce-CHANGES.md), with what each optional mod does.
 
 ## Optional mods
 
-Nine mods come with Arcanum CE, all off unless you turn them on.
+Ten mods come with Arcanum CE, all off unless you turn them on.
 
 - **Turning them on:** setup asks about each one. Afterwards each corresponds to one line
   in `arcanum-ce.cfg`.

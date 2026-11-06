@@ -39,7 +39,7 @@ cd arcanum-ce-*-linux-x64
 
 Setup then:
 
-- asks yes or no for each of the nine optional mods, from Called Shots to
+- asks yes or no for each of the ten optional mods, from Called Shots to
   Encounter Variety ("Optional mods" below lists them). The answer is no
   unless you say yes;
 - unpacks both installers;
@@ -114,7 +114,7 @@ arcanum-ce-CHANGES.md), with what each optional mod does.
 
 ## Optional mods
 
-Nine mods come with Arcanum CE, all off unless you turn them on.
+Ten mods come with Arcanum CE, all off unless you turn them on.
 
 - **Turning them on:** setup asks about each one. Afterwards each corresponds to one line
   in `arcanum-ce.cfg`.
