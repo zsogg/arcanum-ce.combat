@@ -202,6 +202,9 @@ Nine mods come with Arcanum CE, all off unless you turn them on.
   - grenades that hurt everyone near the blast;
   - sight and hearing: walls stop sound, enemies see less to the sides;
   - criticals and fumbles, more variety for both;
+  - Dodge that armour, weight and guns hinder, and that can knock an
+    attacker down;
+  - floating text that says "Miss", "Stopped" or "Glancing";
   - magic costs, and spells that no longer stack;
   - poison that bites in a fight and wears off after it; prowling and
     backstab reined in.
@@ -217,7 +220,7 @@ Nine mods come with Arcanum CE, all off unless you turn them on.
   - Aimed attacks are harder to land, and more likely to leave a lasting
     effect when they are critical.
 
-**The other mods** (new in this release; apart from Starting Gold, not yet
+**The other mods** (apart from Starting Gold and Simultaneous Turns, not yet
 tested in a game):
 
 - `mod followers`, **Followers**: alignment and level no longer stop an NPC
@@ -231,7 +234,7 @@ tested in a game):
   your turn comes when the last has finished. New in release 3, and played.
 - `mod better-shops`, **Better Shops**: schematics in stock more often,
   specialist components sold and easier to use, and Conjure Spirit scrolls
-  in every magic shop.
+  in every magic shop, from a shop's first visit.
 - `mod starting-gold`, **Starting Gold**: a new character starts with three
   times the gold.
 - `mod brighter-lanterns`, **Brighter Lanterns**: carried lights light a
