@@ -471,7 +471,9 @@ sell, in one mod because they edit the same file:
 - **Conjure Spirit scrolls** in every magic shop, where only the Tarant
   magick shop carried them.
 
-A shop's new stock appears from its next restock: leave it and rest a day.
+A shop shows the new stock from your first visit: one still holding the stock the
+game's maps ship is restocked once when its map loads. After that it re-rolls
+a day after you trade there, as before.
 Measured over 200 restocks of every shop list in the game, every item came
 in as often as the mod's model predicts, and Conjure Spirit scrolls were in every
 magic shop's stock every time.

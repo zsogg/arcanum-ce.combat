@@ -246,5 +246,9 @@ FEATURE(SIMULTANEOUS_NPC_TURNS, "simultaneous npc turns", false)
 // 10 or 20% of the time by the dodger's training, and that fumble is always a
 // stumble (`dodge_rules.h`).
 FEATURE(DODGE_RULES, "dodge rules", false)
+// Better Shops (zsogg, 2026-11-05), read by `map_open`: a shop whose stock is
+// still the one the module's maps ship restocks once when its map has loaded,
+// so a changed shop list shows from the first visit (`fresh_stock.h`).
+FEATURE(FRESH_SHOP_STOCK, "fresh shop stock", false)
 
 // clang-format on

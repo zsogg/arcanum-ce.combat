@@ -275,6 +275,10 @@ typedef enum ReplayKind {
     //       the light level at that critter and the light it carries.
     //   inspect wear [<id>]
     //       each wielded or worn item's durability, the player's by default.
+    //   inspect stock <id>
+    //       the description of every item a container or critter holds, one
+    //       line, so a run can read a shop's stock without restocking it
+    //       (`fresh shop stock`, 2026-11-05).
     // Traps T2 (2026-10-26):
     //   block <dx> <dy>
     //       the tile that many tiles from the player made impassable, as the
@@ -762,6 +766,33 @@ static void replay_inspect_wear(int64_t obj, const char* who)
     }
 }
 
+// `inspect stock <id>` (2026-11-05): every item that container or critter
+// holds, by description, as `restock` counts them.
+static void replay_inspect_stock(int64_t obj, const char* who)
+{
+    int num_fld;
+    int list_fld;
+    int count;
+    int index;
+
+    if (obj_field_int32_get(obj, OBJ_F_TYPE) == OBJ_TYPE_CONTAINER) {
+        num_fld = OBJ_F_CONTAINER_INVENTORY_NUM;
+        list_fld = OBJ_F_CONTAINER_INVENTORY_LIST_IDX;
+    } else if (obj_type_is_critter(obj_field_int32_get(obj, OBJ_F_TYPE))) {
+        num_fld = OBJ_F_CRITTER_INVENTORY_NUM;
+        list_fld = OBJ_F_CRITTER_INVENTORY_LIST_IDX;
+    } else {
+        tig_debug_printf("Replay: stock %s holds no inventory\n", who);
+        return;
+    }
+    count = obj_field_int32_get(obj, num_fld);
+    tig_debug_printf("Replay: stock %s %d item(s):", who, count);
+    for (index = 0; index < count; index++) {
+        tig_debug_printf(" %d", obj_field_int32_get(obj_arrayfield_handle_get(obj, list_fld, index), OBJ_F_DESCRIPTION));
+    }
+    tig_debug_printf("\n");
+}
+
 // `inspect xp` (release 1, R1): the player's level and experience, and each
 // party member's basic skills as training/level - for UAP's level-cap and
 // Educator add-ons. Training needs the skill level its tier requires, so the
@@ -1048,6 +1079,16 @@ static bool replay_parse_line(const char* text, ReplayCommand* command)
         // `inspect location <id>` (card PH1): `stat` 3, the object in `target`.
         if (strcmp(tokens[index], "location") == 0) {
             command->stat = 3;
+            index++;
+            if (index >= count) {
+                return false;
+            }
+            replay_copy_target(command, tokens[index++]);
+            return index == count;
+        }
+        // `inspect stock <id>` (2026-11-05): `stat` 9, the holder in `target`.
+        if (strcmp(tokens[index], "stock") == 0) {
+            command->stat = 9;
             index++;
             if (index >= count) {
                 return false;
@@ -1923,6 +1964,13 @@ void replay_ui_tick(void)
                 return;
             }
             replay_inspect_sight(target_obj, pc_obj, command->target);
+            return;
+        }
+        if (command->stat == 9) {
+            if (!replay_resolve(command, &target_obj)) {
+                return;
+            }
+            replay_inspect_stock(target_obj, command->target);
             return;
         }
         if (command->stat == 3) {

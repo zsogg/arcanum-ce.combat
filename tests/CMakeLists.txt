@@ -43,6 +43,7 @@ add_executable(arcanum-tests
     "test_penetration.c"
     "test_combat_feedback.c"
     "test_dodge_rules.c"
+    "test_fresh_stock.c"
     "test_ai_caster_tactics.c"
     "test_ai_targeting.c"
     "test_ai_follower_casting.c"

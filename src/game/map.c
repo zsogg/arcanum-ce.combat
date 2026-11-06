@@ -7,8 +7,11 @@
 #include "game/description.h"
 #include "game/descriptions.h"
 #include "game/effect.h"
+#include "game/feature.h"
+#include "game/fresh_stock.h"
 #include "game/gamelib.h"
 #include "game/gsound.h"
+#include "game/item.h"
 #include "game/jumppoint.h"
 #include "game/light.h"
 #include "game/light_scheme.h"
@@ -95,6 +98,7 @@ static bool map_save_objects(void);
 static bool map_save_difs(void);
 static bool map_save_dynamic(void);
 static void map_load_postprocess(void);
+static void map_fresh_shop_stock(void);
 static bool map_load_mobile(const char* base_path, const char* save_path);
 static bool map_load_dynamic(const char* name);
 static void map_load_extension(const char* base_path);
@@ -804,6 +808,7 @@ bool map_open(const char* base_path, const char* save_path, bool a3)
     tig_debug_printf("map_open: map_gender_check()...");
     tig_timer_now(&timestamp);
     map_gender_check();
+    map_fresh_shop_stock();
     map_is_start_map = false;
     if (map_current_map_index != 0 && map_type_to_map_index[MAP_TYPE_START_MAP] == map_current_map_index) {
         map_is_start_map = true;
@@ -1428,6 +1433,61 @@ void map_load_postprocess(void)
                 obj_field_int32_set(obj, OBJ_F_FLAGS, flags);
             }
         } while (obj_inst_next(&obj, &iter));
+    }
+}
+
+// CE (`fresh shop stock`; zsogg, 2026-11-05): restock each shop whose stock
+// is still the module's own (`fresh_stock_wanted`), once the map has loaded.
+// The containers are gathered first: a restock creates objects, which the
+// instance walk must not see change under it.
+#define MAP_FRESH_SHOPS_MAX 256
+
+static void map_fresh_shop_stock(void)
+{
+    int64_t shops[MAP_FRESH_SHOPS_MAX];
+    int count = 0;
+    int64_t obj;
+    int iter;
+    int index;
+
+    if (map_editor || !feature_enabled(FEATURE_FRESH_SHOP_STOCK)) {
+        return;
+    }
+
+    if (obj_inst_first(&obj, &iter)) {
+        do {
+            int64_t container;
+            bool listed;
+
+            if (obj_field_int32_get(obj, OBJ_F_TYPE) != OBJ_TYPE_NPC) {
+                continue;
+            }
+            container = critter_substitute_inventory_get(obj);
+            if (container == OBJ_HANDLE_NULL) {
+                continue;
+            }
+            listed = obj_field_int32_get(container, OBJ_F_TYPE) == OBJ_TYPE_CONTAINER;
+            if (!fresh_stock_wanted(listed,
+                    listed ? obj_field_int32_get(container, OBJ_F_CONTAINER_INVENTORY_SOURCE) : 0,
+                    listed ? obj_field_int32_get(container, OBJ_F_CONTAINER_FLAGS) : 0,
+                    obj_is_modified(container),
+                    critter_is_dead(obj),
+                    critter_pc_leader_get(obj) != OBJ_HANDLE_NULL)) {
+                continue;
+            }
+            for (index = 0; index < count && shops[index] != container; index++) {
+            }
+            if (index == count && count < MAP_FRESH_SHOPS_MAX) {
+                shops[count++] = container;
+            }
+        } while (obj_inst_next(&obj, &iter));
+    }
+
+    for (index = 0; index < count; index++) {
+        item_inventory_restock_contents(shops[index]);
+    }
+    if (count != 0) {
+        tig_debug_printf("fresh shop stock: %d shop(s) restocked\n", count);
     }
 }
 

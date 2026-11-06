@@ -1091,6 +1091,9 @@ TEST(the_inspect_light_and_wear_rows_load)
     CHECK(row_is(0, "turn=0 now=0 kind=inspect target=@pc loc=0 aim=0 spell=0 cast=- wait=0"));
     CHECK(row_is(1, "turn=0 now=0 kind=inspect target= loc=0 aim=0 spell=0 cast=- wait=0"));
     CHECK(!load_script("0 inspect light\n"));
+    // 2026-11-05: `inspect stock` needs its holder.
+    CHECK(load_script("0 inspect stock @s\n"));
+    CHECK(!load_script("0 inspect stock\n"));
     CHECK(!load_script("0 inspect wear @w extra\n"));
 }
 

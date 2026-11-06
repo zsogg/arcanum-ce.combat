@@ -87,6 +87,8 @@ set(SRCS
     "src/game/combat_feedback.h"
     "src/game/dodge_rules.c"
     "src/game/dodge_rules.h"
+    "src/game/fresh_stock.c"
+    "src/game/fresh_stock.h"
     "src/game/reload.c"
     "src/game/reload.h"
     "src/game/creature_rules.c"
