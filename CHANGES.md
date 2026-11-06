@@ -59,8 +59,9 @@ ledger of decompilation mistakes.
 
 ## 1. The optional mods
 
-Nine optional mods come with Arcanum CE, all off unless you turn them on.
-Six are new since release 1 (sections 1.4 to 1.9).
+Ten optional mods come with Arcanum CE, all off unless you turn them on.
+Six were new in release 2 (sections 1.4 to 1.9), and Simultaneous Turns
+(section 1.10) is new in release 3.
 
 - **Turning them on:** setup asks about each one. Afterwards each is one line
   in `arcanum-ce.cfg`: change its `0` to `1` and restart the game to turn it
@@ -522,6 +523,25 @@ mod changes the encounter file in five ways:
 
 Quest encounters still need their story flag, and each encounter holds the
 creatures it always did.
+
+### 1.10 Simultaneous Turns - `mod simultaneous-turns`
+
+New in release 3, and played. In the original turn-based game every critter
+takes its turn in succession: six wolves against you and a follower is eight
+turns, one after another, and the wolves' six are most of the wait. With
+this mod **the enemy side takes one turn together**: everyone outside your
+party moves and attacks at once, each on its own action points under the
+usual costs, and your turn comes when the last of them has finished.
+
+- **Your party keeps its own turns**, one at a time, as before: you, your
+  followers and what either of you summoned.
+- **The side acts when its first member would.** Without Initiative and
+  Awareness the party acts last, so the enemy side goes first. With it, the
+  side acts at its best initiative.
+- **Ambushes stay forgiving:** with Initiative and Awareness, at most one
+  enemy still acts before your party in an ambush's first round.
+- **Nobody acts twice in a round**, and Fast Turn-Based still applies.
+  Real-time combat is unchanged.
 
 ## 2. Highlights
 

@@ -161,6 +161,9 @@ tested in a game):
 - `mod initiative-awareness`, **Initiative and Awareness**: turn-based fights
   in initiative order, random encounters you can spot and avoid, and
   ambushes in which at most one enemy acts first.
+- `mod simultaneous-turns`, **Simultaneous Turns**: in turn-based fights the
+  enemy side takes one turn together, each on its own action points, and
+  your turn comes when the last has finished. New in release 3, and played.
 - `mod better-shops`, **Better Shops**: schematics in stock more often,
   specialist components sold and easier to use, and Conjure Spirit scrolls
   in every magic shop.
