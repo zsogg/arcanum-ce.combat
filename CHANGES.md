@@ -23,6 +23,20 @@ Magick Obscura*.
 - The original's 'quirks' are kept on purpose. Section 6 lists reachable
   quirks.
 
+**Release 3 in brief.** Release 2 came out on 2026-10-29; release 3 is a
+beta. It adds:
+
+- Simultaneous Turns, a new optional mod (section 1.10): the enemy side of a
+  turn-based round acts at once
+- In the Combat Rebalance: new Dodge rules, floating text that tells a miss
+  from a dodge and says when armour stopped a blow, and enemy casters that
+  protect themselves and spare their own side
+- Better Shops: the new stock shows from a shop's first visit
+- Fixes: sorting and text comparison as the original does them, and a few
+  more checks on damaged files
+
+What release 3 adds is marked "new in release 3".
+
 **Release 2 in brief.** Release 1 came out on 2026-10-18; release 2 is a
 beta. Progress in release 2 focused on bugfixes to both vanilla Arcanum and
 to the CE engine rebuild (section 3.2), and expanded combat overhaul
@@ -45,7 +59,7 @@ release 1".
 **Contents:**
 1. The optional mods: Combat Rebalance, Real-Time Pacing, Called Shots,
    Followers, Initiative and Awareness, Better Shops, Starting Gold, Brighter
-   Lanterns, Encounter Variety
+   Lanterns, Encounter Variety, Simultaneous Turns
 2. Highlights: the bugs worth a story, and the quirks left alone
 3. Bug fixes: the original game's bugs, the decompilation's mistakes, safety
 4. Changes to game mechanics: the Unofficial Arcanum Patch, CE's own rules,
@@ -124,6 +138,10 @@ magazine/cylinder mechanic and must be reloaded.
   gunners and casters.
 - **Followers on Defensive** fight within 8 tiles of you.
 - **Potions:** an enemy drinks at most two a fight, and drinking costs 6 AP.
+- **Enemy casters** (new in release 3) put up a protective spell first, keep
+  an area spell off their own side unless it also catches two of yours, and
+  leave alone a foe who is already disabled or has just recovered. A caster
+  no longer loses its turn on a spell its target cannot take.
 
 **Followers** (new since release 1)
 
@@ -233,6 +251,30 @@ magazine/cylinder mechanic and must be reloaded.
 - **No stacking:** a second casting of a buff does not add to the first.
 - **Summoning sickness:** a creature summoned in combat waits a turn before
   acting.
+- **The Stun spell** stuns 35% longer (new in release 3).
+- **A cast cut short** - by turn-based combat starting, or a new order - ends
+  instead of sticking, which had kept the AI from ever casting that spell on
+  that target again (new in release 3).
+
+**Dodge** (new in release 3)
+
+- **Armour and weight hinder it:** body armour takes 3 (leather), 6 (chain)
+  or 12 (plate) off the dodge chance, and each level of encumbrance 2 more
+  (16 when severely encumbered).
+- **Guns are hard to dodge:** against a firearm only 30% of the chance
+  applies. Bows and thrown weapons are dodged in full.
+- **No Dodge while asleep or knocked down.**
+- **Training floors the attacker:** instead of the original's rare critical
+  dodge, a dodge knocks the attacker down 5%, 10% or 20% of the time, by the
+  dodger's training (Apprentice, Expert, Master), whatever the attacker's
+  own training. Getting up costs 6 AP.
+
+**What the floats say** (new in release 3)
+
+- **"Miss"** over a plain miss, so it reads apart from "Dodge!".
+- **"Stopped"** when armour took all of a blow's damage, and **"Glancing"**
+  when it took more than half, with any fatigue that got through.
+- **At Verbose**, a hit's damage in one line: "4 HT, 7 FT".
 
 **Traps** (new since release 1)
 
@@ -381,6 +423,14 @@ scripts keep the original checks, so no quest changes.
   long fight can no longer stop poison working.
 - With potion costs on and exertion off, the action bar no longer offers a
   potion you cannot afford and then refuses the drink.
+- Loading a turn-based save no longer ticks poison again or ends summoning
+  sickness early (new in release 3).
+- Getting up after a fumble costs at most a whole turn, so a slow critter is
+  no longer stuck on the floor for the rest of a fight (new in release 3).
+- Without `walls stop sound`, hearing through a wall is the original's again
+  (new in release 3).
+- A follower whose gun ran dry gets it back after the fight however many
+  enemies swapped weapons in the session (new in release 3).
 
 ### 1.2 Real-Time Pacing - `mod real-time-pacing`
 
@@ -694,12 +744,16 @@ These were wrong in the original 2001 game itself. CE fixes them, always.
 
 **Drawing**
 
+- A corpse you take clothes from keeps its colours in coloured light; the
+  original redrew it in a few grey and olive tones (new in release 3).
 - The "ghosts" over dead critters that do not decay draw correctly.
 - Summoned creatures keep their own colours.
 - An effect's light is added once, not twice or not at all.
 
 **Smaller fixes, with no ordinary effect on play**
 
+- A mod that empties the sleeping text no longer crashes the game when a
+  sleeping character's name is drawn (new in release 3).
 - A turn-based timer was scaled a thousand times too long.
 - A script call returned the script's number instead of its result.
 - An animation timer used the wrong event type.
@@ -770,6 +824,11 @@ then what release 1 did.
 
 **Spells and magic**
 
+- NPCs choose among equally good spells in the original's order; before,
+  ties fell the other way, so an NPC knowing Unseen Force and Drain Will
+  opened with Unseen Force where the original opens with Drain Will. The
+  world map's equal encounter regions are ordered the same way. (#374, new
+  in release 3)
 - Effects that multiply or divide work, and carrying the Flow Reaper no longer
   crashes the game; before, every multiplier was zero. (#60)
 - Wall of Fire, Squall of Ice and the fire grenade hurt enemies and spare their
@@ -817,6 +876,10 @@ then what release 1 did.
 
 **Dialogue, quests and scripts**
 
+- Text comparisons treat accented letters as the original does; before, an e
+  with an acute accent and one with a grave accent compared equal, which
+  matters most in translated and modded text.
+  (#375, new in release 3)
 - Scripts that ask about a skill, including every gambling conversation, just
   ask; before, they went on to cast a stray spell. (#62)
 - A character short of money sees the "I can't afford that" replies; before,
@@ -1381,10 +1444,12 @@ multiplayer-only paths and the editor's start-up. (#14, #15, #17, #21, #28,
   - message (`.mes`) files with a duplicated number (the original looped
     forever) or a very large number of entries (the original took minutes);
   - saves with impossible lists, counts or sizes, for running animations,
-    active spells, timed events, world-map notes and visited areas;
+    active spells, timed events, world-map notes (town notes too, new in
+    release 3) and visited areas;
   - game archives with impossible sizes, overlong names or names that never
     end;
-  - art with impossible frame sizes, or pixels that run past the frame;
+  - art with impossible frame sizes or frame counts (counts new in release
+    3), or pixels that run past the frame;
   - terrain and building walk grids claiming impossible sizes, and map files
     naming impossible animation slots;
   - a dialogue line with a stray `@` marker, or a flag list ending in a
@@ -1509,6 +1574,11 @@ All of UAP 2.0.2's fixes to the game program are part of Arcanum CE, and on.
 - **A resizable window or full screen**, at the High Resolution Patch's
   resolution.
 - **Save thumbnails** are centred and smoothed at any resolution.
+- **The screen is scaled smoothly** when the window is larger than the game's
+  resolution (new in release 3); `scale mode` in `arcanum-ce.cfg` picks 0
+  nearest, 1 linear (the default) or 2 pixel art.
+- **Busy scenes draw faster** (new in release 3): art lookups, portraits and
+  NPCs' searches for targets are remembered instead of repeated.
 - **Left Alt** turns object highlighting on and off.
 
 **How the interface behaves**
