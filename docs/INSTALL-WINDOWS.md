@@ -33,13 +33,18 @@ Obscura*.
 ## From Steam
 
 The game's files from Steam are the same as GOG's, so everything here works
-the same way. Four things are different:
+the same way. Five things are different:
 
 - **Finding the game folder:** in Steam, right-click Arcanum, then Manage,
   then Browse local files. That opens the folder with Sierra's launcher; the
-  game is in the `Arcanum` folder inside it. Install UAP into that inner
-  folder. Setup finds it by itself, and steps down to it if you give it the
-  outer one.
+  game is in the `Arcanum` folder inside it. Setup finds it by itself, and
+  steps down to it if you give it the outer one.
+- **Installing UAP:** copy `UAP2.0.2.exe` into that inner `Arcanum` folder
+  and run it from there. Run from elsewhere, UAP's installer can offer
+  another Arcanum folder, such as a GOG copy. Check the folder it shows
+  before you go on.
+- **If you also have GOG's copy:** setup lists both and asks which one to
+  use. So does the uninstaller.
 - **If setup says the folder cannot be written to:** Steam's library is under
   Program Files. In Steam, Settings, Storage, add a library folder elsewhere
   (for example `C:\SteamLibrary`) and move Arcanum there, then run setup
