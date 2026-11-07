@@ -11,7 +11,7 @@
 Arcanum CE is a rebuilt engine plus mods for *Arcanum: Of Steamworks and
 Magick Obscura*.
 
-- It runs over Arcanum 1.0.7.4 from GOG (Good Old Games), with the
+- It runs over Arcanum 1.0.7.4 from GOG (Good Old Games) or Steam, with the
   Unofficial Arcanum Patch (UAP) 2.0.2 and its High Resolution Patch.
 - It builds on and extends Arcanum Community Edition
   (github.com/alexbatalov/arcanum-ce), a decompilation of the original game.
@@ -22,6 +22,18 @@ Magick Obscura*.
     and 3.3).
 - The original's 'quirks' are kept on purpose. Section 6 lists reachable
   quirks.
+
+**Release 4 in brief.** Release 3 came out on 2026-11-06; release 4 is a
+beta. It adds Arcanum from Steam:
+
+- The Windows setup finds Arcanum in a Steam library and installs into
+  Steam's game folder. Steam's game files are the same as GOG's, so
+  everything else works as it does over GOG.
+- When a PC has more than one Arcanum, GOG's and Steam's say, setup and the
+  uninstaller list them and ask which one.
+- The Linux setup takes a Steam copy's game folder too.
+
+The game, the engine and the mods are release 3's.
 
 **Release 3 in brief.** Release 2 came out on 2026-10-29; release 3 is a
 beta. It adds:
