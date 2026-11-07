@@ -57,9 +57,9 @@ the same way. Five things are different:
   and play; UAP itself warns that saves from before it may not carry over
   well, so if an old save behaves strangely, start a new game.
 
-**Starting Arcanum CE from Steam:** Steam's Games menu, "Add a Non-Steam
-Game to My Library", then Browse to `arcanum-ce.exe` in the game folder. It
-gets its own entry in the library.
+**Starting Arcanum CE:** start `arcanum-ce.exe` in the inner `Arcanum`
+folder, not from Steam. Steam's Play button starts the original game. Setup's
+`-DesktopShortcut` or `-StartMenuShortcut` adds a shortcut to CE.
 
 ## Installing
 
