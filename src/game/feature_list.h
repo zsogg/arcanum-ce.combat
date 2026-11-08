@@ -232,6 +232,14 @@ FEATURE(CASTER_TACTICS, "caster tactics", false)
 // `StunPct` stuns for that percent of the stock length (the Stun spell, 135);
 // a critical's stun and every other stun keep theirs.
 FEATURE(SPELL_STUN_LENGTH, "spell stun length", false)
+// Combat AI AI-8 (zsogg, 2026-11-08), read by `ai_choose_magictech_action` for
+// an NPC caster: instead of the first spell its lists allow, it casts the one
+// worth the most hit points for its fatigue - damage taken from each target,
+// a disabled target, a summon by how near the enemy is, a buff by what
+// threatens - keeping back three casts of its best attack, aiming an area
+// spell at the densest enemies, and in turn-based not spending a turn's points
+// on a buff that leaves no attack affordable (codes 20 to 23).
+FEATURE(CASTER_JUDGEMENT, "caster judgement", false)
 // Simultaneous Turns (card TB1; zsogg, 2026-11-05), read by `combat.c`'s turn
 // loop: in a turn-based round the NPC side - everyone outside the player's
 // party - takes one group turn together, each member with its own action

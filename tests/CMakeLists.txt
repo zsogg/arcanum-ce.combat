@@ -45,6 +45,7 @@ add_executable(arcanum-tests
     "test_dodge_rules.c"
     "test_fresh_stock.c"
     "test_ai_caster_tactics.c"
+    "test_ai_caster_judgement.c"
     "test_ai_targeting.c"
     "test_ai_follower_casting.c"
     "test_ai_follower_healing.c"

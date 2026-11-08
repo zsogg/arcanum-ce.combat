@@ -284,6 +284,30 @@ bool ai_tactics_area_refuses(int allies, int enemies);
 // has only just recovered at `now_key`: within one turn, either way the key
 // runs (rounds count up; real-time turns down). Pure.
 bool ai_tactics_just_recovered(int disabled_key, int now_key);
+// CE: AI-8, `caster judgement` (zsogg, 2026-11-08). Whether it binds `obj`:
+// any NPC, enemy or follower.
+bool ai_judgement_applies(int64_t obj);
+// CE: AI-8 rule 1's worths, in hit points. Pure.
+// - a damage spell on one target: the expected damage, never more than the
+//   target has left, plus 20 for a kill, at the chance it lands;
+int ai_judgement_damage_value(int expected, int hp_left, int land_pct);
+// - a spell that disables or weakens: half the target's hit points left, x
+//   the spell data's AI value / 20 (at most 1), at the chance it lands;
+int ai_judgement_control_value(int hp_left, int ai_value, int land_pct);
+// - a summon: 12 x its AI value, in full with an enemy within 8 tiles, a fifth
+//   from 20, in between by distance;
+int ai_judgement_summon_value(int ai_value, int nearest_enemy);
+// - a buff: 10 for each threatening enemy, at most 5, x (1 + AI value / 5).
+int ai_judgement_buff_value(int threats, int ai_value);
+// CE: AI-8. A worth per fatigue: hundredths of a hit point for each point of
+// the cost plus two upkeep periods. Pure.
+int ai_judgement_score(int value, int cost, int upkeep);
+// CE: AI-8 rule 2. Whether a spell spending into the reserve kept for the best
+// attack (three of its casts) is refused: unless it scores as well. Pure.
+bool ai_judgement_budget_refuses(int fatigue_left, int cost, int reserve, int score, int attack_score);
+// CE: AI-8 rule 4. Whether a turn-based buff or summon leaving too few action
+// points for the best attack is passed over for that attack, worth more. Pure.
+bool ai_judgement_turn_refuses(int ap_left, int ap_cost, int attack_ap_cost, int value, int attack_value);
 // CE: AI-5. Whether `ONF_CAST_HIGHEST` holds a critter to each college's
 // highest spell: always in stock; under `follower casting`, not for a follower
 // of the player.

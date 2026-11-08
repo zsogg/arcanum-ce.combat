@@ -379,6 +379,21 @@ bool magictech_spell_can_target(int64_t source_obj, int64_t target_obj, int magi
 // once (Intelligence / 4), so that the run ends "Maintain terminated" as it
 // begins. False for a spell without an upkeep.
 bool magictech_maintain_capacity_full(int64_t caster_obj, int magictech);
+// CE (combat AI, `caster judgement`, card AI-8): the spell data's AI value for
+// one of `mt_ai.h`'s actions (`AI_Offensive: 13` and the like), -1 for none.
+int magictech_ai_value(int magictech, int action);
+// CE (card AI-8): the fatigue a maintained spell takes each upkeep period, 0
+// for a spell without one.
+int magictech_upkeep_cost(int magictech);
+// CE (card AI-8): the hit points a cast of the spell by `caster_obj` is
+// expected to take from `target_obj` (or from anyone, when null): its begin
+// damage, averaged and scaled as the cast scales it, less the target's
+// resistance; fatigue and poison at half. 0 for a spell that does no damage.
+int magictech_ai_expected_damage(int64_t caster_obj, int64_t target_obj, int magictech);
+// CE (card AI-8): the percent chance a cast of the spell by `attacker_obj`
+// takes `target_obj`, by `magictech_cast_spell_fail_chance`'s rules with the
+// saving throw at its odds, unrolled. 100 for the caster itself or a tile.
+int magictech_ai_land_chance(int64_t attacker_obj, int64_t target_obj, int magictech);
 // CE (`grenade blasts`): the `ai_attack` flags for a spell or blast hit; 0x01,
 // accidental, between members of one party.
 int magictech_attack_flags(int64_t attacker_obj, int64_t target_obj);

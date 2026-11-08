@@ -1716,6 +1716,167 @@ bool magictech_maintain_capacity_full(int64_t caster_obj, int magictech)
     return magictech_maintained_count(caster_obj) + 1 > magictech_maintain_capacity_get(caster_obj);
 }
 
+// CE (combat AI, `caster judgement`, card AI-8): see `magictech.h`.
+int magictech_ai_value(int magictech, int action)
+{
+    if (magictech_spells == NULL || magictech < 0 || magictech >= MT_SPELL_COUNT
+        || action < 0 || action >= MAGICTECH_AI_ACTION_COUNT) {
+        return -1;
+    }
+
+    return magictech_spells[magictech].ai.values[action];
+}
+
+// CE (combat AI, `caster judgement`, card AI-8): see `magictech.h`.
+int magictech_upkeep_cost(int magictech)
+{
+    if (magictech_spells == NULL || magictech < 0 || magictech >= MT_SPELL_COUNT
+        || magictech_spells[magictech].maintenance.period <= 0) {
+        return 0;
+    }
+
+    return magictech_spells[magictech].maintenance.cost;
+}
+
+// CE (combat AI, `caster judgement`, card AI-8): see `magictech.h`. The
+// arithmetic of `magictech_cast_spell_fail_chance`, with the saving throw
+// taken at its odds rather than rolled, so weighing draws no random number.
+int magictech_ai_land_chance(int64_t attacker_obj, int64_t target_obj, int magictech)
+{
+    MagicTechInfo* info;
+    int resistance;
+    int saving_throw_bonus = 0;
+    int save_pct = 0;
+    int saved = 0;
+
+    if (magictech_spells == NULL || magictech < 0 || magictech >= MT_SPELL_COUNT
+        || target_obj == OBJ_HANDLE_NULL || attacker_obj == target_obj) {
+        return 100;
+    }
+
+    info = &(magictech_spells[magictech]);
+    if ((info->flags & MAGICTECH_IS_TECH) != 0) {
+        return 100;
+    }
+
+    resistance = object_get_resistance(target_obj, RESISTANCE_TYPE_MAGIC, false);
+    {
+        int aptitude = stat_level_get(target_obj, STAT_MAGICK_TECH_APTITUDE);
+        if (aptitude < 0) {
+            resistance = 100 - (100 - resistance) * (aptitude + 100) / 100;
+        }
+    }
+
+    if (resistance > 0
+        && (info->flags & MAGICTECH_HAVE_DAMAGE) == 0
+        && info->maintenance.period <= 0) {
+        if (info->resistance.stat != -1) {
+            saving_throw_bonus = resistance / 10;
+        } else if (resistance > 40) {
+            return 0;
+        }
+    }
+
+    if (info->resistance.stat != -1
+        && obj_type_is_critter(obj_field_int32_get(target_obj, OBJ_F_TYPE))) {
+        int difficulty;
+
+        if (info->resistance.stat == STAT_WILLPOWER
+            && stat_is_extraordinary(target_obj, STAT_WILLPOWER)) {
+            return 0;
+        }
+
+        difficulty = stat_level_get(target_obj, info->resistance.stat) + info->resistance.value - saving_throw_bonus;
+        save_pct = difficulty <= 0 ? 0 : difficulty >= 20 ? 100
+                                                          : difficulty * 5;
+        if ((info->flags & MAGICTECH_HAVE_DAMAGE) == 0) {
+            saved = info->maintenance.period == 0 ? 100 : resistance;
+        } else {
+            saved = resistance < 50 ? 50 : resistance;
+        }
+    }
+
+    resistance = (resistance * (100 - save_pct) + saved * save_pct) / 100;
+    if (resistance < 0) {
+        resistance = 0;
+    } else if (resistance > 100) {
+        resistance = 100;
+    }
+
+    return 100 - resistance;
+}
+
+// CE (combat AI, `caster judgement`, card AI-8): see `magictech.h`. Each begin
+// damage component as `MTComponentDamage_ProcFunc` rolls it - scaled by the
+// caster's aptitude as the cast scales it - averaged, then cut by the
+// target's resistance to its type.
+int magictech_ai_expected_damage(int64_t caster_obj, int64_t target_obj, int magictech)
+{
+    static const int resistances[DAMAGE_TYPE_COUNT] = {
+        RESISTANCE_TYPE_NORMAL,
+        RESISTANCE_TYPE_POISON,
+        RESISTANCE_TYPE_ELECTRICAL,
+        RESISTANCE_TYPE_FIRE,
+        RESISTANCE_TYPE_NORMAL,
+    };
+    MagicTechComponentList* list;
+    int idx;
+    int total = 0;
+
+    if (magictech_spells == NULL || magictech < 0 || magictech >= MT_SPELL_COUNT) {
+        return 0;
+    }
+
+    list = &(magictech_spells[magictech].components[MAGICTECH_ACTION_BEGIN]);
+    for (idx = 0; idx < list->cnt; idx++) {
+        MagicTechComponentInfo* component = &(list->entries[idx]);
+        int dam_min;
+        int dam_max;
+        int type;
+        int expected;
+
+        if (component->type != MTC_DAMAGE) {
+            continue;
+        }
+
+        dam_min = component->data.damage.damage_min;
+        dam_max = component->data.damage.damage_max;
+        if ((component->data.damage.damage_flags & CDF_SCALE) != 0) {
+            int aptitude = caster_obj != OBJ_HANDLE_NULL
+                    && obj_type_is_critter(obj_field_int32_get(caster_obj, OBJ_F_TYPE))
+                ? stat_level_get(caster_obj, STAT_MAGICK_TECH_APTITUDE)
+                : 0;
+            if (feature_enabled(FEATURE_SPELL_APTITUDE_DAMAGE)) {
+                dam_max = spell_rules_scaled_damage(dam_min, dam_max, aptitude, SPELL_APTITUDE_DAMAGE_PERCENT);
+            } else {
+                dam_max = aptitude > 0 ? dam_min + aptitude * (dam_max - dam_min) / 100 : dam_min;
+            }
+            dam_min = dam_max;
+        }
+
+        type = component->data.damage.damage_type >= 0 && component->data.damage.damage_type < DAMAGE_TYPE_COUNT
+            ? component->data.damage.damage_type
+            : DAMAGE_TYPE_NORMAL;
+        expected = (dam_min + dam_max) / 2;
+        // Fatigue and poison take no hit points at once: half their worth.
+        if (type == DAMAGE_TYPE_FATIGUE || type == DAMAGE_TYPE_POISON) {
+            expected /= 2;
+        }
+        if (target_obj != OBJ_HANDLE_NULL) {
+            int resistance = object_get_resistance(target_obj, resistances[type], false);
+            if (resistance > 95) {
+                resistance = 95;
+            }
+            if (resistance > 0) {
+                expected = expected * (100 - resistance) / 100;
+            }
+        }
+        total += expected;
+    }
+
+    return total;
+}
+
 // 0x4502E0
 int magictech_min_intelligence(int magictech)
 {

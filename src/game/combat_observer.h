@@ -390,7 +390,8 @@ void combat_observer_damage_committed(const char* attacker,
 // roll for this turn passed, letting it cast below its fatigue floor.
 // `waived` (milestone AI-5) is true when the spell roll was made only because
 // `follower casting` waived a healthy follower's restraint.
-#define COMBAT_OBSERVER_AI_CONSIDERED_MAX 8
+// 16 since card AI-8, whose judged choice reports every spell it weighed.
+#define COMBAT_OBSERVER_AI_CONSIDERED_MAX 16
 void combat_observer_ai_decided(const char* actor, const char* target,
     const char* danger, const char* origin, const char* action, int spell,
     const char* item, const char* weapon, int cast_chance, int cast_roll,

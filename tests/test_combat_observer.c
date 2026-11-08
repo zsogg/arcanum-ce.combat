@@ -166,8 +166,20 @@ TEST(an_ai_decision_lists_what_it_weighed)
         != NULL);
     CHECK(strstr(trace, "\"weapon\":\"G_SWORD\",\"cast_chance\":25,\"cast_roll\":-1,") != NULL);
     // No more than the cap is written, however many are passed.
-    CHECK(strstr(trace, "[0,0],[0,0],[0,0],[0,0],[0,0],[0,0],[0,0],[0,0]],\"desperate\":false,\"waived\":true}") != NULL);
-    CHECK(strstr(trace, "[0,0],[0,0],[0,0],[0,0],[0,0],[0,0],[0,0],[0,0],[0,0]") == NULL);
+    {
+        char capped[16 * COMBAT_OBSERVER_AI_CONSIDERED_MAX + 64] = "[";
+        char over[16 * COMBAT_OBSERVER_AI_CONSIDERED_MAX + 64] = "";
+        int index;
+
+        for (index = 0; index < COMBAT_OBSERVER_AI_CONSIDERED_MAX; index++) {
+            strcat(capped, index > 0 ? ",[0,0]" : "[0,0]");
+            strcat(over, "[0,0],");
+        }
+        strcat(capped, "],\"desperate\":false,\"waived\":true}");
+        strcat(over, "[0,0]");
+        CHECK(strstr(trace, capped) != NULL);
+        CHECK(strstr(trace, over) == NULL);
+    }
 }
 
 TEST(an_armor_aware_weapon_choice_lists_its_candidates)

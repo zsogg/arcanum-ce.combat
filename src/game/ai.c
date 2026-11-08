@@ -197,6 +197,7 @@ static int ai_check_use_spell(int64_t attacker_obj, int64_t item_obj, int64_t ta
 static bool ai_tactics_applies(int64_t obj);
 static bool ai_protect_first(Ai* ai);
 static int ai_tactics_refusal(int64_t caster_obj, int64_t target_obj, int spell);
+static bool ai_choose_magictech_judged(Ai* ai);
 static void ai_tactics_note_if_disabled(int64_t caster_obj, int64_t target_obj, int spell);
 static int ai_desperation_key(void);
 static bool ai_is_indoor_to_outdoor_transition(int64_t portal_obj, int dir);
@@ -3259,8 +3260,10 @@ bool ai_choose_magictech_action(Ai* ai)
         ai->cast_chance = 100;
     }
     // CE (`caster tactics`, card AI-7, rule 1): a protection not already on
-    // it comes first, past both the cast roll and AI parameter 13's.
-    if (ai_protect_first(ai)) {
+    // it comes first, past both the cast roll and AI parameter 13's. Under
+    // `caster judgement` (AI-8) the score decides that instead: a protection
+    // is worth most while something threatens the caster.
+    if (!ai_judgement_applies(ai->obj) && ai_protect_first(ai)) {
         return true;
     }
     if (ai->cast_roll > ai->cast_chance) {
@@ -3270,7 +3273,11 @@ bool ai_choose_magictech_action(Ai* ai)
     // CE (combat AI, milestone AI-5): while the waiver is what lets this
     // follower cast, it keeps its fatigue reserve (`ai_may_be_desperate`).
     ai_waived_caster = ai->cast_waived ? ai->obj : OBJ_HANDLE_NULL;
-    if (ai_choose_magictech_from_lists(ai)) {
+    // CE (`caster judgement`, card AI-8): the best allowed spell, not the
+    // first.
+    if (ai_judgement_applies(ai->obj)
+            ? ai_choose_magictech_judged(ai)
+            : ai_choose_magictech_from_lists(ai)) {
         ai_waived_caster = OBJ_HANDLE_NULL;
         return true;
     }
@@ -6895,4 +6902,421 @@ static int ai_tactics_refusal(int64_t caster_obj, int64_t target_obj, int spell)
     }
 
     return 0;
+}
+
+// CE (combat AI, milestone AI-8, `caster judgement`; zsogg, 2026-11-08). The
+// card's rules (arcanum-work tasks/AI8-caster-judgement.md): a caster casts the
+// allowed spell worth the most hit points for its fatigue, keeps back three
+// casts of its best attack, aims an area spell where it takes the most
+// enemies, and in turn-based does not spend a turn's points on a buff that
+// leaves no attack affordable. The arithmetic is pure, for the C cases.
+#define AI_JUDGEMENT_KILL_BONUS 20
+#define AI_JUDGEMENT_MIN_VALUE 10
+#define AI_JUDGEMENT_RESERVE_CASTS 3
+#define AI_JUDGEMENT_AREA_CENTRES 8
+#define AI_JUDGEMENT_MAX 48
+#define AI_JUDGEMENT_RADIUS 25
+
+bool ai_judgement_applies(int64_t obj)
+{
+    return feature_enabled(FEATURE_CASTER_JUDGEMENT)
+        && obj_field_int32_get(obj, OBJ_F_TYPE) == OBJ_TYPE_NPC;
+}
+
+int ai_judgement_damage_value(int expected, int hp_left, int land_pct)
+{
+    int value;
+
+    if (expected <= 0 || hp_left <= 0) {
+        return 0;
+    }
+
+    value = expected < hp_left ? expected : hp_left;
+    if (expected >= hp_left) {
+        value += AI_JUDGEMENT_KILL_BONUS;
+    }
+    return value * land_pct / 100;
+}
+
+int ai_judgement_control_value(int hp_left, int ai_value, int land_pct)
+{
+    if (hp_left <= 0 || ai_value <= 0) {
+        return 0;
+    }
+    if (ai_value > 20) {
+        ai_value = 20;
+    }
+    return hp_left / 2 * ai_value / 20 * land_pct / 100;
+}
+
+int ai_judgement_summon_value(int ai_value, int nearest_enemy)
+{
+    int urgency;
+
+    if (ai_value <= 0) {
+        return 0;
+    }
+
+    if (nearest_enemy <= 8) {
+        urgency = 100;
+    } else if (nearest_enemy >= 20) {
+        urgency = 20;
+    } else {
+        urgency = 100 - (nearest_enemy - 8) * 80 / 12;
+    }
+    return 12 * ai_value * urgency / 100;
+}
+
+int ai_judgement_buff_value(int threats, int ai_value)
+{
+    if (threats <= 0) {
+        return 0;
+    }
+    if (threats > 5) {
+        threats = 5;
+    }
+    if (ai_value < 0) {
+        ai_value = 0;
+    }
+    return 10 * threats * (5 + ai_value) / 5;
+}
+
+int ai_judgement_score(int value, int cost, int upkeep)
+{
+    int spend = cost + 2 * upkeep;
+
+    return value * 100 / (spend > 0 ? spend : 1);
+}
+
+bool ai_judgement_budget_refuses(int fatigue_left, int cost, int reserve, int score, int attack_score)
+{
+    return reserve > 0 && score < attack_score && fatigue_left - cost < reserve;
+}
+
+bool ai_judgement_turn_refuses(int ap_left, int ap_cost, int attack_ap_cost, int value, int attack_value)
+{
+    return attack_ap_cost > 0 && ap_left - ap_cost < attack_ap_cost && attack_value > value;
+}
+
+typedef struct AiJudgedSpell {
+    int spell;
+    int64_t item_obj;
+    int64_t target_obj;
+    int code;
+    int value;
+    int score;
+    int cost;
+    bool attack;
+} AiJudgedSpell;
+
+// An enemy, for the weighing: on the target's side and not on the caster's,
+// so a bystander counts for neither.
+static bool ai_judgement_enemy(Ai* ai, int64_t obj)
+{
+    return obj != ai->obj
+        && ai->danger_source != OBJ_HANDLE_NULL
+        && !critter_is_dead(obj)
+        && !ai_tactics_same_side(ai->obj, obj)
+        && ai_tactics_same_side(ai->danger_source, obj);
+}
+
+// The enemies threatening `protect_obj`: aiming at it, or within `near` tiles.
+static int ai_judgement_threats(Ai* ai, ObjectList* critters, int64_t protect_obj, int near, bool aimed)
+{
+    int64_t loc = obj_field_int64_get(protect_obj, OBJ_F_LOCATION);
+    ObjectNode* node;
+    int threats = 0;
+
+    for (node = critters->head; node != NULL; node = node->next) {
+        if (!ai_judgement_enemy(ai, node->obj)) {
+            continue;
+        }
+        if (location_dist(loc, obj_field_int64_get(node->obj, OBJ_F_LOCATION)) <= near
+            || (aimed
+                && obj_field_int32_get(node->obj, OBJ_F_TYPE) == OBJ_TYPE_NPC
+                && obj_field_handle_get(node->obj, OBJ_F_NPC_COMBAT_FOCUS) == protect_obj)) {
+            threats++;
+        }
+    }
+    return threats;
+}
+
+// Rule 3: an area attack's worth with its blast at `centre_obj` - each enemy
+// inside by the damage it would take, each ally of an enemy caster at twice
+// that against it. The player's party is spared by the spells' own data
+// (`Tgt_Non_Party_Critters`), so a follower's allies do not count.
+static int ai_judgement_area_value(Ai* ai, ObjectList* critters, int spell, int64_t centre_obj, int radius)
+{
+    int64_t centre = obj_field_int64_get(centre_obj, OBJ_F_LOCATION);
+    bool party = critter_pc_leader_get(ai->obj) != OBJ_HANDLE_NULL;
+    ObjectNode* node;
+    int value = 0;
+
+    for (node = critters->head; node != NULL; node = node->next) {
+        int worth;
+
+        if (node->obj == ai->obj
+            || critter_is_dead(node->obj)
+            || location_dist(centre, obj_field_int64_get(node->obj, OBJ_F_LOCATION)) > radius) {
+            continue;
+        }
+        worth = ai_judgement_damage_value(magictech_ai_expected_damage(ai->obj, node->obj, spell),
+            object_hp_current(node->obj), 100);
+        if (ai_judgement_enemy(ai, node->obj)) {
+            value += worth;
+        } else if (!party && ai_tactics_same_side(ai->obj, node->obj)) {
+            value -= 2 * worth;
+        }
+    }
+    return value;
+}
+
+// Rule 3: the centre for an area attack, among the target and the nearest
+// enemies within the spell's range.
+static int64_t ai_judgement_area_centre(Ai* ai, ObjectList* critters, int spell, int radius)
+{
+    int64_t caster_loc = obj_field_int64_get(ai->obj, OBJ_F_LOCATION);
+    int range = magictech_get_range(spell);
+    int64_t near_obj[AI_JUDGEMENT_AREA_CENTRES];
+    int near_dist[AI_JUDGEMENT_AREA_CENTRES];
+    int near_cnt = 0;
+    int64_t best_obj = ai->danger_source;
+    int best_value = ai_judgement_area_value(ai, critters, spell, ai->danger_source, radius);
+    ObjectNode* node;
+    int idx;
+
+    for (node = critters->head; node != NULL; node = node->next) {
+        int dist;
+        int slot;
+
+        if (node->obj == ai->danger_source || !ai_judgement_enemy(ai, node->obj)) {
+            continue;
+        }
+        dist = (int)location_dist(caster_loc, obj_field_int64_get(node->obj, OBJ_F_LOCATION));
+        if (dist > range) {
+            continue;
+        }
+        if (near_cnt < AI_JUDGEMENT_AREA_CENTRES) {
+            slot = near_cnt++;
+        } else {
+            slot = 0;
+            for (idx = 1; idx < near_cnt; idx++) {
+                if (near_dist[idx] > near_dist[slot]) {
+                    slot = idx;
+                }
+            }
+            if (near_dist[slot] <= dist) {
+                continue;
+            }
+        }
+        near_obj[slot] = node->obj;
+        near_dist[slot] = dist;
+    }
+
+    for (idx = 0; idx < near_cnt; idx++) {
+        int value = ai_judgement_area_value(ai, critters, spell, near_obj[idx], radius);
+        if (value > best_value) {
+            best_value = value;
+            best_obj = near_obj[idx];
+        }
+    }
+    return best_obj;
+}
+
+// Rule 1's worth of one allowed spell at its target, in hit points.
+static int ai_judgement_value(Ai* ai, ObjectList* critters, int action, AiJudgedSpell* c, int nearest_enemy)
+{
+    bool caster_centred = false;
+    int radius;
+    int damage;
+    int land;
+
+    if (action == MAGICTECH_AI_ACTION_SUMMON) {
+        return ai_judgement_summon_value(magictech_ai_value(c->spell, action), nearest_enemy);
+    }
+
+    if (action == MAGICTECH_AI_ACTION_DEFENSIVE && !mt_ai_spell_defensive_targets_enemy(c->spell)) {
+        // Body of Fire's own worth is the burn a melee attacker takes.
+        bool melee_only = c->spell == SPELL_BODY_OF_FIRE;
+        return ai_judgement_buff_value(ai_judgement_threats(ai, critters, c->target_obj, melee_only ? 2 : 3, !melee_only),
+            magictech_ai_value(c->spell, action));
+    }
+
+    land = magictech_ai_land_chance(ai->obj, c->target_obj, c->spell);
+    damage = magictech_ai_expected_damage(ai->obj, c->target_obj, c->spell);
+    if (damage <= 0) {
+        return ai_judgement_control_value(object_hp_current(c->target_obj), magictech_ai_value(c->spell, action), land);
+    }
+
+    c->attack = true;
+    radius = magictech_area_radius(c->spell, &caster_centred);
+    if (radius >= 0) {
+        return ai_judgement_area_value(ai, critters, c->spell, caster_centred ? ai->obj : c->target_obj, radius) * land / 100;
+    }
+    return ai_judgement_damage_value(damage, object_hp_current(c->target_obj), land);
+}
+
+// Rules 1 to 4 in place of the stock list walk: every allowed spell of the
+// summon (under the cap), defensive and offensive lists, weighed at the target
+// the stock walk would give it - an area attack at its best centre - and the
+// best cast. Each weighed spell goes to `ai.decided` with its code.
+static bool ai_choose_magictech_judged(Ai* ai)
+{
+    static const int actions[] = {
+        MAGICTECH_AI_ACTION_SUMMON,
+        MAGICTECH_AI_ACTION_DEFENSIVE,
+        MAGICTECH_AI_ACTION_OFFENSIVE,
+    };
+    AiJudgedSpell cands[AI_JUDGEMENT_MAX];
+    int cnt = 0;
+    ObjectList critters;
+    ObjectNode* node;
+    int64_t caster_loc = obj_field_int64_get(ai->obj, OBJ_F_LOCATION);
+    int64_t protect_obj = ai_player_under_attack(ai->obj);
+    int nearest_enemy = INT_MAX;
+    int best_attack = -1;
+    int chosen = -1;
+    int reserve;
+    int fatigue_left;
+    bool turn_based;
+    int ap_left = 0;
+    int attack_ap = 0;
+    int list;
+    int idx;
+
+    // The screen-sized vicinity can miss a target the AI keeps at 20 tiles.
+    ai_objects_in_radius(ai->obj, AI_JUDGEMENT_RADIUS, &critters, OBJ_TM_PC | OBJ_TM_NPC);
+    for (node = critters.head; node != NULL; node = node->next) {
+        if (ai_judgement_enemy(ai, node->obj)) {
+            int dist = (int)location_dist(caster_loc, obj_field_int64_get(node->obj, OBJ_F_LOCATION));
+            if (dist < nearest_enemy) {
+                nearest_enemy = dist;
+            }
+        }
+    }
+
+    for (list = 0; list < (int)(sizeof(actions) / sizeof(actions[0])); list++) {
+        MagicTechAi magictech_ai;
+        int action = actions[list];
+
+        if (action == MAGICTECH_AI_ACTION_SUMMON && !ai_may_summon(ai)) {
+            continue;
+        }
+
+        mt_ai_create(&magictech_ai, ai->obj, action);
+        for (idx = 0; idx < magictech_ai.actions[action].cnt && cnt < AI_JUDGEMENT_MAX; idx++) {
+            MagicTechAiActionListEntry* entry = &(magictech_ai.actions[action].entries[idx]);
+            AiJudgedSpell* c = &(cands[cnt]);
+            bool caster_centred = false;
+
+            if (entry->spell == -1) {
+                continue;
+            }
+
+            c->spell = entry->spell;
+            c->item_obj = entry->item_obj;
+            c->attack = false;
+            c->value = 0;
+            c->score = 0;
+            if (action == MAGICTECH_AI_ACTION_SUMMON) {
+                c->target_obj = ai->obj;
+            } else if (action == MAGICTECH_AI_ACTION_DEFENSIVE) {
+                c->target_obj = mt_ai_spell_defensive_targets_enemy(entry->spell) ? ai->danger_source : ai->obj;
+                // AI-6 F4: a follower's buff that can go on another goes on
+                // the player while the player is under attack.
+                if (protect_obj != OBJ_HANDLE_NULL
+                    && c->target_obj == ai->obj
+                    && magictech_spell_reaches_others(entry->spell)
+                    && !magictech_is_under_influence_of(protect_obj, entry->spell)
+                    && ai_check_use_spell(ai->obj, entry->item_obj, protect_obj, entry->spell) == 0) {
+                    c->target_obj = protect_obj;
+                }
+            } else {
+                c->target_obj = ai->danger_source;
+                if (magictech_ai_expected_damage(ai->obj, OBJ_HANDLE_NULL, entry->spell) > 0) {
+                    int radius = magictech_area_radius(entry->spell, &caster_centred);
+                    if (radius >= 0 && !caster_centred) {
+                        c->target_obj = ai_judgement_area_centre(ai, &critters, entry->spell, radius);
+                    }
+                }
+            }
+
+            c->code = magictech_is_under_influence_of(c->target_obj, c->spell)
+                ? 13
+                : ai_check_use_spell(ai->obj, c->item_obj, c->target_obj, c->spell);
+            if (c->code == 13) {
+                ai_tactics_note_if_disabled(ai->obj, c->target_obj, c->spell);
+            }
+            if (c->code == 0) {
+                c->value = ai_judgement_value(ai, &critters, action, c, nearest_enemy);
+                c->cost = c->item_obj != OBJ_HANDLE_NULL ? 0 : spell_cast_cost(c->spell, ai->obj);
+                c->score = ai_judgement_score(c->value, spell_cast_cost(c->spell, ai->obj), magictech_upkeep_cost(c->spell));
+                if (c->attack && (best_attack < 0 || c->score > cands[best_attack].score)) {
+                    best_attack = cnt;
+                }
+            }
+            cnt++;
+        }
+        mt_ai_destroy(&magictech_ai);
+    }
+    object_list_destroy(&critters);
+
+    // Rules 2 and 4 against the best attack, then the best of the rest.
+    reserve = best_attack >= 0 ? AI_JUDGEMENT_RESERVE_CASTS * cands[best_attack].cost : 0;
+    fatigue_left = critter_fatigue_current(ai->obj);
+    turn_based = combat_turn_based_is_active() && combat_turn_based_is_acting(ai->obj);
+    if (turn_based) {
+        ap_left = combat_action_points_of(ai->obj);
+        if (best_attack >= 0) {
+            attack_ap = combat_spell_cast_cost(ai->obj, cands[best_attack].spell, cands[best_attack].item_obj);
+        }
+    }
+
+    for (idx = 0; idx < cnt; idx++) {
+        AiJudgedSpell* c = &(cands[idx]);
+
+        if (c->code != 0) {
+            continue;
+        }
+        if (c->value < AI_JUDGEMENT_MIN_VALUE) {
+            c->code = 23;
+        } else if (best_attack >= 0
+            && ai_judgement_budget_refuses(fatigue_left, c->cost, reserve, c->score, cands[best_attack].score)) {
+            c->code = 21;
+        } else if (turn_based
+            && best_attack >= 0
+            && !c->attack
+            && ai_judgement_turn_refuses(ap_left, combat_spell_cast_cost(ai->obj, c->spell, c->item_obj),
+                attack_ap, c->value, cands[best_attack].value)) {
+            c->code = 22;
+        } else if (chosen < 0 || c->score > cands[chosen].score) {
+            chosen = idx;
+        }
+    }
+
+    for (idx = 0; idx < cnt; idx++) {
+        if (cands[idx].code == 0 && idx != chosen) {
+            cands[idx].code = 20;
+        }
+        if (ai->considered_count < COMBAT_OBSERVER_AI_CONSIDERED_MAX) {
+            ai->considered[ai->considered_count][0] = cands[idx].spell;
+            ai->considered[ai->considered_count][1] = cands[idx].code;
+            ai->considered_count++;
+        }
+    }
+
+    if (chosen < 0) {
+        return false;
+    }
+
+    if (cands[chosen].item_obj != OBJ_HANDLE_NULL && mt_item_valid_ai_action(cands[chosen].item_obj)) {
+        ai_restorative_note_used(ai->obj, cands[chosen].item_obj);
+        ai->action_type = AI_ACTION_TYPE_USE_ITEM;
+    } else {
+        ai->action_type = AI_ACTION_TYPE_CAST_SPELL;
+    }
+    ai->spell = cands[chosen].spell;
+    ai->item_obj = cands[chosen].item_obj;
+    ai->danger_source = cands[chosen].target_obj;
+    return true;
 }

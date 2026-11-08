@@ -33,6 +33,7 @@ void test_combat_feedback_suite(void);
 void test_dodge_rules_suite(void);
 void test_fresh_stock_suite(void);
 void test_ai_caster_tactics_suite(void);
+void test_ai_caster_judgement_suite(void);
 void test_ai_targeting_suite(void);
 void test_ai_follower_casting_suite(void);
 void test_ai_follower_healing_suite(void);
@@ -149,6 +150,7 @@ int main(void)
     test_dodge_rules_suite();
     test_fresh_stock_suite();
     test_ai_caster_tactics_suite();
+    test_ai_caster_judgement_suite();
     test_ai_targeting_suite();
     test_ai_follower_casting_suite();
     test_ai_follower_healing_suite();
