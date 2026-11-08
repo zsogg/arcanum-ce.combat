@@ -1117,6 +1117,51 @@ void anim_interrupted_cast_end(AnimRunInfo* run_info, int goal)
     }
 }
 
+// CE (`interrupted casts end`): a spell run is freed - its target died and
+// the game interrupted it, or it ran its course - while a cast goal still
+// names it. Run ids are slots in a 512-entry pool, so a later cast can be
+// given the same one, and the leftover goal, reaching its action frame,
+// began that cast as its own: the new run began twice and was paid twice
+// (an Agility of Fire 0.4 s apart in the demonstration battle,
+// 2026-11-08). The goals forget it instead, as `anim_cleanup_spell` does
+// within its own run, and a cast left with no spell ends on its failure
+// step. Only the spell goals: pickpocketing keeps other data in the slot.
+void anim_spell_run_freed(int mt_id)
+{
+    int slot;
+    int idx;
+
+    if (!feature_enabled(FEATURE_INTERRUPTED_CASTS_END) || mt_id == -1) {
+        return;
+    }
+
+    for (slot = 0; slot < ANIM_RUN_INFO_COUNT; slot++) {
+        AnimRunInfo* run_info = &(anim_run_info[slot]);
+
+        if ((run_info->flags & 0x01) == 0) {
+            continue;
+        }
+        for (idx = 0; idx <= run_info->current_goal && idx < 8; idx++) {
+            switch (run_info->goals[idx].type) {
+            case AG_THROW_SPELL:
+            case AG_ATTEMPT_SPELL:
+            case AG_SHOOT_SPELL:
+            case AG_THROW_SPELL_FRIENDLY:
+            case AG_ATTEMPT_SPELL_FRIENDLY:
+            case AG_THROW_SPELL_W_CAST_ANIM:
+            case AG_ATTEMPT_SPELL_W_CAST_ANIM:
+            case AG_THROW_SPELL_W_CAST_ANIM_2NDARY:
+                if (run_info->goals[idx].params[AGDATA_SPELL_DATA].data == mt_id) {
+                    run_info->goals[idx].params[AGDATA_SPELL_DATA].data = -1;
+                }
+                break;
+            default:
+                break;
+            }
+        }
+    }
+}
+
 // 0x44E2C0
 bool anim_interrupt(AnimID* anim_id, int priority)
 {

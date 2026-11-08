@@ -430,6 +430,9 @@ bool anim_force_interrupt(AnimID* anim_id);
 // CE (`interrupted casts end`, quirk 68): called by `anim_interrupt` for each
 // goal it cancels; public for the suite.
 void anim_interrupted_cast_end(AnimRunInfo* run_info, int goal);
+// CE (`interrupted casts end`): called by `magictech_id_free_lock` as a spell
+// run is freed; the cast goals still naming it forget it.
+void anim_spell_run_freed(int mt_id);
 bool anim_interrupt(AnimID* anim_id, int priority);
 bool anim_find_first_of_type(int64_t obj, int type, AnimID* anim_id);
 bool anim_find_next_of_type(int64_t obj, int type, AnimID* anim_id);

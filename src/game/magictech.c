@@ -5425,6 +5425,9 @@ void magictech_id_free_lock(int mt_id)
 
     run_info = &(magictech_run_info[mt_id]);
     if (run_info->id != -1) {
+        // CE (`interrupted casts end`): no cast goal keeps a freed run's id.
+        anim_spell_run_freed(mt_id);
+
         magictech_timeevent_match_id = run_info->id;
         timeevent_clear_one_ex(TIMEEVENT_TYPE_MAGICTECH, magictech_timeevent_matches_current);
         magictech_timeevent_match_id = -1;

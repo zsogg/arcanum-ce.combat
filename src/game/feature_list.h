@@ -210,7 +210,10 @@ FEATURE(COMBAT_MUSIC_SHUFFLE, "combat music shuffle", false)
 // while it is still `AG_THROW_SPELL` or `AG_THROW_SPELL_W_CAST_ANIM` (turn-based
 // combat starting, or a new goal) releases its spell's run, unpaid; stock left
 // the run on its target for good, so the AI never weighed that spell for that
-// target again (a healer stopped healing the player).
+// target again (a healer stopped healing the player). Read by
+// `magictech_id_free_lock` too (2026-11-08): when a spell run is freed, the cast
+// goals still naming it forget it, so a leftover goal cannot begin a later cast
+// given the same run slot - which began that cast twice, and charged it twice.
 FEATURE(INTERRUPTED_CASTS_END, "interrupted casts end", false)
 // Card FB1 (zsogg, 2026-11-02), read by `combat_attack` and `combat_dmg`:
 // floating text that tells a plain miss from a dodge ("Miss"), says when armor
