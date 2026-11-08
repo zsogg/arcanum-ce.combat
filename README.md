@@ -2,7 +2,7 @@
 
 Arcanum CE-Combat is an open source rebuild of Troika’s 2001 *Arcanum*, with optional mods focused on bugfixes and combat rebalance.
 
-- Installation builds upon Arcanum 1.0.7.4 from GOG (Good Old Games), with the UAP (Unofficial Arcanum Patch) 2.0.2 and its High Resolution Patch.
+- Installation builds upon Arcanum 1.0.7.4 from GOG (Good Old Games) or Steam, with the UAP (Unofficial Arcanum Patch) 2.0.2 and its High Resolution Patch.
 - It builds on and extends Arcanum Community Edition by Alex Batalov (`github.com/alexbatalov/arcanum-ce`), a partial decompilation of the original game.
 - The original’s ‘quirks’ and idiosyncrasies are kept on purpose. Section 6 in [CHANGES.md](CHANGES.md#6-the-originals-quirks-kept-on-purpose) lists reachable quirks.
 - **Native on Linux and Windows**, through SDL3 instead of DirectX. Some performance enhancements in testing.
@@ -225,18 +225,21 @@ with rifles against ten Sir Garrick Stouts, two Elder Joachims and Arronax.
 
 ## Playing
 
-You need Arcanum from GOG (Good Old Games) and the Unofficial Arcanum Patch
+You need Arcanum from GOG (Good Old Games) or Steam and the Unofficial Arcanum Patch
 2.0.2 (`UAP2.0.2.exe`).
 
 Download the mod package for your system from
 [Releases](https://github.com/zsogg/arcanum-ce.combat/releases). Each comes with a README covering installation,
 playing, the optional mods and removal; the same guides are below:
 
-- **Windows:** install GOG Arcanum and UAP: **Do not install Arcanum into your Program Files directory**, as this mod will be unable to write there.
+- **Windows:** install Arcanum and UAP: **Do not install Arcanum into your Program Files directory**, as this mod will be unable to write there.
 - After installing Arcanum and the UAP patch, unzip this package - downloads below,
   run `setup.bat`. Setup changes nothing outside the game folder.
-- **Linux:** setup builds the game folder from GOG's offline installer and
-  `UAP2.0.2.exe` with `innoextract` and `7z`. No Wine is used.
+- **Steam on Windows:** the game folder is the `Arcanum` folder inside
+  `steamapps\common\Arcanum`; run UAP from there. Start the mod from
+  `arcanum-ce.exe` in that folder, not from Steam, whose Play button starts the original game.
+- **Linux:** setup builds the game folder from GOG's offline installer, or copies Steam's
+  game folder, and `UAP2.0.2.exe` with `innoextract` and `7z`. No Wine is used.
 
 The original `Arcanum.exe` stays untouched and playable.
 
