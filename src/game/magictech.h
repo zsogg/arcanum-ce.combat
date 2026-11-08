@@ -374,6 +374,11 @@ int magictech_area_radius(int magictech, bool* caster_centred);
 // by the spell's begin targets - Dominate Will never the player - as the
 // cast's own check decides it. True for a spell that may fall back to a tile.
 bool magictech_spell_can_target(int64_t source_obj, int64_t target_obj, int magictech);
+// CE (combat AI, `ai spellcasting`, 2026-11-08): whether a cast of a spell
+// with an upkeep would take `caster_obj` past the spells it can maintain at
+// once (Intelligence / 4), so that the run ends "Maintain terminated" as it
+// begins. False for a spell without an upkeep.
+bool magictech_maintain_capacity_full(int64_t caster_obj, int magictech);
 // CE (`grenade blasts`): the `ai_attack` flags for a spell or blast hit; 0x01,
 // accidental, between members of one party.
 int magictech_attack_flags(int64_t attacker_obj, int64_t target_obj);

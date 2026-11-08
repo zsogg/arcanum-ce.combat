@@ -5761,6 +5761,16 @@ int ai_check_use_spell(int64_t attacker_obj, int64_t item_obj, int64_t target_ob
         return 18;
     }
 
+    // CE (combat AI, `ai spellcasting`, 2026-11-08): a spell with an upkeep
+    // the caster cannot maintain beside the ones it keeps up, which ends
+    // "Maintain terminated" as it begins. Stock casts it again at once and
+    // pays each time: a mage of Intelligence 7 under Agility of Fire recast
+    // Shield of Protection 27 times in 18 seconds (the demonstration battle).
+    if (feature_enabled(FEATURE_AI_SPELLCASTING)
+        && magictech_maintain_capacity_full(attacker_obj, spell)) {
+        return 19;
+    }
+
     if (feature_enabled(FEATURE_SPELL_COSTS)
         && combat_turn_based_is_active()
         && combat_turn_based_is_acting(attacker_obj)

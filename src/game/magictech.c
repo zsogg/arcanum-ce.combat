@@ -115,6 +115,7 @@ static void magictech_register_cur_attack(void);
 static void magictech_register_attack(int64_t a1, int64_t a2);
 static void magictech_run_advance(void);
 static bool magictech_maintain_capacity_check(MagicTechRunInfo* run_info);
+static int magictech_maintained_count(int64_t parent_obj);
 static bool magictech_target_in_range(int64_t source_loc, int64_t target_loc, int64_t target_obj, int spell);
 static void magictech_setup_maintain_timeevent(TimeEvent* timeevent, int a2, int a3, DateTime* datetime);
 static bool magictech_maintain_schedule(TimeEvent* timeevent, DateTime* datetime);
@@ -1699,6 +1700,20 @@ bool magictech_spell_can_target(int64_t source_obj, int64_t target_obj, int magi
     target_ctx.params = &target_params;
 
     return target_context_evaluate(&target_ctx);
+}
+
+// CE (combat AI, `ai spellcasting`, 2026-11-08): see `magictech.h`. The
+// count `magictech_maintain_capacity_check` makes, with the new run added.
+bool magictech_maintain_capacity_full(int64_t caster_obj, int magictech)
+{
+    if (magictech_spells == NULL || magictech < 0 || magictech >= MT_SPELL_COUNT
+        || caster_obj == OBJ_HANDLE_NULL
+        || (magictech_spells[magictech].flags & MAGICTECH_IS_TECH) != 0
+        || magictech_spells[magictech].maintenance.period <= 0) {
+        return false;
+    }
+
+    return magictech_maintained_count(caster_obj) + 1 > magictech_maintain_capacity_get(caster_obj);
 }
 
 // 0x4502E0
@@ -4497,9 +4512,6 @@ END:
 // 0x4545E0
 bool magictech_maintain_capacity_check(MagicTechRunInfo* run_info)
 {
-    int idx;
-    int cnt = 0;
-
     if (run_info->source_obj.obj == OBJ_HANDLE_NULL) {
         return true;
     }
@@ -4518,21 +4530,31 @@ bool magictech_maintain_capacity_check(MagicTechRunInfo* run_info)
         return false;
     }
 
+    if (magictech_maintain_capacity_get(run_info->parent_obj.obj) < magictech_maintained_count(run_info->parent_obj.obj)) {
+        return false;
+    }
+
+    return true;
+}
+
+// The spells `parent_obj` maintains: magic runs it has begun that have an
+// upkeep. Taken out of 0x4545E0 for `magictech_maintain_capacity_full`.
+static int magictech_maintained_count(int64_t parent_obj)
+{
+    int idx;
+    int cnt = 0;
+
     for (idx = 0; idx < 512; idx++) {
         if ((magictech_run_info[idx].flags & MAGICTECH_RUN_ACTIVE) != 0
             && (magictech_spells[magictech_run_info[idx].spell].flags & MAGICTECH_IS_TECH) == 0
-            && magictech_run_info[idx].parent_obj.obj == run_info->parent_obj.obj
+            && magictech_run_info[idx].parent_obj.obj == parent_obj
             && (magictech_run_info[idx].flags & MAGICTECH_RUN_0x04) != 0
             && magictech_spells[magictech_run_info[idx].spell].maintenance.period > 0) {
             cnt++;
         }
     }
 
-    if (magictech_maintain_capacity_get(run_info->parent_obj.obj) < cnt) {
-        return false;
-    }
-
-    return true;
+    return cnt;
 }
 
 // 0x454700
