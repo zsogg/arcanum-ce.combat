@@ -110,8 +110,24 @@ TEST(the_leash_is_the_defensive_stance)
     settings_exit(&settings);
 }
 
+// Review 2026-11-08, targeting-3: prey a hunter could not reach is passed
+// over for 5 turns, where the unreachable record kept 1.
+TEST(an_unreachable_memo_lasts_its_window_on_either_clock)
+{
+    CHECK(ai_memo_age_within(4, 3, 1));
+    CHECK(!ai_memo_age_within(5, 3, 1));
+    CHECK(ai_memo_age_within(8, 3, 5));
+    CHECK(!ai_memo_age_within(9, 3, 5));
+    // Real time: negative keys count down.
+    CHECK(ai_memo_age_within(-12, -10, 5));
+    CHECK(!ai_memo_age_within(-16, -10, 5));
+    // The clocks never mix.
+    CHECK(!ai_memo_age_within(2, -2, 5));
+}
+
 void test_ai_targeting_suite(void)
 {
+    RUN(an_unreachable_memo_lasts_its_window_on_either_clock);
     RUN(an_adjacent_attacker_draws_an_npc_whose_target_is_not);
     RUN(an_adjacent_target_is_kept_against_another_adjacent_attacker);
     RUN(a_clearly_nearer_attacker_draws_it);

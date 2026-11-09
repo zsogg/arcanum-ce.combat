@@ -728,6 +728,17 @@ void ai_restorative_forget(int64_t obj)
     }
 }
 
+// CE (`real time restoratives`): an item used at once that `item_use_on_obj`
+// refuses while its user walks in real time (review 2026-11-08, healing-2).
+// Both list walks, the stock one and caster judgement's, pass it over.
+static bool ai_item_waits_for_standing(int64_t obj, int64_t item_obj)
+{
+    return feature_enabled(FEATURE_REAL_TIME_RESTORATIVES)
+        && rt_budget_active()
+        && obj_field_int32_get(item_obj, OBJ_F_TYPE) == OBJ_TYPE_FOOD
+        && rt_budget_is_moving_now(obj);
+}
+
 bool ai_restorative_refused(int64_t obj, int64_t item_obj)
 {
     int slot;
@@ -1449,9 +1460,6 @@ void ai_update_danger_state(Ai* ai)
             // AI milestone AI-3).
             danger_source_obj = ai_hunter_choose(ai->obj, danger_source_obj);
             ai->danger_source = danger_source_obj;
-            // CE (`ai armor aware`): the weapon for this target, before the
-            // spell decision reads it (review 2026-11-08, cross-3).
-            ai_armor_rewield(ai);
             ai_choose_action(ai);
             ai->danger_type = ai_apply_danger_type(ai->obj,
                 AI_DANGER_SOURCE_TYPE_COMBAT_FOCUS,
@@ -1467,9 +1475,6 @@ void ai_update_danger_state(Ai* ai)
             danger_source_obj = ai_turn_from_unreachable(ai->obj, danger_source_obj);
             danger_source_obj = ai_hunter_choose(ai->obj, danger_source_obj);
             ai->danger_source = danger_source_obj;
-            // CE (`ai armor aware`): the weapon for this target, before the
-            // spell decision reads it (review 2026-11-08, cross-3).
-            ai_armor_rewield(ai);
             ai_choose_action(ai);
             ai->danger_type = ai_apply_danger_type(ai->obj,
                 AI_DANGER_SOURCE_TYPE_COMBAT_FOCUS,
@@ -3240,6 +3245,10 @@ int64_t ai_keep_or_find_target(int64_t obj)
 // 0x4ABC20
 void ai_choose_action(Ai* ai)
 {
+    // CE (`ai armor aware`): the weapon for this target, before the spell
+    // decision reads it (review 2026-11-08, cross-3).
+    ai_armor_rewield(ai);
+
     if ((obj_field_int32_get(ai->obj, OBJ_F_FLAGS) & OF_INVULNERABLE) != 0
         || (obj_field_int32_get(ai->obj, OBJ_F_CRITTER_FLAGS2) & OCF2_NIGH_INVULNERABLE) != 0
         || !ai_choose_magictech_action(ai)) {
@@ -3582,21 +3591,26 @@ void ai_note_unreachable(int64_t obj, int64_t target_obj)
     ai_unreachable[slot].key = ai_desperation_key();
 }
 
+// CE (`ai targeting`): see `ai.h`.
+bool ai_memo_age_within(int key, int recorded, int turns)
+{
+    // Turn-based keys count up, real-time keys (negative) count down, and
+    // the two never mix.
+    int age = key >= 0 ? key - recorded : recorded - key;
+
+    return (key < 0) == (recorded < 0)
+        && age >= -1
+        && age <= turns;
+}
+
 // Whether `obj` failed to reach `target_obj` within the last `turns` turns.
 static bool ai_is_unreachable_within(int64_t obj, int64_t target_obj, int turns)
 {
-    int key = ai_desperation_key();
     int slot;
-    int age;
 
     for (slot = 0; slot < AI_UNREACHABLE_MAX; slot++) {
         if (ai_unreachable[slot].obj == obj && ai_unreachable[slot].target == target_obj) {
-            // Turn-based keys count up, real-time keys (negative) count
-            // down, and the two never mix.
-            age = key >= 0 ? key - ai_unreachable[slot].key : ai_unreachable[slot].key - key;
-            return (key < 0) == (ai_unreachable[slot].key < 0)
-                && age >= -1
-                && age <= turns;
+            return ai_memo_age_within(ai_desperation_key(), ai_unreachable[slot].key, turns);
         }
     }
 
@@ -3667,9 +3681,10 @@ static bool ai_side_filter_reachable(int64_t obj, int64_t candidate_obj)
 }
 
 // Whether `target_obj` is the one the player ordered `obj` to attack
-// (`OCF2_TARGET_LOCK`), which neither redirect below overrides: AI-6's "an
-// ordered target sticks" (review 2026-11-08, targeting-5: the focus stayed
-// locked while the attack went elsewhere).
+// (`OCF2_TARGET_LOCK`). The hunter's redirect never overrides it; turning from
+// one it cannot reach drops the order, so the focus and the attack agree
+// (review 2026-11-08, targeting-5: the focus stayed locked while the attack
+// went elsewhere).
 static bool ai_is_ordered_target(int64_t obj, int64_t target_obj)
 {
     return obj_field_int32_get(obj, OBJ_F_TYPE) == OBJ_TYPE_NPC
@@ -3683,13 +3698,18 @@ static int64_t ai_turn_from_unreachable(int64_t obj, int64_t target_obj)
 
     if (!feature_enabled(FEATURE_AI_TARGETING)
         || !obj_type_is_critter(obj_field_int32_get(target_obj, OBJ_F_TYPE))
-        || ai_is_ordered_target(obj, target_obj)
         || !ai_is_unreachable(obj, target_obj)) {
         return target_obj;
     }
 
     other_obj = ai_side_nearest(obj, target_obj, ai_side_filter_reachable);
-    return other_obj != OBJ_HANDLE_NULL ? other_obj : target_obj;
+    if (other_obj == OBJ_HANDLE_NULL) {
+        return target_obj;
+    }
+    if (ai_is_ordered_target(obj, target_obj)) {
+        ai_target_unlock(obj);
+    }
+    return other_obj;
 }
 
 // CE (combat AI, milestone AI-3): hunters under `ai targeting`. An NPC whose
@@ -3713,17 +3733,6 @@ static struct {
 } ai_casters[AI_CASTERS_MAX];
 
 static int ai_casters_next;
-
-// CE (review 2026-11-08, targeting-6): a turn-based fight's rounds count from
-// 0 again, so the round-keyed memos of the last fight would count in this
-// one. Called as one starts (`combat_turn_based_start`). See `ai.h`.
-void ai_fight_memos_forget(void)
-{
-    memset(ai_unreachable, 0, sizeof(ai_unreachable));
-    ai_unreachable_next = 0;
-    memset(ai_casters, 0, sizeof(ai_casters));
-    ai_casters_next = 0;
-}
 
 void ai_roles_reset(void)
 {
@@ -4038,10 +4047,7 @@ bool ai_choose_action_from_list(Ai* ai, S4ABF10* a2)
             // `item_use_on_obj` refuses in real time (review 2026-11-08,
             // healing-2): counted and floated, it was never drunk. An item
             // with a spell is used by its own goal, which stops the walk.
-            if (feature_enabled(FEATURE_REAL_TIME_RESTORATIVES)
-                && rt_budget_active()
-                && obj_field_int32_get(entry->item_obj, OBJ_F_TYPE) == OBJ_TYPE_FOOD
-                && rt_budget_is_moving_now(ai->obj)) {
+            if (ai_item_waits_for_standing(ai->obj, entry->item_obj)) {
                 continue;
             }
 
@@ -6944,6 +6950,21 @@ static struct {
     int key;
 } ai_control_memo[AI_CONTROL_MEMO_MAX];
 
+// CE (review 2026-11-08, targeting-6): a turn-based fight's rounds count from
+// 0 again, so the round-keyed memos of the last fight would count in this
+// one. Called as one starts (`combat_turn_based_start`). See `ai.h`.
+void ai_fight_memos_forget(void)
+{
+    memset(ai_unreachable, 0, sizeof(ai_unreachable));
+    ai_unreachable_next = 0;
+    memset(ai_casters, 0, sizeof(ai_casters));
+    ai_casters_next = 0;
+    // And AI-7's "seen disabled" and AI-2's once-a-turn desperation roll, on
+    // the same key (the fix review, 2026-11-08).
+    memset(ai_control_memo, 0, sizeof(ai_control_memo));
+    memset(ai_desperation, 0, sizeof(ai_desperation));
+}
+
 static int ai_control_memo_slot(int64_t obj, bool add)
 {
     int slot;
@@ -7368,7 +7389,9 @@ static bool ai_choose_magictech_judged(Ai* ai)
             MagicTechAiActionListEntry* entry = &(lists[list].actions[action].entries[idx]);
             int64_t use_on;
 
-            if (entry->spell != -1 || entry->item_obj == OBJ_HANDLE_NULL) {
+            if (entry->spell != -1
+                || entry->item_obj == OBJ_HANDLE_NULL
+                || ai_item_waits_for_standing(ai->obj, entry->item_obj)) {
                 continue;
             }
             use_on = action == MAGICTECH_AI_ACTION_OFFENSIVE ? ai->danger_source : ai->obj;
@@ -7426,7 +7449,9 @@ static bool ai_choose_magictech_judged(Ai* ai)
                     int protect_code = magictech_is_under_influence_of(protect_obj, entry->spell)
                         ? 13
                         : ai_check_use_spell(ai->obj, entry->item_obj, protect_obj, entry->spell);
-                    if (ai->considered_count < COMBAT_OBSERVER_AI_CONSIDERED_MAX) {
+                    // Listed when it refuses: allowed, it is the candidate's
+                    // own entry below.
+                    if (protect_code != 0 && ai->considered_count < COMBAT_OBSERVER_AI_CONSIDERED_MAX) {
                         ai->considered[ai->considered_count][0] = entry->spell;
                         ai->considered[ai->considered_count][1] = protect_code;
                         ai->considered_count++;

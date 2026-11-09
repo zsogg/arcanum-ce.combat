@@ -225,6 +225,10 @@ void ai_follow_joined(int64_t npc_obj, int64_t pc_obj);
 // CE (`ai targeting`): forgets the round-keyed memos (unreachable targets,
 // who was seen casting) as a turn-based fight starts.
 void ai_fight_memos_forget(void);
+// CE (`ai targeting`): whether a memo made at turn key `recorded` is within
+// `turns` turns of `key` (`ai_desperation_key`: a round, or in real time a
+// negative key counting down). Pure.
+bool ai_memo_age_within(int key, int recorded, int turns);
 void ai_timeevent_add_immediate(int64_t obj, int first_heartbeat);
 int ai_line_of_fire_cost(int64_t source_obj, int64_t target_loc, int64_t* block_obj_ptr);
 void ai_switch_weapon(int64_t obj);

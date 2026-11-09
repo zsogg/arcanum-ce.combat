@@ -4,6 +4,7 @@
 #include "game/background.h"
 #include "game/combat.h"
 #include "game/combat_observer.h"
+#include "game/creature_rules.h"
 #include "game/critter.h"
 #include "game/description.h"
 #include "game/descriptions.h"
@@ -3354,8 +3355,10 @@ void item_wield_best(int64_t critter_obj, int inventory_location, int64_t target
                             // A blunt weapon's blow the armor stops still
                             // tires, at its StoppedToFatigue, which fatigue's
                             // full count credits (review 2026-11-08,
-                            // weapons-3).
-                            if (stopped_fatigue != WEAPON_RULE_UNSET && stopped_fatigue > 0) {
+                            // weapons-3) - not a phantom's, which takes none.
+                            if (stopped_fatigue != WEAPON_RULE_UNSET
+                                && stopped_fatigue > 0
+                                && creature_rules_profile(target_obj) != CREATURE_PROFILE_PHANTOM) {
                                 total_dam += (min_dam + max_dam) * 50 * (1000 - expected) / 1000 * stopped_fatigue / 100;
                             }
                             continue;
