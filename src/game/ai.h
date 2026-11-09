@@ -310,6 +310,17 @@ typedef enum AiSide {
 } AiSide;
 AiSide ai_side_rule(bool with_caster, bool with_target, bool fighting,
     bool focus_with_caster, bool focus_with_target);
+// CE: AI-8 rule 3, one critter in an area attack's blast (zsogg 2026-11-09):
+// an enemy by the damage it would take (`worth`; a `downed` one nothing), an
+// ally the spell does not spare at twice that against it, anyone else
+// nothing. Pure.
+int ai_judgement_area_worth(AiSide side, bool downed, bool spared, int worth);
+// CE: the same - whether an area spell's target rules spare `obj` (its player
+// leader `obj_leader`) from a caster whose player leader is `caster_leader`:
+// the player and every follower under it (`Tgt_Non_Party_Critters`,
+// 0x4F2D20), unless the spell is a `blast`, which under `grenade blasts`
+// takes the party too. Pure.
+bool ai_judgement_area_spares(int64_t caster_leader, int64_t obj, int64_t obj_leader, bool blast);
 // CE: AI-7. Whether a target last seen disabled at turn key `disabled_key`
 // has only just recovered at `now_key`: within one turn, either way the key
 // runs (rounds count up; real-time turns down). Pure.

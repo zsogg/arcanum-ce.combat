@@ -74,6 +74,32 @@ TEST(fireflash_into_a_crowd_beats_an_elemental_far_off)
     CHECK(near_summon > far_summon);
 }
 
+TEST(an_area_spell_counts_the_allies_it_does_not_spare)
+{
+    // Handles stand in: the player, its follower (the caster), the follower's
+    // summon, a town guard fighting the same bandits.
+    const int64_t player = 101;
+    const int64_t summon = 103;
+    const int64_t guard = 104;
+
+    CHECK(ai_judgement_area_spares(player, player, OBJ_HANDLE_NULL, false));
+    CHECK(ai_judgement_area_spares(player, summon, player, false)); // a follower's follower
+    CHECK(!ai_judgement_area_spares(player, guard, OBJ_HANDLE_NULL, false));
+    CHECK(!ai_judgement_area_spares(player, summon, player, true)); // a blast takes the party
+    CHECK(!ai_judgement_area_spares(OBJ_HANDLE_NULL, guard, OBJ_HANDLE_NULL, false)); // an enemy caster
+    CHECK(!ai_judgement_area_spares(OBJ_HANDLE_NULL, OBJ_HANDLE_NULL, OBJ_HANDLE_NULL, false));
+
+    CHECK_INT(ai_judgement_area_worth(AI_SIDE_TARGET, false, false, 30), 30);
+    CHECK_INT(ai_judgement_area_worth(AI_SIDE_TARGET, true, false, 30), 0); // downed
+    CHECK_INT(ai_judgement_area_worth(AI_SIDE_CASTER, false, false, 30), -60); // the guard
+    CHECK_INT(ai_judgement_area_worth(AI_SIDE_CASTER, false, true, 30), 0); // the party
+    CHECK_INT(ai_judgement_area_worth(AI_SIDE_NONE, false, false, 30), 0);
+    // Two bandits and the guard in the blast: not worth it.
+    CHECK(ai_judgement_area_worth(AI_SIDE_TARGET, false, false, 30) * 2
+            + ai_judgement_area_worth(AI_SIDE_CASTER, false, false, 30)
+        <= 0);
+}
+
 TEST(the_budget_keeps_back_the_best_attacks)
 {
     // 60 left, a reserve of 45 (three Fireflashes): a 50-point summon is
@@ -301,6 +327,7 @@ void test_ai_caster_judgement_suite(void)
     RUN(a_buff_is_worth_what_threatens);
     RUN(the_score_divides_by_the_cost_and_two_upkeep_periods);
     RUN(fireflash_into_a_crowd_beats_an_elemental_far_off);
+    RUN(an_area_spell_counts_the_allies_it_does_not_spare);
     RUN(the_budget_keeps_back_the_best_attacks);
     RUN(a_heal_keeps_to_the_reserve_unless_the_patient_is_dying);
     RUN(a_disable_is_worth_the_damage_it_denies);

@@ -7475,16 +7475,37 @@ static int ai_judgement_threats(Ai* ai, ObjectList* critters, int64_t protect_ob
     return threats;
 }
 
-// Rule 3: an area attack's worth with its blast at `centre_obj` - each enemy
-// inside by the damage it would take, each ally of an enemy caster at twice
-// that against it. The player's party is spared by the spells' own data
-// (`Tgt_Non_Party_Critters`), so a follower's allies do not count - nor, so
-// far, a non-party NPC on its side only by whom it fights (the second review
-// of 2026-11-09, a question for zsogg).
+int ai_judgement_area_worth(AiSide side, bool downed, bool spared, int worth)
+{
+    if (side == AI_SIDE_TARGET) {
+        // A downed enemy adds nothing: its kill bonus drew blasts onto
+        // fallen companions (review 2026-11-08, cross-2).
+        return downed ? 0 : worth;
+    }
+    if (side == AI_SIDE_CASTER && !spared) {
+        return -2 * worth;
+    }
+    return 0;
+}
+
+bool ai_judgement_area_spares(int64_t caster_leader, int64_t obj, int64_t obj_leader, bool blast)
+{
+    return !blast
+        && caster_leader != OBJ_HANDLE_NULL
+        && (obj == caster_leader || obj_leader == caster_leader);
+}
+
+// Rule 3: an area attack's worth with its blast at `centre_obj`, critter by
+// critter (`ai_judgement_area_worth`). The player's party is spared by the
+// spells' own data, so a follower's party does not count against it; since
+// 2026-11-09 (zsogg, the second review's question) a non-party NPC on its
+// side - a guard fighting the same bandits - does, as an enemy caster's
+// allies do.
 static int ai_judgement_area_value(Ai* ai, ObjectList* critters, int spell, int64_t centre_obj, int radius)
 {
     int64_t centre = obj_field_int64_get(centre_obj, OBJ_F_LOCATION);
-    bool party = critter_pc_leader_get(ai->obj) != OBJ_HANDLE_NULL;
+    int64_t caster_leader = critter_pc_leader_get(ai->obj);
+    bool blast = feature_enabled(FEATURE_GRENADE_BLASTS) && spell_rules_is_blast(spell);
     ObjectNode* node;
     int value = 0;
 
@@ -7501,15 +7522,14 @@ static int ai_judgement_area_value(Ai* ai, ObjectList* critters, int spell, int6
             object_hp_current(node->obj), 100);
         // Classified once: the enemy test and the ally test are one side.
         side = ai_tactics_side(ai->obj, ai->danger_source, node->obj);
-        if (ai->danger_source != OBJ_HANDLE_NULL && side == AI_SIDE_TARGET) {
-            // A downed enemy adds nothing: its kill bonus drew blasts onto
-            // fallen companions (review 2026-11-08, cross-2).
-            if (!critter_is_unconscious(node->obj)) {
-                value += worth;
-            }
-        } else if (!party && side == AI_SIDE_CASTER) {
-            value -= 2 * worth;
+        if (side == AI_SIDE_TARGET && ai->danger_source == OBJ_HANDLE_NULL) {
+            continue;
         }
+        value += ai_judgement_area_worth(side,
+            side == AI_SIDE_TARGET && critter_is_unconscious(node->obj),
+            side == AI_SIDE_CASTER
+                && ai_judgement_area_spares(caster_leader, node->obj, critter_pc_leader_get(node->obj), blast),
+            worth);
     }
     return value;
 }
