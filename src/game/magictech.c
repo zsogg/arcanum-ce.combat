@@ -1807,7 +1807,7 @@ int magictech_ai_land_chance(int64_t attacker_obj, int64_t target_obj, int magic
 }
 
 // CE (combat AI, `caster judgement`, card AI-8): see `magictech.h`. Each begin
-// damage component as `MTComponentDamage_ProcFunc` rolls it - scaled by the
+// and callback damage component as `MTComponentDamage_ProcFunc` rolls it - scaled by the
 // caster's aptitude as the cast scales it - averaged, then cut by the
 // target's resistance to its type.
 int magictech_ai_expected_damage(int64_t caster_obj, int64_t target_obj, int magictech)
@@ -1820,6 +1820,7 @@ int magictech_ai_expected_damage(int64_t caster_obj, int64_t target_obj, int mag
         RESISTANCE_TYPE_NORMAL,
     };
     MagicTechComponentList* list;
+    int phase;
     int idx;
     int total = 0;
 
@@ -1827,51 +1828,55 @@ int magictech_ai_expected_damage(int64_t caster_obj, int64_t target_obj, int mag
         return 0;
     }
 
-    list = &(magictech_spells[magictech].components[MAGICTECH_ACTION_BEGIN]);
-    for (idx = 0; idx < list->cnt; idx++) {
-        MagicTechComponentInfo* component = &(list->entries[idx]);
-        int dam_min;
-        int dam_max;
-        int type;
-        int expected;
+    // The begin's damage, and the callback's: Quench Life's 50-100 comes in
+    // its [Callback] (review 2026-11-08, casting-4), and no spell has both.
+    for (phase = 0; phase < 2; phase++) {
+        list = &(magictech_spells[magictech].components[phase == 0 ? MAGICTECH_ACTION_BEGIN : MAGICTECH_ACTION_CALLBACK]);
+        for (idx = 0; idx < list->cnt; idx++) {
+            MagicTechComponentInfo* component = &(list->entries[idx]);
+            int dam_min;
+            int dam_max;
+            int type;
+            int expected;
 
-        if (component->type != MTC_DAMAGE) {
-            continue;
-        }
+            if (component->type != MTC_DAMAGE) {
+                continue;
+            }
 
-        dam_min = component->data.damage.damage_min;
-        dam_max = component->data.damage.damage_max;
-        if ((component->data.damage.damage_flags & CDF_SCALE) != 0) {
-            int aptitude = caster_obj != OBJ_HANDLE_NULL
-                    && obj_type_is_critter(obj_field_int32_get(caster_obj, OBJ_F_TYPE))
-                ? stat_level_get(caster_obj, STAT_MAGICK_TECH_APTITUDE)
-                : 0;
-            if (feature_enabled(FEATURE_SPELL_APTITUDE_DAMAGE)) {
-                dam_max = spell_rules_scaled_damage(dam_min, dam_max, aptitude, SPELL_APTITUDE_DAMAGE_PERCENT);
-            } else {
-                dam_max = aptitude > 0 ? dam_min + aptitude * (dam_max - dam_min) / 100 : dam_min;
+            dam_min = component->data.damage.damage_min;
+            dam_max = component->data.damage.damage_max;
+            if ((component->data.damage.damage_flags & CDF_SCALE) != 0) {
+                int aptitude = caster_obj != OBJ_HANDLE_NULL
+                        && obj_type_is_critter(obj_field_int32_get(caster_obj, OBJ_F_TYPE))
+                    ? stat_level_get(caster_obj, STAT_MAGICK_TECH_APTITUDE)
+                    : 0;
+                if (feature_enabled(FEATURE_SPELL_APTITUDE_DAMAGE)) {
+                    dam_max = spell_rules_scaled_damage(dam_min, dam_max, aptitude, SPELL_APTITUDE_DAMAGE_PERCENT);
+                } else {
+                    dam_max = aptitude > 0 ? dam_min + aptitude * (dam_max - dam_min) / 100 : dam_min;
+                }
+                dam_min = dam_max;
             }
-            dam_min = dam_max;
-        }
 
-        type = component->data.damage.damage_type >= 0 && component->data.damage.damage_type < DAMAGE_TYPE_COUNT
-            ? component->data.damage.damage_type
-            : DAMAGE_TYPE_NORMAL;
-        expected = (dam_min + dam_max) / 2;
-        // Fatigue and poison take no hit points at once: half their worth.
-        if (type == DAMAGE_TYPE_FATIGUE || type == DAMAGE_TYPE_POISON) {
-            expected /= 2;
-        }
-        if (target_obj != OBJ_HANDLE_NULL) {
-            int resistance = object_get_resistance(target_obj, resistances[type], false);
-            if (resistance > 95) {
-                resistance = 95;
+            type = component->data.damage.damage_type >= 0 && component->data.damage.damage_type < DAMAGE_TYPE_COUNT
+                ? component->data.damage.damage_type
+                : DAMAGE_TYPE_NORMAL;
+            expected = (dam_min + dam_max) / 2;
+            // Fatigue and poison take no hit points at once: half their worth.
+            if (type == DAMAGE_TYPE_FATIGUE || type == DAMAGE_TYPE_POISON) {
+                expected /= 2;
             }
-            if (resistance > 0) {
-                expected = expected * (100 - resistance) / 100;
+            if (target_obj != OBJ_HANDLE_NULL) {
+                int resistance = object_get_resistance(target_obj, resistances[type], false);
+                if (resistance > 95) {
+                    resistance = 95;
+                }
+                if (resistance > 0) {
+                    expected = expected * (100 - resistance) / 100;
+                }
             }
+            total += expected;
         }
-        total += expected;
     }
 
     return total;
@@ -2665,7 +2670,10 @@ void magictech_process(void)
     // a script. A spell refused before this point was never cast.
     // CE (combat AI milestone AI-3): the same point tells the AI who was
     // seen casting, for a hunter's choice of prey under `ai targeting`.
-    if (magictech_cur_run_info->action == MAGICTECH_ACTION_BEGIN) {
+    // Only a spell of its own: a weapon's proc, a worn ring's or a used
+    // item's makes nobody a caster (review 2026-11-08, targeting-4).
+    if (magictech_cur_run_info->action == MAGICTECH_ACTION_BEGIN
+        && magictech_cur_run_info->source_obj.obj == magictech_cur_run_info->parent_obj.obj) {
         ai_note_cast(magictech_cur_run_info->parent_obj.obj);
     }
 

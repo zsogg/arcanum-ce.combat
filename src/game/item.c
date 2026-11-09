@@ -3348,7 +3348,16 @@ void item_wield_best(int64_t critter_obj, int inventory_location, int64_t target
 
                         item_weapon_damage(item_obj, critter_obj, damage_type, skill, false, &min_dam, &max_dam);
                         if (damage_type == DAMAGE_TYPE_NORMAL && expected >= 0) {
+                            int stopped_fatigue = weapon_rules_stopped_to_fatigue(item_obj);
+
                             total_dam += (min_dam + max_dam) * 50 * expected / 1000;
+                            // A blunt weapon's blow the armor stops still
+                            // tires, at its StoppedToFatigue, which fatigue's
+                            // full count credits (review 2026-11-08,
+                            // weapons-3).
+                            if (stopped_fatigue != WEAPON_RULE_UNSET && stopped_fatigue > 0) {
+                                total_dam += (min_dam + max_dam) * 50 * (1000 - expected) / 1000 * stopped_fatigue / 100;
+                            }
                             continue;
                         }
                         // FIX (porting bug #52): the average of every damage

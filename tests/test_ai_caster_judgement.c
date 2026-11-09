@@ -3,7 +3,10 @@
 // their chance to land are read from game objects, and are measured by the
 // benches.
 
+#include <stdlib.h>
+
 #include "game/ai.h"
+#include "game/magictech.h"
 
 #include "test_harness.h"
 
@@ -90,6 +93,28 @@ TEST(a_turn_is_not_spent_on_a_buff_that_strands_the_attack)
     CHECK(!ai_judgement_turn_refuses(7, 5, 0, 40, 150)); // no attack this turn
 }
 
+// Quench Life's 50-100 is in its [Callback], not its begin (review
+// 2026-11-08, casting-4): it was weighed as a disable.
+#define CALLBACK_DAMAGE_SPELL 22
+
+TEST(a_spell_s_callback_damage_is_counted)
+{
+    MagicTechComponentInfo damage = { 0 };
+
+    magictech_spells = (MagicTechInfo*)calloc(MT_SPELL_COUNT, sizeof(MagicTechInfo));
+    damage.type = MTC_DAMAGE;
+    damage.data.damage.damage_type = DAMAGE_TYPE_NORMAL;
+    damage.data.damage.damage_min = 50;
+    damage.data.damage.damage_max = 100;
+    magictech_spells[CALLBACK_DAMAGE_SPELL].components[MAGICTECH_ACTION_CALLBACK].cnt = 1;
+    magictech_spells[CALLBACK_DAMAGE_SPELL].components[MAGICTECH_ACTION_CALLBACK].entries = &damage;
+
+    CHECK_INT(magictech_ai_expected_damage(OBJ_HANDLE_NULL, OBJ_HANDLE_NULL, CALLBACK_DAMAGE_SPELL), 75);
+
+    free(magictech_spells);
+    magictech_spells = NULL;
+}
+
 void test_ai_caster_judgement_suite(void)
 {
     RUN(damage_is_worth_what_the_target_has_left_and_a_kill_more);
@@ -100,4 +125,5 @@ void test_ai_caster_judgement_suite(void)
     RUN(fireflash_into_a_crowd_beats_an_elemental_far_off);
     RUN(the_budget_keeps_back_the_best_attacks);
     RUN(a_turn_is_not_spent_on_a_buff_that_strands_the_attack);
+    RUN(a_spell_s_callback_damage_is_counted);
 }

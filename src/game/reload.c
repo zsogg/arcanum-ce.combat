@@ -725,7 +725,11 @@ static void reload_backup_restore(int64_t critter_obj)
     int count;
     int index;
 
-    if (!feature_enabled(FEATURE_FOLLOWER_CONDUCT)) {
+    // Not while the follower itself still fights, which the player's combat
+    // mode does not say in real time (review 2026-11-08, weapons-2). The note
+    // waits for the fight's end.
+    if (!feature_enabled(FEATURE_FOLLOWER_CONDUCT)
+        || combat_critter_is_combat_mode_active(critter_obj)) {
         return;
     }
 

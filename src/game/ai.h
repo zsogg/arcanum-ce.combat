@@ -222,6 +222,9 @@ int ai_check_follow(int64_t npc_obj, int64_t pc_obj, bool ignore_charisma_limits
 // NPC the switch let join at low reaction is raised to the reaction it needs
 // to stay.
 void ai_follow_joined(int64_t npc_obj, int64_t pc_obj);
+// CE (`ai targeting`): forgets the round-keyed memos (unreachable targets,
+// who was seen casting) as a turn-based fight starts.
+void ai_fight_memos_forget(void);
 void ai_timeevent_add_immediate(int64_t obj, int first_heartbeat);
 int ai_line_of_fire_cost(int64_t source_obj, int64_t target_loc, int64_t* block_obj_ptr);
 void ai_switch_weapon(int64_t obj);

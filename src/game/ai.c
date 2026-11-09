@@ -1449,6 +1449,9 @@ void ai_update_danger_state(Ai* ai)
             // AI milestone AI-3).
             danger_source_obj = ai_hunter_choose(ai->obj, danger_source_obj);
             ai->danger_source = danger_source_obj;
+            // CE (`ai armor aware`): the weapon for this target, before the
+            // spell decision reads it (review 2026-11-08, cross-3).
+            ai_armor_rewield(ai);
             ai_choose_action(ai);
             ai->danger_type = ai_apply_danger_type(ai->obj,
                 AI_DANGER_SOURCE_TYPE_COMBAT_FOCUS,
@@ -1464,6 +1467,9 @@ void ai_update_danger_state(Ai* ai)
             danger_source_obj = ai_turn_from_unreachable(ai->obj, danger_source_obj);
             danger_source_obj = ai_hunter_choose(ai->obj, danger_source_obj);
             ai->danger_source = danger_source_obj;
+            // CE (`ai armor aware`): the weapon for this target, before the
+            // spell decision reads it (review 2026-11-08, cross-3).
+            ai_armor_rewield(ai);
             ai_choose_action(ai);
             ai->danger_type = ai_apply_danger_type(ai->obj,
                 AI_DANGER_SOURCE_TYPE_COMBAT_FOCUS,
@@ -3013,8 +3019,11 @@ int64_t ai_find_target(int64_t critter_obj)
                 }
 
                 // CE (`hearing alerts`): heard only, it is gone to look at.
+                // With the switch off the enclosing test is stock's whole
+                // answer (review 2026-11-08, targeting-7).
                 if (ai_check_kos(critter_obj, handles[idx]) != AI_KOS_NO
-                    && ai_acts_on(critter_obj, handles[idx], ai_presence_loudness(handles[idx]), true)) {
+                    && (!feature_enabled(FEATURE_HEARING_ALERTS)
+                        || ai_acts_on(critter_obj, handles[idx], ai_presence_loudness(handles[idx]), true))) {
                     danger_source_obj = handles[idx];
                     break;
                 }
@@ -3573,22 +3582,31 @@ void ai_note_unreachable(int64_t obj, int64_t target_obj)
     ai_unreachable[slot].key = ai_desperation_key();
 }
 
-static bool ai_is_unreachable(int64_t obj, int64_t target_obj)
+// Whether `obj` failed to reach `target_obj` within the last `turns` turns.
+static bool ai_is_unreachable_within(int64_t obj, int64_t target_obj, int turns)
 {
     int key = ai_desperation_key();
     int slot;
+    int age;
 
     for (slot = 0; slot < AI_UNREACHABLE_MAX; slot++) {
         if (ai_unreachable[slot].obj == obj && ai_unreachable[slot].target == target_obj) {
-            // This turn or the last: turn-based keys count up, real-time
-            // keys (negative) count down, and the two never mix.
+            // Turn-based keys count up, real-time keys (negative) count
+            // down, and the two never mix.
+            age = key >= 0 ? key - ai_unreachable[slot].key : ai_unreachable[slot].key - key;
             return (key < 0) == (ai_unreachable[slot].key < 0)
-                && key - ai_unreachable[slot].key >= -1
-                && key - ai_unreachable[slot].key <= 1;
+                && age >= -1
+                && age <= turns;
         }
     }
 
     return false;
+}
+
+// This turn or the last.
+static bool ai_is_unreachable(int64_t obj, int64_t target_obj)
+{
+    return ai_is_unreachable_within(obj, target_obj, 1);
 }
 
 // The nearest member of `target_obj`'s side - its PC, or its leader, and that
@@ -3612,7 +3630,11 @@ static int64_t ai_side_nearest(int64_t obj, int64_t target_obj, AiSideFilter fil
         return OBJ_HANDLE_NULL;
     }
 
+    // A downed member is never the side's nearest: stock's "the fallen
+    // last" stays with the current target, and asking `ai_is_valid_target`
+    // about one runs a whole target search (review 2026-11-08, targeting-8).
     if (leader_obj != target_obj
+        && !critter_is_unconscious(leader_obj)
         && ai_is_valid_target(obj, leader_obj)
         && filter(obj, leader_obj)) {
         best_obj = leader_obj;
@@ -3622,6 +3644,7 @@ static int64_t ai_side_nearest(int64_t obj, int64_t target_obj, AiSideFilter fil
     object_list_all_followers(leader_obj, &objects);
     for (node = objects.head; node != NULL; node = node->next) {
         if (node->obj == target_obj
+            || critter_is_unconscious(node->obj)
             || !ai_is_valid_target(obj, node->obj)
             || !filter(obj, node->obj)) {
             continue;
@@ -3643,12 +3666,24 @@ static bool ai_side_filter_reachable(int64_t obj, int64_t candidate_obj)
     return !ai_is_unreachable(obj, candidate_obj);
 }
 
+// Whether `target_obj` is the one the player ordered `obj` to attack
+// (`OCF2_TARGET_LOCK`), which neither redirect below overrides: AI-6's "an
+// ordered target sticks" (review 2026-11-08, targeting-5: the focus stayed
+// locked while the attack went elsewhere).
+static bool ai_is_ordered_target(int64_t obj, int64_t target_obj)
+{
+    return obj_field_int32_get(obj, OBJ_F_TYPE) == OBJ_TYPE_NPC
+        && (obj_field_int32_get(obj, OBJ_F_CRITTER_FLAGS2) & OCF2_TARGET_LOCK) != 0
+        && obj_field_handle_get(obj, OBJ_F_NPC_COMBAT_FOCUS) == target_obj;
+}
+
 static int64_t ai_turn_from_unreachable(int64_t obj, int64_t target_obj)
 {
     int64_t other_obj;
 
     if (!feature_enabled(FEATURE_AI_TARGETING)
         || !obj_type_is_critter(obj_field_int32_get(target_obj, OBJ_F_TYPE))
+        || ai_is_ordered_target(obj, target_obj)
         || !ai_is_unreachable(obj, target_obj)) {
         return target_obj;
     }
@@ -3678,6 +3713,17 @@ static struct {
 } ai_casters[AI_CASTERS_MAX];
 
 static int ai_casters_next;
+
+// CE (review 2026-11-08, targeting-6): a turn-based fight's rounds count from
+// 0 again, so the round-keyed memos of the last fight would count in this
+// one. Called as one starts (`combat_turn_based_start`). See `ai.h`.
+void ai_fight_memos_forget(void)
+{
+    memset(ai_unreachable, 0, sizeof(ai_unreachable));
+    ai_unreachable_next = 0;
+    memset(ai_casters, 0, sizeof(ai_casters));
+    ai_casters_next = 0;
+}
 
 void ai_roles_reset(void)
 {
@@ -3804,9 +3850,14 @@ static bool ai_is_prey(int64_t obj)
     return ai_seen_casting(obj);
 }
 
+// Prey it could not reach stays passed over for AI_PREY_UNREACHABLE_TURNS:
+// with the one-turn memory a hunter went back to it as soon as the record
+// lapsed, and lost every other turn (review 2026-11-08, targeting-3).
+#define AI_PREY_UNREACHABLE_TURNS 5
+
 static bool ai_side_filter_prey(int64_t obj, int64_t candidate_obj)
 {
-    return ai_is_prey(candidate_obj) && !ai_is_unreachable(obj, candidate_obj);
+    return ai_is_prey(candidate_obj) && !ai_is_unreachable_within(obj, candidate_obj, AI_PREY_UNREACHABLE_TURNS);
 }
 
 static int64_t ai_hunter_choose(int64_t obj, int64_t target_obj)
@@ -3816,6 +3867,7 @@ static int64_t ai_hunter_choose(int64_t obj, int64_t target_obj)
     if (!feature_enabled(FEATURE_AI_TARGETING)
         || !ai_is_hunter(obj)
         || !obj_type_is_critter(obj_field_int32_get(target_obj, OBJ_F_TYPE))
+        || ai_is_ordered_target(obj, target_obj)
         || object_dist(obj, target_obj) <= 1
         || ai_is_prey(target_obj)) {
         return target_obj;
@@ -7157,6 +7209,10 @@ static int64_t ai_judgement_area_centre(Ai* ai, ObjectList* critters, int spell,
     int near_cnt = 0;
     int64_t best_obj = ai->danger_source;
     int best_value = ai_judgement_area_value(ai, critters, spell, ai->danger_source, radius);
+    // AI-7's code 14 at a centre refuses the whole spell: such a centre loses
+    // to any other (review 2026-11-08, cross-4).
+    bool tactics = ai_tactics_applies(ai->obj);
+    bool best_refused = tactics && ai_tactics_friendly_fire(ai->obj, ai->danger_source, spell) == 14;
     ObjectNode* node;
     int idx;
 
@@ -7196,9 +7252,11 @@ static int64_t ai_judgement_area_centre(Ai* ai, ObjectList* critters, int spell,
 
     for (idx = 0; idx < near_cnt; idx++) {
         int value = ai_judgement_area_value(ai, critters, spell, near_obj[idx], radius);
-        if (value > best_value) {
+        if ((best_refused || value > best_value)
+            && !(tactics && ai_tactics_friendly_fire(ai->obj, near_obj[idx], spell) == 14)) {
             best_value = value;
             best_obj = near_obj[idx];
+            best_refused = false;
         }
     }
     return best_obj;
@@ -7237,23 +7295,39 @@ static int ai_judgement_value(Ai* ai, ObjectList* critters, int action, AiJudged
     return ai_judgement_damage_value(damage, object_hp_current(c->target_obj), land);
 }
 
+#define AI_JUDGEMENT_LISTS 3
+
+static void ai_judgement_lists_destroy(MagicTechAi* lists, const bool* made)
+{
+    int list;
+
+    for (list = 0; list < AI_JUDGEMENT_LISTS; list++) {
+        if (made[list]) {
+            mt_ai_destroy(&(lists[list]));
+        }
+    }
+}
+
 // Rules 1 to 4 in place of the stock list walk: every allowed spell of the
 // summon (under the cap), defensive and offensive lists, weighed at the target
 // the stock walk would give it - an area attack at its best centre - and the
 // best cast. Each weighed spell goes to `ai.decided` with its code.
 static bool ai_choose_magictech_judged(Ai* ai)
 {
-    static const int actions[] = {
+    static const int actions[AI_JUDGEMENT_LISTS] = {
         MAGICTECH_AI_ACTION_SUMMON,
         MAGICTECH_AI_ACTION_DEFENSIVE,
         MAGICTECH_AI_ACTION_OFFENSIVE,
     };
     AiJudgedSpell cands[AI_JUDGEMENT_MAX];
+    MagicTechAi lists[AI_JUDGEMENT_LISTS];
+    bool made[AI_JUDGEMENT_LISTS];
+    int entries = 0;
     int cnt = 0;
     ObjectList critters;
     ObjectNode* node;
     int64_t caster_loc = obj_field_int64_get(ai->obj, OBJ_F_LOCATION);
-    int64_t protect_obj = ai_player_under_attack(ai->obj);
+    int64_t protect_obj;
     int nearest_enemy = INT_MAX;
     int best_attack = -1;
     int chosen = -1;
@@ -7264,6 +7338,48 @@ static bool ai_choose_magictech_judged(Ai* ai)
     int attack_ap = 0;
     int list;
     int idx;
+
+    // The lists first: an NPC with nothing to cast pays for no scan (review
+    // 2026-11-08, casting-8).
+    for (list = 0; list < AI_JUDGEMENT_LISTS; list++) {
+        made[list] = actions[list] != MAGICTECH_AI_ACTION_SUMMON || ai_may_summon(ai);
+        if (made[list]) {
+            mt_ai_create(&(lists[list]), ai->obj, actions[list]);
+            entries += lists[list].actions[actions[list]].cnt;
+        }
+    }
+    if (entries == 0) {
+        ai_judgement_lists_destroy(lists, made);
+        return false;
+    }
+
+    // An item the lists name to use as it is (`OIF_VALID_AI_ACTION`, spell
+    // -1) has no spell to weigh: it is used at once, as the stock walk uses
+    // it (review 2026-11-08, casting-5). Troika flagged only potions, which
+    // are healing's; a mod's item for these lists would otherwise never be
+    // used.
+    for (list = 0; list < AI_JUDGEMENT_LISTS; list++) {
+        int action = actions[list];
+
+        if (!made[list]) {
+            continue;
+        }
+        for (idx = 0; idx < lists[list].actions[action].cnt; idx++) {
+            MagicTechAiActionListEntry* entry = &(lists[list].actions[action].entries[idx]);
+            int64_t use_on;
+
+            if (entry->spell != -1 || entry->item_obj == OBJ_HANDLE_NULL) {
+                continue;
+            }
+            use_on = action == MAGICTECH_AI_ACTION_OFFENSIVE ? ai->danger_source : ai->obj;
+            ai_observe_item_used(ai, entry->item_obj, use_on);
+            item_use_on_obj(ai->obj, entry->item_obj, use_on);
+            ai_judgement_lists_destroy(lists, made);
+            return true;
+        }
+    }
+
+    protect_obj = ai_player_under_attack(ai->obj);
 
     // The screen-sized vicinity can miss a target the AI keeps at 20 tiles.
     ai_objects_in_radius(ai->obj, AI_JUDGEMENT_RADIUS, &critters, OBJ_TM_PC | OBJ_TM_NPC);
@@ -7276,17 +7392,15 @@ static bool ai_choose_magictech_judged(Ai* ai)
         }
     }
 
-    for (list = 0; list < (int)(sizeof(actions) / sizeof(actions[0])); list++) {
-        MagicTechAi magictech_ai;
+    for (list = 0; list < AI_JUDGEMENT_LISTS; list++) {
         int action = actions[list];
 
-        if (action == MAGICTECH_AI_ACTION_SUMMON && !ai_may_summon(ai)) {
+        if (!made[list]) {
             continue;
         }
 
-        mt_ai_create(&magictech_ai, ai->obj, action);
-        for (idx = 0; idx < magictech_ai.actions[action].cnt && cnt < AI_JUDGEMENT_MAX; idx++) {
-            MagicTechAiActionListEntry* entry = &(magictech_ai.actions[action].entries[idx]);
+        for (idx = 0; idx < lists[list].actions[action].cnt && cnt < AI_JUDGEMENT_MAX; idx++) {
+            MagicTechAiActionListEntry* entry = &(lists[list].actions[action].entries[idx]);
             AiJudgedSpell* c = &(cands[cnt]);
             bool caster_centred = false;
 
@@ -7304,13 +7418,22 @@ static bool ai_choose_magictech_judged(Ai* ai)
             } else if (action == MAGICTECH_AI_ACTION_DEFENSIVE) {
                 c->target_obj = mt_ai_spell_defensive_targets_enemy(entry->spell) ? ai->danger_source : ai->obj;
                 // AI-6 F4: a follower's buff that can go on another goes on
-                // the player while the player is under attack.
+                // the player while the player is under attack. The player's
+                // weighing is listed first, as the stock walk lists it.
                 if (protect_obj != OBJ_HANDLE_NULL
                     && c->target_obj == ai->obj
-                    && magictech_spell_reaches_others(entry->spell)
-                    && !magictech_is_under_influence_of(protect_obj, entry->spell)
-                    && ai_check_use_spell(ai->obj, entry->item_obj, protect_obj, entry->spell) == 0) {
-                    c->target_obj = protect_obj;
+                    && magictech_spell_reaches_others(entry->spell)) {
+                    int protect_code = magictech_is_under_influence_of(protect_obj, entry->spell)
+                        ? 13
+                        : ai_check_use_spell(ai->obj, entry->item_obj, protect_obj, entry->spell);
+                    if (ai->considered_count < COMBAT_OBSERVER_AI_CONSIDERED_MAX) {
+                        ai->considered[ai->considered_count][0] = entry->spell;
+                        ai->considered[ai->considered_count][1] = protect_code;
+                        ai->considered_count++;
+                    }
+                    if (protect_code == 0) {
+                        c->target_obj = protect_obj;
+                    }
                 }
             } else {
                 c->target_obj = ai->danger_source;
@@ -7338,8 +7461,8 @@ static bool ai_choose_magictech_judged(Ai* ai)
             }
             cnt++;
         }
-        mt_ai_destroy(&magictech_ai);
     }
+    ai_judgement_lists_destroy(lists, made);
     object_list_destroy(&critters);
 
     // Rules 2 and 4 against the best attack, then the best of the rest.
@@ -7391,7 +7514,6 @@ static bool ai_choose_magictech_judged(Ai* ai)
     }
 
     if (cands[chosen].item_obj != OBJ_HANDLE_NULL && mt_item_valid_ai_action(cands[chosen].item_obj)) {
-        ai_restorative_note_used(ai->obj, cands[chosen].item_obj);
         ai->action_type = AI_ACTION_TYPE_USE_ITEM;
     } else {
         ai->action_type = AI_ACTION_TYPE_CAST_SPELL;

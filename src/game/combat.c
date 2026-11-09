@@ -233,6 +233,12 @@ static int64_t combat_opening_enemy;
 #define COMBAT_OPENING_HELD_MAX 64
 static int64_t combat_opening_held[COMBAT_OPENING_HELD_MAX];
 static int combat_opening_held_count;
+// Those released behind the player, for the rest of the first round: a
+// critter joining mid-round re-sorts the list, which put them back ahead of
+// the player's turn, already taken, and they lost theirs (review 2026-11-08,
+// turns-4). `sort_combat_list` moves them back.
+static int64_t combat_opening_released[COMBAT_OPENING_HELD_MAX];
+static int combat_opening_released_count;
 
 // CE (`simultaneous npc turns`, card TB1; zsogg, 2026-11-05): the members of
 // a group turn, the NPC side of a round acting at once. The engine has one
@@ -3812,6 +3818,7 @@ static int combat_armor_natural(int64_t critter_obj)
 int combat_armor_expected_permille(int64_t weapon_obj, int64_t target_obj)
 {
     PenetrationHit hit = { 0 };
+    int64_t wielder_obj;
     int64_t shield_obj;
     int block_chance = 0;
     int penetration;
@@ -3828,6 +3835,13 @@ int combat_armor_expected_permille(int64_t weapon_obj, int64_t target_obj)
     }
     if (!combat_armor_weapon_penetration(weapon_obj, false, &penetration)) {
         return -1;
+    }
+    // A pistol's falloff with range, at the wielder's distance, as the hit
+    // has it (`combat_armor_penetration`; review 2026-11-08, weapons-3).
+    if (weapon_obj != OBJ_HANDLE_NULL
+        && item_parent(weapon_obj, &wielder_obj)
+        && obj_type_is_critter(obj_field_int32_get(wielder_obj, OBJ_F_TYPE))) {
+        penetration = weapon_rules_penetration_at(weapon_obj, (int)object_dist(wielder_obj, target_obj), penetration);
     }
     // CE (creature profiles): a phantom takes nothing from an ordinary blow,
     // so an NPC that has spells or another answer looks for it.
@@ -4597,6 +4611,8 @@ bool combat_turn_based_start(void)
     combat_round_acted_count = 0;
     // CE (`turn order initiative`): a new fight rolls initiative anew.
     combat_initiative_clear();
+    // CE (`ai targeting`): its rounds count from 0 again.
+    ai_fight_memos_forget();
     // CE (`ambush safeguard`): an ambush marked lately makes this fight's
     // opening round an ambush's.
     combat_ambush_opening = false;
@@ -4610,6 +4626,7 @@ bool combat_turn_based_start(void)
     }
     // CE (opening safeguard): a fight's first turn-based round.
     combat_opening_end();
+    combat_opening_released_count = 0;
     // A loaded fight is past its opening: its walk to the saved turn never
     // reaches the player's node, which would leave every enemy after the
     // player held for the round (review 2026-11-08, turns-2).
@@ -4720,6 +4737,7 @@ bool combat_turn_based_begin_turn(void)
     // CE (opening safeguard): the opening is the first round only.
     if (combat_turn_based_turn > 1) {
         combat_opening_end();
+        combat_opening_released_count = 0;
     }
 
     combat_turn_index = 0;
@@ -6046,6 +6064,8 @@ static void combat_opening_player_reached(void)
 
     combat_opening_splice(&(combat_critter_list.head), player_get_local_pc_obj(),
         combat_opening_held, combat_opening_held_count);
+    memcpy(combat_opening_released, combat_opening_held, sizeof(combat_opening_held[0]) * combat_opening_held_count);
+    combat_opening_released_count = combat_opening_held_count;
 
     if (combat_opening_held_count != 0) {
         tig_debug_printf("Combat: opening safeguard: %d enemy turn(s) after the player's\n",
@@ -6603,6 +6623,13 @@ void sort_combat_list(void)
 
     // CE (`ambush safeguard`): the ambush's opening round.
     combat_ambush_order();
+
+    // CE (opening safeguard): the enemies released behind the player stay
+    // there for the first round.
+    if (combat_opening_released_count != 0 && combat_turn_based_turn == 1) {
+        combat_opening_splice(&(combat_critter_list.head), player_get_local_pc_obj(),
+            combat_opening_released, combat_opening_released_count);
+    }
 
     node = combat_critter_list.head;
     while (node != NULL) {
