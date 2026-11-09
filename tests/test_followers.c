@@ -360,6 +360,21 @@ TEST(a_helper_grazed_by_friendly_fire_is_not_attacked_under_grazing_hits)
     CHECK_INT(magictech_attack_flags(followers_npc, helper, wolf), 0);
     graze_fights(helper, wolf);
 
+    // An idle follower of the helper's, grazed by it, is kin: it does not
+    // turn on its leader.
+    {
+        int64_t page = obj_harness_create_proto(OBJ_TYPE_NPC);
+
+        obj_field_int32_set(page, OBJ_F_NPC_FLAGS, 0);
+        critter_leader_set(page, helper);
+        CHECK_INT(magictech_attack_flags(helper, page, wolf), graze);
+        ai_attack(helper, page, LOUDNESS_NORMAL, (unsigned int)graze);
+        CHECK(obj_field_handle_get(page, OBJ_F_NPC_COMBAT_FOCUS) != helper);
+        CHECK((obj_field_int32_get(page, OBJ_F_NPC_FLAGS) & ONF_FIGHTING) == 0);
+        critter_leader_set(page, OBJ_HANDLE_NULL);
+        obj_harness_destroy(page);
+    }
+
     // A graze leaves the helper on the Wolf, with no one on its shitlist and
     // its last attacker unchanged. A deliberate hit records the attacker and,
     // as in stock, puts the helper on the follower's shitlist (the harness
