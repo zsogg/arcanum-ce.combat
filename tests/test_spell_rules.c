@@ -111,6 +111,25 @@ TEST(an_entry_reads_a_disabling_spell)
     CHECK(!spell_rule_parse("Control: yes", &rule));
 }
 
+TEST(an_entry_reads_a_weakening_spell)
+{
+    SpellRule rule;
+
+    // Review 2026-11-08, casting-2 (zsogg 2026-11-09): the sheet's role
+    // `debuff`, worth half its target's damage under `caster judgement`.
+    CHECK(spell_rule_parse("APCost: 4, Critical: Exposed, Debuff: 1", &rule));
+    CHECK(rule.debuff);
+    CHECK(!rule.control);
+    CHECK(spell_rule_parse("APCost: 5", &rule));
+    CHECK(!rule.debuff);
+    CHECK(spell_rule_parse("Debuff: 0", &rule));
+    CHECK(!rule.debuff);
+    CHECK(!spell_rule_parse("Debuff: 2", &rule));
+    CHECK(!spell_rule_parse("Debuff: x", &rule));
+    CHECK(!spell_rules_debuff(80));
+    CHECK(!spell_rules_debuff(-1));
+}
+
 TEST(an_entry_reads_a_longer_stun)
 {
     SpellRule rule;
@@ -204,4 +223,5 @@ void test_spell_rules_suite(void)
     RUN(a_complete_college_casts_for_one_less_never_below_3);
     RUN(the_aptitude_part_of_scaled_damage_is_30_percent_smaller);
     RUN(a_grenade_blast_falls_off_fast_and_is_critical_only_near_its_centre);
+    RUN(an_entry_reads_a_weakening_spell);
 }

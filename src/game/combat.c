@@ -3923,6 +3923,64 @@ int combat_armor_expected_permille(int64_t weapon_obj, int64_t target_obj)
     return penetration_expected_permille(&hit, block_chance);
 }
 
+// CE (combat AI, `caster judgement`, card AI-8; review 2026-11-08, casting-2
+// and cross-7): see `combat.h`. On `magictech_ai_expected_damage`'s scale -
+// averaged, through armor or resistance, fatigue and poison at half - so a
+// spell and a blow are weighed alike.
+int combat_expected_attack_damage(int64_t attacker_obj, int64_t target_obj, int* chance_ptr)
+{
+    int64_t weapon_obj;
+    int skill;
+    int permille;
+    int chance;
+    int total = 0;
+
+    *chance_ptr = 0;
+    if (attacker_obj == OBJ_HANDLE_NULL
+        || target_obj == OBJ_HANDLE_NULL
+        || !obj_type_is_critter(obj_field_int32_get(attacker_obj, OBJ_F_TYPE))
+        || !obj_type_is_critter(obj_field_int32_get(target_obj, OBJ_F_TYPE))) {
+        return 0;
+    }
+
+    weapon_obj = item_wield_get(attacker_obj, ITEM_INV_LOC_WEAPON);
+    skill = item_weapon_skill(weapon_obj);
+    permille = combat_armor_expected_permille(weapon_obj, target_obj);
+    for (DamageType type = 0; type < DAMAGE_TYPE_COUNT; type++) {
+        int min_dam;
+        int max_dam;
+        int expected;
+
+        item_weapon_damage(weapon_obj, attacker_obj, type, skill, false, &min_dam, &max_dam);
+        expected = (min_dam + max_dam) / 2;
+        if (type == DAMAGE_TYPE_NORMAL && permille >= 0) {
+            expected = expected * permille / 1000;
+        } else {
+            int resistance = object_get_resistance(target_obj, combat_damage_to_resistance_tbl[type], false);
+
+            resistance = resistance < 0 ? 0 : resistance > 95 ? 95 : resistance;
+            expected = expected * (100 - resistance) / 100;
+        }
+        if (type == DAMAGE_TYPE_FATIGUE || type == DAMAGE_TYPE_POISON) {
+            expected /= 2;
+        }
+        total += expected;
+    }
+
+    // `item_wield_best`'s untrained rule: without the skill only melee hits.
+    if (IS_TECH_SKILL(skill)) {
+        chance = tech_skill_level(attacker_obj, GET_TECH_SKILL(skill)) != 0
+            ? tech_skill_effectiveness(attacker_obj, GET_TECH_SKILL(skill), target_obj)
+            : 0;
+    } else {
+        chance = skill == BASIC_SKILL_MELEE || basic_skill_level(attacker_obj, skill) != 0
+            ? basic_skill_effectiveness(attacker_obj, GET_BASIC_SKILL(skill), target_obj)
+            : 0;
+    }
+    *chance_ptr = chance < 0 ? 0 : chance > 100 ? 100 : chance;
+    return total;
+}
+
 // CE (creature profiles): a phantom is hurt by no weapon blow but a critical
 // one. Called where a weapon hit's damage is worked out, so a spell, an
 // explosion or a trap never meets it; the blow still lands, and a weapon's

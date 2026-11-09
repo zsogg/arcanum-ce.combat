@@ -202,6 +202,11 @@ int combat_jam_clear_cost(int64_t obj, int64_t weapon_obj);
 // shield's block chance, by the rules a hit is resolved with. 1000 for a
 // weapon that ignores resistance; -1 when the armor rules do not apply.
 int combat_armor_expected_permille(int64_t weapon_obj, int64_t target_obj);
+// CE (combat AI, card AI-8): the hit points one attack with `attacker_obj`'s
+// held weapon (its natural attack with none) is expected to take from
+// `target_obj` when it hits, and in `*chance_ptr` the percent chance it hits
+// (0 untrained), so a caster weighs its spells against it.
+int combat_expected_attack_damage(int64_t attacker_obj, int64_t target_obj, int* chance_ptr);
 int combat_weapon_swap_cost(int64_t obj);
 bool combat_check_weapon_swap(int64_t obj, int64_t weapon_obj);
 void combat_weapon_swap_left(int64_t obj, int64_t weapon_obj);

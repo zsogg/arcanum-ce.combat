@@ -109,6 +109,13 @@ typedef struct S4ABF10 {
     /* 0010 */ int64_t obj;
 } S4ABF10;
 
+// CE (`caster judgement`, AI-8 rule 2; review 2026-11-08, healing-3): a heal
+// list in a fight, which keeps to the reserve the caster's last judged pass
+// kept. Beside the stock 0x1/0x2/0x8 target bits and AI-6's 0x4.
+#define AI_LIST_HEAL_BUDGET 0x10
+
+static int ai_judgement_reserve_get(int64_t obj);
+
 static bool ai_prepare_to_act(Ai* ai);
 static void ai_setup(Ai* ai, int64_t obj);
 static bool ai_heal(Ai* ai);
@@ -1148,6 +1155,7 @@ bool ai_heal_func(Ai* ai, int64_t obj, bool a3)
     int hp_ratio;
     int64_t item_obj;
     bool fatigue_after_heals = false;
+    unsigned int heal_flags;
 
     // NOTE: This read `ONF_NO_ATTACK`, which is a *NPC*-flags constant that
     // happens to share bit 0x20000000 with `OCF_MECHANICAL`. The generated
@@ -1184,6 +1192,14 @@ bool ai_heal_func(Ai* ai, int64_t obj, bool a3)
         return false;
     }
 
+    // CE (`caster judgement`, AI-8 rule 2; review 2026-11-08, healing-3): in
+    // a fight a heal list keeps to the reserve the caster's last judged pass
+    // kept (`AI_LIST_HEAL_BUDGET`).
+    heal_flags = 0x8
+        | (ai_judgement_applies(ai->obj) && ai->danger_type == AI_DANGER_SOURCE_TYPE_COMBAT_FOCUS
+                ? AI_LIST_HEAL_BUDGET
+                : 0);
+
     if (ai->danger_type != AI_DANGER_SOURCE_TYPE_NONE) {
         // NOTE: stock tests the healer's fatigue and restores the patient's
         // (0x4A8BF8 passes `ai->obj`, 0x4A8C3C targets the patient, and so
@@ -1215,7 +1231,7 @@ bool ai_heal_func(Ai* ai, int64_t obj, bool a3)
 
     if (hp_ratio < 40) {
         mt_ai_create(&magictech_ai, ai->obj, MAGICTECH_AI_ACTION_HEAL_HEAVY);
-        v1.flags = 0x8;
+        v1.flags = heal_flags;
         v1.entries = magictech_ai.actions[MAGICTECH_AI_ACTION_HEAL_HEAVY].entries;
         v1.cnt = magictech_ai.actions[MAGICTECH_AI_ACTION_HEAL_HEAVY].cnt;
         v1.obj = obj;
@@ -1229,7 +1245,7 @@ bool ai_heal_func(Ai* ai, int64_t obj, bool a3)
 
     if (hp_ratio < 55) {
         mt_ai_create(&magictech_ai, ai->obj, MAGICTECH_AI_ACTION_HEAL_MEDIUM);
-        v1.flags = 0x8;
+        v1.flags = heal_flags;
         v1.entries = magictech_ai.actions[MAGICTECH_AI_ACTION_HEAL_MEDIUM].entries;
         v1.cnt = magictech_ai.actions[MAGICTECH_AI_ACTION_HEAL_MEDIUM].cnt;
         v1.obj = obj;
@@ -1259,7 +1275,7 @@ bool ai_heal_func(Ai* ai, int64_t obj, bool a3)
         || (ai->danger_type == AI_DANGER_SOURCE_TYPE_NONE
             && hp_ratio < 90)) {
         mt_ai_create(&magictech_ai, ai->obj, MAGICTECH_AI_ACTION_HEAL_LIGHT);
-        v1.flags = 0x8;
+        v1.flags = heal_flags;
         v1.entries = magictech_ai.actions[MAGICTECH_AI_ACTION_HEAL_LIGHT].entries;
         v1.cnt = magictech_ai.actions[MAGICTECH_AI_ACTION_HEAL_LIGHT].cnt;
         v1.obj = obj;
@@ -4141,6 +4157,20 @@ bool ai_choose_action_from_list(Ai* ai, S4ABF10* a2)
         // spell is disabled too, and is remembered as such for its recovery.
         if (code == 13) {
             ai_tactics_note_if_disabled(ai->obj, obj, entry->spell);
+        }
+        // CE (`caster judgement`, AI-8 rule 2; review 2026-11-08,
+        // healing-3): a heal from memory on a patient above 30% keeps to the
+        // reserve (code 21, as the judged pass's). The player under `follower
+        // healing` is exempt: AI-6 heals the player at half health or below.
+        if (code == 0
+            && (a2->flags & AI_LIST_HEAL_BUDGET) != 0
+            && entry->item_obj == OBJ_HANDLE_NULL
+            && !(player_is_pc_obj(obj) && ai_follower_healing_applies(ai->obj))
+            && ai_judgement_heal_refuses(critter_fatigue_current(ai->obj),
+                spell_cast_cost(entry->spell, ai->obj),
+                ai_judgement_reserve_get(ai->obj),
+                ai_object_hp_ratio(obj))) {
+            code = 21;
         }
         if (!on_player && ai->considered_count < COMBAT_OBSERVER_AI_CONSIDERED_MAX) {
             ai->considered[ai->considered_count][0] = entry->spell;
@@ -7047,6 +7077,18 @@ static struct {
     int key;
 } ai_control_memo[AI_CONTROL_MEMO_MAX];
 
+// CE (`caster judgement`, AI-8; review 2026-11-08, healing-3): the reserve
+// each caster's last judged pass kept, in `ai_desperation_key`'s turn, which
+// its heals keep to. A fight's memory only, not saved; older than the last
+// turn it is none, so a pass that never weighed does not hold heals back.
+#define AI_JUDGEMENT_RESERVE_MAX 32
+
+static struct {
+    int64_t obj;
+    int reserve;
+    int key;
+} ai_judgement_reserves[AI_JUDGEMENT_RESERVE_MAX];
+
 // CE (review 2026-11-08, targeting-6): a turn-based fight's rounds count from
 // 0 again, so the round-keyed memos of the last fight would count in this
 // one. Called as one starts (`combat_turn_based_start`). See `ai.h`.
@@ -7060,6 +7102,44 @@ void ai_fight_memos_forget(void)
     // the same key (the fix review, 2026-11-08).
     memset(ai_control_memo, 0, sizeof(ai_control_memo));
     memset(ai_desperation, 0, sizeof(ai_desperation));
+    memset(ai_judgement_reserves, 0, sizeof(ai_judgement_reserves));
+}
+
+static int ai_judgement_reserve_slot(int64_t obj, bool add)
+{
+    int slot;
+    int free_slot = -1;
+
+    for (slot = 0; slot < AI_JUDGEMENT_RESERVE_MAX; slot++) {
+        if (ai_judgement_reserves[slot].obj == obj) {
+            return slot;
+        }
+        if (free_slot < 0 && ai_memo_entry_free(ai_judgement_reserves[slot].obj)) {
+            free_slot = slot;
+        }
+    }
+    if (!add) {
+        return -1;
+    }
+    return free_slot >= 0 ? free_slot : 0;
+}
+
+static void ai_judgement_reserve_note(int64_t obj, int reserve)
+{
+    int slot = ai_judgement_reserve_slot(obj, true);
+
+    ai_judgement_reserves[slot].obj = obj;
+    ai_judgement_reserves[slot].reserve = reserve;
+    ai_judgement_reserves[slot].key = ai_desperation_key();
+}
+
+static int ai_judgement_reserve_get(int64_t obj)
+{
+    int slot = ai_judgement_reserve_slot(obj, false);
+
+    return slot >= 0 && ai_memo_age_within(ai_desperation_key(), ai_judgement_reserves[slot].key, 1)
+        ? ai_judgement_reserves[slot].reserve
+        : 0;
 }
 
 static int ai_control_memo_slot(int64_t obj, bool add)
@@ -7157,6 +7237,9 @@ static int ai_tactics_refusal(int64_t caster_obj, int64_t target_obj, int spell)
 #define AI_JUDGEMENT_AREA_CENTRES 8
 #define AI_JUDGEMENT_MAX 48
 #define AI_JUDGEMENT_RADIUS 25
+// The share of its target's damage a debuff denies (casting-2). shortcut: one
+// share for every debuff; a sheet column if they are tuned apart.
+#define AI_JUDGEMENT_DEBUFF_PERCENT 50
 
 bool ai_judgement_applies(int64_t obj)
 {
@@ -7229,9 +7312,19 @@ int ai_judgement_score(int value, int cost, int upkeep)
     return value * 100 / (spend > 0 ? spend : 1);
 }
 
-bool ai_judgement_budget_refuses(int fatigue_left, int cost, int reserve, int score, int attack_score)
+// Rule 2 (review 2026-11-08, casting-1; zsogg 2026-11-09): a cast that
+// costs fatigue never spends into the reserve, whatever it scores. The caller
+// exempts attacks; an item's cast costs nothing.
+bool ai_judgement_budget_refuses(int fatigue_left, int cost, int reserve)
 {
-    return reserve > 0 && score < attack_score && fatigue_left - cost < reserve;
+    return reserve > 0 && cost > 0 && fatigue_left - cost < reserve;
+}
+
+// Rule 2 for heals (healing-3): a patient at 30% health or below is the
+// emergency, healed whatever it costs.
+bool ai_judgement_heal_refuses(int fatigue_left, int cost, int reserve, int patient_hp_pct)
+{
+    return patient_hp_pct > 30 && ai_judgement_budget_refuses(fatigue_left, cost, reserve);
 }
 
 bool ai_judgement_turn_refuses(int ap_left, int ap_cost, int attack_ap_cost, int value, int attack_value)
@@ -7239,16 +7332,106 @@ bool ai_judgement_turn_refuses(int ap_left, int ap_cost, int attack_ap_cost, int
     return attack_ap_cost > 0 && ap_left - ap_cost < attack_ap_cost && attack_value > value;
 }
 
-typedef struct AiJudgedSpell {
-    int spell;
-    int64_t item_obj;
-    int64_t target_obj;
-    int code;
+// Rule 1 for a disable (casting-2): the turns it holds its target. A stun
+// the turns it skips (three ticks a turn-based turn); a spell with a duration
+// or upkeep the horizon; anything else (a knockdown, a dropped weapon) one.
+// The horizon is a cap, not a conversion: a turn-based round is one game
+// second and a real-time turn about two, so durations do not convert.
+int ai_judgement_hold_turns(bool stuns, int stun_ticks, bool lasts)
+{
+    int turns;
+
+    if (stuns) {
+        turns = stun_ticks > 0 ? (stun_ticks + 2) / 3 : 0;
+    } else {
+        turns = lasts ? AI_JUDGEMENT_HOLD_TURNS : 1;
+    }
+    return turns < AI_JUDGEMENT_HOLD_TURNS ? turns : AI_JUDGEMENT_HOLD_TURNS;
+}
+
+// Rule 1 for a disable (casting-2): the damage it denies - the target's
+// expected damage per attack, times the attacks a turn allows it, times the
+// turns held, times the share denied - never more than killing the target is
+// worth, times the chance it lands. Each percent step divides at once.
+int ai_judgement_disable_value(int attack_damage, int ap_per_turn, int attack_ap, int turns, int share_pct, int hp_left, int land_pct)
+{
+    int attacks = attack_ap > 0 ? ap_per_turn / attack_ap : 1;
     int value;
-    int score;
-    int cost;
-    bool attack;
-} AiJudgedSpell;
+
+    if (attack_damage <= 0 || turns <= 0 || share_pct <= 0 || hp_left <= 0) {
+        return 0;
+    }
+    if (attacks < 1) {
+        attacks = 1;
+    }
+    value = attack_damage * attacks * turns * share_pct / 100;
+    if (value > hp_left + AI_JUDGEMENT_KILL_BONUS) {
+        value = hp_left + AI_JUDGEMENT_KILL_BONUS;
+    }
+    return value * land_pct / 100;
+}
+
+// Rule 1's floor (cross-7): 10, or the caster's own attack for the spell's
+// AP, on a spell's scale - capped at the target's hit points, a kill +20,
+// times its chance to hit.
+int ai_judgement_floor(int weapon_avg, int weapon_chance, int weapon_ap, int spell_ap, int hp_left)
+{
+    int damage = weapon_ap > 0 ? weapon_avg * spell_ap / weapon_ap : weapon_avg;
+    int value = ai_judgement_damage_value(damage, hp_left, weapon_chance);
+
+    return value > AI_JUDGEMENT_MIN_VALUE ? value : AI_JUDGEMENT_MIN_VALUE;
+}
+
+// Rules 1, 2 and 4 over the weighed spells (see `ai.h`).
+int ai_judgement_pick(AiJudgedSpell* cands, int cnt, int fatigue_left, int ap_left, int* reserve_ptr)
+{
+    int best = -1;
+    int chosen = -1;
+    int reserve;
+    int idx;
+
+    // The attack worth keeping fatigue for is one that clears its floor
+    // (casting-1: an attack worth too little kept a reserve for nothing).
+    for (idx = 0; idx < cnt; idx++) {
+        if (cands[idx].code == 0
+            && cands[idx].attack
+            && cands[idx].value >= cands[idx].floor
+            && (best < 0 || cands[idx].score > cands[best].score)) {
+            best = idx;
+        }
+    }
+    reserve = best >= 0 ? AI_JUDGEMENT_RESERVE_CASTS * cands[best].cost : 0;
+
+    for (idx = 0; idx < cnt; idx++) {
+        AiJudgedSpell* c = &(cands[idx]);
+
+        if (c->code != 0) {
+            continue;
+        }
+        if (c->value < c->floor) {
+            c->code = 23;
+        } else if (!c->attack && ai_judgement_budget_refuses(fatigue_left, c->cost, reserve)) {
+            c->code = 21;
+        } else if (ap_left >= 0
+            && best >= 0
+            && !c->attack
+            && ai_judgement_turn_refuses(ap_left, c->ap_cost, cands[best].ap_cost, c->value, cands[best].value)) {
+            c->code = 22;
+        } else if (chosen < 0 || c->score > cands[chosen].score) {
+            chosen = idx;
+        }
+    }
+
+    for (idx = 0; idx < cnt; idx++) {
+        if (cands[idx].code == 0 && idx != chosen) {
+            cands[idx].code = 20;
+        }
+    }
+    if (reserve_ptr != NULL) {
+        *reserve_ptr = reserve;
+    }
+    return chosen;
+}
 
 // An enemy, for the weighing: on the target's side by kin or by whom it is
 // fighting, and not on the caster's, so a bystander counts for neither.
@@ -7404,7 +7587,50 @@ static int ai_judgement_value(Ai* ai, ObjectList* critters, int action, AiJudged
     land = magictech_ai_land_chance(ai->obj, c->target_obj, c->spell);
     damage = magictech_ai_expected_damage(ai->obj, c->target_obj, c->spell);
     if (damage <= 0) {
-        return ai_judgement_control_value(object_hp_current(c->target_obj), magictech_ai_value(c->spell, action), land);
+        // Rule 1 (review 2026-11-08, casting-2; zsogg 2026-11-09): a disable
+        // or debuff is worth the damage it denies the target.
+        int share = spell_rules_control(c->spell) ? 100
+            : spell_rules_debuff(c->spell)        ? AI_JUDGEMENT_DEBUFF_PERCENT
+                                                  : 0;
+        int foe_avg;
+        int foe_chance;
+        int stun_ticks = 0;
+        bool stuns;
+
+        // A damage spell the target shrugs off is not a disable.
+        if (magictech_ai_expected_damage(ai->obj, OBJ_HANDLE_NULL, c->spell) > 0) {
+            return 0;
+        }
+        // Neither on the sheet (a dispel, a tech spell, no Rebalance data):
+        // the worth of 2026-11-08.
+        if (share == 0) {
+            return ai_judgement_control_value(object_hp_current(c->target_obj), magictech_ai_value(c->spell, action), land);
+        }
+        // Held already, it denies nothing more: without `caster tactics`
+        // (code 15) the new worth would stun-lock it.
+        if (ai_tactics_disabled(c->target_obj)) {
+            return 0;
+        }
+        stuns = magictech_ai_stuns(c->spell);
+        if (stuns) {
+            // `anim_goal_animate_stunned`'s length, and the lengthening the
+            // engine applies (a StunPct above 100, under `spell stun length`).
+            int percent = feature_enabled(FEATURE_SPELL_STUN_LENGTH) && spell_rules_stun_percent(c->spell) > 100
+                ? spell_rules_stun_percent(c->spell)
+                : 100;
+            stun_ticks = spell_rules_stun_ticks((20 - stat_level_get(c->target_obj, STAT_CONSTITUTION)) / 2, percent);
+        }
+        // Its blows at the caster: the one it is weighed against.
+        foe_avg = combat_expected_attack_damage(c->target_obj, ai->obj, &foe_chance);
+        return ai_judgement_disable_value(foe_avg * foe_chance / 100,
+            combat_action_points_per_turn(c->target_obj),
+            combat_weapon_attack_cost(c->target_obj, item_wield_get(c->target_obj, ITEM_INV_LOC_WEAPON)),
+            ai_judgement_hold_turns(stuns,
+                stun_ticks,
+                magictech_get_duration(c->spell)->period > 0 || magictech_get_maintenance(c->spell)->period > 0),
+            share,
+            object_hp_current(c->target_obj),
+            land);
     }
 
     c->attack = true;
@@ -7449,13 +7675,14 @@ static bool ai_choose_magictech_judged(Ai* ai)
     int64_t caster_loc = obj_field_int64_get(ai->obj, OBJ_F_LOCATION);
     int64_t protect_obj;
     int nearest_enemy = INT_MAX;
-    int best_attack = -1;
-    int chosen = -1;
+    int chosen;
     int reserve;
-    int fatigue_left;
     bool turn_based;
-    int ap_left = 0;
-    int attack_ap = 0;
+    int64_t weapon_obj;
+    int weapon_ap;
+    int weapon_avg = 0;
+    int weapon_chance = 0;
+    int foe_hp;
     int list;
     int idx;
 
@@ -7470,6 +7697,7 @@ static bool ai_choose_magictech_judged(Ai* ai)
     }
     if (entries == 0) {
         ai_judgement_lists_destroy(lists, made);
+        ai_judgement_reserve_note(ai->obj, 0);
         return false;
     }
 
@@ -7497,11 +7725,24 @@ static bool ai_choose_magictech_judged(Ai* ai)
             ai_observe_item_used(ai, entry->item_obj, use_on);
             item_use_on_obj(ai->obj, entry->item_obj, use_on);
             ai_judgement_lists_destroy(lists, made);
+            ai_judgement_reserve_note(ai->obj, 0);
             return true;
         }
     }
 
     protect_obj = ai_player_under_attack(ai->obj);
+
+    // Rule 1's floor (review 2026-11-08, cross-7; zsogg 2026-11-09): the
+    // caster's own attack, if it reaches the target now - a dagger ten tiles
+    // off holds back no spell. shortcut: a ranged weapon's ammunition is not
+    // checked; AI-1's rewield normally swaps an empty one first.
+    weapon_obj = item_wield_get(ai->obj, ITEM_INV_LOC_WEAPON);
+    weapon_ap = combat_weapon_attack_cost(ai->obj, weapon_obj);
+    foe_hp = ai->danger_source != OBJ_HANDLE_NULL ? object_hp_current(ai->danger_source) : 0;
+    if (ai->danger_source != OBJ_HANDLE_NULL
+        && item_weapon_range(weapon_obj, ai->obj) >= object_dist(ai->obj, ai->danger_source)) {
+        weapon_avg = combat_expected_attack_damage(ai->obj, ai->danger_source, &weapon_chance);
+    }
 
     // The screen-sized vicinity can miss a target the AI keeps at 20 tiles.
     ai_objects_in_radius(ai->obj, AI_JUDGEMENT_RADIUS, &critters, OBJ_TM_PC | OBJ_TM_NPC);
@@ -7535,6 +7776,9 @@ static bool ai_choose_magictech_judged(Ai* ai)
             c->attack = false;
             c->value = 0;
             c->score = 0;
+            c->cost = 0;
+            c->ap_cost = 0;
+            c->floor = 0;
             if (action == MAGICTECH_AI_ACTION_SUMMON) {
                 c->target_obj = ai->obj;
             } else if (action == MAGICTECH_AI_ACTION_DEFENSIVE) {
@@ -7579,9 +7823,8 @@ static bool ai_choose_magictech_judged(Ai* ai)
                 c->value = ai_judgement_value(ai, &critters, action, c, nearest_enemy);
                 c->cost = c->item_obj != OBJ_HANDLE_NULL ? 0 : spell_cast_cost(c->spell, ai->obj);
                 c->score = ai_judgement_score(c->value, spell_cast_cost(c->spell, ai->obj), magictech_upkeep_cost(c->spell));
-                if (c->attack && (best_attack < 0 || c->score > cands[best_attack].score)) {
-                    best_attack = cnt;
-                }
+                c->ap_cost = combat_spell_cast_cost(ai->obj, c->spell, c->item_obj);
+                c->floor = ai_judgement_floor(weapon_avg, weapon_chance, weapon_ap, c->ap_cost, foe_hp);
             }
             cnt++;
         }
@@ -7589,43 +7832,14 @@ static bool ai_choose_magictech_judged(Ai* ai)
     ai_judgement_lists_destroy(lists, made);
     object_list_destroy(&critters);
 
-    // Rules 2 and 4 against the best attack, then the best of the rest.
-    reserve = best_attack >= 0 ? AI_JUDGEMENT_RESERVE_CASTS * cands[best_attack].cost : 0;
-    fatigue_left = critter_fatigue_current(ai->obj);
+    // Rules 1, 2 and 4, then the best of the rest; the reserve is kept for
+    // this caster's heals (healing-3).
     turn_based = combat_turn_based_is_active() && combat_turn_based_is_acting(ai->obj);
-    if (turn_based) {
-        ap_left = combat_action_points_of(ai->obj);
-        if (best_attack >= 0) {
-            attack_ap = combat_spell_cast_cost(ai->obj, cands[best_attack].spell, cands[best_attack].item_obj);
-        }
-    }
+    chosen = ai_judgement_pick(cands, cnt, critter_fatigue_current(ai->obj),
+        turn_based ? combat_action_points_of(ai->obj) : -1, &reserve);
+    ai_judgement_reserve_note(ai->obj, reserve);
 
     for (idx = 0; idx < cnt; idx++) {
-        AiJudgedSpell* c = &(cands[idx]);
-
-        if (c->code != 0) {
-            continue;
-        }
-        if (c->value < AI_JUDGEMENT_MIN_VALUE) {
-            c->code = 23;
-        } else if (best_attack >= 0
-            && ai_judgement_budget_refuses(fatigue_left, c->cost, reserve, c->score, cands[best_attack].score)) {
-            c->code = 21;
-        } else if (turn_based
-            && best_attack >= 0
-            && !c->attack
-            && ai_judgement_turn_refuses(ap_left, combat_spell_cast_cost(ai->obj, c->spell, c->item_obj),
-                attack_ap, c->value, cands[best_attack].value)) {
-            c->code = 22;
-        } else if (chosen < 0 || c->score > cands[chosen].score) {
-            chosen = idx;
-        }
-    }
-
-    for (idx = 0; idx < cnt; idx++) {
-        if (cands[idx].code == 0 && idx != chosen) {
-            cands[idx].code = 20;
-        }
         if (ai->considered_count < COMBAT_OBSERVER_AI_CONSIDERED_MAX) {
             ai->considered[ai->considered_count][0] = cands[idx].spell;
             ai->considered[ai->considered_count][1] = cands[idx].code;

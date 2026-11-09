@@ -26,6 +26,9 @@
 // `Control: 1`, read under `caster tactics` (combat AI, milestone AI-7;
 // zsogg, 2026-11-02): a disabling spell, the sheet's role `disable`, which an
 // NPC caster keeps off a target already disabled or just recovered.
+// `Debuff: 1`, read under `caster judgement` (AI-8; review 2026-11-08,
+// casting-2): a weakening spell, the sheet's role `debuff`, worth half the
+// damage its target would do.
 // `StunPct: N`, read under `spell stun length` (card AI-7; zsogg,
 // 2026-11-04: "the stun can last maybe 30 to 40% longer"): the stun the
 // spell's own damage gives lasts N percent of the stock length, 100 to 400.
@@ -62,13 +65,15 @@ typedef struct SpellRule {
     bool no_stack;
     // AI-7: `Control: 1`.
     bool control;
+    // AI-8: `Debuff: 1`.
+    bool debuff;
     // AI-7: `StunPct`, 100 when the entry names none.
     int stun_percent;
 } SpellRule;
 
-// Pure: reads one entry's text - `APCost`, `Critical`, `NoStack`, `Control`
-// and `StunPct`, any of them. `NoStack` and `Control` take 0 or 1, `StunPct`
-// 100 to 400.
+// Pure: reads one entry's text - `APCost`, `Critical`, `NoStack`, `Control`,
+// `Debuff` and `StunPct`, any of them. `NoStack`, `Control` and `Debuff` take
+// 0 or 1, `StunPct` 100 to 400.
 // False, with `rule` untouched, for anything else, an AP below 4 or above 10,
 // a damage critical without its bonus or another critical with one - so a bad
 // entry changes nothing rather than a guessed rule.
@@ -95,6 +100,8 @@ bool spell_rules_no_stack(int spell);
 
 // AI-7: whether the table marks the spell as disabling (`Control: 1`).
 bool spell_rules_control(int spell);
+// AI-8: whether the table marks the spell as weakening (`Debuff: 1`).
+bool spell_rules_debuff(int spell);
 // AI-7: the spell's `StunPct`, 100 when not listed.
 int spell_rules_stun_percent(int spell);
 // AI-7: the spell's damage is about to stun `obj` at `percent` of the stock

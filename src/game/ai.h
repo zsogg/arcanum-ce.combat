@@ -321,9 +321,27 @@ bool ai_judgement_applies(int64_t obj);
 // - a damage spell on one target: the expected damage, never more than the
 //   target has left, plus 20 for a kill, at the chance it lands;
 int ai_judgement_damage_value(int expected, int hp_left, int land_pct);
-// - a spell that disables or weakens: half the target's hit points left, x
+// - a spell that disables or weakens but the sheet marks neither `Control` nor
+//   `Debuff` (a dispel, a tech spell): half the target's hit points left, x
 //   the spell data's AI value / 20 (at most 1), at the chance it lands;
 int ai_judgement_control_value(int hp_left, int ai_value, int land_pct);
+// - a disable or debuff (review 2026-11-08, casting-2; zsogg 2026-11-09): the
+//   damage it denies - `attack_damage` per attack, x the attacks
+//   `ap_per_turn` allows at `attack_ap` each (at least one), x `turns` held,
+//   x `share_pct` (100 a disable, 50 a debuff) - never more than killing the
+//   target is worth, at the chance it lands;
+int ai_judgement_disable_value(int attack_damage, int ap_per_turn, int attack_ap, int turns, int share_pct, int hp_left, int land_pct);
+// - the turns a disable holds its target: a stun the turns its `stun_ticks`
+//   skip (three a turn-based turn), a spell that `lasts` (a duration or
+//   upkeep) AI_JUDGEMENT_HOLD_TURNS, anything else one; never more than
+//   AI_JUDGEMENT_HOLD_TURNS, a horizon rather than a conversion.
+#define AI_JUDGEMENT_HOLD_TURNS 3
+int ai_judgement_hold_turns(bool stuns, int stun_ticks, bool lasts);
+// CE: AI-8 rule 1's floor (review 2026-11-08, cross-7; zsogg 2026-11-09): a
+// spell worth less is not cast. 10, or the caster's own attack for the
+// spell's AP (`weapon_avg` a blow at `weapon_chance`, `weapon_ap` a blow),
+// valued as a damage spell is. Pure.
+int ai_judgement_floor(int weapon_avg, int weapon_chance, int weapon_ap, int spell_ap, int hp_left);
 // - a summon: 12 x its AI value, in full with an enemy within 8 tiles, a fifth
 //   from 20, in between by distance;
 int ai_judgement_summon_value(int ai_value, int nearest_enemy);
@@ -332,12 +350,41 @@ int ai_judgement_buff_value(int threats, int ai_value);
 // CE: AI-8. A worth per fatigue: hundredths of a hit point for each point of
 // the cost plus two upkeep periods. Pure.
 int ai_judgement_score(int value, int cost, int upkeep);
-// CE: AI-8 rule 2. Whether a spell spending into the reserve kept for the best
-// attack (three of its casts) is refused: unless it scores as well. Pure.
-bool ai_judgement_budget_refuses(int fatigue_left, int cost, int reserve, int score, int attack_score);
+// CE: AI-8 rule 2 (review 2026-11-08, casting-1; zsogg 2026-11-09). Whether a
+// spell that is not an attack, costing fatigue, is refused for spending into
+// the reserve kept for the best attack worth casting (three of its casts),
+// whatever it scores. Pure.
+bool ai_judgement_budget_refuses(int fatigue_left, int cost, int reserve);
+// CE: AI-8 rule 2 for heals (healing-3). Whether a heal from memory is
+// refused for spending into the reserve: only for a patient above 30% health.
+// Pure.
+bool ai_judgement_heal_refuses(int fatigue_left, int cost, int reserve, int patient_hp_pct);
 // CE: AI-8 rule 4. Whether a turn-based buff or summon leaving too few action
 // points for the best attack is passed over for that attack, worth more. Pure.
 bool ai_judgement_turn_refuses(int ap_left, int ap_cost, int attack_ap_cost, int value, int attack_value);
+// CE: AI-8. One allowed spell as the judged pass weighs it.
+typedef struct AiJudgedSpell {
+    int spell;
+    int64_t item_obj;
+    int64_t target_obj;
+    // `ai.decided`'s code; 0 while allowed.
+    int code;
+    int value;
+    int score;
+    // Fatigue; 0 for an item's cast.
+    int cost;
+    int ap_cost;
+    // Rule 1's floor for it.
+    int floor;
+    bool attack;
+} AiJudgedSpell;
+// CE: AI-8 rules 1, 2 and 4 over the weighed spells, in place: under its
+// floor 23; not an attack and into the reserve 21; in a turn-based turn
+// (`ap_left` >= 0, -1 otherwise) leaving the best attack unaffordable 22;
+// the best score chosen and the rest 20. The reserve is three casts of the
+// best attack that clears its floor, into `*reserve_ptr`. Returns the chosen
+// index, -1 for none. Pure.
+int ai_judgement_pick(AiJudgedSpell* cands, int cnt, int fatigue_left, int ap_left, int* reserve_ptr);
 // CE: AI-5. Whether `ONF_CAST_HIGHEST` holds a critter to each college's
 // highest spell: always in stock; under `follower casting`, not for a follower
 // of the player.
