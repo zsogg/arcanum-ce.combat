@@ -33,6 +33,11 @@
 //   on a hit whose magic-target roll set 0x20000. The original rolls from 0
 //   (0x4B602D `jne 0x4B6069`, `xor eax,eax`). Found by Apple clang's
 //   -Wsometimes-uninitialized on the first macOS build.
+// - #376 `object_locked_set` (0x441DD0) took its value as a bool. The
+//   original locks only on 1 (0x441E5E) and relocks after an hour only on 0
+//   (0x441E22); scripts pass 2 to unlock for good, and CE locked instead,
+//   so the Bates mansion gate stayed shut after "Go right in" (zsogg's
+//   campaign, 2026-11-08).
 
 #include <string.h>
 
@@ -501,9 +506,24 @@ TEST(a_magic_target_critical_rolls_its_effects_from_zero)
     obj_harness_destroy(attacker);
 }
 
+TEST(a_lock_state_of_two_unlocks_for_good)
+{
+    int64_t gate = obj_harness_create_proto(OBJ_TYPE_PORTAL);
+
+    obj_field_int32_set(gate, OBJ_F_PORTAL_FLAGS, OPF_LOCKED | OPF_ALWAYS_LOCKED);
+    object_locked_set(gate, 2);
+    CHECK_INT(obj_field_int32_get(gate, OBJ_F_PORTAL_FLAGS), OPF_ALWAYS_LOCKED);
+
+    object_locked_set(gate, 1);
+    CHECK_INT(obj_field_int32_get(gate, OBJ_F_PORTAL_FLAGS), OPF_LOCKED | OPF_ALWAYS_LOCKED);
+
+    obj_harness_destroy(gate);
+}
+
 void test_compare_fixes_suite(void)
 {
     RUN(a_magic_target_critical_rolls_its_effects_from_zero);
+    RUN(a_lock_state_of_two_unlocks_for_good);
     RUN(a_radius_2_wall_is_5_tiles_along_its_rotation);
     RUN(capped_eye_candy_stops_stacking_past_its_cap);
     RUN(the_gamble_gates_read_the_pcs_training);

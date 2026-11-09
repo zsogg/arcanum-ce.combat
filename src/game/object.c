@@ -4239,8 +4239,13 @@ bool object_locked_get(int64_t obj)
     return (flags & (type == OBJ_TYPE_PORTAL ? OPF_LOCKED : OCOF_LOCKED)) != 0;
 }
 
+// FIX (porting bug #376): `locked` is the script's number, not a bool. The
+// original locks only on 1 (0x441E5E `cmp eax,1`) and queues the hour's
+// relock only on 0 (0x441E22 `test eax,eax`), so scripts pass 2 to unlock for
+// good - the Bates mansion gate's captain does. CE took a bool, and 2 locked.
+//
 // 0x441DD0
-bool object_locked_set(int64_t obj, bool locked)
+bool object_locked_set(int64_t obj, int locked)
 {
     int type;
     unsigned int flags;
@@ -4253,17 +4258,16 @@ bool object_locked_set(int64_t obj, bool locked)
 
     type = obj_field_int32_get(obj, OBJ_F_TYPE);
     flags = obj_field_int32_get(obj, type == OBJ_TYPE_PORTAL ? OBJ_F_PORTAL_FLAGS : OBJ_F_CONTAINER_FLAGS);
-    if ((flags & (type == OBJ_TYPE_PORTAL ? OPF_LOCKED : OCOF_LOCKED)) != 0 && !locked) {
+    if ((flags & (type == OBJ_TYPE_PORTAL ? OPF_LOCKED : OCOF_LOCKED)) != 0 && locked == 0) {
         timeevent.type = TIMEEVENT_TYPE_LOCK;
         timeevent.params[0].object_value = obj;
         datetime_from_milliseconds(&datetime, 3600000);
         timeevent_add_delay(&timeevent, &datetime);
     }
 
-    if (locked) {
+    flags &= ~(type == OBJ_TYPE_PORTAL ? OPF_LOCKED : OCOF_LOCKED);
+    if (locked == 1) {
         flags |= (type == OBJ_TYPE_PORTAL ? OPF_LOCKED : OCOF_LOCKED);
-    } else {
-        flags &= ~(type == OBJ_TYPE_PORTAL ? OPF_LOCKED : OCOF_LOCKED);
     }
 
     obj_field_int32_set(obj,

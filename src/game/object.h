@@ -188,7 +188,7 @@ void object_examine(int64_t obj, int64_t pc_obj, char* buffer);
 void object_set_gender_and_race(int64_t obj, int body_type, int gender, int race);
 bool object_is_lockable(int64_t obj);
 bool object_locked_get(int64_t obj);
-bool object_locked_set(int64_t obj, bool locked);
+bool object_locked_set(int64_t obj, int locked);
 bool object_lock_timeevent_process(TimeEvent* timeevent);
 bool object_jammed_set(int64_t obj, bool jammed);
 void object_npc_ai_start(int64_t obj, int first_heartbeat);
