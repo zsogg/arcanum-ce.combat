@@ -3971,7 +3971,11 @@ int combat_expected_attack_damage(int64_t attacker_obj, int64_t target_obj, int*
         } else {
             int resistance = object_get_resistance(target_obj, combat_damage_to_resistance_tbl[type], false);
 
-            resistance = resistance < 0 ? 0 : resistance > 95 ? 95 : resistance;
+            if (resistance < 0) {
+                resistance = 0;
+            } else if (resistance > 95) {
+                resistance = 95;
+            }
             expected = expected * (100 - resistance) / 100;
         }
         if (type == DAMAGE_TYPE_FATIGUE || type == DAMAGE_TYPE_POISON) {
@@ -3990,7 +3994,12 @@ int combat_expected_attack_damage(int64_t attacker_obj, int64_t target_obj, int*
             ? basic_skill_effectiveness(attacker_obj, GET_BASIC_SKILL(skill), target_obj)
             : 0;
     }
-    *chance_ptr = chance < 0 ? 0 : chance > 100 ? 100 : chance;
+    if (chance < 0) {
+        chance = 0;
+    } else if (chance > 100) {
+        chance = 100;
+    }
+    *chance_ptr = chance;
     return total;
 }
 

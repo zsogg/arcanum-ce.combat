@@ -2,8 +2,8 @@
 #define ARCANUM_GAME_COMBAT_H_
 
 #include "game/context.h"
-#include "game/obj_id.h"
 #include "game/damage_type.h"
+#include "game/obj_id.h"
 #include "game/timeevent.h"
 
 typedef void (*CombatCallbackF0)(bool combat_ended);
