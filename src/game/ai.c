@@ -1687,7 +1687,9 @@ void ai_attack(int64_t source_obj, int64_t target_obj, int loudness, unsigned in
             }
 
             if ((flags & 0x02) == 0) {
-                if (target_obj_type == OBJ_TYPE_PC) {
+                // CE (`grazing hits`): a grazed player is not set on its
+                // grazer, nor, with 0x01, its party.
+                if (target_obj_type == OBJ_TYPE_PC && (flags & AI_ATTACK_GRAZE) == 0) {
                     ai_start_attacking(target_obj, source_obj);
                 }
 
@@ -1703,15 +1705,23 @@ void ai_attack(int64_t source_obj, int64_t target_obj, int loudness, unsigned in
 
                 leader_obj = critter_leader_get(target_obj);
 
-                if ((flags & 0x01) == 0
-                    || !critter_faction_same(source_obj, target_obj)) {
+                // CE (`grazing hits`): a grazed NPC keeps who hit it last and
+                // makes no shitlist entry either way, so neither turns on the
+                // other.
+                if ((flags & AI_ATTACK_GRAZE) == 0
+                    && ((flags & 0x01) == 0
+                        || !critter_faction_same(source_obj, target_obj))) {
                     obj_field_handle_set(target_obj, OBJ_F_NPC_WHO_HIT_ME_LAST, source_obj);
                 }
 
-                ai_shitlist_add_team(target_obj, source_obj);
+                if ((flags & AI_ATTACK_GRAZE) == 0) {
+                    ai_shitlist_add_team(target_obj, source_obj);
+                }
 
                 if (source_obj_type == OBJ_TYPE_NPC) {
-                    ai_shitlist_add_team(source_obj, target_obj);
+                    if ((flags & AI_ATTACK_GRAZE) == 0) {
+                        ai_shitlist_add_team(source_obj, target_obj);
+                    }
                 } else if (source_obj_type == OBJ_TYPE_PC) {
                     ai_copy_params(target_obj, &ai_params);
                     if (leader_obj == source_obj) {
@@ -1753,8 +1763,9 @@ void ai_attack(int64_t source_obj, int64_t target_obj, int loudness, unsigned in
                     }
                 }
 
-                if ((flags & 0x01) == 0
-                    || !critter_faction_same(source_obj, target_obj)) {
+                if ((flags & AI_ATTACK_GRAZE) == 0
+                    && ((flags & 0x01) == 0
+                        || !critter_faction_same(source_obj, target_obj))) {
                     ai_react_to_threat(target_obj, source_obj);
                 }
             }
@@ -6978,6 +6989,60 @@ static bool ai_tactics_same_side(int64_t anchor_obj, int64_t obj)
         return false;
     }
     return ai_check_protect(anchor_obj, obj) != AI_PROTECT_NO;
+}
+
+// CE (`grazing hits`), see ai.h.
+bool ai_graze_rule(bool aimed, bool hostile, bool kin, bool busy_elsewhere)
+{
+    return !aimed && !hostile && (kin || busy_elsewhere);
+}
+
+// The combat focus `obj` is fighting, if it is an NPC fighting one still
+// there.
+static int64_t ai_graze_focus(int64_t obj)
+{
+    int64_t focus_obj;
+
+    if (obj_field_int32_get(obj, OBJ_F_TYPE) != OBJ_TYPE_NPC
+        || (obj_field_int32_get(obj, OBJ_F_NPC_FLAGS) & ONF_FIGHTING) == 0) {
+        return OBJ_HANDLE_NULL;
+    }
+    focus_obj = obj_field_handle_get(obj, OBJ_F_NPC_COMBAT_FOCUS);
+    return focus_obj != OBJ_HANDLE_NULL && obj_handle_is_valid(focus_obj) ? focus_obj : OBJ_HANDLE_NULL;
+}
+
+// CE (`grazing hits`; zsogg, 2026-11-09), see ai.h. The sides are AI-7's kin
+// (`ai_tactics_same_side`); "busy" is a fight with someone neither the other
+// party nor kin to it.
+bool ai_attack_is_graze(int64_t attacker_obj, int64_t aimed_obj, int64_t victim_obj)
+{
+    int victim_type;
+    int64_t busy_obj;
+    int64_t other_obj;
+    int64_t focus_obj;
+
+    if (!feature_enabled(FEATURE_GRAZING_HITS)
+        || attacker_obj == OBJ_HANDLE_NULL
+        || victim_obj == OBJ_HANDLE_NULL
+        || attacker_obj == victim_obj
+        || !obj_type_is_critter(obj_field_int32_get(attacker_obj, OBJ_F_TYPE))) {
+        return false;
+    }
+    victim_type = obj_field_int32_get(victim_obj, OBJ_F_TYPE);
+    if (!obj_type_is_critter(victim_type)) {
+        return false;
+    }
+
+    // The player is busy through its attacker; an NPC through itself.
+    busy_obj = victim_type == OBJ_TYPE_PC ? attacker_obj : victim_obj;
+    other_obj = busy_obj == victim_obj ? attacker_obj : victim_obj;
+    focus_obj = ai_graze_focus(busy_obj);
+    return ai_graze_rule(victim_obj == aimed_obj,
+        ai_shitlist_has(victim_obj, attacker_obj) || ai_shitlist_has(attacker_obj, victim_obj),
+        ai_tactics_same_side(attacker_obj, victim_obj),
+        focus_obj != OBJ_HANDLE_NULL
+            && focus_obj != other_obj
+            && !ai_tactics_same_side(other_obj, focus_obj));
 }
 
 // CE: AI-7/AI-8, see ai.h.

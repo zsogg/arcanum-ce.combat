@@ -287,20 +287,104 @@ TEST(a_party_hit_by_a_spell_or_blast_is_accidental_under_grenade_blasts)
     critter_leader_set(followers_npc, followers_pc);
     critter_leader_set(second, followers_pc);
 
-    CHECK_INT(magictech_attack_flags(followers_pc, followers_npc), 0);
-    CHECK_INT(magictech_attack_flags(followers_npc, followers_pc), 0);
+    CHECK_INT(magictech_attack_flags(followers_pc, followers_npc, OBJ_HANDLE_NULL), 0);
+    CHECK_INT(magictech_attack_flags(followers_npc, followers_pc, OBJ_HANDLE_NULL), 0);
 
     followers_switch(FEATURE_GRENADE_BLASTS, true);
-    CHECK_INT(magictech_attack_flags(followers_pc, followers_npc), 0x01);
-    CHECK_INT(magictech_attack_flags(followers_npc, followers_pc), 0x01);
-    CHECK_INT(magictech_attack_flags(followers_npc, second), 0x01);
-    CHECK_INT(magictech_attack_flags(followers_pc, stranger), 0);
-    CHECK_INT(magictech_attack_flags(stranger, followers_npc), 0);
+    CHECK_INT(magictech_attack_flags(followers_pc, followers_npc, OBJ_HANDLE_NULL), 0x01);
+    CHECK_INT(magictech_attack_flags(followers_npc, followers_pc, OBJ_HANDLE_NULL), 0x01);
+    CHECK_INT(magictech_attack_flags(followers_npc, second, OBJ_HANDLE_NULL), 0x01);
+    CHECK_INT(magictech_attack_flags(followers_pc, stranger, OBJ_HANDLE_NULL), 0);
+    CHECK_INT(magictech_attack_flags(stranger, followers_npc, OBJ_HANDLE_NULL), 0);
     followers_switch(FEATURE_GRENADE_BLASTS, false);
 
     critter_leader_set(second, OBJ_HANDLE_NULL);
     obj_harness_destroy(stranger);
     obj_harness_destroy(second);
+    followers_end();
+}
+
+// `grazing hits` (zsogg, 2026-11-09): the player's follower grazes a villager
+// fighting the same Wolf.
+static void graze_fights(int64_t npc, int64_t focus)
+{
+    unsigned int flags = (unsigned int)obj_field_int32_get(npc, OBJ_F_NPC_FLAGS);
+
+    flags = focus != OBJ_HANDLE_NULL ? flags | ONF_FIGHTING : flags & ~ONF_FIGHTING;
+    obj_field_int32_set(npc, OBJ_F_NPC_FLAGS, (int)flags);
+    obj_field_handle_set(npc, OBJ_F_NPC_COMBAT_FOCUS, focus);
+}
+
+TEST(a_helper_grazed_by_friendly_fire_is_not_attacked_under_grazing_hits)
+{
+    const int graze = 0x01 | AI_ATTACK_GRAZE;
+    int64_t helper;
+    int64_t wolf;
+
+    CHECK(ai_graze_rule(false, false, false, true));
+    CHECK(ai_graze_rule(false, false, true, false));
+    CHECK(!ai_graze_rule(true, false, true, true)); // the one aimed at
+    CHECK(!ai_graze_rule(false, true, true, true)); // already enemies
+    CHECK(!ai_graze_rule(false, false, false, false)); // an idle bystander
+
+    CHECK(followers_begin());
+    helper = obj_harness_create_proto(OBJ_TYPE_NPC);
+    wolf = obj_harness_create_proto(OBJ_TYPE_NPC);
+    obj_field_int32_set(helper, OBJ_F_NPC_FLAGS, 0);
+    obj_field_int32_set(wolf, OBJ_F_NPC_FLAGS, 0);
+    critter_leader_set(followers_npc, followers_pc);
+    graze_fights(helper, wolf);
+    graze_fights(wolf, helper);
+
+    CHECK_INT(magictech_attack_flags(followers_npc, helper, wolf), 0); // stock
+
+    followers_switch(FEATURE_GRAZING_HITS, true);
+    CHECK_INT(magictech_attack_flags(followers_npc, helper, wolf), graze);
+    CHECK_INT(magictech_attack_flags(followers_npc, helper, followers_npc), graze); // Jolt
+    CHECK_INT(magictech_attack_flags(followers_pc, helper, OBJ_HANDLE_NULL), graze); // the player's
+    CHECK_INT(magictech_attack_flags(followers_npc, wolf, wolf), 0);
+    CHECK_INT(magictech_attack_flags(followers_npc, helper, helper), 0); // aimed at
+    CHECK_INT(magictech_attack_flags(followers_pc, followers_npc, OBJ_HANDLE_NULL), graze); // the party
+    CHECK_INT(magictech_attack_flags(followers_pc, followers_npc, followers_npc), 0);
+    // The helper's own splash on the player, while it fights the Wolf.
+    CHECK_INT(magictech_attack_flags(helper, followers_pc, wolf), graze);
+
+    graze_fights(helper, OBJ_HANDLE_NULL); // idle
+    CHECK_INT(magictech_attack_flags(followers_npc, helper, wolf), 0);
+    CHECK_INT(magictech_attack_flags(helper, followers_pc, wolf), 0);
+    graze_fights(helper, followers_npc); // fighting the party
+    CHECK_INT(magictech_attack_flags(followers_npc, helper, wolf), 0);
+    graze_fights(helper, followers_pc);
+    CHECK_INT(magictech_attack_flags(followers_npc, helper, wolf), 0);
+    graze_fights(helper, wolf);
+
+    // A graze leaves the helper on the Wolf, with no one on its shitlist and
+    // its last attacker unchanged. A deliberate hit records the attacker and,
+    // as in stock, puts the helper on the follower's shitlist (the harness
+    // lists no player's team, so the helper's own entry is not made here);
+    // from then on nothing between them grazes. An entry on the victim's
+    // list, set as `ai_shitlist_add` sets it, does the same.
+    ai_attack(followers_npc, helper, LOUDNESS_NORMAL, (unsigned int)graze);
+    CHECK(!ai_shitlist_has(helper, followers_npc));
+    CHECK(!ai_shitlist_has(followers_npc, helper));
+    CHECK(obj_field_handle_get(helper, OBJ_F_NPC_WHO_HIT_ME_LAST) != followers_npc);
+    CHECK(obj_field_handle_get(helper, OBJ_F_NPC_COMBAT_FOCUS) == wolf);
+    ai_attack(followers_npc, helper, LOUDNESS_NORMAL, 0);
+    CHECK(obj_field_handle_get(helper, OBJ_F_NPC_WHO_HIT_ME_LAST) == followers_npc);
+    CHECK(ai_shitlist_has(followers_npc, helper));
+    graze_fights(helper, wolf);
+    CHECK_INT(magictech_attack_flags(followers_npc, helper, wolf), 0);
+    // The Wolf, busy with the helper, is grazed too, until it lists the
+    // follower.
+    CHECK_INT(magictech_attack_flags(followers_npc, wolf, OBJ_HANDLE_NULL), graze);
+    obj_arrayfield_obj_set(wolf, OBJ_F_NPC_SHIT_LIST_IDX, 0, followers_npc);
+    CHECK(ai_shitlist_has(wolf, followers_npc));
+    CHECK_INT(magictech_attack_flags(followers_npc, wolf, OBJ_HANDLE_NULL), 0);
+    followers_switch(FEATURE_GRAZING_HITS, false);
+
+    critter_leader_set(followers_npc, OBJ_HANDLE_NULL);
+    obj_harness_destroy(wolf);
+    obj_harness_destroy(helper);
     followers_end();
 }
 
@@ -317,4 +401,5 @@ void test_followers_suite(void)
     RUN(a_master_persuader_is_still_held_to_the_charisma_limit);
     RUN(heal_refuses_by_the_healer_stock_and_by_the_patient_under_the_switch);
     RUN(a_party_hit_by_a_spell_or_blast_is_accidental_under_grenade_blasts);
+    RUN(a_helper_grazed_by_friendly_fire_is_not_attacked_under_grazing_hits);
 }

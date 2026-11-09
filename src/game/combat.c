@@ -789,7 +789,9 @@ void combat_projectile_end(int64_t proj_obj, int64_t a2, int64_t a3, CombatConte
         && combat->target_obj != OBJ_HANDLE_NULL) {
         int loudness = combat_weapon_loudness(combat->weapon_obj);
         if ((combat->flags & 0x800) != 0) {
-            ai_attack(combat->attacker_obj, combat->target_obj, loudness, 0x01);
+            // CE (`grazing hits`): a stray shot that only grazed.
+            ai_attack(combat->attacker_obj, combat->target_obj, loudness,
+                0x01 | (ai_attack_is_graze(combat->attacker_obj, combat->field_28, combat->target_obj) ? AI_ATTACK_GRAZE : 0));
         } else {
             ai_attack(combat->attacker_obj, combat->target_obj, loudness, 0);
         }
@@ -1224,7 +1226,9 @@ int combat_attack(CombatContext* combat)
     if (is_melee && combat->target_obj != OBJ_HANDLE_NULL) {
         int loudness = combat_weapon_loudness(combat->weapon_obj);
         if ((combat->flags & 0x800) != 0) {
-            ai_attack(combat->attacker_obj, combat->target_obj, loudness, 1);
+            // CE (`grazing hits`): a redirected blow that only grazed.
+            ai_attack(combat->attacker_obj, combat->target_obj, loudness,
+                1 | (ai_attack_is_graze(combat->attacker_obj, combat->field_28, combat->target_obj) ? AI_ATTACK_GRAZE : 0));
         } else {
             ai_attack(combat->attacker_obj, combat->target_obj, loudness, 0);
         }

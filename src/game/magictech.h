@@ -397,9 +397,11 @@ unsigned int magictech_ai_damage_flags(int magictech);
 // takes `target_obj`, by `magictech_cast_spell_fail_chance`'s rules with the
 // saving throw at its odds, unrolled. 100 for the caster itself or a tile.
 int magictech_ai_land_chance(int64_t attacker_obj, int64_t target_obj, int magictech);
-// CE (`grenade blasts`): the `ai_attack` flags for a spell or blast hit; 0x01,
-// accidental, between members of one party.
-int magictech_attack_flags(int64_t attacker_obj, int64_t target_obj);
+// CE (`grenade blasts`, `grazing hits`): the `ai_attack` flags for a spell or
+// blast hit on `target_obj` of a spell aimed at `aimed_obj`: 0x01,
+// accidental, between members of one party; 0x01 | AI_ATTACK_GRAZE for a
+// graze (`ai_attack_is_graze`).
+int magictech_attack_flags(int64_t attacker_obj, int64_t target_obj, int64_t aimed_obj);
 int magictech_min_intelligence(int magictech);
 int magictech_min_willpower(int magictech);
 int magictech_get_cost(int magictech);

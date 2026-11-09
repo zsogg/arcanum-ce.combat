@@ -255,6 +255,20 @@ int64_t ai_sight_block(int64_t source_obj, int64_t target_loc);
 int ai_can_hear(int64_t a1, int64_t a2, int loudness);
 void ai_npc_fighting_toggle(void);
 bool ai_shitlist_has(int64_t npc_obj, int64_t shit_obj);
+// CE (`grazing hits`; zsogg, 2026-11-09): an `ai_attack` flag beside the
+// stock 0x01 (accidental), 0x02 (quiet) and 0x04 (an order). With 0x01, the
+// victim makes no shitlist entry either way, keeps who hit it last and does
+// not turn to the attacker (a player victim's party does not either).
+#define AI_ATTACK_GRAZE 0x08
+// The same: whether a hit of `attacker_obj`'s on `victim_obj`, aimed at
+// `aimed_obj` (none for a burning area; anything not a critter counts as
+// none), only grazed it: not the one aimed at, neither on the other's
+// shitlist, and kin to the attacker or fighting someone not on its side. A
+// player victim counts as busy when the attacker is fighting someone not on
+// the player's side. False with the switch off.
+bool ai_attack_is_graze(int64_t attacker_obj, int64_t aimed_obj, int64_t victim_obj);
+// The same rule's logic. Pure.
+bool ai_graze_rule(bool aimed, bool hostile, bool kin, bool busy_elsewhere);
 int ai_max_dialog_distance(int64_t obj);
 void ai_target_lock(int64_t obj, int64_t tgt);
 void ai_target_unlock(int64_t obj);

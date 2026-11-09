@@ -4449,13 +4449,19 @@ void magictech_register_cur_attack(void)
 // attacked, and a follower deliberately hit by its leader has its reaction
 // set to 0 and leaves once the fight is over; stock grenades never reached
 // the party, but under the switch they do (follower AI survey, finding 1).
-int magictech_attack_flags(int64_t attacker_obj, int64_t target_obj)
+// Under `grazing hits` (zsogg, 2026-11-09) a hit on someone the spell was not
+// aimed at (`aimed_obj`) that only grazed it is accidental and a graze
+// (`ai_attack_is_graze`).
+int magictech_attack_flags(int64_t attacker_obj, int64_t target_obj, int64_t aimed_obj)
 {
     if (feature_enabled(FEATURE_GRENADE_BLASTS)
         && obj_type_is_critter(obj_field_int32_get(attacker_obj, OBJ_F_TYPE))
         && obj_type_is_critter(obj_field_int32_get(target_obj, OBJ_F_TYPE))
         && critter_party_same(attacker_obj, target_obj)) {
         return 0x01;
+    }
+    if (ai_attack_is_graze(attacker_obj, aimed_obj, target_obj)) {
+        return 0x01 | AI_ATTACK_GRAZE;
     }
     return 0;
 }
@@ -4465,12 +4471,12 @@ void magictech_register_attack(int64_t a1, int64_t a2)
 {
     if (magictech_last_attack_target != a2) {
         magictech_last_attack_target = a2;
-        ai_attack(a1, a2, 1, magictech_attack_flags(a1, a2));
+        ai_attack(a1, a2, 1, magictech_attack_flags(a1, a2, magictech_cur_run_info->target_obj.obj));
 
         if (magictech_cur_run_info->attacker_obj.obj != OBJ_HANDLE_NULL
             && a1 != magictech_cur_run_info->attacker_obj.obj) {
             ai_attack(magictech_cur_run_info->attacker_obj.obj, a2, LOUDNESS_NORMAL,
-                magictech_attack_flags(magictech_cur_run_info->attacker_obj.obj, a2));
+                magictech_attack_flags(magictech_cur_run_info->attacker_obj.obj, a2, magictech_cur_run_info->target_obj.obj));
         }
     }
 }

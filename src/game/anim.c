@@ -8164,7 +8164,10 @@ bool AGapplyFireDmg(AnimRunInfo* run_info)
             continue;
         }
 
-        ai_attack(parent_obj, node->obj, LOUDNESS_NORMAL, 0);
+        // CE (`grazing hits`): a burning area aims at nobody, so whoever it
+        // only grazes is friendly fire.
+        ai_attack(parent_obj, node->obj, LOUDNESS_NORMAL,
+            ai_attack_is_graze(parent_obj, OBJ_HANDLE_NULL, node->obj) ? 0x01 | AI_ATTACK_GRAZE : 0);
 
         if (combat_turn_based_is_active()) {
             if (run_info->cur_stack_data->params[AGDATA_SCRATCH_VAL6].data == combat_turn_based_turn_get()) {
