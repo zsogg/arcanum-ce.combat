@@ -1196,7 +1196,7 @@ bool ai_heal_func(Ai* ai, int64_t obj, bool a3)
     // a fight a heal list keeps to the reserve the caster's last judged pass
     // kept (`AI_LIST_HEAL_BUDGET`).
     heal_flags = 0x8
-        | (ai_judgement_applies(ai->obj) && ai->danger_type == AI_DANGER_SOURCE_TYPE_COMBAT_FOCUS
+        | (ai->danger_type == AI_DANGER_SOURCE_TYPE_COMBAT_FOCUS && ai_judgement_applies(ai->obj)
                 ? AI_LIST_HEAL_BUDGET
                 : 0);
 
