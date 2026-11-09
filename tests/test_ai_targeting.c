@@ -4,6 +4,7 @@
 // clearly nearer attacker - is pinned before it is seen in a fight.
 
 #include "game/ai.h"
+#include "game/critter.h"
 #include "game/feature.h"
 #include "game/gamelib.h"
 #include "game/obj.h"
@@ -97,6 +98,32 @@ TEST(the_leash_is_the_defensive_stance)
 
     obj_field_int32_set(follower, OBJ_F_NPC_FLAGS, ONF_AI_SPREAD_OUT);
     CHECK_INT(ai_follower_reach(follower, pc), 20);
+
+    // Review 2026-11-08, followers-3: a follower of the player's follower (a
+    // companion's summon) is Defensive too; stock and the old leash asked
+    // about its direct leader, an NPC, and kept 20. A group led by an NPC
+    // that is not the player's keeps 20.
+    {
+        int64_t summon = obj_harness_create_proto(OBJ_TYPE_NPC);
+
+        obj_field_int32_set(follower, OBJ_F_NPC_FLAGS, 0);
+        obj_field_int32_set(summon, OBJ_F_NPC_FLAGS, 0);
+        critter_leader_set(follower, pc);
+        critter_leader_set(summon, follower);
+        CHECK(ai_follower_leash_leader(summon) == pc);
+        CHECK_INT(ai_follower_reach(summon, ai_follower_leash_leader(summon)), AI_FOLLOWER_LEASH);
+        CHECK(ai_follower_leash_leader(follower) == pc);
+        critter_leader_set(follower, npc_leader);
+        CHECK(ai_follower_leash_leader(summon) == follower);
+        CHECK_INT(ai_follower_reach(summon, ai_follower_leash_leader(summon)), 20);
+        critter_leader_set(follower, pc);
+        settings_set_value(&settings, feature_key(FEATURE_AI_FOLLOWER_LEASH), 0);
+        CHECK(ai_follower_leash_leader(summon) == follower);
+        CHECK_INT(ai_follower_reach(summon, ai_follower_leash_leader(summon)), 20);
+        critter_leader_set(summon, OBJ_HANDLE_NULL);
+        critter_leader_set(follower, OBJ_HANDLE_NULL);
+        obj_harness_destroy(summon);
+    }
 
     settings_set_value(&settings, feature_key(FEATURE_AI_FOLLOWER_LEASH), 0);
     obj_harness_destroy(follower);

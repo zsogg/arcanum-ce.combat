@@ -274,6 +274,11 @@ void ai_target_unlock(int64_t obj);
 // stock distance, except under `ai follower leash` for a follower of a PC
 // that has not been told to Spread Out (combat AI milestones AI-3 and AI-4).
 int ai_follower_reach(int64_t obj, int64_t leader_obj);
+// CE: the leader `ai_follower_reach` is asked about for `obj`: under `ai
+// follower leash` the player heading its chain of leaders (a companion's
+// summon is the player's too; review 2026-11-08, followers-3), otherwise its
+// direct leader. The distance is still counted from the direct leader.
+int64_t ai_follower_leash_leader(int64_t obj);
 bool ai_targeting_prefers_new_attacker(int current_dist, int threat_dist);
 
 // CE: combat AI milestone AI-5, `follower casting`. The chance in 100 that an
@@ -282,7 +287,9 @@ bool ai_targeting_prefers_new_attacker(int current_dist, int threat_dist);
 // 0 to a critter with a leader while both are above half health and its foe
 // is not stronger; otherwise 50 when its AI set keeps a distance in combat,
 // else 25. Under `follower casting` a caster-type follower of the player is
-// not held back: it gets the 50 or 25, and `*waived` says so. Pure, so the
+// not held back: it gets the 50 or 25, and `*waived` says so. A follower of
+// the player is one whose chain of leaders reaches the player (followers-3);
+// the hp test reads its direct leader. Pure, so the
 // rule is tested without a game.
 int ai_spell_chance_rule(bool has_leader, bool player_leader, int own_hp_pct,
     int leader_hp_pct, bool foe_stronger, bool caster_type, bool keeps_distance,
@@ -291,6 +298,18 @@ int ai_spell_chance_rule(bool has_leader, bool player_leader, int own_hp_pct,
 // caster's side (the caster aside) and `enemies` of the target's is refused:
 // any ally, unless two or more enemies go with it (zsogg, 2026-11-02). Pure.
 bool ai_tactics_area_refuses(int allies, int enemies);
+// CE: AI-7/AI-8 (review 2026-11-08, cross-1). Which side a critter is on in
+// a caster's fight: the caster's or the target's by kin (`with_caster`,
+// `with_target`, caster first); otherwise, if its AI is fighting, the side
+// opposite the one its combat focus is on (the caster's side first) - so a
+// faction-0 pack is sided by what it does. Pure.
+typedef enum AiSide {
+    AI_SIDE_NONE,
+    AI_SIDE_CASTER,
+    AI_SIDE_TARGET,
+} AiSide;
+AiSide ai_side_rule(bool with_caster, bool with_target, bool fighting,
+    bool focus_with_caster, bool focus_with_target);
 // CE: AI-7. Whether a target last seen disabled at turn key `disabled_key`
 // has only just recovered at `now_key`: within one turn, either way the key
 // runs (rounds count up; real-time turns down). Pure.

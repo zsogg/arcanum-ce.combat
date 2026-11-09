@@ -2,6 +2,7 @@
 #define ARCANUM_GAME_COMBAT_H_
 
 #include "game/context.h"
+#include "game/obj_id.h"
 #include "game/damage_type.h"
 #include "game/timeevent.h"
 
@@ -212,6 +213,7 @@ void combat_turn_based_end_critter_turn(int64_t obj);
 bool combat_can_pay_action_points(int64_t obj, int action_points);
 bool combat_throw_refused(int64_t obj);
 int combat_initiative_score(int dexterity, int roll);
+int combat_initiative_roll(unsigned int seed, ObjectID oid);
 int combat_initiative_compare(int score_a, bool party_a, int dexterity_a,
     int score_b, bool party_b, int dexterity_b);
 int encounter_awareness_score(int perception, int intelligence);

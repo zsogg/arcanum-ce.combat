@@ -2815,11 +2815,31 @@ static bool ai_holds_ground(int64_t obj)
 // Under `ai follower leash` (combat AI milestone AI-3; zsogg, 2026-10-04:
 // followers "less aggressive and stay close to the player character") a
 // follower of a PC takes targets only within AI_FOLLOWER_LEASH tiles of it,
-// and with none left follows it again. An NPC led by an NPC keeps 20.
+// and with none left follows it again. A follower of the player's follower
+// (a companion's summon) is Defensive too, counted from its own leader, so it
+// keeps to a companion on Wait Here or Spread Out (review 2026-11-08,
+// followers-3). A group led by an NPC that is not the player's keeps 20.
 //
 // The leash is the Defensive stance (milestone AI-4, zsogg 2026-10-05): a
 // follower told to Spread Out (`ONF_AI_SPREAD_OUT`, which the game saves) is
 // Aggressive and keeps the stock 20; Stay Close, the default, is Defensive.
+// CE: the leader `ai_follower_reach` is asked about - under `ai follower
+// leash` the player heading `obj`'s chain of leaders, so its followers'
+// followers are the player's too (followers-3); otherwise its own leader.
+int64_t ai_follower_leash_leader(int64_t obj)
+{
+    int64_t pc_obj;
+
+    if (feature_enabled(FEATURE_AI_FOLLOWER_LEASH)) {
+        pc_obj = critter_pc_leader_get(obj);
+        if (pc_obj != OBJ_HANDLE_NULL) {
+            return pc_obj;
+        }
+    }
+
+    return critter_leader_get(obj);
+}
+
 int ai_follower_reach(int64_t obj, int64_t leader_obj)
 {
     if (feature_enabled(FEATURE_AI_FOLLOWER_LEASH)
@@ -3178,13 +3198,16 @@ bool ai_is_valid_target(int64_t source_obj, int64_t target_obj)
     }
 
     // CE: `ai_follower_reach` is 20, the stock distance, except under `ai
-    // follower leash` for a Defensive follower of a PC (combat AI milestones
-    // AI-3 and AI-4). Under the leash (AI-6, zsogg 2026-10-28) a target the
-    // player ordered attacked - the only thing that locks one - is never
-    // refused, and a follower of the player on Wait Here counts from itself.
+    // follower leash` for a Defensive follower of the player, its followers'
+    // followers included, each counted from its own leader (combat AI
+    // milestones AI-3 and AI-4; followers-3). Under the leash (AI-6, zsogg
+    // 2026-10-28) a target the player ordered attacked - the only thing that
+    // locks one - is never refused, and a follower of the player on Wait Here
+    // counts from itself.
     if (source_leader_obj != OBJ_HANDLE_NULL) {
+        int64_t leash_leader_obj = ai_follower_leash_leader(source_obj);
         bool leash_on = feature_enabled(FEATURE_AI_FOLLOWER_LEASH)
-            && obj_field_int32_get(source_leader_obj, OBJ_F_TYPE) == OBJ_TYPE_PC;
+            && obj_field_int32_get(leash_leader_obj, OBJ_F_TYPE) == OBJ_TYPE_PC;
         bool ordered = (obj_field_int32_get(source_obj, OBJ_F_CRITTER_FLAGS2) & OCF2_TARGET_LOCK) != 0
             && obj_field_handle_get(source_obj, OBJ_F_NPC_COMBAT_FOCUS) == target_obj;
         bool waiting = (obj_field_int32_get(source_obj, OBJ_F_NPC_FLAGS) & ONF_AI_WAIT_HERE) != 0;
@@ -3192,7 +3215,7 @@ bool ai_is_valid_target(int64_t source_obj, int64_t target_obj)
         if (ai_follower_leash_refuses(leash_on, waiting, ordered,
                 (int)object_dist(source_leader_obj, target_obj),
                 (int)object_dist(source_obj, target_obj),
-                ai_follower_reach(source_obj, source_leader_obj))) {
+                ai_follower_reach(source_obj, leash_leader_obj))) {
             return false;
         }
     }
@@ -3918,9 +3941,11 @@ int ai_magictech_chance(Ai* ai)
     // CE (combat AI, milestone AI-5): the rule is `ai_spell_chance_rule`, the
     // stock one when `follower casting` is off. The hit-point ratios are read
     // only with a leader, as the original reads them; the caster test only
-    // when the waiver could apply.
+    // when the waiver could apply. The waiver reads the player at the head of
+    // the chain of leaders, as every other follower rule does (review
+    // 2026-11-08, followers-3); the hp test stays on the direct leader.
     return ai_spell_chance_rule(has_leader,
-        has_leader && obj_field_int32_get(ai->leader_obj, OBJ_F_TYPE) == OBJ_TYPE_PC,
+        follower_casting && critter_pc_leader_get(ai->obj) != OBJ_HANDLE_NULL,
         has_leader ? ai_object_hp_ratio(ai->obj) : 0,
         has_leader ? ai_object_hp_ratio(ai->leader_obj) : 0,
         has_leader && ai_is_stronger(ai->obj, ai->danger_source),
@@ -6905,9 +6930,10 @@ static bool ai_protect_first(Ai* ai)
     return chosen;
 }
 
-// Whose side `obj` is on, seen from `anchor_obj`: the player's party as one
-// side; otherwise itself, its leader or followers, and whoever it protects
-// (`ai_check_protect`: its faction, a guard's town).
+// Whether `obj` is kin to `anchor_obj`: the player's party as one side;
+// otherwise itself, its leader or followers, and whoever it protects
+// (`ai_check_protect`: its faction, a guard's town). `ai_tactics_side` is the
+// side itself, kin or fight.
 static bool ai_tactics_same_side(int64_t anchor_obj, int64_t obj)
 {
     if (obj == anchor_obj
@@ -6922,6 +6948,51 @@ static bool ai_tactics_same_side(int64_t anchor_obj, int64_t obj)
         return false;
     }
     return ai_check_protect(anchor_obj, obj) != AI_PROTECT_NO;
+}
+
+// CE: AI-7/AI-8, see ai.h.
+AiSide ai_side_rule(bool with_caster, bool with_target, bool fighting,
+    bool focus_with_caster, bool focus_with_target)
+{
+    if (with_caster) {
+        return AI_SIDE_CASTER;
+    }
+    if (with_target) {
+        return AI_SIDE_TARGET;
+    }
+    if (fighting && focus_with_caster) {
+        return AI_SIDE_TARGET;
+    }
+    if (fighting && focus_with_target) {
+        return AI_SIDE_CASTER;
+    }
+    return AI_SIDE_NONE;
+}
+
+// Which side `obj` is on between `caster_obj` and `target_obj`: kin first
+// (`ai_tactics_same_side`), then, for an NPC whose AI is fighting, the side
+// opposite its combat focus - as `combat_hostile_to_party` reads the party's
+// enemies (review 2026-11-08, cross-1: faction 0 is kin to nobody, so a
+// faction-0 pack was one enemy). The focus is read only when kin has not
+// settled it, and an expired summon's handle is no side.
+static AiSide ai_tactics_side(int64_t caster_obj, int64_t target_obj, int64_t obj)
+{
+    bool has_target = target_obj != OBJ_HANDLE_NULL;
+    bool with_caster = ai_tactics_same_side(caster_obj, obj);
+    bool with_target = !with_caster && has_target && ai_tactics_same_side(target_obj, obj);
+    int64_t focus_obj = OBJ_HANDLE_NULL;
+
+    if (!with_caster && !with_target
+        && obj_field_int32_get(obj, OBJ_F_TYPE) == OBJ_TYPE_NPC
+        && (obj_field_int32_get(obj, OBJ_F_NPC_FLAGS) & ONF_FIGHTING) != 0) {
+        focus_obj = obj_field_handle_get(obj, OBJ_F_NPC_COMBAT_FOCUS);
+        if (focus_obj != OBJ_HANDLE_NULL && !obj_handle_is_valid(focus_obj)) {
+            focus_obj = OBJ_HANDLE_NULL;
+        }
+    }
+    return ai_side_rule(with_caster, with_target, focus_obj != OBJ_HANDLE_NULL,
+        focus_obj != OBJ_HANDLE_NULL && ai_tactics_same_side(caster_obj, focus_obj),
+        focus_obj != OBJ_HANDLE_NULL && has_target && ai_tactics_same_side(target_obj, focus_obj));
 }
 
 // Rule 2: who an area spell's effect would take, the caster aside (every area
@@ -6950,10 +7021,15 @@ static int ai_tactics_friendly_fire(int64_t caster_obj, int64_t target_obj, int 
             || location_dist(centre, obj_field_int64_get(node->obj, OBJ_F_LOCATION)) > radius) {
             continue;
         }
-        if (ai_tactics_same_side(caster_obj, node->obj)) {
+        switch (ai_tactics_side(caster_obj, target_obj, node->obj)) {
+        case AI_SIDE_CASTER:
             allies++;
-        } else if (ai_tactics_same_side(target_obj, node->obj)) {
+            break;
+        case AI_SIDE_TARGET:
             enemies++;
+            break;
+        default:
+            break;
         }
     }
     object_list_destroy(&critters);
@@ -7174,15 +7250,14 @@ typedef struct AiJudgedSpell {
     bool attack;
 } AiJudgedSpell;
 
-// An enemy, for the weighing: on the target's side and not on the caster's,
-// so a bystander counts for neither.
+// An enemy, for the weighing: on the target's side by kin or by whom it is
+// fighting, and not on the caster's, so a bystander counts for neither.
 static bool ai_judgement_enemy(Ai* ai, int64_t obj)
 {
     return obj != ai->obj
         && ai->danger_source != OBJ_HANDLE_NULL
         && !critter_is_dead(obj)
-        && !ai_tactics_same_side(ai->obj, obj)
-        && ai_tactics_same_side(ai->danger_source, obj);
+        && ai_tactics_side(ai->obj, ai->danger_source, obj) == AI_SIDE_TARGET;
 }
 
 // The enemies threatening `protect_obj`: aiming at it, or within `near` tiles.
@@ -7219,6 +7294,7 @@ static int ai_judgement_area_value(Ai* ai, ObjectList* critters, int spell, int6
 
     for (node = critters->head; node != NULL; node = node->next) {
         int worth;
+        AiSide side;
 
         if (node->obj == ai->obj
             || critter_is_dead(node->obj)
@@ -7227,13 +7303,15 @@ static int ai_judgement_area_value(Ai* ai, ObjectList* critters, int spell, int6
         }
         worth = ai_judgement_damage_value(magictech_ai_expected_damage(ai->obj, node->obj, spell),
             object_hp_current(node->obj), 100);
-        if (ai_judgement_enemy(ai, node->obj)) {
+        // Classified once: the enemy test and the ally test are one side.
+        side = ai_tactics_side(ai->obj, ai->danger_source, node->obj);
+        if (ai->danger_source != OBJ_HANDLE_NULL && side == AI_SIDE_TARGET) {
             // A downed enemy adds nothing: its kill bonus drew blasts onto
             // fallen companions (review 2026-11-08, cross-2).
             if (!critter_is_unconscious(node->obj)) {
                 value += worth;
             }
-        } else if (!party && ai_tactics_same_side(ai->obj, node->obj)) {
+        } else if (!party && side == AI_SIDE_CASTER) {
             value -= 2 * worth;
         }
     }

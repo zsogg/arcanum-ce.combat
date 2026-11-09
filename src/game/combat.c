@@ -106,6 +106,8 @@ static void combat_opening_player_reached(void);
 static void combat_opening_end(void);
 static bool combat_opening_is_held(int64_t obj);
 static void combat_initiative_clear(void);
+static bool combat_initiative_seed_peek(TigFile* stream);
+static bool combat_group_joins(int64_t obj);
 static void combat_initiative_sort(void);
 static void combat_ambush_order(void);
 static bool combat_in_party(int64_t obj);
@@ -123,8 +125,11 @@ static void pc_switch_weapon(int64_t pc_obj, int64_t target_obj);
 static int64_t combat_weapon_swap_last;
 
 // CE (`turn order initiative`, card X10): each critter's initiative in the
-// fight in progress, rolled the first time it is sorted. A fight's start
-// clears it, and a load starts the fight again, so a load rolls anew.
+// fight in progress, rolled the first time it is sorted - from the fight's
+// seed and the critter's ID (`combat_initiative_roll`). A fight's start
+// clears it; the seed is saved (`combat_save`), so a load mid-fight rebuilds
+// the same order (review 2026-11-08, turns-6: a load rolled anew, and the
+// rest of the round could be save-scummed).
 #define COMBAT_INITIATIVE_MAX 256
 
 static struct {
@@ -132,6 +137,7 @@ static struct {
     int score;
 } combat_initiative[COMBAT_INITIATIVE_MAX];
 static int combat_initiative_count;
+static unsigned int combat_initiative_seed;
 
 // CE (`ambush safeguard`, card X10): an unspotted random encounter marks an
 // ambush; the next turn-based fight to start within an hour of game time is
@@ -446,6 +452,7 @@ void combat_reset(void)
 bool combat_save(TigFile* stream)
 {
     ObjectID oid;
+    int required;
 
     if (stream == NULL) return false;
     if (tig_file_fwrite(&combat_turn_based, sizeof(combat_turn_based), 1, stream) != 1) return false;
@@ -469,7 +476,13 @@ bool combat_save(TigFile* stream)
     oid = obj_get_id(combat_whos_turn_node->obj);
     if (tig_file_fwrite(&oid, sizeof(oid), 1, stream) != 1) return false;
 
-    if (tig_file_fwrite(&combat_required_action_points, sizeof(combat_required_action_points), 1, stream) != 1) return false;
+    // CE (`turn order initiative`, review 2026-11-08 turns-6): the load
+    // discards this slot (`combat_load` zeroes it, as the original does), so
+    // under initiative it carries the fight's seed instead.
+    required = feature_enabled(FEATURE_TURN_ORDER_INITIATIVE)
+        ? (int)combat_initiative_seed
+        : combat_required_action_points;
+    if (tig_file_fwrite(&required, sizeof(required), 1, stream) != 1) return false;
 
     oid = obj_get_id(combat_whos_turn_obj);
     if (tig_file_fwrite(&oid, sizeof(oid), 1, stream) != 1) return false;
@@ -507,6 +520,14 @@ bool combat_load(GameLoadInfo* load_info)
     saved_action_points = combat_action_points;
     combat_turn_based_active = false;
 
+    // CE (`turn order initiative`, turns-6): the seed rides in the
+    // required-AP slot after the two object IDs; read it ahead, so the fight
+    // is rebuilt in the order it saved.
+    if (feature_enabled(FEATURE_TURN_ORDER_INITIATIVE)
+        && !combat_initiative_seed_peek(load_info->stream)) {
+        return false;
+    }
+
     if (!combat_turn_based_start()) {
         return false;
     }
@@ -535,6 +556,32 @@ bool combat_load(GameLoadInfo* load_info)
     }
 
     combat_whos_turn_node = node;
+
+    // CE (`simultaneous npc turns`, card TB1; review 2026-11-08 turns-6): a
+    // group that acted before the player's saved turn pulled the rest of the
+    // NPC side up with it, past the party. The rebuilt list is sorted again,
+    // so the group is pulled up and marked acted once more - or the walk on
+    // from the player would give it a second turn. Under initiative only:
+    // with the party last nobody is pulled past it.
+    if (feature_enabled(FEATURE_SIMULTANEOUS_NPC_TURNS)) {
+        ObjectNode* leader;
+
+        for (leader = combat_critter_list.head; leader != node; leader = leader->next) {
+            if (combat_group_joins(leader->obj) && critter_is_active(leader->obj)) {
+                ObjectNode* tail = combat_group_pull_forward(leader, combat_group_joins);
+                ObjectNode* member = leader;
+
+                while (true) {
+                    combat_round_mark_acted(member->obj);
+                    if (member == tail) {
+                        break;
+                    }
+                    member = member->next;
+                }
+                break;
+            }
+        }
+    }
 
     if (tig_file_fread(&combat_required_action_points, sizeof(combat_required_action_points), 1, load_info->stream) != 1) return false;
 
@@ -4609,8 +4656,13 @@ bool combat_turn_based_start(void)
     // CE (card TB1): a new fight has no group and nobody has acted.
     combat_group_count = 0;
     combat_round_acted_count = 0;
-    // CE (`turn order initiative`): a new fight rolls initiative anew.
+    // CE (`turn order initiative`): a new fight rolls initiative anew, from
+    // a seed of its own; a loaded fight read its saved seed in `combat_load`
+    // (review 2026-11-08, turns-6).
     combat_initiative_clear();
+    if (feature_enabled(FEATURE_TURN_ORDER_INITIATIVE) && !gamelib_in_load()) {
+        combat_initiative_seed = (unsigned int)random_rand();
+    }
     // CE (`ai targeting`): its rounds count from 0 again.
     ai_fight_memos_forget();
     // CE (`ambush safeguard`): an ambush marked lately makes this fight's
@@ -4618,7 +4670,12 @@ bool combat_turn_based_start(void)
     combat_ambush_opening = false;
     if (combat_ambush_pending) {
         DateTime elapsed = timeevent_game_time_elapsed(&combat_ambush_marked);
+        // An initiative rule (review 2026-11-08, turns-3): without initiative,
+        // entering combat mode hands the player the opening, as stock does,
+        // and moving a party member to second gave the enemies after it
+        // round-1 turns stock denies.
         combat_ambush_opening = feature_enabled(FEATURE_AMBUSH_SAFEGUARD)
+            && feature_enabled(FEATURE_TURN_ORDER_INITIATIVE)
             && !datetime_is_at_least_milliseconds(&elapsed, COMBAT_AMBUSH_WINDOW_MS);
         combat_ambush_pending = false;
         tig_debug_printf("Combat: ambush: %s\n",
@@ -6704,6 +6761,59 @@ static void combat_initiative_clear(void)
     combat_initiative_count = 0;
 }
 
+// CE (`turn order initiative`, review 2026-11-08 turns-6): a critter's roll
+// of 1-10 in a fight, from the fight's seed and the critter's persistent ID,
+// so a load mid-fight rebuilds the order it saved. Reads only the ID's
+// meaningful bytes (as `objid_is_equal` does), never its padding. Pure.
+int combat_initiative_roll(unsigned int seed, ObjectID oid)
+{
+    const unsigned char* bytes = (const unsigned char*)&oid.d;
+    unsigned int hash = seed ^ (uint16_t)oid.type;
+    size_t size;
+    size_t index;
+
+    switch (oid.type) {
+    case OID_TYPE_A:
+        size = sizeof(oid.d.a);
+        break;
+    case OID_TYPE_GUID:
+        size = sizeof(oid.d.g);
+        break;
+    case OID_TYPE_P:
+        size = sizeof(oid.d.p);
+        break;
+    default:
+        size = 0;
+        break;
+    }
+    for (index = 0; index < size; index++) {
+        hash = (hash ^ bytes[index]) * 16777619u; // an FNV-1a step
+    }
+    // murmur3's finalizer: FNV alone ties neighbouring IDs too seldom.
+    hash ^= hash >> 16;
+    hash *= 0x85ebca6bu;
+    hash ^= hash >> 13;
+    hash *= 0xc2b2ae35u;
+    hash ^= hash >> 16;
+    return (int)(hash % 10) + 1;
+}
+
+// Reads the seed `combat_save` put in the required-AP slot, after the two
+// object IDs, and goes back.
+static bool combat_initiative_seed_peek(TigFile* stream)
+{
+    ObjectID oid;
+    int seed;
+    int pos;
+
+    if (tig_file_fgetpos(stream, &pos) != 0) return false;
+    if (tig_file_fread(&oid, sizeof(oid), 1, stream) != 1) return false;
+    if (tig_file_fread(&oid, sizeof(oid), 1, stream) != 1) return false;
+    if (tig_file_fread(&seed, sizeof(seed), 1, stream) != 1) return false;
+    combat_initiative_seed = (unsigned int)seed;
+    return tig_file_fsetpos(stream, &pos) == 0;
+}
+
 // The critter's initiative in this fight, rolled the first time it is asked
 // for. A table full beyond any real fight rolls without remembering.
 static int combat_initiative_of(int64_t obj)
@@ -6719,7 +6829,7 @@ static int combat_initiative_of(int64_t obj)
         }
     }
 
-    roll = random_between(1, 10);
+    roll = combat_initiative_roll(combat_initiative_seed, obj_get_id(obj));
     score = combat_initiative_score(stat_level_get(obj, STAT_DEXTERITY), roll);
     if (combat_initiative_count < COMBAT_INITIATIVE_MAX) {
         combat_initiative[combat_initiative_count].obj = obj;
