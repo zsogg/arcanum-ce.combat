@@ -4454,14 +4454,15 @@ void magictech_register_cur_attack(void)
 // (`ai_attack_is_graze`).
 int magictech_attack_flags(int64_t attacker_obj, int64_t target_obj, int64_t aimed_obj)
 {
+    // A graze first: within the party it is also accidental, and more.
+    if (ai_attack_is_graze(attacker_obj, aimed_obj, target_obj)) {
+        return 0x01 | AI_ATTACK_GRAZE;
+    }
     if (feature_enabled(FEATURE_GRENADE_BLASTS)
         && obj_type_is_critter(obj_field_int32_get(attacker_obj, OBJ_F_TYPE))
         && obj_type_is_critter(obj_field_int32_get(target_obj, OBJ_F_TYPE))
         && critter_party_same(attacker_obj, target_obj)) {
         return 0x01;
-    }
-    if (ai_attack_is_graze(attacker_obj, aimed_obj, target_obj)) {
-        return 0x01 | AI_ATTACK_GRAZE;
     }
     return 0;
 }

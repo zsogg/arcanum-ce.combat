@@ -326,6 +326,10 @@ TEST(a_helper_grazed_by_friendly_fire_is_not_attacked_under_grazing_hits)
     CHECK(!ai_graze_rule(true, false, true, true)); // the one aimed at
     CHECK(!ai_graze_rule(false, true, true, true)); // already enemies
     CHECK(!ai_graze_rule(false, false, false, false)); // an idle bystander
+    CHECK_INT(ai_graze_reaction_cost(50, 0), 10);
+    CHECK_INT(ai_graze_reaction_cost(8, 0), 7); // stops at 1, above attack-on-sight
+    CHECK_INT(ai_graze_reaction_cost(1, 0), 0);
+    CHECK_INT(ai_graze_reaction_cost(-20, 0), 0);
 
     CHECK(followers_begin());
     helper = obj_harness_create_proto(OBJ_TYPE_NPC);
@@ -335,6 +339,8 @@ TEST(a_helper_grazed_by_friendly_fire_is_not_attacked_under_grazing_hits)
     critter_leader_set(followers_npc, followers_pc);
     graze_fights(helper, wolf);
     graze_fights(wolf, helper);
+    // Neutral to the player; at 0 it would attack the player on sight.
+    reaction_adj_ex(helper, followers_pc, 50 - reaction_get(helper, followers_pc), false);
 
     CHECK_INT(magictech_attack_flags(followers_npc, helper, wolf), 0); // stock
 
@@ -349,6 +355,33 @@ TEST(a_helper_grazed_by_friendly_fire_is_not_attacked_under_grazing_hits)
     // The helper's own splash on the player, while it fights the Wolf.
     CHECK_INT(magictech_attack_flags(helper, followers_pc, wolf), graze);
 
+    // Both switches: the graze comes first, the party's 0x01 after.
+    followers_switch(FEATURE_GRENADE_BLASTS, true);
+    CHECK_INT(magictech_attack_flags(followers_pc, followers_npc, OBJ_HANDLE_NULL), graze);
+    CHECK_INT(magictech_attack_flags(followers_pc, followers_npc, followers_npc), 0x01);
+    followers_switch(FEATURE_GRENADE_BLASTS, false);
+
+    // One who would attack the other on sight is no helper; a charm's
+    // override makes it one again, and a graze keeps the override.
+    obj_field_int32_set(helper, OBJ_F_NPC_FLAGS, obj_field_int32_get(helper, OBJ_F_NPC_FLAGS) | ONF_KOS);
+    CHECK_INT(magictech_attack_flags(followers_npc, helper, wolf), 0);
+    obj_field_int32_set(helper, OBJ_F_NPC_FLAGS, obj_field_int32_get(helper, OBJ_F_NPC_FLAGS) | ONF_KOS_OVERRIDE);
+    CHECK_INT(magictech_attack_flags(followers_npc, helper, wolf), graze);
+    ai_attack(followers_npc, helper, LOUDNESS_NORMAL, (unsigned int)graze);
+    CHECK((obj_field_int32_get(helper, OBJ_F_NPC_FLAGS) & ONF_KOS_OVERRIDE) != 0);
+    obj_field_int32_set(helper, OBJ_F_NPC_FLAGS, obj_field_int32_get(helper, OBJ_F_NPC_FLAGS) & ~(ONF_KOS | ONF_KOS_OVERRIDE));
+    graze_fights(helper, wolf);
+
+    // A grenade the blast first set the victim on is no fight.
+    {
+        int64_t grenade = obj_harness_create_proto(OBJ_TYPE_WEAPON);
+
+        graze_fights(helper, grenade);
+        CHECK_INT(magictech_attack_flags(followers_npc, helper, OBJ_HANDLE_NULL), 0);
+        graze_fights(helper, wolf);
+        obj_harness_destroy(grenade);
+    }
+
     graze_fights(helper, OBJ_HANDLE_NULL); // idle
     CHECK_INT(magictech_attack_flags(followers_npc, helper, wolf), 0);
     obj_field_handle_set(helper, OBJ_F_NPC_COMBAT_FOCUS, wolf); // out of the fight, its focus left
@@ -360,17 +393,13 @@ TEST(a_helper_grazed_by_friendly_fire_is_not_attacked_under_grazing_hits)
     CHECK_INT(magictech_attack_flags(followers_npc, helper, wolf), 0);
     graze_fights(helper, wolf);
 
-    // An idle follower of the helper's, grazed by it, is kin: it does not
-    // turn on its leader.
+    // An idle follower of the helper's, grazed by it, is kin: a graze.
     {
         int64_t page = obj_harness_create_proto(OBJ_TYPE_NPC);
 
         obj_field_int32_set(page, OBJ_F_NPC_FLAGS, 0);
         critter_leader_set(page, helper);
         CHECK_INT(magictech_attack_flags(helper, page, wolf), graze);
-        ai_attack(helper, page, LOUDNESS_NORMAL, (unsigned int)graze);
-        CHECK(obj_field_handle_get(page, OBJ_F_NPC_COMBAT_FOCUS) != helper);
-        CHECK((obj_field_int32_get(page, OBJ_F_NPC_FLAGS) & ONF_FIGHTING) == 0);
         critter_leader_set(page, OBJ_HANDLE_NULL);
         obj_harness_destroy(page);
     }

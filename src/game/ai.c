@@ -1671,7 +1671,10 @@ void ai_attack(int64_t source_obj, int64_t target_obj, int loudness, unsigned in
 
             if (target_obj_type == OBJ_TYPE_NPC) {
                 npc_flags = obj_field_int32_get(target_obj, OBJ_F_NPC_FLAGS);
-                npc_flags &= ~ONF_KOS_OVERRIDE;
+                // CE (`grazing hits`): a graze leaves a charm's KOS override.
+                if ((flags & AI_ATTACK_GRAZE) == 0) {
+                    npc_flags &= ~ONF_KOS_OVERRIDE;
+                }
                 obj_field_int32_set(target_obj, OBJ_F_NPC_FLAGS, npc_flags);
 
                 // CE (combat AI, milestone AI-6): under `follower conduct`
@@ -1752,7 +1755,14 @@ void ai_attack(int64_t source_obj, int64_t target_obj, int loudness, unsigned in
                             }
                         }
                     } else {
-                        if ((flags & 0x01) != 0) {
+                        if ((flags & AI_ATTACK_GRAZE) != 0) {
+                            // CE (`grazing hits`): a graze costs 10 as an
+                            // accidental hit does, but never takes the
+                            // victim to attacking on sight; a burning area
+                            // grazes every tick.
+                            reaction_adj(target_obj, source_obj,
+                                -ai_graze_reaction_cost(reaction_get_for_ai(target_obj, source_obj), ai_params.field_28));
+                        } else if ((flags & 0x01) != 0) {
                             reaction_adj(target_obj, source_obj, -10);
                         } else {
                             v3 = reaction_get_for_ai(target_obj, source_obj);
@@ -6997,8 +7007,10 @@ bool ai_graze_rule(bool aimed, bool hostile, bool kin, bool busy_elsewhere)
     return !aimed && !hostile && (kin || busy_elsewhere);
 }
 
-// The combat focus `obj` is fighting, if it is an NPC fighting one still
-// there.
+// The critter `obj` is fighting, if it is an NPC fighting one: a grenade a
+// victim was first set on by the blast (`ai_attack`'s non-critter branch) is
+// no fight. One just killed still counts: the splash that killed the helper's
+// Wolf may reach the helper next.
 static int64_t ai_graze_focus(int64_t obj)
 {
     int64_t focus_obj;
@@ -7008,7 +7020,49 @@ static int64_t ai_graze_focus(int64_t obj)
         return OBJ_HANDLE_NULL;
     }
     focus_obj = obj_field_handle_get(obj, OBJ_F_NPC_COMBAT_FOCUS);
-    return focus_obj != OBJ_HANDLE_NULL && obj_handle_is_valid(focus_obj) ? focus_obj : OBJ_HANDLE_NULL;
+    if (focus_obj == OBJ_HANDLE_NULL
+        || !obj_handle_is_valid(focus_obj)
+        || !obj_type_is_critter(obj_field_int32_get(focus_obj, OBJ_F_TYPE))) {
+        return OBJ_HANDLE_NULL;
+    }
+    return focus_obj;
+}
+
+// Whether NPC `obj` would attack `other_obj` on sight: `ai_check_kos`'s
+// faction, reaction and alignment tests, which read fields only (its own
+// first step runs the victim's will-KOS script, which a hit test must not).
+static bool ai_graze_kos(int64_t obj, int64_t other_obj)
+{
+    unsigned int npc_flags;
+    AiParams ai_params;
+
+    if (obj_field_int32_get(obj, OBJ_F_TYPE) != OBJ_TYPE_NPC
+        || critter_pc_leader_get(obj) != OBJ_HANDLE_NULL) {
+        return false;
+    }
+    npc_flags = obj_field_int32_get(obj, OBJ_F_NPC_FLAGS);
+    if ((npc_flags & ONF_KOS) != 0
+        && (npc_flags & ONF_KOS_OVERRIDE) == 0
+        && !critter_faction_same(obj, other_obj)) {
+        return true;
+    }
+    ai_copy_params(obj, &ai_params);
+    if (obj_field_int32_get(other_obj, OBJ_F_TYPE) == OBJ_TYPE_PC
+        && reaction_get_for_ai(obj, other_obj) <= ai_params.field_28) {
+        return true;
+    }
+    return abs(stat_level_get(obj, STAT_ALIGNMENT) - stat_level_get(other_obj, STAT_ALIGNMENT)) >= ai_params.field_2C;
+}
+
+// CE (`grazing hits`), see ai.h.
+int ai_graze_reaction_cost(int reaction, int kos_reaction)
+{
+    int cost = reaction - kos_reaction - 1;
+
+    if (cost > 10) {
+        cost = 10;
+    }
+    return cost > 0 ? cost : 0;
 }
 
 // CE (`grazing hits`; zsogg, 2026-11-09), see ai.h. The sides are AI-7's kin
@@ -7038,7 +7092,10 @@ bool ai_attack_is_graze(int64_t attacker_obj, int64_t aimed_obj, int64_t victim_
     other_obj = busy_obj == victim_obj ? attacker_obj : victim_obj;
     focus_obj = ai_graze_focus(busy_obj);
     return ai_graze_rule(victim_obj == aimed_obj,
-        ai_shitlist_has(victim_obj, attacker_obj) || ai_shitlist_has(attacker_obj, victim_obj),
+        ai_shitlist_has(victim_obj, attacker_obj)
+            || ai_shitlist_has(attacker_obj, victim_obj)
+            || ai_graze_kos(victim_obj, attacker_obj)
+            || ai_graze_kos(attacker_obj, victim_obj),
         ai_tactics_same_side(attacker_obj, victim_obj),
         focus_obj != OBJ_HANDLE_NULL && !ai_tactics_same_side(other_obj, focus_obj));
 }

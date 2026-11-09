@@ -263,12 +263,19 @@ bool ai_shitlist_has(int64_t npc_obj, int64_t shit_obj);
 // The same: whether a hit of `attacker_obj`'s on `victim_obj`, aimed at
 // `aimed_obj` (none for a burning area; anything not a critter counts as
 // none), only grazed it: not the one aimed at, neither on the other's
-// shitlist, and kin to the attacker or fighting someone not on its side. A
+// shitlist nor would attack the other on sight, and kin to the attacker or
+// fighting a critter not on its side. A
 // player victim counts as busy when the attacker is fighting someone not on
 // the player's side. False with the switch off.
 bool ai_attack_is_graze(int64_t attacker_obj, int64_t aimed_obj, int64_t victim_obj);
-// The same rule's logic. Pure.
+// The same rule's logic: `hostile` is either on the other's shitlist, or an
+// NPC that would attack the other on sight (faction, reaction, alignment).
+// Pure.
 bool ai_graze_rule(bool aimed, bool hostile, bool kin, bool busy_elsewhere);
+// The same: what a graze by the player costs its victim's `reaction`: 10, as
+// an accidental hit does, but never down to `kos_reaction`, where the victim
+// would attack on sight. Pure.
+int ai_graze_reaction_cost(int reaction, int kos_reaction);
 int ai_max_dialog_distance(int64_t obj);
 void ai_target_lock(int64_t obj, int64_t tgt);
 void ai_target_unlock(int64_t obj);

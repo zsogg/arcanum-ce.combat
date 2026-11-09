@@ -267,12 +267,14 @@ FEATURE(FRESH_SHOP_STOCK, "fresh shop stock", false)
 // zsogg (2026-11-09; card AI-9, MODDING-NOTES 66), read by `ai_attack` through
 // `ai_attack_is_graze`: a spell's splash, a burning area or a stray shot that
 // only grazes someone - not the one aimed at, on neither's shitlist, and kin
-// to the attacker or busy fighting someone not on the attacker's side - is
-// friendly fire: no shitlist either way, no turn to the attacker, no
-// witnesses; a player who grazes still loses 10 reaction. Stock made a
+// to the attacker or busy fighting a critter not on the attacker's side, and
+// neither would attack the other on sight - is friendly fire: no shitlist
+// either way, no turn to the attacker, no witnesses; a player who grazes
+// loses up to 10 reaction, never down to attack-on-sight. Stock made a
 // grazed helper of another faction an enemy of the whole party. Covers the
 // within-party rule of `grenade blasts`. An idle bystander, and the one
-// aimed at, are attacked as in stock; a graze that kills alerts no witness.
+// aimed at, are attacked as in stock; a helper a graze kills is still avenged
+// by its friends (`ai_avenge_target`).
 FEATURE(GRAZING_HITS, "grazing hits", false)
 
 // clang-format on
