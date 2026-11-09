@@ -218,6 +218,10 @@ void ai_timeevent_schedule(int64_t obj);
 void ai_timeevent_clear(int64_t obj);
 int ai_can_speak(int64_t npc_obj, int64_t pc_obj, bool a3);
 int ai_check_follow(int64_t npc_obj, int64_t pc_obj, bool ignore_charisma_limits);
+// CE (`follower reaction joins`): called as an NPC joins a leader unforced; an
+// NPC the switch let join at low reaction is raised to the reaction it needs
+// to stay.
+void ai_follow_joined(int64_t npc_obj, int64_t pc_obj);
 void ai_timeevent_add_immediate(int64_t obj, int first_heartbeat);
 int ai_line_of_fire_cost(int64_t source_obj, int64_t target_loc, int64_t* block_obj_ptr);
 void ai_switch_weapon(int64_t obj);

@@ -155,6 +155,7 @@ static void ai_armor_rewield(Ai* ai);
 static bool ai_prefers_spells(Ai* ai);
 static bool ai_is_caster_type(Ai* ai);
 static bool ai_may_be_desperate(int64_t obj);
+static bool ai_in_fight(int64_t obj);
 static bool ai_choose_magictech_from_lists(Ai* ai);
 
 // CE (combat AI, milestone AI-5): the follower whose spell roll was made only
@@ -570,9 +571,12 @@ void ai_process(int64_t obj)
 
     // CE (combat AI, milestone AI-4): the item cap applies while `ai_heal`
     // chooses, to restoratives and to nothing else on the lists; an NPC out
-    // of combat mode starts its next fight with its allowance back.
+    // of the fight starts its next fight with its allowance back. Out of
+    // combat mode was the test until 2026-11-08 (review, healing-1), and an
+    // NPC is in combat mode only after its first swing, so a caster drank
+    // its whole pack.
     if (feature_enabled(FEATURE_AI_RESTORATIVES)
-        && !combat_critter_is_combat_mode_active(obj)) {
+        && !ai_in_fight(obj)) {
         ai_restorative_forget(obj);
     }
     ai_heal_choosing = true;
@@ -740,6 +744,15 @@ bool ai_restorative_refused(int64_t obj, int64_t item_obj)
     // NPC goes on with the pass rather than reach for another.
     if (feature_enabled(FEATURE_REAL_TIME_RESTORATIVES)
         && item_restorative_pending(obj)) {
+        return true;
+    }
+
+    // Nor while it walks, which `item_use_on_obj` refuses in real time
+    // (review 2026-11-08, healing-2): counted and floated, it was never drunk.
+    if (feature_enabled(FEATURE_REAL_TIME_RESTORATIVES)
+        && rt_budget_active()
+        && obj_field_int32_get(item_obj, OBJ_F_TYPE) == OBJ_TYPE_FOOD
+        && rt_budget_is_moving_now(obj)) {
         return true;
     }
 
@@ -3400,6 +3413,16 @@ bool ai_may_summon(Ai* ai)
     return magictech_summons_alive(ai->obj) < AI_SUMMON_CAP;
 }
 
+// CE: whether an NPC is in a fight - turn-based, its combat mode, or its AI
+// fighting. Combat mode alone comes only with the NPC's own first swing, so a
+// caster, or a fighter still closing in, is fighting before it.
+bool ai_in_fight(int64_t obj)
+{
+    return combat_turn_based_is_active()
+        || combat_critter_is_combat_mode_active(obj)
+        || (obj_field_int32_get(obj, OBJ_F_NPC_FLAGS) & ONF_FIGHTING) != 0;
+}
+
 // CE (combat AI, milestone AI-2): desperate casting under `ai spellcasting`.
 // Once per turn - the turn-based round, or in real time one turn length `R` -
 // an NPC whose fatigue floor or reserve would refuse a spell rolls its
@@ -3474,9 +3497,7 @@ bool ai_desperate_now(int64_t obj)
     // Only in a fight (zsogg, 2026-10-13). Out of combat Virgil, healing his
     // own poison, cast past his fatigue, fell unconscious and died of it -
     // a calculated risk in a fight, a trap outside one.
-    if (!combat_turn_based_is_active()
-        && !combat_critter_is_combat_mode_active(obj)
-        && (obj_field_int32_get(obj, OBJ_F_NPC_FLAGS) & ONF_FIGHTING) == 0) {
+    if (!ai_in_fight(obj)) {
         return false;
     }
 
@@ -4224,6 +4245,14 @@ void ai_action_perform_combat(Ai* ai)
     ObjectNpcFlags npc_flags;
     int64_t distance;
 
+    // CE (`real time restoratives`): a drink under way is waited for, as a
+    // standing reload is; the pass's attack goal would walk and cancel it
+    // (review 2026-11-08, healing-2).
+    if (feature_enabled(FEATURE_REAL_TIME_RESTORATIVES)
+        && item_restorative_pending(ai->obj)) {
+        return;
+    }
+
     ai_copy_params(ai->obj, &params);
     npc_flags = obj_field_int32_get(ai->obj, OBJ_F_NPC_FLAGS);
     distance = object_dist(ai->obj, ai->danger_source);
@@ -4959,6 +4988,29 @@ int ai_can_speak(int64_t npc_obj, int64_t pc_obj, bool a3)
     }
 
     return AI_SPEAK_OK;
+}
+
+// CE (`follower reaction joins`, review 2026-11-08, followers-1; zsogg's
+// choice): an NPC whose low reaction the switch let join the player starts at
+// the reaction it needs to stay, one above the limit. The idle re-check is the
+// stock one, so until then it left on its first idle pass; now only a reaction
+// that falls again makes it leave. See `ai.h`.
+void ai_follow_joined(int64_t npc_obj, int64_t pc_obj)
+{
+    AiParams params;
+    int reaction;
+
+    if (!feature_enabled(FEATURE_FOLLOWER_REACTION_JOINS)
+        || obj_field_int32_get(npc_obj, OBJ_F_TYPE) != OBJ_TYPE_NPC
+        || obj_field_int32_get(pc_obj, OBJ_F_TYPE) != OBJ_TYPE_PC) {
+        return;
+    }
+
+    ai_copy_params(npc_obj, &params);
+    reaction = reaction_get(npc_obj, pc_obj);
+    if (reaction <= params.field_14) {
+        reaction_adj_ex(npc_obj, pc_obj, params.field_14 + 1 - reaction, false);
+    }
 }
 
 // 0x4AD950
@@ -5703,6 +5755,16 @@ int ai_check_use_skill(int64_t source_obj, int64_t target_obj, int64_t item_obj,
     return AI_USE_SKILL_OK;
 }
 
+// CE (combat AI): whether the AI refuses the casts the engine would refuse or
+// end at once (codes 18 and 19) - under any switch that changes which spell an
+// NPC chooses.
+static bool ai_spell_guards_apply(void)
+{
+    return feature_enabled(FEATURE_AI_SPELLCASTING)
+        || feature_enabled(FEATURE_CASTER_TACTICS)
+        || feature_enabled(FEATURE_CASTER_JUDGEMENT);
+}
+
 // Whether this critter could cast `spell` at `target_obj` right now, either
 // from an item or from its own memory. Returns 0 when it can, and otherwise a
 // code saying why not - a member of the same `ai_check_*` family as
@@ -5762,7 +5824,11 @@ int ai_check_use_spell(int64_t attacker_obj, int64_t item_obj, int64_t target_ob
     // CE (combat AI, `ai spellcasting`, 2026-11-04): a spell whose targets
     // exclude this one - Dominate Will at the player - which the cast would
     // refuse, losing the turn-based turn (zsogg's Mental-mage playtest).
-    if (feature_enabled(FEATURE_AI_SPELLCASTING)
+    // Codes 18 and 19 refuse only casts the engine refuses or ends at once,
+    // so they bind under each switch that changes which spell is chosen
+    // (review 2026-11-08, casting-3: `caster tactics` alone recast a buff it
+    // could not maintain on every pass).
+    if (ai_spell_guards_apply()
         && target_obj != OBJ_HANDLE_NULL
         && !magictech_spell_can_target(item_obj != OBJ_HANDLE_NULL ? item_obj : attacker_obj, target_obj, spell)) {
         return 18;
@@ -5773,7 +5839,7 @@ int ai_check_use_spell(int64_t attacker_obj, int64_t item_obj, int64_t target_ob
     // "Maintain terminated" as it begins. Stock casts it again at once and
     // pays each time: a mage of Intelligence 7 under Agility of Fire recast
     // Shield of Protection 27 times in 18 seconds (the demonstration battle).
-    if (feature_enabled(FEATURE_AI_SPELLCASTING)
+    if (ai_spell_guards_apply()
         && magictech_maintain_capacity_full(attacker_obj, spell)) {
         return 19;
     }
@@ -7094,6 +7160,12 @@ static int64_t ai_judgement_area_centre(Ai* ai, ObjectList* critters, int spell,
         }
         dist = (int)location_dist(caster_loc, obj_field_int64_get(node->obj, OBJ_F_LOCATION));
         if (dist > range) {
+            continue;
+        }
+        // Only a critter it may target (review 2026-11-08, cross-2): the kill
+        // bonus drew blasts onto a downed companion, and a follower's onto a
+        // group past its leash. Unconscious first, the costly refusal.
+        if (critter_is_unconscious(node->obj) || !ai_is_valid_target(ai->obj, node->obj)) {
             continue;
         }
         if (near_cnt < AI_JUDGEMENT_AREA_CENTRES) {

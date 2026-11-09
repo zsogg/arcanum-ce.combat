@@ -224,6 +224,37 @@ TEST(a_turn_comes_round_once_a_round_only_under_the_switch)
     combat_round_acted_count = 0;
 }
 
+TEST(the_opening_s_held_enemies_go_behind_the_player_once_each)
+{
+    // Review 2026-11-08, turns-1: a group's gather and the walk after it
+    // both held enemy 2, listed twice; the second move linked it to itself
+    // and it fell out of the round.
+    const int64_t before[4] = { NPC(1), NPC(2), PARTY(1), NPC(3) };
+    const int64_t held[3] = { NPC(2), NPC(3), NPC(2) };
+    const int64_t expected[4] = { NPC(1), PARTY(1), NPC(2), NPC(3) };
+    int64_t after[16];
+    ObjectNode nodes[4];
+    ObjectNode* head;
+    int i;
+
+    chain(nodes, before, 4);
+    head = &nodes[0];
+    combat_opening_splice(&head, PARTY(1), held, 3);
+
+    CHECK_INT(walk(head, after, 16), 4);
+    for (i = 0; i < 4; i++) {
+        CHECK(after[i] == expected[i]);
+    }
+
+    // Held ahead of everyone, the list's head moves.
+    chain(nodes, before, 4);
+    head = &nodes[0];
+    combat_opening_splice(&head, PARTY(1), before, 1);
+    CHECK(head->obj == NPC(2));
+    CHECK_INT(walk(head, after, 16), 4);
+    CHECK(after[2] == NPC(1));
+}
+
 void test_group_turn_suite(void)
 {
     RUN(later_npcs_are_pulled_up_behind_the_first_in_order);
@@ -235,4 +266,5 @@ void test_group_turn_suite(void)
     RUN(each_member_pays_from_its_own_pool_and_others_go_free);
     RUN(with_no_group_only_whose_turn_it_is_acts);
     RUN(a_turn_comes_round_once_a_round_only_under_the_switch);
+    RUN(the_opening_s_held_enemies_go_behind_the_player_once_each);
 }

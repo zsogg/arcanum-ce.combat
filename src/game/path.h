@@ -38,6 +38,10 @@ typedef struct WmapPathInfo {
 } WmapPathInfo;
 
 int path_make(PathCreateInfo* path_create_info);
+// CE: whether the last `path_make` failed only for want of the NPC search
+// budget (`path_set_limit`, `path_set_time_limit`): a target then is not
+// unreachable, only not searched for this second.
+bool path_last_refused_by_budget(void);
 unsigned int path_translate_flags(PathFlags flags);
 int path_make_straight(int64_t from, int64_t to, int8_t* rotations);
 int wmap_path_make(WmapPathInfo* path_info);

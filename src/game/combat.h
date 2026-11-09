@@ -139,6 +139,9 @@ int combat_required_action_points_of(int64_t obj);
 // member, for the suite. See `combat.c`.
 struct ObjectNode* combat_group_pull_forward(struct ObjectNode* leader, bool (*joins)(int64_t obj));
 struct ObjectNode* combat_group_run_end(struct ObjectNode* leader, bool (*joins)(int64_t obj));
+// CE (opening safeguard): the held enemies moved behind the player. See
+// `combat.c`.
+void combat_opening_splice(struct ObjectNode** head, int64_t pc_obj, const int64_t* held, int held_count);
 bool combat_group_member_finished(bool gone, bool ended, int action_points, bool idle);
 bool combat_group_stall_step(int action_points, bool idle, bool* seen, int* last_action_points);
 bool combat_group_add(int64_t obj, int action_points);

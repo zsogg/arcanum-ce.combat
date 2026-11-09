@@ -65,10 +65,22 @@ static int path_search_count;
 // 0x5DE600
 static tig_duration_t path_search_time_ms;
 
+// CE: whether the last `path_make` found no path only because the NPC search
+// budget above was spent (review 2026-11-08, targeting-1).
+static bool path_budget_refused;
+
+// CE: see `path.h`.
+bool path_last_refused_by_budget(void)
+{
+    return path_budget_refused;
+}
+
 // 0x41F3C0
 int path_make(PathCreateInfo* path_create_info)
 {
     bool v1 = false;
+
+    path_budget_refused = false;
 
     if ((path_create_info->flags & PATH_FLAG_0x0800) != 0) {
         return path_make_back_off(path_create_info);
@@ -344,10 +356,12 @@ int path_make_astar(PathCreateInfo* path_create_info)
         }
 
         if (path_search_count > path_limit) {
+            path_budget_refused = true;
             return 0;
         }
 
         if (path_search_time_ms > path_time_limit) {
+            path_budget_refused = true;
             return 0;
         }
 

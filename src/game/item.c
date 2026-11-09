@@ -3181,10 +3181,18 @@ bool item_reaching_weapon_wins(bool armor_aware, int reaching_worth)
     return !armor_aware || reaching_worth > 0;
 }
 
+// CE: combat AI, 2026-10-05, see item.h.
+bool item_weapon_affordable(bool armor_aware, bool turn_based, int attack_cost, int turn_points)
+{
+    return !armor_aware || !turn_based || attack_cost <= turn_points;
+}
+
 // CE (combat AI, milestone AI-6 F3): whether a follower of the player, under
 // `follower conduct`, can go on using what it holds in `inventory_location`:
 // it can wield it, and a weapon has ammunition, a shot loaded, a jam to clear
-// or ammunition to load.
+// or ammunition to load, and under `ai armor aware` an attack that fits in a
+// turn-based turn (review 2026-11-08, weapons-1: a follower handed a rifle
+// it could not afford never attacked, quirk 57).
 static bool item_follower_keeps(int64_t critter_obj, int64_t item_obj, int inventory_location)
 {
     int ammo_type;
@@ -3196,6 +3204,13 @@ static bool item_follower_keeps(int64_t critter_obj, int64_t item_obj, int inven
     if (inventory_location != ITEM_INV_LOC_WEAPON
         || obj_field_int32_get(item_obj, OBJ_F_TYPE) != OBJ_TYPE_WEAPON) {
         return true;
+    }
+
+    if (!item_weapon_affordable(feature_enabled(FEATURE_AI_ARMOR_AWARE),
+            combat_turn_based_is_active(),
+            combat_weapon_attack_cost(critter_obj, item_obj),
+            combat_action_points_per_turn(critter_obj))) {
+        return false;
     }
 
     ammo_type = item_weapon_ammo_type(item_obj);
@@ -3314,7 +3329,7 @@ void item_wield_best(int64_t critter_obj, int inventory_location, int64_t target
                     // the least a turn grants.
                     if (armor_aware && combat_turn_based_is_active()) {
                         int cost = combat_weapon_attack_cost(critter_obj, item_obj);
-                        if (cost > combat_action_points_per_turn(critter_obj)) {
+                        if (!item_weapon_affordable(armor_aware, true, cost, combat_action_points_per_turn(critter_obj))) {
                             if (unaffordable_count < COMBAT_OBSERVER_AI_WEAPONS_MAX) {
                                 unaffordable[unaffordable_count][0] = obj_field_int32_get(item_obj, OBJ_F_DESCRIPTION);
                                 unaffordable[unaffordable_count][1] = cost;

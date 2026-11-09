@@ -152,6 +152,24 @@ TEST(low_reaction_no_longer_stops_joining_under_follower_reaction_joins)
     followers_end();
 }
 
+TEST(one_let_join_at_low_reaction_stays_until_it_falls_again)
+{
+    // Review 2026-11-08, followers-1: it joined, then the stay check - the
+    // stock one - sent it off jilted on its first idle pass.
+    CHECK(followers_begin());
+    followers_reaction(10);
+    followers_switch(FEATURE_FOLLOWER_REACTION_JOINS, true);
+    // `critter_follow`'s join, short of the art and UI it reaches.
+    CHECK_INT(ai_check_follow(followers_npc, followers_pc, false), AI_FOLLOW_OK);
+    critter_leader_set(followers_npc, followers_pc);
+    ai_follow_joined(followers_npc, followers_pc);
+    CHECK_INT(reaction_get(followers_npc, followers_pc), 21);
+    CHECK_INT(ai_check_follow(followers_npc, followers_pc, true), AI_FOLLOW_OK);
+    followers_reaction(20);
+    CHECK_INT(ai_check_follow(followers_npc, followers_pc, true), AI_FOLLOW_DISLIKE);
+    followers_end();
+}
+
 TEST(a_follower_whose_reaction_collapses_still_leaves)
 {
     CHECK(followers_begin());
@@ -293,6 +311,7 @@ void test_followers_suite(void)
     RUN(an_alignment_mismatch_no_longer_makes_a_follower_leave);
     RUN(a_higher_level_npc_refuses_stock_and_joins_under_follower_level_free);
     RUN(low_reaction_no_longer_stops_joining_under_follower_reaction_joins);
+    RUN(one_let_join_at_low_reaction_stays_until_it_falls_again);
     RUN(a_follower_whose_reaction_collapses_still_leaves);
     RUN(the_charisma_follower_limit_stays);
     RUN(a_master_persuader_is_still_held_to_the_charisma_limit);

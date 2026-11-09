@@ -30,6 +30,7 @@
 bool ai_desperate_now(int64_t obj);
 bool ai_desperation_rolled(int64_t obj);
 int ai_check_use_spell(int64_t attacker_obj, int64_t item_obj, int64_t target_obj, int spell);
+bool ai_in_fight(int64_t obj);
 
 // A caster in a fight: `ai_desperate_now` rolls only for an NPC that is
 // fighting, which the flag says without a combat.
@@ -81,6 +82,22 @@ TEST(dead_casters_free_their_desperation_slots)
     obj_harness_destroy(first);
     obj_harness_destroy(second);
     feature_clear_overrides();
+}
+
+// Review 2026-11-08, healing-1: an NPC is in combat mode only after its own
+// first swing, so the restorative allowance, given back "out of combat mode",
+// came back on every pass of a caster's fight. A fighting NPC is in a fight.
+TEST(an_npc_whose_ai_is_fighting_is_in_a_fight_before_its_first_swing)
+{
+    int64_t idle = obj_harness_create_proto(OBJ_TYPE_NPC);
+    int64_t fighting = fighting_npc();
+
+    obj_field_int32_set(idle, OBJ_F_NPC_FLAGS, 0);
+    CHECK(!ai_in_fight(idle));
+    CHECK(ai_in_fight(fighting));
+
+    obj_harness_destroy(idle);
+    obj_harness_destroy(fighting);
 }
 
 // A spell the estimate flickers on. The harness loads no spell list, so the
@@ -175,6 +192,15 @@ TEST(a_spell_that_cannot_take_its_target_is_refused_under_spellcasting)
     random_seed(20261104);
     CHECK_INT(ai_check_use_spell(caster, OBJ_HANDLE_NULL, npc, NOT_THE_PLAYER_SPELL), stock_npc);
 
+    // Review 2026-11-08, casting-3: each switch that changes the choice
+    // refuses it too, alone.
+    feature_override(FEATURE_AI_SPELLCASTING, false);
+    feature_override(FEATURE_CASTER_JUDGEMENT, true);
+    CHECK_INT(ai_check_use_spell(caster, OBJ_HANDLE_NULL, player, NOT_THE_PLAYER_SPELL), 18);
+    feature_override(FEATURE_CASTER_JUDGEMENT, false);
+    feature_override(FEATURE_CASTER_TACTICS, true);
+    CHECK_INT(ai_check_use_spell(caster, OBJ_HANDLE_NULL, player, NOT_THE_PLAYER_SPELL), 18);
+
     obj_harness_destroy(caster);
     obj_harness_destroy(player);
     obj_harness_destroy(npc);
@@ -187,6 +213,7 @@ void test_ai_memo_suite(void)
 {
     CHECK(obj_harness_init());
     RUN(dead_casters_free_their_desperation_slots);
+    RUN(an_npc_whose_ai_is_fighting_is_in_a_fight_before_its_first_swing);
     RUN(a_likely_to_fail_refusal_takes_two_bad_estimates_under_spellcasting);
     RUN(a_spell_that_cannot_take_its_target_is_refused_under_spellcasting);
 }

@@ -6420,6 +6420,7 @@ bool anim_create_path_near_obj_combat(AnimRunInfo* run_info)
     unsigned int path_create_flags;
     PathCreateInfo path_create_info;
     int max_rotations;
+    bool budget_refused = false;
 
     source_obj = run_info->params[0].obj;
     target_obj = run_info->params[1].obj;
@@ -6469,6 +6470,7 @@ bool anim_create_path_near_obj_combat(AnimRunInfo* run_info)
 
     if (anim_set_path_flags(&path_create_info, false)) {
         run_info->path.max = path_make(&path_create_info);
+        budget_refused = path_last_refused_by_budget();
     } else {
         run_info->path.max = 0;
     }
@@ -6486,7 +6488,11 @@ bool anim_create_path_near_obj_combat(AnimRunInfo* run_info)
     if (path_create_flags == path_create_info.flags
         || (run_info->flags & 0x4000) != 0) {
         if (!player_is_pc_obj(source_obj)) {
-            ai_note_unreachable(source_obj, target_obj);
+            // CE (review 2026-11-08, targeting-1): a search refused for the
+            // budget says nothing of the target.
+            if (!budget_refused) {
+                ai_note_unreachable(source_obj, target_obj);
+            }
             combat_turn_based_end_critter_turn(source_obj);
         }
         return false;
@@ -6495,19 +6501,28 @@ bool anim_create_path_near_obj_combat(AnimRunInfo* run_info)
     path_create_info.flags = path_create_flags;
     if (!anim_set_path_flags(&path_create_info, false)) {
         if (!player_is_pc_obj(source_obj)) {
-            ai_note_unreachable(source_obj, target_obj);
+            // CE (review 2026-11-08, targeting-1): a search refused for the
+            // budget says nothing of the target.
+            if (!budget_refused) {
+                ai_note_unreachable(source_obj, target_obj);
+            }
             combat_turn_based_end_critter_turn(source_obj);
         }
         return false;
     }
 
     run_info->path.max = path_make(&path_create_info);
+    budget_refused = path_last_refused_by_budget();
     run_info->path.field_E8 = path_create_info.from;
     run_info->path.field_F0 = path_create_info.to;
 
     if (run_info->path.max == 0) {
         if (!player_is_pc_obj(source_obj)) {
-            ai_note_unreachable(source_obj, target_obj);
+            // CE (review 2026-11-08, targeting-1): a search refused for the
+            // budget says nothing of the target.
+            if (!budget_refused) {
+                ai_note_unreachable(source_obj, target_obj);
+            }
             combat_turn_based_end_critter_turn(source_obj);
         }
         return false;

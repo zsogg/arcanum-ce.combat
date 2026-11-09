@@ -139,6 +139,11 @@ void item_wield_best(int64_t critter_obj, int inventory_location, int64_t target
 // over the best overall: always in stock; under `ai armor aware` only with a
 // positive score, i.e. a wielder trained with it. Pure.
 bool item_reaching_weapon_wins(bool armor_aware, int reaching_worth);
+// CE (combat AI, 2026-10-05): under `ai armor aware`, in turn-based, an NPC's
+// weapon must cost no more to attack with than a whole turn grants; an NPC
+// short of AP loses its turn (quirk 57). Shared by `item_wield_best`'s choice
+// and a follower's keeping of what it holds.
+bool item_weapon_affordable(bool armor_aware, bool turn_based, int attack_cost, int turn_points);
 void item_wield_best_all(int64_t critter_obj, int64_t target_obj);
 void item_rewield(int64_t obj);
 bool item_in_rewield(void);

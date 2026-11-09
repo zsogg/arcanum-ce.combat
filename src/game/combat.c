@@ -104,6 +104,7 @@ static void combat_summons_round_began(void);
 static bool combat_opening_holds(int64_t obj);
 static void combat_opening_player_reached(void);
 static void combat_opening_end(void);
+static bool combat_opening_is_held(int64_t obj);
 static void combat_initiative_clear(void);
 static void combat_initiative_sort(void);
 static void combat_ambush_order(void);
@@ -4609,7 +4610,10 @@ bool combat_turn_based_start(void)
     }
     // CE (opening safeguard): a fight's first turn-based round.
     combat_opening_end();
-    combat_opening_active = feature_enabled(FEATURE_OPENING_SAFEGUARD);
+    // A loaded fight is past its opening: its walk to the saved turn never
+    // reaches the player's node, which would leave every enemy after the
+    // player held for the round (review 2026-11-08, turns-2).
+    combat_opening_active = feature_enabled(FEATURE_OPENING_SAFEGUARD) && !gamelib_in_load();
 
     if (!anim_goal_interrupt_all_for_tb_combat()) {
         tig_debug_printf("Combat: TB_Start: Anim-Goal-Interrupt FAILED!\n");
@@ -6016,6 +6020,13 @@ static bool combat_opening_holds(int64_t obj)
         return false;
     }
 
+    // A group turn tests its run as it gathers, and the walk tests the same
+    // nodes again after it (review 2026-11-08, turns-1): held once, it stays
+    // held, and is not listed twice.
+    if (combat_opening_is_held(obj)) {
+        return true;
+    }
+
     if (combat_opening_enemy == OBJ_HANDLE_NULL) {
         combat_opening_enemy = obj;
     }
@@ -6029,45 +6040,59 @@ static bool combat_opening_holds(int64_t obj)
 
 static void combat_opening_player_reached(void)
 {
-    int64_t pc_obj = player_get_local_pc_obj();
-    ObjectNode* pc_node;
-    ObjectNode* tail;
-    ObjectNode* prev;
-    ObjectNode* node;
-    int index;
-
     if (!combat_opening_active) {
         return;
     }
 
-    for (pc_node = combat_critter_list.head; pc_node != NULL && pc_node->obj != pc_obj; pc_node = pc_node->next) {
-    }
-
-    tail = pc_node;
-    for (index = 0; pc_node != NULL && index < combat_opening_held_count; index++) {
-        prev = NULL;
-        for (node = combat_critter_list.head; node != NULL && node->obj != combat_opening_held[index]; node = node->next) {
-            prev = node;
-        }
-        if (node == NULL || node == pc_node) {
-            continue;
-        }
-
-        if (prev != NULL) {
-            prev->next = node->next;
-        } else {
-            combat_critter_list.head = node->next;
-        }
-        node->next = tail->next;
-        tail->next = node;
-        tail = node;
-    }
+    combat_opening_splice(&(combat_critter_list.head), player_get_local_pc_obj(),
+        combat_opening_held, combat_opening_held_count);
 
     if (combat_opening_held_count != 0) {
         tig_debug_printf("Combat: opening safeguard: %d enemy turn(s) after the player's\n",
             combat_opening_held_count);
     }
     combat_opening_end();
+}
+
+// Moves each of `held` found in the list at `*head` to just after `pc_obj`'s
+// node, in their order. One already moved is left where it is, so the run
+// never links to itself. Pure, for the suite.
+void combat_opening_splice(ObjectNode** head, int64_t pc_obj, const int64_t* held, int held_count)
+{
+    ObjectNode* pc_node;
+    ObjectNode* tail;
+    ObjectNode* prev;
+    ObjectNode* node;
+    ObjectNode* moved;
+    int index;
+
+    for (pc_node = *head; pc_node != NULL && pc_node->obj != pc_obj; pc_node = pc_node->next) {
+    }
+
+    tail = pc_node;
+    for (index = 0; pc_node != NULL && index < held_count; index++) {
+        prev = NULL;
+        for (node = *head; node != NULL && node->obj != held[index]; node = node->next) {
+            prev = node;
+        }
+        if (node == NULL || node == pc_node) {
+            continue;
+        }
+        for (moved = pc_node->next; moved != tail->next && moved != node; moved = moved->next) {
+        }
+        if (moved == node) {
+            continue;
+        }
+
+        if (prev != NULL) {
+            prev->next = node->next;
+        } else {
+            *head = node->next;
+        }
+        node->next = tail->next;
+        tail->next = node;
+        tail = node;
+    }
 }
 
 static void combat_opening_end(void)

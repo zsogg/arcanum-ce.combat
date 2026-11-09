@@ -1036,6 +1036,11 @@ bool critter_follow(int64_t follower_obj, int64_t leader_obj, bool force)
     }
     obj_field_int32_set(follower_obj, OBJ_F_NPC_FLAGS, flags);
 
+    // CE (`follower reaction joins`): one let join at low reaction stays.
+    if (!force) {
+        ai_follow_joined(follower_obj, leader_obj);
+    }
+
     // Update follower state.
     anim_speed_recalc(follower_obj);
     ui_follower_refresh();

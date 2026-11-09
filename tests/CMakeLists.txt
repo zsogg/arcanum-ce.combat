@@ -644,6 +644,7 @@ set(AI_TEST_STATICS
     ai_desperate_now
     ai_desperation_rolled
     ai_check_use_spell
+    ai_in_fight
 )
 set(AI_TEST_OBJ "${CMAKE_CURRENT_BINARY_DIR}/ai_globalized.o")
 set(_ai_globalize_args "")

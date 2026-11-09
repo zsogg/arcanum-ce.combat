@@ -82,6 +82,17 @@ TEST(armor_aware_takes_a_reaching_weapon_only_with_a_positive_score)
     CHECK(!item_reaching_weapon_wins(true, -40));
 }
 
+// Quirk 57, under `ai armor aware`: in turn-based an NPC's weapon must fit in
+// a turn. A follower keeping what it holds is held to it too (review
+// 2026-11-08, weapons-1: one handed a rifle it could not afford never fired).
+TEST(a_weapon_must_fit_in_a_turn_based_turn_under_armor_aware)
+{
+    CHECK(item_weapon_affordable(true, true, 6, 6));
+    CHECK(!item_weapon_affordable(true, true, 7, 6));
+    CHECK(item_weapon_affordable(true, false, 7, 6)); // real time: no turn
+    CHECK(item_weapon_affordable(false, true, 7, 6)); // stock
+}
+
 // The guns are only remembered, never read, so plain numbers stand in for them.
 static int64_t follower_of(int64_t pc)
 {
@@ -174,6 +185,7 @@ void test_ai_follower_conduct_suite(void)
     RUN(stock_takes_any_weapon_that_reaches);
     RUN(armor_aware_takes_a_reaching_weapon_only_with_a_positive_score);
     CHECK(obj_harness_init());
+    RUN(a_weapon_must_fit_in_a_turn_based_turn_under_armor_aware);
     RUN(a_backup_remembers_the_gun_it_replaced);
     RUN(enemies_never_fill_the_backup_memory);
     RUN(a_follower_that_left_frees_its_slot);
