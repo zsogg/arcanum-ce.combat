@@ -6078,6 +6078,11 @@ void combat_opening_splice(ObjectNode** head, int64_t pc_obj, const int64_t* hel
         if (node == NULL || node == pc_node) {
             continue;
         }
+        // Already next in line: it joins the run where it stands.
+        if (node == tail->next) {
+            tail = node;
+            continue;
+        }
         for (moved = pc_node->next; moved != tail->next && moved != node; moved = moved->next) {
         }
         if (moved == node) {

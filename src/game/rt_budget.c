@@ -141,6 +141,9 @@ void rt_budget_init(void)
 void rt_budget_reset(void)
 {
     memset(rt_budget_entries, 0, sizeof(rt_budget_entries));
+    // A restorative waits on its entry; with the entries gone nothing would
+    // finish it (review 2026-11-08, a load mid-drink).
+    item_restorative_forget_all();
     rt_budget_was_turn_based = false;
     rt_budget_was_enabled = false;
 }

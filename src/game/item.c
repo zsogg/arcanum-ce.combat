@@ -3190,10 +3190,11 @@ bool item_weapon_affordable(bool armor_aware, bool turn_based, int attack_cost, 
 // CE (combat AI, milestone AI-6 F3): whether a follower of the player, under
 // `follower conduct`, can go on using what it holds in `inventory_location`:
 // it can wield it, and a weapon has ammunition, a shot loaded, a jam to clear
-// or ammunition to load, and under `ai armor aware` an attack that fits in a
+// or ammunition to load, and under `ai armor aware` (`armor_aware`, as
+// `item_wield_best` reckons it for its target) an attack that fits in a
 // turn-based turn (review 2026-11-08, weapons-1: a follower handed a rifle
 // it could not afford never attacked, quirk 57).
-static bool item_follower_keeps(int64_t critter_obj, int64_t item_obj, int inventory_location)
+static bool item_follower_keeps(int64_t critter_obj, int64_t item_obj, int inventory_location, bool armor_aware)
 {
     int ammo_type;
 
@@ -3206,7 +3207,7 @@ static bool item_follower_keeps(int64_t critter_obj, int64_t item_obj, int inven
         return true;
     }
 
-    if (!item_weapon_affordable(feature_enabled(FEATURE_AI_ARMOR_AWARE),
+    if (!item_weapon_affordable(armor_aware,
             combat_turn_based_is_active(),
             combat_weapon_attack_cost(critter_obj, item_obj),
             combat_action_points_per_turn(critter_obj))) {
@@ -3261,18 +3262,18 @@ void item_wield_best(int64_t critter_obj, int inventory_location, int64_t target
     // of the player keeps what it holds while it can use it - the player's
     // choice, which stock re-picked on every inventory change and at every
     // fight's start. Only an empty or unusable slot is chosen for.
-    if (equipped_item_obj != OBJ_HANDLE_NULL
-        && feature_enabled(FEATURE_FOLLOWER_CONDUCT)
-        && obj_field_int32_get(critter_obj, OBJ_F_TYPE) == OBJ_TYPE_NPC
-        && critter_pc_leader_get(critter_obj) != OBJ_HANDLE_NULL
-        && item_follower_keeps(critter_obj, equipped_item_obj, inventory_location)) {
-        return;
-    }
     armor_aware = feature_enabled(FEATURE_AI_ARMOR_AWARE)
         && inventory_location == ITEM_INV_LOC_WEAPON
         && obj_field_int32_get(critter_obj, OBJ_F_TYPE) == OBJ_TYPE_NPC
         && target_obj != OBJ_HANDLE_NULL
         && obj_type_is_critter(obj_field_int32_get(target_obj, OBJ_F_TYPE));
+    if (equipped_item_obj != OBJ_HANDLE_NULL
+        && feature_enabled(FEATURE_FOLLOWER_CONDUCT)
+        && obj_field_int32_get(critter_obj, OBJ_F_TYPE) == OBJ_TYPE_NPC
+        && critter_pc_leader_get(critter_obj) != OBJ_HANDLE_NULL
+        && item_follower_keeps(critter_obj, equipped_item_obj, inventory_location, armor_aware)) {
+        return;
+    }
     best_item_worth = INT_MIN;
     best_item_obj = equipped_item_obj;
 

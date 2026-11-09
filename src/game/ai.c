@@ -571,12 +571,13 @@ void ai_process(int64_t obj)
 
     // CE (combat AI, milestone AI-4): the item cap applies while `ai_heal`
     // chooses, to restoratives and to nothing else on the lists; an NPC out
-    // of the fight starts its next fight with its allowance back. Out of
-    // combat mode was the test until 2026-11-08 (review, healing-1), and an
-    // NPC is in combat mode only after its first swing, so a caster drank
-    // its whole pack.
+    // of the fight - not fighting, fleeing or surrendering - starts its next
+    // fight with its allowance back. Out of combat mode was the test until
+    // 2026-11-08 (review, healing-1), and an NPC is in combat mode only after
+    // its first swing, so a caster drank its whole pack.
     if (feature_enabled(FEATURE_AI_RESTORATIVES)
-        && !ai_in_fight(obj)) {
+        && !ai_in_fight(obj)
+        && ai.danger_type == AI_DANGER_SOURCE_TYPE_NONE) {
         ai_restorative_forget(obj);
     }
     ai_heal_choosing = true;
@@ -681,7 +682,7 @@ static void ai_observe_item_used(Ai* ai, int64_t item_obj, int64_t target_obj)
 // - Under `ai restoratives` an enemy - an NPC outside the player's party -
 //   uses at most AI_RESTORATIVES_PER_FIGHT restorative items a fight,
 //   whatever it carries. Spells are not limited, and the allowance returns
-//   once the NPC is out of combat mode. And every NPC's restorative floats
+//   once the NPC is out of the fight (`ai_process`). And every NPC's restorative floats
 //   "Uses <item>" over it, as the player knows the item: a drink has no
 //   animation, so nothing else on screen shows it.
 // - Under `restorative cost` an NPC passes over a restorative it cannot pay
@@ -744,15 +745,6 @@ bool ai_restorative_refused(int64_t obj, int64_t item_obj)
     // NPC goes on with the pass rather than reach for another.
     if (feature_enabled(FEATURE_REAL_TIME_RESTORATIVES)
         && item_restorative_pending(obj)) {
-        return true;
-    }
-
-    // Nor while it walks, which `item_use_on_obj` refuses in real time
-    // (review 2026-11-08, healing-2): counted and floated, it was never drunk.
-    if (feature_enabled(FEATURE_REAL_TIME_RESTORATIVES)
-        && rt_budget_active()
-        && obj_field_int32_get(item_obj, OBJ_F_TYPE) == OBJ_TYPE_FOOD
-        && rt_budget_is_moving_now(obj)) {
         return true;
     }
 
@@ -3990,6 +3982,17 @@ bool ai_choose_action_from_list(Ai* ai, S4ABF10* a2)
         }
 
         if (entry->spell == -1) {
+            // CE (`real time restoratives`): not while it walks, which
+            // `item_use_on_obj` refuses in real time (review 2026-11-08,
+            // healing-2): counted and floated, it was never drunk. An item
+            // with a spell is used by its own goal, which stops the walk.
+            if (feature_enabled(FEATURE_REAL_TIME_RESTORATIVES)
+                && rt_budget_active()
+                && obj_field_int32_get(entry->item_obj, OBJ_F_TYPE) == OBJ_TYPE_FOOD
+                && rt_budget_is_moving_now(ai->obj)) {
+                continue;
+            }
+
             // CE (combat AI, milestone AI-4): the item is used here, at once,
             // and this pass then acts as usual - the original's flow, in which
             // a drink is followed by the pass's own action. `ai.decided`
@@ -4066,6 +4069,16 @@ bool ai_choose_action_from_list(Ai* ai, S4ABF10* a2)
 // 0x4AC180
 void ai_action_perform(Ai* ai)
 {
+    // CE (`real time restoratives`): a drink under way is waited for, as a
+    // standing reload is; a step to attack, back off or flee would cancel it
+    // (review 2026-11-08, healing-2).
+    if (feature_enabled(FEATURE_REAL_TIME_RESTORATIVES)
+        && rt_budget_active()
+        && item_restorative_pending(ai->obj)
+        && rt_budget_standing_action_pending(ai->obj)) {
+        return;
+    }
+
     if (!combat_turn_based_is_active() || combat_turn_based_is_acting(ai->obj)) {
         if ((obj_field_int32_get(ai->obj, OBJ_F_NPC_FLAGS) & ONF_BACKING_OFF) != 0) {
             ai_observe_decision(ai, "back_off");
@@ -4244,14 +4257,6 @@ void ai_action_perform_combat(Ai* ai)
     AiParams params;
     ObjectNpcFlags npc_flags;
     int64_t distance;
-
-    // CE (`real time restoratives`): a drink under way is waited for, as a
-    // standing reload is; the pass's attack goal would walk and cancel it
-    // (review 2026-11-08, healing-2).
-    if (feature_enabled(FEATURE_REAL_TIME_RESTORATIVES)
-        && item_restorative_pending(ai->obj)) {
-        return;
-    }
 
     ai_copy_params(ai->obj, &params);
     npc_flags = obj_field_int32_get(ai->obj, OBJ_F_NPC_FLAGS);
@@ -7129,7 +7134,11 @@ static int ai_judgement_area_value(Ai* ai, ObjectList* critters, int spell, int6
         worth = ai_judgement_damage_value(magictech_ai_expected_damage(ai->obj, node->obj, spell),
             object_hp_current(node->obj), 100);
         if (ai_judgement_enemy(ai, node->obj)) {
-            value += worth;
+            // A downed enemy adds nothing: its kill bonus drew blasts onto
+            // fallen companions (review 2026-11-08, cross-2).
+            if (!critter_is_unconscious(node->obj)) {
+                value += worth;
+            }
         } else if (!party && ai_tactics_same_side(ai->obj, node->obj)) {
             value -= 2 * worth;
         }

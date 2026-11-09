@@ -246,6 +246,22 @@ TEST(the_opening_s_held_enemies_go_behind_the_player_once_each)
         CHECK(after[i] == expected[i]);
     }
 
+    // One already right behind the player keeps its place in the order
+    // (the fix review, 2026-11-08: the later one went in front of it).
+    {
+        const int64_t adjacent[4] = { NPC(1), NPC(3), PARTY(1), NPC(2) };
+        const int64_t order[2] = { NPC(2), NPC(3) };
+        const int64_t in_order[4] = { NPC(1), PARTY(1), NPC(2), NPC(3) };
+
+        chain(nodes, adjacent, 4);
+        head = &nodes[0];
+        combat_opening_splice(&head, PARTY(1), order, 2);
+        CHECK_INT(walk(head, after, 16), 4);
+        for (i = 0; i < 4; i++) {
+            CHECK(after[i] == in_order[i]);
+        }
+    }
+
     // Held ahead of everyone, the list's head moves.
     chain(nodes, before, 4);
     head = &nodes[0];
