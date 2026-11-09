@@ -223,7 +223,7 @@ int ai_check_follow(int64_t npc_obj, int64_t pc_obj, bool ignore_charisma_limits
 // to stay.
 void ai_follow_joined(int64_t npc_obj, int64_t pc_obj);
 // CE (`ai targeting`): forgets the round-keyed memos (unreachable targets,
-// who was seen casting) as a turn-based fight starts.
+// who cast) as a turn-based fight starts.
 void ai_fight_memos_forget(void);
 // CE (`ai targeting`): whether a memo made at turn key `recorded` is within
 // `turns` turns of `key` (`ai_desperation_key`: a round, or in real time a

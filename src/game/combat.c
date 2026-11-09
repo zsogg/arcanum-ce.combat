@@ -5397,18 +5397,27 @@ int combat_use_object_cost(int64_t obj, int64_t target_obj)
 // `item_ui.c`. Charged at once, with no animation goal.
 int combat_use_item_cost(int64_t obj, int64_t item_obj)
 {
-    (void)obj;
-
     // CE (`restorative cost`, combat AI milestone AI-4, zsogg 2026-10-05): a
     // restorative - a food item, which is what every potion and remedy is -
-    // costs 6 for the player and NPCs alike. Anything else stays at 4.
+    // costs 6 for the player and NPCs alike. Anything else stays at 4. Never
+    // more than a whole turn, as a fumble's get-up (zsogg 2026-11-09, review
+    // 2026-11-08 healing-6): with 5 a turn a critter never drank in
+    // turn-based.
     if (feature_enabled(FEATURE_RESTORATIVE_COST)
         && item_obj != OBJ_HANDLE_NULL
         && obj_field_int32_get(item_obj, OBJ_F_TYPE) == OBJ_TYPE_FOOD) {
-        return COMBAT_RESTORATIVE_COST;
+        return combat_restorative_cost_rule(combat_action_points_per_turn(obj));
     }
 
     return 4;
+}
+
+// The restorative's cost against what a turn grants. Pure, for the suite.
+int combat_restorative_cost_rule(int action_points_per_turn)
+{
+    return action_points_per_turn < COMBAT_RESTORATIVE_COST
+        ? action_points_per_turn
+        : COMBAT_RESTORATIVE_COST;
 }
 
 // Picking an item up: 1, charged in `anim_pickup_item` (0x42AA70) and

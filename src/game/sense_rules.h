@@ -42,4 +42,9 @@ int sense_rules_weapon_loudness(int loudness, bool blunt, bool walls_stop);
 // otherwise.
 int sense_rules_presence_loudness(bool concealed, bool moving, bool still_is_silent);
 
+// Pure: whether a critter perceives another well enough to pick it as a
+// target - on sight, or, unless `hearing_alerts`, on hearing too. Stock target
+// finding takes either sense (review 2026-11-08, targeting-2).
+bool sense_rules_perceives(bool seen, bool heard, bool hearing_alerts);
+
 #endif /* ARCANUM_GAME_SENSE_RULES_H_ */

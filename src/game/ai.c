@@ -3675,9 +3675,25 @@ static int64_t ai_side_nearest(int64_t obj, int64_t target_obj, AiSideFilter fil
     return best_obj;
 }
 
+// CE (`ai targeting`; review 2026-11-08, targeting-2): whether `obj`
+// perceives `candidate_obj` enough to turn to it - DB-3's rule as
+// `ai_acts_on` applies it in target finding, without the look a heard target
+// draws there. Hearing is asked only when it can decide: it walks the line
+// of sound.
+static bool ai_perceives(int64_t obj, int64_t candidate_obj)
+{
+    bool hearing_alerts = feature_enabled(FEATURE_HEARING_ALERTS);
+    bool seen = ai_can_see(obj, candidate_obj) == 0;
+
+    return sense_rules_perceives(seen,
+        !seen && !hearing_alerts
+            && ai_can_hear(obj, candidate_obj, ai_presence_loudness(candidate_obj)) == 0,
+        hearing_alerts);
+}
+
 static bool ai_side_filter_reachable(int64_t obj, int64_t candidate_obj)
 {
-    return !ai_is_unreachable(obj, candidate_obj);
+    return !ai_is_unreachable(obj, candidate_obj) && ai_perceives(obj, candidate_obj);
 }
 
 // Whether `target_obj` is the one the player ordered `obj` to attack
@@ -3715,8 +3731,10 @@ static int64_t ai_turn_from_unreachable(int64_t obj, int64_t target_obj)
 // CE (combat AI, milestone AI-3): hunters under `ai targeting`. An NPC whose
 // description `rules/ai_roles.mes` lists as a Hunter goes after the nearest
 // prey on its target's side: a character visibly ranged - wielding a weapon
-// that reaches beyond one tile, or one thrown by default - or seen casting a
-// spell in the last AI_PREY_CAST_TURNS turns. zsogg, 2026-10-04: Human Thief
+// that reaches beyond one tile, or one thrown by default - or that cast a
+// spell of its own in the last AI_PREY_CAST_TURNS turns, and that the hunter
+// perceives now: sees, or hears without `hearing alerts` (review 2026-11-08,
+// targeting-2; who watched the cast is not recorded). zsogg, 2026-10-04: Human Thief
 // and Kite Scout to start, "basic, even if the behavior is not ideal". A
 // hunter already fighting someone adjacent keeps fighting them, so a
 // companion who intercepts it holds it.
@@ -3866,7 +3884,9 @@ static bool ai_is_prey(int64_t obj)
 
 static bool ai_side_filter_prey(int64_t obj, int64_t candidate_obj)
 {
-    return ai_is_prey(candidate_obj) && !ai_is_unreachable_within(obj, candidate_obj, AI_PREY_UNREACHABLE_TURNS);
+    return ai_is_prey(candidate_obj)
+        && !ai_is_unreachable_within(obj, candidate_obj, AI_PREY_UNREACHABLE_TURNS)
+        && ai_perceives(obj, candidate_obj);
 }
 
 static int64_t ai_hunter_choose(int64_t obj, int64_t target_obj)
@@ -5478,7 +5498,8 @@ int ai_presence_loudness(int64_t obj)
 // CE (`hearing alerts`, DB-3; zsogg, 2026-10-27): whether `npc_obj` acts on
 // `target_obj` - stock: when it sees or hears it. Under the switch only on
 // sight; a target heard but unseen is gone to look at, at once or, when
-// `deferred`, by the caller.
+// `deferred`, by the caller. `ai_perceives` applies the same rule
+// (`sense_rules_perceives`) to the side scans.
 static bool ai_acts_on(int64_t npc_obj, int64_t target_obj, int loudness, bool deferred)
 {
     if (ai_can_see(npc_obj, target_obj) == 0) {

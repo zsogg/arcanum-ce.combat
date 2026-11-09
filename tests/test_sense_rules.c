@@ -104,8 +104,21 @@ TEST(moving_matters_only_in_plain_view_under_the_rule)
     }
 }
 
+// Review 2026-11-08, targeting-2: a hunter or an NPC turning from an
+// unreachable target picks only a member it perceives - the Human Thief no
+// longer walks to an unseen, prowling archer.
+TEST(a_side_member_is_turned_to_only_if_perceived)
+{
+    CHECK(sense_rules_perceives(true, false, false));
+    CHECK(sense_rules_perceives(true, false, true));
+    CHECK(sense_rules_perceives(false, true, false)); // stock: heard counts
+    CHECK(!sense_rules_perceives(false, true, true)); // hearing alerts: heard only does not
+    CHECK(!sense_rules_perceives(false, false, false));
+}
+
 void test_sense_rules_suite(void)
 {
+    RUN(a_side_member_is_turned_to_only_if_perceived);
     RUN(moving_matters_only_in_plain_view_under_the_rule);
     RUN(a_wall_stops_ordinary_sound_and_lets_a_third_of_a_loud_one_through);
     RUN(stock_hearing_through_a_wall_grows_with_distance_and_never_reads_1000);

@@ -103,6 +103,31 @@ static int64_t follower_of(int64_t pc)
 }
 
 // F3 (8b-i): the gun a melee backup replaced, remembered per follower.
+// Review 2026-11-08, weapons-4 (zsogg 2026-11-09): a follower re-picks only
+// when the weapon it holds cannot hurt the target - untrained, or stopped
+// whole by armor. Any trained weapon hurts a phantom (its criticals and
+// on-hit spells), so the player's choice stands there.
+TEST(a_trained_weapon_that_scores_hurts)
+{
+    CHECK(item_weapon_hurts(60, 450, false));
+}
+
+TEST(an_untrained_weapon_never_hurts)
+{
+    CHECK(!item_weapon_hurts(-1, -4, false));
+    CHECK(!item_weapon_hurts(-1, 0, true));
+}
+
+TEST(a_trained_weapon_stopped_whole_does_not_hurt_an_ordinary_target)
+{
+    CHECK(!item_weapon_hurts(30, 0, false));
+}
+
+TEST(any_trained_weapon_hurts_a_phantom)
+{
+    CHECK(item_weapon_hurts(30, 0, true));
+}
+
 TEST(a_backup_remembers_the_gun_it_replaced)
 {
     int64_t pc = obj_harness_create_proto(OBJ_TYPE_PC);
@@ -186,6 +211,10 @@ void test_ai_follower_conduct_suite(void)
     RUN(armor_aware_takes_a_reaching_weapon_only_with_a_positive_score);
     CHECK(obj_harness_init());
     RUN(a_weapon_must_fit_in_a_turn_based_turn_under_armor_aware);
+    RUN(a_trained_weapon_that_scores_hurts);
+    RUN(an_untrained_weapon_never_hurts);
+    RUN(a_trained_weapon_stopped_whole_does_not_hurt_an_ordinary_target);
+    RUN(any_trained_weapon_hurts_a_phantom);
     RUN(a_backup_remembers_the_gun_it_replaced);
     RUN(enemies_never_fill_the_backup_memory);
     RUN(a_follower_that_left_frees_its_slot);

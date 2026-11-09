@@ -1617,6 +1617,7 @@ void item_use_on_obj(int64_t source_obj, int64_t item_obj, int64_t target_obj)
 {
     int64_t parent_obj;
     int item_type;
+    int use_cost;
     TargetDescriptor td;
 
     if (item_obj == OBJ_HANDLE_NULL) {
@@ -1643,13 +1644,18 @@ void item_use_on_obj(int64_t source_obj, int64_t item_obj, int64_t target_obj)
         return;
     }
 
+    // CE (review 2026-11-08, healing-6): the cost is read once, so a use is
+    // checked and charged at one Speed - under `restorative cost` it is capped
+    // at the user's turn, and the item's own script runs between the two.
+    use_cost = combat_use_item_cost(source_obj, item_obj);
+
     // CE (`restorative cost`, combat AI milestone AI-4): a restorative's
     // effect runs before its cost is charged, and a charge that fails is
     // simply not made, so at 6 AP one could otherwise be drunk for free.
     // Refused here instead, for the player and NPCs alike.
     if (feature_enabled(FEATURE_RESTORATIVE_COST)
         && item_type == OBJ_TYPE_FOOD
-        && !combat_can_pay_action_points(source_obj, combat_use_item_cost(source_obj, item_obj))) {
+        && !combat_can_pay_action_points(source_obj, use_cost)) {
         if (player_is_local_pc_obj(source_obj)) {
             tf_add(source_obj, TF_TYPE_WHITE, "Not enough action points");
         }
@@ -1676,7 +1682,7 @@ void item_use_on_obj(int64_t source_obj, int64_t item_obj, int64_t target_obj)
     // CE (real-time session C): the shared cost, here and below - the
     // original's 4.
     if (!object_script_execute(source_obj, item_obj, target_obj, SAP_USE, 0)) {
-        combat_consume_action_points(source_obj, combat_use_item_cost(source_obj, item_obj));
+        combat_consume_action_points(source_obj, use_cost);
         return;
     }
 
@@ -1686,12 +1692,12 @@ void item_use_on_obj(int64_t source_obj, int64_t item_obj, int64_t target_obj)
         // effect is a spell, such as the Healing Salve, pays the cast cost
         // when that spell is cast, in another animation that does not know
         // the item. The rest of a restorative's cost is charged here, so the
-        // whole is the same 6 a drunk potion costs.
+        // whole is the same cost a drunk potion has.
         if (feature_enabled(FEATURE_RESTORATIVE_COST) && item_type == OBJ_TYPE_FOOD) {
             // CE (magic, milestone MG-1): the cast is an item's, so it pays
             // the item cost, and the whole stays the restorative cost.
             combat_consume_action_points(source_obj,
-                combat_use_item_cost(source_obj, item_obj)
+                use_cost
                     - combat_spell_cast_cost(source_obj, mt_item_spell(item_obj, 0), item_obj));
         }
 
@@ -1708,7 +1714,7 @@ void item_use_on_obj(int64_t source_obj, int64_t item_obj, int64_t target_obj)
         return;
     }
 
-    combat_consume_action_points(source_obj, combat_use_item_cost(source_obj, item_obj));
+    combat_consume_action_points(source_obj, use_cost);
 
     if (item_type == OBJ_TYPE_WRITTEN) {
         ui_written_start_obj(item_obj, source_obj);
@@ -3229,6 +3235,85 @@ static bool item_follower_keeps(int64_t critter_obj, int64_t item_obj, int inven
     return weapon_rules_ammo_per_shot(item_obj) <= item_ammo_quantity_get(critter_obj, ammo_type);
 }
 
+// CE: the score `item_wield_best` gives a usable weapon against `target_obj`
+// (its stock units, hundredths when `armor_aware`); `*expected_ptr` gets the
+// AI-1 share through armor (-1 when not reckoned) and `*effectiveness_ptr` the
+// wielder's effectiveness (-1 untrained). Moved out of the loop so a follower's
+// held weapon can be judged before it is put down (review 2026-11-08,
+// weapons-4).
+static int item_weapon_worth(int64_t critter_obj, int64_t item_obj, int64_t target_obj, bool armor_aware, int* expected_ptr, int* effectiveness_ptr)
+{
+    int total_dam = 0;
+    int skill = item_weapon_skill(item_obj);
+
+    // CE (combat AI, milestone AI-1): the normal damage at the
+    // share expected through the target's armor.
+    int expected = armor_aware ? combat_armor_expected_permille(item_obj, target_obj) : -1;
+    for (DamageType damage_type = 0; damage_type < DAMAGE_TYPE_COUNT; damage_type++) {
+        int min_dam;
+        int max_dam;
+
+        item_weapon_damage(item_obj, critter_obj, damage_type, skill, false, &min_dam, &max_dam);
+        if (damage_type == DAMAGE_TYPE_NORMAL && expected >= 0) {
+            int stopped_fatigue = weapon_rules_stopped_to_fatigue(item_obj);
+
+            total_dam += (min_dam + max_dam) * 50 * expected / 1000;
+            // A blunt weapon's blow the armor stops still
+            // tires, at its StoppedToFatigue, which fatigue's
+            // full count credits (review 2026-11-08,
+            // weapons-3) - not a phantom's, which takes none.
+            if (stopped_fatigue != WEAPON_RULE_UNSET
+                && stopped_fatigue > 0
+                && creature_rules_profile(target_obj) != CREATURE_PROFILE_PHANTOM) {
+                total_dam += (min_dam + max_dam) * 50 * (1000 - expected) / 1000 * stopped_fatigue / 100;
+            }
+            continue;
+        }
+        // FIX (porting bug #52): the average of every damage
+        // type is added up, as the original does (0x465300
+        // `add edx,eax` into the running total). CE assigned
+        // it, so a weapon scored only its last type's average,
+        // fatigue: an NPC preferred a Mace (1-4, fatigue 1-8)
+        // to a Quality Sword (2-9, fatigue 2-5).
+        // CE (combat AI, milestone AI-1): in hundredths when
+        // armor-aware, so a modest wielder's scores do not all
+        // round to the same handful of points.
+        total_dam += armor_aware ? (min_dam + max_dam) * 50 : (min_dam + max_dam) / 2;
+    }
+
+    int effectiveness;
+    if (IS_TECH_SKILL(skill)) {
+        int tech_skill = GET_TECH_SKILL(skill);
+        if (tech_skill_level(critter_obj, tech_skill) != 0) {
+            effectiveness = tech_skill_effectiveness(critter_obj, tech_skill, target_obj);
+        } else {
+            effectiveness = -1;
+        }
+    } else {
+        int basic_skill = GET_BASIC_SKILL(skill);
+        if (skill == BASIC_SKILL_MELEE
+            || basic_skill_level(critter_obj, skill) != 0) {
+            effectiveness = basic_skill_effectiveness(critter_obj, basic_skill, target_obj);
+        } else {
+            effectiveness = -1;
+        }
+    }
+
+    if (effectiveness == 0) {
+        effectiveness = -1;
+    }
+
+    *expected_ptr = expected;
+    *effectiveness_ptr = effectiveness;
+    return total_dam * effectiveness / 100;
+}
+
+// CE: combat AI AI-6 F3 (review 2026-11-08, weapons-4), see item.h.
+bool item_weapon_hurts(int effectiveness, int worth, bool phantom)
+{
+    return effectiveness > 0 && (worth > 0 || phantom);
+}
+
 // 0x465170
 void item_wield_best(int64_t critter_obj, int inventory_location, int64_t target_obj)
 {
@@ -3254,6 +3339,10 @@ void item_wield_best(int64_t critter_obj, int inventory_location, int64_t target
     // CE (combat AI, 2026-10-05): weapons passed over for their cost.
     int unaffordable[COMBAT_OBSERVER_AI_WEAPONS_MAX][2];
     int unaffordable_count = 0;
+    // CE (review 2026-11-08, weapons-4): a follower choosing again because the
+    // weapon it holds cannot hurt the target.
+    bool phantom;
+    bool follower_yields = false;
 
     cnt = obj_field_int32_get(critter_obj, OBJ_F_CRITTER_INVENTORY_NUM);
     equipped_item_obj = item_wield_get(critter_obj, inventory_location);
@@ -3268,12 +3357,29 @@ void item_wield_best(int64_t critter_obj, int inventory_location, int64_t target
         && obj_field_int32_get(critter_obj, OBJ_F_TYPE) == OBJ_TYPE_NPC
         && target_obj != OBJ_HANDLE_NULL
         && obj_type_is_critter(obj_field_int32_get(target_obj, OBJ_F_TYPE));
+    phantom = armor_aware && creature_rules_profile(target_obj) == CREATURE_PROFILE_PHANTOM;
     if (equipped_item_obj != OBJ_HANDLE_NULL
         && feature_enabled(FEATURE_FOLLOWER_CONDUCT)
         && obj_field_int32_get(critter_obj, OBJ_F_TYPE) == OBJ_TYPE_NPC
         && critter_pc_leader_get(critter_obj) != OBJ_HANDLE_NULL
         && item_follower_keeps(critter_obj, equipped_item_obj, inventory_location, armor_aware)) {
-        return;
+        int held_expected;
+        int held_effectiveness;
+        int held_score = armor_aware && obj_field_int32_get(equipped_item_obj, OBJ_F_TYPE) == OBJ_TYPE_WEAPON
+            ? item_weapon_worth(critter_obj, equipped_item_obj, target_obj, armor_aware, &held_expected, &held_effectiveness)
+            : 0;
+
+        // CE (review 2026-11-08, weapons-4; zsogg 2026-11-09): under `ai
+        // armor aware`, not a weapon that cannot hurt the target - untrained,
+        // or stopped whole by its armor. It is chosen for again, and given up
+        // only for one that can. Any trained weapon hurts a phantom, by its
+        // criticals and on-hit spells (CREATURE-PROFILES).
+        if (!armor_aware
+            || obj_field_int32_get(equipped_item_obj, OBJ_F_TYPE) != OBJ_TYPE_WEAPON
+            || item_weapon_hurts(held_effectiveness, held_score, phantom)) {
+            return;
+        }
+        follower_yields = true;
     }
     best_item_worth = INT_MIN;
     best_item_obj = equipped_item_obj;
@@ -3319,9 +3425,6 @@ void item_wield_best(int64_t critter_obj, int inventory_location, int64_t target
                 if (ammo_type == 10000
                     || weapon_rules_ammo_per_shot(item_obj) <= item_ammo_quantity_get(critter_obj, ammo_type)
                     || (reload_applies(critter_obj, item_obj) && reload_loaded_get(item_obj) > 0)) {
-                    int total_dam = 0;
-                    int skill = item_weapon_skill(item_obj);
-
                     // CE (combat AI, zsogg 2026-10-05): under `ai armor aware`,
                     // in turn-based, a weapon whose attack costs more than a
                     // whole turn grants is never chosen. An NPC short of AP
@@ -3340,64 +3443,17 @@ void item_wield_best(int64_t critter_obj, int inventory_location, int64_t target
                             continue;
                         }
                     }
-                    // CE (combat AI, milestone AI-1): the normal damage at the
-                    // share expected through the target's armor.
-                    int expected = armor_aware ? combat_armor_expected_permille(item_obj, target_obj) : -1;
-                    for (DamageType damage_type = 0; damage_type < DAMAGE_TYPE_COUNT; damage_type++) {
-                        int min_dam;
-                        int max_dam;
-
-                        item_weapon_damage(item_obj, critter_obj, damage_type, skill, false, &min_dam, &max_dam);
-                        if (damage_type == DAMAGE_TYPE_NORMAL && expected >= 0) {
-                            int stopped_fatigue = weapon_rules_stopped_to_fatigue(item_obj);
-
-                            total_dam += (min_dam + max_dam) * 50 * expected / 1000;
-                            // A blunt weapon's blow the armor stops still
-                            // tires, at its StoppedToFatigue, which fatigue's
-                            // full count credits (review 2026-11-08,
-                            // weapons-3) - not a phantom's, which takes none.
-                            if (stopped_fatigue != WEAPON_RULE_UNSET
-                                && stopped_fatigue > 0
-                                && creature_rules_profile(target_obj) != CREATURE_PROFILE_PHANTOM) {
-                                total_dam += (min_dam + max_dam) * 50 * (1000 - expected) / 1000 * stopped_fatigue / 100;
-                            }
-                            continue;
-                        }
-                        // FIX (porting bug #52): the average of every damage
-                        // type is added up, as the original does (0x465300
-                        // `add edx,eax` into the running total). CE assigned
-                        // it, so a weapon scored only its last type's average,
-                        // fatigue: an NPC preferred a Mace (1-4, fatigue 1-8)
-                        // to a Quality Sword (2-9, fatigue 2-5).
-                        // CE (combat AI, milestone AI-1): in hundredths when
-                        // armor-aware, so a modest wielder's scores do not all
-                        // round to the same handful of points.
-                        total_dam += armor_aware ? (min_dam + max_dam) * 50 : (min_dam + max_dam) / 2;
-                    }
-
+                    int expected;
                     int effectiveness;
-                    if (IS_TECH_SKILL(skill)) {
-                        int tech_skill = GET_TECH_SKILL(skill);
-                        if (tech_skill_level(critter_obj, tech_skill) != 0) {
-                            effectiveness = tech_skill_effectiveness(critter_obj, tech_skill, target_obj);
-                        } else {
-                            effectiveness = -1;
-                        }
-                    } else {
-                        int basic_skill = GET_BASIC_SKILL(skill);
-                        if (skill == BASIC_SKILL_MELEE
-                            || basic_skill_level(critter_obj, skill) != 0) {
-                            effectiveness = basic_skill_effectiveness(critter_obj, basic_skill, target_obj);
-                        } else {
-                            effectiveness = -1;
-                        }
-                    }
+                    int effective_total_dam = item_weapon_worth(critter_obj, item_obj, target_obj, armor_aware, &expected, &effectiveness);
 
-                    if (effectiveness == 0) {
-                        effectiveness = -1;
+                    // CE (review 2026-11-08, weapons-4): a follower putting
+                    // down a weapon that cannot hurt the target looks only at
+                    // ones that can, so the commitment below cannot keep the
+                    // useless one and two useless weapons never swap.
+                    if (follower_yields && !item_weapon_hurts(effectiveness, effective_total_dam, phantom)) {
+                        continue;
                     }
-
-                    int effective_total_dam = total_dam * effectiveness / 100;
 
                     if (armor_aware) {
                         if (item_obj == held_obj) {
@@ -3473,6 +3529,14 @@ void item_wield_best(int64_t critter_obj, int inventory_location, int64_t target
             best_item_obj = held_obj;
             kept = true;
         }
+    }
+
+    // CE (review 2026-11-08, weapons-4): with nothing that hurts the target,
+    // the follower keeps what the player gave it - before the empty-gun last
+    // resort below, which would otherwise replace it.
+    if (follower_yields && best_item_obj == OBJ_HANDLE_NULL) {
+        best_item_obj = held_obj;
+        kept = true;
     }
 
     if (armor_aware && combat_observer_is_enabled()) {

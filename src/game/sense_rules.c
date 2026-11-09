@@ -52,3 +52,8 @@ int sense_rules_presence_loudness(bool concealed, bool moving, bool still_is_sil
     }
     return LOUDNESS_NORMAL;
 }
+
+bool sense_rules_perceives(bool seen, bool heard, bool hearing_alerts)
+{
+    return seen || (heard && !hearing_alerts);
+}

@@ -186,9 +186,11 @@ int combat_spell_cast_cost(int64_t caster_obj, int spell, int64_t source_obj);
 bool combat_check_cast_spell_for(int64_t source_obj, int spell, int64_t item_obj);
 int combat_skill_cost(int64_t obj, int skill);
 int combat_use_object_cost(int64_t obj, int64_t target_obj);
-// CE: a restorative's AP under `restorative cost` (combat AI milestone AI-4).
+// CE: a restorative's AP under `restorative cost` (combat AI milestone AI-4),
+// never more than a whole turn (review 2026-11-08, healing-6).
 #define COMBAT_RESTORATIVE_COST 6
 int combat_use_item_cost(int64_t obj, int64_t item_obj);
+int combat_restorative_cost_rule(int action_points_per_turn);
 int combat_pickup_cost(int64_t obj, int64_t item_obj);
 int combat_get_up_cost(int64_t obj);
 int combat_reload_cost(int64_t obj, int64_t weapon_obj);

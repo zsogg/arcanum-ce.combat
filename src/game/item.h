@@ -144,6 +144,13 @@ bool item_reaching_weapon_wins(bool armor_aware, int reaching_worth);
 // short of AP loses its turn (quirk 57). Shared by `item_wield_best`'s choice
 // and a follower's keeping of what it holds.
 bool item_weapon_affordable(bool armor_aware, bool turn_based, int attack_cost, int turn_points);
+// CE: combat AI AI-6 F3 (review 2026-11-08, weapons-4). Whether a weapon its
+// wielder scores `worth` with, at `effectiveness` (-1 untrained), can hurt the
+// target: trained and scoring above 0 - except a phantom, which any trained
+// weapon hurts by its criticals and on-hit spells. Under `follower conduct`
+// and `ai armor aware`, a follower holding one that cannot is chosen for
+// again, and gives it up only for one that can. Pure.
+bool item_weapon_hurts(int effectiveness, int worth, bool phantom);
 void item_wield_best_all(int64_t critter_obj, int64_t target_obj);
 void item_rewield(int64_t obj);
 bool item_in_rewield(void);
