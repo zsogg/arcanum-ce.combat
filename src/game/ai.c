@@ -7012,8 +7012,8 @@ static int64_t ai_graze_focus(int64_t obj)
 }
 
 // CE (`grazing hits`; zsogg, 2026-11-09), see ai.h. The sides are AI-7's kin
-// (`ai_tactics_same_side`); "busy" is a fight with someone neither the other
-// party nor kin to it.
+// (`ai_tactics_same_side`, which counts a critter its own kin); "busy" is a
+// fight with someone not kin to the other one.
 bool ai_attack_is_graze(int64_t attacker_obj, int64_t aimed_obj, int64_t victim_obj)
 {
     int victim_type;
@@ -7040,9 +7040,7 @@ bool ai_attack_is_graze(int64_t attacker_obj, int64_t aimed_obj, int64_t victim_
     return ai_graze_rule(victim_obj == aimed_obj,
         ai_shitlist_has(victim_obj, attacker_obj) || ai_shitlist_has(attacker_obj, victim_obj),
         ai_tactics_same_side(attacker_obj, victim_obj),
-        focus_obj != OBJ_HANDLE_NULL
-            && focus_obj != other_obj
-            && !ai_tactics_same_side(other_obj, focus_obj));
+        focus_obj != OBJ_HANDLE_NULL && !ai_tactics_same_side(other_obj, focus_obj));
 }
 
 // CE: AI-7/AI-8, see ai.h.

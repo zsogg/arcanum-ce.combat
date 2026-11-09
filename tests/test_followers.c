@@ -351,6 +351,8 @@ TEST(a_helper_grazed_by_friendly_fire_is_not_attacked_under_grazing_hits)
 
     graze_fights(helper, OBJ_HANDLE_NULL); // idle
     CHECK_INT(magictech_attack_flags(followers_npc, helper, wolf), 0);
+    obj_field_handle_set(helper, OBJ_F_NPC_COMBAT_FOCUS, wolf); // out of the fight, its focus left
+    CHECK_INT(magictech_attack_flags(followers_npc, helper, wolf), 0);
     CHECK_INT(magictech_attack_flags(helper, followers_pc, wolf), 0);
     graze_fights(helper, followers_npc); // fighting the party
     CHECK_INT(magictech_attack_flags(followers_npc, helper, wolf), 0);
