@@ -116,7 +116,7 @@ TEST(a_hold_lasts_its_turns)
     CHECK_INT(ai_judgement_hold_turns(true, 6, false), 2);
     CHECK_INT(ai_judgement_hold_turns(true, 9, false), 3);
     CHECK_INT(ai_judgement_hold_turns(true, 12, false), AI_JUDGEMENT_HOLD_TURNS);
-    CHECK_INT(ai_judgement_hold_turns(true, 0, true), 1); // Constitution 20: the animation's turn
+    CHECK_INT(ai_judgement_hold_turns(true, 0, true), 1); // Constitution 19 and up: the animation's turn
     CHECK_INT(ai_judgement_hold_turns(true, 2, false), 1);
     CHECK_INT(ai_judgement_hold_turns(false, 0, true), AI_JUDGEMENT_HOLD_TURNS);
     CHECK_INT(ai_judgement_hold_turns(false, 0, false), 1);
