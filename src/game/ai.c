@@ -7341,8 +7341,11 @@ bool ai_judgement_turn_refuses(int ap_left, int ap_cost, int attack_ap_cost, int
 }
 
 // Rule 1 for a disable (casting-2): the turns it holds its target. A stun
-// the turns it skips (three ticks a turn-based turn); a spell with a duration
-// or upkeep the horizon; anything else (a knockdown, a dropped weapon) one.
+// the turns it skips (three ticks a turn-based turn), one at the least: a
+// stun of no ticks (Constitution 20) still plays its animation once, and a
+// stunned critter's turn is skipped (`combat_turn_based_critter_skip`). A
+// spell with a duration or upkeep the horizon; anything else (a knockdown, a
+// dropped weapon) one.
 // The horizon is a cap, not a conversion: a turn-based round is one game
 // second and a real-time turn about two, so durations do not convert.
 int ai_judgement_hold_turns(bool stuns, int stun_ticks, bool lasts)
@@ -7350,7 +7353,7 @@ int ai_judgement_hold_turns(bool stuns, int stun_ticks, bool lasts)
     int turns;
 
     if (stuns) {
-        turns = stun_ticks > 0 ? (stun_ticks + 2) / 3 : 0;
+        turns = stun_ticks > 0 ? (stun_ticks + 2) / 3 : 1;
     } else {
         turns = lasts ? AI_JUDGEMENT_HOLD_TURNS : 1;
     }
