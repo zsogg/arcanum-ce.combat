@@ -182,7 +182,10 @@ FEATURE(WEAPON_FUMBLES, "weapon fumbles", false)
 // `ai_check_use_spell`: a caster follower of the player casts while it and the
 // player are healthy, keeping its fatigue reserve until someone is hurt; and
 // `ONF_CAST_HIGHEST` no longer limits a follower of the player to each
-// college's highest spell (Arronax).
+// college's highest spell (Arronax). Also, a spell centred on the follower is
+// not taken against a target beyond its reach (code 12), and AI-6 F4: while
+// an enemy targets the player, a follower's buff that can go on another goes
+// on the player (`ai_player_under_attack`).
 FEATURE(FOLLOWER_CASTING, "follower casting", false)
 // Combat AI AI-6 (zsogg, 2026-10-28), read by `ai_heal`, `ai_heal_func` and
 // `ai_check_use_spell` for a follower of the player: no healing roll while the
