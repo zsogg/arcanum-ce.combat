@@ -128,8 +128,9 @@ static int64_t combat_weapon_swap_last;
 // fight in progress, rolled the first time it is sorted - from the fight's
 // seed and the critter's ID (`combat_initiative_roll`). A fight's start
 // clears it; the seed is saved (`combat_save`), so a load mid-fight rebuilds
-// the same order (review 2026-11-08, turns-6: a load rolled anew, and the
-// rest of the round could be save-scummed).
+// the same order while no critter's Dexterity has changed since it was first
+// sorted (review 2026-11-08, turns-6: a load rolled anew, and the rest of the
+// round could be save-scummed). Exact ties follow the rebuilt list's order.
 #define COMBAT_INITIATIVE_MAX 256
 
 static struct {
@@ -562,12 +563,18 @@ bool combat_load(GameLoadInfo* load_info)
     // NPC side up with it, past the party. The rebuilt list is sorted again,
     // so the group is pulled up and marked acted once more - or the walk on
     // from the player would give it a second turn. Under initiative only:
-    // with the party last nobody is pulled past it.
+    // with the party last nobody is pulled past it. The leader is the first
+    // NPC-side critter before the player that can act, or that the load's
+    // own walk already marked as the round's first. shortcut: a first round
+    // under the opening or ambush safeguard is not rebuilt - the enemies
+    // the opening put behind the player lose that round's turn on a load.
     if (feature_enabled(FEATURE_SIMULTANEOUS_NPC_TURNS)) {
         ObjectNode* leader;
 
         for (leader = combat_critter_list.head; leader != node; leader = leader->next) {
-            if (combat_group_joins(leader->obj) && critter_is_active(leader->obj)) {
+            if (!player_is_pc_obj(leader->obj)
+                && !combat_in_party(leader->obj)
+                && (critter_is_active(leader->obj) || combat_round_has_acted(leader->obj))) {
                 ObjectNode* tail = combat_group_pull_forward(leader, combat_group_joins);
                 ObjectNode* member = leader;
 
@@ -3943,6 +3950,12 @@ int combat_expected_attack_damage(int64_t attacker_obj, int64_t target_obj, int*
         return 0;
     }
 
+    // `combat_phantom_ward` turns every type of an ordinary blow, so the
+    // floor holds back no spell for one (criticals aside).
+    if (creature_rules_profile(target_obj) == CREATURE_PROFILE_PHANTOM) {
+        return 0;
+    }
+
     weapon_obj = item_wield_get(attacker_obj, ITEM_INV_LOC_WEAPON);
     skill = item_weapon_skill(weapon_obj);
     permille = combat_armor_expected_permille(weapon_obj, target_obj);
@@ -6821,7 +6834,7 @@ static void combat_initiative_clear(void)
 
 // CE (`turn order initiative`, review 2026-11-08 turns-6): a critter's roll
 // of 1-10 in a fight, from the fight's seed and the critter's persistent ID,
-// so a load mid-fight rebuilds the order it saved. Reads only the ID's
+// so a load mid-fight rolls what it rolled before. Reads only the ID's
 // meaningful bytes (as `objid_is_equal` does), never its padding. Pure.
 int combat_initiative_roll(unsigned int seed, ObjectID oid)
 {

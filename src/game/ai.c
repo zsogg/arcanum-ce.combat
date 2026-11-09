@@ -7004,7 +7004,9 @@ AiSide ai_side_rule(bool with_caster, bool with_target, bool fighting,
 // opposite its combat focus - as `combat_hostile_to_party` reads the party's
 // enemies (review 2026-11-08, cross-1: faction 0 is kin to nobody, so a
 // faction-0 pack was one enemy). The focus is read only when kin has not
-// settled it, and an expired summon's handle is no side.
+// settled it, and an expired summon's handle is no side. The player has no
+// combat focus, so outside its own party's casts it is never sided by whom
+// it fights.
 static AiSide ai_tactics_side(int64_t caster_obj, int64_t target_obj, int64_t obj)
 {
     bool has_target = target_obj != OBJ_HANDLE_NULL;
@@ -7126,7 +7128,13 @@ static int ai_judgement_reserve_slot(int64_t obj, bool add)
 
 static void ai_judgement_reserve_note(int64_t obj, int reserve)
 {
-    int slot = ai_judgement_reserve_slot(obj, true);
+    // A missing entry reads as 0, so an NPC with no reserve takes no slot
+    // from a caster's (the second review, AI8-3).
+    int slot = ai_judgement_reserve_slot(obj, reserve > 0);
+
+    if (slot < 0) {
+        return;
+    }
 
     ai_judgement_reserves[slot].obj = obj;
     ai_judgement_reserves[slot].reserve = reserve;
@@ -7467,7 +7475,9 @@ static int ai_judgement_threats(Ai* ai, ObjectList* critters, int64_t protect_ob
 // Rule 3: an area attack's worth with its blast at `centre_obj` - each enemy
 // inside by the damage it would take, each ally of an enemy caster at twice
 // that against it. The player's party is spared by the spells' own data
-// (`Tgt_Non_Party_Critters`), so a follower's allies do not count.
+// (`Tgt_Non_Party_Critters`), so a follower's allies do not count - nor, so
+// far, a non-party NPC on its side only by whom it fights (the second review
+// of 2026-11-09, a question for zsogg).
 static int ai_judgement_area_value(Ai* ai, ObjectList* critters, int spell, int64_t centre_obj, int radius)
 {
     int64_t centre = obj_field_int64_get(centre_obj, OBJ_F_LOCATION);
@@ -7595,23 +7605,27 @@ static int ai_judgement_value(Ai* ai, ObjectList* critters, int action, AiJudged
         int foe_avg;
         int foe_chance;
         int stun_ticks = 0;
-        bool stuns;
+        unsigned int damage_flags = magictech_ai_damage_flags(c->spell);
+        bool stuns = (damage_flags & CDF_STUN) != 0;
 
         // A damage spell the target shrugs off is not a disable.
         if (magictech_ai_expected_damage(ai->obj, OBJ_HANDLE_NULL, c->spell) > 0) {
             return 0;
         }
-        // Neither on the sheet (a dispel, a tech spell, no Rebalance data):
-        // the worth of 2026-11-08.
-        if (share == 0) {
+        // Neither on the sheet (a dispel, a tech spell, no Rebalance data),
+        // or Bonds of Magick, which stops spells and not the blows weighed
+        // here: the worth of 2026-11-08 (the second review, AI8-1).
+        if (share == 0 || c->spell == SPELL_BONDS_OF_MAGICK) {
             return ai_judgement_control_value(object_hp_current(c->target_obj), magictech_ai_value(c->spell, action), land);
         }
         // Held already, it denies nothing more: without `caster tactics`
-        // (code 15) the new worth would stun-lock it.
-        if (ai_tactics_disabled(c->target_obj)) {
+        // (code 15) the new worth would stun-lock it. Nor does Disarm
+        // at a critter with nothing in hand.
+        if (ai_tactics_disabled(c->target_obj)
+            || ((damage_flags & CDF_DROP_WEAPON) != 0
+                && item_wield_get(c->target_obj, ITEM_INV_LOC_WEAPON) == OBJ_HANDLE_NULL)) {
             return 0;
         }
-        stuns = magictech_ai_stuns(c->spell);
         if (stuns) {
             // `anim_goal_animate_stunned`'s length, and the lengthening the
             // engine applies (a StunPct above 100, under `spell stun length`).

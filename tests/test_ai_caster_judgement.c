@@ -224,6 +224,13 @@ TEST(the_turn_rule_protects_only_an_attack_worth_casting)
     cands[1] = judged(40, 500, 5, 5, 10, false); // a buff that strands it
     CHECK_INT(ai_judgement_pick(cands, 2, 200, 7, &reserve), 0);
     CHECK_INT(cands[1].code, 22);
+
+    // Another attack is never held back for the best one: only a buff or
+    // summon waits (the mutation check of 2026-11-09).
+    cands[0] = judged(60, 400, 15, 5, 10, true); // Fireflash
+    cands[1] = judged(40, 300, 10, 5, 10, true); // a lesser attack
+    CHECK_INT(ai_judgement_pick(cands, 2, 200, 7, &reserve), 0);
+    CHECK_INT(cands[1].code, 20);
 }
 
 TEST(a_turn_is_not_spent_on_a_buff_that_strands_the_attack)
@@ -276,8 +283,10 @@ TEST(a_spell_s_stun_is_found)
     magictech_spells[CALLBACK_DAMAGE_SPELL].components[MAGICTECH_ACTION_BEGIN].cnt = 1;
     magictech_spells[CALLBACK_DAMAGE_SPELL].components[MAGICTECH_ACTION_BEGIN].entries = &burn;
 
-    CHECK(magictech_ai_stuns(STUN_SPELL));
-    CHECK(!magictech_ai_stuns(CALLBACK_DAMAGE_SPELL));
+    CHECK((magictech_ai_damage_flags(STUN_SPELL) & CDF_STUN) != 0);
+    CHECK((magictech_ai_damage_flags(CALLBACK_DAMAGE_SPELL) & CDF_STUN) == 0);
+    stun.data.damage.damage_flags = CDF_DROP_WEAPON;
+    CHECK(magictech_ai_damage_flags(STUN_SPELL) == CDF_DROP_WEAPON);
 
     free(magictech_spells);
     magictech_spells = NULL;

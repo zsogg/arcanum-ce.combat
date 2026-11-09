@@ -3388,9 +3388,14 @@ void item_wield_best(int64_t critter_obj, int inventory_location, int64_t target
         if (item_check_wield(equipped_item_obj, inventory_location, critter_obj) == ITEM_CANNOT_OK
             && inventory_location != ITEM_INV_LOC_WEAPON) {
             best_item_worth = item_worth(equipped_item_obj);
-        } else {
+        } else if (!follower_yields) {
             item_unequip_location(critter_obj, inventory_location);
             equipped_item_obj = OBJ_HANDLE_NULL;
+            best_item_obj = OBJ_HANDLE_NULL;
+        } else {
+            // CE (the second review of 2026-11-09): a yielding follower's
+            // weapon stays in hand until one that hurts replaces it, so its
+            // wield scripts are not run again for nothing.
             best_item_obj = OBJ_HANDLE_NULL;
         }
     }

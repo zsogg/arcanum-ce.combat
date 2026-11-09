@@ -390,9 +390,9 @@ int magictech_upkeep_cost(int magictech);
 // damage, averaged and scaled as the cast scales it, less the target's
 // resistance; fatigue and poison at half. 0 for a spell that does no damage.
 int magictech_ai_expected_damage(int64_t caster_obj, int64_t target_obj, int magictech);
-// CE (card AI-8; review 2026-11-08, casting-2): whether any of the spell's
-// damage stuns.
-bool magictech_ai_stuns(int magictech);
+// CE (card AI-8; review 2026-11-08, casting-2): the `CDF_` flags of all the
+// spell's damage components - whether it stuns, drops a weapon.
+unsigned int magictech_ai_damage_flags(int magictech);
 // CE (card AI-8): the percent chance a cast of the spell by `attacker_obj`
 // takes `target_obj`, by `magictech_cast_spell_fail_chance`'s rules with the
 // saving throw at its odds, unrolled. 100 for the caster itself or a tile.

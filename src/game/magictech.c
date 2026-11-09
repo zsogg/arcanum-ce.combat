@@ -1884,26 +1884,26 @@ int magictech_ai_expected_damage(int64_t caster_obj, int64_t target_obj, int mag
 
 // CE (`caster judgement`, AI-8; review 2026-11-08, casting-2): see
 // `magictech.h`. Stun's damage is in its [End].
-bool magictech_ai_stuns(int magictech)
+unsigned int magictech_ai_damage_flags(int magictech)
 {
+    unsigned int flags = 0;
     int phase;
     int idx;
 
     if (magictech_spells == NULL || magictech < 0 || magictech >= MT_SPELL_COUNT) {
-        return false;
+        return 0;
     }
 
     for (phase = 0; phase < MAGICTECH_ACTION_COUNT; phase++) {
         MagicTechComponentList* list = &(magictech_spells[magictech].components[phase]);
 
         for (idx = 0; idx < list->cnt; idx++) {
-            if (list->entries[idx].type == MTC_DAMAGE
-                && (list->entries[idx].data.damage.damage_flags & CDF_STUN) != 0) {
-                return true;
+            if (list->entries[idx].type == MTC_DAMAGE) {
+                flags |= (unsigned int)list->entries[idx].data.damage.damage_flags;
             }
         }
     }
-    return false;
+    return flags;
 }
 
 // 0x4502E0
