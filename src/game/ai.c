@@ -7248,6 +7248,9 @@ static int ai_tactics_refusal(int64_t caster_obj, int64_t target_obj, int spell)
 // The share of its target's damage a debuff denies (casting-2). shortcut: one
 // share for every debuff; a sheet column if they are tuned apart.
 #define AI_JUDGEMENT_DEBUFF_PERCENT 50
+// Rule 3: an ally an area attack would hit counts against it at this share
+// of its damage, rounded up (zsogg, 2026-11-09; it was twice).
+#define AI_JUDGEMENT_ALLY_PERCENT 110
 
 bool ai_judgement_applies(int64_t obj)
 {
@@ -7483,7 +7486,7 @@ int ai_judgement_area_worth(AiSide side, bool downed, bool spared, int worth)
         return downed ? 0 : worth;
     }
     if (side == AI_SIDE_CASTER && !spared) {
-        return -2 * worth;
+        return -((worth * AI_JUDGEMENT_ALLY_PERCENT + 99) / 100);
     }
     return 0;
 }

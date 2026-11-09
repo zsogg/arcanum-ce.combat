@@ -312,8 +312,8 @@ AiSide ai_side_rule(bool with_caster, bool with_target, bool fighting,
     bool focus_with_caster, bool focus_with_target);
 // CE: AI-8 rule 3, one critter in an area attack's blast (zsogg 2026-11-09):
 // an enemy by the damage it would take (`worth`; a `downed` one nothing), an
-// ally the spell does not spare at twice that against it, anyone else
-// nothing. Pure.
+// ally the spell does not spare at 1.1 times that (rounded up) against it,
+// anyone else nothing. Pure.
 int ai_judgement_area_worth(AiSide side, bool downed, bool spared, int worth);
 // CE: the same - whether an area spell's target rules spare `obj` (its player
 // leader `obj_leader`) from a caster whose player leader is `caster_leader`:

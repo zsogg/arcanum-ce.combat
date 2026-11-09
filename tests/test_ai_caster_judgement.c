@@ -91,13 +91,19 @@ TEST(an_area_spell_counts_the_allies_it_does_not_spare)
 
     CHECK_INT(ai_judgement_area_worth(AI_SIDE_TARGET, false, false, 30), 30);
     CHECK_INT(ai_judgement_area_worth(AI_SIDE_TARGET, true, false, 30), 0); // downed
-    CHECK_INT(ai_judgement_area_worth(AI_SIDE_CASTER, false, false, 30), -60); // the guard
+    CHECK_INT(ai_judgement_area_worth(AI_SIDE_CASTER, false, false, 30), -33); // the guard, at 1.1
+    CHECK_INT(ai_judgement_area_worth(AI_SIDE_CASTER, false, false, 5), -6); // rounded up
+    CHECK_INT(ai_judgement_area_worth(AI_SIDE_CASTER, false, false, 0), 0);
     CHECK_INT(ai_judgement_area_worth(AI_SIDE_CASTER, false, true, 30), 0); // the party
     CHECK_INT(ai_judgement_area_worth(AI_SIDE_NONE, false, false, 30), 0);
-    // Two bandits and the guard in the blast: not worth it.
+    // A bandit and the guard in the blast: not worth it; two bandits and the
+    // guard are.
+    CHECK(ai_judgement_area_worth(AI_SIDE_TARGET, false, false, 30)
+            + ai_judgement_area_worth(AI_SIDE_CASTER, false, false, 30)
+        < 0);
     CHECK(ai_judgement_area_worth(AI_SIDE_TARGET, false, false, 30) * 2
             + ai_judgement_area_worth(AI_SIDE_CASTER, false, false, 30)
-        <= 0);
+        > 0);
 }
 
 TEST(the_budget_keeps_back_the_best_attacks)
