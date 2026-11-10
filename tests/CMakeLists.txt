@@ -1253,6 +1253,8 @@ target_link_options(arcanum-tests PRIVATE
     "-Wl,--wrap=magictech_release"
     # test_compare_fixes: award XP on Hard (porting bug #377).
     "-Wl,--wrap=gamelib_game_difficulty_get"
+    # test_dialog_conditions: count `co`'s attack (porting bug #381).
+    "-Wl,--wrap=ai_attack"
 )
 endif() # ARCANUM_TESTS_GNU_LINK
 

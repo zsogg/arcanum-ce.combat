@@ -9,6 +9,8 @@
 // - #70 `script_local_counter_get` returned every higher counter with the one
 //   asked for (original masks at 0x44500C), which `lc N V` reads.
 // - #380 `fo` read inverted (original: 0x4156A0-0x4156C3, 0x41595D).
+// - #381 a code letter with nothing after it: the original fails the condition
+//   (0x415152) and returns from the actions before their attack (0x415C50).
 //
 // The condition cases go through `dialog_collect_pc_options`, which runs every
 // option's conditions, so they test the dialogue as the engine reads it. The
@@ -32,6 +34,23 @@
 int dialog_collect_pc_options(DialogState* state, int* out);
 int dialog_parse_params(int* values, char* str);
 bool dialog_check_conditions(DialogState* a1, char* a2);
+bool dialog_perform_actions(DialogState* a1, char* a2, int a3);
+
+// `co`'s attack, counted instead of made while `attack_calls` is armed (>= 0)
+// (tests/CMakeLists.txt wraps it); other suites get the real one.
+static int attack_calls = -1;
+
+void __real_ai_attack(int64_t target_obj, int64_t source_obj, int loudness, unsigned int flags);
+void __wrap_ai_attack(int64_t target_obj, int64_t source_obj, int loudness, unsigned int flags);
+
+void __wrap_ai_attack(int64_t target_obj, int64_t source_obj, int loudness, unsigned int flags)
+{
+    if (attack_calls < 0) {
+        __real_ai_attack(target_obj, source_obj, loudness, flags);
+        return;
+    }
+    attack_calls++;
+}
 
 #define DLG_DIR "./arcanum_test_dialog"
 
@@ -175,6 +194,14 @@ static bool cond(const char* line)
     return dialog_check_conditions(&direct, buf);
 }
 
+static bool act(const char* line)
+{
+    char buf[128];
+
+    snprintf(buf, sizeof(buf), "%s", line);
+    return dialog_perform_actions(&direct, buf, 0);
+}
+
 TEST(fo_one_passes_for_a_follower_of_the_pc)
 {
     int64_t other;
@@ -205,6 +232,48 @@ TEST(fo_one_passes_for_a_follower_of_the_pc)
     direct_teardown();
 }
 
+TEST(a_lone_code_letter_fails_the_condition)
+{
+    CHECK(direct_setup());
+    if (direct.npc_obj == OBJ_HANDLE_NULL) {
+        return;
+    }
+
+    // Controls: a passing code, and trailing separators after it.
+    CHECK(cond("fo 0"));
+    CHECK(cond("fo 0, "));
+    CHECK(cond(" 7 "));
+    // One character after the last code letter: the original's 0x415156.
+    CHECK(!cond("z"));
+    CHECK(!cond("$"));
+    CHECK(!cond("fo 0, z"));
+    CHECK(!cond("fo 0 x"));
+
+    direct_teardown();
+}
+
+TEST(a_lone_code_letter_ends_the_actions_before_the_attack)
+{
+    CHECK(direct_setup());
+    if (direct.npc_obj == OBJ_HANDLE_NULL) {
+        return;
+    }
+    attack_calls = 0;
+
+    // Control: `co` at the end attacks once (0x4166FB-0x416717).
+    CHECK(act("co"));
+    CHECK_INT(attack_calls, 1);
+    CHECK(act("co, "));
+    CHECK_INT(attack_calls, 2);
+    // A lone letter after it returns through 0x41671F, past the attack.
+    CHECK(act("co a"));
+    CHECK(act("co, $"));
+    CHECK_INT(attack_calls, 2);
+
+    attack_calls = -1;
+    direct_teardown();
+}
+
 void test_dialog_conditions_suite(void)
 {
     RUN(at_most_n_gold_passes_for_a_party_short_of_money);
@@ -213,4 +282,6 @@ void test_dialog_conditions_suite(void)
     RUN(a_list_with_a_range_is_left_as_it_was);
     RUN(a_local_counter_is_one_byte);
     RUN(fo_one_passes_for_a_follower_of_the_pc);
+    RUN(a_lone_code_letter_fails_the_condition);
+    RUN(a_lone_code_letter_ends_the_actions_before_the_attack);
 }

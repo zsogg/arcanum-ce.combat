@@ -1550,7 +1550,10 @@ bool dialog_check_conditions(DialogState* a1, char* a2)
 
         code[0] = *pch++;
         if (*pch == '\0') {
-            break;
+            // FIX (porting bug #381): a code letter with nothing after it
+            // fails the whole condition (0x415152-0x415156, `je 0x415aed`, the
+            // `return 0` exit); CE broke out of the loop and passed it.
+            return false;
         }
 
         code[1] = *pch++;
@@ -2062,7 +2065,11 @@ bool dialog_perform_actions(DialogState* a1, char* a2, int a3)
 
         code[0] = *pch++;
         if (*pch == '\0') {
-            break;
+            // FIX (porting bug #381): a code letter with nothing after it
+            // returns at once (0x415C4C-0x415C50, `je 0x41671f`), past the
+            // attack a `co` earlier in the string asked for (0x4166FB-0x41671C);
+            // CE broke out of the loop and attacked.
+            return v57;
         }
 
         code[1] = *pch++;
