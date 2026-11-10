@@ -8,6 +8,7 @@
 //   dialog file's cached string (original restores it at 0x417FD9).
 // - #70 `script_local_counter_get` returned every higher counter with the one
 //   asked for (original masks at 0x44500C), which `lc N V` reads.
+// - #380 `fo` read inverted (original: 0x4156A0-0x4156C3, 0x41595D).
 //
 // The condition cases go through `dialog_collect_pc_options`, which runs every
 // option's conditions, so they test the dialogue as the engine reads it. The
@@ -18,6 +19,7 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "game/critter.h"
 #include "game/dialog.h"
 #include "game/obj.h"
 #include "game/script.h"
@@ -29,6 +31,7 @@
 // Globalized out of dialog.c by the build (tests/CMakeLists.txt).
 int dialog_collect_pc_options(DialogState* state, int* out);
 int dialog_parse_params(int* values, char* str);
+bool dialog_check_conditions(DialogState* a1, char* a2);
 
 #define DLG_DIR "./arcanum_test_dialog"
 
@@ -145,6 +148,63 @@ TEST(a_local_counter_is_one_byte)
     obj_harness_destroy(obj);
 }
 
+static DialogState direct;
+
+static bool direct_setup(void)
+{
+    if (!obj_harness_init()) {
+        return false;
+    }
+    memset(&direct, 0, sizeof(direct));
+    direct.pc_obj = obj_harness_create_proto(OBJ_TYPE_PC);
+    direct.npc_obj = obj_harness_create_proto(OBJ_TYPE_NPC);
+    return direct.pc_obj != OBJ_HANDLE_NULL && direct.npc_obj != OBJ_HANDLE_NULL;
+}
+
+static void direct_teardown(void)
+{
+    obj_harness_destroy(direct.npc_obj);
+    obj_harness_destroy(direct.pc_obj);
+}
+
+static bool cond(const char* line)
+{
+    char buf[128];
+
+    snprintf(buf, sizeof(buf), "%s", line);
+    return dialog_check_conditions(&direct, buf);
+}
+
+TEST(fo_one_passes_for_a_follower_of_the_pc)
+{
+    int64_t other;
+
+    CHECK(direct_setup());
+    if (direct.npc_obj == OBJ_HANDLE_NULL) {
+        return;
+    }
+    other = obj_harness_create_proto(OBJ_TYPE_NPC);
+
+    // No leader: `fo 0` passes, `fo 1` fails; any other value passes.
+    CHECK(cond("fo 0"));
+    CHECK(!cond("fo 1"));
+    CHECK(cond("fo 2"));
+
+    // Following the PC: Weldo's {294}/{301} `fo 1` is offered.
+    critter_leader_set(direct.npc_obj, direct.pc_obj);
+    CHECK(!cond("fo 0"));
+    CHECK(cond("fo 1"));
+    CHECK(cond("fo 2"));
+
+    // Following someone else reads as not following the PC.
+    critter_leader_set(direct.npc_obj, other);
+    CHECK(cond("fo 0"));
+    CHECK(!cond("fo 1"));
+
+    obj_harness_destroy(other);
+    direct_teardown();
+}
+
 void test_dialog_conditions_suite(void)
 {
     RUN(at_most_n_gold_passes_for_a_party_short_of_money);
@@ -152,4 +212,5 @@ void test_dialog_conditions_suite(void)
     RUN(a_range_reads_the_same_the_second_time);
     RUN(a_list_with_a_range_is_left_as_it_was);
     RUN(a_local_counter_is_one_byte);
+    RUN(fo_one_passes_for_a_follower_of_the_pc);
 }

@@ -1800,12 +1800,18 @@ bool dialog_check_conditions(DialogState* a1, char* a2)
             }
             break;
         case DIALOG_COND_FO:
+            // FIX (porting bug #380): `fo 1` passes for a follower of the PC
+            // and `fo 0` for anyone else. The original computes `leader == pc`
+            // (0x4156A0-0x4156BD) and fails `fo 0` when it holds (0x4156C3)
+            // and `fo 1` when it does not (0x41595D), as Troika's Eventscripts
+            // says; CE had them swapped, so a following Weldo hid "I need you
+            // to do something..." (01077 {294}, {301}).
             if (value == 0) {
-                if (critter_leader_get(a1->npc_obj) != a1->pc_obj) {
+                if (critter_leader_get(a1->npc_obj) == a1->pc_obj) {
                     return false;
                 }
             } else if (value == 1) {
-                if (critter_leader_get(a1->npc_obj) == a1->pc_obj) {
+                if (critter_leader_get(a1->npc_obj) != a1->pc_obj) {
                     return false;
                 }
             }
