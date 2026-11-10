@@ -528,8 +528,12 @@ static bool replay_target_is_live(int64_t obj)
         return false;
     }
 
+    // A dead critter a spell lets the player speak with is still one: the
+    // click path talks to it (`intgame.c`, `OSF_SPOKEN_WITH_DEAD`), as to
+    // Pelonious Schuyler's summoned spirit (QA1 phase 4, 2026-11-10).
     if (obj_type_is_critter(obj_field_int32_get(obj, OBJ_F_TYPE))
-        && critter_is_dead(obj)) {
+        && critter_is_dead(obj)
+        && (obj_field_int32_get(obj, OBJ_F_SPELL_FLAGS) & OSF_SPOKEN_WITH_DEAD) == 0) {
         return false;
     }
 
