@@ -342,6 +342,20 @@ TEST(a_parent_marker_can_name_node_zero)
     }
 }
 
+// A bare `@` is no marker: the option stays unlinked, and in particular is not
+// linked to node 0.
+TEST(a_bare_at_sign_links_nothing_to_node_zero)
+{
+    int out[8];
+    int count = collect(
+        "{0}{Greetings.}{}{}{}{0}{}\r\n"
+        "{10}{Another node.}{}{}{}{0}{}\r\n"
+        "{11}{Stray.}{}{1}{@}{0}{}\r\n",
+        0, out);
+
+    CHECK_INT(count, 0);
+}
+
 void test_dialog_options_suite(void)
 {
     RUN(adjacent_options_are_collected_in_order);
@@ -356,6 +370,7 @@ void test_dialog_options_suite(void)
     RUN(an_unknown_node_offers_nothing);
     RUN(a_node_numbered_zero_lists_its_options_once);
     RUN(a_parent_marker_can_name_node_zero);
+    RUN(a_bare_at_sign_links_nothing_to_node_zero);
     RUN(a_lone_at_sign_in_an_option_keeps_the_text_and_does_not_crash);
     RUN(a_paired_unknown_token_is_still_dropped);
 }
