@@ -14,10 +14,12 @@
 //       `dialog_build_npc_reply` does when that line is shown), and print the
 //       watched state.
 //
-//     arcanum-dlg-steps <repo-list> <case-file>
+//     arcanum-dlg-steps <repo-list> <case-file> [<layer>]
 //
 // `<repo-list>` is one repository per line, lowest priority first, as for
-// `arcanum-dlg-dump`. The case file, one command per line:
+// `arcanum-dlg-dump`. `<layer>`, if given, is mounted over them: a directory
+// laid out as the game's `data/`, such as a mod's `modkit build` output, so
+// the cases run against the mod's files. The case file, one command per line:
 //
 //     case <id> <node> <option or -1> <npc line or -1> <dlg path, to the end>
 //     ss N | gf N V | gv N V | qu N S | lf N V
@@ -49,7 +51,8 @@
 //
 // Not registered as a test: it needs the game's archives. `dialog.c` is
 // included, as in dlg_dump.c, for its static functions. Mount only `.dat`
-// files: mounting a directory deletes its `TIGCache`. Run it from a scratch
+// files and a `<layer>` without a `TIGCache` (one with is refused): mounting a
+// directory deletes its `TIGCache`. Run it from a scratch
 // directory: the object harness writes `rules/effect.mes` under the cwd.
 
 #include "../src/game/dialog.c"
@@ -394,8 +397,8 @@ int main(int argc, char** argv)
     int npc_line = -1;
     char id[128];
 
-    if (argc != 3) {
-        fprintf(stderr, "usage: %s <repo-list> <case-file>\n", argv[0]);
+    if (argc != 3 && argc != 4) {
+        fprintf(stderr, "usage: %s <repo-list> <case-file> [<layer>]\n", argv[0]);
         return 2;
     }
 
@@ -408,6 +411,18 @@ int main(int argc, char** argv)
     for (index = 0; index < repos_count; index++) {
         if (!tig_file_repository_add(repos[index])) {
             fprintf(stderr, "cannot mount %s\n", repos[index]);
+            return 1;
+        }
+    }
+
+    if (argc == 4) {
+        snprintf(path, sizeof(path), "%s/TIGCache", argv[3]);
+        if (SDL_GetPathInfo(path, NULL)) {
+            fprintf(stderr, "refusing %s: mounting it would delete its TIGCache\n", argv[3]);
+            return 1;
+        }
+        if (!tig_file_repository_add(argv[3])) {
+            fprintf(stderr, "cannot mount %s\n", argv[3]);
             return 1;
         }
     }
