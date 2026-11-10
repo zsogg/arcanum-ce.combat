@@ -23,6 +23,23 @@ Magick Obscura*.
 - The original's 'quirks' are kept on purpose. Section 6 lists reachable
   quirks.
 
+**Release 5 in brief.** Release 4 came out on 2026-11-07; release 5 is a
+beta. It adds:
+
+- The main quest, unblocked and corrected: the Bates mansion gate in Tarant
+  opens when its captain says "Go right in" (section 3.2), and four
+  main-quest dialogue lines the original's data spelt wrong now work, always
+  on (Main-Line Fixes, section 3.1)
+- Fixes from an audit of the quest and dialogue code: experience on Hard,
+  Weldo's follower orders, options listed twice, locked doors from inside
+  (section 3.2)
+- In the Combat Rebalance: casters weigh their spells and cast the one worth
+  the most, enemies and followers alike; friendly fire that only grazes no
+  longer turns a helper on you; a protection is no longer cast twice; and
+  the fixes of a review of the whole AI
+
+What release 5 adds is marked "new in release 5".
+
 **Release 4 in brief.** Release 3 came out on 2026-11-06; release 4 is a
 beta. It adds Arcanum from Steam:
 
@@ -145,11 +162,32 @@ magazine/cylinder mechanic and must be reloaded.
 - **They pick weapons they can use:** suited to your armor, and ones they can
   afford to swing. (In the original an NPC could pick a weapon that cost more
   than its turn, and never attack.)
-- **Casters cast**, and summon (up to 3 creatures).
+- **Casters cast**, and summon (up to 3 creatures). They no longer recast a
+  spell they cannot keep up beside the ones they maintain, which in the
+  original they did until exhausted (new in release 5).
+- **Casters weigh their spells** (new in release 5): an enemy caster or a follower
+  casts the spell worth the most for its fatigue - an attack by the damage
+  it deals, a disabling spell by the harm it saves, a summon by how close
+  the enemy is, a protection by what threatens it. It keeps back enough for
+  three of its best attacks, aims an area spell where it catches the most
+  enemies, casts nothing worth less than its own weapon's blow, and in
+  turn-based does not spend the points its attack needs on a buff. In the
+  original it took the first spell its lists allowed.
 - **Targets are chosen better:** undead hold their ground, and hunters go for
-  gunners and casters.
+  gunners and casters they can see or hear (new in release 5).
 - **Followers on Defensive** fight within 8 tiles of you.
-- **Potions:** an enemy drinks at most two a fight, and drinking costs 6 AP.
+- **Potions:** an enemy drinks at most two a fight, and drinking costs 6 AP,
+  or a whole turn for a critter with only 5 (new in release 5).
+- **A protection is cast once** (new in release 5): in real time a caster could cast
+  and pay for the same spell twice, 0.4 seconds apart.
+- **Friendly fire that only grazes** (new in release 5) - a spell's splash, a burning
+  area or a stray shot that catches someone it was not aimed at, who is on
+  the caster's side or busy fighting someone else - no longer turns them or
+  their friends on the caster. A villager helping you against a wolf,
+  singed by your companion's Jolt, keeps fighting the wolf. Your own grazes
+  cost a little of their regard, never enough to make them attack you. In
+  the original even a stray arrow made such a helper an enemy of the whole
+  party.
 - **Enemy casters** (new in release 3) put up a protective spell first, keep
   an area spell off their own side unless it also catches two of yours, and
   leave alone a foe who is already disabled or has just recovered. A caster
@@ -180,7 +218,8 @@ magazine/cylinder mechanic and must be reloaded.
   unless you already have them or are too technological for them to work.
   Otherwise it protects itself, as before.
 - A follower's area spells already spared you and the party in the
-  original, so there is no friendly fire to avoid.
+  original. It now also counts a villager or other helper its blast would
+  catch, and casts elsewhere when that costs more than it gains (new in release 5).
 
 *Healing*
 
@@ -221,6 +260,9 @@ magazine/cylinder mechanic and must be reloaded.
   back stays there while it can use it. In the original it re-chose its
   weapon by damage, and its armour and rings by price, at every change to
   its pack and at every fight. To let it choose, empty the slot.
+- **A weapon that can hurt:** a follower whose weapon cannot hurt its target
+  (one it is untrained in, or one the armour stops whole) changes to one that
+  can, and keeps its own if none can (new in release 5).
 - **The gun comes back:** a gunman follower who switched to its melee
   backup when out of ammunition or with an enemy beside it has the gun back
   in its hands after the fight.
@@ -396,7 +438,10 @@ scripts keep the original checks, so no quest changes.
 
 **The opening, poison and prowling**
 
-- **The opening:** at most one enemy acts before your first turn.
+- **The opening:** at most one enemy acts before your first turn. Fixed in
+  release 5: with Simultaneous Turns that enemy no longer loses its first
+  turn, and loading a save mid-fight no longer holds back the enemies who
+  act after you for a round.
 - **Poison** ticks every turn in combat (every 2 seconds in real time), for
   1 plus a hundredth of the poison level, so it bites during the fight. In
   the original it ticked once in fifteen turn-based rounds, for 1 to 3. (New
@@ -508,7 +553,8 @@ New since release 1; as yet untested in play.
 - **Initiative:** in the original turn-based game the party acts last in
   every round, however quick it is. With this mod every combatant rolls
   Dexterity plus 1 to 10 when the fight starts and keeps it for the fight;
-  turns go highest first, and ties go to the party.
+  turns go highest first, and ties go to the party. A save loaded mid-fight
+  keeps the order (new in release 5).
 - **Awareness:** before a random encounter appears, the party's sharpest
   member (best Perception plus Intelligence, you or a conscious follower) may
   spot it coming: "Virgil spots Lesser Boar ahead." You then choose to
@@ -762,6 +808,26 @@ These were wrong in the original 2001 game itself. CE fixes them, always.
 - Summoned creatures keep their own colours.
 - An effect's light is added once, not twice or not at all.
 
+**Quests** (Main-Line Fixes, new in release 5)
+
+Four lines of the main quest's dialogue are typos in the original's data, so
+the original and CE both read them wrong. CE ships them corrected, always on;
+`mod main-line-fixes=0` in `arcanum-ce.cfg` turns the fix off. A fixed line
+applies from the next conversation, in any save.
+
+- A character of low Intelligence who takes Raven's errand to the Dark Elves
+  gets the journal entry "Find out about M'in Gorad", and its completion and
+  experience on reporting back; the original set an unrelated flag instead.
+- A female elf with Charisma 10 is offered Myrth's "[Fluttering your
+  eyelashes] No, I am not from around here"; the original tested a code the
+  dialogue language does not have, so never offered it.
+- Surly Virgil answers a character of low Intelligence's "What we do now?"
+  with the hint to meet Nasrudin at the Ring of Brodgar, as he answers a
+  clever one; the original asked for a story stage the game never reaches.
+- Hippington offers a character of low Intelligence "Me look for giant too."
+  only once Myrth has given the pelt quest; a misplaced comma in the
+  original offered it always.
+
 **Smaller fixes, with no ordinary effect on play**
 
 - A mod that empties the sleeping text no longer crashes the game when a
@@ -927,7 +993,13 @@ then what release 1 did.
   asks for it; before, it was silently skipped. (#296)
 - A creature or object a script creates where there is no room around it
   appears on the spot the script named; before, it appeared in the map's
-  corner. (#382)
+  corner. (#382, new in release 5)
+- A script that unlocks a door for good leaves it unlocked: the captain at
+  the Bates mansion gate in Tarant says "Go right in" and the gate opens.
+  Before, it stayed locked, which stopped the main quest there; five shipped
+  scripts unlock this way. (#376, new in release 5)
+- The elf trader and the Tarant paperboy, whose conversations start at line
+  0, list each option once; before, some appeared twice. (#379, new in release 5)
 
 **Characters, skills and followers**
 
@@ -949,9 +1021,9 @@ then what release 1 did.
 - Auto-levelled characters raise stats to their planned targets; before, race,
   background and other bonuses made them stop early or overshoot. (#91)
 - On Hard, every experience award, quests included, gives three quarters of
-  the experience; before, it gave half. (#377)
+  the experience; before, it gave half. (#377, new in release 5)
 - Weldo's follower orders ("I need you to do something...") are offered while
-  he follows you; before, a following Weldo hid them. (#380)
+  he follows you; before, a following Weldo hid them. (#380, new in release 5)
 - Killing or robbing good people can drive your alignment as low as the
   original allows; before, it stopped well short. (#93)
 - When a follower volunteers to pick a lock, the follower does the picking;
@@ -1101,9 +1173,9 @@ then what release 1 did.
 - Each newly started animation begins with a clean slate; release 1 could carry
   over a leftover step and target tile from an earlier one. (#151)
 - Your party can leave a building by a locked door from inside; before, some
-  such doors needed a key or Pick Locks. (#383)
+  such doors needed a key or Pick Locks. (#383, new in release 5)
 - A path around an obstacle to a spot exactly 32 tiles away is refused, as in
-  the original; before, one was found. (#384)
+  the original; before, one was found. (#384, new in release 5)
 
 **Interface and screens**
 
@@ -1291,16 +1363,18 @@ then what release 1 did.
   pixel off. (#368)
 - Scaled objects' overlays, shadows and wading lines, and where you can click
   them, are rounded as in the original; before, they could be a pixel off.
-  (#385)
+  (#385, new in release 5)
 
-**Fixes with no effect in ordinary play** (114), listed for completeness:
+**Fixes with no effect in ordinary play** (116), listed for completeness:
 
-- **The world editor and modding** (18): saving a map's objects, terrain codes,
+- **The world editor and modding** (20): saving a map's objects, terrain codes,
   the sector grid, wall lines and deleting parts of long walls in the editor;
   modded text files with a stray carriage return; two-part light colours in
-  modded effects; modded greetings that open a screen or end in a comma.
-  (#155, #161, #162, #166, #187, #188, #191, #192, #291, #297, #320, #321,
-  #323, #324, #337, #339, #390, #391)
+  modded effects; modded greetings that open a screen or end in a comma;
+  modded dialogue conditions that end in a lone code letter, and modded
+  scripts that set a local flag to more than 1. (#155, #161, #162, #166,
+  #187, #188, #191, #192, #291, #297, #320, #321, #323, #324, #337, #339,
+  #378, #381, #390, #391)
 - **Screens and menus** (11): buttons and options with missing art or values,
   scroll-bar bookkeeping, a race-list search, a stray Escape after quitting,
   windows that fail to open, and save-screen text that cannot break. (#203,
@@ -1704,7 +1778,8 @@ does the same. These are the ones a player can meet.
 - **Magickal aptitude never lengthens a spell.** Only college mastery
   doubles a spell's duration.
 - **Maintained spells are not ended for range**, and NPC casters count no
-  maintained spells, so they may choose one the game will not keep up.
+  maintained spells, so they may choose one the game will not keep up (the
+  Combat Rebalance counts them, new in release 5).
 - **Spells are learned on Willpower.** The "IQ" a spell lists is checked
   against Willpower, and every spell's Intelligence minimum is 5.
 

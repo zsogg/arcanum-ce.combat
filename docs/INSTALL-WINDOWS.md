@@ -132,6 +132,10 @@ to play the same game. Where it differs, it is on purpose:
   - quitting from inside a conversation crashed the game;
   - dragging items glitched;
   - several drawing errors.
+- **Four main-quest dialogue typos, fixed** (Main-Line Fixes, always on):
+  lines in Raven's, Myrth's, Surly Virgil's and Hippington's conversations
+  that the original's data spelt wrong, so they gave the wrong quest or were
+  never offered. Its line in `arcanum-ce.cfg` is `mod main-line-fixes`.
 - **Safe saving.** A failed or interrupted save no longer damages the save it
   was replacing.
 - **The Unofficial Arcanum Patch's fixes**, all of them, and three of its
