@@ -947,6 +947,8 @@ then what release 1 did.
   background and other bonuses made them stop early or overshoot. (#91)
 - On Hard, every experience award, quests included, gives three quarters of
   the experience; before, it gave half. (#377)
+- Weldo's follower orders ("I need you to do something...") are offered while
+  he follows you; before, they were hidden then. (#380)
 - Killing or robbing good people can drive your alignment as low as the
   original allows; before, it stopped well short. (#93)
 - When a follower volunteers to pick a lock, the follower does the picking;
