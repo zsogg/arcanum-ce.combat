@@ -170,6 +170,79 @@ target_link_options(arcanum-emudiff-oracle PRIVATE
     "-Wl,--wrap=gamelib_game_difficulty_get"
 )
 
+# The dialogue interpreter's callees (`DLGSTUB_LIST` in emudiff_oracle.c):
+# each wrapper calls the real function except inside the
+# `dialog_check_conditions` and `dialog_perform_actions` cases.
+target_link_options(arcanum-emudiff-oracle PRIVATE
+    "-Wl,--wrap=obj_field_int32_get"
+    "-Wl,--wrap=obj_field_int64_get"
+    "-Wl,--wrap=object_destroy"
+    "-Wl,--wrap=object_list_destroy"
+    "-Wl,--wrap=object_list_followers"
+    "-Wl,--wrap=script_global_var_get"
+    "-Wl,--wrap=script_global_var_set"
+    "-Wl,--wrap=script_global_flag_get"
+    "-Wl,--wrap=script_global_flag_set"
+    "-Wl,--wrap=script_pc_var_get"
+    "-Wl,--wrap=script_pc_var_set"
+    "-Wl,--wrap=script_pc_flag_get"
+    "-Wl,--wrap=script_pc_flag_set"
+    "-Wl,--wrap=script_local_flag_get"
+    "-Wl,--wrap=script_local_flag_set"
+    "-Wl,--wrap=script_local_counter_get"
+    "-Wl,--wrap=script_local_counter_set"
+    "-Wl,--wrap=script_story_state_get"
+    "-Wl,--wrap=script_story_state_set"
+    "-Wl,--wrap=critter_origin_set"
+    "-Wl,--wrap=critter_kill"
+    "-Wl,--wrap=critter_pc_leader_get"
+    "-Wl,--wrap=critter_leader_get"
+    "-Wl,--wrap=critter_follow"
+    "-Wl,--wrap=critter_disband"
+    "-Wl,--wrap=critter_give_xp"
+    "-Wl,--wrap=critter_stay_close"
+    "-Wl,--wrap=critter_spread_out"
+    "-Wl,--wrap=critter_substitute_inventory_get"
+    "-Wl,--wrap=item_parent"
+    "-Wl,--wrap=item_transfer"
+    "-Wl,--wrap=item_find_by_name"
+    "-Wl,--wrap=item_gold_get"
+    "-Wl,--wrap=item_gold_transfer"
+    "-Wl,--wrap=item_remove"
+    "-Wl,--wrap=item_drop_at_loc"
+    "-Wl,--wrap=ai_attack"
+    "-Wl,--wrap=ai_npc_wait"
+    "-Wl,--wrap=ai_npc_unwait"
+    "-Wl,--wrap=ai_check_follow"
+    "-Wl,--wrap=stat_level_get"
+    "-Wl,--wrap=stat_base_get"
+    "-Wl,--wrap=stat_base_set"
+    "-Wl,--wrap=spell_college_level_get"
+    "-Wl,--wrap=newspaper_enqueue"
+    "-Wl,--wrap=reaction_met_before"
+    "-Wl,--wrap=reaction_get"
+    "-Wl,--wrap=reaction_adj"
+    "-Wl,--wrap=reputation_has"
+    "-Wl,--wrap=reputation_add"
+    "-Wl,--wrap=reputation_remove"
+    "-Wl,--wrap=quest_state_get"
+    "-Wl,--wrap=quest_state_set"
+    "-Wl,--wrap=quest_get_xp"
+    "-Wl,--wrap=rumor_qstate_get"
+    "-Wl,--wrap=rumor_qstate_set"
+    "-Wl,--wrap=rumor_known_set"
+    "-Wl,--wrap=rumor_known_get"
+    "-Wl,--wrap=basic_skill_level"
+    "-Wl,--wrap=basic_skill_training_get"
+    "-Wl,--wrap=basic_skill_training_set"
+    "-Wl,--wrap=tech_skill_level"
+    "-Wl,--wrap=tech_skill_training_get"
+    "-Wl,--wrap=tech_skill_training_set"
+    "-Wl,--wrap=training_min_skill_level_required"
+    "-Wl,--wrap=area_is_known"
+    "-Wl,--wrap=area_set_known"
+    "-Wl,--wrap=area_of_object")
+
 # `static` hides several of `art.c`'s most testable functions from the oracle -
 # `tig_art_blt_flags_convert`, `tig_art_build_path`,
 # `tig_art_header_num_rotations` are pure, are in the blit path, and would not
@@ -573,33 +646,6 @@ add_custom_command(
 add_custom_target(arcanum-anim-test-obj DEPENDS "${ANIM_TEST_OBJ}")
 
 
-target_link_libraries(arcanum-emudiff-oracle PRIVATE
-    "${EMUDIFF_ART_OBJ}"
-    "${EMUDIFF_COMBAT_OBJ}"
-    "${EMUDIFF_OBJECT_OBJ}"
-    "${EMUDIFF_MAGICTECH_OBJ}"
-    "${EMUDIFF_REACTION_OBJ}"
-    "${EMUDIFF_SKILL_UI_OBJ}"
-    "${EMUDIFF_TARGET_OBJ}"
-    "${EMUDIFF_MT_AI_OBJ}"
-    "${ANIM_TEST_OBJ}"
-    arcanum-game
-    tig
-    SDL3::SDL3
-)
-add_dependencies(arcanum-emudiff-oracle
-    arcanum-emudiff-reaction-obj
-    arcanum-emudiff-skill-ui-obj
-    arcanum-emudiff-target-obj
-    arcanum-emudiff-art-obj
-    arcanum-emudiff-combat-obj
-    arcanum-emudiff-object-obj
-    arcanum-emudiff-magictech-obj
-    arcanum-emudiff-mt-ai-obj
-    arcanum-anim-test-obj
-)
-
-
 # The same objcopy trick as above, for `dialog.c`, so the unit suite can reach
 # `dialog_collect_pc_options`.
 #
@@ -616,6 +662,9 @@ set(DIALOG_TEST_STATICS
     # test_out_of_range_lines.c runs shipped lines through these (QA1).
     dialog_check_conditions
     dialog_perform_actions
+    # The oracle's number-parser cases (QA1 phase 2); the oracle links this
+    # object too, so the block sits above its link line.
+    dialog_parse_second_number
 )
 set(DIALOG_TEST_OBJ "${CMAKE_CURRENT_BINARY_DIR}/dialog_globalized.o")
 set(_dialog_globalize_args "")
@@ -643,6 +692,36 @@ add_custom_command(
 )
 
 add_custom_target(arcanum-dialog-test-obj DEPENDS "${DIALOG_TEST_OBJ}")
+
+target_link_libraries(arcanum-emudiff-oracle PRIVATE
+    "${EMUDIFF_ART_OBJ}"
+    "${EMUDIFF_COMBAT_OBJ}"
+    "${EMUDIFF_OBJECT_OBJ}"
+    "${EMUDIFF_MAGICTECH_OBJ}"
+    "${EMUDIFF_REACTION_OBJ}"
+    "${EMUDIFF_SKILL_UI_OBJ}"
+    "${EMUDIFF_TARGET_OBJ}"
+    "${EMUDIFF_MT_AI_OBJ}"
+    "${ANIM_TEST_OBJ}"
+    "${DIALOG_TEST_OBJ}"
+    arcanum-game
+    tig
+    SDL3::SDL3
+)
+add_dependencies(arcanum-emudiff-oracle
+    arcanum-dialog-test-obj
+    arcanum-emudiff-reaction-obj
+    arcanum-emudiff-skill-ui-obj
+    arcanum-emudiff-target-obj
+    arcanum-emudiff-art-obj
+    arcanum-emudiff-combat-obj
+    arcanum-emudiff-object-obj
+    arcanum-emudiff-magictech-obj
+    arcanum-emudiff-mt-ai-obj
+    arcanum-anim-test-obj
+)
+
+
 target_link_libraries(arcanum-tests PRIVATE "${DIALOG_TEST_OBJ}")
 add_dependencies(arcanum-tests arcanum-dialog-test-obj)
 

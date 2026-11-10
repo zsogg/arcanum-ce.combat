@@ -10,7 +10,9 @@
 //     > stat_cost 7              -> "12"
 //     > <unknown or bad arity>   -> "!<reason>"
 //
-// Arguments are signed 64-bit decimal. A wrapper narrows to whatever the
+// Arguments are signed 64-bit decimal, or `x` and a string's bytes in hex
+// (`x` alone is the empty string): the wrapper then gets a pointer to a
+// writable NUL-terminated copy in its argument slot. A wrapper narrows to whatever the
 // real signature takes, so the protocol stays uniform while the function
 // under test is called exactly as the game calls it. A wrapper answers by
 // writing its `out` array; the main loop prints the first `outputs`
@@ -38,6 +40,7 @@
 
 #include "game/ai.h"
 #include "game/anim_private.h"
+#include "game/area.h"
 #include "game/background.h"
 #include "game/combat.h"
 #include "game/critter.h"
@@ -52,11 +55,18 @@
 #include "game/magictech.h"
 #include "game/mt_ai.h"
 #include "game/mt_item.h"
+#include "game/newspaper.h"
 #include "game/obj.h"
+#include "game/object.h"
+#include "game/object_node.h"
 #include "game/player.h"
 #include "game/portal.h"
+#include "game/quest.h"
 #include "game/random.h"
 #include "game/reaction.h"
+#include "game/reputation.h"
+#include "game/rumor.h"
+#include "game/script.h"
 #include "game/sfx.h"
 #include "game/skill.h"
 #include "game/spell.h"
@@ -76,7 +86,10 @@
 // costs 8 bytes of stack per request and nothing else -- `entry->outputs`
 // still decides how many are printed.
 #define MAX_OUT 20
-#define MAX_LINE 512
+// 4096 since 2026-11-09: a hex string argument doubles a dialogue field, and
+// the longest shipped one is 561 bytes.
+#define MAX_LINE 4096
+#define MAX_STR (MAX_LINE / 2)
 
 typedef void (*OracleFunc)(const int64_t* args, int64_t* out);
 
@@ -2875,6 +2888,329 @@ static void o_dialog_speech_id_unpack(const int64_t* a, int64_t* out)
     out[1] = (int64_t)(uint32_t)line;
 }
 
+/* FNV-1a over `size` bytes, NULs included; the harness's `_fnv_bytes`. */
+static uint32_t oracle_fnv_bytes(const void* data, size_t size)
+{
+    const unsigned char* p = data;
+    uint32_t h = 2166136261u;
+
+    while (size-- > 0) {
+        h = (h ^ *p++) * 16777619u;
+    }
+    return h;
+}
+
+int dialog_parse_params(int* values, char* str);
+int dialog_parse_second_number(const char* str);
+
+/* QA1 phase 2: the dialogue number parsers, fed the shipped condition and
+ * action fields. The answer is the count, a digest of the values as
+ * little-endian int32s, and a digest of the string afterwards, which the
+ * parser cuts at each comma and dash and must put back (porting bug #68). */
+static void o_dialog_parse_params(const int64_t* a, int64_t* out)
+{
+    char* str = (char*)(intptr_t)a[0];
+    int values[100];
+    int cnt;
+    int i;
+    unsigned char bytes[sizeof(values)];
+
+    cnt = dialog_parse_params(values, str);
+    for (i = 0; i < cnt; i++) {
+        bytes[i * 4] = (unsigned char)values[i];
+        bytes[i * 4 + 1] = (unsigned char)((unsigned int)values[i] >> 8);
+        bytes[i * 4 + 2] = (unsigned char)((unsigned int)values[i] >> 16);
+        bytes[i * 4 + 3] = (unsigned char)((unsigned int)values[i] >> 24);
+    }
+    out[0] = cnt;
+    out[1] = oracle_fnv_bytes(bytes, (size_t)cnt * 4);
+    out[2] = oracle_fnv_bytes(str, strlen(str));
+}
+
+static void o_dialog_parse_second_number(const int64_t* a, int64_t* out)
+{
+    out[0] = dialog_parse_second_number((const char*)(intptr_t)a[0]);
+}
+
+/* QA1 phase 2: dialog_check_conditions (0x4150D0) and dialog_perform_actions
+ * (0x415BA0) with every callee outside dialog.c stubbed, on both sides. Each
+ * stub records its callee and arguments into a digest and answers from a
+ * world both sides build alike: call k answers from mix(seed, k); an int from
+ * a pool of the string's own numbers, each -1, 0 and +1 and negated, plus 0
+ * and 1; a bool 0 or 1; a handle null, the PC, the NPC or an item; a follower
+ * list of 0-2. The answer is the result, the call count and the digest.
+ *
+ * The stubs are `ld --wrap`s (the oracle's link options), live only inside
+ * these two cases: everywhere else they call the real function. A call from
+ * dialog.c to its own helpers is not an undefined reference, so cannot be
+ * wrapped; the harness keeps such action codes out (cases.py). The table's
+ * order and signatures must match `DIALOG_STUBS` in cases.py; the fourth
+ * output is a digest of it. */
+#define DLGSTUB_LIST(X, XV)                                                                                                 \
+    X(int, obj_field_int32_get, "i:Oi", (int64_t a0, int a1), (a0, a1), (a0, a1))                                           \
+    X(int64_t, obj_field_int64_get, "O:Oi", (int64_t a0, int a1), (a0, a1), (a0, a1))                                       \
+    XV(object_destroy, "v:O", (int64_t a0), (a0), (a0))                                                                     \
+    XV(object_list_destroy, "v:D", (ObjectList * a0), (a0), ((int64_t)(intptr_t)a0))                                        \
+    XV(object_list_followers, "v:OL", (int64_t a0, ObjectList* a1), (a0, a1), (a0, (int64_t)(intptr_t)a1))                  \
+    X(int, script_global_var_get, "i:i", (int a0), (a0), (a0))                                                              \
+    XV(script_global_var_set, "v:ii", (int a0, int a1), (a0, a1), (a0, a1))                                                 \
+    X(int, script_global_flag_get, "i:i", (int a0), (a0), (a0))                                                             \
+    XV(script_global_flag_set, "v:ii", (int a0, int a1), (a0, a1), (a0, a1))                                                \
+    X(int, script_pc_var_get, "i:Oi", (int64_t a0, int a1), (a0, a1), (a0, a1))                                             \
+    XV(script_pc_var_set, "v:Oii", (int64_t a0, int a1, int a2), (a0, a1, a2), (a0, a1, a2))                                \
+    X(int, script_pc_flag_get, "i:Oi", (int64_t a0, int a1), (a0, a1), (a0, a1))                                            \
+    XV(script_pc_flag_set, "v:Oii", (int64_t a0, int a1, int a2), (a0, a1, a2), (a0, a1, a2))                               \
+    X(bool, script_local_flag_get, "b:Oii", (int64_t a0, int a1, int a2), (a0, a1, a2), (a0, a1, a2))                       \
+    XV(script_local_flag_set, "v:Oiii", (int64_t a0, int a1, int a2, int a3), (a0, a1, a2, a3), (a0, a1, a2, a3))           \
+    X(int, script_local_counter_get, "i:Oii", (int64_t a0, int a1, int a2), (a0, a1, a2), (a0, a1, a2))                     \
+    XV(script_local_counter_set, "v:Oiii", (int64_t a0, int a1, int a2, int a3), (a0, a1, a2, a3), (a0, a1, a2, a3))        \
+    X(int, script_story_state_get, "i:", (void), (), (0))                                                                   \
+    XV(script_story_state_set, "v:i", (int a0), (a0), (a0))                                                                 \
+    X(int, critter_origin_set, "i:Oi", (int64_t a0, int a1), (a0, a1), (a0, a1))                                            \
+    XV(critter_kill, "v:O", (int64_t a0), (a0), (a0))                                                                       \
+    X(int64_t, critter_pc_leader_get, "O:O", (int64_t a0), (a0), (a0))                                                      \
+    X(int64_t, critter_leader_get, "O:O", (int64_t a0), (a0), (a0))                                                         \
+    X(bool, critter_follow, "b:OOB", (int64_t a0, int64_t a1, bool a2), (a0, a1, a2), (a0, a1, a2))                         \
+    X(bool, critter_disband, "b:OB", (int64_t a0, bool a1), (a0, a1), (a0, a1))                                             \
+    XV(critter_give_xp, "v:Oi", (int64_t a0, int a1), (a0, a1), (a0, a1))                                                   \
+    XV(critter_stay_close, "v:O", (int64_t a0), (a0), (a0))                                                                 \
+    XV(critter_spread_out, "v:O", (int64_t a0), (a0), (a0))                                                                 \
+    X(int64_t, critter_substitute_inventory_get, "O:O", (int64_t a0), (a0), (a0))                                           \
+    X(bool, item_parent, "b:OQ", (int64_t a0, int64_t* a1), (a0, a1), (a0, (int64_t)(intptr_t)a1))                          \
+    X(bool, item_transfer, "b:OO", (int64_t a0, int64_t a1), (a0, a1), (a0, a1))                                            \
+    X(int64_t, item_find_by_name, "O:Oi", (int64_t a0, int a1), (a0, a1), (a0, a1))                                         \
+    X(int, item_gold_get, "i:O", (int64_t a0), (a0), (a0))                                                                  \
+    X(bool, item_gold_transfer, "b:OOiO", (int64_t a0, int64_t a1, int a2, int64_t a3), (a0, a1, a2, a3), (a0, a1, a2, a3)) \
+    XV(item_remove, "v:O", (int64_t a0), (a0), (a0))                                                                        \
+    XV(item_drop_at_loc, "v:OO", (int64_t a0, int64_t a1), (a0, a1), (a0, a1))                                              \
+    XV(ai_attack, "v:OOii", (int64_t a0, int64_t a1, int a2, unsigned int a3), (a0, a1, a2, a3), (a0, a1, a2, a3))          \
+    XV(ai_npc_wait, "v:O", (int64_t a0), (a0), (a0))                                                                        \
+    XV(ai_npc_unwait, "v:OB", (int64_t a0, bool a1), (a0, a1), (a0, a1))                                                    \
+    X(int, ai_check_follow, "i:OOB", (int64_t a0, int64_t a1, bool a2), (a0, a1, a2), (a0, a1, a2))                         \
+    X(int, stat_level_get, "i:Oi", (int64_t a0, int a1), (a0, a1), (a0, a1))                                                \
+    X(int, stat_base_get, "i:Oi", (int64_t a0, int a1), (a0, a1), (a0, a1))                                                 \
+    X(int, stat_base_set, "i:Oii", (int64_t a0, int a1, int a2), (a0, a1, a2), (a0, a1, a2))                                \
+    X(int, spell_college_level_get, "i:Oi", (int64_t a0, int a1), (a0, a1), (a0, a1))                                       \
+    XV(newspaper_enqueue, "v:iB", (int a0, bool a1), (a0, a1), (a0, a1))                                                    \
+    X(bool, reaction_met_before, "b:OO", (int64_t a0, int64_t a1), (a0, a1), (a0, a1))                                      \
+    X(int, reaction_get, "i:OO", (int64_t a0, int64_t a1), (a0, a1), (a0, a1))                                              \
+    XV(reaction_adj, "v:OOi", (int64_t a0, int64_t a1, int a2), (a0, a1, a2), (a0, a1, a2))                                 \
+    X(bool, reputation_has, "b:Oi", (int64_t a0, int a1), (a0, a1), (a0, a1))                                               \
+    XV(reputation_add, "v:Oi", (int64_t a0, int a1), (a0, a1), (a0, a1))                                                    \
+    XV(reputation_remove, "v:Oi", (int64_t a0, int a1), (a0, a1), (a0, a1))                                                 \
+    X(int, quest_state_get, "i:Oi", (int64_t a0, int a1), (a0, a1), (a0, a1))                                               \
+    X(int, quest_state_set, "i:OiiO", (int64_t a0, int a1, int a2, int64_t a3), (a0, a1, a2, a3), (a0, a1, a2, a3))         \
+    X(int, quest_get_xp, "i:i", (int a0), (a0), (a0))                                                                       \
+    X(bool, rumor_qstate_get, "b:i", (int a0), (a0), (a0))                                                                  \
+    XV(rumor_qstate_set, "v:i", (int a0), (a0), (a0))                                                                       \
+    XV(rumor_known_set, "v:Oi", (int64_t a0, int a1), (a0, a1), (a0, a1))                                                   \
+    X(bool, rumor_known_get, "b:Oi", (int64_t a0, int a1), (a0, a1), (a0, a1))                                              \
+    X(int, basic_skill_level, "i:Oi", (int64_t a0, int a1), (a0, a1), (a0, a1))                                             \
+    X(int, basic_skill_training_get, "i:Oi", (int64_t a0, int a1), (a0, a1), (a0, a1))                                      \
+    X(int, basic_skill_training_set, "i:Oii", (int64_t a0, int a1, int a2), (a0, a1, a2), (a0, a1, a2))                     \
+    X(int, tech_skill_level, "i:Oi", (int64_t a0, int a1), (a0, a1), (a0, a1))                                              \
+    X(int, tech_skill_training_get, "i:Oi", (int64_t a0, int a1), (a0, a1), (a0, a1))                                       \
+    X(int, tech_skill_training_set, "i:Oii", (int64_t a0, int a1, int a2), (a0, a1, a2), (a0, a1, a2))                      \
+    X(int, training_min_skill_level_required, "i:i", (int a0), (a0), (a0))                                                  \
+    X(bool, area_is_known, "b:Oi", (int64_t a0, int a1), (a0, a1), (a0, a1))                                                \
+    X(bool, area_set_known, "b:Oi", (int64_t a0, int a1), (a0, a1), (a0, a1))                                               \
+    X(int, area_of_object, "i:O", (int64_t a0), (a0), (a0))
+#define DLG_PC ((int64_t)0x0000000100000011LL)
+#define DLG_NPC ((int64_t)0x0000000200000022LL)
+#define DLG_ITEM ((int64_t)0x0000000300000033LL)
+#define DLG_FOLLOWER_1 ((int64_t)0x0000000400000044LL)
+#define DLG_FOLLOWER_2 ((int64_t)0x0000000500000055LL)
+#define DLG_POOL_MAX 64
+
+#define DLG_SIG(ret, name, sig, params, args, vals) #name ":" sig ";",
+#define DLG_SIGV(name, sig, params, args, vals) #name ":" sig ";",
+static const char* const dlgstub_sigs[] = { DLGSTUB_LIST(DLG_SIG, DLG_SIGV) };
+
+static bool dlgstub_on;
+static uint32_t dlgstub_seed;
+static uint32_t dlgstub_calls;
+static uint32_t dlgstub_hash;
+static int dlgstub_pool[DLG_POOL_MAX];
+static int dlgstub_pool_len;
+static ObjectNode dlgstub_nodes[2];
+static const int64_t dlgstub_handles[4] = { 0, DLG_PC, DLG_NPC, DLG_ITEM };
+
+static uint32_t dlgstub_mix(uint32_t k)
+{
+    uint32_t x = dlgstub_seed * 0x9E3779B1u + k * 0x85EBCA6Bu + 0x165667B1u;
+
+    x ^= x >> 15;
+    x *= 0x2C1B3C6Du;
+    x ^= x >> 12;
+    x *= 0x297A2D39u;
+    x ^= x >> 15;
+    return x;
+}
+
+static void dlgstub_hash_u64(uint64_t value)
+{
+    int i;
+
+    for (i = 0; i < 8; i++) {
+        dlgstub_hash = (dlgstub_hash ^ (uint8_t)(value >> (i * 8))) * 16777619u;
+    }
+}
+
+static void dlgstub_pool_push(uint32_t value)
+{
+    if (dlgstub_pool_len < DLG_POOL_MAX) {
+        dlgstub_pool[dlgstub_pool_len++] = (int)value;
+    }
+}
+
+static void dlgstub_begin(uint32_t seed, const char* str)
+{
+    dlgstub_seed = seed;
+    dlgstub_calls = 0;
+    dlgstub_hash = 2166136261u;
+    dlgstub_pool_len = 0;
+    dlgstub_pool_push(0);
+    dlgstub_pool_push(1);
+    while (*str != '\0') {
+        uint32_t n = 0;
+
+        if (*str < '0' || *str > '9') {
+            str++;
+            continue;
+        }
+        while (*str >= '0' && *str <= '9') {
+            n = n * 10u + (uint32_t)(*str++ - '0');
+        }
+        dlgstub_pool_push(n - 1u);
+        dlgstub_pool_push(n);
+        dlgstub_pool_push(n + 1u);
+        dlgstub_pool_push(0u - n - 1u);
+        dlgstub_pool_push(0u - n);
+        dlgstub_pool_push(0u - n + 1u);
+    }
+    dlgstub_on = true;
+}
+
+static int64_t dlgstub_call(int id, const int64_t* v)
+{
+    const char* sig = strchr(dlgstub_sigs[id], ':') + 1;
+    uint32_t r = dlgstub_mix(dlgstub_calls++);
+    const char* p;
+    int i = 0;
+
+    dlgstub_hash_u64((uint32_t)id);
+    for (p = sig + 2; *p != ';'; p++, i++) {
+        switch (*p) {
+        case 'O':
+            dlgstub_hash_u64((uint64_t)v[i]);
+            break;
+        case 'i':
+            dlgstub_hash_u64((uint64_t)(int64_t)(int32_t)v[i]);
+            break;
+        case 'B':
+            dlgstub_hash_u64((v[i] & 0xFF) != 0);
+            break;
+        case 'L': {
+            ObjectList* list = (ObjectList*)(intptr_t)v[i];
+            unsigned int n = r % 3;
+
+            dlgstub_nodes[0].obj = DLG_FOLLOWER_1;
+            dlgstub_nodes[0].next = n == 2 ? &dlgstub_nodes[1] : NULL;
+            dlgstub_nodes[1].obj = DLG_FOLLOWER_2;
+            dlgstub_nodes[1].next = NULL;
+            list->head = n != 0 ? &dlgstub_nodes[0] : NULL;
+            break;
+        }
+        case 'Q':
+            *(int64_t*)(intptr_t)v[i] = dlgstub_handles[(r >> 8) % 4];
+            break;
+        default:
+            break;
+        }
+    }
+
+    switch (sig[0]) {
+    case 'i':
+        return dlgstub_pool[r % (uint32_t)dlgstub_pool_len];
+    case 'b':
+        return r & 1;
+    case 'O':
+        return dlgstub_handles[r % 4];
+    default:
+        return 0;
+    }
+}
+
+#define DLG_UNPAREN(...) __VA_ARGS__
+#define DLG_ENUM(ret, name, sig, params, args, vals) DLG_ID_##name,
+#define DLG_ENUMV(name, sig, params, args, vals) DLG_ID_##name,
+enum { DLGSTUB_LIST(DLG_ENUM, DLG_ENUMV) DLG_ID_COUNT };
+
+#define DLG_WRAP(ret, name, sig, params, args, vals)    \
+    ret __real_##name params;                           \
+    ret __wrap_##name params;                           \
+    ret __wrap_##name params                            \
+    {                                                   \
+        if (!dlgstub_on) {                              \
+            return __real_##name args;                  \
+        }                                               \
+        {                                               \
+            const int64_t v[] = { DLG_UNPAREN vals };   \
+            return (ret)dlgstub_call(DLG_ID_##name, v); \
+        }                                               \
+    }
+#define DLG_WRAPV(name, sig, params, args, vals)      \
+    void __real_##name params;                        \
+    void __wrap_##name params;                        \
+    void __wrap_##name params                         \
+    {                                                 \
+        if (!dlgstub_on) {                            \
+            __real_##name args;                       \
+            return;                                   \
+        }                                             \
+        {                                             \
+            const int64_t v[] = { DLG_UNPAREN vals }; \
+            dlgstub_call(DLG_ID_##name, v);           \
+        }                                             \
+    }
+DLGSTUB_LIST(DLG_WRAP, DLG_WRAPV)
+
+bool dialog_check_conditions(DialogState* a1, char* a2);
+bool dialog_perform_actions(DialogState* a1, char* a2, int a3);
+
+static void dlgstub_run(const int64_t* a, int64_t* out, bool actions)
+{
+    static DialogState state;
+    char* str = (char*)(intptr_t)a[0];
+    bool result;
+
+    memset(&state, 0, sizeof(state));
+    state.pc_obj = DLG_PC;
+    state.npc_obj = DLG_NPC;
+    dlgstub_begin((uint32_t)a[1], str);
+    result = actions ? dialog_perform_actions(&state, str, 0) : dialog_check_conditions(&state, str);
+    dlgstub_on = false;
+    out[0] = result;
+    out[1] = dlgstub_calls;
+    out[2] = dlgstub_hash;
+    // A digest of the table, so a table out of step with cases.py's
+    // `DIALOG_STUBS` differs on every input rather than on some.
+    out[3] = 0;
+    for (int id = 0; id < DLG_ID_COUNT; id++) {
+        out[3] = oracle_fnv_bytes(dlgstub_sigs[id], strlen(dlgstub_sigs[id])) ^ (uint32_t)(out[3] * 31);
+    }
+}
+
+static void o_dialog_check_conditions(const int64_t* a, int64_t* out)
+{
+    dlgstub_run(a, out, false);
+}
+
+static void o_dialog_perform_actions(const int64_t* a, int64_t* out)
+{
+    dlgstub_run(a, out, true);
+}
+
 static void o_light_build_color(const int64_t* a, int64_t* out)
 {
     unsigned int color = (unsigned int)a[3];
@@ -3897,6 +4233,10 @@ static const OracleEntry oracle_entries[] = {
     { "magictech_min_intelligence", 1, 1, o_magictech_min_intelligence },
     { "magictech_min_willpower", 1, 1, o_magictech_min_willpower },
     { "dialog_speech_id_unpack", 3, 2, o_dialog_speech_id_unpack },
+    { "dialog_parse_params", 1, 3, o_dialog_parse_params },
+    { "dialog_parse_second_number", 1, 1, o_dialog_parse_second_number },
+    { "dialog_check_conditions", 2, 4, o_dialog_check_conditions },
+    { "dialog_perform_actions", 2, 4, o_dialog_perform_actions },
     { "light_build_color", 4, 1, o_light_build_color },
     { "light_get_color_components", 4, 3, o_light_get_color_components },
     { "tig_art_container_id_create", 6, 1, o_tig_art_container_id_create },
@@ -3941,6 +4281,7 @@ int main(void)
         // the symptom reproducible instead of order-dependent.
         int64_t args[MAX_ARGS] = { 0 };
         int64_t out[MAX_OUT] = { 0 };
+        static char strings[MAX_ARGS][MAX_STR];
         char* token;
         char* save;
         int argc = 0;
@@ -3971,7 +4312,24 @@ int main(void)
                 break;
             }
 
-            if (sscanf(token, "%" SCNd64, &args[argc]) != 1) {
+            if (token[0] == 'x') {
+                size_t len = strlen(token + 1) / 2;
+                size_t pos;
+                unsigned int byte;
+
+                for (pos = 0; pos < len; pos++) {
+                    if (sscanf(token + 1 + pos * 2, "%2x", &byte) != 1) {
+                        break;
+                    }
+                    strings[argc][pos] = (char)byte;
+                }
+                if (pos != len || strlen(token + 1) % 2 != 0) {
+                    argc = -1;
+                    break;
+                }
+                strings[argc][len] = '\0';
+                args[argc] = (int64_t)(intptr_t)strings[argc];
+            } else if (sscanf(token, "%" SCNd64, &args[argc]) != 1) {
                 argc = -1;
                 break;
             }
