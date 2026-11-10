@@ -496,6 +496,8 @@ TEST(a_gap_makes_rank_diverge_from_id)
 // value. Not built on Windows, where there is no `fork`; the finding is about
 // the engine and one platform is enough to hold it.
 #ifndef _WIN32
+#define CHILD_LOG "arcanum_test_area_child.log"
+
 TEST(a_list_that_does_not_start_at_zero_crashes_the_module_loader)
 {
     static const int no_zero[] = { 1, 2, 3, 4, 5 };
@@ -514,6 +516,14 @@ TEST(a_list_that_does_not_start_at_zero_crashes_the_module_loader)
         // A hang would be a different failure and must not become a stuck
         // test run.
         alarm(10);
+#ifdef __SANITIZE_ADDRESS__
+        // Under the sanitizers the null load is UBSan's report and exit, not
+        // a SIGSEGV. Keep the report out of the suite's log, where asan-gate
+        // reads any `runtime error:` as a failure, and judge it below.
+        if (freopen(CHILD_LOG, "w", stderr) == NULL) {
+            _exit(2);
+        }
+#endif
         area_mod_load();
         _exit(0);
     }
@@ -521,8 +531,22 @@ TEST(a_list_that_does_not_start_at_zero_crashes_the_module_loader)
     CHECK(child > 0);
     if (child > 0) {
         CHECK(waitpid(child, &status, 0) == child);
+#ifdef __SANITIZE_ADDRESS__
+        char report[4096] = { 0 };
+        FILE* log = fopen(CHILD_LOG, "r");
+        CHECK(log != NULL);
+        if (log != NULL) {
+            report[fread(report, 1, sizeof(report) - 1, log)] = '\0';
+            fclose(log);
+        }
+        remove(CHILD_LOG);
+        CHECK(WIFEXITED(status) && WEXITSTATUS(status) != 0);
+        CHECK(strstr(report, "str_parse.c:") != NULL);
+        CHECK(strstr(report, "load of null pointer") != NULL);
+#else
         CHECK(WIFSIGNALED(status));
         CHECK_INT(WIFSIGNALED(status) ? WTERMSIG(status) : 0, SIGSEGV);
+#endif
     }
 
     // Leave a well-formed list behind for whatever runs next.
