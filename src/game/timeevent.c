@@ -118,7 +118,7 @@ static TimeEventTypeInfo timeevent_type_info[TIMEEVENT_TYPE_COUNT] = {
     /*                TIMEEVENT_TYPE_LOCK */ { "Lock", true, P0_OBJ, TIME_TYPE_GAME_TIME, object_lock_timeevent_process, NULL, NULL },
     /*         TIMEEVENT_TYPE_NPC_RESPAWN */ { "NPC Respawn", true, P0_OBJ, TIME_TYPE_GAME_TIME, npc_respawn_timevent_process, NULL, NULL },
     /* TIMEEVENT_TYPE_RECHARGE_MAGIC_ITEM */ { "Recharge Magic-Item", true, P2_INT | P1_INT | P0_OBJ, TIME_TYPE_GAME_TIME, magictech_recharge_timeevent_process, NULL, NULL },
-    /*    TIMEEVENT_TYPE_DECAY_DEAD_BODIE */ { "Decay Dead Bodie", true, P1_INT | P0_OBJ, TIME_TYPE_GAME_TIME, critter_decay_timeevent_process, NULL, NULL },
+    /*    TIMEEVENT_TYPE_DECAY_DEAD_BODIE */ { "Decay Dead Bodies", true, P1_INT | P0_OBJ, TIME_TYPE_GAME_TIME, critter_decay_timeevent_process, NULL, NULL },
     /*          TIMEEVENT_TYPE_ITEM_DECAY */ { "Item Decay", true, P1_INT | P0_OBJ, TIME_TYPE_GAME_TIME, item_decay_timeevent_process, NULL, NULL },
     /*   TIMEEVENT_TYPE_COMBAT_FOCUS_WIPE */ { "Combat-Focus Wipe", true, P1_INT | P0_OBJ, TIME_TYPE_GAME_TIME, critter_npc_combat_focus_wipe_timeevent_process, NULL, NULL },
     /*          TIMEEVENT_TYPE_NEWSPAPERS */ { "Newspapers", true, 0, TIME_TYPE_GAME_TIME, newspaper_timeevent_process, NULL, NULL },
@@ -128,7 +128,7 @@ static TimeEventTypeInfo timeevent_type_info[TIMEEVENT_TYPE_COUNT] = {
     /*                  TIMEEVENT_TYPE_UI */ { "UI", false, P1_INT | P0_INT, TIME_TYPE_REAL_TIME, ui_timeevent_process, NULL, NULL },
     /*          TIMEEVENT_TYPE_TELEPORTED */ { "Teleported", false, P0_OBJ, TIME_TYPE_GAME_TIME, object_teleported_timeevent_process, NULL, NULL },
     /*     TIMEEVENT_TYPE_SCENERY_RESPAWN */ { "Scenery Respawn", true, P0_OBJ, TIME_TYPE_GAME_TIME, object_scenery_respawn_timeevent_process, NULL, NULL },
-    /*    TIMEEVENT_TYPE_RANDOM_ENCOUNTER */ { "Random Encounter", true, 0, TIME_TYPE_GAME_TIME, ui_wmap_rnd_timeevent_process, NULL, NULL },
+    /*    TIMEEVENT_TYPE_RANDOM_ENCOUNTER */ { "Random Encounters", true, 0, TIME_TYPE_GAME_TIME, ui_wmap_rnd_timeevent_process, NULL, NULL },
 };
 
 // 0x5B278C
