@@ -1172,6 +1172,20 @@ target_link_libraries(arcanum-fuzz-probe PRIVATE
     ${ZLIB_LIBRARIES}
 )
 
+# Dumps .dlg files as CE's loader stores them, for the QA1 parse differential
+# against `mods/lib/dlgfile.py`. Includes `dialog.c` (its loader is static), so
+# that copy, not the archive's, is the one linked. Needs the game's archives.
+add_executable(arcanum-dlg-dump
+    "dlg_dump.c"
+)
+
+target_link_libraries(arcanum-dlg-dump PRIVATE
+    arcanum-game
+    tig
+    SDL3::SDL3
+    ${ZLIB_LIBRARIES}
+)
+
 add_executable(arcanum-file-probe
     "file_probe.c"
 )
