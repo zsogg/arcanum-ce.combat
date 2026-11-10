@@ -1276,6 +1276,8 @@ target_link_options(arcanum-tests PRIVATE
     "-Wl,--wrap=ai_can_speak"
     # test_compare_fixes: indoor and outdoor tiles for a door (porting bug #383).
     "-Wl,--wrap=tile_art_id_at"
+    # test_compare_fixes: no slot dump from the null asserts (#388, #389).
+    "-Wl,--wrap=anim_stats"
 )
 endif() # ARCANUM_TESTS_GNU_LINK
 

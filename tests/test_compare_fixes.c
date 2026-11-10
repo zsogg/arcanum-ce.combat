@@ -654,6 +654,19 @@ TEST(scaled_rects_round_to_the_nearest)
     CHECK_INT(object_scale_up(11, 50), 6); // 5.5
 }
 
+void __real_anim_stats(void);
+
+static bool armed_anim_stats_off;
+
+// CE's ASSERT dumps every animation slot, which examines objects through
+// message files this suite never loads.
+void __wrap_anim_stats(void)
+{
+    if (!armed_anim_stats_off) {
+        __real_anim_stats();
+    }
+}
+
 TEST(a_null_door_or_jumper_answers_no)
 {
     AnimRunInfo run_info;
@@ -662,8 +675,10 @@ TEST(a_null_door_or_jumper_answers_no)
     memset(&run_info, 0, sizeof(run_info));
     run_info.params[0].obj = OBJ_HANDLE_NULL;
     run_info.params[1].obj = critter;
+    armed_anim_stats_off = true;
     CHECK(!anim_cannot_open_portal(&run_info));
     CHECK(!anim_can_jump_window(&run_info));
+    armed_anim_stats_off = false;
 
     obj_harness_destroy(critter);
 }
