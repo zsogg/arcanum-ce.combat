@@ -165,7 +165,7 @@ typedef struct DialogFileEntry {
     // load functions (gamelib.c:157, gameuilib.c:99) - so widening it cannot
     // affect a savegame.
     //
-    // The line number this entry is a player option for, or 0 for none. It
+    // The line number this entry is a player option for, or -1 for none. It
     // exists so a mod can add an option to a node whose numbering has no room:
     // the original finds options by NUMERIC ADJACENCY (see
     // `dialog_collect_pc_options`), and 48% of the 15,444 shipped nodes have no
@@ -2904,9 +2904,16 @@ bool dialog_parse_entry(TigFile* stream, DialogFileEntry* entry, int* line_ptr)
     // No shipped file uses `@` in a conditions field; checked across all 713.
     // The character is reserved for this, and that is recorded in
     // MODDING-NOTES.md so it is not spent twice.
-    entry->parent = 0;
+    //
+    // FIX (porting bug #379): "no parent" is -1. It was 0, which is also a
+    // line number, so at a node numbered 0 the parent pass collected every
+    // unmarked option in the file a second time: the elf trader (03013) and
+    // the Tarant paperboy (01498) start their dialogue there. The original
+    // has no parent pass; its menu is the adjacency walk alone (0x414F50).
+    entry->parent = -1;
     if (str[0] == '@') {
         char* pch = str + 1;
+        entry->parent = 0;
         while (*pch >= '0' && *pch <= '9') {
             entry->parent = entry->parent * 10 + (*pch - '0');
             pch++;
@@ -2915,7 +2922,7 @@ bool dialog_parse_entry(TigFile* stream, DialogFileEntry* entry, int* line_ptr)
         // and reaches the condition evaluator unchanged, which is what an
         // engine without this change would do with it anyway.
         if (pch == str + 1) {
-            entry->parent = 0;
+            entry->parent = -1;
         } else {
             memmove(str, pch, strlen(pch) + 1);
         }

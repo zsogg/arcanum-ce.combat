@@ -304,6 +304,44 @@ TEST(an_unknown_node_offers_nothing)
     CHECK_INT(collect(BODY_ADJACENT, 999, out), 0);
 }
 
+// Porting bug #379: "no parent" was 0, so a node numbered 0 - where the elf
+// trader's and the Tarant paperboy's dialogue start - had every unmarked option
+// in the file collected again by the parent pass: 1, 2, 3, 1, 2.
+TEST(a_node_numbered_zero_lists_its_options_once)
+{
+    int out[8];
+    int count = collect(
+        "{0}{Greetings.}{}{}{}{0}{}\r\n"
+        "{1}{One.}{}{1}{}{0}{}\r\n"
+        "{2}{Two.}{}{1}{}{0}{}\r\n"
+        "{3}{Three.}{}{1}{}{0}{}\r\n"
+        "{10}{Another node.}{}{}{}{0}{}\r\n"
+        "{11}{Not mine.}{}{1}{}{0}{}\r\n",
+        0, out);
+
+    CHECK_INT(count, 3);
+    if (count == 3) {
+        CHECK_INT(out[0], 1);
+        CHECK_INT(out[2], 3);
+    }
+}
+
+// ...and an explicit `@0` still links an option to node 0.
+TEST(a_parent_marker_can_name_node_zero)
+{
+    int out[8];
+    int count = collect(
+        "{0}{Greetings.}{}{}{}{0}{}\r\n"
+        "{10}{Another node.}{}{}{}{0}{}\r\n"
+        "{20000}{Added by a mod.}{}{1}{@0}{0}{}\r\n",
+        0, out);
+
+    CHECK_INT(count, 1);
+    if (count == 1) {
+        CHECK_INT(out[0], 20000);
+    }
+}
+
 void test_dialog_options_suite(void)
 {
     RUN(adjacent_options_are_collected_in_order);
@@ -316,6 +354,8 @@ void test_dialog_options_suite(void)
     RUN(the_marker_is_stripped_and_the_conditions_still_apply);
     RUN(a_file_without_markers_behaves_as_before);
     RUN(an_unknown_node_offers_nothing);
+    RUN(a_node_numbered_zero_lists_its_options_once);
+    RUN(a_parent_marker_can_name_node_zero);
     RUN(a_lone_at_sign_in_an_option_keeps_the_text_and_does_not_crash);
     RUN(a_paired_unknown_token_is_still_dropped);
 }
