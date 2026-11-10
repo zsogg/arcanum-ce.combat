@@ -33,6 +33,10 @@
 #endif
 
 #include "game/area.h"
+#include "game/obj.h"
+#include "game/player.h"
+
+#include "obj_harness.h"
 
 #include "tig/tig.h"
 
@@ -573,6 +577,49 @@ TEST(an_implausible_count_is_refused)
     CHECK(!load_save_block());
 }
 
+// area.c's bound: an area outside the table is neither known nor marked. The
+// original's area_set_known writes `or [area_flags+area],1` unchecked
+// (0x4CB0D2): the debug dialogue's `mm 82` is one past 82 areas.
+TEST(an_area_past_the_table_is_not_marked_known)
+{
+    AreaBlock written;
+    AreaBlock read_back;
+    int64_t pc;
+
+    CHECK(write_contiguous_areas(3));
+    CHECK(reload_areas());
+    block_init(&written, 3);
+    written.last = 2;
+    CHECK(write_save_block(&written, true, false));
+    CHECK(load_save_block());
+
+    CHECK(obj_harness_init());
+    pc = obj_harness_create_proto(OBJ_TYPE_PC);
+    CHECK(pc != OBJ_HANDLE_NULL);
+    if (pc == OBJ_HANDLE_NULL) {
+        return;
+    }
+    player_pc_obj_set(pc);
+
+    CHECK(!area_set_known(pc, 3));
+    CHECK(!area_set_known(pc, -1));
+    CHECK(!area_is_known(pc, 3));
+    CHECK(!area_is_known(pc, -1));
+    CHECK(save_and_read_block(&read_back));
+    CHECK_INT(read_back.flags[0] | read_back.flags[1] | read_back.flags[2], 0);
+    CHECK_INT(read_back.last, 2);
+
+    // Control: an area in the table is marked, and becomes the last known.
+    CHECK(area_set_known(pc, 1));
+    CHECK(area_is_known(pc, 1));
+    CHECK(save_and_read_block(&read_back));
+    CHECK_INT(read_back.flags[1], 1);
+    CHECK_INT(read_back.last, 1);
+
+    player_pc_obj_set(OBJ_HANDLE_NULL);
+    obj_harness_destroy(pc);
+}
+
 void test_area_suite(void)
 {
     // The fixture lives beside the test binary and is found the way the game
@@ -592,6 +639,7 @@ void test_area_suite(void)
 #endif
     RUN(an_original_layout_save_recovers_its_count);
     RUN(an_implausible_count_is_refused);
+    RUN(an_area_past_the_table_is_not_marked_known);
 
     if (area_fixture_loaded) {
         area_mod_unload();

@@ -21,6 +21,16 @@
  */
 #define rumor_num_to_idx(num) ((num) - 1000)
 
+// FIX: a rumour number below 1000, or past the quelled bit array, is not
+// quelled, and quelling it writes nothing. The original takes
+// `(rumour - 1000) / 8` with no bound (0x4C5650, 0x4C5690) into its
+// `calloc(0xFB, 1)` (0x4C5500), so `rq - 1143` (01906 {114}), which reads
+// rumour 0, read the byte 125 before it.
+static bool rumor_qstate_in_table(int rumor)
+{
+    return rumor_num_to_idx(rumor) >= 0 && rumor_num_to_idx(rumor) < RUMOR_QSTATE_SIZE * 8;
+}
+
 /**
  * Describes interaction types for NPC dialog response.
  *
@@ -192,6 +202,11 @@ bool rumor_qstate_get(int rumor)
 {
     int pos = rumor_num_to_idx(rumor) / 8;
     int bit = rumor_num_to_idx(rumor) % 8;
+
+    if (!rumor_qstate_in_table(rumor)) {
+        return false;
+    }
+
     return ((rumor_qstate[pos] >> bit) & 1) != 0;
 }
 
@@ -206,6 +221,10 @@ void rumor_qstate_set(int rumor)
 {
     int pos;
     int bit;
+
+    if (!rumor_qstate_in_table(rumor)) {
+        return;
+    }
 
     pos = rumor_num_to_idx(rumor) / 8;
     bit = rumor_num_to_idx(rumor) % 8;
@@ -288,6 +307,14 @@ void rumor_known_set(int64_t obj, int rumor)
  */
 void rumor_set_known_internal(int64_t obj, int rumor, int64_t timestamp)
 {
+    // FIX: a rumour below 1000 is not learnt. Its index is a negative key
+    // into the PC's sparse array, whose bitset both engines index unchecked
+    // below zero (0x4C58B1, then 0x4E5D01 `jle`); a number past the table is
+    // a key like any other, as in the original.
+    if (rumor_num_to_idx(rumor) < 0) {
+        return;
+    }
+
     obj_arrayfield_int64_set(obj, OBJ_F_PC_RUMOR_IDX, rumor_num_to_idx(rumor), timestamp);
 }
 
@@ -300,6 +327,11 @@ bool rumor_known_get(int64_t obj, int rumor)
 {
     // Ensure the object is a player character.
     if (obj_field_int32_get(obj, OBJ_F_TYPE) != OBJ_TYPE_PC) {
+        return false;
+    }
+
+    // FIX: a rumour below 1000 is not known (see rumor_set_known_internal).
+    if (rumor_num_to_idx(rumor) < 0) {
         return false;
     }
 

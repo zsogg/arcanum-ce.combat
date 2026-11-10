@@ -84,6 +84,18 @@ static mes_file_handle_t* reputation_mes_files;
 // 0x5FC8B8
 static int reputation_pick_candidates[1000];
 
+// FIX: a reputation number outside the table (1000-1999) has no record and
+// adds nothing. The original indexes `rep - 1000` with no bound (0x4C1B66,
+// 0x4C203F, 0x4C222C), so `rp 2` (01395) made every reaction and faction test
+// read record -998, 75,848 bytes before the table. The PC's list still holds
+// the number as the original stores it; only the reads are bounded.
+static ReputationInfo* reputation_record(int reputation)
+{
+    int idx = rep_num_to_idx(reputation);
+
+    return idx >= 0 && idx < MAX_REPUTATIONS ? &(reputations[idx]) : NULL;
+}
+
 /**
  * Called when the game is initialized.
  *
@@ -327,7 +339,7 @@ int reputation_reaction_adj(int64_t pc_obj, int64_t npc_obj)
 {
     int adj = 0;
     int cnt;
-    int idx;
+    ReputationInfo* info;
     int i;
     int j;
     int origin;
@@ -351,11 +363,14 @@ int reputation_reaction_adj(int64_t pc_obj, int64_t npc_obj)
 
         // Iterate through each reputation the PC has.
         for (i = 0; i < cnt; i++) {
-            idx = rep_num_to_idx(obj_arrayfield_uint32_get(pc_obj, OBJ_F_PC_REPUTATION_IDX, i));
+            info = reputation_record(obj_arrayfield_uint32_get(pc_obj, OBJ_F_PC_REPUTATION_IDX, i));
+            if (info == NULL) {
+                continue;
+            }
 
             // Apply each effect that matches the NPC's origin or faction.
-            for (j = 0; j < reputations[idx].num_effects; j++) {
-                effect = &(reputations[idx].effects[j]);
+            for (j = 0; j < info->num_effects; j++) {
+                effect = &(info->effects[j]);
                 if ((effect->origin == 0 || effect->origin == origin)
                     && (effect->faction == 0 || effect->faction == faction)) {
                     adj += effect->adj;
@@ -536,6 +551,7 @@ int reputation_pick(int64_t pc_obj, int64_t npc_obj)
     int reaction_type;
     int i;
     int j;
+    ReputationInfo* info;
     ReputationEffectInfo* effect;
     int selected_cnt;
 
@@ -565,8 +581,12 @@ int reputation_pick(int64_t pc_obj, int64_t npc_obj)
     // Iterate through PC's reputations to find those affecting the NPC.
     for (idx = 0; idx < cnt; idx++) {
         i = rep_num_to_idx(obj_arrayfield_uint32_get(pc_obj, OBJ_F_PC_REPUTATION_IDX, idx));
-        for (j = 0; j < reputations[i].num_effects; j++) {
-            effect = &(reputations[i].effects[j]);
+        info = reputation_record(rep_idx_to_num(i));
+        if (info == NULL) {
+            continue;
+        }
+        for (j = 0; j < info->num_effects; j++) {
+            effect = &(info->effects[j]);
 
             // Check if the effect applies to the NPC's origin and faction.
             if ((effect->origin == 0 || effect->origin == origin)
@@ -646,7 +666,7 @@ bool reputation_check_faction(int64_t pc_obj, int faction)
 {
     int cnt;
     int idx;
-    int i;
+    ReputationInfo* info;
     int j;
 
     if (faction == 0) {
@@ -661,9 +681,12 @@ bool reputation_check_faction(int64_t pc_obj, int faction)
     // Iterate through PC's reputations to find matching factions.
     cnt = obj_arrayfield_length_get(pc_obj, OBJ_F_PC_REPUTATION_IDX);
     for (idx = 0; idx < cnt; idx++) {
-        i = rep_num_to_idx(obj_arrayfield_uint32_get(pc_obj, OBJ_F_PC_REPUTATION_IDX, idx));
+        info = reputation_record(obj_arrayfield_uint32_get(pc_obj, OBJ_F_PC_REPUTATION_IDX, idx));
+        if (info == NULL) {
+            continue;
+        }
         for (j = 0; j < 3; j++) {
-            if (reputations[i].factions[j] == faction) {
+            if (info->factions[j] == faction) {
                 return true;
             }
         }

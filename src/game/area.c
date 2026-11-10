@@ -545,6 +545,14 @@ bool area_is_known(int64_t pc_obj, int area)
         return false;
     }
 
+    // FIX: an area outside the table is not known, and marking it known
+    // does nothing (area_set_known below). The original indexes the flags
+    // unchecked (0x4CAFB9 read, 0x4CB0D2 `or BYTE PTR [eax+ebx*1],0x1`), so
+    // the debug dialogue's `mm 82` wrote one byte past 82 areas' flags.
+    if (area < 0 || area >= num_areas) {
+        return false;
+    }
+
     if (pc_obj == player_get_local_pc_obj()) {
         return (area_flags[area] & AREA_KNOWN) != 0;
     }
@@ -562,6 +570,10 @@ bool area_set_known(int64_t pc_obj, int area)
     // If the area is already known, no action is needed.
     if (area_is_known(pc_obj, area)) {
         return true;
+    }
+
+    if (area < 0 || area >= num_areas) {
+        return false;
     }
 
     // Validate the object and ensure it's a player character.
