@@ -925,6 +925,9 @@ then what release 1 did.
   before, each was asked for the full remainder. (#75)
 - A newspaper story that has already run can be printed again when the game
   asks for it; before, it was silently skipped. (#296)
+- A creature or object a script creates where there is no room around it
+  appears on the spot the script named; before, it appeared in the map's
+  corner. (#382)
 
 **Characters, skills and followers**
 
@@ -1097,6 +1100,10 @@ then what release 1 did.
   kept pointing at the previous step's details. (#150)
 - Each newly started animation begins with a clean slate; release 1 could carry
   over a leftover step and target tile from an earlier one. (#151)
+- Your party can leave a building by a locked door from inside; before, some
+  such doors needed a key or Pick Locks. (#383)
+- A path around an obstacle to a spot exactly 32 tiles away is refused, as in
+  the original; before, one was found. (#384)
 
 **Interface and screens**
 
@@ -1282,41 +1289,47 @@ then what release 1 did.
   strength until it vanished. (#367)
 - Scaled images cut by the screen edge line up; release 1 could draw them a
   pixel off. (#368)
+- Scaled objects' overlays, shadows and wading lines, and where you can click
+  them, are rounded as in the original; before, they could be a pixel off.
+  (#385)
 
-**Fixes with no effect in ordinary play** (103), listed for completeness:
+**Fixes with no effect in ordinary play** (114), listed for completeness:
 
-- **The world editor and modding** (16): saving a map's objects, terrain codes,
+- **The world editor and modding** (18): saving a map's objects, terrain codes,
   the sector grid, wall lines and deleting parts of long walls in the editor;
   modded text files with a stray carriage return; two-part light colours in
-  modded effects. (#155, #161, #162, #166, #187, #188, #191, #192, #291, #297,
-  #320, #321, #323, #324, #337, #339)
-- **Screens and menus** (10): buttons and options with missing art or values,
+  modded effects; modded greetings that open a screen or end in a comma.
+  (#155, #161, #162, #166, #187, #188, #191, #192, #291, #297, #320, #321,
+  #323, #324, #337, #339, #390, #391)
+- **Screens and menus** (11): buttons and options with missing art or values,
   scroll-bar bookkeeping, a race-list search, a stray Escape after quitting,
-  and windows that fail to open. (#203, #204, #205, #207, #213, #222, #223,
-  #228, #249, #252)
-- **Drawing and sound** (7): partial world-map redraws, menu animations,
+  windows that fail to open, and save-screen text that cannot break. (#203,
+  #204, #205, #207, #213, #222, #223, #228, #249, #252, #393)
+- **Drawing and sound** (8): partial world-map redraws, menu animations,
   equipment slots whose art fails, sound balance, looping overlay sounds,
-  effect sizes and sound cross-fades, none of which shipped data reaches.
-  (#246, #251, #261, #313, #314, #317, #364)
+  effect sizes, sound cross-fades and a teleport movie's flags, none of which
+  shipped data reaches. (#246, #251, #261, #313, #314, #317, #364, #386)
 - **The world and travel** (4): map preparation without a module, the town map
   link after switching modules, an unused town-map scroll, and a large scenery
   object built without its data file. (#154, #241, #243, #280)
-- **Crash guards no play reaches** (3): text boxes without a change handler, a
-  drawing failure on the save list, and windows without an input handler.
-  (#236, #250, #356)
+- **Crash guards no play reaches** (6): text boxes without a change handler, a
+  drawing failure on the save list, windows without an input handler, a
+  script showing or hiding a missing item, and door and window checks on a
+  missing object. (#236, #250, #356, #387, #388, #389)
 - **Spells, saving, items and characters** (9): two spell targeting rules no
   shipped spell uses, two save consistency checks, stack weights and generated
   grenade prices, an NPC's second weapon check, and the default character name.
   (#307, #308, #193, #198, #107, #281, #78, #282)
 - **Game text** (1): text files containing the Russian letter "ya" are no
   longer cut short there; no English file has one. (#293)
-- **The engine's own workings** (54): routines nothing calls, multiplayer-only
+- **The engine's own workings** (58): routines nothing calls, multiplayer-only
   paths, debug messages, error codes, file and folder helpers, memory counting
   and message bookkeeping, each as the original has it. (#59, #86, #87, #99,
   #119, #121, #127, #131, #139, #148, #149, #152, #153, #156, #158, #160, #164,
   #167, #168, #173, #174, #176, #189, #194, #253, #284, #285, #286, #290, #294,
   #304, #327, #329, #331, #332, #333, #334, #335, #336, #338, #340, #341, #348,
-  #349, #350, #351, #352, #353, #354, #357, #360, #362, #363, #370)
+  #349, #350, #351, #352, #353, #354, #357, #360, #362, #363, #370, #392,
+  #394, #395, #396)
 
 ### 3.3 Mistakes in the decompilation, fixed before release 1
 
