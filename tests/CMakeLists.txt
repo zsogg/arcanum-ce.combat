@@ -1305,6 +1305,37 @@ target_link_libraries(arcanum-dlg-dump PRIVATE
     ${ZLIB_LIBRARIES}
 )
 
+# Runs main-line dialogue steps through CE's option collector and action
+# interpreter, for QA1 phase 2. Includes `dialog.c` as `arcanum-dlg-dump`
+# does. The wrapped callees need a world; each prints a line and does nothing.
+# Needs the game's archives, so not a test.
+add_executable(arcanum-dlg-steps
+    "dlg_steps.c"
+    "obj_harness.c"
+    "obj_harness.h"
+)
+
+target_link_libraries(arcanum-dlg-steps PRIVATE
+    arcanum-game
+    tig
+    SDL3::SDL3
+    ${ZLIB_LIBRARIES}
+)
+
+target_link_options(arcanum-dlg-steps PRIVATE
+    "-Wl,--wrap=critter_give_xp"
+    "-Wl,--wrap=item_gold_transfer"
+    "-Wl,--wrap=item_transfer"
+    "-Wl,--wrap=reputation_add"
+    "-Wl,--wrap=reputation_remove"
+    "-Wl,--wrap=ai_attack"
+    "-Wl,--wrap=newspaper_enqueue"
+    "-Wl,--wrap=ai_can_speak"
+    "-Wl,--wrap=object_destroy"
+    "-Wl,--wrap=item_remove"
+    "-Wl,--wrap=item_drop_at_loc"
+)
+
 add_executable(arcanum-file-probe
     "file_probe.c"
 )
