@@ -1529,6 +1529,7 @@ bool dialog_check_conditions(DialogState* a1, char* a2)
     int v39;
     int v40;
     bool inverse;
+    bool following;
     int64_t substitute_inventory_obj;
     char code[3];
 
@@ -1808,13 +1809,15 @@ bool dialog_check_conditions(DialogState* a1, char* a2)
             // (0x4156A0-0x4156BD) and fails `fo 0` when it holds (0x4156C3)
             // and `fo 1` when it does not (0x41595D), as Troika's Eventscripts
             // says; CE had them swapped, so a following Weldo hid "I need you
-            // to do something..." (01077 {294}, {301}).
+            // to do something..." (01077 {294}, {301}). The leader is read
+            // whatever the value, as there.
+            following = critter_leader_get(a1->npc_obj) == a1->pc_obj;
             if (value == 0) {
-                if (critter_leader_get(a1->npc_obj) == a1->pc_obj) {
+                if (following) {
                     return false;
                 }
             } else if (value == 1) {
-                if (critter_leader_get(a1->npc_obj) != a1->pc_obj) {
+                if (!following) {
                     return false;
                 }
             }
