@@ -99,6 +99,7 @@ void test_reaction_suite(void);
 void test_effect_parse_suite(void);
 #if ARCANUM_TESTS_GNU_LINK
 void test_dialog_conditions_suite(void);
+void test_out_of_range_lines_suite(void);
 #endif
 void test_rules_fixes_suite(void);
 #if ARCANUM_TESTS_GNU_LINK
@@ -223,6 +224,7 @@ int main(void)
     test_effect_parse_suite();
 #if ARCANUM_TESTS_GNU_LINK
     test_dialog_conditions_suite();
+    test_out_of_range_lines_suite();
 #endif
     test_rules_fixes_suite();
 #if ARCANUM_TESTS_GNU_LINK

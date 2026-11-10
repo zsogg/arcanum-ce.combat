@@ -139,6 +139,7 @@ target_sources(arcanum-tests PRIVATE
     "test_compare_fixes.c"
     "test_dialog_conditions.c"
     "test_dialog_options.c"
+    "test_out_of_range_lines.c"
     "test_eye_candy_sound.c"
     "test_interrupted_cast.c"
     "test_proto.c"
@@ -612,6 +613,9 @@ set(DIALOG_TEST_STATICS
     dialog_collect_pc_options
     dialog_parse_params
     dialog_build_pc_option
+    # test_out_of_range_lines.c runs shipped lines through these (QA1).
+    dialog_check_conditions
+    dialog_perform_actions
 )
 set(DIALOG_TEST_OBJ "${CMAKE_CURRENT_BINARY_DIR}/dialog_globalized.o")
 set(_dialog_globalize_args "")
@@ -1086,6 +1090,38 @@ add_custom_target(arcanum-tc-test-obj DEPENDS "${TC_TEST_OBJ}")
 target_link_libraries(arcanum-tests PRIVATE "${TC_TEST_OBJ}")
 add_dependencies(arcanum-tests arcanum-tc-test-obj)
 
+# `reputation.c` and `rumor.c`: the tables test_out_of_range_lines.c points at
+# a buffer it owns, so a shipped line's out-of-range index (QA1) is pinned
+# without the case itself overrunning.
+foreach(_oor reputation:reputations rumor:rumor_qstate)
+    string(REPLACE ":" ";" _oor "${_oor}")
+    list(GET _oor 0 _oor_src)
+    list(GET _oor 1 _oor_sym)
+    set(_oor_obj "${CMAKE_CURRENT_BINARY_DIR}/${_oor_src}_globalized.o")
+    file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/${_oor_src}obj")
+    add_custom_command(
+        OUTPUT "${_oor_obj}"
+        COMMAND "${CMAKE_AR}" x "$<TARGET_FILE:arcanum-game>" ${_oor_src}.c${CMAKE_C_OUTPUT_EXTENSION}
+        COMMAND "${CMAKE_OBJCOPY}" "--globalize-symbol=${_oor_sym}" ${_oor_src}.c${CMAKE_C_OUTPUT_EXTENSION} "${_oor_obj}"
+        COMMAND "${CMAKE_COMMAND}" -E rm -f ${_oor_src}.c${CMAKE_C_OUTPUT_EXTENSION}
+        COMMAND "${CMAKE_COMMAND}"
+            "-DOBJ=${_oor_obj}"
+            "-DSYMS="
+            "-DDATA_SYMS=${_oor_sym}"
+            "-DNM=${CMAKE_NM}"
+            -P "${CMAKE_CURRENT_SOURCE_DIR}/verify_globalized.cmake"
+        WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/${_oor_src}obj"
+        DEPENDS arcanum-game
+        COMMENT "tests: globalizing ${_oor_src}.c's ${_oor_sym} (no source change)"
+        VERBATIM
+    )
+    add_custom_target(arcanum-${_oor_src}-test-obj DEPENDS "${_oor_obj}")
+    list(APPEND OOR_TEST_OBJS "${_oor_obj}")
+    list(APPEND OOR_TEST_TARGETS arcanum-${_oor_src}-test-obj)
+endforeach()
+target_link_libraries(arcanum-tests PRIVATE ${OOR_TEST_OBJS})
+add_dependencies(arcanum-tests ${OOR_TEST_TARGETS})
+
 # A focused executable for the script VM. The full suite deliberately contains
 # subprocess crash specifications whose expected signal changes under UBSan;
 # this target lets the VM's boundary and repeated-invocation cases run cleanly
@@ -1098,17 +1134,21 @@ add_executable(arcanum-script-tests
     # The local flag and counter accessors read a real object (QA1).
     "obj_harness.c"
     "obj_harness.h"
+    # And the out-of-range dialogue lines, for the sanitizer preset (QA1).
+    "test_out_of_range_lines.c"
 )
 target_include_directories(arcanum-script-tests PRIVATE
     "${CMAKE_CURRENT_SOURCE_DIR}"
 )
 target_link_libraries(arcanum-script-tests PRIVATE
     "${SCRIPT_TEST_OBJ}"
+    "${DIALOG_TEST_OBJ}"
+    ${OOR_TEST_OBJS}
     arcanum-game
     tig
     SDL3::SDL3
 )
-add_dependencies(arcanum-script-tests arcanum-script-test-obj)
+add_dependencies(arcanum-script-tests arcanum-script-test-obj arcanum-dialog-test-obj ${OOR_TEST_TARGETS})
 add_test(NAME arcanum-script-tests COMMAND arcanum-script-tests)
 
 
