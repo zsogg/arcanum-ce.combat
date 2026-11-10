@@ -945,6 +945,8 @@ then what release 1 did.
   nothing in hand. (#90)
 - Auto-levelled characters raise stats to their planned targets; before, race,
   background and other bonuses made them stop early or overshoot. (#91)
+- On Hard, every experience award, quests included, gives three quarters of
+  the experience; before, it gave half. (#377)
 - Killing or robbing good people can drive your alignment as low as the
   original allows; before, it stopped well short. (#93)
 - When a follower volunteers to pick a lock, the follower does the picking;
