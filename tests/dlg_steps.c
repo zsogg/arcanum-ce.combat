@@ -27,6 +27,7 @@
 //     rumor N | reaction N
 //     watch ss | watch gf N | watch gv N | watch qu N
 //     run
+//     reply                                    build the NPC reply at <node>
 //
 // Output, per case:
 //
@@ -37,6 +38,8 @@
 //     X <call>                                 a call out of the dialogue (below)
 //     B <key>=<value> ...                      watched state, before
 //     A <key>=<value> ...                      watched state, after
+//     R <returned 0|1> <status> <num_options>  `reply`: dialog_build_npc_reply,
+//                                              with num_options preset to 7
 //
 // Quest, story-state, flag and variable state is the engine's own
 // (`script_init`, `quest_init` then `quest_reset`, as a new game does: without
@@ -339,6 +342,31 @@ static void run_case(const char* path, int node, int option, int npc_line)
     dialog_unload(dlg);
 }
 
+// The reply a node shows, as `dialog_build_exchange` builds it before its
+// option pass: whether the exchange goes on, and the status it leaves.
+static void run_reply(const char* path, int node)
+{
+    DialogState state;
+    int dlg;
+    bool returned;
+
+    if (!dialog_load(path, &dlg)) {
+        printf("R\tLOAD FAILED %s\n", path);
+        return;
+    }
+
+    memset(&state, 0, sizeof(state));
+    state.dlg = dlg;
+    state.pc_obj = pc_obj;
+    state.npc_obj = npc_obj;
+    state.status_num = node;
+    state.num_options = 7;
+    returned = dialog_build_npc_reply(&state, false);
+    printf("R\t%d\t%d\t%d\n", returned ? 1 : 0, (int)state.status, state.num_options);
+
+    dialog_unload(dlg);
+}
+
 static void reset_world(int script_num)
 {
     Script scr;
@@ -503,6 +531,9 @@ int main(int argc, char** argv)
             watch_num[watch_count++] = a;
         } else if (strcmp(line, "run") == 0) {
             run_case(path, node, option, npc_line);
+            fflush(stdout);
+        } else if (strcmp(line, "reply") == 0) {
+            run_reply(path, node);
             fflush(stdout);
         } else {
             fprintf(stderr, "bad line %d: %s\n", index + 1, line);
