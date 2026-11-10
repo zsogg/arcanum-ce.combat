@@ -48,9 +48,11 @@
 
 #define MAX_TEST_AREAS 16
 
+#if ARCANUM_TESTS_GNU_LINK
 // Globalized out of area.c by the build (tests/CMakeLists.txt), so the bound
 // can be tested against bytes this file plants either side of the table.
 extern uint8_t* area_flags;
+#endif
 
 // The layout `area_save` writes and `area_load` reads. Nine flag arrays and
 // nine int32s: the shared set plus one per player slot.
@@ -613,8 +615,10 @@ TEST(an_area_past_the_table_is_not_marked_known)
     AreaBlock written;
     AreaBlock read_back;
     int64_t pc;
+#if ARCANUM_TESTS_GNU_LINK
     uint8_t planted[5];
     uint8_t* saved_flags;
+#endif
 
     CHECK(write_contiguous_areas(3));
     CHECK(reload_areas());
@@ -636,6 +640,7 @@ TEST(an_area_past_the_table_is_not_marked_known)
     CHECK(!area_is_known(pc, 3));
     CHECK(!area_is_known(pc, -1));
 
+#if ARCANUM_TESTS_GNU_LINK
     // The read, against known bytes either side of the table: unbounded, it
     // would find area 3 and area -1 known (0x4CAFB9).
     saved_flags = area_flags;
@@ -647,6 +652,7 @@ TEST(an_area_past_the_table_is_not_marked_known)
     CHECK(!area_is_known(pc, -1));
     CHECK(area_is_known(pc, 1));
     area_flags = saved_flags;
+#endif
 
     CHECK(save_and_read_block(&read_back));
     CHECK_INT(read_back.flags[0] | read_back.flags[1] | read_back.flags[2], 0);
