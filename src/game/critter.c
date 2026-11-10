@@ -2009,7 +2009,10 @@ void critter_give_xp(int64_t obj, int xp_gain)
         xp_gain += xp_gain / 2;
         break;
     case GAME_DIFFICULTY_HARD:
-        xp_gain -= xp_gain / 2;
+        // FIX (porting bug #377): Hard keeps three quarters. The original
+        // divides by 4 (0x45F15A-0x45F167 `cdq; and edx,3; add; sar eax,2;
+        // neg; add ebp,eax`); CE took half.
+        xp_gain -= xp_gain / 4;
         break;
     }
 

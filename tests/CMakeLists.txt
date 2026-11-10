@@ -163,6 +163,12 @@ add_executable(arcanum-emudiff-oracle
     "obj_harness.h"
 )
 
+# `critter_give_xp`'s case sets the difficulty through a wrapped getter (see
+# `o_critter_give_xp`).
+target_link_options(arcanum-emudiff-oracle PRIVATE
+    "-Wl,--wrap=gamelib_game_difficulty_get"
+)
+
 # `static` hides several of `art.c`'s most testable functions from the oracle -
 # `tig_art_blt_flags_convert`, `tig_art_build_path`,
 # `tig_art_header_num_rotations` are pure, are in the blit path, and would not
@@ -1123,6 +1129,8 @@ target_link_options(arcanum-tests PRIVATE
     "-Wl,--wrap=magictech_summons_turn_reached"
     # test_interrupted_cast: see the release an interrupted cast makes.
     "-Wl,--wrap=magictech_release"
+    # test_compare_fixes: award XP on Hard (porting bug #377).
+    "-Wl,--wrap=gamelib_game_difficulty_get"
 )
 endif() # ARCANUM_TESTS_GNU_LINK
 

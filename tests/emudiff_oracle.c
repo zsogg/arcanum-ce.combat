@@ -43,6 +43,7 @@
 #include "game/critter.h"
 #include "game/dialog.h"
 #include "game/fate.h"
+#include "game/gamelib.h"
 #include "game/gsound.h"
 #include "game/item.h"
 #include "game/level.h"
@@ -808,6 +809,46 @@ static void o_critter_is_monstrous(const int64_t* a, int64_t* out)
     }
 
     out[0] = critter_is_monstrous(obj);
+}
+
+// `critter_give_xp` (0x45F110): the difficulty's adjustment (porting bug
+// #377). Three inputs: the type (PC, or an NPC for the early return), the
+// difficulty and the gain. The answer is the XP stored afterwards, from a
+// base of 1,000,000,000, which the case's gain domain keeps clear of
+// `stat_base_set`'s clamp; the emulator side stubs that call and captures
+// its argument instead.
+//
+// The difficulty is `static` in gamelib.c and set only by the settings
+// callback `gamelib_init` registers, so this binary wraps its getter
+// (tests/CMakeLists.txt). The PC sits at the top level, where `level_recalc`
+// returns before reading the XP table `level_init` would load.
+static int o_forced_difficulty = -1;
+
+int __real_gamelib_game_difficulty_get(void);
+int __wrap_gamelib_game_difficulty_get(void);
+
+int __wrap_gamelib_game_difficulty_get(void)
+{
+    return o_forced_difficulty >= 0 ? o_forced_difficulty : __real_gamelib_game_difficulty_get();
+}
+
+static void o_critter_give_xp(const int64_t* a, int64_t* out)
+{
+    int64_t obj = o_obj_of_type((int)a[0]);
+
+    if (obj == OBJ_HANDLE_NULL) {
+        out[0] = -1;
+        return;
+    }
+
+    obj_arrayfield_int32_set(obj, OBJ_F_CRITTER_STAT_BASE_IDX, STAT_EXPERIENCE_POINTS, 1000000000);
+    obj_arrayfield_int32_set(obj, OBJ_F_CRITTER_STAT_BASE_IDX, STAT_LEVEL, stat_level_max(obj, STAT_LEVEL));
+
+    o_forced_difficulty = (int)a[1];
+    critter_give_xp(obj, (int)a[2]);
+    o_forced_difficulty = -1;
+
+    out[0] = stat_base_get(obj, STAT_EXPERIENCE_POINTS);
 }
 
 // `item_worth` (0x461F20) and `item_is_worthless` (0x461F60), which sit either
@@ -3659,6 +3700,7 @@ static const OracleEntry oracle_entries[] = {
     { "basic_skill_stat", 1, 1, o_basic_skill_stat },
     { "tech_skill_stat", 1, 1, o_tech_skill_stat },
     { "critter_is_monstrous", 3, 1, o_critter_is_monstrous },
+    { "critter_give_xp", 3, 1, o_critter_give_xp },
     { "combat_critter_is_combat_mode_active", 2, 1, o_combat_critter_is_combat_mode_active },
     { "combat_weapon_loudness", 3, 1, o_combat_weapon_loudness },
     { "combat_turn_based_critter_is_dontdraw", 3, 1, o_combat_turn_based_critter_is_dontdraw },

@@ -38,12 +38,16 @@
 //   (0x441E22); scripts pass 2 to unlock for good, and CE locked instead,
 //   so the Bates mansion gate stayed shut after "Go right in" (zsogg's
 //   campaign, 2026-11-08).
+// - #377 `critter_give_xp` (0x45F110) took half of every award on Hard. The
+//   original takes a quarter (0x45F15A-0x45F167, a signed `/ 4`). Found by
+//   the QA1 pilot, 2026-11-09.
 
 #include <string.h>
 
 #include "game/anim_private.h"
 #include "game/animfx.h"
 #include "game/combat.h"
+#include "game/critter.h"
 #include "game/gamelib.h"
 #include "game/item.h"
 #include "game/location.h"
@@ -52,6 +56,7 @@
 #include "game/random.h"
 #include "game/settings.h"
 #include "game/skill.h"
+#include "game/stat.h"
 #include "game/target.h"
 #include "game/tc.h"
 
@@ -520,8 +525,50 @@ TEST(a_lock_state_of_two_unlocks_for_good)
     obj_harness_destroy(gate);
 }
 
+// `gamelib_game_difficulty` is `static` and set only by a settings callback
+// `gamelib_init` registers, so the suite wraps its getter (tests/CMakeLists.txt).
+static int forced_difficulty = -1;
+
+int __real_gamelib_game_difficulty_get(void);
+int __wrap_gamelib_game_difficulty_get(void);
+
+int __wrap_gamelib_game_difficulty_get(void)
+{
+    return forced_difficulty >= 0 ? forced_difficulty : __real_gamelib_game_difficulty_get();
+}
+
+TEST(hard_keeps_three_quarters_of_an_xp_award)
+{
+    static const int gains[][2] = {
+        { 0, 0 },
+        { 1, 1 },
+        { 3, 3 },
+        { 4, 3 },
+        { 7, 6 },
+        { 100, 75 },
+        { -7, -6 },
+    };
+    int64_t pc = obj_harness_create_proto(OBJ_TYPE_PC);
+    size_t idx;
+
+    // At the top level `level_recalc` returns before it reads the XP table,
+    // which only `level_init` loads.
+    obj_arrayfield_int32_set(pc, OBJ_F_CRITTER_STAT_BASE_IDX, STAT_LEVEL, stat_level_max(pc, STAT_LEVEL));
+
+    forced_difficulty = GAME_DIFFICULTY_HARD;
+    for (idx = 0; idx < sizeof(gains) / sizeof(gains[0]); idx++) {
+        obj_arrayfield_int32_set(pc, OBJ_F_CRITTER_STAT_BASE_IDX, STAT_EXPERIENCE_POINTS, 1000);
+        critter_give_xp(pc, gains[idx][0]);
+        CHECK_INT(stat_base_get(pc, STAT_EXPERIENCE_POINTS), 1000 + gains[idx][1]);
+    }
+    forced_difficulty = -1;
+
+    obj_harness_destroy(pc);
+}
+
 void test_compare_fixes_suite(void)
 {
+    RUN(hard_keeps_three_quarters_of_an_xp_award);
     RUN(a_magic_target_critical_rolls_its_effects_from_zero);
     RUN(a_lock_state_of_two_unlocks_for_good);
     RUN(a_radius_2_wall_is_5_tiles_along_its_rotation);
