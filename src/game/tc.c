@@ -697,3 +697,20 @@ void tc_render_internal(TigRectListNode* node)
         tmp_head = tmp_node;
     }
 }
+
+// CE: the screen point in the middle of reply row `index`, where a click picks
+// that reply (`tc_handle_message`'s arithmetic, inverted), for the replay's
+// `option` row. False when the box is not up or the row is empty.
+bool tc_option_point(int index, int* x, int* y)
+{
+    int row_height;
+
+    if (tc_editor || !tc_active || index < 0 || index >= TEXT_CONVERSATION_LINES || tc_options[index] == NULL) {
+        return false;
+    }
+
+    row_height = tc_intermediate_video_buffer_rect.height / TEXT_CONVERSATION_LINES;
+    *x = tc_iso_window_rect.x + tc_content_rect.x + tc_content_rect.width / 2;
+    *y = tc_iso_window_rect.y + tc_content_rect.y + index * row_height + row_height / 2;
+    return true;
+}

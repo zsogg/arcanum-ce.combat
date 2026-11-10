@@ -939,6 +939,39 @@ TEST(the_persistence_rows_load_into_what_they_say)
     CHECK(!load_script("0 drop flintlock\n"));
 }
 
+TEST(the_quest_step_rows_load_into_what_they_say)
+{
+    // QA1 phase 4 (2026-11-10): a main-line step from a set state, through
+    // the dialogue as a player picks it.
+    CHECK(load_script(
+        "0 state story 7\n"
+        "0 state gflag 1046 1\n"
+        "0 state quest 1046 2\n"
+        "0 inspect state quest 1046\n"
+        "0 inspect state story\n"
+        "0 option 2\n"
+        "0 inspect dialogue\n"));
+    CHECK_INT(replay_ui_count(), 7);
+    CHECK(row_is(0, "turn=0 now=0 kind=state target= loc=0 aim=0 spell=0 cast=- wait=0 state=story num=7 value=0"));
+    CHECK(row_is(1, "turn=0 now=0 kind=state target= loc=0 aim=0 spell=0 cast=- wait=0 state=gflag num=1046 value=1"));
+    CHECK(row_is(2, "turn=0 now=0 kind=state target= loc=0 aim=0 spell=0 cast=- wait=0 state=quest num=1046 value=2"));
+    CHECK(row_is(3, "turn=0 now=0 kind=inspect target= loc=0 aim=0 spell=0 cast=- wait=0 state=quest num=1046 value=0"));
+    CHECK(row_is(4, "turn=0 now=0 kind=inspect target= loc=0 aim=0 spell=0 cast=- wait=0 state=story num=0 value=0"));
+    CHECK(row_is(5, "turn=0 now=0 kind=option target= loc=0 aim=0 spell=0 cast=- wait=0 state=- num=2 value=0"));
+    CHECK(row_is(6, "turn=0 now=0 kind=inspect target= loc=0 aim=0 spell=0 cast=- wait=0"));
+
+    CHECK(!load_script("0 state story\n"));
+    CHECK(!load_script("0 state story 7 1\n")); // the story state takes no value
+    CHECK(!load_script("0 state gflag 5\n")); // a flag needs its value
+    CHECK(!load_script("0 state quest 999 1\n")); // quests are 1000-1999
+    CHECK(!load_script("0 state gflag 3200 1\n"));
+    CHECK(!load_script("0 state colour 1 1\n"));
+    CHECK(!load_script("0 inspect state quest\n"));
+    CHECK(!load_script("0 option 0\n")); // rows are 1-5
+    CHECK(!load_script("0 option 6\n"));
+    CHECK(!load_script("0 option\n"));
+}
+
 TEST(the_jam_row_loads_alone)
 {
     // Criticals CR-4 (2026-10-10): a test row that jams the wielded gun,
@@ -2167,6 +2200,7 @@ void test_combat_observer_suite(void)
     RUN(the_throw_rows_load_into_what_they_say);
     RUN(the_called_shot_rows_load_into_what_they_say);
     RUN(the_persistence_rows_load_into_what_they_say);
+    RUN(the_quest_step_rows_load_into_what_they_say);
     RUN(the_jam_row_loads_alone);
     RUN(the_display_and_creature_rows_load_into_what_they_say);
     RUN(the_await_death_row_names_the_critter_it_waits_for);

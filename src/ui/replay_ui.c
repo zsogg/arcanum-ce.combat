@@ -29,13 +29,16 @@
 #include "game/object_node.h"
 #include "game/player.h"
 #include "game/proto.h"
+#include "game/quest.h"
 #include "game/reaction.h"
 #include "game/reload.h"
+#include "game/script.h"
 #include "game/skill.h"
 #include "game/spell.h"
 #include "game/spell_rules.h"
 #include "game/stat.h"
 #include "game/target.h"
+#include "game/tc.h"
 #include "game/tech.h"
 #include "game/teleport.h"
 #include "game/tile_block.h"
@@ -43,6 +46,7 @@
 #include "game/weapon_rules.h"
 #include "ui/called_shot.h"
 #include "ui/combat_ui.h"
+#include "ui/dialog_ui.h"
 #include "ui/intgame.h"
 #include "ui/skill_ui.h"
 #include "ui/spell_ui.h"
@@ -365,7 +369,35 @@ typedef enum ReplayKind {
     //       Specialists' schematic screen); the discipline in `skill`, the
     //       degree in `count`.
     REPLAY_KIND_DEGREE,
+    // QA1 phase 4 (2026-11-10), a main-line step taken as a player takes it:
+    //   state story <n> / state gflag|gvar|pcflag|pcvar|quest <n> <value>
+    //       the story state, a global flag or variable, one of the player's
+    //       flags or variables, or the player's state in a quest, set as a
+    //       script action sets it, so a run can start at a step without the
+    //       playthrough before it. The kind in `skill`, the number in
+    //       `count`, the value in `dx`. `inspect state <kind> [<n>]` reads
+    //       one back (`stat` 10).
+    REPLAY_KIND_STATE,
+    //   option <n>
+    //       a left click in the middle of the open dialogue's reply row n
+    //       (1-5), enqueued as `click` enqueues one, as a player picks a reply;
+    //       the log gives the row's text. `inspect dialogue` (`stat` 11) logs
+    //       the NPC's reply and every option offered.
+    REPLAY_KIND_OPTION,
 } ReplayKind;
+
+// QA1 phase 4's `state` kinds, in `skill`.
+enum {
+    REPLAY_STATE_STORY,
+    REPLAY_STATE_GFLAG,
+    REPLAY_STATE_GVAR,
+    REPLAY_STATE_PCFLAG,
+    REPLAY_STATE_PCVAR,
+    REPLAY_STATE_QUEST,
+    REPLAY_STATE_COUNT,
+};
+
+static const char* replay_state_kinds[REPLAY_STATE_COUNT] = { "story", "gflag", "gvar", "pcflag", "pcvar", "quest" };
 
 // A cast's target, which is a third shape: the caster, an object or a tile.
 typedef enum ReplayCastTarget {
@@ -866,6 +898,77 @@ static void replay_copy_target(ReplayCommand* command, const char* token)
 // One line: `<turn> [now] <kind> <arguments>`. The first three kinds keep the
 // grammar every existing script was written in, so those scripts load as
 // before; the rest are real-time session A's.
+// A `state` kind's index, -1 for none.
+static int replay_state_kind(const char* token)
+{
+    int kind;
+
+    for (kind = 0; kind < REPLAY_STATE_COUNT; kind++) {
+        if (strcmp(token, replay_state_kinds[kind]) == 0) {
+            return kind;
+        }
+    }
+    return -1;
+}
+
+// The numbers each `state` kind takes: the script VM's own tables, and the
+// quest numbers `quest.mes` uses.
+static bool replay_state_num_valid(int kind, int num)
+{
+    switch (kind) {
+    case REPLAY_STATE_STORY:
+        return true;
+    case REPLAY_STATE_GFLAG:
+        return num >= 0 && num < 3200;
+    case REPLAY_STATE_QUEST:
+        return num >= 1000 && num < 2000;
+    default:
+        return num >= 0 && num < 2000;
+    }
+}
+
+static int replay_state_get(int64_t pc_obj, int kind, int num)
+{
+    switch (kind) {
+    case REPLAY_STATE_STORY:
+        return script_story_state_get();
+    case REPLAY_STATE_GFLAG:
+        return script_global_flag_get(num);
+    case REPLAY_STATE_GVAR:
+        return script_global_var_get(num);
+    case REPLAY_STATE_PCFLAG:
+        return script_pc_flag_get(pc_obj, num);
+    case REPLAY_STATE_PCVAR:
+        return script_pc_var_get(pc_obj, num);
+    default:
+        return quest_state_get(pc_obj, num);
+    }
+}
+
+static void replay_state_set(int64_t pc_obj, int kind, int num, int value)
+{
+    switch (kind) {
+    case REPLAY_STATE_STORY:
+        script_story_state_set(num);
+        break;
+    case REPLAY_STATE_GFLAG:
+        script_global_flag_set(num, value);
+        break;
+    case REPLAY_STATE_GVAR:
+        script_global_var_set(num, value);
+        break;
+    case REPLAY_STATE_PCFLAG:
+        script_pc_flag_set(pc_obj, num, value);
+        break;
+    case REPLAY_STATE_PCVAR:
+        script_pc_var_set(pc_obj, num, value);
+        break;
+    default:
+        quest_state_set(pc_obj, num, value, OBJ_HANDLE_NULL);
+        break;
+    }
+}
+
 static bool replay_parse_line(const char* text, ReplayCommand* command)
 {
     char line[512];
@@ -1126,6 +1229,19 @@ static bool replay_parse_line(const char* text, ReplayCommand* command)
             }
             return index == count && (command->stat == 5 || command->target[0] != '\0');
         }
+        // `inspect state <kind> [<n>]` (QA1 phase 4): `stat` 10.
+        if (strcmp(tokens[index], "state") == 0) {
+            command->stat = 10;
+            index++;
+            if (index >= count || (command->skill = replay_state_kind(tokens[index++])) < 0) {
+                return false;
+            }
+            if (command->skill == REPLAY_STATE_STORY) {
+                return index == count;
+            }
+            return index + 1 == count && replay_parse_int(tokens[index], &(command->count))
+                && replay_state_num_valid(command->skill, command->count);
+        }
         // `inspect awareness` (2026-10-12): what each critter nearby makes of
         // the player, for prowling. `stat` tells the two apart.
         if (strcmp(tokens[index], "awareness") == 0) {
@@ -1135,6 +1251,9 @@ static bool replay_parse_line(const char* text, ReplayCommand* command)
             command->stat = 7;
         } else if (strcmp(tokens[index], "xp") == 0) {
             command->stat = 2;
+        } else if (strcmp(tokens[index], "dialogue") == 0) {
+            // `inspect dialogue` (QA1 phase 4): `stat` 11.
+            command->stat = 11;
         } else if (strcmp(tokens[index], "guns") != 0) {
             return false;
         }
@@ -1245,6 +1364,25 @@ static bool replay_parse_line(const char* text, ReplayCommand* command)
             return false;
         }
         return true;
+    }
+
+    if (strcmp(kind, "state") == 0) {
+        command->kind = REPLAY_KIND_STATE;
+        if (index >= count || (command->skill = replay_state_kind(tokens[index++])) < 0
+            || index >= count || !replay_parse_int(tokens[index++], &(command->count))
+            || !replay_state_num_valid(command->skill, command->count)) {
+            return false;
+        }
+        if (command->skill == REPLAY_STATE_STORY) {
+            return index == count;
+        }
+        return index + 1 == count && replay_parse_int(tokens[index], &(command->dx));
+    }
+
+    if (strcmp(kind, "option") == 0) {
+        command->kind = REPLAY_KIND_OPTION;
+        return index + 1 == count && replay_parse_int(tokens[index], &(command->count))
+            && command->count >= 1 && command->count <= 5;
     }
 
     if (strcmp(kind, "degree") == 0) {
@@ -1564,7 +1702,7 @@ int replay_ui_count(void)
 bool replay_ui_describe(int index, char* buffer, size_t size)
 {
     const ReplayCommand* command;
-    static const char* kinds[] = { "object", "location", "key", "cast", "wield", "wait", "learn", "give", "throw", "skill", "raise", "prowl", "panel", "save", "inspect", "transfer", "take", "drop", "pickup", "wear", "skill-level", "stat-level", "jam", "afflict", "poison", "use", "xp", "train", "hour", "encounter", "hover", "screenshot", "spawn", "invulnerable", "await-death", "remove", "examine", "press", "click", "block", "face", "stay", "run", "recruit", "npc", "hurt", "order", "attack", "restock", "teleport", "degree" };
+    static const char* kinds[] = { "object", "location", "key", "cast", "wield", "wait", "learn", "give", "throw", "skill", "raise", "prowl", "panel", "save", "inspect", "transfer", "take", "drop", "pickup", "wear", "skill-level", "stat-level", "jam", "afflict", "poison", "use", "xp", "train", "hour", "encounter", "hover", "screenshot", "spawn", "invulnerable", "await-death", "remove", "examine", "press", "click", "block", "face", "stay", "run", "recruit", "npc", "hurt", "order", "attack", "restock", "teleport", "degree", "state", "option" };
     int written;
     static const char* casts[] = { "self", "object", "location" };
 
@@ -1592,6 +1730,13 @@ bool replay_ui_describe(int index, char* buffer, size_t size)
     if (command->kind == REPLAY_KIND_DEGREE && written >= 0 && (size_t)written < size) {
         snprintf(buffer + written, size - (size_t)written, " tech=%d degree=%d",
             command->skill, command->count);
+    }
+    if ((command->kind == REPLAY_KIND_STATE || command->kind == REPLAY_KIND_OPTION
+            || (command->kind == REPLAY_KIND_INSPECT && command->stat == 10))
+        && written >= 0 && (size_t)written < size) {
+        snprintf(buffer + written, size - (size_t)written, " state=%s num=%d value=%d",
+            command->kind == REPLAY_KIND_OPTION ? "-" : replay_state_kinds[command->skill],
+            command->count, command->dx);
     }
     if (command->kind == REPLAY_KIND_TELEPORT && written >= 0 && (size_t)written < size) {
         snprintf(buffer + written, size - (size_t)written, " map=%d x=%d y=%d",
@@ -1947,6 +2092,33 @@ void replay_ui_tick(void)
     if (command->kind == REPLAY_KIND_INSPECT) {
         replay_stall_reported = false;
         replay_next++;
+        if (command->stat == 10) {
+            if (command->skill == REPLAY_STATE_STORY) {
+                tig_debug_printf("Replay: command %d: story reads %d\n", replay_next - 1,
+                    script_story_state_get());
+            } else {
+                tig_debug_printf("Replay: command %d: %s %d reads %d\n", replay_next - 1,
+                    replay_state_kinds[command->skill], command->count,
+                    replay_state_get(pc_obj, command->skill, command->count));
+            }
+            return;
+        }
+        if (command->stat == 11) {
+            const DialogState* state = dialog_ui_local_state();
+            int option;
+
+            if (state == NULL) {
+                tig_debug_printf("Replay: command %d: no dialogue is open\n", replay_next - 1);
+                return;
+            }
+            tig_debug_printf("Replay: command %d: dialogue says \"%s\"; %d option(s)\n",
+                replay_next - 1, state->reply, state->num_options);
+            for (option = 0; option < state->num_options; option++) {
+                tig_debug_printf("Replay: command %d: option %d \"%s\"\n",
+                    replay_next - 1, option + 1, state->options[option]);
+            }
+            return;
+        }
         if (command->stat == 4 || command->stat == 5) {
             target_obj = pc_obj;
             if (command->target[0] != '\0' && !replay_resolve(command, &target_obj)) {
@@ -2196,6 +2368,46 @@ void replay_ui_tick(void)
             tech_degree_get(pc_obj, command->skill) >= command->count
                 ? ""
                 : " (refused: Intelligence too low for the next degree)");
+        return;
+    }
+
+    if (command->kind == REPLAY_KIND_STATE) {
+        replay_stall_reported = false;
+        replay_next++;
+        replay_state_set(pc_obj, command->skill, command->count, command->dx);
+        if (command->skill == REPLAY_STATE_STORY) {
+            tig_debug_printf("Replay: command %d set story to %d; it reads %d\n", replay_next - 1,
+                command->count, script_story_state_get());
+        } else {
+            tig_debug_printf("Replay: command %d set %s %d to %d; it reads %d\n", replay_next - 1,
+                replay_state_kinds[command->skill], command->count, command->dx,
+                replay_state_get(pc_obj, command->skill, command->count));
+        }
+        return;
+    }
+
+    if (command->kind == REPLAY_KIND_OPTION) {
+        const DialogState* state = dialog_ui_local_state();
+        TigMessage click;
+        int x;
+        int y;
+
+        replay_stall_reported = false;
+        replay_next++;
+        if (state == NULL || !tc_option_point(command->count - 1, &x, &y)) {
+            tig_debug_printf("Replay: command %d: no reply row %d to pick\n", replay_next - 1, command->count);
+            return;
+        }
+        tig_debug_printf("Replay: command %d picks option %d \"%s\" at %d,%d\n", replay_next - 1,
+            command->count, command->count <= state->num_options ? state->options[command->count - 1] : "?", x, y);
+        memset(&click, 0, sizeof(click));
+        click.type = TIG_MESSAGE_MOUSE;
+        click.data.mouse.x = x;
+        click.data.mouse.y = y;
+        click.data.mouse.event = TIG_MESSAGE_MOUSE_LEFT_BUTTON_DOWN;
+        tig_message_enqueue(&click);
+        click.data.mouse.event = TIG_MESSAGE_MOUSE_LEFT_BUTTON_UP;
+        tig_message_enqueue(&click);
         return;
     }
 

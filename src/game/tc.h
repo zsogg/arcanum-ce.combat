@@ -14,5 +14,6 @@ void tc_clear(bool compact);
 void tc_set_option(int index, const char* str);
 int tc_handle_message(TigMessage* msg);
 int tc_check_size(const char* str);
+bool tc_option_point(int index, int* x, int* y);
 
 #endif /* ARCANUM_GAME_TC_H_ */

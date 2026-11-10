@@ -530,3 +530,17 @@ void dialog_ui_speech_stop(void)
         dialog_ui_speech_handle = TIG_SOUND_HANDLE_INVALID;
     }
 }
+
+// CE: the local player's open dialogue, for the replay's `inspect dialogue`
+// row; NULL when there is none.
+const DialogState* dialog_ui_local_state(void)
+{
+    DialogUiEntry* entry;
+
+    if (!dialog_ui_local_pc_dialog_active) {
+        return NULL;
+    }
+
+    entry = dialog_ui_entry_get(player_get_local_pc_obj());
+    return entry != NULL ? &(entry->state) : NULL;
+}
