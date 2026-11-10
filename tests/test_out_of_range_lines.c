@@ -192,6 +192,11 @@ TEST(reputation_two_lands_on_the_pc_and_reads_no_record)
     CHECK_INT(rep_count(), 1);
     CHECK_INT(rep_at(0), 2);
     CHECK_INT(reputation_reaction_adj(state.pc_obj, state.npc_obj), 0);
+    // reputation_pick weighs record -998's +7 only when the NPC likes the PC
+    // (reputation.c's `reaction_type < REACTION_NEUTRAL`); the harness NPC's
+    // reaction base is 0, so it is raised above 60.
+    reaction_adj(state.npc_obj, state.pc_obj, 80);
+    CHECK(reaction_translate(reaction_get(state.npc_obj, state.pc_obj)) < REACTION_NEUTRAL);
     CHECK_INT(reputation_pick(state.pc_obj, state.npc_obj), 0);
 
     // {23}, and {17}, {18} without their `$$ -10` (a gold transfer creates a
@@ -297,6 +302,17 @@ TEST(rumour_zero_is_not_quelled_and_reads_nothing)
     known = obj_arrayfield_length_get(state.pc_obj, OBJ_F_PC_RUMOR_IDX);
     CHECK(act("ru 999"));
     CHECK_INT(obj_arrayfield_length_get(state.pc_obj, OBJ_F_PC_RUMOR_IDX), known);
+    CHECK(!rumor_known_get(state.pc_obj, 999));
+    CHECK(!cond("ru 999"));
+
+    // The read, made observable: key -1 is word 0 of the PC's bitset
+    // (`pos / 32`), and x86 takes the shift `1u << -1` as bit 31, key 31. Its
+    // rank reads the mask before the popcount table, but with only bit 31 of
+    // the word's upper half set it is 0 or 1, and keys 31 and 32 are both
+    // stamped: unbounded, rumour 999 reads as known.
+    obj_arrayfield_int64_set(state.pc_obj, OBJ_F_PC_RUMOR_IDX, 31, 1);
+    obj_arrayfield_int64_set(state.pc_obj, OBJ_F_PC_RUMOR_IDX, 32, 1);
+    CHECK(rumor_known_get(state.pc_obj, 1031));
     CHECK(!rumor_known_get(state.pc_obj, 999));
     CHECK(!cond("ru 999"));
 

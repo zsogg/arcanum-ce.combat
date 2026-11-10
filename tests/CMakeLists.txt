@@ -1171,8 +1171,9 @@ add_dependencies(arcanum-tests arcanum-tc-test-obj)
 
 # `reputation.c` and `rumor.c`: the tables test_out_of_range_lines.c points at
 # a buffer it owns, so a shipped line's out-of-range index (QA1) is pinned
-# without the case itself overrunning.
-foreach(_oor reputation:reputations rumor:rumor_qstate)
+# without the case itself overrunning. `area.c`'s flags likewise, for
+# test_area.c.
+foreach(_oor reputation:reputations rumor:rumor_qstate area:area_flags)
     string(REPLACE ":" ";" _oor "${_oor}")
     list(GET _oor 0 _oor_src)
     list(GET _oor 1 _oor_sym)
