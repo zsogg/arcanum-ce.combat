@@ -1095,6 +1095,9 @@ add_executable(arcanum-script-tests
     "test_harness.h"
     "test_script.c"
     "script_tests_main.c"
+    # The local flag and counter accessors read a real object (QA1).
+    "obj_harness.c"
+    "obj_harness.h"
 )
 target_include_directories(arcanum-script-tests PRIVATE
     "${CMAKE_CURRENT_SOURCE_DIR}"

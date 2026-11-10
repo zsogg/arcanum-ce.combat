@@ -371,7 +371,7 @@ void script_pc_var_set(int64_t obj, int index, int value);
 int script_pc_flag_get(int64_t obj, int index);
 void script_pc_flag_set(int64_t obj, int index, int value);
 bool script_local_flag_get(int64_t obj, int index, int flag);
-void script_local_flag_set(int64_t obj, int index, int flag, bool enabled);
+void script_local_flag_set(int64_t obj, int index, int flag, int value);
 int script_local_counter_get(int64_t obj, int index, int counter);
 void script_local_counter_set(int64_t obj, int index, int counter, int value);
 int script_story_state_get(void);

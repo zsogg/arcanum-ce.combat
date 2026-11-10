@@ -1034,21 +1034,31 @@ bool script_local_flag_get(int64_t obj, int index, int flag)
 
     obj_arrayfield_script_get(obj, OBJ_F_SCRIPTS_IDX, index, &scr);
 
-    return scr.num != 0 ? (scr.hdr.flags & (1u << flag)) != 0 : false;
+    // NOTE: the original shifts by the flag unchecked (0x444F48 `shl eax,cl`),
+    // and x86 takes the count mod 32, so `lf61` reads flag 29 and `lf241`
+    // flag 17. Masked here, since a shift past the width is undefined in C.
+    return scr.num != 0 ? (scr.hdr.flags & (1u << (flag & 31))) != 0 : false;
 }
 
 // 0x444F60
-void script_local_flag_set(int64_t obj, int index, int flag, bool enabled)
+void script_local_flag_set(int64_t obj, int index, int flag, int value)
 {
     Script scr;
 
     obj_arrayfield_script_get(obj, OBJ_F_SCRIPTS_IDX, index, &scr);
 
     if (scr.num != 0) {
-        if (enabled) {
-            scr.hdr.flags |= 1u << flag;
+        // FIX (porting bug #378): the value is an int, ORed in shifted, with
+        // no clear first (0x444F8C-0x444F9A `shl eax,cl; or`), so 2 sets the
+        // next flag up and leaves this one as it was; 0 clears it
+        // (0x444FA0-0x444FB3). CE took a bool. Latent: shipped data passes
+        // only 0 and 1.
+        // NOTE: the count is masked as x86 masks the original's (0x444F98,
+        // 0x444FAD `shl ...,cl`), as in the getter.
+        if (value) {
+            scr.hdr.flags |= (unsigned int)value << (flag & 31);
         } else {
-            scr.hdr.flags &= ~(1u << flag);
+            scr.hdr.flags &= ~(1u << (flag & 31));
         }
 
         obj_arrayfield_script_set(obj, OBJ_F_SCRIPTS_IDX, index, &scr);
@@ -1066,7 +1076,11 @@ int script_local_counter_get(int64_t obj, int index, int counter)
     // shifted word (0x44500C `and $0xff,%eax`); CE returned every higher
     // counter with it, so `lc 2 N` failed whenever counter 3 was set - the
     // dice game's roll options never appeared (01620, 01952, 02017, 02098).
-    return scr.num != 0 ? (scr.hdr.counters >> (8 * counter)) & 0xFF : 0;
+    // NOTE: the original shifts by `8 * counter` unchecked (0x445007 `shl
+    // ecx,3`, 0x44500A `shr eax,cl`), and x86 takes the count mod 32, so
+    // `lc4` reads counter 0 and `lc21` counter 1. Masked here, since a shift
+    // past the width is undefined in C; unsigned, as `shl ecx,3` wraps.
+    return scr.num != 0 ? (scr.hdr.counters >> ((8u * counter) & 31)) & 0xFF : 0;
 }
 
 // 0x445020
@@ -1077,8 +1091,10 @@ void script_local_counter_set(int64_t obj, int index, int counter, int value)
     obj_arrayfield_script_get(obj, OBJ_F_SCRIPTS_IDX, index, &scr);
 
     if (scr.num) {
-        scr.hdr.counters &= ~(0xFFu << (8 * counter));
-        scr.hdr.counters |= (unsigned int)(value & 0xFF) << (8 * counter);
+        // NOTE: the shifts are masked as x86 masks the original's (0x44505C,
+        // 0x44506B `shl ...,cl` by `8 * counter`), as in the getter.
+        scr.hdr.counters &= ~(0xFFu << ((8u * counter) & 31));
+        scr.hdr.counters |= (unsigned int)(value & 0xFF) << ((8u * counter) & 31);
 
         obj_arrayfield_script_set(obj, OBJ_F_SCRIPTS_IDX, index, &scr);
     }

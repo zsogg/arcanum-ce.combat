@@ -27,6 +27,12 @@
 // below so local arrays and diagnostic status are reachable. The R1 arithmetic
 // cases still pass NULL deliberately: their operand kinds need no state, and
 // an accidental new dependency would crash rather than produce a lucky pass.
+//
+// QA1 (2026-11-09) adds the dialogue's local flag and counter accessors, on a
+// harness object: porting bug #378, `script_local_flag_set` (0x444F60) ORs in
+// `value << flag` with no clear first, and the shifts past the width that
+// the original leaves to x86's mod-32 count (0x444F48, 0x44500A, 0x44505C,
+// 0x44506B), as Raven's `lc4`, `lc21`, `lf61` and `lf241` reach.
 
 #include "game/script.h"
 
@@ -35,8 +41,10 @@
 #include <string.h>
 
 #include "game/location.h"
+#include "game/obj.h"
 #include "game/object.h"
 #include "game/sector.h"
+#include "obj_harness.h"
 #include "test_harness.h"
 
 // script.c:50. Not exported, so it is pinned here: if the sentinel changes,
@@ -845,8 +853,114 @@ TEST(hours_since_startup_does_not_toggle_a_sector)
     sector_block_init();
 }
 
+// An NPC whose first script slot holds `flags` and `counters`.
+static int64_t local_script_obj(unsigned int flags, unsigned int counters)
+{
+    int64_t obj;
+    Script scr;
+
+    if (!obj_harness_init()) {
+        return OBJ_HANDLE_NULL;
+    }
+
+    obj = obj_harness_create_proto(OBJ_TYPE_NPC);
+    if (obj != OBJ_HANDLE_NULL) {
+        memset(&scr, 0, sizeof(scr));
+        scr.num = 1074;
+        scr.hdr.flags = flags;
+        scr.hdr.counters = counters;
+        obj_arrayfield_script_set(obj, OBJ_F_SCRIPTS_IDX, 0, &scr);
+    }
+
+    return obj;
+}
+
+static Script local_script_get(int64_t obj)
+{
+    Script scr;
+
+    obj_arrayfield_script_get(obj, OBJ_F_SCRIPTS_IDX, 0, &scr);
+    return scr;
+}
+
+TEST(a_local_flag_value_of_two_sets_the_next_flag_up)
+{
+    int64_t obj = local_script_obj(0, 0);
+
+    CHECK(obj != OBJ_HANDLE_NULL);
+    if (obj == OBJ_HANDLE_NULL) {
+        return;
+    }
+
+    script_local_flag_set(obj, 0, 5, 2);
+    CHECK_INT(local_script_get(obj).hdr.flags, 1u << 6);
+    CHECK(!script_local_flag_get(obj, 0, 5));
+
+    // Nothing is cleared first, so a set flag stays set.
+    script_local_flag_set(obj, 0, 6, 0);
+    script_local_flag_set(obj, 0, 5, 1);
+    script_local_flag_set(obj, 0, 5, 2);
+    CHECK_INT(local_script_get(obj).hdr.flags, (1u << 5) | (1u << 6));
+    CHECK(script_local_flag_get(obj, 0, 5));
+
+    script_local_flag_set(obj, 0, 5, 0);
+    CHECK_INT(local_script_get(obj).hdr.flags, 1u << 6);
+
+    obj_harness_destroy(obj);
+}
+
+TEST(local_flags_past_31_wrap_as_the_original_shifts)
+{
+    int64_t obj = local_script_obj((1u << 29) | (1u << 17), 0);
+
+    CHECK(obj != OBJ_HANDLE_NULL);
+    if (obj == OBJ_HANDLE_NULL) {
+        return;
+    }
+
+    // Raven's `lf61` is flag 29 and `lf241` flag 17.
+    CHECK(script_local_flag_get(obj, 0, 61));
+    CHECK(script_local_flag_get(obj, 0, 241));
+    CHECK(!script_local_flag_get(obj, 0, 62));
+
+    script_local_flag_set(obj, 0, 61, 0);
+    CHECK_INT(local_script_get(obj).hdr.flags, 1u << 17);
+    script_local_flag_set(obj, 0, 241, 0);
+    CHECK_INT(local_script_get(obj).hdr.flags, 0);
+    script_local_flag_set(obj, 0, 61, 1);
+    CHECK_INT(local_script_get(obj).hdr.flags, 1u << 29);
+
+    obj_harness_destroy(obj);
+}
+
+TEST(local_counters_past_3_wrap_as_the_original_shifts)
+{
+    int64_t obj = local_script_obj(0, 0x44332211u);
+
+    CHECK(obj != OBJ_HANDLE_NULL);
+    if (obj == OBJ_HANDLE_NULL) {
+        return;
+    }
+
+    // Raven's `lc4` is counter 0 and `lc21` counter 1: the count is
+    // `8 * counter` mod 32.
+    CHECK_INT(script_local_counter_get(obj, 0, 4), 0x11);
+    CHECK_INT(script_local_counter_get(obj, 0, 21), 0x22);
+
+    script_local_counter_set(obj, 0, 4, 0x99);
+    CHECK_INT(local_script_get(obj).hdr.counters, 0x44332299u);
+    script_local_counter_set(obj, 0, 21, 0x5A);
+    CHECK_INT(local_script_get(obj).hdr.counters, 0x44335A99u);
+    CHECK_INT(script_local_counter_get(obj, 0, 1), 0x5A);
+
+    obj_harness_destroy(obj);
+}
+
 void test_script_suite(void)
 {
+    RUN(a_local_flag_value_of_two_sets_the_next_flag_up);
+    RUN(local_flags_past_31_wrap_as_the_original_shifts);
+    RUN(local_counters_past_3_wrap_as_the_original_shifts);
     RUN(hours_since_startup_does_not_toggle_a_sector);
     RUN(compiled_records_validate_each_fixed_operand_domain);
     RUN(compiled_records_validate_focus_opcode_and_embedded_selector_domains);
