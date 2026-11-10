@@ -504,7 +504,11 @@ bool spell_add(int64_t obj, int spell, bool force)
 
         // If the cost is negative we're trying to add a spell that's already
         // known.
-        if (cost < 0) {
+        //
+        // FIX (porting bug #392): a level at or below the college's returns
+        // (0x4B1868 `cmp ebx,eax; jle`); CE went on at cost 0 and rewrote the
+        // same values.
+        if (cost <= 0) {
             return true;
         }
     }

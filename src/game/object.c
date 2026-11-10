@@ -1,6 +1,7 @@
 #include "game/object.h"
 
 #include <inttypes.h>
+#include <math.h>
 
 #include "game/ai.h"
 #include "game/anim.h"
@@ -511,6 +512,23 @@ static inline bool object_render_check_rotation(int64_t obj)
         && rot != 7;
 }
 
+// FIX (porting bug #385): the original scales by a float factor,
+// `scale * 0.01f` (0x596040), and rounds the result to the nearest
+// (`frndint` before `fistp`: object_draw 0x43B902, 0x43BC8A, 0x43BECA,
+// 0x43C07D; object_at_screen_pos 0x43DC9E, 0x43DDBA; object_get_rect
+// 0x43E289, 0x43E41D, 0x43E63E; object_calc_art_rect 0x4436CF). CE
+// computed `v / scale * 100` or `v * scale / 100` and truncated, so a scaled
+// rect or hit test could be a pixel off.
+static int object_scale_up(int value, int scale)
+{
+    return (int)lrintf((float)value * ((float)scale * 0.01f));
+}
+
+static int object_scale_down(int value, int scale)
+{
+    return (int)lrintf((float)value / ((float)scale * 0.01f));
+}
+
 // 0x43B390
 void object_draw(GameDrawInfo* draw_info)
 {
@@ -690,10 +708,10 @@ void object_draw(GameDrawInfo* draw_info)
                                                                         // scale TYPE, which is never 100, so every overlay went
                                                                         // through the float division.
                                                                         if (overlay_scale != 100) {
-                                                                            src_rect.x = (int)((float)src_rect.x / (float)overlay_scale * 100.0f);
-                                                                            src_rect.y = (int)((float)src_rect.y / (float)overlay_scale * 100.0f);
-                                                                            src_rect.width = (int)((float)src_rect.width / (float)overlay_scale * 100.0f);
-                                                                            src_rect.height = (int)((float)src_rect.height / (float)overlay_scale * 100.0f);
+                                                                            src_rect.x = object_scale_down(src_rect.x, overlay_scale);
+                                                                            src_rect.y = object_scale_down(src_rect.y, overlay_scale);
+                                                                            src_rect.width = object_scale_down(src_rect.width, overlay_scale);
+                                                                            src_rect.height = object_scale_down(src_rect.height, overlay_scale);
                                                                         }
 
                                                                         if ((obj_flags & OF_SHRUNK) != 0) {
@@ -771,10 +789,10 @@ void object_draw(GameDrawInfo* draw_info)
                                                                         src_rect.height = dst_rect.height;
 
                                                                         if (scale != 100) {
-                                                                            src_rect.x = (int)((float)src_rect.x / (float)scale * 100.0f);
-                                                                            src_rect.y = (int)((float)src_rect.y / (float)scale * 100.0f);
-                                                                            src_rect.width = (int)((float)src_rect.width / (float)scale * 100.0f);
-                                                                            src_rect.height = (int)((float)src_rect.height / (float)scale * 100.0f);
+                                                                            src_rect.x = object_scale_down(src_rect.x, scale);
+                                                                            src_rect.y = object_scale_down(src_rect.y, scale);
+                                                                            src_rect.width = object_scale_down(src_rect.width, scale);
+                                                                            src_rect.height = object_scale_down(src_rect.height, scale);
                                                                         }
 
                                                                         if ((obj_flags & OF_SHRUNK) != 0) {
@@ -836,10 +854,10 @@ void object_draw(GameDrawInfo* draw_info)
                                                                     // rect first, as the full sprite below does (0x43BE91 `cmp eax,0x64`,
                                                                     // 0x43BE9E the call); CE had dropped the call here.
                                                                     object_iso_invalidate_rect(&eye_candy_rect);
-                                                                    src_rect.x = (int)((float)src_rect.x / (float)scale * 100.0f);
-                                                                    src_rect.y = (int)((float)src_rect.y / (float)scale * 100.0f);
-                                                                    src_rect.width = (int)((float)src_rect.width / (float)scale * 100.0f);
-                                                                    src_rect.height = (int)((float)src_rect.height / (float)scale * 100.0f);
+                                                                    src_rect.x = object_scale_down(src_rect.x, scale);
+                                                                    src_rect.y = object_scale_down(src_rect.y, scale);
+                                                                    src_rect.width = object_scale_down(src_rect.width, scale);
+                                                                    src_rect.height = object_scale_down(src_rect.height, scale);
                                                                 }
 
                                                                 if ((obj_flags & OF_SHRUNK) != 0) {
@@ -931,10 +949,10 @@ void object_draw(GameDrawInfo* draw_info)
                                                                     // problems of its own, but at least they won't last more than one frame.
                                                                     tig_rect_intersection(&eye_candy_rect, &object_iso_content_rect, &dst_rect);
 
-                                                                    src_rect.x = (int)((float)(dst_rect.x - eye_candy_rect.x) / (float)scale * 100.0f);
-                                                                    src_rect.y = (int)((float)(dst_rect.y - eye_candy_rect.y) / (float)scale * 100.0f);
-                                                                    src_rect.width = (int)((float)dst_rect.width / (float)scale * 100.0f);
-                                                                    src_rect.height = (int)((float)dst_rect.height / (float)scale * 100.0f);
+                                                                    src_rect.x = object_scale_down(dst_rect.x - eye_candy_rect.x, scale);
+                                                                    src_rect.y = object_scale_down(dst_rect.y - eye_candy_rect.y, scale);
+                                                                    src_rect.width = object_scale_down(dst_rect.width, scale);
+                                                                    src_rect.height = object_scale_down(dst_rect.height, scale);
                                                                 }
 
                                                                 if ((obj_flags & OF_SHRUNK) != 0) {
@@ -1995,8 +2013,8 @@ bool object_at_screen_pos(int x, int y, int64_t* obj_ptr, unsigned int flags)
                                 test_y = y - obj_rect.y;
 
                                 if (scale != 100) {
-                                    test_x = (int)((float)test_x / (float)scale * 100.0f);
-                                    test_y = (int)((float)test_y / (float)scale * 100.0f);
+                                    test_x = object_scale_down(test_x, scale);
+                                    test_y = object_scale_down(test_y, scale);
                                 }
 
                                 if (!tig_art_hit_test(aid, test_x, test_y)) {
@@ -2023,8 +2041,8 @@ bool object_at_screen_pos(int x, int y, int64_t* obj_ptr, unsigned int flags)
                                             test_y = ext_y - obj_rect.y;
 
                                             if (scale != 100) {
-                                                test_x = (int)((float)test_x / (float)scale * 100.0f);
-                                                test_y = (int)((float)test_y / (float)scale * 100.0f);
+                                                test_x = object_scale_down(test_x, scale);
+                                                test_y = object_scale_down(test_y, scale);
                                             }
 
                                             if (!tig_art_hit_test(aid, test_x, test_y)) {
@@ -2180,10 +2198,10 @@ void object_get_rect(int64_t obj, unsigned int flags, TigRect* rect)
     scale = obj_field_int32_get(obj, OBJ_F_BLIT_SCALE);
 
     if (scale != 100) {
-        hot_x = (int)((float)hot_x * (float)scale / 100.0f);
-        hot_y = (int)((float)hot_y * (float)scale / 100.0f);
-        width = (int)((float)width * (float)scale / 100.0f);
-        height = (int)((float)height * (float)scale / 100.0f);
+        hot_x = object_scale_up(hot_x, scale);
+        hot_y = object_scale_up(hot_y, scale);
+        width = object_scale_up(width, scale);
+        height = object_scale_up(height, scale);
     }
 
     if ((obj_flags & OF_SHRUNK) != 0) {
@@ -2219,10 +2237,10 @@ void object_get_rect(int64_t obj, unsigned int flags, TigRect* rect)
                         width = art_frame_data.width;
 
                         if (overlay_scale != 100) {
-                            hot_x = (int)((float)hot_x * (float)overlay_scale / 100.0f);
-                            hot_y = (int)((float)hot_y * (float)overlay_scale / 100.0f);
-                            width = (int)((float)width * (float)overlay_scale / 100.0f);
-                            height = (int)((float)height * (float)overlay_scale / 100.0f);
+                            hot_x = object_scale_up(hot_x, overlay_scale);
+                            hot_y = object_scale_up(hot_y, overlay_scale);
+                            width = object_scale_up(width, overlay_scale);
+                            height = object_scale_up(height, overlay_scale);
                         }
 
                         if ((obj_flags & OF_SHRUNK) != 0) {
@@ -2287,10 +2305,10 @@ void object_get_rect(int64_t obj, unsigned int flags, TigRect* rect)
                         width = art_frame_data.width;
 
                         if (scale != 100) {
-                            hot_x = (int)((float)hot_x * (float)scale / 100.0f);
-                            hot_y = (int)((float)hot_y * (float)scale / 100.0f);
-                            width = (int)((float)width * (float)scale / 100.0f);
-                            height = (int)((float)height * (float)scale / 100.0f);
+                            hot_x = object_scale_up(hot_x, scale);
+                            hot_y = object_scale_up(hot_y, scale);
+                            width = object_scale_up(width, scale);
+                            height = object_scale_up(height, scale);
                         }
 
                         if ((obj_flags & OF_SHRUNK) != 0) {
@@ -5083,10 +5101,10 @@ void object_calc_art_rect(unsigned int flags, int scale, int x, int y, tig_art_i
     height = art_frame_data.height;
 
     if (scale != 100) {
-        hot_x = (int)((float)hot_x * (float)scale / 100.0f);
-        hot_y = (int)((float)hot_y * (float)scale / 100.0f);
-        width = (int)((float)width * (float)scale / 100.0f);
-        height = (int)((float)height * (float)scale / 100.0f);
+        hot_x = object_scale_up(hot_x, scale);
+        hot_y = object_scale_up(hot_y, scale);
+        width = object_scale_up(width, scale);
+        height = object_scale_up(height, scale);
     }
 
     if ((flags & OF_SHRUNK) != 0) {

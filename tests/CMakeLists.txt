@@ -373,6 +373,9 @@ add_custom_target(arcanum-emudiff-combat-obj DEPENDS "${EMUDIFF_COMBAT_OBJ}")
 set(EMUDIFF_OBJECT_STATICS
     object_hp_from_pts
     object_lighting_changed
+    # test_compare_fixes: the scaled-rect rounding (porting bug #385).
+    object_scale_up
+    object_scale_down
 )
 set(EMUDIFF_OBJECT_DATA
     object_lighting
@@ -617,6 +620,9 @@ set(ANIM_TEST_STATICS
     anim_eye_candy_sound_restart
     anim_goal_turn_on_stop_at_blockers
     anim_knockback_path_blocked
+    # test_compare_fixes: the null returns (porting bugs #388, #389).
+    anim_cannot_open_portal
+    anim_can_jump_window
 )
 set(ANIM_TEST_OBJ "${CMAKE_CURRENT_BINARY_DIR}/anim_globalized.o")
 set(_anim_globalize_args "")
@@ -665,6 +671,8 @@ set(DIALOG_TEST_STATICS
     # The oracle's number-parser cases (QA1 phase 2); the oracle links this
     # object too, so the block sits above its link line.
     dialog_parse_second_number
+    # test_dialog_options: the greeting's scan (porting bug #391).
+    dialog_build_greeting
 )
 set(DIALOG_TEST_OBJ "${CMAKE_CURRENT_BINARY_DIR}/dialog_globalized.o")
 set(_dialog_globalize_args "")
@@ -734,6 +742,8 @@ set(AI_TEST_STATICS
     ai_desperation_rolled
     ai_check_use_spell
     ai_in_fight
+    # test_compare_fixes: leaving by a locked door (porting bug #383).
+    ai_is_indoor_to_outdoor_transition
 )
 set(AI_TEST_OBJ "${CMAKE_CURRENT_BINARY_DIR}/ai_globalized.o")
 set(_ai_globalize_args "")
@@ -1256,6 +1266,16 @@ target_link_options(arcanum-tests PRIVATE
     "-Wl,--wrap=gamelib_game_difficulty_get"
     # test_dialog_conditions: count `co`'s attack (porting bug #381).
     "-Wl,--wrap=ai_attack"
+    # test_script: a create-object with no room, a fade-and-teleport's movie
+    # (porting bugs #382, #386); and a harness object given a location.
+    "-Wl,--wrap=target_find_displacement_loc"
+    "-Wl,--wrap=mp_object_create"
+    "-Wl,--wrap=teleport_do"
+    "-Wl,--wrap=obj_find_move"
+    # test_dialog_options: an NPC that can speak (porting bug #391).
+    "-Wl,--wrap=ai_can_speak"
+    # test_compare_fixes: indoor and outdoor tiles for a door (porting bug #383).
+    "-Wl,--wrap=tile_art_id_at"
 )
 endif() # ARCANUM_TESTS_GNU_LINK
 

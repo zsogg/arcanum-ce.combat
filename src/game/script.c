@@ -2644,13 +2644,18 @@ int script_execute_action(ScriptAction* action, int line, ScriptState* state)
     case SAT_CREATE_OBJECT: {
         int proto = script_get_value(action->op_type[0], action->op_value[0], state);
         int64_t near_obj = script_get_obj(action->op_type[1], action->op_value[1], state);
-        int64_t loc = -1;
-        for (int attempt = 0; attempt < 10; attempt++) {
+        int64_t loc;
+        int attempt;
+        for (attempt = 0; attempt < 10; attempt++) {
             if (target_find_displacement_loc(near_obj, random_between(1, 3), &loc)) {
                 break;
             }
         }
-        if (loc == -1) {
+        // FIX (porting bug #382): after ten failed tries the object goes on
+        // the anchor's own tile (0x4485A0 `cmp [esp+0x14],0xa`, 0x4485B3 the
+        // location read). CE tested `loc == -1`, but a failed try writes 0
+        // first (0x4F4E77), so the object was created at tile (0,0).
+        if (attempt == 10) {
             loc = obj_field_int64_get(near_obj, OBJ_F_LOCATION);
         }
 
@@ -3140,8 +3145,13 @@ int script_execute_action(ScriptAction* action, int line, ScriptState* state)
                 teleport_data.flags |= TELEPORT_SOUND;
             }
 
+            // FIX (porting bug #386): a movie is any non-zero number, tested
+            // unsigned (0x449B82 `cmp eax,ebx`, 0x449B88 `jbe`), and it plays
+            // with no movie flags (0x449B8E stores 0); CE tested `> 0` and left
+            // `movie_flags1` as the stack had it.
             teleport_data.movie1 = script_get_value(action->op_type[2], action->op_value[2], state);
-            if (teleport_data.movie1 > 0) {
+            if (teleport_data.movie1 != 0) {
+                teleport_data.movie_flags1 = 0;
                 teleport_data.flags |= TELEPORT_MOVIE1;
             }
 
@@ -3182,7 +3192,10 @@ int script_execute_action(ScriptAction* action, int line, ScriptState* state)
                 teleport_data.flags |= TELEPORT_SOUND;
             }
 
-            if (teleport_data.movie1 > 0) {
+            // FIX (porting bug #386): the movie is tested unsigned, so any
+            // non-zero number plays (0x449D36 `cmp eax,ebx`, 0x449D38 `jbe`);
+            // CE tested `> 0`.
+            if (teleport_data.movie1 != 0) {
                 if (teleport_data.sound_id > 0) {
                     gmovie_play(teleport_data.movie1, 0, teleport_data.sound_id);
                 } else {
@@ -3401,6 +3414,11 @@ int script_execute_action(ScriptAction* action, int line, ScriptState* state)
     }
     case SAT_TOGGLE_ITEM_INVENTORY_DISPLAY: {
         int64_t item_obj = script_get_obj(action->op_type[0], action->op_value[0], state);
+        // FIX (porting bug #387): a null object does nothing (0x44A6B7 `or
+        // ecx,edx`, 0x44A6C1 `je`); CE read its type through pool slot 0.
+        if (item_obj == OBJ_HANDLE_NULL) {
+            return NEXT;
+        }
         if (obj_type_is_item(obj_field_int32_get(item_obj, OBJ_F_TYPE))) {
             unsigned int flags = obj_field_int32_get(item_obj, OBJ_F_ITEM_FLAGS);
             if ((flags & OIF_NO_DISPLAY) != 0) {

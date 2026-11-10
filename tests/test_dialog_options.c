@@ -23,6 +23,7 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "game/ai.h"
 #include "game/dialog.h"
 #include "game/obj.h"
 #include "game/stat.h"
@@ -34,6 +35,7 @@
 // `static` in the shipped engine and this suite does not change that.
 int dialog_collect_pc_options(DialogState* state, int* out);
 bool dialog_build_pc_option(int entry_num, int slot, DialogState* state);
+void dialog_build_greeting(DialogState* a1, const char* str);
 
 #define DLG_DIR "./arcanum_test_dialog"
 
@@ -356,6 +358,52 @@ TEST(a_bare_at_sign_links_nothing_to_node_zero)
     CHECK_INT(count, 0);
 }
 
+int __real_ai_can_speak(int64_t npc_obj, int64_t pc_obj, bool a3);
+
+static bool armed_speak;
+
+// Building a line asks whether the NPC can speak, which reads its spells; the
+// harness has no magictech, so the armed answer is yes.
+int __wrap_ai_can_speak(int64_t npc_obj, int64_t pc_obj, bool a3)
+{
+    return armed_speak ? AI_SPEAK_OK : __real_ai_can_speak(npc_obj, pc_obj, a3);
+}
+
+// Porting bug #391: the greeting's scan for the next number stops at the end
+// of its string (0x4192B9-0x4192C4). The bytes after this one's NUL would
+// float a dead NPC's line 20; the string itself says line 10.
+TEST(a_greeting_override_ends_at_its_string)
+{
+    static const char greeting[] = "0 fl10,\0"
+                                   "0 fl20";
+    DialogState state;
+    int dlg = -1;
+
+    dlg_write("{10}{Ten.}{}{}{}{0}{}\r\n"
+              "{20}{Twenty.}{}{}{}{0}{}\r\n");
+    CHECK(dialog_load(dlg_path, &dlg));
+    if (dlg == -1) {
+        return;
+    }
+
+    memset(&state, 0, sizeof(state));
+    state.dlg = dlg;
+    state.pc_obj = obj_harness_create_proto(OBJ_TYPE_PC);
+    state.npc_obj = obj_harness_create_proto(OBJ_TYPE_NPC);
+    obj_field_int32_set(state.npc_obj, OBJ_F_HP_DAMAGE, 10000);
+
+    armed_speak = true;
+    dialog_build_greeting(&state, greeting);
+    armed_speak = false;
+    CHECK_INT(state.status, DIALOG_STATUS_FLOAT_AND_END);
+    CHECK_INT(state.num, 10);
+
+    obj_harness_destroy(state.npc_obj);
+    obj_harness_destroy(state.pc_obj);
+    dialog_unload(dlg);
+    dlg_remove();
+}
+
 void test_dialog_options_suite(void)
 {
     RUN(adjacent_options_are_collected_in_order);
@@ -373,4 +421,5 @@ void test_dialog_options_suite(void)
     RUN(a_bare_at_sign_links_nothing_to_node_zero);
     RUN(a_lone_at_sign_in_an_option_keeps_the_text_and_does_not_crash);
     RUN(a_paired_unknown_token_is_still_dropped);
+    RUN(a_greeting_override_ends_at_its_string);
 }

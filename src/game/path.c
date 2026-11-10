@@ -400,7 +400,11 @@ int path_make_astar(PathCreateInfo* path_create_info)
     }
 
     // Check if the locations are too far apart.
-    if (dx > 32 || dy > 32) {
+    //
+    // FIX (porting bug #384): the search runs only below 32 on each axis
+    // (0x41FB6B `cmp eax,0x20; jb`, 0x41FB83 `cmp edx,0x20; jb`); CE let
+    // exactly 32 through.
+    if (dx >= 32 || dy >= 32) {
         return 0;
     }
 

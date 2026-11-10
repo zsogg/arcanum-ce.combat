@@ -6285,7 +6285,11 @@ bool ai_is_indoor_to_outdoor_transition(int64_t portal_obj, int dir)
     if ((dir + 4) % 8 == rot
         || (dir + 5) % 8 == rot
         || (dir + 3) % 8 == rot) {
-        tmp_loc = new_loc;
+        // FIX (porting bug #383): the portal and neighbour tiles swap
+        // (0x4AED21-0x4AED31); CE copied the neighbour into both, so this
+        // branch always answered no and the party could not leave by a
+        // locked door from inside.
+        tmp_loc = loc;
         loc = new_loc;
         new_loc = tmp_loc;
     }

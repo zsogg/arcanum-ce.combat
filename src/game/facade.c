@@ -243,10 +243,14 @@ bool facade_loc_rect_clip(LocRect* loc_rect, int* x_ptr, int* y_ptr)
     int64_t max_x;
     int64_t max_y;
 
+    // FIX (porting bug #395): the y bounds are the plain origin Y and
+    // Y + height - 1, and there is no third clamp (0x4CA702-0x4CA741); CE
+    // shifted both into the high word and clamped y1 to the whole origin, so
+    // every rect was refused. Unreachable: the facade never loads.
     min_x = location_make(LOCATION_GET_X(facade_origin), 0);
-    min_y = location_make(0, LOCATION_GET_Y(facade_origin));
+    min_y = LOCATION_GET_Y(facade_origin);
     max_x = location_make(LOCATION_GET_X(facade_origin) + facade_width - 1, 0);
-    max_y = location_make(0, LOCATION_GET_Y(facade_origin) + facade_height - 1);
+    max_y = LOCATION_GET_Y(facade_origin) + facade_height - 1;
 
     if (loc_rect->x1 < min_x) {
         loc_rect->x1 = min_x;
@@ -262,10 +266,6 @@ bool facade_loc_rect_clip(LocRect* loc_rect, int* x_ptr, int* y_ptr)
 
     if (loc_rect->y2 >= max_y) {
         loc_rect->y2 = max_y;
-    }
-
-    if (facade_origin > loc_rect->y1) {
-        loc_rect->y1 = facade_origin;
     }
 
     if (loc_rect->x2 - loc_rect->x1 + 1 < 0) {

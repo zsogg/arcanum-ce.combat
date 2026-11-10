@@ -1961,7 +1961,14 @@ bool item_party_has_key(int64_t obj, int key_id)
 
     if (tig_net_is_active()
         && (tig_net_local_server_get_options() & TIG_NET_SERVER_KEY_SHARING) != 0) {
-        if (player_is_pc_obj(obj)) {
+        // FIX (porting bug #396): server option 0x80 picks the party-id
+        // search; without it only a PC searches its party (0x463446 `test
+        // al,0x80`, 0x4634E7 `player_is_pc_obj`). CE chose by
+        // `player_is_pc_obj` alone. Dead while `tig_net_is_active` is 0.
+        if ((tig_net_local_server_get_options() & 0x80) == 0) {
+            if (!player_is_pc_obj(obj)) {
+                return false;
+            }
             party_member_obj = party_find_first(obj, &iter);
             while (party_member_obj != OBJ_HANDLE_NULL) {
                 if (item_critter_has_key(party_member_obj, key_id)) {

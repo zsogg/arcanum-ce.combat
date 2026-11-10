@@ -497,6 +497,7 @@ void tile_cache_destroy(void)
 // 0x4D7AC0
 void tile_cache_lookup_tables_build(int zoom)
 {
+    double half;
     double v1;
     double v2;
     double v3;
@@ -511,7 +512,8 @@ void tile_cache_lookup_tables_build(int zoom)
 
     tile_cache_lookup_tables_destroy();
 
-    v1 = zoom * 0.5 - 1.0;
+    half = zoom * 0.5;
+    v1 = half - 1.0;
 
     tile_cache_lookup_x = (uint8_t*)MALLOC(sizeof(*tile_cache_lookup_x) * (zoom * zoom));
     tile_cache_lookup_y = (uint8_t*)MALLOC(sizeof(*tile_cache_lookup_y) * (zoom * zoom));
@@ -545,10 +547,13 @@ void tile_cache_lookup_tables_build(int zoom)
     v5 = v3 * scale;
     v6 = v4 * scale;
 
+    // FIX (porting bug #394): each cell is offset by `i - zoom * 0.5 - 1.0`
+    // (0x4D7BEC `fsub st,st(2)`, 0x4D7BEE `fsub 1.0`), not by `i - v1`; CE
+    // shifted the top-down x table. Unreachable: nothing selects the view.
     for (y = 0; y < zoom; y++) {
-        v7 = (y - v1) * M_SQRT1_2;
+        v7 = (y - half - 1.0) * M_SQRT1_2;
         for (x = 0; x < zoom; x++) {
-            v8 = (x - v1) * M_SQRT1_2;
+            v8 = (x - half - 1.0) * M_SQRT1_2;
             tile_cache_lookup_x[y * zoom + x] = (uint8_t)((v7 + v8) * v5 + 40.0);
             tile_cache_lookup_y[y * zoom + x] = (uint8_t)((v7 - v8) * v6 + 20.0);
         }

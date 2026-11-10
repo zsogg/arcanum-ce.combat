@@ -44,6 +44,7 @@
 #include "game/obj.h"
 #include "game/object.h"
 #include "game/sector.h"
+#include "game/teleport.h"
 #include "obj_harness.h"
 #include "test_harness.h"
 
@@ -956,6 +957,193 @@ TEST(local_counters_past_3_wrap_as_the_original_shifts)
     obj_harness_destroy(obj);
 }
 
+#ifdef ARCANUM_TESTS_GNU_LINK
+// QA1 phase 3's script actions (porting bugs #382, #386, #387). The world they
+// reach is wrapped (tests/CMakeLists.txt): each wrapper forwards to the real
+// function unless its test has armed it.
+
+bool __real_target_find_displacement_loc(int64_t obj, int distance, int64_t* loc_ptr);
+bool __real_mp_object_create(int name, int64_t loc, int64_t* obj_ptr);
+void __real_obj_find_move(int64_t obj);
+bool __real_teleport_do(TeleportData* teleport_data);
+
+static bool armed_displacement;
+static int displacement_calls;
+static bool armed_create;
+static int64_t created_at;
+static int64_t created_obj;
+static bool armed_teleport;
+static TeleportData teleported;
+
+// Shared with test_compare_fixes.c, whose objects take a location too.
+bool test_obj_find_move_off;
+
+bool __wrap_target_find_displacement_loc(int64_t obj, int distance, int64_t* loc_ptr)
+{
+    if (!armed_displacement) {
+        return __real_target_find_displacement_loc(obj, distance, loc_ptr);
+    }
+    // As the real one does when its walk leaves the map (target.c:1633).
+    displacement_calls++;
+    *loc_ptr = 0;
+    return false;
+}
+
+bool __wrap_mp_object_create(int name, int64_t loc, int64_t* obj_ptr)
+{
+    if (!armed_create) {
+        return __real_mp_object_create(name, loc, obj_ptr);
+    }
+    created_at = loc;
+    *obj_ptr = created_obj;
+    return true;
+}
+
+void __wrap_obj_find_move(int64_t obj)
+{
+    // A harness object is in no sector, so a location write must not reindex.
+    if (!test_obj_find_move_off) {
+        __real_obj_find_move(obj);
+    }
+}
+
+bool __wrap_teleport_do(TeleportData* teleport_data)
+{
+    if (!armed_teleport) {
+        return __real_teleport_do(teleport_data);
+    }
+    teleported = *teleport_data;
+    return true;
+}
+
+static int run_on_attachee(ScriptAction* action, int64_t attachee)
+{
+    ScriptState state;
+    ScriptInvocation invocation;
+    Script script;
+
+    script_state_begin(&state, &invocation, &script, 1);
+    invocation.attachee_obj = attachee;
+    return script_execute_action(action, 0, &state);
+}
+
+TEST(a_create_object_that_finds_no_room_lands_on_its_anchor)
+{
+    ScriptAction action;
+    int64_t anchor = obj_harness_create_proto(OBJ_TYPE_GENERIC);
+    int64_t loc = location_make(57, 91);
+
+    CHECK(anchor != OBJ_HANDLE_NULL);
+    if (anchor == OBJ_HANDLE_NULL) {
+        return;
+    }
+    test_obj_find_move_off = true;
+    obj_field_int64_set(anchor, OBJ_F_LOCATION, loc);
+    created_obj = obj_harness_create_proto(OBJ_TYPE_GENERIC);
+
+    memset(&action, 0, sizeof(action));
+    action.type = SAT_CREATE_OBJECT;
+    action.op_type[0] = SVT_NUMBER;
+    action.op_value[0] = 1;
+    action.op_type[1] = SFO_ATTACHEE;
+
+    armed_displacement = true;
+    armed_create = true;
+    displacement_calls = 0;
+    created_at = -1;
+    CHECK_INT(run_on_attachee(&action, anchor), SCRIPT_NEXT);
+    armed_displacement = false;
+    armed_create = false;
+    test_obj_find_move_off = false;
+
+    // Ten tries, then the anchor's own tile, not the 0 the last try wrote.
+    CHECK_INT(displacement_calls, 10);
+    CHECK(created_at == loc);
+
+    obj_harness_destroy(created_obj);
+    test_obj_find_move_off = true;
+    obj_harness_destroy(anchor);
+    test_obj_find_move_off = false;
+}
+
+// Leaves non-zero bytes where the action's TeleportData will sit, so a field
+// it forgets to write is not zero by luck.
+static void __attribute__((noinline)) dirty_stack(void)
+{
+    volatile unsigned char junk[4096];
+
+    for (size_t index = 0; index < sizeof(junk); index++) {
+        junk[index] = 0xA5;
+    }
+}
+
+static TeleportData fade_and_teleport(int movie)
+{
+    ScriptAction action;
+
+    memset(&action, 0, sizeof(action));
+    action.type = SAT_FADE_AND_TELEPORT;
+    for (int index = 0; index < 7; index++) {
+        action.op_type[index] = SVT_NUMBER;
+    }
+    action.op_value[2] = movie;
+    action.op_value[4] = 5001;
+    action.op_type[3] = SFO_ATTACHEE;
+
+    memset(&teleported, 0, sizeof(teleported));
+    armed_teleport = true;
+    dirty_stack();
+    CHECK_INT(run_on_attachee(&action, OBJ_HANDLE_NULL), SCRIPT_NEXT);
+    armed_teleport = false;
+    return teleported;
+}
+
+TEST(a_fade_and_teleport_movie_plays_with_no_flags)
+{
+    TeleportData data = fade_and_teleport(7);
+
+    CHECK((data.flags & TELEPORT_MOVIE1) != 0);
+    CHECK_INT(data.movie1, 7);
+    CHECK_INT(data.movie_flags1, 0u);
+
+    // Unsigned: a negative movie is still a movie.
+    data = fade_and_teleport(-1);
+    CHECK((data.flags & TELEPORT_MOVIE1) != 0);
+    CHECK_INT(data.movie_flags1, 0u);
+
+    data = fade_and_teleport(0);
+    CHECK((data.flags & TELEPORT_MOVIE1) == 0);
+}
+
+TEST(toggling_a_null_items_display_touches_no_object)
+{
+    ScriptAction action;
+    int64_t items[4];
+
+    // Fill the low pool slots, where a null handle's lookup lands.
+    for (int index = 0; index < 4; index++) {
+        items[index] = obj_harness_create_proto(OBJ_TYPE_GENERIC);
+    }
+
+    memset(&action, 0, sizeof(action));
+    action.type = SAT_TOGGLE_ITEM_INVENTORY_DISPLAY;
+    action.op_type[0] = SFO_ATTACHEE;
+
+    CHECK_INT(run_on_attachee(&action, OBJ_HANDLE_NULL), SCRIPT_NEXT);
+    for (int index = 0; index < 4; index++) {
+        CHECK_INT(obj_field_int32_get(items[index], OBJ_F_ITEM_FLAGS) & OIF_NO_DISPLAY, 0u);
+    }
+
+    // The control: a real item does toggle.
+    CHECK_INT(run_on_attachee(&action, items[0]), SCRIPT_NEXT);
+    CHECK_INT(obj_field_int32_get(items[0], OBJ_F_ITEM_FLAGS) & OIF_NO_DISPLAY, OIF_NO_DISPLAY);
+
+    for (int index = 0; index < 4; index++) {
+        obj_harness_destroy(items[index]);
+    }
+}
+#endif
+
 void test_script_suite(void)
 {
     RUN(a_local_flag_value_of_two_sets_the_next_flag_up);
@@ -987,4 +1175,9 @@ void test_script_suite(void)
     RUN(goto_returns_its_operand_as_the_next_line);
     RUN(arithmetic_operands_can_be_globals_not_only_literals);
     RUN(the_shipped_level_scaling_script_divides_by_five);
+#ifdef ARCANUM_TESTS_GNU_LINK
+    RUN(a_create_object_that_finds_no_room_lands_on_its_anchor);
+    RUN(a_fade_and_teleport_movie_plays_with_no_flags);
+    RUN(toggling_a_null_items_display_touches_no_object);
+#endif
 }

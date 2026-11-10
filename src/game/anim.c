@@ -6696,6 +6696,12 @@ bool anim_cannot_open_portal(AnimRunInfo* run_info)
     obj = run_info->params[1].obj;
 
     ASSERT(door_obj != OBJ_HANDLE_NULL); // 6183, "doorObj != OBJ_HANDLE_NULL"
+    // FIX (porting bug #388): the original returns after the assert
+    // (0x428770 `or eax,edi; jne`); CE's ASSERT only logs, and the flags of
+    // a null door were read.
+    if (door_obj == OBJ_HANDLE_NULL) {
+        return false;
+    }
 
     if ((obj_field_int32_get(door_obj, OBJ_F_FLAGS) & (OF_DESTROYED | OF_OFF)) != 0) {
         return false;
@@ -6765,6 +6771,11 @@ bool anim_can_jump_window(AnimRunInfo* run_info)
     portal_obj = run_info->params[1].obj;
 
     ASSERT(source_obj != OBJ_HANDLE_NULL); // 6259, "sourceObj != OBJ_HANDLE_NULL"
+    // FIX (porting bug #389): the original returns after the assert
+    // (0x4288C0); CE's ASSERT only logs, and a null source was tested.
+    if (source_obj == OBJ_HANDLE_NULL) {
+        return false;
+    }
 
     if (!critter_can_jump_window(source_obj)) {
         return false;

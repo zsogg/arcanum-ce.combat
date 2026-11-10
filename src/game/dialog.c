@@ -2477,7 +2477,10 @@ bool dialog_build_npc_reply(DialogState* a1, bool a2)
     if (tig_strncasecmp(entry.str, "g:", 2) == 0) {
         dialog_build_greeting(a1, &(entry.str[2]));
 
-        if (a1->status) {
+        // FIX (porting bug #390): only a float-and-end ends the exchange
+        // here (0x4168F9 `cmp eax,0x4`, `jne 0x416a98`); CE ended it on any
+        // status, so a greeting whose action opened a screen drew no options.
+        if (a1->status == DIALOG_STATUS_FLOAT_AND_END) {
             a1->num_options = 0;
             return false;
         }
@@ -3865,7 +3868,9 @@ void dialog_build_greeting(DialogState* a1, const char* str)
         int value;
 
         while (*str != '\0') {
-            while (!SDL_isdigit(*str)) {
+            // FIX (porting bug #391): the scan stops at the end of the string
+            // (0x4192B9-0x4192C4); CE read past it after a trailing non-digit.
+            while (*str != '\0' && !SDL_isdigit(*str)) {
                 str++;
             }
 

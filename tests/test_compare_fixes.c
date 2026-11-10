@@ -41,6 +41,14 @@
 // - #377 `critter_give_xp` (0x45F110) took half of every award on Hard. The
 //   original takes a quarter (0x45F15A-0x45F167, a signed `/ 4`). Found by
 //   the QA1 pilot, 2026-11-09.
+// - #383 `ai_is_indoor_to_outdoor_transition` (0x4AECA0) copied the
+//   neighbour tile into both of the two it meant to swap (0x4AED21-0x4AED31),
+//   so a party could not leave by a locked door from inside. QA1 phase 3.
+// - #385 the scaled object rects and hit tests round to the nearest
+//   (`frndint`, 0x43B902 and nine more) where CE truncated. QA1 phase 3.
+// - #388, #389 `anim_cannot_open_portal` (0x428750) and
+//   `anim_can_jump_window` (0x4288A0) return after their null asserts,
+//   which in CE only log. QA1 phase 3.
 
 #include <string.h>
 
@@ -59,6 +67,7 @@
 #include "game/stat.h"
 #include "game/target.h"
 #include "game/tc.h"
+#include "game/tile.h"
 
 #include "tig/art.h"
 #include "tig/video.h"
@@ -81,6 +90,11 @@ void anim_goal_turn_on_stop_at_blockers(AnimID anim_id);
 bool anim_knockback_path_blocked(AnimRunInfo* run_info, int64_t obj, AnimPath* path, int64_t from, int64_t to);
 void object_lighting_changed(void);
 void convert_screen_to_world_coords(int64_t sx, int64_t sy, int64_t* wx, int64_t* wy);
+int object_scale_up(int value, int scale);
+int object_scale_down(int value, int scale);
+bool anim_cannot_open_portal(AnimRunInfo* run_info);
+bool anim_can_jump_window(AnimRunInfo* run_info);
+bool ai_is_indoor_to_outdoor_transition(int64_t portal_obj, int dir);
 extern bool object_lighting;
 extern IsoInvalidateRectFunc* object_iso_invalidate_rect;
 
@@ -566,8 +580,99 @@ TEST(hard_keeps_three_quarters_of_an_xp_award)
     obj_harness_destroy(pc);
 }
 
+// test_script.c's wrapper, which lets a harness object take a location.
+extern bool test_obj_find_move_off;
+
+tig_art_id_t __real_tile_art_id_at(int64_t loc);
+
+static bool armed_tiles;
+static int64_t indoor_loc;
+
+tig_art_id_t __wrap_tile_art_id_at(int64_t loc)
+{
+    tig_art_id_t aid;
+
+    if (!armed_tiles) {
+        return __real_tile_art_id_at(loc);
+    }
+    tig_art_tile_id_create(0, 0, 0, 0,
+        loc == indoor_loc ? TIG_ART_TILE_TYPE_INDOOR : TIG_ART_TILE_TYPE_OUTDOOR,
+        0, 0, 0, &aid);
+    return aid;
+}
+
+// The portal's tile and the one past it in its rotation swap when the mover
+// heads back against that rotation (0x4AED21-0x4AED31); the answer is then
+// "the far tile is indoor and the portal's is not".
+TEST(a_locked_door_can_be_left_from_inside)
+{
+    int64_t limit_x;
+    int64_t limit_y;
+    int64_t door = obj_harness_create_proto(OBJ_TYPE_PORTAL);
+    int64_t loc = location_make(40, 40);
+    int64_t past;
+    tig_art_id_t aid;
+    int rot = 3;
+
+    location_limits_get(&limit_x, &limit_y);
+    location_limits_set(100, 100);
+    test_obj_find_move_off = true;
+    obj_field_int64_set(door, OBJ_F_LOCATION, loc);
+    CHECK_INT(tig_art_portal_id_create(0, 0, 0, 0, rot, 0, &aid), TIG_OK);
+    obj_field_int32_set(door, OBJ_F_CURRENT_AID, aid);
+    CHECK_INT(tig_art_id_rotation_get(aid), rot);
+    CHECK(location_in_dir(loc, rot, &past));
+
+    armed_tiles = true;
+
+    // Inside is past the door: heading back against its rotation is leaving.
+    indoor_loc = past;
+    CHECK(ai_is_indoor_to_outdoor_transition(door, (rot + 4) % 8));
+    CHECK(ai_is_indoor_to_outdoor_transition(door, (rot + 3) % 8));
+    CHECK(ai_is_indoor_to_outdoor_transition(door, (rot + 5) % 8));
+    CHECK(!ai_is_indoor_to_outdoor_transition(door, rot));
+
+    // Inside is the door's own tile: heading along its rotation is leaving.
+    indoor_loc = loc;
+    CHECK(ai_is_indoor_to_outdoor_transition(door, rot));
+    CHECK(!ai_is_indoor_to_outdoor_transition(door, (rot + 4) % 8));
+
+    armed_tiles = false;
+    obj_harness_destroy(door);
+    test_obj_find_move_off = false;
+    location_limits_set(limit_x, limit_y);
+}
+
+// Overlay scale 63 maps 5 back to 7.94: 8 rounded, 7 truncated.
+TEST(scaled_rects_round_to_the_nearest)
+{
+    CHECK_INT(object_scale_down(5, 63), 8);
+    CHECK_INT(object_scale_down(10, 50), 20);
+    CHECK_INT(object_scale_up(7, 63), 4);
+    CHECK_INT(object_scale_up(5, 70), 4);
+    CHECK_INT(object_scale_up(9, 50), 4); // 4.5: to even, as frndint does
+    CHECK_INT(object_scale_up(11, 50), 6); // 5.5
+}
+
+TEST(a_null_door_or_jumper_answers_no)
+{
+    AnimRunInfo run_info;
+    int64_t critter = obj_harness_create_proto(OBJ_TYPE_NPC);
+
+    memset(&run_info, 0, sizeof(run_info));
+    run_info.params[0].obj = OBJ_HANDLE_NULL;
+    run_info.params[1].obj = critter;
+    CHECK(!anim_cannot_open_portal(&run_info));
+    CHECK(!anim_can_jump_window(&run_info));
+
+    obj_harness_destroy(critter);
+}
+
 void test_compare_fixes_suite(void)
 {
+    RUN(a_locked_door_can_be_left_from_inside);
+    RUN(scaled_rects_round_to_the_nearest);
+    RUN(a_null_door_or_jumper_answers_no);
     RUN(hard_keeps_three_quarters_of_an_xp_award);
     RUN(a_magic_target_critical_rolls_its_effects_from_zero);
     RUN(a_lock_state_of_two_unlocks_for_good);

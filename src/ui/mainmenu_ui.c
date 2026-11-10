@@ -3396,7 +3396,10 @@ void mmUITextWriteCenteredToArray(char* str, TigRect* rects, int cnt, tig_font_h
             *space = ' ';
             space = NULL;
         } else {
-            pch = strrchr(str, ' ');
+            // FIX (porting bug #393): the break is searched for in the current
+            // line (0x542FF5 `push 0x20`, 0x542FF7 `push esi`); CE searched the
+            // whole string and could walk back into lines already drawn.
+            pch = strrchr(curr, ' ');
             if (pch == NULL) {
                 tig_debug_printf("MainMenuUI: mmUITextWriteCenteredToArray: ERROR: Coudn't fit entire to string to print: '%s'!\n", str);
                 break;
