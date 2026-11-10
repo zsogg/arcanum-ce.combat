@@ -516,6 +516,11 @@ void reputation_remove(int64_t pc_obj, int reputation)
     }
 
     // Shift subsequent reputations up.
+    //
+    // FIX: the original reads entry 2i into slot i (0x4C1ED6 `lea
+    // edi,[esi+esi*1]`, 0x4C1F33 `add edi,2`), so removing the first of
+    // several drops the wrong one, and from four entries up it reads past
+    // the end. CE shifts i+1 into i, removing the one asked for.
     while (index < cnt - 1) {
         tmp_rep = obj_arrayfield_uint32_get(pc_obj, OBJ_F_PC_REPUTATION_IDX, index + 1);
         tmp_ts = obj_arrayfield_int64_get(pc_obj, OBJ_F_PC_REPUTATION_TS_IDX, index + 1);

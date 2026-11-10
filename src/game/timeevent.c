@@ -862,8 +862,7 @@ void timeevent_pause_reset(void)
 {
     timeevent_pause_depth = 0;
 
-    // NOTE: The original writes the pause flag at 0x5DE6E0 directly here
-    // instead of calling the setter at 0x4300C0, as the two functions above do.
+    // The original calls the setter here too (0x45B36A `jmp 0x4300C0`).
     anim_unpause();
 }
 
