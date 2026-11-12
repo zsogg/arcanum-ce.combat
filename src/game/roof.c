@@ -1,5 +1,6 @@
 #include "game/roof.h"
 
+#include "game/feature.h"
 #include "game/gamelib.h"
 #include "game/light.h"
 #include "game/location.h"
@@ -180,9 +181,7 @@ bool roof_init(GameInitInfo* init_info)
     mes_unload(mes_file);
 
     roof_hardware_accelerated = tig_video_3d_check_initialized() == TIG_OK;
-    if (!roof_hardware_accelerated) {
-        roof_blit_flags = TIG_ART_BLT_BLEND_ALPHA_STIPPLE_D;
-    }
+    roof_transparency_update();
 
     return true;
 }
@@ -706,6 +705,21 @@ bool roof_is_covered_loc(int64_t loc, bool check_faded)
     }
 
     return true;
+}
+
+// UAP (0x40107D, `-no3d` restored): A faded roof is blended with
+// real alpha, as under UAP's Direct3D path, while `uap fixes` is on. The
+// shipped 1.0.7.4 executable never takes that path (Troika NOPped the jump),
+// so without 3D, which CE never reports, it draws the checkerboard of the
+// software renderer; that is what `uap fixes` off keeps (card HW1). Called
+// at init and when `uap fixes` changes (`uap_fixes_changed`).
+void roof_transparency_update(void)
+{
+    if (!roof_hardware_accelerated) {
+        roof_blit_flags = feature_enabled(FEATURE_UAP_FIXES)
+            ? TIG_ART_BLT_BLEND_ALPHA_CONST
+            : TIG_ART_BLT_BLEND_ALPHA_STIPPLE_D;
+    }
 }
 
 // 0x43A110

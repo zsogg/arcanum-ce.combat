@@ -424,6 +424,9 @@ typedef bool (*TigArtBlitPaletteAdjustCallback)(tig_art_id_t art_id, TigPaletteM
 
 int tig_art_init(TigInitInfo* init_info);
 void tig_art_exit(void);
+// CE (card HW1): decodes one RLE-encoded frame of `src_size` bytes into at most
+// `dst_size` pixels; the pixels written, or -1 for a malformed frame.
+int tig_art_rle_decode(const uint8_t* src, int src_size, uint8_t* dst, int dst_size);
 void tig_art_ping(void);
 int tig_art_misc_id_create(unsigned int num, unsigned int palette, tig_art_id_t* art_id);
 void tig_art_flush(void);

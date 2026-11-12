@@ -35,11 +35,34 @@ int AILCALL AIL_digital_handle_release(HDIGDRIVER drvr)
     return 1;
 }
 
+// FIX: NULL when the file cannot be opened, as Miles returns, so
+// `tig_sound_play_streamed`'s test frees the handle at once. This returned a
+// stream with no audio (and dereferenced an unchecked malloc), which the mixer
+// was then asked to play (card HW1).
 HSTREAM AILCALL AIL_open_stream(HDIGDRIVER dig, const char* filename, int stream_mem)
 {
-    HSTREAM stream = malloc(sizeof(*stream));
+    HSTREAM stream;
+    MIX_Audio* audio;
+
+    audio = MIX_LoadAudio(mixer, filename, false);
+    if (audio == NULL) {
+        return NULL;
+    }
+
+    stream = malloc(sizeof(*stream));
+    if (stream == NULL) {
+        MIX_DestroyAudio(audio);
+        return NULL;
+    }
+
+    stream->audio = audio;
     stream->track = MIX_CreateTrack(mixer);
-    stream->audio = MIX_LoadAudio(mixer, filename, false);
+    if (stream->track == NULL) {
+        MIX_DestroyAudio(audio);
+        free(stream);
+        return NULL;
+    }
+
     MIX_SetTrackAudio(stream->track, stream->audio);
     return stream;
 }
@@ -81,11 +104,38 @@ int AILCALL AIL_quick_play(HAUDIO audio, unsigned loop_count)
     return ret ? 1 : 0;
 }
 
+// CE (card HW1): Miles' balance, 0 left, 64 centre, 127 right, as the two
+// gains `MIX_SetTrackStereo` takes. The near side stays whole and the far side
+// falls linearly, Miles' own law being unknown. False for the centre, which
+// needs no gains.
+bool mss_compat_balance_gains(int extravol, float* left, float* right)
+{
+    if (extravol < 0) {
+        extravol = 0;
+    } else if (extravol > 127) {
+        extravol = 127;
+    }
+
+    *left = extravol <= 64 ? 1.0f : (float)(127 - extravol) / 63.0f;
+    *right = extravol >= 64 ? 1.0f : (float)extravol / 64.0f;
+    return extravol != 64;
+}
+
+// FIX: `extravol` is the balance, as Miles takes it and gsound computes it
+// (`GSOUND_BALANCE_CENTER`); this dropped it, so every positional sound and
+// every scheme ambient played centred. A centred sound mixes exactly as
+// before (card HW1).
 void AILCALL AIL_quick_set_volume(HAUDIO audio, int volume, int extravol)
 {
-    (void)extravol;
+    MIX_StereoGains gains;
 
     MIX_SetTrackGain(audio->track, (float)volume / 128.0f);
+
+    if (mss_compat_balance_gains(extravol, &gains.left, &gains.right)) {
+        MIX_SetTrackStereo(audio->track, &gains);
+    } else {
+        MIX_SetTrackStereo(audio->track, NULL);
+    }
 }
 
 void AILCALL AIL_quick_shutdown(void)

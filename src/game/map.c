@@ -200,6 +200,10 @@ static int map_type_to_map_index[MAP_TYPE_COUNT];
 // 0x5D1220
 static int map_jumppoint_depth;
 
+// CE: the ids mobile.des already holds, read by map_save_difs.
+static ObjectID* map_des_known;
+static int map_des_known_capacity;
+
 // 0x40EA90
 bool map_init(GameInitInfo* init_info)
 {
@@ -348,6 +352,11 @@ void map_exit(void)
     FREE(map_base_path);
     FREE(map_save_path);
     FREE(map_list_info);
+    if (map_des_known != NULL) {
+        FREE(map_des_known);
+        map_des_known = NULL;
+        map_des_known_capacity = 0;
+    }
 
     map_initialized = false;
 }
@@ -1293,6 +1302,8 @@ bool map_save_difs(void)
     int64_t obj;
     int iter;
     ObjectID oid;
+    int known_cnt;
+    int known;
 
     snprintf(path1, sizeof(path1), "%s\\mobile.md", map_save_path);
     stream1 = tig_file_fopen(path1, "wb");
@@ -1303,6 +1314,26 @@ bool map_save_difs(void)
     }
 
     snprintf(path2, sizeof(path2), "%s\\mobile.des", map_save_path);
+
+    // FIX: a destroyed object stays in the pool, still modified, until the
+    // map is reloaded, so every flush in a session appended its id again:
+    // half of a long campaign's mobile.des was repeats (HW1). The loader
+    // only deallocates what it lists, so skipping an id already there
+    // changes nothing it does.
+    known_cnt = 0;
+    if (tig_file_exists(path2, NULL)) {
+        stream2 = tig_file_fopen(path2, "rb");
+        if (stream2 != NULL) {
+            known_cnt = tig_file_filelength(stream2) / (int)sizeof(ObjectID);
+            if (known_cnt > map_des_known_capacity) {
+                map_des_known = (ObjectID*)REALLOC(map_des_known, sizeof(*map_des_known) * known_cnt);
+                map_des_known_capacity = known_cnt;
+            }
+            known_cnt = (int)tig_file_fread(map_des_known, sizeof(ObjectID), known_cnt, stream2);
+            tig_file_fclose(stream2);
+        }
+    }
+
     stream2 = tig_file_fopen(path2, "ab");
     if (stream2 == NULL) {
         tig_file_fclose(stream1);
@@ -1320,6 +1351,18 @@ bool map_save_difs(void)
                 && obj_is_modified(obj)) {
                 oid = obj_get_id(obj);
                 if ((obj_field_int32_get(obj, OBJ_F_FLAGS) & (OF_EXTINCT | OF_DESTROYED)) != 0) {
+                    // shortcut: a linear scan per destroyed object; a flush
+                    // is a save or a map change, and the measured file holds
+                    // under 2,000 unique ids. Sort it if that ever shows.
+                    for (known = 0; known < known_cnt; known++) {
+                        if (objid_is_equal(map_des_known[known], oid)) {
+                            break;
+                        }
+                    }
+                    if (known < known_cnt) {
+                        continue;
+                    }
+
                     if (tig_file_fwrite(&oid, sizeof(oid), 1, stream2) != 1) {
                         tig_file_fclose(stream2);
                         tig_file_fclose(stream1);

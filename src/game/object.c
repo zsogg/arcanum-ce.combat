@@ -286,9 +286,7 @@ bool object_init(GameInitInfo* init_info)
     }
 
     object_hardware_accelerated = tig_video_3d_check_initialized() == TIG_OK;
-    if (!object_hardware_accelerated) {
-        object_blit_flags = TIG_ART_BLT_BLEND_ALPHA_STIPPLE_D;
-    }
+    object_transparency_update();
 
     settings_register(&settings, OBJECT_LIGHTING_KEY, "1", object_lighting_changed);
     object_lighting_changed();
@@ -358,10 +356,10 @@ void object_ping(tig_timestamp_t timestamp)
     int col;
     int row;
     SectorRectRow* v2;
-    int indexes[3];
-    int widths[3];
-    bool locks[3];
-    Sector* sectors[3];
+    int indexes[SECTOR_RECT_MAX];
+    int widths[SECTOR_RECT_MAX];
+    bool locks[SECTOR_RECT_MAX];
+    Sector* sectors[SECTOR_RECT_MAX];
     int v4;
     int v3;
     ObjectNode* obj_node;
@@ -537,12 +535,12 @@ void object_draw(GameDrawInfo* draw_info)
     bool is_detecting_invisible;
     int col;
     int row;
-    int64_t locations[3];
-    int indexes[3];
-    int widths[3];
-    bool locks[3];
-    Sector* sectors[3];
-    int v5[3];
+    int64_t locations[SECTOR_RECT_MAX];
+    int indexes[SECTOR_RECT_MAX];
+    int widths[SECTOR_RECT_MAX];
+    bool locks[SECTOR_RECT_MAX];
+    Sector* sectors[SECTOR_RECT_MAX];
+    int v5[SECTOR_RECT_MAX];
     int v3;
     int v4;
     ObjectNode* obj_node;
@@ -1916,10 +1914,10 @@ bool object_at_screen_pos(int x, int y, int64_t* obj_ptr, unsigned int flags)
     SectorRectRow* v3;
     int row;
     int col;
-    int indexes[3];
-    int widths[3];
-    bool locks[3];
-    Sector* sectors[3];
+    int indexes[SECTOR_RECT_MAX];
+    int widths[SECTOR_RECT_MAX];
+    bool locks[SECTOR_RECT_MAX];
+    Sector* sectors[SECTOR_RECT_MAX];
     int64_t v65;
     int64_t v67;
     int64_t v69;
@@ -3595,10 +3593,10 @@ void object_list_rect(LocRect* loc_rect, unsigned int flags, ObjectList* objects
     ObjectNode** prev_ptr;
     ObjectNode* new_node;
     ObjectNode* obj_node;
-    int indexes[3];
-    int widths[3];
-    bool locks[3];
-    Sector* sectors[3];
+    int indexes[SECTOR_RECT_MAX];
+    int widths[SECTOR_RECT_MAX];
+    bool locks[SECTOR_RECT_MAX];
+    Sector* sectors[SECTOR_RECT_MAX];
     int v3;
     int v4;
 
@@ -4360,6 +4358,21 @@ void object_npc_ai_start(int64_t obj, int first_heartbeat)
             && (obj_field_int32_get(obj, OBJ_F_FLAGS) & OF_DESTROYED) == 0) {
             ai_timeevent_add_immediate(obj, first_heartbeat);
         }
+    }
+}
+
+// UAP (0x40107D, `-no3d` restored): A see-through wall, and an invisible or translucent critter, is blended with
+// real alpha, as under UAP's Direct3D path, while `uap fixes` is on. The
+// shipped 1.0.7.4 executable never takes that path (Troika NOPped the jump),
+// so without 3D, which CE never reports, it draws the checkerboard of the
+// software renderer; that is what `uap fixes` off keeps (card HW1). Called
+// at init and when `uap fixes` changes (`uap_fixes_changed`).
+void object_transparency_update(void)
+{
+    if (!object_hardware_accelerated) {
+        object_blit_flags = feature_enabled(FEATURE_UAP_FIXES)
+            ? TIG_ART_BLT_BLEND_ALPHA_CONST
+            : TIG_ART_BLT_BLEND_ALPHA_STIPPLE_D;
     }
 }
 

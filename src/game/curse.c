@@ -107,6 +107,13 @@ int curse_get_logbook_data(int64_t obj, CurseLogbookEntry* logbook_entries)
 
     // Iterate through all curse entries and populate the array.
     cnt = obj_arrayfield_length_get(obj, OBJ_F_PC_CURSE_IDX);
+
+    // FIX: at most the logbook's CURSE_LOGBOOK_MAX. The original writes every
+    // entry the player has into the logbook's 100 on the stack; stock has
+    // fewer than 60, but a mod can grant more (card HW1).
+    if (cnt > CURSE_LOGBOOK_MAX) {
+        cnt = CURSE_LOGBOOK_MAX;
+    }
     for (index = 0; index < cnt; index++) {
         logbook_entries[index].id = obj_arrayfield_uint32_get(obj, OBJ_F_PC_CURSE_IDX, index);
         logbook_entries[index].datetime.value = obj_arrayfield_int64_get(obj, OBJ_F_PC_CURSE_TS_IDX, index);

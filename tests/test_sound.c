@@ -22,19 +22,22 @@
 
 #include <SDL3/SDL.h>
 
+#include "mss_compat.h"
 #include "tig/sound.h"
 #include "tig/types.h"
 
 #include "test_harness.h"
 
-// The handle ranges, from `sound.c`'s own constants. Attested at 0x5331B8
-// (voice scans entries 0..1) and 0x533299 (an effect handle wrapping resets to
-// 6), and by `sizeof(TigSound)` being 0x150 in the original - the index
-// arithmetic `[eax*336]` appears at every accessor.
+// The handle ranges, from `sound.c`'s own constants. The original's are
+// attested at 0x5331B8 (voice scans entries 0..1) and 0x533299 (an effect
+// handle wrapping resets to 6), and by `sizeof(TigSound)` being 0x150 - the
+// index arithmetic `[eax*336]` appears at every accessor. CE has 16 music and
+// 256 effect handles where the original has 4 and 54 (card HW1); the voice
+// range and the shape of every rule below are the original's.
 #define VOICE_FIRST 0
 #define MUSIC_FIRST 2
-#define EFFECT_FIRST 6
-#define HANDLE_MAX 60
+#define EFFECT_FIRST 18
+#define HANDLE_MAX 274
 
 // `tig_sound_init` only succeeds if `AIL_quick_startup` opens a mixer, so the
 // suite asks SDL for its dummy driver rather than a sound card. Set before
@@ -102,7 +105,8 @@ TEST(the_dummy_driver_brings_the_subsystem_up)
     CHECK(!tig_sound_is_initialized());
 }
 
-// Three fixed partitions, not one pool: voice 0-1, music 2-5, effects 6-59.
+// Three fixed partitions, not one pool: voice 0-1, music 2-17, effects 18-273
+// (the original's music 2-5, effects 6-59).
 // A type that runs out does not borrow from another.
 TEST(each_type_draws_from_its_own_range)
 {
@@ -162,9 +166,9 @@ TEST(an_exhausted_type_says_so_and_recovers)
 
 // Effects are round-robin rather than lowest-free: the cursor keeps moving, so
 // a slot released early is not handed straight back while others are free.
-// That is what `tig_sound_next_effect_handle` is for, and it wraps to 6 rather
-// than 0 (0x533299 `mov eax,6`), which is what keeps effects out of the voice
-// and music ranges.
+// That is what `tig_sound_next_effect_handle` is for, and it wraps to the first
+// effect handle rather than 0 (the original's 6, 0x533299 `mov eax,6`), which
+// is what keeps effects out of the voice and music ranges.
 TEST(effect_handles_advance_and_wrap_within_their_range)
 {
     tig_sound_handle_t first;
@@ -364,8 +368,64 @@ TEST(a_slot_freed_by_a_failed_play_is_handed_out_again)
     sound_down();
 }
 
+// Card HW1: a stream the mixer cannot open frees its handle at once.
+// `AIL_open_stream` returned a stream with no audio, so the music handle
+// stayed active and `tig_sound_play_streamed`'s NULL test never ran.
+TEST(a_stream_the_mixer_cannot_open_frees_its_handle)
+{
+    tig_sound_handle_t handle;
+    FILE* stream;
+
+    CHECK(sound_up());
+
+    stream = fopen("./arcanum_test_sound_garbage.mp3", "wb");
+    CHECK(stream != NULL);
+    fputs("not audio", stream);
+    fclose(stream);
+
+    tig_sound_create(&handle, TIG_SOUND_TYPE_MUSIC);
+    CHECK(tig_sound_is_active(handle));
+    CHECK_INT(tig_sound_play_streamed_once(handle, "./arcanum_test_sound_garbage.mp3", 0, TIG_SOUND_HANDLE_INVALID), TIG_OK);
+    CHECK(!tig_sound_is_active(handle));
+
+    remove("./arcanum_test_sound_garbage.mp3");
+    sound_down();
+}
+
+// Card HW1: the balance reaches the mix. `AIL_quick_set_volume` dropped it, so
+// every effect played centred; it now turns Miles' 0-127 balance into the two
+// gains it sets on the track (`MIX_SetTrackStereo`). The end-to-end check, a
+// tone through the real mixer read back from SDL's disk driver, is in card
+// HW1: switching SDL's audio driver inside this suite is not reliable.
+TEST(an_effects_balance_becomes_left_and_right_gains)
+{
+    float left;
+    float right;
+
+    // Centred: no gains at all, so a centred sound mixes as before.
+    CHECK(!mss_compat_balance_gains(64, &left, &right));
+
+    CHECK(mss_compat_balance_gains(0, &left, &right));
+    CHECK(left == 1.0f && right == 0.0f);
+    CHECK(mss_compat_balance_gains(127, &left, &right));
+    CHECK(left == 0.0f && right == 1.0f);
+
+    // The near side whole, the far side falling linearly.
+    CHECK(mss_compat_balance_gains(32, &left, &right));
+    CHECK(left == 1.0f && right == 0.5f);
+    CHECK(mss_compat_balance_gains(95, &left, &right));
+    CHECK(right == 1.0f && left > 0.49f && left < 0.52f);
+
+    // Out of range is clamped, as Miles' 0-127 is.
+    CHECK(mss_compat_balance_gains(-5, &left, &right));
+    CHECK(left == 1.0f && right == 0.0f);
+    CHECK(mss_compat_balance_gains(400, &left, &right));
+    CHECK(left == 0.0f && right == 1.0f);
+}
+
 void test_sound_suite(void)
 {
+    RUN(an_effects_balance_becomes_left_and_right_gains);
     RUN(the_dummy_driver_brings_the_subsystem_up);
     RUN(each_type_draws_from_its_own_range);
     RUN(an_exhausted_type_says_so_and_recovers);
@@ -377,4 +437,5 @@ void test_sound_suite(void)
     RUN(setting_a_volume_by_type_leaves_the_other_types_alone);
     RUN(playing_a_missing_file_quietly_deactivates_the_handle);
     RUN(a_slot_freed_by_a_failed_play_is_handed_out_again);
+    RUN(a_stream_the_mixer_cannot_open_frees_its_handle);
 }

@@ -4,7 +4,8 @@
 // `test_sound.c`, which is not the same as being tested. Written 2026-08-29.
 //
 // **Its one real caller is `sound.c`** - `tig_file_cache_create(20, 1000000)`
-// at sound.c:103, holding sound effects. The module header says as much: "there
+// in the original (256 files and 64 MB in CE since card HW1), holding sound
+// effects. The module header says as much: "there
 // is only one use case in both Arcanum and ToEE". So the behaviours worth
 // pinning are the ones a sound reaching or missing the cache depends on, and
 // the ones a modder meets when a sound does not play.

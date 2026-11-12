@@ -129,7 +129,7 @@ static bool magictech_target_shield_check(TargetContext* target_ctx, MagicTechRu
 static void magictech_run_info_clear_all(void);
 static void magictech_summons_record(int64_t summoner_obj, int64_t summon_obj);
 static void magictech_summons_clear(void);
-static void magictech_id_new_lock(MagicTechRunInfo** lock_ptr);
+static bool magictech_id_new_lock(MagicTechRunInfo** lock_ptr);
 static bool magictech_run_info_validate(MagicTechRunInfo* run_info);
 static void magictech_id_free_lock(int mt_id);
 static void magictech_run_info_release(MagicTechRunInfo* run_info);
@@ -1400,7 +1400,12 @@ void magictech_load_nodes_from_map(const char* map)
 
         run_info = &(magictech_run_info[tmp_run_info.id]);
         if ((run_info->flags & MAGICTECH_RUN_ACTIVE) != 0) {
-            magictech_id_new_lock(&run_info);
+            // FIX: with every id in use the saved run is dropped, not the game
+            // (`magictech_id_new_lock`, card HW1).
+            if (!magictech_id_new_lock(&run_info)) {
+                tig_debug_printf("MagicTech: magictech_load_nodes_from_map: no free id, run %d dropped\n", tmp_run_info.id);
+                continue;
+            }
             mt_id = run_info->id;
         } else {
             mt_id = tmp_run_info.id;
@@ -5382,7 +5387,7 @@ void magictech_run_info_clear_all(void)
 }
 
 // 0x455740
-void magictech_id_new_lock(MagicTechRunInfo** run_info_ptr)
+bool magictech_id_new_lock(MagicTechRunInfo** run_info_ptr)
 {
     int index;
 
@@ -5393,12 +5398,16 @@ void magictech_id_new_lock(MagicTechRunInfo** run_info_ptr)
             magictech_run_info[index].action = MAGICTECH_ACTION_BEGIN;
             *run_info_ptr = &(magictech_run_info[index]);
             magictech_active_run_count++;
-            return;
+            return true;
         }
     }
 
+    // FIX: the spell is refused. The original quits the game here
+    // (0x45576A `push 1; call exit`); a run more than the 512 the save
+    // format holds is better lost than the game (card HW1).
     tig_debug_printf("magictech_id_new_lock: Error: ran out of id's!\n");
-    exit(EXIT_FAILURE);
+    *run_info_ptr = NULL;
+    return false;
 }
 
 // 0x4557C0
@@ -5599,7 +5608,10 @@ void magictech_invocation_process(MagicTechInvocation* mt_invocation)
     }
 
     info = &(magictech_spells[mt_invocation->spell]);
-    magictech_id_new_lock(&run_info);
+    // FIX: with every id in use the spell does not start (card HW1).
+    if (!magictech_id_new_lock(&run_info)) {
+        return;
+    }
 
     run_info->source_obj.obj = mt_invocation->source_obj.obj;
     object_locator_init(run_info->source_obj.obj, &(run_info->source_obj.field_8));

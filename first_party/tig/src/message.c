@@ -156,6 +156,12 @@ void tig_message_ping(void)
         case SDL_EVENT_QUIT:
             tig_message_post_quit(0);
             break;
+        case SDL_EVENT_RENDER_TARGETS_RESET:
+        case SDL_EVENT_RENDER_DEVICE_RESET:
+            // CE (card HW1): the screen texture's contents may be gone, and
+            // `tig_video_flip` uploads only what changed.
+            tig_video_invalidate_screen();
+            break;
         }
     }
 }

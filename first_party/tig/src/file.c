@@ -16,12 +16,17 @@
 #include "tig/find_file.h"
 #include "tig/memory.h"
 
+#include "file_memory.h"
+
 #define CACHE_DIR_NAME "TIGCache"
 #define COPY_BUFFER_SIZE 0x8000
 
 #define TIG_FILE_DATABASE 0x01
 #define TIG_FILE_PLAIN 0x02
 #define TIG_FILE_DELETE_ON_CLOSE 0x04
+// CE (`save scratch in memory`, card HW1): a stream into `Save\\Current` held
+// in memory (`file_memory.c`).
+#define TIG_FILE_MEMORY 0x08
 
 typedef struct TigFile {
     /* 0000 */ char* path;
@@ -29,6 +34,7 @@ typedef struct TigFile {
     /* 0008 */ union {
         TigDatabaseFileHandle* database_file_stream;
         FILE* plain_file_stream;
+        TigMemFile* memory_file_stream;
     } impl;
 } TigFile;
 
@@ -734,6 +740,7 @@ void tig_file_exit(void)
     }
 
     tig_file_repository_remove_all();
+    tig_memfs_clear();
 }
 
 // 0x52ED40
@@ -937,6 +944,10 @@ int tig_file_mkdir_ex_native(const char* path)
     size_t temp_path_length;
     TigFileRepository* repo;
 
+    if (tig_memfs_claims(path)) {
+        return tig_memfs_mkdir(path);
+    }
+
     temp_path[0] = '\0';
 
     if (path[0] != '.' && path[0] != '\\' && path[1] != ':' && path[0] != '/') {
@@ -976,6 +987,10 @@ int tig_file_rmdir_ex_native(const char* path)
     char temp_path[TIG_MAX_PATH];
     TigFileRepository* repo;
     int rc;
+
+    if (tig_memfs_claims(path)) {
+        return tig_memfs_rmdir(path);
+    }
 
     if (path[0] == '.' || path[0] == '\\' || path[1] == ':' || path[0] == '/') {
         temp_path[0] = '\0';
@@ -1161,6 +1176,11 @@ void tig_file_list_create_native(TigFileList* list, const char* pattern)
     list->count = 0;
     list->entries = NULL;
 
+    if (tig_memfs_claims(mutable_pattern)) {
+        tig_memfs_list(mutable_pattern, tig_file_list_add, list);
+        return;
+    }
+
     if (mutable_pattern[0] == '.' || mutable_pattern[0] == '\\' || mutable_pattern[1] == ':' || mutable_pattern[0] == '/') {
         if (tig_find_first_file(mutable_pattern, &directory_ffd)) {
             do {
@@ -1232,6 +1252,10 @@ void tig_file_list_destroy(TigFileList* file_list)
 // 0x52FB40
 int tig_file_filelength(TigFile* stream)
 {
+    if ((stream->flags & TIG_FILE_MEMORY) != 0) {
+        return (int)tig_memfile_length(stream->impl.memory_file_stream);
+    }
+
     if ((stream->flags & TIG_FILE_DATABASE) != 0) {
         return tig_database_filelength(stream->impl.database_file_stream);
     }
@@ -1274,6 +1298,10 @@ bool tig_file_exists_native(const char* file_name, TigFileInfo* info)
     char path[TIG_MAX_PATH];
     char fname[COMPAT_MAX_FNAME];
     char ext[COMPAT_MAX_EXT];
+
+    if (tig_memfs_claims(file_name)) {
+        return tig_memfs_exists(file_name, info);
+    }
 
     ignored = tig_file_ignored(file_name);
 
@@ -1411,6 +1439,10 @@ int tig_file_remove_native(const char* file_name)
     char path[TIG_MAX_PATH];
     TigDatabaseEntry* database_entry;
 
+    if (tig_memfs_claims(file_name)) {
+        return tig_memfs_remove(file_name);
+    }
+
     // FIX (porting bug #333): an absolute path answers the CRT `remove`'s
     // result, -1 on failure (0x5301d9); CE answered 1, which
     // `tig_file_unlock`'s `== -1` never sees.
@@ -1460,6 +1492,11 @@ int tig_file_rename_native(const char* old_file_name, const char* new_file_name)
     TigFileRepository* repo;
     char old_path[TIG_MAX_PATH];
     char new_path[TIG_MAX_PATH];
+
+    // Within the scratch folder, or a failure: nothing renames across it.
+    if (tig_memfs_claims(old_file_name) || tig_memfs_claims(new_file_name)) {
+        return tig_memfs_rename(old_file_name, new_file_name);
+    }
 
     if (old_file_name[0] == '.' || old_file_name[0] == '\\' || old_file_name[1] == ':' || old_file_name[0] == '/') {
         // FIX (porting bug #334): as `tig_file_remove_native`, the CRT
@@ -1526,6 +1563,10 @@ int tig_file_fflush(TigFile* stream)
         return fflush(NULL);
     }
 
+    if ((stream->flags & TIG_FILE_MEMORY) != 0) {
+        return 0;
+    }
+
     if ((stream->flags & TIG_FILE_DATABASE) != 0) {
         return tig_database_fflush(stream->impl.database_file_stream);
     }
@@ -1577,6 +1618,10 @@ int tig_file_setbuf(TigFile* stream, char* buffer)
 // 0x530440
 int tig_file_setvbuf(TigFile* stream, char* buffer, int mode, size_t size)
 {
+    if ((stream->flags & TIG_FILE_MEMORY) != 0) {
+        return 0;
+    }
+
     if ((stream->flags & TIG_FILE_DATABASE) != 0) {
         return tig_database_setvbuf(stream->impl.database_file_stream, buffer, mode, size);
     }
@@ -1604,6 +1649,10 @@ int tig_file_fprintf(TigFile* stream, const char* format, ...)
 // 0x5304C0
 int tig_file_vfprintf(TigFile* stream, const char* format, va_list args)
 {
+    if ((stream->flags & TIG_FILE_MEMORY) != 0) {
+        return tig_memfile_vprintf(stream->impl.memory_file_stream, format, args);
+    }
+
     if ((stream->flags & TIG_FILE_DATABASE) != 0) {
         return tig_database_vfprintf(stream->impl.database_file_stream, format, args);
     }
@@ -1618,6 +1667,10 @@ int tig_file_vfprintf(TigFile* stream, const char* format, va_list args)
 // 0x530510
 int tig_file_fgetc(TigFile* stream)
 {
+    if ((stream->flags & TIG_FILE_MEMORY) != 0) {
+        return tig_memfile_getc(stream->impl.memory_file_stream);
+    }
+
     if ((stream->flags & TIG_FILE_DATABASE) != 0) {
         return tig_database_fgetc(stream->impl.database_file_stream);
     }
@@ -1632,6 +1685,10 @@ int tig_file_fgetc(TigFile* stream)
 // 0x530540
 char* tig_file_fgets(char* buffer, int max_count, TigFile* stream)
 {
+    if ((stream->flags & TIG_FILE_MEMORY) != 0) {
+        return tig_memfile_gets(buffer, max_count, stream->impl.memory_file_stream);
+    }
+
     if ((stream->flags & TIG_FILE_DATABASE) != 0) {
         return tig_database_fgets(buffer, max_count, stream->impl.database_file_stream);
     }
@@ -1646,6 +1703,10 @@ char* tig_file_fgets(char* buffer, int max_count, TigFile* stream)
 // 0x530580
 int tig_file_fputc(int ch, TigFile* stream)
 {
+    if ((stream->flags & TIG_FILE_MEMORY) != 0) {
+        return tig_memfile_putc(ch, stream->impl.memory_file_stream);
+    }
+
     if ((stream->flags & TIG_FILE_DATABASE) != 0) {
         return tig_database_fputc(ch, stream->impl.database_file_stream);
     }
@@ -1660,6 +1721,10 @@ int tig_file_fputc(int ch, TigFile* stream)
 // 0x5305C0
 int tig_file_fputs(const char* str, TigFile* stream)
 {
+    if ((stream->flags & TIG_FILE_MEMORY) != 0) {
+        return tig_memfile_puts(str, stream->impl.memory_file_stream);
+    }
+
     if ((stream->flags & TIG_FILE_DATABASE) != 0) {
         return tig_database_fputs(str, stream->impl.database_file_stream);
     }
@@ -1674,6 +1739,10 @@ int tig_file_fputs(const char* str, TigFile* stream)
 // 0x530600
 int tig_file_ungetc(int ch, TigFile* stream)
 {
+    if ((stream->flags & TIG_FILE_MEMORY) != 0) {
+        return tig_memfile_ungetc(ch, stream->impl.memory_file_stream);
+    }
+
     if ((stream->flags & TIG_FILE_DATABASE) != 0) {
         return tig_database_ungetc(ch, stream->impl.database_file_stream);
     }
@@ -1692,6 +1761,10 @@ size_t tig_file_fread(void* buffer, size_t size, size_t count, TigFile* stream)
         return 0;
     }
 
+    if ((stream->flags & TIG_FILE_MEMORY) != 0) {
+        return tig_memfile_read(buffer, size, count, stream->impl.memory_file_stream);
+    }
+
     if ((stream->flags & TIG_FILE_DATABASE) != 0) {
         return tig_database_fread(buffer, size, count, stream->impl.database_file_stream);
     }
@@ -1706,6 +1779,10 @@ size_t tig_file_fread(void* buffer, size_t size, size_t count, TigFile* stream)
 // 0x5306A0
 size_t tig_file_fwrite(const void* buffer, size_t size, size_t count, TigFile* stream)
 {
+    if ((stream->flags & TIG_FILE_MEMORY) != 0) {
+        return tig_memfile_write(buffer, size, count, stream->impl.memory_file_stream);
+    }
+
     if ((stream->flags & TIG_FILE_DATABASE) != 0) {
         return tig_database_fwrite(buffer, size, count, stream->impl.database_file_stream);
     }
@@ -1735,6 +1812,10 @@ int tig_file_fgetpos(TigFile* stream, int* pos_ptr)
 // 0x530720
 int tig_file_fseek(TigFile* stream, int offset, int origin)
 {
+    if ((stream->flags & TIG_FILE_MEMORY) != 0) {
+        return tig_memfile_seek(stream->impl.memory_file_stream, offset, origin);
+    }
+
     if ((stream->flags & TIG_FILE_DATABASE) != 0) {
         return tig_database_fseek(stream->impl.database_file_stream, offset, origin);
     }
@@ -1755,6 +1836,10 @@ int tig_file_fsetpos(TigFile* stream, int* pos)
 // 0x530790
 int tig_file_ftell(TigFile* stream)
 {
+    if ((stream->flags & TIG_FILE_MEMORY) != 0) {
+        return (int)tig_memfile_tell(stream->impl.memory_file_stream);
+    }
+
     if ((stream->flags & TIG_FILE_DATABASE) != 0) {
         return tig_database_ftell(stream->impl.database_file_stream);
     }
@@ -1769,6 +1854,11 @@ int tig_file_ftell(TigFile* stream)
 // 0x5307C0
 void tig_file_rewind(TigFile* stream)
 {
+    if ((stream->flags & TIG_FILE_MEMORY) != 0) {
+        tig_memfile_rewind(stream->impl.memory_file_stream);
+        return;
+    }
+
     if ((stream->flags & TIG_FILE_DATABASE) != 0) {
         tig_database_rewind(stream->impl.database_file_stream);
     } else if ((stream->flags & TIG_FILE_PLAIN) != 0) {
@@ -1779,6 +1869,11 @@ void tig_file_rewind(TigFile* stream)
 // 0x5307F0
 void tig_file_clearerr(TigFile* stream)
 {
+    if ((stream->flags & TIG_FILE_MEMORY) != 0) {
+        tig_memfile_clearerr(stream->impl.memory_file_stream);
+        return;
+    }
+
     if ((stream->flags & TIG_FILE_DATABASE) != 0) {
         tig_database_clearerr(stream->impl.database_file_stream);
     } else if ((stream->flags & TIG_FILE_PLAIN) != 0) {
@@ -1789,6 +1884,10 @@ void tig_file_clearerr(TigFile* stream)
 // 0x530820
 int tig_file_feof(TigFile* stream)
 {
+    if ((stream->flags & TIG_FILE_MEMORY) != 0) {
+        return tig_memfile_eof(stream->impl.memory_file_stream);
+    }
+
     if ((stream->flags & TIG_FILE_DATABASE) != 0) {
         return tig_database_feof(stream->impl.database_file_stream);
     }
@@ -1803,6 +1902,10 @@ int tig_file_feof(TigFile* stream)
 // 0x530850
 int tig_file_ferror(TigFile* stream)
 {
+    if ((stream->flags & TIG_FILE_MEMORY) != 0) {
+        return tig_memfile_error(stream->impl.memory_file_stream);
+    }
+
     if ((stream->flags & TIG_FILE_DATABASE) != 0) {
         return tig_database_ferror(stream->impl.database_file_stream);
     }
@@ -1973,6 +2076,10 @@ bool tig_file_close_internal(TigFile* stream)
         if (fclose(stream->impl.plain_file_stream) == 0) {
             success = true;
         }
+    } else if ((stream->flags & TIG_FILE_MEMORY) != 0) {
+        if (tig_memfile_close(stream->impl.memory_file_stream) == 0) {
+            success = true;
+        }
     }
 
     if ((stream->flags & TIG_FILE_DELETE_ON_CLOSE) != 0) {
@@ -2013,7 +2120,18 @@ int tig_file_open_internal_native(const char* path, const char* mode, TigFile* s
     TigDatabaseEntry* database_entry;
     char mutable_path[TIG_MAX_PATH];
 
-    stream->flags &= ~(TIG_FILE_DATABASE | TIG_FILE_PLAIN);
+    stream->flags &= ~(TIG_FILE_DATABASE | TIG_FILE_PLAIN | TIG_FILE_MEMORY);
+
+    // CE (`save scratch in memory`): `Save\\Current` never reaches a repository.
+    if (tig_memfs_claims(path)) {
+        stream->impl.memory_file_stream = tig_memfs_open(path, mode);
+        if (stream->impl.memory_file_stream == NULL) {
+            return 0;
+        }
+
+        stream->flags |= TIG_FILE_MEMORY;
+        return stream->flags & TIG_FILE_MEMORY;
+    }
 
     if (path[0] == '.' || path[0] == '\\' || path[1] == ':' || path[0] == '/') {
         stream->impl.plain_file_stream = tig_file_fopen_plain(path, mode);
@@ -2398,6 +2516,17 @@ void tig_file_set_save_dir(const char* name)
 const char* tig_file_save_dir(void)
 {
     return tig_file_save_dir_name;
+}
+
+void tig_file_set_scratch_in_memory(bool enabled)
+{
+    tig_memfs_clear();
+    tig_memfs_set_enabled(enabled);
+}
+
+bool tig_file_scratch_in_memory(void)
+{
+    return tig_memfs_enabled();
 }
 
 bool tig_file_apply_save_dir(char* path, size_t size, const char* save_dir)

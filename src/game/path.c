@@ -1,5 +1,7 @@
 #include "game/path.h"
 
+#include "game/feature.h"
+
 #include "game/critter.h"
 #include "game/location.h"
 #include "game/object.h"
@@ -29,6 +31,9 @@ static int path_make_straight_flag_0x0080(int64_t from, int64_t to, int8_t* rota
 static int wmap_path_find_detour(WmapPathInfo* path_info);
 static int wmap_path_make_astar(WmapPathInfo* path_info);
 static int path_make_timed(PathCreateInfo* path_create_info, tig_duration_t ms);
+
+// CE (`npc path budget`, card HW1): searches a second, less one, as `path_limit`.
+#define PATH_NPC_BUDGET_SEARCHES 99
 
 // 0x5A15C0
 static int path_limit = 10;
@@ -355,7 +360,9 @@ int path_make_astar(PathCreateInfo* path_create_info)
             path_search_time_ms = 0;
         }
 
-        if (path_search_count > path_limit) {
+        // CE (`npc path budget`, card HW1): 100 searches a second instead of
+        // the original's `path_limit` (11, as `count > limit`).
+        if (path_search_count > (feature_enabled(FEATURE_NPC_PATH_BUDGET) ? PATH_NPC_BUDGET_SEARCHES : path_limit)) {
             path_budget_refused = true;
             return 0;
         }

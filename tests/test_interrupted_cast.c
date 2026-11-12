@@ -120,8 +120,12 @@ TEST(a_freed_spell_run_is_forgotten_by_the_cast_goals_naming_it_under_the_switch
 {
     AnimRunInfo saved[3];
     AnimRunInfo* slots = &(anim_run_info[ANIM_RUN_INFO_COUNT - 3]);
+    int saved_high_water = anim_run_info_high_water;
 
     memcpy(saved, slots, sizeof(saved));
+    // The slots are filled by hand, not allocated, so the search bound that
+    // allocation raises (card HW1) is raised over them here.
+    anim_run_info_note_used(ANIM_RUN_INFO_COUNT - 1);
 
     run_freed(false, &slots[0], &slots[1], &slots[2]);
     CHECK_INT(slots[0].goals[1].params[AGDATA_SPELL_DATA].data, 7);
@@ -135,6 +139,7 @@ TEST(a_freed_spell_run_is_forgotten_by_the_cast_goals_naming_it_under_the_switch
     CHECK_INT(slots[2].goals[0].params[AGDATA_SPELL_DATA].data, 7); // a slot not in use
 
     memcpy(slots, saved, sizeof(saved));
+    anim_run_info_high_water = saved_high_water;
 }
 
 void test_interrupted_cast_suite(void)

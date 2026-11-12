@@ -385,6 +385,11 @@ bool gamelib_init(GameInitInfo* init_info)
     // effect at the next start.
     tig_file_set_save_dir(feature_enabled(FEATURE_CE_SAVE_FOLDER) ? GAMELIB_CE_SAVE_DIR : NULL);
 
+    // CE (`save scratch in memory`, card HW1): `Save\\Current`, the scratch
+    // folder a load unpacks the slot into and a save packs, in memory. Read
+    // once, here, after the save folder and before anything touches it.
+    tig_file_set_scratch_in_memory(feature_enabled(FEATURE_SAVE_SCRATCH_IN_MEMORY));
+
     uap_init();
 
     gamelib_mod_loaded = false;

@@ -605,7 +605,8 @@ void ai_process(int64_t obj)
 // CE (combat AI, milestone AI-0): `ai.decided` for one combat decision. In
 // turn-based every decision is written; in real time, where the AI is polled
 // many times a second, only one that differs from the actor's last.
-#define AI_OBSERVE_SEEN_MAX 64
+// Card HW1 (zsogg, 2026-11-11): 1024, sized for a crowd, not a party (was 64).
+#define AI_OBSERVE_SEEN_MAX 1024
 
 static struct {
     int64_t obj;
@@ -694,7 +695,8 @@ static void ai_observe_item_used(Ai* ai, int64_t item_obj, int64_t target_obj)
 //   animation, so nothing else on screen shows it.
 // - Under `restorative cost` an NPC passes over a restorative it cannot pay
 //   for, rather than reach `item_use_on_obj`'s refusal.
-#define AI_RESTORATIVES_MAX 64
+// Card HW1 (zsogg, 2026-11-11): 1024, sized for a crowd, not a party (was 64).
+#define AI_RESTORATIVES_MAX 1024
 #define AI_RESTORATIVES_PER_FIGHT 2
 
 static struct {
@@ -1017,7 +1019,8 @@ int ai_failure_refusal_threshold(bool white_heal_waived, bool futile_cut)
 // CE (combat AI, milestone AI-6): `ai_heal`'s patients for a follower of the
 // player under `follower healing` - itself, its leader and the leader's other
 // followers, as stock - tried worst hurt first instead of in that order.
-#define AI_HEAL_PATIENTS_MAX 32
+// Card HW1 (zsogg, 2026-11-11): 1024, sized for a crowd, not a party (was 32).
+#define AI_HEAL_PATIENTS_MAX 1024
 
 static bool ai_heal_worst_first(Ai* ai, int64_t leader_obj, bool force)
 {
@@ -2915,7 +2918,8 @@ static bool ai_follower_conduct_applies(int64_t obj)
 
 // CE: AI-6 F2. Who has already declined to defend the player against whom,
 // this fight. A party is a handful and a fight a few attackers.
-#define AI_CONDUCT_REFUSALS_MAX 32
+// Card HW1 (zsogg, 2026-11-11): 1024, sized for a crowd, not a party (was 32).
+#define AI_CONDUCT_REFUSALS_MAX 1024
 
 static struct {
     int64_t follower_obj;
@@ -3502,7 +3506,8 @@ bool ai_in_fight(int64_t obj)
 // refusal is about to happen, and remembered for the rest of the turn. Only
 // in a fight: turn-based, combat mode, or the NPC's AI fighting.
 #define AI_DESPERATION_CHANCE 40
-#define AI_DESPERATION_MAX 64
+// Card HW1 (zsogg, 2026-11-11): 1024, sized for a crowd, not a party (was 64).
+#define AI_DESPERATION_MAX 1024
 
 static struct {
     int64_t obj;
@@ -3615,7 +3620,8 @@ bool ai_desperation_rolled(int64_t obj)
 // budget (`path_limit`, ten a second) is shared with every NPC's movement,
 // and an exhausted budget would read as "unreachable". The turn is
 // `ai_desperation_key`'s: the turn-based round, or one turn length `R`.
-#define AI_UNREACHABLE_MAX 64
+// Card HW1 (zsogg, 2026-11-11): 1024, sized for a crowd, not a party (was 64).
+#define AI_UNREACHABLE_MAX 1024
 
 static struct {
     int64_t obj;
@@ -3799,7 +3805,8 @@ static int64_t ai_turn_from_unreachable(int64_t obj, int64_t target_obj)
 // hunter already fighting someone adjacent keeps fighting them, so a
 // companion who intercepts it holds it.
 #define AI_HUNTERS_MAX 64
-#define AI_CASTERS_MAX 64
+// Card HW1 (zsogg, 2026-11-11): 1024, sized for a crowd, not a party (was 64).
+#define AI_CASTERS_MAX 1024
 #define AI_PREY_CAST_TURNS 10
 
 static int ai_hunter_descriptions[AI_HUNTERS_MAX];
@@ -4445,7 +4452,8 @@ void ai_action_perform_combat(Ai* ai)
 // attacks. The table remembers each NPC's last target; one turning back to an
 // earlier target weighs again, and commitment keeps a weapon that is close
 // enough.
-#define AI_ARMOR_TARGETS_MAX 64
+// Card HW1 (zsogg, 2026-11-11): 1024, sized for a crowd, not a party (was 64).
+#define AI_ARMOR_TARGETS_MAX 1024
 
 static struct {
     int64_t obj;
@@ -6504,7 +6512,7 @@ bool ai_is_moving(int64_t obj)
     };
     size_t idx;
 
-    // Each lookup below scans all 216 animation slots and is false when the
+    // Each lookup below scans the animation slots in use and is false when the
     // critter has none running: one scan answers that case (card PG1).
     if (anim_find_first(obj) == -1) {
         return false;
@@ -7196,7 +7204,8 @@ static int ai_tactics_friendly_fire(int64_t caster_obj, int64_t target_obj, int 
 // Rule 3's memo: when each target was last seen disabled, in the turn key
 // `ai_desperation_key` gives (a round, or a real-time turn). A fight's
 // memory only: nothing is saved (the plan's default, 2026-11-02).
-#define AI_CONTROL_MEMO_MAX 32
+// Card HW1 (zsogg, 2026-11-11): 1024, sized for a crowd, not a party (was 32).
+#define AI_CONTROL_MEMO_MAX 1024
 
 static struct {
     int64_t obj;
@@ -7207,7 +7216,8 @@ static struct {
 // each caster's last judged pass kept, in `ai_desperation_key`'s turn, which
 // its heals keep to. A fight's memory only, not saved; older than the last
 // turn it is none, so a pass that never weighed does not hold heals back.
-#define AI_JUDGEMENT_RESERVE_MAX 32
+// Card HW1 (zsogg, 2026-11-11): 1024, sized for a crowd, not a party (was 32).
+#define AI_JUDGEMENT_RESERVE_MAX 1024
 
 static struct {
     int64_t obj;

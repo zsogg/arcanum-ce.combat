@@ -10,6 +10,10 @@ typedef struct CurseLogbookEntry {
     /* 0008 */ DateTime datetime;
 } CurseLogbookEntry;
 
+// CE (card HW1): the most entries `curse_get_logbook_data` writes, the size of
+// the logbook's array (logbook_ui.c).
+#define CURSE_LOGBOOK_MAX 100
+
 bool curse_mod_load(void);
 void curse_mod_unload(void);
 void curse_copy_name(int curse, char* buffer, size_t maxlen);

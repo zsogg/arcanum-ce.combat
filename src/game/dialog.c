@@ -2789,15 +2789,13 @@ bool find_dialog(const char* path, int* index_ptr)
             return true;
         }
 
-        if (dialog_files[index].refcount == 0) {
-            if (candidate == -1) {
-                candidate = index;
-            } else if (dialog_files[candidate].path[0] != '\0') {
-                if (dialog_files[index].path[0] == '\0'
-                    || datetime_compare(&(dialog_files[candidate].timestamp), &(dialog_files[index].timestamp)) > 0) {
-                    candidate = index;
-                }
-            }
+        // CE (card HW1): only an empty slot is taken; a parsed file stays
+        // parsed, and the table grows when it is full. The original took the
+        // oldest unused file (0x4175D0), so the eleventh NPC spoken to pushed
+        // out the first and its file was read and parsed again on the next
+        // conversation; the whole game's dialogue is about 7 MB of text.
+        if (dialog_files[index].refcount == 0 && dialog_files[index].path[0] == '\0' && candidate == -1) {
+            candidate = index;
         }
     }
 

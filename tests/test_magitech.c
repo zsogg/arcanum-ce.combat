@@ -22,6 +22,8 @@
 // and a valid parent handle. Everything else returns the input object. These
 // tests pin that table with real prototype objects from the obj_harness.
 
+#include <stdlib.h>
+
 #include "game/magictech.h"
 #include "game/obj.h"
 
@@ -197,8 +199,39 @@ TEST(non_item_types_resolve_to_themselves)
     obj_harness_destroy(other_obj);
 }
 
+// Card HW1: the 513th spell run is refused. The original quits the game when
+// every one of its 512 ids is in use (0x45576A `push 1; call exit`).
+extern bool magictech_id_new_lock(MagicTechRunInfo** run_info_ptr);
+
+#define TEST_MAGICTECH_RUNS 512
+
+TEST(a_full_spell_pool_refuses_the_run_instead_of_quitting)
+{
+    MagicTechRunInfo* saved = magictech_run_info;
+    MagicTechRunInfo* pool = (MagicTechRunInfo*)calloc(TEST_MAGICTECH_RUNS, sizeof(*pool));
+    MagicTechRunInfo* run_info = pool;
+    int index;
+
+    for (index = 0; index < TEST_MAGICTECH_RUNS; index++) {
+        pool[index].id = index;
+    }
+    magictech_run_info = pool;
+
+    CHECK(!magictech_id_new_lock(&run_info));
+    CHECK(run_info == NULL);
+
+    pool[300].id = -1;
+    CHECK(magictech_id_new_lock(&run_info));
+    CHECK(run_info == &(pool[300]));
+    CHECK_INT(pool[300].id, 300);
+
+    magictech_run_info = saved;
+    free(pool);
+}
+
 void test_magitech_suite(void)
 {
+    RUN(a_full_spell_pool_refuses_the_run_instead_of_quitting);
     RUN(null_parent_resolves_to_null);
     RUN(every_item_type_resolves_to_parent_when_in_inventory);
     RUN(item_without_inventory_flag_resolves_to_itself);

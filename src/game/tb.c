@@ -6,8 +6,13 @@
 
 /**
  * The maximum number of text bubbles that can be active simultaneously.
+ *
+ * CE (card HW1, zsogg 2026-11-11): 32, where the original has 8 (its array at
+ * 0x602930, 8 x 0x30). The ninth bubble replaced the oldest, so in a crowded
+ * town or a large fight lines went before they could be read. Each bubble's
+ * buffer is allocated at `tb_init`: about 5 MB at the stock size.
  */
-#define MAX_TEXT_BUBBLES 8
+#define MAX_TEXT_BUBBLES 32
 
 /**
  * The maximum width of the text bubble rectangle.

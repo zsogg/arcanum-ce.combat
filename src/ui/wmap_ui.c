@@ -222,6 +222,7 @@ static bool wmTileArtLock(int tile);
 static void wmTileArtUnlock(int tile);
 static void wmTileArtUnload(int tile);
 static bool wmTileArtLockMode(WmapUiMode mode, int tile);
+static void wmap_ui_tile_keep_flush(WmapUiMode mode);
 static bool wmTileArtLoad(const char* path, TigVideoBuffer** video_buffer_ptr, TigRect* rect);
 static bool wmTileArtUnlockMode(WmapUiMode mode, int tile);
 static void wmTileArtUnloadMode(WmapUiMode mode, int tile);
@@ -848,6 +849,9 @@ void wmap_ui_exit(void)
     wmap_ui_destroy();
     wmap_ui_town_shutdown();
     mes_unload(wmap_ui_worldmap_mes_file);
+    for (mode = 0; mode < WMAP_UI_MODE_COUNT; mode++) {
+        wmap_ui_tile_keep_flush(mode);
+    }
     wmap_ui_initialized = false;
 }
 
@@ -2802,10 +2806,77 @@ void wmTileArtUnload(int tile)
     wmTileArtUnloadMode(wmap_ui_mode, tile);
 }
 
+// CE (card HW1): a map's tile pictures, kept when the map closes. The original
+// destroys every tile on each close (`wmap_ui_destroy`) and reads them again
+// from the archives on the next open; here an unloaded tile's picture is kept
+// per mode, for the map it belongs to (its tile name and count), and a lock
+// of that tile takes it back instead of reading it. Opening another map, or
+// another town, drops what was kept. The open and close paths are the
+// original's.
+typedef struct WmapTileKeep {
+    char name[TIG_MAX_PATH];
+    int count;
+    TigVideoBuffer** buffers;
+} WmapTileKeep;
+
+static WmapTileKeep wmap_ui_tile_keep[WMAP_UI_MODE_COUNT];
+
+static void wmap_ui_tile_keep_flush(WmapUiMode mode)
+{
+    WmapTileKeep* keep = &(wmap_ui_tile_keep[mode]);
+    int index;
+
+    for (index = 0; index < keep->count; index++) {
+        if (keep->buffers[index] != NULL) {
+            tig_video_buffer_destroy(keep->buffers[index]);
+        }
+    }
+    if (keep->buffers != NULL) {
+        FREE(keep->buffers);
+    }
+    keep->buffers = NULL;
+    keep->count = 0;
+    keep->name[0] = '\0';
+}
+
+// The slot for `tile` of the map `mode` shows now, the store first emptied if
+// it held another map's tiles.
+static TigVideoBuffer** wmap_ui_tile_keep_slot(WmapUiMode mode, int tile)
+{
+    WmapTileKeep* keep = &(wmap_ui_tile_keep[mode]);
+    WmapInfo* info = &(wmap_ui_mode_info[mode]);
+
+    if (keep->count != info->num_tiles || strcmp(keep->name, info->field_68) != 0) {
+        wmap_ui_tile_keep_flush(mode);
+        if (info->num_tiles <= 0) {
+            return NULL;
+        }
+        keep->buffers = (TigVideoBuffer**)CALLOC(info->num_tiles, sizeof(*keep->buffers));
+        keep->count = info->num_tiles;
+        SDL_strlcpy(keep->name, info->field_68, sizeof(keep->name));
+    }
+
+    return tile >= 0 && tile < keep->count ? &(keep->buffers[tile]) : NULL;
+}
+
 // 0x563000
 bool wmTileArtLockMode(WmapUiMode mode, int tile)
 {
     char path[TIG_MAX_PATH];
+    TigVideoBuffer** kept;
+    TigVideoBufferData kept_data;
+
+    kept = (wmap_ui_mode_info[mode].tiles[tile].flags & 0x1) == 0 ? wmap_ui_tile_keep_slot(mode, tile) : NULL;
+    if (kept != NULL && *kept != NULL && tig_video_buffer_data(*kept, &kept_data) == TIG_OK) {
+        wmap_ui_mode_info[mode].tiles[tile].video_buffer = *kept;
+        wmap_ui_mode_info[mode].tiles[tile].rect.x = 0;
+        wmap_ui_mode_info[mode].tiles[tile].rect.y = 0;
+        wmap_ui_mode_info[mode].tiles[tile].rect.width = kept_data.width;
+        wmap_ui_mode_info[mode].tiles[tile].rect.height = kept_data.height;
+        wmap_ui_mode_info[mode].tiles[tile].flags |= 0x1;
+        wmap_ui_mode_info[mode].num_loaded_tiles++;
+        *kept = NULL;
+    }
 
     if ((wmap_ui_mode_info[mode].tiles[tile].flags & 0x1) == 0) {
         if (mode == 2) {
@@ -2879,6 +2950,20 @@ bool wmTileArtUnlockMode(WmapUiMode mode, int tile)
 // 0x563210
 void wmTileArtUnloadMode(WmapUiMode mode, int tile)
 {
+    TigVideoBuffer** kept;
+
+    // CE (card HW1): kept for the same map's next opening (`wmap_ui_tile_keep`).
+    if ((wmap_ui_mode_info[mode].tiles[tile].flags & 0x1) != 0
+        && (kept = wmap_ui_tile_keep_slot(mode, tile)) != NULL) {
+        if (*kept != NULL) {
+            tig_video_buffer_destroy(*kept);
+        }
+        *kept = wmap_ui_mode_info[mode].tiles[tile].video_buffer;
+        wmap_ui_mode_info[mode].tiles[tile].flags &= ~0x1;
+        wmap_ui_mode_info[mode].num_loaded_tiles--;
+        return;
+    }
+
     if ((wmap_ui_mode_info[mode].tiles[tile].flags & 0x1) != 0) {
         if (tig_video_buffer_destroy(wmap_ui_mode_info[mode].tiles[tile].video_buffer) == TIG_OK) {
             wmap_ui_mode_info[mode].tiles[tile].flags &= ~0x1;

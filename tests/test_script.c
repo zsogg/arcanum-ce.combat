@@ -47,13 +47,14 @@
 #include "game/teleport.h"
 #include "obj_harness.h"
 #include "test_harness.h"
+#include "tig/memory.h"
 
-// script.c:50. Not exported, so it is pinned here: if the sentinel changes,
+// script.c:55. Not exported, so it is pinned here: if the sentinel changes,
 // these tests should say so rather than silently comparing -1 to -1.
 #define SCRIPT_NEXT (-1)
 #define SCRIPT_INVALID_OPERAND (-5)
 
-// script.c:47 and script.c:48.
+// script.c:52 and script.c:53.
 #define TEST_MAX_GLOBAL_VARS 2000
 #define TEST_MAX_GLOBAL_FLAGS 100
 
@@ -1144,8 +1145,153 @@ TEST(toggling_a_null_items_display_touches_no_object)
 }
 #endif
 
+// The parsed-script cache (porting bug #397, card HW1). `ScriptCacheEntry` is
+// private to script.c (script.c:60); this mirrors it, as `ScriptOperandError`
+// is mirrored above. The cache's table, its size and the editor flag are
+// globalized beside the three functions, so a case can hand the cache a few
+// entries of its own and need no script on disk: a lock of a script already
+// cached reads nothing.
+typedef struct TestScriptCacheEntry {
+    int script_id;
+    DateTime datetime;
+    int ref_count;
+    ScriptFile* file;
+} TestScriptCacheEntry;
+
+extern TestScriptCacheEntry* script_cache_entries;
+extern int script_cache_capacity;
+extern bool script_editor;
+extern ScriptFile* script_lock(int script_id);
+extern void script_unlock(int script_id);
+extern int cache_find(int script_id);
+
+static ScriptFile cache_test_file;
+
+// Three cached scripts, ids 11 to 13, none in use, the oldest first.
+static void cache_test_fill(void)
+{
+    int index;
+
+    script_cache_capacity = 3;
+    script_cache_entries = (TestScriptCacheEntry*)CALLOC(script_cache_capacity, sizeof(*script_cache_entries));
+    for (index = 0; index < 3; index++) {
+        script_cache_entries[index].script_id = 11 + index;
+        script_cache_entries[index].datetime.days = index;
+        script_cache_entries[index].file = &cache_test_file;
+    }
+}
+
+static void cache_test_clear(void)
+{
+    FREE(script_cache_entries);
+    script_cache_entries = NULL;
+    script_cache_capacity = 0;
+    script_editor = false;
+}
+
+// The original releases a script when it has run (0x44C450 returns early only
+// in the editor); CE kept every script locked, so once the cache held 100 the
+// 101st different script quit the game.
+TEST(a_script_that_has_run_is_released_for_eviction)
+{
+    cache_test_fill();
+
+    CHECK(script_lock(12) == &cache_test_file);
+    CHECK_INT(script_cache_entries[1].ref_count, 1);
+    script_unlock(12);
+    CHECK_INT(script_cache_entries[1].ref_count, 0);
+
+    // A new script takes the oldest released entry, and the table keeps its size.
+    script_lock(11);
+    script_unlock(11);
+    CHECK_INT(cache_find(99), 0);
+    CHECK_INT(script_cache_capacity, 3);
+
+    cache_test_clear();
+}
+
+TEST(the_editor_does_not_release_a_script)
+{
+    cache_test_fill();
+    script_cache_entries[1].ref_count = 1;
+    script_editor = true;
+
+    script_unlock(12);
+    CHECK_INT(script_cache_entries[1].ref_count, 1);
+
+    cache_test_clear();
+}
+
+// Every entry in use: the original quits with 0 (0x44C708); CE grows the
+// table, keeps what was cached, and hands back the first new entry.
+TEST(a_cache_with_every_script_in_use_grows_instead_of_quitting)
+{
+    cache_test_fill();
+    script_lock(11);
+    script_lock(12);
+    script_lock(13);
+
+    CHECK_INT(cache_find(99), 3);
+    CHECK(script_cache_capacity > 3);
+    CHECK_INT(script_cache_entries[3].script_id, 0);
+    CHECK_INT(script_cache_entries[2].script_id, 13);
+    CHECK_INT(script_cache_entries[2].ref_count, 1);
+
+    cache_test_clear();
+}
+
+extern int script_resolve_focus_obj(ScriptFocusObject type, int index, ScriptState* state, int64_t* objs, ObjectList* l);
+
+// Card HW1: the group focus is the triggerer's followers and then the
+// triggerer. The original writes the triggerer at objs[100] after 100
+// followers, past the array and, in ScriptState, onto `objects`. CE keeps 99
+// followers and the triggerer.
+TEST(a_group_of_a_hundred_followers_stays_inside_its_array)
+{
+    enum { FOLLOWERS = 105 };
+    ScriptInvocation invocation;
+    ScriptState state;
+    ObjectList group;
+    int64_t leader;
+    int64_t followers[FOLLOWERS];
+    int index;
+    int cnt;
+
+    CHECK(obj_harness_init());
+    leader = obj_harness_create_proto(OBJ_TYPE_NPC);
+    for (index = 0; index < FOLLOWERS; index++) {
+        followers[index] = obj_harness_create_proto(OBJ_TYPE_NPC);
+        obj_arrayfield_obj_set(leader, OBJ_F_CRITTER_FOLLOWER_IDX, index, followers[index]);
+    }
+
+    memset(&invocation, 0, sizeof(invocation));
+    invocation.triggerer_obj = leader;
+    memset(&state, 0, sizeof(state));
+    state.invocation = &invocation;
+    state.objects.head = (ObjectNode*)&state;
+    state.objects.num_sectors = 7;
+
+    cnt = script_resolve_focus_obj(SFO_EVERYONE_IN_GROUP, 0, &state, state.objs, &group);
+    CHECK_INT(cnt, 100);
+    CHECK(state.objects.head == (ObjectNode*)&state);
+    CHECK_INT(state.objects.num_sectors, 7);
+    CHECK(state.objs[0] == followers[0]);
+    CHECK(state.objs[98] == followers[98]);
+    CHECK(state.objs[99] == leader);
+    object_list_destroy(&group);
+
+    for (index = 0; index < FOLLOWERS; index++) {
+        obj_harness_destroy(followers[index]);
+    }
+    obj_harness_destroy(leader);
+}
+
 void test_script_suite(void)
 {
+    RUN(a_group_of_a_hundred_followers_stays_inside_its_array);
+    RUN(a_script_that_has_run_is_released_for_eviction);
+    RUN(the_editor_does_not_release_a_script);
+    RUN(a_cache_with_every_script_in_use_grows_instead_of_quitting);
     RUN(a_local_flag_value_of_two_sets_the_next_flag_up);
     RUN(local_flags_past_31_wrap_as_the_original_shifts);
     RUN(local_counters_past_3_wrap_as_the_original_shifts);

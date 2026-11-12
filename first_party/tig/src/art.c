@@ -465,6 +465,11 @@ static int tig_art_bytes_per_pixel;
 // 0x60473C
 static bool tig_art_initialized;
 
+// CE (card HW1): the encoded bytes of the frame `tig_art_file_read` is
+// decoding, reused across loads; it grows to the largest frame met.
+static uint8_t* tig_art_rle_buffer;
+static int tig_art_rle_capacity;
+
 // 0x604740
 static art_size_t tig_art_available_system_memory;
 
@@ -541,6 +546,12 @@ void tig_art_exit(void)
 
         tig_art_exists_cache_clear();
 
+        if (tig_art_rle_buffer != NULL) {
+            FREE(tig_art_rle_buffer);
+            tig_art_rle_buffer = NULL;
+            tig_art_rle_capacity = 0;
+        }
+
         tig_art_initialized = false;
     }
 }
@@ -616,7 +627,10 @@ void tig_art_flush(void)
 // `tig_file_repository_changes` counts those.
 // shortcut: art copied into a mounted directory while the game runs is not
 // seen until a repository changes; restart the game after adding art.
-#define TIG_ART_EXISTS_CACHE_SIZE 4096 // slots, a power of two
+// Card HW1: 32,768 slots (24,576 answers before it empties itself), where
+// PG1 sized it at 4,096; the game has 15,655 art files, and a long session
+// across many areas asks after more paths than that, existing or not.
+#define TIG_ART_EXISTS_CACHE_SIZE 32768 // slots, a power of two
 
 typedef struct TigArtExistsEntry {
     char* path;
@@ -677,6 +691,7 @@ int tig_art_exists(tig_art_id_t art_id)
     if (entry->path == NULL) {
         // Kept under three quarters full, so a probe always ends.
         if (tig_art_exists_cache_count >= TIG_ART_EXISTS_CACHE_SIZE / 4 * 3) {
+            tig_debug_printf("TIG Art: the existence cache is full at %d paths; emptied\n", tig_art_exists_cache_count);
             tig_art_exists_cache_clear();
             entry = tig_art_exists_cache_slot(path);
         }
@@ -6186,6 +6201,47 @@ void tig_art_cache_entry_video_buffers_free(int cache_entry_index)
     }
 }
 
+// CE (card HW1): one RLE-encoded frame, `src_size` encoded bytes into a frame
+// of `dst_size` pixels. A header byte's low 7 bits are a length; with the top
+// bit set that many literal pixels follow, otherwise one colour fills them.
+// This is the original's loop over a buffer instead of the stream. Answers
+// the pixels written, which the next frame starts after, as the original's
+// pointer does; -1 when a run passes the frame or the encoded bytes (a
+// malformed file, which the stream read on into the next frame).
+int tig_art_rle_decode(const uint8_t* src, int src_size, uint8_t* dst, int dst_size)
+{
+    const uint8_t* src_end = src + src_size;
+    uint8_t* dst_start = dst;
+    const uint8_t* dst_end = dst + dst_size;
+    int len;
+
+    while (src < src_end) {
+        len = *src & 0x7F;
+        // FIX: the frame's pixel area bounds every run. The loop was bounded
+        // by `data_size` alone - the number of encoded bytes - so a run that
+        // overshot the frame wrote past the allocation (review 2026-10-22,
+        // finding 4).
+        if (len > dst_end - dst) {
+            return -1;
+        }
+        if ((*src++ & 0x80) != 0) {
+            if (len > src_end - src) {
+                return -1;
+            }
+            memcpy(dst, src, len);
+            src += len;
+        } else {
+            if (src == src_end) {
+                return -1;
+            }
+            memset(dst, *src++, len);
+        }
+        dst += len;
+    }
+
+    return (int)(dst - dst_start);
+}
+
 // 0x51B710
 int tig_art_file_read(tig_art_id_t art_id, const char* filename, TigArtHeader* hdr, TigPalette** palette_tbl, int a5, art_size_t* size_ptr)
 {
@@ -6330,44 +6386,33 @@ int tig_art_file_read(tig_art_id_t art_id, const char* filename, TigArtHeader* h
                 bytes += hdr->frames_tbl[index][frame].data_size;
             } else if (hdr->frames_tbl[index][frame].data_size > 0) {
                 // Pixels are RLE-encoded.
-                uint8_t value;
-                uint8_t color;
-                int len;
-                int cnt = 0;
-                // FIX: the frame's pixel area bounds every run. The loop was
-                // bounded by `data_size` alone - the number of encoded bytes -
-                // so a run that overshot the frame wrote past the allocation
-                // (review 2026-10-22, finding 4).
-                const uint8_t* frame_end = bytes + hdr->frames_tbl[index][frame].width * hdr->frames_tbl[index][frame].height;
+                //
+                // CE (card HW1): the frame's encoded bytes are read in one call
+                // and decoded from memory. The original reads every run header
+                // and fill colour with its own 1-byte `fread` (0x51BB16,
+                // 0x51BB43), and from a compressed archive each of those is a
+                // call into zlib: tens of thousands for one animation, on the
+                // frame that first draws it.
+                int data_size = hdr->frames_tbl[index][frame].data_size;
+                int written;
 
-                while (cnt < hdr->frames_tbl[index][frame].data_size) {
-                    if (tig_file_fread(&value, 1, 1, stream) != 1) {
-                        tig_art_load_cleanup(stream, hdr, palette_tbl);
-                        return TIG_ERR_GENERIC;
-                    }
-
-                    len = value & 0x7F;
-                    if (len > frame_end - bytes) {
-                        tig_art_load_cleanup(stream, hdr, palette_tbl);
-                        return TIG_ERR_GENERIC;
-                    }
-                    if ((value & 0x80) != 0) {
-                        if (tig_file_fread(bytes, 1, len, stream) != (size_t)len) {
-                            tig_art_load_cleanup(stream, hdr, palette_tbl);
-                            return TIG_ERR_GENERIC;
-                        }
-                        cnt += 1 + len;
-                    } else {
-                        if (tig_file_fread(&color, 1, 1, stream) != 1) {
-                            tig_art_load_cleanup(stream, hdr, palette_tbl);
-                            return TIG_ERR_GENERIC;
-                        }
-
-                        memset(bytes, color, len);
-                        cnt += 2;
-                    }
-                    bytes += len;
+                if (data_size > tig_art_rle_capacity) {
+                    tig_art_rle_capacity = data_size;
+                    tig_art_rle_buffer = (uint8_t*)REALLOC(tig_art_rle_buffer, tig_art_rle_capacity);
                 }
+                if (tig_file_fread(tig_art_rle_buffer, 1, data_size, stream) != (size_t)data_size) {
+                    tig_art_load_cleanup(stream, hdr, palette_tbl);
+                    return TIG_ERR_GENERIC;
+                }
+                written = tig_art_rle_decode(tig_art_rle_buffer,
+                    data_size,
+                    bytes,
+                    hdr->frames_tbl[index][frame].width * hdr->frames_tbl[index][frame].height);
+                if (written < 0) {
+                    tig_art_load_cleanup(stream, hdr, palette_tbl);
+                    return TIG_ERR_GENERIC;
+                }
+                bytes += written;
             }
         }
     }

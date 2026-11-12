@@ -47,6 +47,8 @@ set(SRCS
     "src/draw.c"
     "src/file_cache.c"
     "src/file.c"
+    "src/file_memory.c"
+    "src/file_memory.h"
     "src/find_file.c"
     "src/font.c"
     "src/guid.c"

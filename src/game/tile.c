@@ -683,10 +683,10 @@ void tile_draw_iso(GameDrawInfo* draw_info)
     tig_color_t outdoor_color;
     int v2;
     int v4;
-    int indexes[3];
-    int widths[3];
-    bool sector_lock_results[3];
-    Sector* sectors[3];
+    int indexes[SECTOR_RECT_MAX];
+    int widths[SECTOR_RECT_MAX];
+    bool sector_lock_results[SECTOR_RECT_MAX];
+    Sector* sectors[SECTOR_RECT_MAX];
     int64_t loc_x;
     int64_t loc_y;
     TigRectListNode* rect_node;

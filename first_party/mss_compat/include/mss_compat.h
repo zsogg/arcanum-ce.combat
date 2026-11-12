@@ -42,6 +42,9 @@ void AILCALL AIL_start_stream(HSTREAM stream);
 int AILCALL AIL_stream_status(HSTREAM stream);
 
 bool mss_compat_init(void);
+// CE (card HW1): Miles' 0-127 balance as left and right gains; false for
+// the centre, which needs none.
+bool mss_compat_balance_gains(int extravol, float* left, float* right);
 void mss_compat_exit(void);
 
 #ifdef __cplusplus

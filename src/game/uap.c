@@ -5,6 +5,8 @@
 #include "game/feature.h"
 #include "game/highres_config.h"
 #include "game/obj.h"
+#include "game/object.h"
+#include "game/roof.h"
 
 static void uap_fixes_changed(void);
 
@@ -60,4 +62,9 @@ void uap_fixes_changed(void)
     if (!uap_fixes) {
         tig_art_mirroring_set(highres_config_get()->sprite_mirroring);
     }
+
+    // Card HW1: see-through walls, faded roofs and invisible critters
+    // blended as under UAP's 3D path, or the 1.0.7.4 checkerboard.
+    object_transparency_update();
+    roof_transparency_update();
 }

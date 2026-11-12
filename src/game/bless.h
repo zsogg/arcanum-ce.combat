@@ -10,6 +10,10 @@ typedef struct BlessLogbookEntry {
     /* 0008 */ DateTime datetime;
 } BlessLogbookEntry;
 
+// CE (card HW1): the most entries `bless_get_logbook_data` writes, the size of
+// the logbook's array (logbook_ui.c).
+#define BLESS_LOGBOOK_MAX 100
+
 bool bless_mod_load(void);
 void bless_mod_unload(void);
 void bless_copy_name(int bless, char* buffer, size_t maxlen);

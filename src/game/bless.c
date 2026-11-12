@@ -108,6 +108,13 @@ int bless_get_logbook_data(int64_t obj, BlessLogbookEntry* logbook_entries)
 
     // Iterate through all blessing entries and populate the array.
     cnt = obj_arrayfield_length_get(obj, OBJ_F_PC_BLESSING_IDX);
+
+    // FIX: at most the logbook's BLESS_LOGBOOK_MAX. The original writes every
+    // entry the player has into the logbook's 100 on the stack; stock has
+    // fewer than 60, but a mod can grant more (card HW1).
+    if (cnt > BLESS_LOGBOOK_MAX) {
+        cnt = BLESS_LOGBOOK_MAX;
+    }
     for (index = 0; index < cnt; index++) {
         logbook_entries[index].id = obj_arrayfield_uint32_get(obj, OBJ_F_PC_BLESSING_IDX, index);
         logbook_entries[index].datetime.value = obj_arrayfield_int64_get(obj, OBJ_F_PC_BLESSING_TS_IDX, index);

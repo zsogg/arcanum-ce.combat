@@ -43,7 +43,12 @@
 #include "game/trap.h"
 #include "game/ui.h"
 
-#define MAX_CACHE_ENTRIES 100
+// CE (card HW1, zsogg 2026-11-11): 1024 parsed scripts to start with, not the
+// original's 100 (`calloc(0x64, 0x18)` at 0x4446E7), so most of the game's
+// scripts stay parsed; and the table grows by `SCRIPT_CACHE_GROW` rather than
+// quitting when every entry is in use (`cache_find`).
+#define SCRIPT_CACHE_INITIAL_CAPACITY 1024
+#define SCRIPT_CACHE_GROW 256
 #define MAX_GLOBAL_VARS 2000
 #define MAX_GLOBAL_FLAGS 100
 
@@ -392,6 +397,9 @@ static ScriptStartDialogFunc script_start_dialog_func;
 
 // 0x5E2FF0
 static ScriptCacheEntry* script_cache_entries;
+
+// CE (card HW1): the number of entries `script_cache_entries` holds.
+static int script_cache_capacity;
 // The production target is always script_execute. The focused VM suite swaps
 // it briefly so SAT_CALL_SCRIPT can exercise a supplied accepted child file
 // without inventing a second cache or filesystem implementation.
@@ -406,11 +414,12 @@ bool script_init(GameInitInfo* init_info)
     int index;
 
     script_editor = init_info->editor;
-    script_cache_entries = (ScriptCacheEntry*)CALLOC(MAX_CACHE_ENTRIES, sizeof(ScriptCacheEntry));
+    script_cache_capacity = SCRIPT_CACHE_INITIAL_CAPACITY;
+    script_cache_entries = (ScriptCacheEntry*)CALLOC(script_cache_capacity, sizeof(ScriptCacheEntry));
     script_global_vars = (int*)CALLOC(MAX_GLOBAL_VARS, sizeof(int));
     script_global_flags = (int*)CALLOC(MAX_GLOBAL_FLAGS, sizeof(int));
 
-    for (index = 0; index < MAX_CACHE_ENTRIES; index++) {
+    for (index = 0; index < script_cache_capacity; index++) {
         script_cache_entries[index].script_id = 0;
     }
 
@@ -450,7 +459,7 @@ void script_reset(void)
 {
     int index;
 
-    for (index = 0; index < MAX_CACHE_ENTRIES; index++) {
+    for (index = 0; index < script_cache_capacity; index++) {
         cache_remove(index);
     }
 
@@ -470,12 +479,13 @@ void script_exit(void)
 {
     int index;
 
-    for (index = 0; index < MAX_CACHE_ENTRIES; index++) {
+    for (index = 0; index < script_cache_capacity; index++) {
         cache_remove(index);
     }
 
     script_story_state = 0;
     FREE(script_cache_entries);
+    script_cache_capacity = 0;
     FREE(script_global_vars);
     FREE(script_global_flags);
 
@@ -3822,14 +3832,17 @@ int script_resolve_focus_obj(ScriptFocusObject type, int index, ScriptState* sta
     case SFO_ANYONE_IN_GROUP:
         object_list_followers(state->invocation->triggerer_obj, l);
 
+        // FIX: the original fills 100 followers and then writes the
+        // triggerer at objs[100] unconditionally (0x44B6FB-0x44B70A), one
+        // past every caller's array: in ScriptState it lands on `objects`.
+        // The last slot is kept for the triggerer, so a group of 100 or more
+        // followers keeps its leader and drops the 100th follower (card HW1).
         node = l->head;
-        while (node != NULL && cnt < 100) {
+        while (node != NULL && cnt < 99) {
             objs[cnt++] = node->obj;
             node = node->next;
         }
 
-        // NOTE: Verified against 0x44B6FB-0x44B70A - the original overflows
-        // identically when cnt == 100 (writes objs[100] unconditionally).
         objs[cnt++] = state->invocation->triggerer_obj;
         break;
     case SFO_EVERY_SCENERY_IN_VICINITY:
@@ -4169,7 +4182,13 @@ void script_unlock(int script_id)
 {
     int cache_entry_id;
 
-    if (!script_editor) {
+    // FIX (porting bug #397): only the editor returns here (0x44C450 `cmp
+    // [0x5E2FDC],1; je ret`); the game releases the script. CE had the test
+    // inverted since the baseline import, so no script was ever released, and
+    // the 101st different script since a load or new game found the cache full
+    // of scripts in use and quit the game (`cache_find`'s exit): zsogg's silent
+    // crashes of 2026-11-08 and 2026-11-10 (BR1, BR2, card HW1).
+    if (script_editor) {
         return;
     }
 
@@ -4283,7 +4302,7 @@ int cache_find(int script_id)
     int candidate = -1;
     int best_candidate = -1;
 
-    for (idx = 0; idx < MAX_CACHE_ENTRIES; idx++) {
+    for (idx = 0; idx < script_cache_capacity; idx++) {
         if (script_cache_entries[idx].script_id == script_id) {
             return idx;
         }
@@ -4313,8 +4332,17 @@ int cache_find(int script_id)
         return candidate;
     }
 
-    tig_debug_printf("cache_find: Error: failed to find cache item!\n");
-    exit(EXIT_SUCCESS); // NOTE: Verified against 0x44C706/0x44C708 - original exits with 0.
+    // FIX: the table grows. The original quits here with 0 (0x44C706/0x44C708
+    // `push 0; call exit`), closing the game with no message and no save. With
+    // `script_unlock` releasing scripts this needs every entry in use at once,
+    // which nesting does not reach; were it reached, a log line is better than
+    // the desktop (card HW1).
+    idx = script_cache_capacity;
+    script_cache_capacity += SCRIPT_CACHE_GROW;
+    script_cache_entries = (ScriptCacheEntry*)REALLOC(script_cache_entries, sizeof(*script_cache_entries) * script_cache_capacity);
+    memset(&(script_cache_entries[idx]), 0, sizeof(*script_cache_entries) * SCRIPT_CACHE_GROW);
+    tig_debug_printf("cache_find: every one of %d cached scripts is in use; grown to %d\n", idx, script_cache_capacity);
+    return idx;
 }
 
 // 0x44C710

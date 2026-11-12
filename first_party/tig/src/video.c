@@ -223,6 +223,47 @@ void tig_video_set_scale_mode(int mode)
                                                              : "nearest");
 }
 
+// CE (card HW1): the part of the screen surface written since the last flip,
+// so `tig_video_flip` uploads only that to the GPU, and nothing at all on a
+// frame that drew nothing. `tig_video_blit` and `tig_video_fill` are the
+// only writers of the screen surface. Uploading the whole surface every frame
+// was free at 800x600 and is about 33 MB a frame at 4K.
+static SDL_Rect tig_video_dirty;
+static bool tig_video_dirty_any;
+
+static void tig_video_mark_dirty(const SDL_Rect* rect)
+{
+    int x2;
+    int y2;
+
+    if (rect->w <= 0 || rect->h <= 0) {
+        return;
+    }
+
+    if (!tig_video_dirty_any) {
+        tig_video_dirty = *rect;
+        tig_video_dirty_any = true;
+        return;
+    }
+
+    x2 = SDL_max(tig_video_dirty.x + tig_video_dirty.w, rect->x + rect->w);
+    y2 = SDL_max(tig_video_dirty.y + tig_video_dirty.h, rect->y + rect->h);
+    tig_video_dirty.x = SDL_min(tig_video_dirty.x, rect->x);
+    tig_video_dirty.y = SDL_min(tig_video_dirty.y, rect->y);
+    tig_video_dirty.w = x2 - tig_video_dirty.x;
+    tig_video_dirty.h = y2 - tig_video_dirty.y;
+}
+
+void tig_video_invalidate_screen(void)
+{
+    if (tig_video_state.surface != NULL) {
+        SDL_Rect whole = { 0, 0, tig_video_state.surface->w, tig_video_state.surface->h };
+
+        tig_video_dirty_any = false;
+        tig_video_mark_dirty(&whole);
+    }
+}
+
 // 0x51F600
 int tig_video_blit(TigVideoBuffer* src_video_buffer, TigRect* src_rect, TigRect* dst_rect)
 {
@@ -286,6 +327,9 @@ int tig_video_blit(TigVideoBuffer* src_video_buffer, TigRect* src_rect, TigRect*
         return TIG_ERR_BLIT;
     }
 
+    // SDL leaves the clipped destination in `native_dst_rect`.
+    tig_video_mark_dirty(&native_dst_rect);
+
     return TIG_OK;
 }
 
@@ -316,13 +360,24 @@ int tig_video_fill(const TigRect* rect, tig_color_t color)
         return TIG_ERR_GENERIC;
     }
 
+    tig_video_mark_dirty(&native_rect);
+
     return TIG_OK;
 }
 
 // 0x51F8F0
 int tig_video_flip(void)
 {
-    SDL_UpdateTexture(tig_video_state.texture, NULL, tig_video_state.surface->pixels, tig_video_state.surface->pitch);
+    // CE (card HW1): only what was drawn since the last flip.
+    if (tig_video_dirty_any) {
+        SDL_UpdateTexture(tig_video_state.texture,
+            &tig_video_dirty,
+            (const uint8_t*)tig_video_state.surface->pixels
+                + tig_video_dirty.y * tig_video_state.surface->pitch
+                + tig_video_dirty.x * SDL_BYTESPERPIXEL(tig_video_state.surface->format),
+            tig_video_state.surface->pitch);
+        tig_video_dirty_any = false;
+    }
 
     SDL_RenderClear(tig_video_state.renderer);
 
@@ -1502,6 +1557,7 @@ bool tig_video_window_create(TigInitInfo* init_info)
     tig_video_state.renderer = renderer;
     tig_video_state.texture = texture;
     tig_video_state.surface = surface;
+    tig_video_invalidate_screen();
 
     stru_610388.x = 0;
     stru_610388.y = 0;

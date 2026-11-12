@@ -75,7 +75,10 @@
 
 #define MAX_INTERFACE_WINDOW_ROTATION_STEPS 6
 
-#define MAX_MESSAGE_HISTORY_ITEMS 10
+// CE (card HW1, zsogg 2026-11-11): 100 lines of message history, where the
+// original keeps 10 (0x64C540-0x64C630, 10 x 24 bytes); a fight could push out
+// everything older than its last few messages. Not saved.
+#define MAX_MESSAGE_HISTORY_ITEMS 100
 #define MAX_MESSAGE_HISTORY_STRING_SIZE 200
 
 typedef enum IntgameCounter {

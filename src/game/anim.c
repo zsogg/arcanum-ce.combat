@@ -2856,7 +2856,7 @@ bool anim_id_to_run_info(AnimID* anim_id, AnimRunInfo** run_info_ptr)
     ASSERT(run_info_ptr != NULL); // ppRunInfo != NULL
 
     if (anim_id->slot_num != -1) {
-        for (index = 0; index < 216; index++) {
+        for (index = 0; index < anim_run_info_high_water; index++) {
             if (anim_id_matches_run_info(anim_id, &(anim_run_info[index]))) {
                 *run_info_ptr = &(anim_run_info[index]);
                 return true;
@@ -2958,7 +2958,15 @@ bool anim_save(TigFile* stream)
     if (tig_file_fwrite(&dword_5DE6C4, 4, 1, stream) != 1) return false;
     if (tig_file_fwrite(&dword_5DE6C0, 4, 1, stream) != 1) return false;
 
-    cnt = 216;
+    // CE (card HW1): the original's 216, or more only while a slot past it is
+    // in use, so a save is the original's bytes unless a crowd outgrew them.
+    cnt = ANIM_RUN_INFO_SAVED_MIN;
+    for (idx = anim_run_info_high_water - 1; idx >= ANIM_RUN_INFO_SAVED_MIN; idx--) {
+        if ((anim_run_info[idx].flags & 0x01) != 0) {
+            cnt = idx + 1;
+            break;
+        }
+    }
     if (tig_file_fwrite(&cnt, 4, 1, stream) != 1) return false;
 
     idx = 0;
@@ -3168,7 +3176,7 @@ bool anim_load_internal(GameLoadInfo* load_info)
 
     // FIX: the count and every extent are bounded by the array they index.
     // The stream said how many slots to fill and nothing checked it against
-    // the 216 there are, so a corrupt save wrote past `anim_run_info` into
+    // the slots there are, so a corrupt save wrote past `anim_run_info` into
     // whatever follows it (review 2026-10-22, finding 2). A save the game
     // wrote never exceeds its own array, so nothing valid is refused.
     if (cnt < 0 || cnt > ANIM_RUN_INFO_COUNT) {
@@ -3199,6 +3207,11 @@ bool anim_load_internal(GameLoadInfo* load_info)
             }
             idx += -extent_size;
         }
+    }
+
+    // CE (card HW1): every slot the save could have filled is searched.
+    if (cnt > 0) {
+        anim_run_info_note_used(cnt - 1);
     }
 
     return true;
@@ -3364,7 +3377,7 @@ void anim_break_nodes_to_map(const char* map)
         }
     }
 
-    for (idx = 0; idx < 216; idx++) {
+    for (idx = 0; idx < anim_run_info_high_water; idx++) {
         run_info = &(anim_run_info[idx]);
         if ((run_info->flags & 0x1) != 0) {
             if (!teleport_is_teleporting_obj(run_info->anim_obj)
@@ -3380,7 +3393,7 @@ void anim_break_nodes_to_map(const char* map)
         }
     }
 
-    if (idx < 216) {
+    if (idx < anim_run_info_high_water) {
         tig_debug_printf("Anim: anim_break_nodes_to_map: ERROR: Failed to save out nodes!\n");
         ASSERT(0); // 1089, "0"
         tig_file_fclose(stream);
@@ -3462,7 +3475,7 @@ void anim_save_nodes_to_map(const char* map)
         }
     }
 
-    for (idx = 0; idx < 216; idx++) {
+    for (idx = 0; idx < anim_run_info_high_water; idx++) {
         run_info = &(anim_run_info[idx]);
         if ((run_info->flags & 0x1) != 0) {
             if (!anim_run_info_save(run_info, stream)) {
@@ -3474,7 +3487,7 @@ void anim_save_nodes_to_map(const char* map)
         }
     }
 
-    if (idx < 216) {
+    if (idx < anim_run_info_high_water) {
         tig_debug_printf("Anim: anim_save_nodes_to_map: ERROR: Failed to save out nodes!\n");
         ASSERT(0); // 1208, "0"
         tig_file_fclose(stream);
@@ -3534,8 +3547,8 @@ void anim_load_nodes_from_map(const char* map)
             break;
         }
 
-        // FIX: the slot number came out of the map's file and indexes a
-        // 216-entry array (review 2026-10-22, finding 2).
+        // FIX: the slot number came out of the map's file and indexes the
+        // slot array (review 2026-10-22, finding 2).
         if (run_info.id.slot_num < 0 || run_info.id.slot_num >= ANIM_RUN_INFO_COUNT) {
             tig_debug_printf("Anim: anim_load_nodes_from_map: ERROR: slot %d out of range\n", run_info.id.slot_num);
             break;
@@ -3551,6 +3564,7 @@ void anim_load_nodes_from_map(const char* map)
             anim_id = run_info.id;
         }
 
+        anim_run_info_note_used(anim_id.slot_num);
         anim_run_info[anim_id.slot_num] = run_info;
         anim_run_info[anim_id.slot_num].id = anim_id;
         anim_run_info[anim_id.slot_num].cur_stack_data = &(anim_run_info[anim_id.slot_num].goals[anim_run_info[anim_id.slot_num].current_goal]);
@@ -3718,7 +3732,7 @@ bool anim_timeevent_process(TimeEvent* timeevent)
 
     run_index = timeevent->params[0].integer_value;
 
-    ASSERT(run_index < 216); // 1965, "animRunIndex < ANIM_MAX_CURRENT_ANIMS"
+    ASSERT(run_index < ANIM_RUN_INFO_COUNT); // 1965, "animRunIndex < ANIM_MAX_CURRENT_ANIMS"
 
     run_info = &(anim_run_info[run_index]);
     if (run_info->id.slot_num != run_index) {
@@ -4061,7 +4075,7 @@ int anim_goal_pending_active_goals_count(void)
     int cnt = 0;
     int stack_index;
 
-    for (index = 0; index < 216; index++) {
+    for (index = 0; index < anim_run_info_high_water; index++) {
         run_info = &(anim_run_info[index]);
         if ((run_info->flags & 0x1) != 0) {
             for (stack_index = 0; stack_index <= run_info->current_goal; stack_index++) {
@@ -4220,7 +4234,7 @@ bool anim_goal_interrupt_all_goals(void)
     int index;
 
     if (anim_num_allocated_run_indices > 0) {
-        for (index = 0; index < 216; index++) {
+        for (index = 0; index < anim_run_info_high_water; index++) {
             if ((anim_run_info[index].flags & 0x1) != 0
                 && !anim_interrupt(&(anim_run_info[index].id), PRIORITY_HIGHEST)) {
                 return false;
@@ -4238,7 +4252,7 @@ bool anim_goal_interrupt_all_goals_of_priority(int priority_level)
 
     ASSERT(priority_level >= PRIORITY_NONE && priority_level < PRIORITY_HIGHEST); // (priorityLevel >= priorityNone)&&(priorityLevel <= priorityHighest)
 
-    for (index = 0; index < 216; index++) {
+    for (index = 0; index < anim_run_info_high_water; index++) {
         if ((anim_run_info[index].flags & 0x1) != 0
             && !anim_interrupt(&(anim_run_info[index].id), priority_level)) {
             tig_debug_printf("Anim: anim_goal_interrupt_all_goals_of_priority: ERROR: Failed to interrupt slot: %d!\n", index);
@@ -4254,7 +4268,7 @@ bool anim_goal_interrupt_all_for_tb_combat(void)
     int index = 0;
     AnimRunInfo* run_info;
 
-    for (index = 0; index < 216; index++) {
+    for (index = 0; index < anim_run_info_high_water; index++) {
         run_info = &(anim_run_info[index]);
         if ((run_info->flags & 0x1) != 0
             && !anim_goal_is_endless(run_info)

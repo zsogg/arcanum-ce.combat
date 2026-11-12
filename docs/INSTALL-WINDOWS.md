@@ -214,6 +214,10 @@ tested in a game):
   wider, brighter circle.
 - `mod encounter-variety`, **Encounter Variety**: an experimental draft with
   more frequent and more varied random encounters.
+- `mod large-sector-cache`, **Large Sector Cache**: the game keeps 128 map
+  sectors in memory instead of 16. A town you leave and come back to stays
+  loaded, so its people carry on instead of going back to their posts. New,
+  and not yet played.
 
 **Saves and mods:**
 
@@ -242,6 +246,14 @@ tested in a game):
   the Riddlers) is untested with Arcanum CE.
 - **The original's own quirks** are mostly kept on purpose; only those listed
   as fixed are changed, please see CHANGES.md for the curious.
+- **Speed follows the screen's refresh rate.** On a 120-144 Hz screen,
+  real-time combat runs a little faster than at 60 Hz (a stock bow about 5%),
+  fades are shorter and map scrolling can judder. The Real-Time Pacing mod
+  evens out combat. If your graphics driver forces vsync off, the game runs
+  without a frame cap.
+- **Distant NPCs think slowly.** An NPC 30 tiles or more from you decides
+  what to do only every 5 seconds, as in the original. At 4K and wider, NPCs
+  near the edge of the screen can be slow to react.
 
 ## Reporting a problem
 

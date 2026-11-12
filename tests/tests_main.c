@@ -65,6 +65,9 @@ void test_palette_suite(void);
 void test_mes_suite(void);
 void test_database_suite(void);
 void test_file_suite(void);
+void test_file_memory_suite(void);
+void test_sector_rect_suite(void);
+void test_art_rle_suite(void);
 void test_sound_suite(void);
 void test_find_file_suite(void);
 void test_memory_suite(void);
@@ -191,6 +194,9 @@ int main(void)
     // property of the caller, not something these tests can fix.
     test_find_file_suite();
     test_file_suite();
+    test_file_memory_suite();
+    test_sector_rect_suite();
+    test_art_rle_suite();
     test_sound_suite();
     test_memory_suite();
     test_file_cache_suite();

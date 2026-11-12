@@ -58,13 +58,14 @@ TEST(a_full_memory_forgets_its_oldest_refusal)
 {
     int64_t attacker;
 
+    // `AI_CONDUCT_REFUSALS_MAX` in ai.c: 1024 since card HW1 (32 before).
     ai_conduct_refusals_forget();
-    for (attacker = 0; attacker < 32; attacker++) {
-        CHECK(ai_conduct_refusal_first(1, 1000 + attacker));
+    for (attacker = 0; attacker < 1024; attacker++) {
+        CHECK(ai_conduct_refusal_first(1, 10000 + attacker));
     }
-    CHECK(ai_conduct_refusal_first(1, 2000));
-    CHECK(ai_conduct_refusal_first(1, 1000));
-    CHECK(!ai_conduct_refusal_first(1, 1031));
+    CHECK(ai_conduct_refusal_first(1, 20000));
+    CHECK(ai_conduct_refusal_first(1, 10000));
+    CHECK(!ai_conduct_refusal_first(1, 10000 + 1023));
     ai_conduct_refusals_forget();
 }
 

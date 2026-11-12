@@ -182,7 +182,7 @@ static AnimID anim_goal_restart_match_id;
 // 0x5E33F8
 static AnimPath anim_scratch_path;
 
-// Set when `anim_allocate_new_run_index` finds all 216 slots taken - Troika's
+// Set when `anim_allocate_new_run_index` finds every slot taken - Troika's
 // own "Ran out of animation slots!" warning sits on the line above the write.
 // It is a *deferred* recovery request, not a report: `anim_timeevent_process`
 // picks it up on the next tick, clears it, and calls
@@ -211,7 +211,17 @@ static bool anim_private_editor;
 int anim_next_unique_id;
 
 // 0x687700
-AnimRunInfo anim_run_info[216];
+AnimRunInfo anim_run_info[ANIM_RUN_INFO_COUNT];
+
+// CE (card HW1): see `anim_private.h`.
+int anim_run_info_high_water;
+
+void anim_run_info_note_used(int slot)
+{
+    if (slot >= anim_run_info_high_water) {
+        anim_run_info_high_water = slot + 1;
+    }
+}
 
 // `dword_739E40` and `dword_739E44` are savegame ballast: see the NOTE above
 // anim.c's `dword_5DE6xx` block.
@@ -288,7 +298,8 @@ bool anim_private_init(GameInitInfo* init_info)
 
     anim_private_editor = init_info->editor;
 
-    for (index = 0; index < 216; index++) {
+    anim_run_info_high_water = 0;
+    for (index = 0; index < ANIM_RUN_INFO_COUNT; index++) {
         anim_run_info[index].id.slot_num = index;
         anim_run_info[index].flags = 0;
         anim_run_info[index].path.flags = 1;
@@ -308,7 +319,8 @@ void anim_private_exit(void)
 {
     int index;
 
-    for (index = 0; index < 216; index++) {
+    anim_run_info_high_water = 0;
+    for (index = 0; index < ANIM_RUN_INFO_COUNT; index++) {
         anim_run_info[index].flags = 0;
         anim_run_info[index].path.flags = 1;
         anim_path_destroy(&(anim_run_info[index].path));
@@ -322,7 +334,8 @@ void anim_private_reset(void)
 {
     int index;
 
-    for (index = 0; index < 216; index++) {
+    anim_run_info_high_water = 0;
+    for (index = 0; index < ANIM_RUN_INFO_COUNT; index++) {
         anim_run_info[index].flags = 0;
         anim_run_info[index].path.flags = 1;
     }
@@ -394,18 +407,19 @@ bool anim_allocate_new_run_index(AnimID* anim_id)
 
     ASSERT(anim_id != NULL); // pAnimID != NULL
 
-    for (index = 0; index < 216; index++) {
+    for (index = 0; index < ANIM_RUN_INFO_COUNT; index++) {
         if ((anim_run_info[index].flags & 0x1) == 0) {
             break;
         }
     }
 
-    if (index == 216) {
+    if (index == ANIM_RUN_INFO_COUNT) {
         tig_debug_printf("Anim: WARNING: Ran out of animation slots!\n");
         anim_out_of_slots = 1;
         return false;
     }
 
+    anim_run_info_note_used(index);
     run_info = &(anim_run_info[index]);
     run_info->id.slot_num = index;
     run_info->id.unique_id = anim_next_unique_id++;
@@ -453,7 +467,7 @@ bool anim_allocate_this_run_index(AnimID* anim_id)
         return false;
     }
 
-    for (slot = 0; slot < 216; slot++) {
+    for (slot = 0; slot < ANIM_RUN_INFO_COUNT; slot++) {
         run_info = &(anim_run_info[slot]);
         if (run_info->id.unique_id == anim_id->unique_id) {
             if ((run_info->flags & 0x1) != 0
@@ -468,17 +482,17 @@ bool anim_allocate_this_run_index(AnimID* anim_id)
         }
     }
 
-    if (slot == 216) {
+    if (slot == ANIM_RUN_INFO_COUNT) {
         // FIX (porting bug #152): when no slot carries the unique id, the
         // requested slot is taken as it is unless it is busy; only then is a
         // free one searched (the original sets its cursor to the requested
         // slot before testing bit 0x1). CE went on with `slot` at 216 and
         // wrote one past the array. A requested slot out of range leaves the
-        // original's cursor on the last slot walked, 215; kept as it is.
-        if (anim_id->slot_num >= 0 && anim_id->slot_num < 216) {
+        // original's cursor on the last slot walked (its 215); kept as it is.
+        if (anim_id->slot_num >= 0 && anim_id->slot_num < ANIM_RUN_INFO_COUNT) {
             slot = anim_id->slot_num;
             if ((anim_run_info[slot].flags & 0x1) != 0) {
-                for (slot = 0; slot < 216; slot++) {
+                for (slot = 0; slot < ANIM_RUN_INFO_COUNT; slot++) {
                     run_info = &(anim_run_info[slot]);
                     if ((run_info->flags & 0x1) == 0) {
                         anim_id->slot_num = slot;
@@ -487,16 +501,17 @@ bool anim_allocate_this_run_index(AnimID* anim_id)
                     }
                 }
 
-                if (slot == 216) {
+                if (slot == ANIM_RUN_INFO_COUNT) {
                     tig_debug_printf("Anim: anim_allocate_this_run_index: could not allocate a run index, ALL FULL!.\n");
                     return false;
                 }
             }
         } else {
-            slot = 215;
+            slot = ANIM_RUN_INFO_COUNT - 1;
         }
     }
 
+    anim_run_info_note_used(slot);
     run_info = &(anim_run_info[slot]);
     run_info->id = *anim_id;
     run_info->flags = 0x1;
@@ -646,7 +661,7 @@ int anim_find_first(int64_t obj)
     int slot;
     AnimRunInfo* run_info;
 
-    for (slot = 0; slot < 216; slot++) {
+    for (slot = 0; slot < anim_run_info_high_water; slot++) {
         run_info = &(anim_run_info[slot]);
         if ((run_info->flags & 0x1) != 0
             && (run_info->flags & 0x2) == 0
@@ -666,7 +681,7 @@ int anim_find_next(int prev, int64_t obj)
     int slot;
     AnimRunInfo* run_info;
 
-    for (slot = prev + 1; slot < 216; slot++) {
+    for (slot = prev + 1; slot < anim_run_info_high_water; slot++) {
         run_info = &(anim_run_info[slot]);
         if ((run_info->flags & 0x1) != 0
             && (run_info->flags & 0x2) == 0
@@ -1043,7 +1058,7 @@ bool anim_force_interrupt(AnimID* anim_id)
     AnimGoalNode* goal_node;
 
     ASSERT(anim_id != NULL); // 3979, "pAnimID != NULL"
-    ASSERT(anim_id->slot_num < 216); // 3980, "pAnimID->slotNum < ANIM_MAX_CURRENT_ANIMS"
+    ASSERT(anim_id->slot_num < ANIM_RUN_INFO_COUNT); // 3980, "pAnimID->slotNum < ANIM_MAX_CURRENT_ANIMS"
 
     if (!anim_id_to_run_info(anim_id, &run_info)) {
         return false;
@@ -1135,7 +1150,7 @@ void anim_spell_run_freed(int mt_id)
         return;
     }
 
-    for (slot = 0; slot < ANIM_RUN_INFO_COUNT; slot++) {
+    for (slot = 0; slot < anim_run_info_high_water; slot++) {
         AnimRunInfo* run_info = &(anim_run_info[slot]);
 
         if ((run_info->flags & 0x01) == 0) {
@@ -1172,7 +1187,7 @@ bool anim_interrupt(AnimID* anim_id, int priority)
     bool freed;
 
     ASSERT(anim_id != NULL); // 4034, "pAnimID != NULL"
-    ASSERT(anim_id->slot_num < 216); // 4035, "pAnimID->slotNum < ANIM_MAX_CURRENT_ANIMS"
+    ASSERT(anim_id->slot_num < ANIM_RUN_INFO_COUNT); // 4035, "pAnimID->slotNum < ANIM_MAX_CURRENT_ANIMS"
 
     if (!anim_id_to_run_info(anim_id, &run_info)) {
         return false;
@@ -1769,7 +1784,7 @@ void anim_stats(void)
     tig_debug_printf("Currently Existing Animations\n");
     tig_debug_printf("------------------------------------------------\n");
 
-    for (index = 0; index < 216; index++) {
+    for (index = 0; index < ANIM_RUN_INFO_COUNT; index++) {
         if (anim_run_info[index].flags != 0) {
             tig_debug_printf("In Slot %d:\n", index);
             anim_run_info_debug(&(anim_run_info[index]));

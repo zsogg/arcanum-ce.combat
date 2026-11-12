@@ -3,6 +3,7 @@
 #include <inttypes.h>
 #include <stdio.h>
 
+#include "game/feature.h"
 #include "game/gamelib.h"
 #include "game/li.h"
 #include "game/map.h"
@@ -25,6 +26,15 @@ typedef uint32_t DifferenceFileFlags;
 #define DIF_HAVE_APTITUDE_ADJ 0x0080u
 #define DIF_HAVE_LIGHT_SCHEME 0x0100u
 #define DIF_HAVE_SOUND_LIST 0x0200u
+
+// CE (`large sector cache`, card HW1): the most sector-history entries a save
+// carries, twice the original's 16-sector cache, which is the most its loader
+// takes.
+#define SECTOR_HISTORY_SAVED_MAX 32u
+
+// The boundaries `sector_list_create` has room for (`calloc(0x97, 8)` at
+// 0x4CF083-0x4CF08D, in `sector_init`).
+#define SECTOR_BOUNDARIES_MAX 151
 #define DIF_HAVE_BLOCK_LIST 0x0400u
 
 typedef bool (*SectorSaveFunc)(Sector* sector);
@@ -49,7 +59,7 @@ static_assert(sizeof(SectorHistoryEntry) == 0x10, "wrong size");
 static bool sector_cache_init(unsigned int capacity);
 static void sector_block_clear(void);
 static void sector_history_clear(void);
-static int sector_compute_boundaries(int64_t start, int64_t end, int size, int64_t* boundaries);
+static int sector_compute_boundaries(int64_t start, int64_t end, int size, int64_t* boundaries, int capacity);
 static SectorListNode* sector_list_node_create(void);
 static void sector_list_node_reserve(void);
 static void sector_cache_evict(Sector* sector);
@@ -226,12 +236,14 @@ bool sector_init(GameInitInfo* init_info)
     sector_base_path = (char*)CALLOC(TIG_MAX_PATH, sizeof(*sector_base_path));
     sector_save_path = (char*)CALLOC(TIG_MAX_PATH, sizeof(*sector_save_path));
 
-    sector_boundaries_x = (int64_t*)CALLOC(151, sizeof(*sector_boundaries_x));
-    sector_boundaries_y = (int64_t*)CALLOC(151, sizeof(*sector_boundaries_y));
+    sector_boundaries_x = (int64_t*)CALLOC(SECTOR_BOUNDARIES_MAX, sizeof(*sector_boundaries_x));
+    sector_boundaries_y = (int64_t*)CALLOC(SECTOR_BOUNDARIES_MAX, sizeof(*sector_boundaries_y));
 
     sector_limits_set(0x4000000, 0x4000000);
 
-    if (!sector_cache_init(16)) {
+    // CE (`large sector cache`, card HW1): 128 sectors, the top of the
+    // original's own clamp in `sector_cache_init`, for a 2026 machine.
+    if (!sector_cache_init(feature_enabled(FEATURE_LARGE_SECTOR_CACHE) ? 128 : 16)) {
         return false;
     }
 
@@ -767,16 +779,16 @@ bool sector_rect_from_loc_rect(LocRect* loc_rect, SectorRect* sector_rect)
     int y;
     int width;
     int height;
-    int64_t horizontal[4];
-    int64_t vertical[4];
+    int64_t horizontal[SECTOR_RECT_MAX + 1];
+    int64_t vertical[SECTOR_RECT_MAX + 1];
 
-    width = sector_compute_boundaries(loc_rect->x1, loc_rect->x2 + 1, 64, horizontal) - 1;
-    if (width == 0) {
+    width = sector_compute_boundaries(loc_rect->x1, loc_rect->x2 + 1, 64, horizontal, SECTOR_RECT_MAX + 1) - 1;
+    if (width <= 0) {
         return false;
     }
 
-    height = sector_compute_boundaries(loc_rect->y1, loc_rect->y2 + 1, 64, vertical) - 1;
-    if (height == 0) {
+    height = sector_compute_boundaries(loc_rect->y1, loc_rect->y2 + 1, 64, vertical, SECTOR_RECT_MAX + 1) - 1;
+    if (height <= 0) {
         return false;
     }
 
@@ -809,13 +821,13 @@ SectorListNode* sector_list_create(LocRect* loc_rect)
     SectorListNode* prev;
     SectorListNode* node;
 
-    width = sector_compute_boundaries(loc_rect->x1, loc_rect->x2 + 1, 64, sector_boundaries_x) - 1;
-    if (width == 0) {
+    width = sector_compute_boundaries(loc_rect->x1, loc_rect->x2 + 1, 64, sector_boundaries_x, SECTOR_BOUNDARIES_MAX) - 1;
+    if (width <= 0) {
         return NULL;
     }
 
-    height = sector_compute_boundaries(loc_rect->y1, loc_rect->y2 + 1, 64, sector_boundaries_y) - 1;
-    if (height == 0) {
+    height = sector_compute_boundaries(loc_rect->y1, loc_rect->y2 + 1, 64, sector_boundaries_y, SECTOR_BOUNDARIES_MAX) - 1;
+    if (height <= 0) {
         return NULL;
     }
 
@@ -1234,6 +1246,8 @@ bool sector_history_save(TigFile* stream)
 {
     unsigned int index;
     unsigned int k;
+    unsigned int first;
+    unsigned int count;
     SectorCacheEntry* cache_entry;
 
     for (index = 0; index < sector_cache_capacity; index++) {
@@ -1260,11 +1274,18 @@ bool sector_history_save(TigFile* stream)
         }
     }
 
-    if (tig_file_fwrite(&sector_history_size, sizeof(sector_history_size), 1, stream) != 1) {
+    // CE (`large sector cache`, card HW1): at most the newest 32 entries, the
+    // most a 16-sector build accepts (`sector_history_load`), so a save made
+    // with 128 sectors loads in the original, older CE builds and this one
+    // with the switch off. With 16 sectors the history never holds more.
+    first = sector_history_size > SECTOR_HISTORY_SAVED_MAX ? sector_history_size - SECTOR_HISTORY_SAVED_MAX : 0;
+    count = sector_history_size - first;
+
+    if (tig_file_fwrite(&count, sizeof(count), 1, stream) != 1) {
         return false;
     }
 
-    if (tig_file_fwrite(sector_history_entries, sizeof(*sector_history_entries), sector_history_size, stream) != sector_history_size) {
+    if (tig_file_fwrite(&(sector_history_entries[first]), sizeof(*sector_history_entries), count, stream) != count) {
         return false;
     }
 
@@ -1290,7 +1311,12 @@ bool sector_history_load(GameLoadInfo* load_info)
 }
 
 // 0x4D1310
-int sector_compute_boundaries(int64_t start, int64_t end, int size, int64_t* boundaries)
+//
+// FIX: `capacity` bounds the writes, and a range that needs more boundaries
+// answers 0. The original's callers push a capacity (0x4D00A6 `push 4`,
+// 0x4D02EB `push 0x97`) that this function never reads, so a view crossing
+// more sectors than the caller's array wrote past it (card HW1).
+int sector_compute_boundaries(int64_t start, int64_t end, int size, int64_t* boundaries, int capacity)
 {
     int64_t cur;
     int cnt = 0;
@@ -1299,6 +1325,9 @@ int sector_compute_boundaries(int64_t start, int64_t end, int size, int64_t* bou
 
     cur = (start / size + 1) * size;
     while (cur < end) {
+        if (cnt + 1 >= capacity) {
+            return 0;
+        }
         boundaries[cnt++] = cur;
         cur += size;
     }
@@ -1560,6 +1589,10 @@ bool sector_load_game(int64_t id, Sector* sector)
         sec_stream = tig_file_fopen(sec_path, "rb");
         if (sec_stream == NULL) {
             tig_debug_printf("Error opening sector file %s\n", sec_path);
+            // FIX: the load fails, as `sector_load_editor` does. The original
+            // logs and goes on (0x4D1A30), and the light list's first read
+            // dereferences the NULL stream (card HW1).
+            return false;
         }
 
         snprintf(dif_path, sizeof(dif_path), "%s\\%" PRIu64 ".dif", sector_save_path, (uint64_t)id);
@@ -1875,7 +1908,9 @@ bool sector_save_editor_internal(Sector* sector, const char* base_path)
     stream = tig_file_fopen(path, "wb");
     if (stream == NULL) {
         tig_debug_printf("Error creating sector data file %s\n", path);
-        tig_file_fclose(stream); // NOTE: Verified against 0x4D2523/0x4D2524 - original calls tig_file_fclose(NULL) on this path.
+        // FIX: no close of a stream that never opened. The original calls
+        // `tig_file_fclose(NULL)` here (0x4D2523/0x4D2524), which reads through
+        // NULL (card HW1).
         return false;
     }
 
@@ -2045,7 +2080,10 @@ bool sector_save_game(Sector* sector)
     stream = tig_file_fopen(path, "wb");
     if (stream == NULL) {
         tig_debug_printf("Error creating differences file %s\n", path);
-        tig_file_fclose(stream); // NOTE: Verified against 0x4D2968/0x4D2969 - original calls tig_file_fclose(NULL) on this path.
+        // FIX: no close of a stream that never opened. The original calls
+        // `tig_file_fclose(NULL)` here (0x4D2968/0x4D2969), which reads through
+        // NULL: the access violation of zsogg's crash report of 2026-11-09, when
+        // Windows refused the `.dif` for a moment (BR2, card HW1).
         return false;
     }
 

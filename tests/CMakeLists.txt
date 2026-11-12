@@ -74,6 +74,9 @@ add_executable(arcanum-tests
     "test_mes.c"
     "test_database.c"
     "test_file.c"
+    "test_file_memory.c"
+    "test_sector_rect.c"
+    "test_art_rle.c"
     "test_sound.c"
     "test_find_file.c"
     "test_memory.c"
@@ -829,6 +832,8 @@ add_dependencies(arcanum-tests arcanum-combat-test-obj)
 
 set(MAGICTECH_TEST_STATICS
     magictech_summons_record
+    # Card HW1: a full pool refuses rather than quitting.
+    magictech_id_new_lock
 )
 set(MAGICTECH_TEST_OBJ "${CMAKE_CURRENT_BINARY_DIR}/magictech_test_globalized.o")
 set(_magictech_test_globalize_args "")
@@ -851,7 +856,7 @@ add_custom_command(
         -P "${CMAKE_CURRENT_SOURCE_DIR}/verify_globalized.cmake"
     WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/magictechtestobj"
     DEPENDS arcanum-game
-    COMMENT "tests: globalizing magictech.c summon recorder (no source change)"
+    COMMENT "tests: globalizing magictech.c summon recorder and id lock (no source change)"
     VERBATIM
 )
 
@@ -886,11 +891,20 @@ set(SCRIPT_TEST_STATICS
     script_execute_action
     script_file_validate
     script_execute_file
+    # The parsed-script cache (porting bug #397, card HW1).
+    script_lock
+    script_unlock
+    cache_find
+    # The group focus's bound (card HW1).
+    script_resolve_focus_obj
 )
 set(SCRIPT_TEST_DATA
     script_global_vars
     script_global_flags
     script_nested_execute_func
+    script_cache_entries
+    script_cache_capacity
+    script_editor
 )
 set(SCRIPT_TEST_OBJ "${CMAKE_CURRENT_BINARY_DIR}/script_globalized.o")
 set(_script_globalize_args "")

@@ -404,8 +404,51 @@ TEST(a_greeting_override_ends_at_its_string)
     dlg_remove();
 }
 
+// Card HW1: a parsed dialogue file stays parsed. The original kept the ten
+// most recent and parsed an eleventh NPC's file over the oldest unused one,
+// so speaking to the first NPC again read its file from the archives again.
+// Twelve files are loaded and let go; then the first one's text changes on
+// disk, and loading it again still answers with the parse already held.
+TEST(the_first_of_twelve_dialogue_files_is_still_parsed)
+{
+    DialogState state;
+    char paths[12][128];
+    int out[8];
+    int dlg;
+    int index;
+    FILE* stream;
+
+    for (index = 0; index < 12; index++) {
+        dlg_write(BODY_ADJACENT);
+        strcpy(paths[index], dlg_path);
+        dlg = -1;
+        CHECK(dialog_load(dlg_path, &dlg));
+        dialog_unload(dlg);
+    }
+
+    stream = fopen(paths[0], "wb");
+    if (stream != NULL) {
+        fputs("{100}{Well?}{}{}{}{0}{}\r\n{101}{Changed.}{}{1}{}{0}{}\r\n", stream);
+        fclose(stream);
+    }
+
+    dlg = -1;
+    CHECK(dialog_load(paths[0], &dlg));
+    memset(&state, 0, sizeof(state));
+    state.dlg = dlg;
+    state.status_num = 100;
+    state.pc_obj = obj_harness_create_proto(OBJ_TYPE_PC);
+    CHECK_INT(dialog_collect_pc_options(&state, out), 2);
+    obj_harness_destroy(state.pc_obj);
+    dialog_unload(dlg);
+    for (index = 0; index < 12; index++) {
+        remove(paths[index]);
+    }
+}
+
 void test_dialog_options_suite(void)
 {
+    RUN(the_first_of_twelve_dialogue_files_is_still_parsed);
     RUN(adjacent_options_are_collected_in_order);
     RUN(the_next_npc_line_ends_the_block);
     RUN(a_parent_linked_option_is_collected_though_it_is_not_adjacent);

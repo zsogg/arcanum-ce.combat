@@ -49,18 +49,24 @@ typedef struct SectorListNode {
     /* 0018 */ struct SectorListNode* next;
 } SectorListNode;
 
+// CE (card HW1): the most sectors a draw rectangle spans each way. The
+// original's 3 (`SectorRectRow`, 0x4D0090) holds a view up to about 4K; a
+// view 5K wide crosses 4 sectors and wrote past these arrays. 5 holds 8K.
+#define SECTOR_RECT_MAX 5
+
+// The offsets are the original's, for its 3 columns and rows.
 typedef struct SectorRectRow {
     /* 0000 */ int num_cols;
-    /* 0008 */ int64_t origin_locs[3];
-    /* 0020 */ int64_t sector_ids[3];
-    /* 0038 */ int tile_ids[3];
-    /* 0044 */ int num_hor_tiles[3];
+    /* 0008 */ int64_t origin_locs[SECTOR_RECT_MAX];
+    /* 0020 */ int64_t sector_ids[SECTOR_RECT_MAX];
+    /* 0038 */ int tile_ids[SECTOR_RECT_MAX];
+    /* 0044 */ int num_hor_tiles[SECTOR_RECT_MAX];
     /* 0050 */ int num_vert_tiles;
 } SectorRectRow;
 
 typedef struct SectorRect {
     /* 0000 */ int num_rows;
-    /* 0008 */ SectorRectRow rows[3];
+    /* 0008 */ SectorRectRow rows[SECTOR_RECT_MAX];
 } SectorRect;
 
 typedef struct GameDrawInfo {

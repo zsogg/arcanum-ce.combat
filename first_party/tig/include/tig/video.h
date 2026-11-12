@@ -113,6 +113,9 @@ void tig_video_display_fps(void);
 int tig_video_blit(TigVideoBuffer* src_video_buffer, TigRect* src_rect, TigRect* dst_rect);
 int tig_video_fill(const TigRect* rect, tig_color_t color);
 int tig_video_flip(void);
+// CE (card HW1): the next flip uploads the whole screen, for when the GPU's
+// copy may have been lost (a render device or target reset).
+void tig_video_invalidate_screen(void);
 int tig_video_screenshot_set_settings(TigVideoScreenshotSettings* settings);
 int tig_video_screenshot_make(void);
 int tig_video_get_palette(unsigned int* colors);

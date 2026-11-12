@@ -400,8 +400,22 @@ extern int anim_next_unique_id;
 extern int dword_739E40;
 extern int dword_739E44;
 
-#define ANIM_RUN_INFO_COUNT 216
+// CE (card HW1, zsogg 2026-11-11): 1024 animation slots, where the original has
+// 216 (0x687700..0x739E40, 216 x 3384 bytes). With every slot taken an action
+// silently failed and every low-priority goal in the world was interrupted
+// (`anim_timeevent_process`). Slots are taken lowest first, so a game that
+// never had more than 216 at once uses the same slots as the original; a save
+// writes 216 unless more are in use (`anim_save`).
+#define ANIM_RUN_INFO_COUNT 1024
+// The count the original's save writes, and its loader's limit.
+#define ANIM_RUN_INFO_SAVED_MIN 216
 extern AnimRunInfo anim_run_info[ANIM_RUN_INFO_COUNT];
+
+// CE (card HW1): one past the highest slot used since the last reset, so a
+// search of the slots stops there rather than walking all 1024; no slot at or
+// above it is in use. `anim_run_info_note_used` raises it.
+extern int anim_run_info_high_water;
+void anim_run_info_note_used(int slot);
 
 void anim_active_goal_count_increment(AnimRunInfo* run_info, AnimGoalNode* goal_node);
 bool anim_goal_is_endless(AnimRunInfo* run_info);

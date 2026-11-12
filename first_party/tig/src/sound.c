@@ -10,10 +10,15 @@
 #include "tig/file_cache.h"
 #include "tig/timer.h"
 
+// CE (card HW1, zsogg 2026-11-11): 16 music handles and 256 effect handles,
+// where the original has 4 and 54 (0x5331A0's ranges 2..5 and 6..59), sized
+// for 2001's Miles channels; SDL_mixer has no voice limit. A fading song held
+// one of the 4 for about 2.6 s, so a scheme change and a fight could leave no
+// handle for the combat music. Handle numbers are not saved.
 #define FIRST_VOICE_HANDLE 0
 #define FIRST_MUSIC_HANDLE 2
-#define FIRST_EFFECT_HANDLE 6
-#define SOUND_HANDLE_MAX 60
+#define FIRST_EFFECT_HANDLE 18
+#define SOUND_HANDLE_MAX 274
 
 typedef unsigned int TigSoundFlags;
 
@@ -99,8 +104,12 @@ int tig_sound_init(TigInitInfo* init_info)
 
     tig_sound_set_file_path_resolver(init_info->sound_file_path_resolver);
 
-    // Create a file cache for 20 files, approx. 1 MB total.
-    tig_sound_cache = tig_file_cache_create(20, 1000000);
+    // CE (card HW1, zsogg 2026-11-11): 256 files and 64 MB, where the original
+    // has 20 files and 1,000,000 bytes (0x532D98 `push 0xf4240; push 0x14`).
+    // The 21st distinct sound playing at once was dropped without a word, and
+    // a single scheme's sounds (the jungle birds, 1.38 MB) outgrew the bytes,
+    // so they were read and inflated from the archives again and again.
+    tig_sound_cache = tig_file_cache_create(256, 64 * 1024 * 1024);
 
     return TIG_OK;
 }
@@ -353,7 +362,8 @@ int tig_sound_acquire_handle(TigSoundType type)
     tig_debug_printf("No sound handle available for sound type %d! Current sounds are:\n", (int)type);
     for (index = 0; index < SOUND_HANDLE_MAX; index++) {
         // NOTE: the dump ignores the requested type's bounds and does not
-        // check `active`, so it prints all 60 paths including stale ones.
+        // check `active`, so it prints every path including stale ones (the
+        // original's 60; CE's 274 since card HW1).
         // FAITHFUL: the original's loop at 0x5331DF walks `esi` from
         // 0x62B348 (entry 0's `path`) to 0x630208 in steps of 0x150 - that is
         // all 60 entries, with no type range and no `active` test. It is a

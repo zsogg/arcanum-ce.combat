@@ -276,5 +276,26 @@ FEATURE(FRESH_SHOP_STOCK, "fresh shop stock", false)
 // aimed at, are attacked as in stock; a helper a graze kills is still avenged
 // by its friends (`ai_avenge_target`).
 FEATURE(GRAZING_HITS, "grazing hits", false)
+// Card HW1 (zsogg, 2026-11-11), read once at start by `gamelib_init`: the save's
+// scratch folder `Save\Current` is held in memory (`tig_file_set_scratch_in_memory`),
+// so a sector evicted while walking, or a map change, writes nothing to disk
+// until a save packs the slot. Same files and the same slot bytes; zsogg's
+// 11-09 crash was one of those writes refused on Windows (BR2).
+FEATURE(SAVE_SCRATCH_IN_MEMORY, "save scratch in memory", false)
+// Card HW1 (zsogg, 2026-11-11), read once at start by `sector_init`: 128 map
+// sectors in memory instead of the original's 16, the top of its own clamp.
+// A sector walked away from stays loaded longer, so its NPCs restart (first
+// heartbeat, `sector_lock`) less often and random-encounter critters linger;
+// a save still writes at most 32 sector-history entries, so it loads in every
+// build.
+FEATURE(LARGE_SECTOR_CACHE, "large sector cache", false)
+// Card HW1 (zsogg, 2026-11-11), read by `path_make_astar`: NPCs may make 100
+// A* searches a second between them, where the original allows 11
+// (`path_limit`, 0x5A15C0), sized for a 2001 CPU. The 250 ms a second of
+// search time still caps them. A crowd that ran the budget out stood still
+// in real time, and in turn-based a refused search ended the NPC's turn
+// (`anim.c`). Measured in a 200-wolf fight: 19 refused against 11 made in
+// real time, 35 against 32 turn-based; none refused with this on.
+FEATURE(NPC_PATH_BUDGET, "npc path budget", false)
 
 // clang-format on

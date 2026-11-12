@@ -895,8 +895,11 @@ void logbook_ui_switch_tab(int tab, bool preserve_page)
  */
 void logbook_ui_turn_page_right(void)
 {
+    // FIX: the next spread must fit the 100 starts. The original tests the
+    // current spread (`cmp $0x64; jge` at 0x53F65F) and then writes the next,
+    // so turning past spread 99 wrote one past the array (card HW1).
     if (logbook_ui_last_visible_entry < logbook_ui_entry_count - 1
-        && (logbook_ui_current_page - 1) / 2 < 100) {
+        && (logbook_ui_current_page - 1) / 2 + 1 < 100) {
         logbook_ui_current_page += 2;
         logbook_ui_page_spread_starts[(logbook_ui_current_page - 1) / 2] = logbook_ui_last_visible_entry + 1;
         logbook_ui_refresh();
@@ -1273,8 +1276,8 @@ void logbook_ui_load_data(void)
     }
 
     if (logbook_ui_tab == LOGBOOK_UI_TAB_BLESSINGS_AND_CURSES) {
-        CurseLogbookEntry curses[100];
-        BlessLogbookEntry blessings[100];
+        CurseLogbookEntry curses[CURSE_LOGBOOK_MAX];
+        BlessLogbookEntry blessings[BLESS_LOGBOOK_MAX];
         int num_blessings;
         int num_curses;
         int bless_idx;

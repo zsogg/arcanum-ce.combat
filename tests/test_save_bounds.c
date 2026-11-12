@@ -134,11 +134,58 @@ TEST(an_anim_extent_that_skips_past_the_array_is_refused)
     // returned true for a stream describing slots that do not exist.
     put_zeros(ANIM_HEADER_SIZE);
     put_int(ANIM_RUN_INFO_COUNT);
-    put_int(-1000);
+    put_int(-(ANIM_RUN_INFO_COUNT + 1));
     write_fixture(FIXTURE);
 
     CHECK(!load_fixture(anim_load, &position));
     CHECK_INT(position, ANIM_HEADER_SIZE + 8);
+}
+
+// Card HW1: the save writes the original's 216 as its count unless a slot
+// past it is in use, so a save stays the original's bytes, loadable by every
+// build, until a crowd needs more.
+static int anim_saved_count(void)
+{
+    TigFile* stream;
+    FILE* in;
+    int count = -1;
+
+    stream = tig_file_fopen(FIXTURE, "wb");
+    CHECK(stream != NULL);
+    if (stream == NULL) {
+        return -1;
+    }
+    CHECK(anim_save(stream));
+    tig_file_fclose(stream);
+
+    in = fopen(FIXTURE, "rb");
+    if (in != NULL) {
+        if (fseek(in, ANIM_HEADER_SIZE, SEEK_SET) != 0 || fread(&count, sizeof(count), 1, in) != 1) {
+            count = -1;
+        }
+        fclose(in);
+    }
+    return count;
+}
+
+TEST(an_anim_save_writes_216_unless_a_later_slot_is_in_use)
+{
+    int saved_high_water = anim_run_info_high_water;
+
+    clear_anim_table();
+    anim_run_info_high_water = 0;
+    CHECK_INT(anim_saved_count(), ANIM_RUN_INFO_SAVED_MIN);
+
+    anim_run_info[300].flags = 0x1;
+    anim_run_info[300].current_goal = -1;
+    anim_run_info_note_used(300);
+    CHECK_INT(anim_saved_count(), 301);
+
+    anim_run_info[300].flags = 0;
+    CHECK_INT(anim_saved_count(), ANIM_RUN_INFO_SAVED_MIN);
+
+    clear_anim_table();
+    anim_run_info_high_water = saved_high_water;
 }
 
 TEST(an_empty_anim_block_still_loads)
@@ -440,6 +487,7 @@ void test_save_bounds_suite(void)
 
     RUN(an_anim_count_past_the_array_is_refused_before_anything_is_read);
     RUN(an_anim_extent_that_skips_past_the_array_is_refused);
+    RUN(an_anim_save_writes_216_unless_a_later_slot_is_in_use);
     RUN(an_empty_anim_block_still_loads);
     RUN(a_goal_index_past_the_stack_is_refused_at_the_index);
     RUN(a_magictech_extent_that_skips_past_the_array_is_refused);

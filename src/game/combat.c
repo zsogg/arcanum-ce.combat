@@ -131,7 +131,8 @@ static int64_t combat_weapon_swap_last;
 // the same order while no critter's Dexterity has changed since it was first
 // sorted (review 2026-11-08, turns-6: a load rolled anew, and the rest of the
 // round could be save-scummed). Exact ties follow the rebuilt list's order.
-#define COMBAT_INITIATIVE_MAX 256
+// Card HW1 (zsogg, 2026-11-11): 1024, sized for a crowd (was 256).
+#define COMBAT_INITIATIVE_MAX 1024
 
 static struct {
     int64_t obj;
@@ -271,7 +272,8 @@ typedef struct CombatGroupMember {
 } CombatGroupMember;
 
 // The demonstration battle puts sixty guards on one side.
-#define COMBAT_GROUP_MAX 128
+// Card HW1 (zsogg, 2026-11-11): 1024, sized for a crowd (was 128).
+#define COMBAT_GROUP_MAX 1024
 static CombatGroupMember combat_group[COMBAT_GROUP_MAX];
 static int combat_group_count;
 // The watchdog: turn-based time events in a row in which no member spent a
@@ -285,7 +287,8 @@ static int combat_group_progress;
 // in a group or alone: the walk passes them by, so a member pulled forward
 // into a group is not reached again in its own place, and a re-sort mid-round
 // (`combat_turn_based_add_critter`) cannot give anyone a second turn.
-#define COMBAT_ROUND_ACTED_MAX 256
+// Card HW1 (zsogg, 2026-11-11): 1024, sized for a crowd (was 256).
+#define COMBAT_ROUND_ACTED_MAX 1024
 static int64_t combat_round_acted[COMBAT_ROUND_ACTED_MAX];
 static int combat_round_acted_count;
 

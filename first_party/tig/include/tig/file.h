@@ -99,6 +99,14 @@ const char* tig_file_save_dir(void);
 // as above; false, unchanged, when the result would not fit.
 bool tig_file_apply_save_dir(char* path, size_t size, const char* save_dir);
 
+// CE (`save scratch in memory`, card HW1): when enabled, the save folder's
+// `Current` (the scratch folder a load unpacks a slot into and a save packs)
+// is held in memory: every path under it, through every function here,
+// answers as the disk would, and nothing under it reaches the disk. Set once,
+// before the first path under it is touched; setting it empties the folder.
+void tig_file_set_scratch_in_memory(bool enabled);
+bool tig_file_scratch_in_memory(void);
+
 SDL_IOStream* tig_file_io_open(const char* path, const char* mode);
 
 #ifdef __cplusplus

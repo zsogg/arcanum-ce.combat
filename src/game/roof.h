@@ -20,6 +20,7 @@ bool roof_is_faded(int64_t loc);
 bool roof_is_covered_xy(int64_t x, int64_t y, bool check_faded);
 bool roof_is_covered_loc(int64_t loc, bool check_faded);
 void roof_blit_flags_set(unsigned int flags);
+void roof_transparency_update(void);
 unsigned int roof_blit_flags_get(void);
 
 #endif /* ARCANUM_GAME_ROOF_H_ */
