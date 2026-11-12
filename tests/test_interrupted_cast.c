@@ -36,6 +36,20 @@ void __wrap_magictech_release(int mt_id, unsigned int flags)
     released_count++;
 }
 
+void __real_magictech_missile_cancelled(int mt_id);
+
+static bool cancel_armed;
+static int cancelled_id;
+
+void __wrap_magictech_missile_cancelled(int mt_id)
+{
+    if (!cancel_armed) {
+        __real_magictech_missile_cancelled(mt_id);
+        return;
+    }
+    cancelled_id = mt_id;
+}
+
 // One goal on a run slot, carrying spell run 7.
 static AnimRunInfo cast_run;
 
@@ -178,8 +192,38 @@ TEST(a_spell_is_in_flight_while_its_missile_names_the_thrower)
     anim_run_info_high_water = saved_high_water;
 }
 
+// `missile spells paid at launch` (zsogg, 2026-11-12): a missile destroyed in
+// flight forgets its spell run (refunded and freed by
+// `magictech_missile_cancelled`); stock left the run named, never begun.
+TEST(a_destroyed_missile_forgets_its_run_under_the_switch)
+{
+    AnimRunInfo missile;
+
+    memset(&missile, 0, sizeof(missile));
+    missile.flags = 0x01;
+    missile.current_goal = 0;
+    missile.goals[0].type = AG_SHOOT_SPELL;
+
+    settings_init(&settings, "unused");
+    feature_init();
+    cancel_armed = true;
+    cancelled_id = -1;
+    missile.goals[0].params[AGDATA_SPELL_DATA].data = 9;
+    anim_interrupted_cast_end(&missile, 0);
+    CHECK_INT(missile.goals[0].params[AGDATA_SPELL_DATA].data, 9);
+    CHECK_INT(cancelled_id, -1);
+
+    settings_set_value(&settings, feature_key(FEATURE_MISSILE_PAID_AT_LAUNCH), 1);
+    anim_interrupted_cast_end(&missile, 0);
+    CHECK_INT(missile.goals[0].params[AGDATA_SPELL_DATA].data, -1);
+    CHECK_INT(cancelled_id, 9);
+    cancel_armed = false;
+    settings_exit(&settings);
+}
+
 void test_interrupted_cast_suite(void)
 {
+    RUN(a_destroyed_missile_forgets_its_run_under_the_switch);
     RUN(a_spell_is_in_flight_while_its_missile_names_the_thrower);
     RUN(a_freed_spell_run_is_forgotten_by_the_cast_goals_naming_it_under_the_switch);
     RUN(an_interrupted_throw_spell_keeps_its_run_stock_and_releases_it_under_the_switch);

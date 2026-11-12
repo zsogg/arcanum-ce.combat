@@ -2274,11 +2274,18 @@ void magictech_charge_wmap_spell_fatigue(int64_t obj, int magictech)
 // 0x4507D0
 bool magictech_charge_spell_fatigue(int64_t obj, int magictech)
 {
-    int cost;
-
     if (obj == OBJ_HANDLE_NULL) {
         return true;
     }
+
+    return magictech_charge_fatigue(obj, magictech_spell_fatigue_cost(obj, magictech), true, magictech);
+}
+
+// The cost `magictech_charge_spell_fatigue` charges, split out (2026-11-12)
+// for `magictech_missile_cancelled`'s refund.
+int magictech_spell_fatigue_cost(int64_t obj, int magictech)
+{
+    int cost;
 
     cost = magictech_spells[magictech].cost;
     if (magictech >= 0 && magictech < MT_80
@@ -2300,7 +2307,7 @@ bool magictech_charge_spell_fatigue(int64_t obj, int magictech)
         cost *= 2;
     }
 
-    return magictech_charge_fatigue(obj, cost, true, magictech);
+    return cost;
 }
 
 // 0x4508A0
@@ -6425,6 +6432,28 @@ bool magictech_prepay_missile(int mt_id)
     }
 
     return true;
+}
+
+// CE (`missile spells paid at launch`): a prepaid missile destroyed before
+// it landed (`anim_interrupted_cast_end`) gives its caster back the fatigue
+// its throw was charged, and its run is freed, unpaid.
+void magictech_missile_cancelled(int mt_id)
+{
+    MagicTechRunInfo* run_info;
+
+    if (!magictech_id_to_run_info(mt_id, &run_info)) {
+        return;
+    }
+
+    if ((run_info->flags & MAGICTECH_RUN_CE_PREPAID) != 0
+        && run_info->source_obj.obj != OBJ_HANDLE_NULL
+        && obj_type_is_critter(obj_field_int32_get(run_info->source_obj.obj, OBJ_F_TYPE))) {
+        int64_t obj = run_info->source_obj.obj;
+        int damage = critter_fatigue_damage_get(obj) - magictech_spell_fatigue_cost(obj, run_info->spell);
+
+        critter_fatigue_damage_set(obj, damage > 0 ? damage : 0);
+    }
+    magictech_release(mt_id, 0);
 }
 
 // 0x457000

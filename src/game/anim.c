@@ -4297,6 +4297,17 @@ bool anim_goal_interrupt_all_for_tb_combat(void)
 
     for (index = 0; index < anim_run_info_high_water; index++) {
         run_info = &(anim_run_info[index]);
+        // CE (`missile spells paid at launch`, zsogg 2026-11-12): a missile
+        // already thrown - a run whose base goal is the projectile's, its
+        // flight pushed on top - finishes; stock destroyed it, the spell
+        // never landed and, paid as thrown, its fatigue was lost.
+        if (feature_enabled(FEATURE_MISSILE_PAID_AT_LAUNCH)
+            && (run_info->flags & 0x1) != 0
+            && run_info->current_goal > -1
+            && run_info->goals[0].type == AG_SHOOT_SPELL) {
+            continue;
+        }
+
         if ((run_info->flags & 0x1) != 0
             && !anim_goal_is_endless(run_info)
             && !anim_interrupt(&(run_info->id), PRIORITY_3)) {

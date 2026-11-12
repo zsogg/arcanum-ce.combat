@@ -1274,8 +1274,10 @@ target_link_options(arcanum-tests PRIVATE
     "-Wl,--wrap=gamelib_in_load"
     "-Wl,--wrap=stat_poison_turn_reached"
     "-Wl,--wrap=magictech_summons_turn_reached"
-    # test_interrupted_cast: see the release an interrupted cast makes.
+    # test_interrupted_cast: see the release an interrupted cast makes, and a
+    # destroyed missile's cancel.
     "-Wl,--wrap=magictech_release"
+    "-Wl,--wrap=magictech_missile_cancelled"
     # test_compare_fixes: award XP on Hard (porting bug #377).
     "-Wl,--wrap=gamelib_game_difficulty_get"
     # test_dialog_conditions: count `co`'s attack (porting bug #381).

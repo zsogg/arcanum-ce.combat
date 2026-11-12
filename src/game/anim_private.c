@@ -1111,6 +1111,18 @@ void anim_interrupted_cast_end(AnimRunInfo* run_info, int goal)
     int spell;
     int idx;
 
+    // CE (`missile spells paid at launch`, zsogg 2026-11-12): a missile
+    // destroyed in flight - a map change, say - gives back what its throw
+    // was charged and frees its run, which stock left on its target for
+    // good, never begun.
+    if (feature_enabled(FEATURE_MISSILE_PAID_AT_LAUNCH)
+        && run_info->goals[goal].type == AG_SHOOT_SPELL
+        && run_info->goals[goal].params[AGDATA_SPELL_DATA].data != -1) {
+        magictech_missile_cancelled(run_info->goals[goal].params[AGDATA_SPELL_DATA].data);
+        run_info->goals[goal].params[AGDATA_SPELL_DATA].data = -1;
+        return;
+    }
+
     if (!feature_enabled(FEATURE_INTERRUPTED_CASTS_END)
         || (run_info->goals[goal].type != AG_THROW_SPELL
             && run_info->goals[goal].type != AG_THROW_SPELL_W_CAST_ANIM)

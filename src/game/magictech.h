@@ -495,6 +495,8 @@ void magictech_demaintain_spells_except_summons(int64_t obj);
 // spell's fatigue as it leaves its caster. False when the caster cannot pay:
 // the missile is not thrown and the run is freed.
 bool magictech_prepay_missile(int mt_id);
+void magictech_missile_cancelled(int mt_id);
+int magictech_spell_fatigue_cost(int64_t obj, int magictech);
 
 // CE (magic, milestone MG-3): under `spell no stacking`, whether a cast of
 // `spell` by `caster_obj` at `target_obj` (or at the caster, when null) is
