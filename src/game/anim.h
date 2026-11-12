@@ -69,6 +69,7 @@ bool anim_load(GameLoadInfo* load_info);
 void anim_debug_enable(void);
 bool anim_is_busy(int64_t obj, AnimID* anim_id);
 int anim_busy_priority(int64_t obj);
+bool anim_spell_in_flight_from(int64_t caster_obj);
 bool anim_is_idle(int64_t obj);
 bool anim_is_fidgeting(int64_t obj);
 bool anim_timeevent_process(TimeEvent* timeevent);

@@ -270,6 +270,9 @@ typedef unsigned int MagicTechRunFlags;
 // Unfocused, or a second copy under `spell no stacking`. Its release charges
 // no fatigue, as stock charges an interrupted cast's.
 #define MAGICTECH_RUN_CE_REFUSED 0x00020000u
+// CE (`missile spells paid at launch`): a missile whose fatigue was charged as
+// it left the caster; its begin and its release charge nothing more.
+#define MAGICTECH_RUN_CE_PREPAID 0x00040000u
 #define MAGICTECH_RUN_DISPELLED 0x80000000u
 
 typedef struct MagicTechRunInfo {
@@ -486,6 +489,11 @@ void magictech_summons_tick(int delta_ms);
 bool magictech_summon_hold_active(unsigned int age_ms, int hits);
 void magictech_summon_dealt_damage(int64_t summon_obj);
 bool magictech_summons_held(int64_t caster_obj);
+
+// CE (`missile spells paid at launch`, zsogg 2026-11-12): charges a missile
+// spell's fatigue as it leaves its caster. False when the caster cannot pay:
+// the missile is not thrown and the run is freed.
+bool magictech_prepay_missile(int mt_id);
 
 // CE (magic, milestone MG-3): under `spell no stacking`, whether a cast of
 // `spell` by `caster_obj` at `target_obj` (or at the caster, when null) is

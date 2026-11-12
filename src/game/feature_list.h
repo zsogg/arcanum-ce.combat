@@ -218,6 +218,16 @@ FEATURE(COMBAT_MUSIC_SHUFFLE, "combat music shuffle", false)
 // goals still naming it forget it, so a leftover goal cannot begin a later cast
 // given the same run slot - which began that cast twice, and charged it twice.
 FEATURE(INTERRUPTED_CASTS_END, "interrupted casts end", false)
+// zsogg, 2026-11-12, read by `anim_create_spell_projectile`: a missile spell
+// (Stone Throw, Fireflash, Bolt of Lightning, Disintegrate) is charged its
+// fatigue as it leaves the caster, not when it lands, so a real-time caster
+// cannot throw several before the first is paid for.
+FEATURE(MISSILE_PAID_AT_LAUNCH, "missile spells paid at launch", false)
+// zsogg, 2026-11-12, read by `ai_check_use_spell` (code 24): an NPC does not
+// cast while a spell it threw is still flying. Its animation ends at the
+// throw, so in real time it threw again on every think - a molten spider four
+// Fireflashes in 1.2 seconds, overrunning its fatigue floor.
+FEATURE(AI_WAITS_FOR_MISSILES, "ai waits for its missiles", false)
 // Card FB1 (zsogg, 2026-11-02), read by `combat_attack` and `combat_dmg`:
 // floating text that tells a plain miss from a dodge ("Miss"), says when armor
 // took all or more than half of a weapon hit's normal damage ("Stopped",

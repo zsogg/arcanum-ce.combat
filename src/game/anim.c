@@ -3651,6 +3651,33 @@ int anim_busy_priority(int64_t obj)
     return 0;
 }
 
+// CE (`ai waits for its missiles`, zsogg 2026-11-12): whether a spell
+// `caster_obj` threw is still flying - a projectile's shoot-spell goal names
+// its thrower as the parent (`anim_add_parented_goal`). The thrower's own
+// animation ends at the throw, so `anim_busy_priority` cannot see it.
+bool anim_spell_in_flight_from(int64_t caster_obj)
+{
+    int slot;
+    int goal;
+
+    for (slot = 0; slot < anim_run_info_high_water; slot++) {
+        AnimRunInfo* run_info = &(anim_run_info[slot]);
+
+        if ((run_info->flags & 0x1) == 0 || (run_info->flags & 0x2) != 0) {
+            continue;
+        }
+
+        for (goal = 0; goal <= run_info->current_goal && goal < 8; goal++) {
+            if (run_info->goals[goal].type == AG_SHOOT_SPELL
+                && run_info->goals[goal].params[AGDATA_PARENT_OBJ].obj == caster_obj) {
+                return true;
+            }
+        }
+    }
+
+    return false;
+}
+
 // 0x423470
 bool anim_is_idle(int64_t obj)
 {
@@ -4430,6 +4457,13 @@ bool anim_add_parented_goal(AnimRunInfo* run_info)
 bool anim_create_spell_projectile(AnimRunInfo* run_info)
 {
     ObjectID oid;
+
+    // CE (`missile spells paid at launch`): the fatigue is charged here, as
+    // the missile leaves; a caster who cannot pay throws nothing.
+    if (!magictech_prepay_missile(run_info->cur_stack_data->params[AGDATA_SPELL_DATA].data)) {
+        run_info->cur_stack_data->params[AGDATA_SPELL_DATA].data = -1;
+        return false;
+    }
 
     oid.type = OID_TYPE_NULL;
 

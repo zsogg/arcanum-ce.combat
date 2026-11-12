@@ -142,8 +142,45 @@ TEST(a_freed_spell_run_is_forgotten_by_the_cast_goals_naming_it_under_the_switch
     anim_run_info_high_water = saved_high_water;
 }
 
+// `ai waits for its missiles` (zsogg, 2026-11-12): a thrower's spell is in
+// flight while a slot in use holds a shoot-spell goal naming it as parent.
+TEST(a_spell_is_in_flight_while_its_missile_names_the_thrower)
+{
+    AnimRunInfo saved;
+    AnimRunInfo* slot = &(anim_run_info[ANIM_RUN_INFO_COUNT - 1]);
+    int saved_high_water = anim_run_info_high_water;
+    int64_t thrower = 0x1234;
+
+    memcpy(&saved, slot, sizeof(saved));
+    anim_run_info_note_used(ANIM_RUN_INFO_COUNT - 1);
+
+    memset(slot, 0, sizeof(*slot));
+    slot->flags = 0x01;
+    slot->current_goal = 1;
+    slot->goals[0].type = AG_ANIMATE;
+    slot->goals[1].type = AG_SHOOT_SPELL;
+    slot->goals[1].params[AGDATA_PARENT_OBJ].obj = thrower;
+    CHECK(anim_spell_in_flight_from(thrower));
+    CHECK(!anim_spell_in_flight_from(0x5678));
+
+    // Landed: the goal is popped.
+    slot->current_goal = 0;
+    CHECK(!anim_spell_in_flight_from(thrower));
+
+    // A slot being freed (0x02) or not in use holds nothing in flight.
+    slot->current_goal = 1;
+    slot->flags = 0x01 | 0x02;
+    CHECK(!anim_spell_in_flight_from(thrower));
+    slot->flags = 0;
+    CHECK(!anim_spell_in_flight_from(thrower));
+
+    memcpy(slot, &saved, sizeof(saved));
+    anim_run_info_high_water = saved_high_water;
+}
+
 void test_interrupted_cast_suite(void)
 {
+    RUN(a_spell_is_in_flight_while_its_missile_names_the_thrower);
     RUN(a_freed_spell_run_is_forgotten_by_the_cast_goals_naming_it_under_the_switch);
     RUN(an_interrupted_throw_spell_keeps_its_run_stock_and_releases_it_under_the_switch);
     RUN(a_begun_spell_and_an_attempt_are_left_to_their_own_cleanup);

@@ -6001,6 +6001,13 @@ int ai_check_use_spell(int64_t attacker_obj, int64_t item_obj, int64_t target_ob
         return 10;
     }
 
+    // CE (`ai waits for its missiles`, zsogg 2026-11-12): nothing while a
+    // spell it threw is still flying (code 24).
+    if (feature_enabled(FEATURE_AI_WAITS_FOR_MISSILES)
+        && anim_spell_in_flight_from(attacker_obj)) {
+        return 24;
+    }
+
     // CE (magic, milestone MG-3): a buff, or Drain Will, already on the
     // target under `spell no stacking` - the cast would be refused.
     if (magictech_recast_refused(attacker_obj, spell, target_obj, -1)) {

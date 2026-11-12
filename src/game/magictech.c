@@ -3879,6 +3879,7 @@ bool magictech_process_upkeep(void)
 
             if (v2) {
                 if ((magictech_cur_spell_info->flags & 0x100) == 0
+                    && (magictech_cur_run_info->flags & MAGICTECH_RUN_CE_PREPAID) == 0
                     && !magictech_charge_spell_fatigue(magictech_cur_run_info->source_obj.obj, magictech_cur_run_info->spell)) {
                     v1 = true;
                     mes_file_entry.num = 600; // "Not enough Energy."
@@ -6234,12 +6235,49 @@ void magictech_release(int mt_id, unsigned int flags)
         && (!tig_net_is_active()
             || tig_net_is_host())) {
         if ((flags & 0x1) != 0
-            && (magictech_run_info[mt_id].flags & MAGICTECH_RUN_CE_REFUSED) == 0) {
+            && (magictech_run_info[mt_id].flags & (MAGICTECH_RUN_CE_REFUSED | MAGICTECH_RUN_CE_PREPAID)) == 0) {
             magictech_charge_spell_fatigue(magictech_run_info[mt_id].source_obj.obj,
                 magictech_run_info[mt_id].spell);
         }
         magictech_id_free_lock(mt_id);
     }
+}
+
+// CE (`missile spells paid at launch`, zsogg 2026-11-12): stock charges a
+// missile spell's fatigue when it lands (the begin, in
+// `magictech_process_upkeep`), and its caster is free once it has thrown it,
+// so in real time a caster could throw four Fireflashes before the first was
+// paid for and end far below its floor (the molten spider, measured
+// 2026-11-12). The charge is the begin's own, made earlier.
+bool magictech_prepay_missile(int mt_id)
+{
+    MagicTechRunInfo* run_info;
+    MesFileEntry mes_file_entry;
+
+    if (!feature_enabled(FEATURE_MISSILE_PAID_AT_LAUNCH)
+        || !magictech_id_to_run_info(mt_id, &run_info)
+        || (run_info->flags & MAGICTECH_RUN_CE_PREPAID) != 0
+        || !obj_type_is_critter(run_info->parent_obj.type)
+        || !magictech_is_magic(run_info->spell)
+        || (magictech_spells[run_info->spell].flags & 0x100) != 0) {
+        return true;
+    }
+
+    // Marked before the charge: a charge that knocks the caster out ends its
+    // cast inside the set, and that release must not charge again.
+    run_info->flags |= MAGICTECH_RUN_CE_PREPAID;
+    if (!magictech_charge_spell_fatigue(run_info->source_obj.obj, run_info->spell)) {
+        run_info->flags &= ~MAGICTECH_RUN_CE_PREPAID;
+        if (player_is_local_pc_obj(run_info->parent_obj.obj)) {
+            mes_file_entry.num = 600; // "Not enough Energy."
+            mes_get_msg(magictech_spell_mes_file, &mes_file_entry);
+            ui_display_warning(mes_file_entry.str);
+        }
+        magictech_release(mt_id, 0);
+        return false;
+    }
+
+    return true;
 }
 
 // 0x457000
