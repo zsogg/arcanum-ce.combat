@@ -142,16 +142,17 @@ TEST(a_follower_keeps_its_reserve_after_the_cast)
     CHECK(!ai_follower_reserve_refuses(10, 0, 50, 100, 20));
 }
 
-// zsogg, 2026-11-11: a follower's summon is held 150 seconds, 60 more for
-// each blow it lands that does damage.
-TEST(a_summon_is_held_150_seconds_and_60_more_a_damaging_blow)
+// zsogg, 2026-11-11: a follower's summon is held 150 seconds, and (zsogg,
+// 2026-11-12) 40 more for each blow it lands that does damage.
+TEST(a_summon_is_held_150_seconds_and_40_more_a_damaging_blow)
 {
     CHECK(magictech_summon_hold_active(0, 0));
     CHECK(magictech_summon_hold_active(149999, 0));
     CHECK(!magictech_summon_hold_active(150000, 0));
-    CHECK(magictech_summon_hold_active(209999, 1));
-    CHECK(!magictech_summon_hold_active(210000, 1));
-    CHECK(magictech_summon_hold_active(329999, 3));
+    CHECK(magictech_summon_hold_active(189999, 1));
+    CHECK(!magictech_summon_hold_active(190000, 1));
+    CHECK(magictech_summon_hold_active(269999, 3));
+    CHECK(!magictech_summon_hold_active(270000, 3));
 }
 
 void test_ai_follower_casting_suite(void)
@@ -168,5 +169,5 @@ void test_ai_follower_casting_suite(void)
     RUN(a_buff_on_any_critter_can_go_on_the_player);
     RUN(a_self_only_buff_stays_on_its_caster);
     RUN(a_follower_keeps_its_reserve_after_the_cast);
-    RUN(a_summon_is_held_150_seconds_and_60_more_a_damaging_blow);
+    RUN(a_summon_is_held_150_seconds_and_40_more_a_damaging_blow);
 }

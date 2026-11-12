@@ -440,6 +440,18 @@ int item_effective_power(int64_t item_obj, int64_t parent_obj)
     }
 
     effective_power = (complexity + stat_level_get(parent_obj, STAT_MAGICK_TECH_APTITUDE)) / 2;
+
+    // CE (`aptitude balance`, zsogg 2026-11-12; card AP1): a technologist
+    // keeps the half of a magick item a neutral user has at aptitude 0,
+    // falling evenly to none at -100, whatever the item; stock takes it away
+    // as fast as the aptitude grows past the item's complexity.
+    if (complexity > 0 && feature_enabled(FEATURE_APTITUDE_BALANCE)) {
+        int aptitude = stat_level_get(parent_obj, STAT_MAGICK_TECH_APTITUDE);
+        if (aptitude < 0) {
+            return complexity * (aptitude > -100 ? 100 + aptitude : 0) / 200;
+        }
+    }
+
     if (complexity < 0) {
         // Item is technological, check if the owner is too much magician to use
         // this item.
@@ -583,7 +595,24 @@ int item_aptitude_crit_failure_chance(int64_t item_obj, int64_t owner_obj)
     // Calculate the penalty based the owner's profiency in magick: the better
     // the magician, the higher the chance of a critical failure (up to the
     // techinical complexity of the item itself).
-    return -complexity * aptitude / 100;
+    // CE (`aptitude balance`, zsogg 2026-11-12; card AP1): over 250, not 100.
+    return -complexity * aptitude / (feature_enabled(FEATURE_APTITUDE_BALANCE) ? 250 : 100);
+}
+
+// CE (`aptitude balance`, zsogg 2026-11-12; card AP1): the share of damage a
+// weapon loses, or a friendly spell's effect, against a creature of the
+// opposite lean whose `strength` (0-100) is what
+// `item_adjust_magic_target` gives: 0.3% a point to 50, then 0.4%, so 15% at
+// 50 and 35% at 100.
+int item_aptitude_cut(int strength)
+{
+    if (strength <= 0) {
+        return 0;
+    }
+    if (strength > 100) {
+        strength = 100;
+    }
+    return strength <= 50 ? 3 * strength / 10 : 15 + 4 * (strength - 50) / 10;
 }
 
 // 0x461780

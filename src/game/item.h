@@ -58,6 +58,7 @@ int item_effective_power_ratio(int64_t item_obj, int64_t owner_obj);
 int item_adjust_magic(int64_t item_obj, int64_t owner_obj, int value);
 int item_adjust_magic_target(int64_t item_obj, int64_t owner_obj, int64_t a3);
 int item_aptitude_crit_failure_chance(int64_t item_obj, int64_t owner_obj);
+int item_aptitude_cut(int strength);
 void item_inv_icon_size(int64_t item_id, int* width, int* height);
 bool item_transfer(int64_t item_obj, int64_t critter_obj);
 bool item_transfer_ex(int64_t item_obj, int64_t critter_obj, int inventory_location);

@@ -7558,7 +7558,11 @@ void intgame_examine_combat_target(int64_t pc_obj, int64_t target_obj)
             if (v3 > 20) {
                 skill_invocation.flags |= SKILL_INVOCATION_MAGIC_TECH_PENALTY;
             }
-            effectiveness -= effectiveness * v3 / 100;
+            // CE (`aptitude balance`, card AP1): the attack no longer fails
+            // for it, so the chance shown keeps it; the icon still warns.
+            if (!feature_enabled(FEATURE_APTITUDE_BALANCE)) {
+                effectiveness -= effectiveness * v3 / 100;
+            }
         }
     }
 

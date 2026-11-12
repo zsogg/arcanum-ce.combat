@@ -698,6 +698,9 @@ static int64_t magictech_cur_critical_target;
 // a Refund critical returns exactly what was paid - after any mana store, a
 // dwarf's double and fatigue limiting.
 static int64_t magictech_last_charge_obj;
+// CE (`aptitude balance`, card AP1): a friendly heal's cut, in percent, set by
+// `magictech_resistance_roll` for its target and read by its heal.
+static int magictech_cur_friendly_cut;
 static int magictech_last_charge_spell = -1;
 static int magictech_last_charge_cost;
 
@@ -1743,6 +1746,92 @@ int magictech_upkeep_cost(int magictech)
     return magictech_spells[magictech].maintenance.cost;
 }
 
+// CE (`aptitude balance`, zsogg 2026-11-12; card AP1): whether a spell
+// heals - a heal component in any phase, Regenerate's upkeep included - and
+// not Resurrect, which the rule treats as a buff.
+static bool magictech_spell_heals(int magictech)
+{
+    int action;
+    int idx;
+
+    if (magictech == SPELL_RESURRECT) {
+        return false;
+    }
+    for (action = 0; action < MAGICTECH_ACTION_COUNT; action++) {
+        MagicTechComponentList* list = &(magictech_spells[magictech].components[action]);
+        for (idx = 0; idx < list->cnt; idx++) {
+            if (list->entries[idx].type == MTC_HEAL) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+// CE (`aptitude balance`): whether two critters are of one side: the player
+// and its followers.
+static bool magictech_same_side(int64_t a, int64_t b)
+{
+    int64_t side_a = obj_field_int32_get(a, OBJ_F_TYPE) == OBJ_TYPE_PC ? a : critter_pc_leader_get(a);
+    int64_t side_b = obj_field_int32_get(b, OBJ_F_TYPE) == OBJ_TYPE_PC ? b : critter_pc_leader_get(b);
+
+    return side_a != OBJ_HANDLE_NULL && side_a == side_b;
+}
+
+// CE (`aptitude balance`, zsogg 2026-11-12; card AP1): stock resists a
+// friendly spell as an enemy's - worn magic resistance and the target's tech
+// aptitude, a heal failing outright - so a follower's heals failed on a tech
+// player about as often as its aptitude (a heal at resistance 55: one of two,
+// measured 2026-11-12). Under the switch a spell from the target's own side,
+// or one the spell list marks friendly only, ignores worn resistance and
+// never fails outright: a heal heals less and a buff may fail, on the weapon
+// curve (`item_aptitude_cut`). Returns that strength, 0-100 - the target's
+// tech lean, less the caster's magick share as a technologist's gun is cut -
+// or -1 when the rule does not apply.
+static int magictech_friendly_tech_strength(int64_t caster_obj, int64_t target_obj, int magictech)
+{
+    unsigned int flags;
+    int target_aptitude;
+    int caster_aptitude;
+    int strength;
+
+    if (!feature_enabled(FEATURE_APTITUDE_BALANCE)
+        || caster_obj == OBJ_HANDLE_NULL
+        || target_obj == OBJ_HANDLE_NULL
+        || caster_obj == target_obj
+        || magictech < 0
+        || magictech >= MT_SPELL_COUNT
+        || !obj_type_is_critter(obj_field_int32_get(caster_obj, OBJ_F_TYPE))
+        || !obj_type_is_critter(obj_field_int32_get(target_obj, OBJ_F_TYPE))) {
+        return -1;
+    }
+
+    flags = magictech_spells[magictech].flags;
+    if (!magictech_same_side(caster_obj, target_obj)
+        && !((flags & MAGICTECH_FRIENDLY) != 0 && (flags & MAGICTECH_AGGRESSIVE) == 0)) {
+        return -1;
+    }
+
+    target_aptitude = stat_level_get(target_obj, STAT_MAGICK_TECH_APTITUDE);
+    if (target_aptitude >= 0) {
+        return 0;
+    }
+    strength = -target_aptitude;
+    caster_aptitude = stat_level_get(caster_obj, STAT_MAGICK_TECH_APTITUDE);
+    if (caster_aptitude > 0) {
+        strength = strength * (100 - caster_aptitude) / 100;
+    }
+    return strength;
+}
+
+// CE (`aptitude balance`): the share of a damage spell a target resists on
+// average, which the AI's estimates weigh in place of the resistance itself:
+// the margin `resistance - roll`, over a d100 roll.
+static int magictech_damage_resisted(int resistance)
+{
+    return resistance > 1 ? resistance * (resistance - 1) / 200 : 0;
+}
+
 // CE (combat AI, `caster judgement`, card AI-8): see `magictech.h`. The
 // arithmetic of `magictech_cast_spell_fail_chance`, with the saving throw
 // taken at its odds rather than rolled, so weighing draws no random number.
@@ -1764,12 +1853,27 @@ int magictech_ai_land_chance(int64_t attacker_obj, int64_t target_obj, int magic
         return 100;
     }
 
+    // CE (`aptitude balance`, card AP1): a friendly spell lands; a buff fails
+    // on the curve.
+    {
+        int strength = magictech_friendly_tech_strength(attacker_obj, target_obj, magictech);
+        if (strength >= 0) {
+            return magictech_spell_heals(magictech) ? 100 : 100 - item_aptitude_cut(strength);
+        }
+    }
+
     resistance = object_get_resistance(target_obj, RESISTANCE_TYPE_MAGIC, false);
     {
         int aptitude = stat_level_get(target_obj, STAT_MAGICK_TECH_APTITUDE);
         if (aptitude < 0) {
             resistance = 100 - (100 - resistance) * (aptitude + 100) / 100;
         }
+    }
+
+    // CE (`aptitude balance`, zsogg 2026-11-12; card AP1): a damage spell
+    // never fails for resistance, it loses the margin; weigh that.
+    if (feature_enabled(FEATURE_APTITUDE_BALANCE) && (info->flags & MAGICTECH_HAVE_DAMAGE) != 0) {
+        resistance = magictech_damage_resisted(resistance);
     }
 
     if (resistance > 0
@@ -3379,6 +3483,15 @@ void MTComponentHeal_ProcFunc(void)
             } else {
                 combat.dam[DAMAGE_TYPE_NORMAL] = random_between(heal_min, heal_max);
             }
+
+            // CE (`aptitude balance`, card AP1): a friendly heal on a tech
+            // target heals less, by the cut its resistance roll set.
+            if (magictech_cur_friendly_cut > 0) {
+                int type;
+                for (type = 0; type < DAMAGE_TYPE_COUNT; type++) {
+                    combat.dam[type] -= combat.dam[type] * magictech_cur_friendly_cut / 100;
+                }
+            }
         }
 
         combat_heal(&combat);
@@ -4160,6 +4273,8 @@ bool magictech_resistance_roll(void)
 {
     int v1 = 0;
 
+    magictech_cur_friendly_cut = 0;
+
     if (magictech_cur_run_info->action != MAGICTECH_ACTION_BEGIN) {
         return true;
     }
@@ -4183,6 +4298,22 @@ bool magictech_resistance_roll(void)
         && obj_type_is_critter(obj_field_int32_get(magictech_cur_target_ctx.target_obj, OBJ_F_TYPE))
         && (obj_field_int32_get(magictech_cur_target_ctx.target_obj, OBJ_F_CRITTER_FLAGS2) & OCF2_NO_DISINTEGRATE) != 0) {
         return false;
+    }
+
+    // CE (`aptitude balance`, card AP1): a friendly spell is not resisted:
+    // a heal heals less (`MTComponentHeal_ProcFunc`), a buff may fail.
+    {
+        int strength = magictech_friendly_tech_strength(magictech_cur_run_info->parent_obj.obj,
+            magictech_cur_target_ctx.target_obj,
+            magictech_cur_run_info->spell);
+        if (strength >= 0) {
+            int cut = item_aptitude_cut(strength);
+            if (magictech_spell_heals(magictech_cur_run_info->spell)) {
+                magictech_cur_friendly_cut = cut;
+                return true;
+            }
+            return random_between(1, 100) > cut;
+        }
     }
 
     if (magictech_cur_run_info->parent_obj.obj != magictech_cur_target_ctx.target_obj) {
@@ -4285,6 +4416,13 @@ int magictech_cast_spell_fail_chance(int64_t attacker_obj, int64_t target_obj, i
     if ((info->flags & MAGICTECH_IS_TECH) == 0) {
         // Self-cast spells should never fail.
         if (attacker_obj != target_obj) {
+            // CE (`aptitude balance`, card AP1): a friendly spell heals for
+            // certain; a buff fails on the curve.
+            int strength = magictech_friendly_tech_strength(attacker_obj, target_obj, spell);
+            if (strength >= 0) {
+                return magictech_spell_heals(spell) ? 0 : item_aptitude_cut(strength);
+            }
+
             // Retrieve the target's base magic resistance, which is also the
             // base chance for a spell to fail.
 
@@ -4305,6 +4443,15 @@ int magictech_cast_spell_fail_chance(int64_t attacker_obj, int64_t target_obj, i
                 if (aptitude < 0) {
                     resistance = 100 - (100 - resistance) * (aptitude + 100) / 100;
                 }
+            }
+
+            // CE (`aptitude balance`, zsogg 2026-11-12; card AP1): a damage
+            // spell never fails for resistance, it loses the margin. Stock
+            // reported the resistance as its failure, so an enemy refused
+            // Fireflash at a tech player from resistance 38 (code 8) and
+            // used its staff (measured 2026-11-12).
+            if (feature_enabled(FEATURE_APTITUDE_BALANCE) && (info->flags & MAGICTECH_HAVE_DAMAGE) != 0) {
+                resistance = magictech_damage_resisted(resistance);
             }
 
             // "If the spell does not do damage, but has a "saving throw"
@@ -6473,6 +6620,33 @@ void magictech_demaintain_spells(int64_t obj)
     }
 }
 
+// CE (follower casting, zsogg 2026-11-12): `magictech_demaintain_spells`
+// sparing the summoning spells (the AI's summon list, as
+// `magictech_summons_alive` counts them), for a follower whose summons are
+// held: its buffs go at the fight's end as stock.
+void magictech_demaintain_spells_except_summons(int64_t obj)
+{
+    int index;
+    MagicTechInfo* info;
+
+    if (obj == OBJ_HANDLE_NULL) {
+        return;
+    }
+
+    for (index = 0; index < 512; index++) {
+        if (magictech_run_info[index].source_obj.obj == obj
+            && magictech_run_info[index].spell >= 0
+            && magictech_run_info[index].spell < MT_SPELL_COUNT) {
+            info = &(magictech_spells[magictech_run_info[index].spell]);
+            if ((info->flags & MAGICTECH_IS_TECH) == 0
+                && (info->item_triggers == 0 || info->maintenance.period > 0)
+                && info->ai.values[MAGICTECH_AI_ACTION_SUMMON] == -1) {
+                magictech_interrupt_delayed(magictech_run_info[index].id);
+            }
+        }
+    }
+}
+
 // 0x4574D0
 void magictech_clear_source_refs(int64_t obj)
 {
@@ -7703,8 +7877,9 @@ static void magictech_summons_clear(void)
 }
 
 // CE (follower casting, zsogg 2026-11-11): a player's follower keeps a summon
-// at least 150 seconds, and 60 more for each blow it lands that does damage,
-// rather than dropping it as a fight ends and calling another next time.
+// at least 150 seconds, and 40 more (zsogg, 2026-11-12; was 60) for each blow
+// it lands that does damage, rather than dropping it as a fight ends and
+// calling another next time.
 bool magictech_summon_hold_active(unsigned int age_ms, int hits)
 {
     return age_ms < MAGICTECH_SUMMON_HOLD_MS + MAGICTECH_SUMMON_HOLD_PER_HIT_MS * (unsigned int)hits;
@@ -8154,6 +8329,16 @@ bool magictech_effect_resist_check(int64_t obj, int mt_id)
         && obj_type_is_critter(obj_field_int32_get(obj, OBJ_F_TYPE))
         && (obj_field_int32_get(obj, OBJ_F_CRITTER_FLAGS2) & OCF2_NO_DISINTEGRATE) != 0) {
         return false;
+    }
+
+    // CE (`aptitude balance`, card AP1): a friendly spell's effect is not
+    // resisted; it may fail on the curve, as its cast may.
+    {
+        int strength = magictech_friendly_tech_strength(run_info->parent_obj.obj, obj, run_info->spell);
+        if (strength >= 0) {
+            return magictech_spell_heals(run_info->spell)
+                || random_between(1, 100) > item_aptitude_cut(strength);
+        }
     }
 
     if (run_info->parent_obj.obj != obj

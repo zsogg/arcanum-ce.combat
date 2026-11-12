@@ -1263,14 +1263,28 @@ int combat_attack(CombatContext* combat)
         }
 
         bool cont = true;
+        // CE (`aptitude balance`, zsogg 2026-11-12; card AP1): a weapon at a
+        // creature of the opposite lean never fails outright. A melee one,
+        // tech as well as magick, lands without its item's bonuses on the
+        // roll; a ranged one loses damage (`combat_calc_dmg`), and a magick
+        // one its magick whatever the roll. Stock: a tech weapon, or a magick
+        // ranged one, misses.
+        bool aptitude_balance = feature_enabled(FEATURE_APTITUDE_BALANCE);
         if (random_between(1, 100) <= v3) {
             if (combat->skill == SKILL_MELEE
                 && combat->weapon_obj != OBJ_HANDLE_NULL
-                && obj_field_int32_get(combat->weapon_obj, OBJ_F_ITEM_MAGIC_TECH_COMPLEXITY) > 0) {
+                && (aptitude_balance
+                    || obj_field_int32_get(combat->weapon_obj, OBJ_F_ITEM_MAGIC_TECH_COMPLEXITY) > 0)) {
                 combat->flags |= 0x20000;
-            } else {
+            } else if (!aptitude_balance) {
                 cont = false;
             }
+        }
+        if (aptitude_balance
+            && v3 > 0
+            && combat->skill != SKILL_MELEE
+            && obj_field_int32_get(combat->weapon_obj, OBJ_F_ITEM_MAGIC_TECH_COMPLEXITY) > 0) {
+            combat->flags |= 0x20000;
         }
 
         if (cont) {
@@ -3743,6 +3757,25 @@ void combat_calc_dmg(CombatContext* combat)
         && reload_jams_apply(combat->attacker_obj, combat->weapon_obj)) {
         for (damage_type = 0; damage_type < DAMAGE_TYPE_COUNT; damage_type++) {
             combat->dam[damage_type] /= 2;
+        }
+    }
+
+    // CE (`aptitude balance`, zsogg 2026-11-12; card AP1): a ranged weapon at
+    // a creature of the opposite lean loses damage in place of stock's
+    // outright miss, by the strength stock rolled that miss against.
+    if (feature_enabled(FEATURE_APTITUDE_BALANCE)
+        && (combat->flags & CF_RANGED) != 0
+        && combat->weapon_obj != OBJ_HANDLE_NULL
+        && combat->skill != SKILL_THROWING
+        && combat->target_obj != OBJ_HANDLE_NULL) {
+        int cut = item_aptitude_cut(item_adjust_magic_target(combat->weapon_obj,
+            combat->attacker_obj,
+            combat->target_obj));
+
+        if (cut > 0) {
+            for (damage_type = 0; damage_type < DAMAGE_TYPE_COUNT; damage_type++) {
+                combat->dam[damage_type] -= combat->dam[damage_type] * cut / 100;
+            }
         }
     }
 }

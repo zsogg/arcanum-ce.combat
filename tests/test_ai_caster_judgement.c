@@ -208,6 +208,33 @@ TEST(rule_2_changes_the_pick)
     CHECK_INT(cands[0].code, 20);
 }
 
+// zsogg, 2026-11-12 (review 2026-11-11, finding 2): the three casts sit on
+// the fatigue floor. Elder Joachim, 202 fatigue, Fireflash at 15: at 50 the
+// Shield of Protection (5) passed beside the floor and left Fireflash refused
+// by it; above the floor's 40 only 10 is his to spend, and the buff waits.
+TEST(the_reserve_sits_on_the_fatigue_floor)
+{
+    AiJudgedSpell cands[2];
+    int reserve;
+    int floor_pts = ai_judgement_floor_points(202, 20, false);
+
+    CHECK_INT(floor_pts, 40);
+    CHECK_INT(ai_judgement_floor_points(202, 20, true), 0); // the leader is dying
+    CHECK_INT(ai_judgement_floor_points(0, 20, false), 0);
+
+    cands[0] = judged(150, 1000, 15, 4, 10, true); // Fireflash
+    cands[1] = judged(160, 2000, 5, 4, 10, false); // Shield of Protection
+    CHECK_INT(ai_judgement_pick(cands, 2, 50, -1, &reserve), 1); // beside: the buff
+    cands[0] = judged(150, 1000, 15, 4, 10, true);
+    cands[1] = judged(160, 2000, 5, 4, 10, false);
+    CHECK_INT(ai_judgement_pick(cands, 2, 50 - floor_pts, -1, &reserve), 0);
+    CHECK_INT(cands[1].code, 21);
+    // 90 left: 50 above the floor keeps three Fireflashes after the buff.
+    cands[0] = judged(150, 1000, 15, 4, 10, true);
+    cands[1] = judged(160, 2000, 5, 4, 10, false);
+    CHECK_INT(ai_judgement_pick(cands, 2, 90 - floor_pts, -1, &reserve), 1);
+}
+
 TEST(an_attack_under_its_floor_keeps_no_reserve)
 {
     AiJudgedSpell cands[2];
@@ -327,6 +354,7 @@ TEST(a_spell_s_stun_is_found)
 
 void test_ai_caster_judgement_suite(void)
 {
+    RUN(the_reserve_sits_on_the_fatigue_floor);
     RUN(damage_is_worth_what_the_target_has_left_and_a_kill_more);
     RUN(a_disabling_spell_is_worth_half_its_target_by_its_ai_value);
     RUN(a_summon_is_worth_more_as_the_enemy_closes);

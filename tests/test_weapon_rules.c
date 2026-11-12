@@ -4,6 +4,7 @@
 
 #include <string.h>
 
+#include "game/item.h"
 #include "game/weapon_rules.h"
 
 #include "test_harness.h"
@@ -339,6 +340,20 @@ TEST(a_malformed_entry_changes_nothing)
     CHECK_INT(rule.capacity, 0x5a5a5a5a);
 }
 
+// Card AP1 (zsogg, 2026-11-12): a weapon at a creature of the opposite lean
+// loses 15% of its damage at strength 50 and 35% at 100.
+TEST(the_aptitude_cut_is_15_at_half_strength_and_35_at_full)
+{
+    CHECK_INT(item_aptitude_cut(0), 0);
+    CHECK_INT(item_aptitude_cut(-20), 0);
+    CHECK_INT(item_aptitude_cut(31), 9); // the golem against Kal
+    CHECK_INT(item_aptitude_cut(40), 12); // the golem against a neutral shooter
+    CHECK_INT(item_aptitude_cut(50), 15);
+    CHECK_INT(item_aptitude_cut(75), 25);
+    CHECK_INT(item_aptitude_cut(100), 35);
+    CHECK_INT(item_aptitude_cut(150), 35);
+}
+
 void test_weapon_rules_suite(void)
 {
     RUN(an_entry_reads_every_key);
@@ -360,4 +375,5 @@ void test_weapon_rules_suite(void)
     RUN(armor_damage_is_read_and_clamped);
     RUN(elemental_damage_and_ammunition_per_shot_are_read);
     RUN(a_malformed_entry_changes_nothing);
+    RUN(the_aptitude_cut_is_15_at_half_strength_and_35_at_full);
 }

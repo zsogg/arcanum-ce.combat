@@ -6,6 +6,7 @@
 #include "game/anim.h"
 #include "game/combat.h"
 #include "game/critter.h"
+#include "game/feature.h"
 #include "game/gamelib.h"
 #include "game/gmovie.h"
 #include "game/gsound.h"
@@ -15,10 +16,13 @@
 #include "game/obj_private.h"
 #include "game/object.h"
 #include "game/player.h"
+#include "game/random.h"
 #include "game/reaction.h"
 #include "game/roof.h"
+#include "game/target.h"
 #include "game/tb.h"
 #include "game/tf.h"
+#include "game/tile.h"
 #include "game/ui.h"
 #include "game/wallcheck.h"
 
@@ -34,6 +38,7 @@ typedef struct TeleportObjectNode {
 } TeleportObjectNode;
 
 static bool teleport_process(TeleportData* teleport_data);
+static void teleport_party_spread(int64_t pc_obj);
 static bool schedule_teleport_obj_recursively(int64_t obj, int64_t loc);
 static bool teleport_run(TeleportData* teleport_data);
 static void teleport_obj_prepare(int64_t obj);
@@ -263,6 +268,10 @@ bool teleport_process(TeleportData* teleport_data)
             if (critter_is_unconscious(obj)) {
                 anim_goal_knockdown(obj);
             }
+
+            if (obj != OBJ_HANDLE_NULL && player_get_local_pc_obj() == obj) {
+                teleport_party_spread(obj);
+            }
         }
     }
 
@@ -274,6 +283,50 @@ bool teleport_process(TeleportData* teleport_data)
     }
 
     return true;
+}
+
+// CE (`party spread`, zsogg 2026-11-12): stock puts every follower on the
+// player's tile and leaves it there (MODDING-NOTES 72). Each one still there
+// steps to a free tile one to three away along a path it could walk
+// (`target_find_displacement_loc`), so not into a wall or blocking scenery;
+// ten tries, as `SAT_CREATE_OBJECT` makes, and with none it stays, as stock.
+static void teleport_party_spread(int64_t pc_obj)
+{
+    int64_t pc_loc;
+    ObjectList followers;
+    ObjectList critters;
+    ObjectNode* node;
+
+    if (!feature_enabled(FEATURE_PARTY_SPREAD)) {
+        return;
+    }
+
+    pc_loc = obj_field_int64_get(pc_obj, OBJ_F_LOCATION);
+    object_list_all_followers(pc_obj, &followers);
+    for (node = followers.head; node != NULL; node = node->next) {
+        int64_t loc;
+        int tries;
+
+        if (obj_field_int64_get(node->obj, OBJ_F_LOCATION) != pc_loc) {
+            continue;
+        }
+
+        for (tries = 0; tries < 10; tries++) {
+            if (!target_find_displacement_loc(node->obj, random_between(1, 3), &loc)
+                || loc == pc_loc
+                || tile_is_blocking(loc, false)) {
+                continue;
+            }
+            object_list_location(loc, OBJ_TM_CRITTER, &critters);
+            if (critters.head == NULL) {
+                object_list_destroy(&critters);
+                object_move_to(node->obj, loc, 0, 0);
+                break;
+            }
+            object_list_destroy(&critters);
+        }
+    }
+    object_list_destroy(&followers);
 }
 
 // 0x4D3760

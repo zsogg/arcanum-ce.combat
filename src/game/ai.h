@@ -387,6 +387,10 @@ int ai_judgement_score(int value, int cost, int upkeep);
 // the reserve kept for the best attack worth casting (three of its casts),
 // whatever it scores. Pure.
 bool ai_judgement_budget_refuses(int fatigue_left, int cost, int reserve);
+// CE: AI-8 rule 2 (zsogg, 2026-11-12). The fatigue, in points, a caster's
+// floor keeps: `floor_pct` of its maximum, none once it is `spent` (a follower
+// whose leader is below 20% health). The reserve sits on it. Pure.
+int ai_judgement_floor_points(int fatigue_max, int floor_pct, bool spent);
 // CE: AI-8 rule 2 for heals (healing-3). Whether a heal from memory is
 // refused for spending into the reserve: only for a patient above 30% health.
 // Pure.

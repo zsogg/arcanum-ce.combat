@@ -485,10 +485,11 @@ int64_t magictech_summon_summoner(int64_t summon_obj, unsigned int* seq);
 void magictech_summons_tick(int delta_ms);
 
 #define MAGICTECH_SUMMON_HOLD_MS 150000u
-#define MAGICTECH_SUMMON_HOLD_PER_HIT_MS 60000u
+#define MAGICTECH_SUMMON_HOLD_PER_HIT_MS 40000u
 bool magictech_summon_hold_active(unsigned int age_ms, int hits);
 void magictech_summon_dealt_damage(int64_t summon_obj);
 bool magictech_summons_held(int64_t caster_obj);
+void magictech_demaintain_spells_except_summons(int64_t obj);
 
 // CE (`missile spells paid at launch`, zsogg 2026-11-12): charges a missile
 // spell's fatigue as it leaves its caster. False when the caster cannot pay:

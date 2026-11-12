@@ -161,14 +161,9 @@ static void ai_action_perform_baking_off(Ai* ai);
 static void ai_armor_rewield(Ai* ai);
 static bool ai_prefers_spells(Ai* ai);
 static bool ai_is_caster_type(Ai* ai);
-static bool ai_may_be_desperate(int64_t obj);
 static bool ai_in_fight(int64_t obj);
 static bool ai_choose_magictech_from_lists(Ai* ai);
 
-// CE (combat AI, milestone AI-5): the follower whose spell roll was made only
-// by `follower casting`'s waiver, while its lists are tried; it is not
-// desperate then.
-static int64_t ai_waived_caster = OBJ_HANDLE_NULL;
 static bool ai_may_summon(Ai* ai);
 static bool ai_desperate_now(int64_t obj);
 static bool ai_desperation_rolled(int64_t obj);
@@ -203,9 +198,11 @@ static int ai_check_protect(int64_t source_obj, int64_t target_obj);
 static int64_t ai_avenge_target(int64_t obj, int64_t ally_obj);
 static int ai_check_use_spell(int64_t attacker_obj, int64_t item_obj, int64_t target_obj, int spell);
 static bool ai_tactics_applies(int64_t obj);
+static bool ai_control_restraint_applies(int64_t obj);
 static bool ai_protect_first(Ai* ai);
 static int ai_tactics_refusal(int64_t caster_obj, int64_t target_obj, int spell);
 static bool ai_choose_magictech_judged(Ai* ai);
+static int64_t ai_judgement_centred_target(Ai* ai, ObjectList* critters, int radius);
 static void ai_tactics_note_if_disabled(int64_t caster_obj, int64_t target_obj, int spell);
 static int ai_desperation_key(void);
 static bool ai_is_indoor_to_outdoor_transition(int64_t portal_obj, int dir);
@@ -947,8 +944,9 @@ bool ai_prepare_to_act(Ai* ai)
             || critter_is_dead(leader_obj)
             || !combat_critter_is_combat_mode_active(leader_obj)) {
             // CE (follower casting, zsogg 2026-11-11): a follower of the player
-            // keeps its maintained spells while one of its summons is held
-            // (`magictech_summons_held`); the flag stays, so they go when the
+            // keeps its summons while one of them is held
+            // (`magictech_summons_held`); its other maintained spells go now
+            // (zsogg, 2026-11-12). The flag stays, so the summons go when the
             // hold ends and the leader is still out of combat. A new fight
             // spends the old request instead (review 2026-11-11, finding 3).
             bool held = feature_enabled(FEATURE_FOLLOWER_CASTING)
@@ -963,6 +961,8 @@ bool ai_prepare_to_act(Ai* ai)
             }
             if (!held) {
                 magictech_demaintain_spells(ai->obj);
+            } else if ((npc_flags & ONF_FIGHTING) == 0) {
+                magictech_demaintain_spells_except_summons(ai->obj);
             }
         }
     }
@@ -1050,8 +1050,8 @@ static bool ai_heal_worst_first(Ai* ai, int64_t leader_obj, bool force)
     patients[count++] = ai->obj;
     patients[count++] = leader_obj;
 
-    // shortcut: a party past 32 has its last members left out, which no
-    // party in the game reaches; grow the arrays if summons ever do.
+    // shortcut: a party past 1024 has its last members left out, which no
+    // party in the game reaches.
     object_list_all_followers(leader_obj, &objects);
     for (node = objects.head; node != NULL && count < AI_HEAL_PATIENTS_MAX; node = node->next) {
         if (node->obj != ai->obj) {
@@ -3372,23 +3372,14 @@ bool ai_choose_magictech_action(Ai* ai)
         return false;
     }
 
-    // CE (combat AI, milestone AI-5): while the waiver is what lets this
-    // follower cast, it keeps its fatigue reserve (`ai_may_be_desperate`).
-    ai_waived_caster = ai->cast_waived ? ai->obj : OBJ_HANDLE_NULL;
     // CE (`caster judgement`, card AI-8): the best allowed spell, not the
     // first.
-    if (ai_judgement_applies(ai->obj)
-            ? ai_choose_magictech_judged(ai)
-            : ai_choose_magictech_from_lists(ai)) {
-        ai_waived_caster = OBJ_HANDLE_NULL;
-        return true;
-    }
-    ai_waived_caster = OBJ_HANDLE_NULL;
-    return false;
+    return ai_judgement_applies(ai->obj)
+        ? ai_choose_magictech_judged(ai)
+        : ai_choose_magictech_from_lists(ai);
 }
 
-// The original's list order, from `ai_choose_magictech_action`; split out so
-// AI-5's waived caster is cleared on every way out.
+// The original's list order, from `ai_choose_magictech_action`.
 static bool ai_choose_magictech_from_lists(Ai* ai)
 {
     MagicTechAi magictech_ai;
@@ -3604,15 +3595,6 @@ bool ai_desperate_now(int64_t obj)
     return ai_desperation[slot].desperate;
 }
 
-// CE (combat AI, milestone AI-5): AI-2's desperation, except for a follower
-// whose cast is allowed only by `follower casting`'s waiver - it keeps its
-// reserve while the party is healthy (zsogg, 2026-10-27). No roll is drawn
-// for it, so its turn's roll is still to come if someone is hurt later.
-bool ai_may_be_desperate(int64_t obj)
-{
-    return obj != ai_waived_caster && ai_desperate_now(obj);
-}
-
 // Whether `obj` is desperate this turn by a roll already made - for the
 // observer, which must not make one.
 bool ai_desperation_rolled(int64_t obj)
@@ -3632,8 +3614,9 @@ bool ai_desperation_rolled(int64_t obj)
 // that, an NPC whose target is recorded turns to the nearest member of the
 // target's side it may attack and has not failed to reach; with none, it
 // keeps the stock behaviour. No extra path search is made: the NPC path
-// budget (`path_limit`, ten a second) is shared with every NPC's movement,
-// and an exhausted budget would read as "unreachable". The turn is
+// budget (`path_limit`, ten a second; 100 under `npc path budget`) is shared
+// with every NPC's movement, and an exhausted budget would read as
+// "unreachable". The turn is
 // `ai_desperation_key`'s: the turn-based round, or one turn length `R`.
 // Card HW1 (zsogg, 2026-11-11): 1024, sized for a crowd, not a party (was 64).
 #define AI_UNREACHABLE_MAX 1024
@@ -6015,8 +5998,9 @@ int ai_check_use_spell(int64_t attacker_obj, int64_t item_obj, int64_t target_ob
     }
 
     // CE (`caster tactics`, card AI-7): friendly fire (14) and crowd control's
-    // restraint (15-17).
-    if (ai_tactics_applies(attacker_obj)) {
+    // restraint (15-17); a follower of the player keeps the restraint on a
+    // held or just-recovered foe (15, 16; zsogg, 2026-11-12).
+    if (ai_control_restraint_applies(attacker_obj)) {
         int tactics_code = ai_tactics_refusal(attacker_obj, target_obj, spell);
         if (tactics_code != 0) {
             return tactics_code;
@@ -6086,24 +6070,21 @@ int ai_check_use_spell(int64_t attacker_obj, int64_t item_obj, int64_t target_ob
 
         if (attacker_obj_type == OBJ_TYPE_NPC) {
             int fatigue_ratio = ai_critter_fatigue_ratio(attacker_obj);
-            // CE (combat AI, milestone AI-5): a follower casting only by
-            // `follower casting`'s waiver keeps the floor an NPC without a
-            // leader keeps (20% stock), its reserve for when someone is hurt.
             // A follower's own floor is 0: stock never needed one, since a
-            // follower cast only once someone was.
-            int follower_floor = attacker_obj == ai_waived_caster
-                ? fatigue_cfg->min_cast_pct_leaderless
-                : fatigue_cfg->min_cast_pct_follower;
+            // follower cast only once someone was. Under `follower casting`
+            // its reserve is kept after the cast, below (zsogg, 2026-11-11;
+            // AI-5's pre-cast floor for a waived caster is gone, 2026-11-12).
+            int follower_floor = fatigue_cfg->min_cast_pct_follower;
 
             // CE (combat AI, milestone AI-2): a desperate caster ignores its
             // fatigue floor this turn (`ai_desperate_now`).
             if (critter_pc_leader_get(attacker_obj) == OBJ_HANDLE_NULL) {
                 if (fatigue_ratio < fatigue_cfg->min_cast_pct_leaderless
-                    && !ai_may_be_desperate(attacker_obj)) {
+                    && !ai_desperate_now(attacker_obj)) {
                     return 2;
                 }
             } else if (fatigue_ratio < follower_floor
-                && !ai_may_be_desperate(attacker_obj)) {
+                && !ai_desperate_now(attacker_obj)) {
                 return 2;
             }
 
@@ -6139,7 +6120,7 @@ int ai_check_use_spell(int64_t attacker_obj, int64_t item_obj, int64_t target_ob
             // reserve, but the cost must still be chargeable, so the cast
             // completes before exhaustion can interrupt it.
             if (!(attacker_obj_type == OBJ_TYPE_NPC
-                    && ai_may_be_desperate(attacker_obj)
+                    && ai_desperate_now(attacker_obj)
                     && magictech_can_charge_spell_fatigue(attacker_obj, spell))) {
                 return 2;
             }
@@ -6192,10 +6173,14 @@ int ai_check_use_spell(int64_t attacker_obj, int64_t item_obj, int64_t target_ob
     // the player does not take a spell centred on itself against a foe beyond
     // its radius (code 12). Clearing Arronax's ONF_CAST_HIGHEST gave him Jolt,
     // which he then chose against distant wolves: nothing was cast and his
-    // turn passed (measured 2026-10-27).
-    if (feature_enabled(FEATURE_FOLLOWER_CASTING)
+    // turn passed (measured 2026-10-27). Every NPC under the spell guards
+    // since zsogg's decision of 2026-11-12: `caster judgement` aims such a
+    // spell at a foe inside its radius (`ai_judgement_centred_target`), and an
+    // enemy aimed beyond it lost its turn the same way.
+    if (((feature_enabled(FEATURE_FOLLOWER_CASTING)
+             && critter_pc_leader_get(attacker_obj) != OBJ_HANDLE_NULL)
+            || ai_spell_guards_apply())
         && attacker_obj_type == OBJ_TYPE_NPC
-        && critter_pc_leader_get(attacker_obj) != OBJ_HANDLE_NULL
         && target_obj != OBJ_HANDLE_NULL
         && target_obj != attacker_obj
         && ai_caster_centred_out_of_reach(magictech_caster_centred_radius(spell),
@@ -7002,6 +6987,16 @@ static bool ai_tactics_applies(int64_t obj)
         && critter_pc_leader_get(obj) == OBJ_HANDLE_NULL;
 }
 
+// CE (`caster tactics`, zsogg 2026-11-12): codes 15 and 16, no disable on a
+// held foe or one just up, bind the player's followers too, so a follower
+// cannot stun-lock; friendly fire (14) and group control (17) stay with the
+// enemy casters `ai_tactics_applies` names.
+static bool ai_control_restraint_applies(int64_t obj)
+{
+    return feature_enabled(FEATURE_CASTER_TACTICS)
+        && obj_field_int32_get(obj, OBJ_F_TYPE) == OBJ_TYPE_NPC;
+}
+
 // Rule 1: the caster's own defensive spells, in their priority order, the
 // first it can cast that is not already on it.
 static bool ai_protect_first(Ai* ai)
@@ -7376,7 +7371,7 @@ static void ai_tactics_note_if_disabled(int64_t caster_obj, int64_t target_obj, 
 {
     int slot;
 
-    if (!ai_tactics_applies(caster_obj)
+    if (!ai_control_restraint_applies(caster_obj)
         || !spell_rules_control(spell)
         || target_obj == OBJ_HANDLE_NULL
         || !ai_tactics_disabled(target_obj)) {
@@ -7393,7 +7388,7 @@ static int ai_tactics_refusal(int64_t caster_obj, int64_t target_obj, int spell)
     int code;
     int slot;
 
-    code = ai_tactics_friendly_fire(caster_obj, target_obj, spell);
+    code = ai_tactics_applies(caster_obj) ? ai_tactics_friendly_fire(caster_obj, target_obj, spell) : 0;
     if (code != 0) {
         return code;
     }
@@ -7412,7 +7407,8 @@ static int ai_tactics_refusal(int64_t caster_obj, int64_t target_obj, int spell)
         return 16;
     }
 
-    if (magictech_area_radius(spell, &caster_centred) >= 0 && !creature_rules_specialist(caster_obj)) {
+    if (ai_tactics_applies(caster_obj)
+        && magictech_area_radius(spell, &caster_centred) >= 0 && !creature_rules_specialist(caster_obj)) {
         return 17;
     }
 
@@ -7512,6 +7508,11 @@ int ai_judgement_score(int value, int cost, int upkeep)
 // Rule 2 (review 2026-11-08, casting-1; zsogg 2026-11-09): a cast that
 // costs fatigue never spends into the reserve, whatever it scores. The caller
 // exempts attacks; an item's cast costs nothing.
+int ai_judgement_floor_points(int fatigue_max, int floor_pct, bool spent)
+{
+    return spent || fatigue_max <= 0 ? 0 : floor_pct * fatigue_max / 100;
+}
+
 bool ai_judgement_budget_refuses(int fatigue_left, int cost, int reserve)
 {
     return reserve > 0 && cost > 0 && fatigue_left - cost < reserve;
@@ -7725,6 +7726,39 @@ static int ai_judgement_area_value(Ai* ai, ObjectList* critters, int spell, int6
 
 // Rule 3: the centre for an area attack, among the target and the nearest
 // enemies within the spell's range.
+// CE (`caster judgement`, zsogg 2026-11-12; review 2026-11-11, code 12): a
+// spell centred on its caster - Jolt, Nightmare - aimed at a foe inside its
+// radius: the focus when it is there, else the nearest such enemy. Cast at a
+// foe beyond it, it casts nothing and the turn is lost (code 12).
+static int64_t ai_judgement_centred_target(Ai* ai, ObjectList* critters, int radius)
+{
+    int64_t best_obj = OBJ_HANDLE_NULL;
+    int best_dist = INT_MAX;
+    ObjectNode* node;
+
+    if (ai->danger_source != OBJ_HANDLE_NULL
+        && !ai_caster_centred_out_of_reach(radius, (int)object_dist(ai->obj, ai->danger_source))) {
+        return ai->danger_source;
+    }
+
+    for (node = critters->head; node != NULL; node = node->next) {
+        int dist;
+
+        if (!ai_judgement_enemy(ai, node->obj)
+            || critter_is_unconscious(node->obj)
+            || !ai_is_valid_target(ai->obj, node->obj)) {
+            continue;
+        }
+        dist = (int)object_dist(ai->obj, node->obj);
+        if (!ai_caster_centred_out_of_reach(radius, dist) && dist < best_dist) {
+            best_obj = node->obj;
+            best_dist = dist;
+        }
+    }
+
+    return best_obj != OBJ_HANDLE_NULL ? best_obj : ai->danger_source;
+}
+
 static int64_t ai_judgement_area_centre(Ai* ai, ObjectList* critters, int spell, int radius)
 {
     int64_t caster_loc = obj_field_int64_get(ai->obj, OBJ_F_LOCATION);
@@ -7903,6 +7937,8 @@ static bool ai_choose_magictech_judged(Ai* ai)
     int nearest_enemy = INT_MAX;
     int chosen;
     int reserve;
+    int floor_pts;
+    int64_t leader_obj;
     bool turn_based;
     int64_t weapon_obj;
     int weapon_ap;
@@ -8035,6 +8071,9 @@ static bool ai_choose_magictech_judged(Ai* ai)
                     int radius = magictech_area_radius(entry->spell, &caster_centred);
                     if (radius >= 0 && !caster_centred) {
                         c->target_obj = ai_judgement_area_centre(ai, &critters, entry->spell, radius);
+                    } else if (magictech_caster_centred_radius(entry->spell) >= 0) {
+                        c->target_obj = ai_judgement_centred_target(ai, &critters,
+                            magictech_caster_centred_radius(entry->spell));
                     }
                 }
             }
@@ -8060,10 +8099,19 @@ static bool ai_choose_magictech_judged(Ai* ai)
 
     // Rules 1, 2 and 4, then the best of the rest; the reserve is kept for
     // this caster's heals (healing-3).
+    // The reserve sits on the caster's fatigue floor (zsogg, 2026-11-12;
+    // review 2026-11-11, finding 2): three casts kept above the floor, not
+    // beside it, so a buff cannot leave the attack refused by the floor.
     turn_based = combat_turn_based_is_active() && combat_turn_based_is_acting(ai->obj);
-    chosen = ai_judgement_pick(cands, cnt, critter_fatigue_current(ai->obj),
+    leader_obj = critter_pc_leader_get(ai->obj);
+    floor_pts = ai_judgement_floor_points(critter_fatigue_max(ai->obj),
+        ai_fatigue_config_get()->min_cast_pct_leaderless,
+        feature_enabled(FEATURE_FOLLOWER_CASTING)
+            && leader_obj != OBJ_HANDLE_NULL
+            && ai_object_hp_ratio(leader_obj) < AI_FOLLOWER_RESERVE_LEADER_HP_PCT);
+    chosen = ai_judgement_pick(cands, cnt, critter_fatigue_current(ai->obj) - floor_pts,
         turn_based ? combat_action_points_of(ai->obj) : -1, &reserve);
-    ai_judgement_reserve_note(ai->obj, reserve);
+    ai_judgement_reserve_note(ai->obj, reserve > 0 ? reserve + floor_pts : 0);
 
     for (idx = 0; idx < cnt; idx++) {
         if (ai->considered_count < COMBAT_OBSERVER_AI_CONSIDERED_MAX) {

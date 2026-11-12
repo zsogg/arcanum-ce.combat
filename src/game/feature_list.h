@@ -180,12 +180,14 @@ FEATURE(HEARING_ALERTS, "hearing alerts", false)
 FEATURE(WEAPON_FUMBLES, "weapon fumbles", false)
 // Combat AI AI-5 (zsogg, 2026-10-27), read by `ai_magictech_chance` and
 // `ai_check_use_spell`: a caster follower of the player casts while it and the
-// player are healthy, keeping its fatigue reserve until someone is hurt; and
-// `ONF_CAST_HIGHEST` no longer limits a follower of the player to each
-// college's highest spell (Arronax). Also, a spell centred on the follower is
-// not taken against a target beyond its reach (code 12), and AI-6 F4: while
-// an enemy targets the player, a follower's buff that can go on another goes
-// on the player (`ai_player_under_attack`).
+// player are healthy; and `ONF_CAST_HIGHEST` no longer limits a follower of
+// the player to each college's highest spell (Arronax). Also, a spell centred
+// on the follower is not taken against a target beyond its reach (code 12),
+// and AI-6 F4: while an enemy targets the player, a follower's buff that can
+// go on another goes on the player (`ai_player_under_attack`). zsogg,
+// 2026-11-11/12: a follower keeps 20% of its fatigue after each cast unless
+// the player is below 20% health (an emergency heal excepted), and keeps its
+// summons 150 seconds after a fight, 40 more for each damaging blow they land.
 FEATURE(FOLLOWER_CASTING, "follower casting", false)
 // Combat AI AI-6 (zsogg, 2026-10-28), read by `ai_heal`, `ai_heal_func` and
 // `ai_check_use_spell` for a follower of the player: no healing roll while the
@@ -228,6 +230,22 @@ FEATURE(MISSILE_PAID_AT_LAUNCH, "missile spells paid at launch", false)
 // throw, so in real time it threw again on every think - a molten spider four
 // Fireflashes in 1.2 seconds, overrunning its fatigue floor.
 FEATURE(AI_WAITS_FOR_MISSILES, "ai waits for its missiles", false)
+// zsogg, 2026-11-12, read by `teleport_process`: after the player teleports
+// with the party (a map transition, a script's teleport, a random encounter),
+// each follower left on the player's tile steps to a free tile one to three
+// away; stock stacks the party on one tile (MODDING-NOTES 72). Draws on the
+// random generator.
+FEATURE(PARTY_SPREAD, "party spread", false)
+// Card AP1 (zsogg, 2026-11-12), the aptitude balance mod: a weapon at a creature
+// of the opposite lean never fails outright - a ranged one loses damage on a
+// curve (15% at strength 50, 35% at 100) and a magick one its magick too, a
+// melee one its item's bonuses; a magick user's critical-failure chance with
+// tech divides by 250, not 100; a tech user keeps half a magick item's power
+// at aptitude 0, falling evenly to none at -100; a
+// friendly spell at a tech target ignores worn resistance and never fails
+// outright (a heal heals less, a buff may fail, on the curve); the AI weighs a
+// damage spell by the damage resisted, not as a failure.
+FEATURE(APTITUDE_BALANCE, "aptitude balance", false)
 // Card FB1 (zsogg, 2026-11-02), read by `combat_attack` and `combat_dmg`:
 // floating text that tells a plain miss from a dodge ("Miss"), says when armor
 // took all or more than half of a weapon hit's normal damage ("Stopped",
