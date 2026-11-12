@@ -84,6 +84,8 @@ typedef struct WmapRndEncounterTableEntry {
     /* 0034 */ int max_trigger_cnt;
     /* 0038 */ int trigger_cnt;
     /* 003C */ int message_num;
+    // CE (card AP1): "Hostile: 1" on the entry's line.
+    bool ce_hostile;
 } WmapRndEncounterTableEntry;
 
 /**
@@ -490,6 +492,18 @@ bool wmap_rnd_mod_load(void)
             entry = &(table->entries[entry_idx]);
             wmap_rnd_encounter_table_entry_init(entry);
 
+            // CE (card AP1, zsogg 2026-11-12): a table may skip keys within its
+            // hundred. The original disables every encounter at a gap; two
+            // mods adding to one table cannot know each other's last key, so
+            // the Aptitude Balance mod adds at the top of the block whatever
+            // Encounter Variety adds below. `wmap_rnd_mes_count_entries`
+            // already counts the keys present, gaps or not. Stock data has
+            // none.
+            while (mes_file_entry.num < 50000 + 100 * table_idx + 99
+                && !mes_search(wmap_rnd_mes_file, &mes_file_entry)) {
+                mes_file_entry.num++;
+            }
+
             if (!mes_search(wmap_rnd_mes_file, &mes_file_entry)) {
                 tig_debug_printf("Error:  Random encounter table is discontinuous at line %d.\n", mes_file_entry.num);
                 tig_debug_println("Disabling random encounters because of bad message file.");
@@ -570,6 +584,15 @@ bool wmap_rnd_mod_load(void)
             // playthrough.
             if (tig_str_parse_named_value(&str, "TriggerCount:", &value)) {
                 entry->max_trigger_cnt = value;
+            }
+
+            // CE (card AP1, zsogg 2026-11-12): "Hostile: 1", last on the line,
+            // makes the entry's critters hostile on sight, so a prototype
+            // that is not - the Automaton - can make an encounter (the
+            // Aptitude Balance mod's tech encounters). Stock data never has
+            // it, and the original ignores it.
+            if (tig_str_parse_named_value(&str, "Hostile:", &value)) {
+                entry->ce_hostile = value != 0;
             }
             // FIX (porting bug #58): the original moves to the table's next
             // line here (0x558513-0x558522: the line number is incremented and
@@ -841,6 +864,7 @@ void wmap_rnd_encounter_table_entry_init(WmapRndEncounterTableEntry* entry)
     entry->global_flag_num = -1;
     entry->max_trigger_cnt = -1;
     entry->trigger_cnt = 0;
+    entry->ce_hostile = false;
 }
 
 /**
@@ -1443,6 +1467,10 @@ void wmap_rnd_encounter_spawn(WmapRndEncounterTableEntry* entry)
                 node = node->next;
             }
             object_list_destroy(&objects);
+
+            if (obj != OBJ_HANDLE_NULL && entry->ce_hostile) {
+                obj_field_int32_set(obj, OBJ_F_NPC_FLAGS, obj_field_int32_get(obj, OBJ_F_NPC_FLAGS) | ONF_KOS);
+            }
 
             // Orient the spawned monster to face toward the player's location.
             if (obj != OBJ_HANDLE_NULL) {
