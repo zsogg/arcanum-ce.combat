@@ -7460,6 +7460,9 @@ static struct {
     // The turn-based round it was made in, -1 before turn-based began: its
     // caster's turn cures it only in a later round (zsogg, 2026-10-11).
     int round;
+    // CE (follower casting, zsogg 2026-11-11): the blows it has landed that did
+    // damage; each lengthens a follower's hold on it.
+    int hits;
 } magictech_summons[MAGICTECH_SUMMONS_MAX];
 static int magictech_summons_next;
 static unsigned int magictech_summons_seq;
@@ -7512,6 +7515,7 @@ static void magictech_summons_record(int64_t summoner_obj, int64_t summon_obj)
     magictech_summons[slot].sick = false;
     magictech_summons[slot].made_ms = magictech_summons_clock_ms;
     magictech_summons[slot].round = combat_turn_based_is_active() ? combat_turn_based_turn_get() : -1;
+    magictech_summons[slot].hits = 0;
 
     // CE (magic, milestone MG-3): a summon made in combat - including its
     // opening - cannot act until its caster's next turn has come round, or in
@@ -7658,6 +7662,44 @@ static void magictech_summons_clear(void)
     memset(magictech_summons, 0, sizeof(magictech_summons));
     magictech_summons_next = 0;
     magictech_summons_seq = 0;
+}
+
+// CE (follower casting, zsogg 2026-11-11): a player's follower keeps a summon
+// at least 150 seconds, and 60 more for each blow it lands that does damage,
+// rather than dropping it as a fight ends and calling another next time.
+bool magictech_summon_hold_active(unsigned int age_ms, int hits)
+{
+    return age_ms < MAGICTECH_SUMMON_HOLD_MS + MAGICTECH_SUMMON_HOLD_PER_HIT_MS * (unsigned int)hits;
+}
+
+void magictech_summon_dealt_damage(int64_t summon_obj)
+{
+    int slot = magictech_summons_find(summon_obj);
+
+    if (slot != -1) {
+        magictech_summons[slot].hits++;
+    }
+}
+
+// Whether any living summon of `caster_obj` is still within its hold.
+bool magictech_summons_held(int64_t caster_obj)
+{
+    int slot;
+
+    if (caster_obj == OBJ_HANDLE_NULL) {
+        return false;
+    }
+
+    for (slot = 0; slot < MAGICTECH_SUMMONS_MAX; slot++) {
+        if (magictech_summons[slot].summoner == caster_obj
+            && magictech_summon_lives(magictech_summons[slot].summon)
+            && magictech_summon_hold_active(magictech_summons_clock_ms - magictech_summons[slot].made_ms,
+                magictech_summons[slot].hits)) {
+            return true;
+        }
+    }
+
+    return false;
 }
 
 int magictech_summons_alive(int64_t caster_obj)

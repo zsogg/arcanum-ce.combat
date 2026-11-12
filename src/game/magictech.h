@@ -481,6 +481,12 @@ void magictech_summon_ready(int64_t summon_obj, const char* reason);
 int64_t magictech_summon_summoner(int64_t summon_obj, unsigned int* seq);
 void magictech_summons_tick(int delta_ms);
 
+#define MAGICTECH_SUMMON_HOLD_MS 150000u
+#define MAGICTECH_SUMMON_HOLD_PER_HIT_MS 60000u
+bool magictech_summon_hold_active(unsigned int age_ms, int hits);
+void magictech_summon_dealt_damage(int64_t summon_obj);
+bool magictech_summons_held(int64_t caster_obj);
+
 // CE (magic, milestone MG-3): under `spell no stacking`, whether a cast of
 // `spell` by `caster_obj` at `target_obj` (or at the caster, when null) is
 // refused because the spells table marks it `NoStack` and a copy of it is

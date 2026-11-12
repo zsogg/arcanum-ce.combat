@@ -2499,6 +2499,12 @@ void combat_dmg(CombatContext* combat)
         }
 
         if (combat->attacker_obj != OBJ_HANDLE_NULL) {
+            // CE (follower casting, zsogg 2026-11-11): a summon's blow that did
+            // damage lengthens its summoner's hold on it.
+            if (dam > 0) {
+                magictech_summon_dealt_damage(combat->attacker_obj);
+            }
+
             mt_item_notify_parent_hit(combat->attacker_obj, combat, combat->target_obj);
 
             if ((combat->flags & 0x40000) != 0) {

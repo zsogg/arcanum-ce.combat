@@ -128,6 +128,32 @@ TEST(a_self_only_buff_stays_on_its_caster)
     CHECK(!magictech_tgt_reaches_others(TGT_NONE));
 }
 
+// zsogg, 2026-11-11: a follower keeps 20% of its fatigue after the cast, not
+// only before it, unless its leader is below 20% health. Elder Joachim, 202
+// fatigue at 36% (72), cannot pay a 50-point summon; at 120 he can.
+TEST(a_follower_keeps_its_reserve_after_the_cast)
+{
+    CHECK(ai_follower_reserve_refuses(72, 202, 50, 100, 20));
+    CHECK(!ai_follower_reserve_refuses(120, 202, 50, 100, 20));
+    CHECK(!ai_follower_reserve_refuses(91, 202, 50, 100, 20)); // 41 left: 20.3%
+    CHECK(ai_follower_reserve_refuses(90, 202, 50, 100, 20)); // 40 left: 19.8%
+    CHECK(!ai_follower_reserve_refuses(72, 202, 50, 19, 20)); // the leader is dying
+    CHECK(ai_follower_reserve_refuses(72, 202, 50, 20, 20));
+    CHECK(!ai_follower_reserve_refuses(10, 0, 50, 100, 20));
+}
+
+// zsogg, 2026-11-11: a follower's summon is held 150 seconds, 60 more for
+// each blow it lands that does damage.
+TEST(a_summon_is_held_150_seconds_and_60_more_a_damaging_blow)
+{
+    CHECK(magictech_summon_hold_active(0, 0));
+    CHECK(magictech_summon_hold_active(149999, 0));
+    CHECK(!magictech_summon_hold_active(150000, 0));
+    CHECK(magictech_summon_hold_active(209999, 1));
+    CHECK(!magictech_summon_hold_active(210000, 1));
+    CHECK(magictech_summon_hold_active(329999, 3));
+}
+
 void test_ai_follower_casting_suite(void)
 {
     RUN(a_leaderless_npc_has_the_stock_chance);
@@ -141,4 +167,6 @@ void test_ai_follower_casting_suite(void)
     RUN(a_spell_centred_on_its_caster_reaches_only_its_radius);
     RUN(a_buff_on_any_critter_can_go_on_the_player);
     RUN(a_self_only_buff_stays_on_its_caster);
+    RUN(a_follower_keeps_its_reserve_after_the_cast);
+    RUN(a_summon_is_held_150_seconds_and_60_more_a_damaging_blow);
 }

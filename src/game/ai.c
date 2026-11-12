@@ -946,9 +946,24 @@ bool ai_prepare_to_act(Ai* ai)
         if (leader_obj == OBJ_HANDLE_NULL
             || critter_is_dead(leader_obj)
             || !combat_critter_is_combat_mode_active(leader_obj)) {
-            npc_flags &= ~ONF_DEMAINTAIN_SPELLS;
-            obj_field_int32_set(ai->obj, OBJ_F_NPC_FLAGS, npc_flags);
-            magictech_demaintain_spells(ai->obj);
+            // CE (follower casting, zsogg 2026-11-11): a follower of the player
+            // keeps its maintained spells while one of its summons is held
+            // (`magictech_summons_held`); the flag stays, so they go when the
+            // hold ends and the leader is still out of combat. A new fight
+            // spends the old request instead (review 2026-11-11, finding 3).
+            bool held = feature_enabled(FEATURE_FOLLOWER_CASTING)
+                && leader_obj != OBJ_HANDLE_NULL
+                && !critter_is_dead(leader_obj)
+                && critter_pc_leader_get(ai->obj) != OBJ_HANDLE_NULL
+                && magictech_summons_held(ai->obj);
+
+            if (!held || (npc_flags & ONF_FIGHTING) != 0) {
+                npc_flags &= ~ONF_DEMAINTAIN_SPELLS;
+                obj_field_int32_set(ai->obj, OBJ_F_NPC_FLAGS, npc_flags);
+            }
+            if (!held) {
+                magictech_demaintain_spells(ai->obj);
+            }
         }
     }
 
@@ -4025,6 +4040,18 @@ bool ai_caster_centred_out_of_reach(int centred_radius, int dist)
 }
 
 // CE (combat AI, milestone AI-5): see `ai.h`.
+// CE (follower casting, zsogg 2026-11-11): whether a cast would leave a
+// follower of the player below `reserve_pct` of its fatigue; never while its
+// leader is below 20% health, when the reserve is there to be spent.
+bool ai_follower_reserve_refuses(int fatigue_now, int fatigue_max, int cost, int leader_hp_pct, int reserve_pct)
+{
+    if (leader_hp_pct < AI_FOLLOWER_RESERVE_LEADER_HP_PCT || fatigue_max <= 0) {
+        return false;
+    }
+
+    return (fatigue_now - cost) * 100 < reserve_pct * fatigue_max;
+}
+
 bool ai_cast_highest_applies(unsigned int npc_flags, bool player_follower, bool follower_casting)
 {
     return (npc_flags & ONF_CAST_HIGHEST) != 0 && !(follower_casting && player_follower);
@@ -6075,6 +6102,24 @@ int ai_check_use_spell(int64_t attacker_obj, int64_t item_obj, int64_t target_ob
 
             if (magictech_has_maintenance(spell) && !magictech_maintain_capacity_remaining(attacker_obj)) {
                 return 6;
+            }
+
+            // CE (follower casting, zsogg 2026-11-11): a follower of the player
+            // is with it all the time, so it keeps the floor after the cast,
+            // not only before it, unless its leader is below 20% health. An
+            // emergency heal (White Necromancy on a patient at 30% or below,
+            // AI-8's line) is not held back (review 2026-11-11, finding 1).
+            if (feature_enabled(FEATURE_FOLLOWER_CASTING)
+                && critter_pc_leader_get(attacker_obj) != OBJ_HANDLE_NULL
+                && !(COLLEGE_FROM_SPELL(spell) == COLLEGE_NECROMANTIC_WHITE
+                    && target_obj != OBJ_HANDLE_NULL
+                    && ai_object_hp_ratio(target_obj) <= 30)
+                && ai_follower_reserve_refuses(critter_fatigue_current(attacker_obj),
+                    critter_fatigue_max(attacker_obj),
+                    spell_cast_cost(spell, attacker_obj),
+                    ai_object_hp_ratio(critter_pc_leader_get(attacker_obj)),
+                    fatigue_cfg->min_cast_pct_leaderless)) {
+                return 2;
             }
         }
 

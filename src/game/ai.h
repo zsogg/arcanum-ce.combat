@@ -421,6 +421,8 @@ int ai_judgement_pick(AiJudgedSpell* cands, int cnt, int fatigue_left, int ap_le
 // highest spell: always in stock; under `follower casting`, not for a follower
 // of the player.
 bool ai_cast_highest_applies(unsigned int npc_flags, bool player_follower, bool follower_casting);
+#define AI_FOLLOWER_RESERVE_LEADER_HP_PCT 20
+bool ai_follower_reserve_refuses(int fatigue_now, int fatigue_max, int cost, int leader_hp_pct, int reserve_pct);
 // CE: AI-6, `follower healing`. The order a follower of the player tries its
 // patients in: by health percentage, worst first, ties in stock order (itself,
 // its leader, then the other followers). Pure; `order` gets `count` indices.
