@@ -132,7 +132,7 @@ typedef struct WeaponRule {
     // cumulative), each unset falling back the same way, on top of CritChance.
     // SkillDamage: percent of the Firearms level added to each shot's normal
     // damage, rounded up - the gunner's Strength bonus. FreeLoad: percent
-    // chance that a paid reload of one shot loads a second for nothing.
+    // chance that the shot a Reload command starts loads at no cost.
     int fire_ap_expert;
     int fire_ap_master;
     int load_ap_expert;

@@ -329,8 +329,8 @@ FEATURE(NPC_PATH_BUDGET, "npc path budget", false)
 // a gun's `rules/weapons.mes` Expert and Master firing and loading costs, its
 // critical-chance points by training tier (`skill.c`), SkillDamage - percent
 // of the Firearms level added to each shot's normal damage, rounded up
-// (`item_weapon_damage`) - and FreeLoad, a paid one-shot reload's chance to
-// load a second for nothing (`reload.c`).
+// (`item_weapon_damage`) - and FreeLoad, the chance that the shot a Reload
+// command starts loads at no cost (`reload.c`).
 FEATURE(FIREARM_EXPERTISE, "firearm expertise", false)
 
 // clang-format on

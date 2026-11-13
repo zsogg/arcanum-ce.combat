@@ -506,30 +506,28 @@ static bool reload_clear_command(int64_t critter_obj, int64_t weapon_obj)
     return true;
 }
 
-// CE (`firearm expertise`; zsogg, 2026-11-12): a paid reload of one shot. A
-// gun with a FreeLoad chance - the pistols' 15 - then loads one more shot for
-// nothing on that roll, if there is room and ammunition. Rolled once a paid
-// shot, so pressing Q again cannot re-roll it.
-static void reload_load_paid(int64_t critter_obj, int64_t weapon_obj)
+// CE (`firearm expertise`; zsogg, 2026-11-12, as he worded it: "a 15% chance
+// to reload a single round for 0 AP"): a gun with a FreeLoad chance - the
+// pistols' 15 - loads the shot about to be paid for at no cost on that roll.
+// Rolled only where the Reload command would start paying for a new shot, so
+// pressing Q again cannot re-roll it.
+static bool reload_free_round(int64_t critter_obj, int64_t weapon_obj, int progress)
 {
     int chance;
     char text[64];
 
-    reload_load_one(critter_obj, weapon_obj, false);
-
     chance = weapon_rules_free_load(weapon_obj);
-    if (chance <= 0 || reload_rule_for(weapon_obj)->whole_magazine == 1) {
-        return;
-    }
-    if (random_between(1, 100) > chance || !reload_can_load_quiet(critter_obj, weapon_obj)) {
-        return;
+    if (chance <= 0 || progress > 0 || reload_rule_for(weapon_obj)->whole_magazine == 1
+        || random_between(1, 100) > chance) {
+        return false;
     }
 
-    tig_debug_printf("reload: quick reload, a second shot for 0 AP\n");
+    tig_debug_printf("reload: quick reload, a shot for 0 AP\n");
     reload_load_one(critter_obj, weapon_obj, true);
     snprintf(text, sizeof(text), "Quick reload %d/%d",
         reload_loaded_get(weapon_obj), reload_rule_for(weapon_obj)->capacity);
     reload_say(critter_obj, text);
+    return true;
 }
 
 bool reload_command(int64_t critter_obj)
@@ -564,6 +562,9 @@ bool reload_command(int64_t critter_obj)
             reload_say(critter_obj, "No action points");
             return false;
         }
+        if (reload_free_round(critter_obj, weapon_obj, progress)) {
+            return true;
+        }
         if (work.spent > 0 && !combat_consume_action_points(critter_obj, work.spent)) {
             return false;
         }
@@ -576,7 +577,7 @@ bool reload_command(int64_t critter_obj)
                 work.progress, cost);
             return true;
         }
-        reload_load_paid(critter_obj, weapon_obj);
+        reload_load_one(critter_obj, weapon_obj, false);
         return true;
     }
 
@@ -589,6 +590,10 @@ bool reload_command(int64_t critter_obj)
     }
 
     if (rt_budget_active()) {
+        if (!rt_budget_standing_action_pending(critter_obj)
+            && reload_free_round(critter_obj, weapon_obj, progress)) {
+            return true;
+        }
         if (!rt_budget_begin_standing_action(critter_obj, RT_BUDGET_RELOAD, cost - progress)) {
             return false;
         }
@@ -600,7 +605,7 @@ bool reload_command(int64_t critter_obj)
 
     // Real time without the budget: stock real time gives no action any time,
     // and a reload is no different.
-    reload_load_paid(critter_obj, weapon_obj);
+    reload_load_one(critter_obj, weapon_obj, false);
     return true;
 }
 
@@ -633,7 +638,7 @@ void reload_standing_done(int64_t critter_obj, bool completed)
         return;
     }
 
-    reload_load_paid(critter_obj, weapon_obj);
+    reload_load_one(critter_obj, weapon_obj, false);
 }
 
 // ---------------------------------------------------------------------------
