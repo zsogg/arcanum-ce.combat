@@ -235,6 +235,47 @@ TEST(the_reserve_sits_on_the_fatigue_floor)
     CHECK_INT(ai_judgement_pick(cands, 2, 90 - floor_pts, -1, &reserve), 1);
 }
 
+// zsogg, 2026-11-12: a summon is not held to the reserve. Ember, 108 fatigue,
+// Fireflash at 15 and Call Fire Elemental at 50: above the floor's 21 she has
+// 87, and the reserve of 45 refused the summon (87 - 50 < 45); she never
+// summoned.
+TEST(a_summon_is_not_held_to_the_reserve)
+{
+    AiJudgedSpell cands[2];
+    int reserve;
+
+    cands[0] = judged(150, 1000, 15, 4, 10, true); // Fireflash
+    cands[1] = judged(960, 1600, 50, 6, 10, false); // Call Fire Elemental
+    CHECK_INT(ai_judgement_pick(cands, 2, 108 - 21, -1, &reserve), 0);
+    CHECK_INT(cands[1].code, 21);
+
+    cands[0] = judged(150, 1000, 15, 4, 10, true);
+    cands[1] = judged(960, 1600, 50, 6, 10, false);
+    cands[1].summon = true;
+    CHECK_INT(ai_judgement_pick(cands, 2, 108 - 21, -1, &reserve), 1);
+}
+
+TEST(an_outscored_summon_is_found_for_the_override)
+{
+    AiJudgedSpell cands[3];
+
+    cands[0] = judged(150, 1000, 15, 4, 10, true); // Fireflash
+    cands[1] = judged(96, 160, 50, 6, 10, false); // Call Fire Elemental
+    cands[1].summon = true;
+    cands[2] = judged(20, 200, 10, 5, 10, false); // a buff
+    CHECK_INT(ai_judgement_pick(cands, 3, 200, -1, NULL), 0);
+    CHECK_INT(cands[1].code, 20);
+    CHECK_INT(ai_judgement_outscored_summon(cands, 3, 0), 1);
+
+    // Refused for another reason, it is not taken.
+    cands[1].code = 22;
+    CHECK_INT(ai_judgement_outscored_summon(cands, 3, 0), -1);
+    // Nor when the summon was chosen already, or nothing was.
+    cands[1].code = 0;
+    CHECK_INT(ai_judgement_outscored_summon(cands, 3, 1), -1);
+    CHECK_INT(ai_judgement_outscored_summon(cands, 3, -1), -1);
+}
+
 TEST(an_attack_under_its_floor_keeps_no_reserve)
 {
     AiJudgedSpell cands[2];
@@ -355,6 +396,8 @@ TEST(a_spell_s_stun_is_found)
 void test_ai_caster_judgement_suite(void)
 {
     RUN(the_reserve_sits_on_the_fatigue_floor);
+    RUN(a_summon_is_not_held_to_the_reserve);
+    RUN(an_outscored_summon_is_found_for_the_override);
     RUN(damage_is_worth_what_the_target_has_left_and_a_kill_more);
     RUN(a_disabling_spell_is_worth_half_its_target_by_its_ai_value);
     RUN(a_summon_is_worth_more_as_the_enemy_closes);

@@ -3512,13 +3512,22 @@ bool ai_in_fight(int64_t obj)
 // refusal is about to happen, and remembered for the rest of the turn. Only
 // in a fight: turn-based, combat mode, or the NPC's AI fighting.
 #define AI_DESPERATION_CHANCE 40
+// zsogg, 2026-11-12: the chance an outscored summon is cast by a caster with
+// none alive, once a turn.
+#define AI_JUDGEMENT_SUMMON_OVERRIDE_PCT 20
 // Card HW1 (zsogg, 2026-11-11): 1024, sized for a crowd, not a party (was 64).
 #define AI_DESPERATION_MAX 1024
+
+// No turn yet: a slot newly taken rolls both its chances afresh.
+#define AI_MEMO_NO_KEY INT_MIN
 
 static struct {
     int64_t obj;
     int key;
     bool desperate;
+    // The summon override's own once-per-turn roll (zsogg, 2026-11-12).
+    int summon_key;
+    bool summon;
 } ai_desperation[AI_DESPERATION_MAX];
 
 static int ai_desperation_key(void)
@@ -3587,12 +3596,41 @@ bool ai_desperate_now(int64_t obj)
     if (slot < 0) {
         slot = 0;
     }
-    if (ai_desperation[slot].obj != obj || ai_desperation[slot].key != key) {
+    if (ai_desperation[slot].obj != obj) {
         ai_desperation[slot].obj = obj;
+        ai_desperation[slot].key = AI_MEMO_NO_KEY;
+        ai_desperation[slot].summon_key = AI_MEMO_NO_KEY;
+    }
+    if (ai_desperation[slot].key != key) {
         ai_desperation[slot].key = key;
         ai_desperation[slot].desperate = random_between(1, 100) <= AI_DESPERATION_CHANCE;
     }
     return ai_desperation[slot].desperate;
+}
+
+// Whether an outscored summon is cast in place of the pick: rolled once a
+// turn, the turn `ai_desperation_key`'s, and kept for the rest of it (zsogg,
+// 2026-11-12: "at most once per turn, not per decision").
+static bool ai_summon_override_now(int64_t obj)
+{
+    int slot;
+    int key;
+
+    key = ai_desperation_key();
+    slot = ai_desperation_slot(obj);
+    if (slot < 0) {
+        slot = 0;
+    }
+    if (ai_desperation[slot].obj != obj) {
+        ai_desperation[slot].obj = obj;
+        ai_desperation[slot].key = AI_MEMO_NO_KEY;
+        ai_desperation[slot].summon_key = AI_MEMO_NO_KEY;
+    }
+    if (ai_desperation[slot].summon_key != key) {
+        ai_desperation[slot].summon_key = key;
+        ai_desperation[slot].summon = random_between(1, 100) <= AI_JUDGEMENT_SUMMON_OVERRIDE_PCT;
+    }
+    return ai_desperation[slot].summon;
 }
 
 // Whether `obj` is desperate this turn by a roll already made - for the
@@ -7611,7 +7649,13 @@ int ai_judgement_pick(AiJudgedSpell* cands, int cnt, int fatigue_left, int ap_le
         }
         if (c->value < c->floor) {
             c->code = 23;
-        } else if (!c->attack && ai_judgement_budget_refuses(fatigue_left, c->cost, reserve)) {
+        } else if (!c->attack
+            && !c->summon
+            && ai_judgement_budget_refuses(fatigue_left, c->cost, reserve)) {
+            // Not a summon: it is the caster's damage too. Since the reserve
+            // sat on the fatigue floor a 50-point summon needed 116 fatigue
+            // of a caster with three Fireflashes, and a follower of 108 never
+            // summoned (zsogg's playtest; exempt, zsogg 2026-11-12).
             c->code = 21;
         } else if (ap_left >= 0
             && best >= 0
@@ -7632,6 +7676,24 @@ int ai_judgement_pick(AiJudgedSpell* cands, int cnt, int fatigue_left, int ap_le
         *reserve_ptr = reserve;
     }
     return chosen;
+}
+
+int ai_judgement_outscored_summon(const AiJudgedSpell* cands, int cnt, int chosen)
+{
+    int best = -1;
+    int idx;
+
+    if (chosen < 0 || cands[chosen].summon) {
+        return -1;
+    }
+    for (idx = 0; idx < cnt; idx++) {
+        if (cands[idx].summon
+            && cands[idx].code == 20
+            && (best < 0 || cands[idx].score > cands[best].score)) {
+            best = idx;
+        }
+    }
+    return best;
 }
 
 // An enemy, for the weighing: on the target's side by kin or by whom it is
@@ -7830,6 +7892,7 @@ static int ai_judgement_value(Ai* ai, ObjectList* critters, int action, AiJudged
     int land;
 
     if (action == MAGICTECH_AI_ACTION_SUMMON) {
+        c->summon = true;
         return ai_judgement_summon_value(magictech_ai_value(c->spell, action), nearest_enemy);
     }
 
@@ -7936,6 +7999,7 @@ static bool ai_choose_magictech_judged(Ai* ai)
     int64_t protect_obj;
     int nearest_enemy = INT_MAX;
     int chosen;
+    int summon;
     int reserve;
     int floor_pts;
     int64_t leader_obj;
@@ -8036,6 +8100,7 @@ static bool ai_choose_magictech_judged(Ai* ai)
             c->spell = entry->spell;
             c->item_obj = entry->item_obj;
             c->attack = false;
+            c->summon = false;
             c->value = 0;
             c->score = 0;
             c->cost = 0;
@@ -8112,6 +8177,19 @@ static bool ai_choose_magictech_judged(Ai* ai)
     chosen = ai_judgement_pick(cands, cnt, critter_fatigue_current(ai->obj) - floor_pts,
         turn_based ? combat_action_points_of(ai->obj) : -1, &reserve);
     ai_judgement_reserve_note(ai->obj, reserve > 0 ? reserve + floor_pts : 0);
+
+    // A summon scores at most 160 and Fireflash ~200 a target, so a caster
+    // with a damage spell never summoned: with none of its summons alive, 20
+    // in 100 it summons anyway, rolled once a turn (zsogg, 2026-11-12). Rolled
+    // only when one was outscored. The release rules are unchanged.
+    summon = ai_judgement_outscored_summon(cands, cnt, chosen);
+    if (summon >= 0
+        && magictech_summons_alive(ai->obj) == 0
+        && ai_summon_override_now(ai->obj)) {
+        cands[chosen].code = 20;
+        cands[summon].code = 0;
+        chosen = summon;
+    }
 
     for (idx = 0; idx < cnt; idx++) {
         if (ai->considered_count < COMBAT_OBSERVER_AI_CONSIDERED_MAX) {

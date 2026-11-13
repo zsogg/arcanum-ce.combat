@@ -413,14 +413,20 @@ typedef struct AiJudgedSpell {
     // Rule 1's floor for it.
     int floor;
     bool attack;
+    // Not held to rule 2's reserve, as an attack is not (zsogg, 2026-11-12).
+    bool summon;
 } AiJudgedSpell;
 // CE: AI-8 rules 1, 2 and 4 over the weighed spells, in place: under its
 // floor 23; not an attack and into the reserve 21; in a turn-based turn
 // (`ap_left` >= 0, -1 otherwise) leaving the best attack unaffordable 22;
 // the best score chosen and the rest 20. The reserve is three casts of the
-// best attack that clears its floor, into `*reserve_ptr`. Returns the chosen
+// best attack that clears its floor, into `*reserve_ptr`; a summon is not
+// held to it. Returns the chosen
 // index, -1 for none. Pure.
 int ai_judgement_pick(AiJudgedSpell* cands, int cnt, int fatigue_left, int ap_left, int* reserve_ptr);
+// CE: after `ai_judgement_pick`, the best-scoring summon it refused only as
+// outscored (code 20) when `chosen` is not a summon; -1 for none. Pure.
+int ai_judgement_outscored_summon(const AiJudgedSpell* cands, int cnt, int chosen);
 // CE: AI-5. Whether `ONF_CAST_HIGHEST` holds a critter to each college's
 // highest spell: always in stock; under `follower casting`, not for a follower
 // of the player.
