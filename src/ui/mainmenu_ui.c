@@ -1282,11 +1282,47 @@ static struct {
  */
 static int mainmenu_ui_race_body_type(int race)
 {
+    if (uap_race_mod_enabled()) {
+        return proto_race_mod_body_type(race);
+    }
+
     if (uap_fixes_enabled() && race == RACE_HALF_ELF) {
         return TIG_ART_CRITTER_BODY_TYPE_ELF;
     }
 
     return mainmenu_ui_race_info[race].body_type;
+}
+
+/**
+ * Whether a new character of `race` can be female.
+ *
+ * UAP (0x5C5178-0x5C51AB, Race Mod): the table becomes 11 flags, one per
+ * race, the body types moving to `proto_race_mod_body_type`. A Dark Elf can
+ * be female; an Ogre or an Orc cannot.
+ */
+static bool mainmenu_ui_race_available_for_female(int race)
+{
+    static const bool race_mod_female[RACE_COUNT] = {
+        true, false, true, true, false, false, true, false, true, false, false
+    };
+
+    if (uap_race_mod_enabled()) {
+        return race_mod_female[race];
+    }
+
+    return mainmenu_ui_race_info[race].available_for_female;
+}
+
+/**
+ * The last race the race arrows reach.
+ *
+ * UAP (0x5454ED, 0x5455E9, Race Mod): the Orc instead of the Half-Ogre. The
+ * arrows' other bounds move with it: the binary's `race < 7`, `race >= 8` and
+ * the table-end comparisons become 10, 11 and the end of the 11 flags.
+ */
+static int mainmenu_ui_race_last(void)
+{
+    return uap_race_mod_enabled() ? RACE_ORC : RACE_HALF_OGRE;
 }
 
 // 0x5C51B0
@@ -4675,7 +4711,7 @@ bool mainmenu_ui_new_char_set_gender(int64_t obj, int gender)
 
     race = stat_level_get(obj, STAT_RACE);
     if (gender == GENDER_FEMALE
-        && !mainmenu_ui_race_info[race].available_for_female) {
+        && !mainmenu_ui_race_available_for_female(race)) {
         return false;
     }
 
@@ -4711,13 +4747,13 @@ bool mainmenu_ui_new_char_prev_race(int64_t obj)
         if (stat_level_get(obj, STAT_GENDER) == GENDER_FEMALE) {
             do {
                 race--;
-            } while (race >= 0 && !mainmenu_ui_race_info[race].available_for_female);
+            } while (race >= 0 && !mainmenu_ui_race_available_for_female(race));
 
             if (race < 0) {
                 return false;
             }
 
-            if (!mainmenu_ui_race_info[race].available_for_female) {
+            if (!mainmenu_ui_race_available_for_female(race)) {
                 return false;
             }
         } else {
@@ -4728,9 +4764,9 @@ bool mainmenu_ui_new_char_prev_race(int64_t obj)
             return false;
         }
     } else {
-        race = 7;
+        race = mainmenu_ui_race_last();
         if (stat_level_get(obj, STAT_GENDER) == GENDER_FEMALE) {
-            while (race >= 0 && !mainmenu_ui_race_info[race].available_for_female) {
+            while (race >= 0 && !mainmenu_ui_race_available_for_female(race)) {
                 race--;
             }
 
@@ -4738,7 +4774,7 @@ bool mainmenu_ui_new_char_prev_race(int64_t obj)
                 return false;
             }
 
-            if (!mainmenu_ui_race_info[race].available_for_female) {
+            if (!mainmenu_ui_race_available_for_female(race)) {
                 return false;
             }
         }
@@ -4758,7 +4794,7 @@ void mainmenu_ui_new_char_set_race(int64_t obj, int race)
 
     gender = stat_level_get(obj, STAT_GENDER);
     if (gender == GENDER_FEMALE) {
-        gender = !mainmenu_ui_race_info[race].available_for_female
+        gender = !mainmenu_ui_race_available_for_female(race)
             ? GENDER_MALE
             : GENDER_FEMALE;
     }
@@ -4777,18 +4813,18 @@ bool mainmenu_ui_new_char_next_race(int64_t obj)
     int race;
 
     race = stat_level_get(obj, STAT_RACE);
-    if (race < 7) {
+    if (race < mainmenu_ui_race_last()) {
         if (stat_level_get(obj, STAT_GENDER) == GENDER_FEMALE) {
             do {
                 race++;
-            } while (race < 7 && !mainmenu_ui_race_info[race].available_for_female);
+            } while (race < mainmenu_ui_race_last() && !mainmenu_ui_race_available_for_female(race));
 
-            if (race >= 8) {
-                // NOTE: verified against 0x545615-0x545618 - the binary contains this dead race>=8 check.
+            if (race > mainmenu_ui_race_last()) {
+                // NOTE: verified against 0x545615-0x545618 - the binary contains this dead race>=8 check (race>=11 under the Race Mod).
                 return false;
             }
 
-            if (!mainmenu_ui_race_info[race].available_for_female) {
+            if (!mainmenu_ui_race_available_for_female(race)) {
                 race = RACE_HUMAN;
             }
         } else {
@@ -4797,25 +4833,25 @@ bool mainmenu_ui_new_char_next_race(int64_t obj)
     } else {
         race = RACE_HUMAN;
         if (stat_level_get(obj, STAT_GENDER) == GENDER_FEMALE) {
-            // FIX (porting bug #207): the search stops at the seventh race
+            // FIX (porting bug #207): the search stops at the last race
             // (0x545651 `cmp eax,0x5C51AC; jl`), as the branch above does; CE's
             // loop had no bound and would run off the table.
-            while (race < 7 && !mainmenu_ui_race_info[race].available_for_female) {
+            while (race < mainmenu_ui_race_last() && !mainmenu_ui_race_available_for_female(race)) {
                 race++;
             }
 
-            if (race >= 8) {
-                // NOTE: verified against 0x545658-0x54565B - the binary contains this dead race>=8 check.
+            if (race > mainmenu_ui_race_last()) {
+                // NOTE: verified against 0x545658-0x54565B - the binary contains this dead race>=8 check (race>=11 under the Race Mod).
                 return false;
             }
 
-            if (!mainmenu_ui_race_info[race].available_for_female) {
+            if (!mainmenu_ui_race_available_for_female(race)) {
                 return false;
             }
         }
     }
 
-    if (race < 8) {
+    if (race <= mainmenu_ui_race_last()) {
         background_clear(obj);
         mainmenu_ui_new_char_set_race(obj, race);
         return true;
@@ -5003,7 +5039,12 @@ bool mainmenu_ui_pregen_char_execute(int btn)
 
     for (index = 0; index < mainmenu_ui_pregen_char_cnt - 1; index++) {
         mes_file_entry.num = 551 + index;
-        mes_get_msg(mainmenu_ui_mainmenu_mes_file, &mes_file_entry);
+        // FIX (card RM1): a character with no flag line sets no flag. The
+        // Race Mod's `mainmenu.mes` has no {563}-{565} for its three, and
+        // the missing-line text parsed as flag 0. Stock has every line.
+        if (!mes_search(mainmenu_ui_mainmenu_mes_file, &mes_file_entry)) {
+            continue;
+        }
         flag = atoi(mes_file_entry.str);
         // FIX (porting bug #252): flag 0 is a flag too (0x545c06 jl); CE
         // skipped it. Latent: the shipped list names flags 2350-2361.
@@ -6777,7 +6818,9 @@ void mainmenu_ui_female_chars_probe(void)
         if (obj != OBJ_HANDLE_NULL
             && tig_art_exists(obj_field_int32_get(obj, OBJ_F_CURRENT_AID)) == TIG_OK) {
             mainmenu_ui_female_chars_missing = false;
-            mainmenu_ui_pregen_char_cnt = 13;
+            // UAP (0x549AE1, Race Mod): three more, from `ArcanumXRaces.dat`
+            // (descriptions 16079-16081).
+            mainmenu_ui_pregen_char_cnt = uap_race_mod_enabled() ? 16 : 13;
             mainmenu_ui_new_char_window_info.num_buttons = 10;
         } else {
             mainmenu_ui_female_chars_missing = true;

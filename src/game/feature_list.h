@@ -91,6 +91,10 @@ FEATURE(UAP_LEVEL_CAP_100, "uap level cap 100", false)
 FEATURE(UAP_MASTER_EDUCATOR, "uap master educator", false)
 FEATURE(UAP_NO_XP_PER_HIT, "uap no xp per hit", false)
 FEATURE(UAP_NO_COMBAT_MUSIC, "uap no combat music", false)
+// CE (card RM1): UAP's optional Race Mod, Dark Elf, Ogre and Orc player
+// characters. Takes effect only with `uap fixes` on and `ArcanumXRaces.dat`
+// mounted; ask `uap_race_mod_enabled`, not this flag.
+FEATURE(UAP_RACE_MOD, "uap race mod", false)
 FEATURE(CE_SAVE_FOLDER, "ce save folder", false)
 FEATURE(LOG_FILE, "log file", false)
 // The Followers mod (card X9; zsogg, 2026-10-19), read by `ai_check_follow`

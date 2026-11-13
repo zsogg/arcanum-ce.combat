@@ -9,8 +9,12 @@
 #include "game/roof.h"
 
 static void uap_fixes_changed(void);
+static void uap_race_mod_changed(void);
 
 static UapDragItemQuery uap_drag_item_query;
+
+// Whether `ArcanumXRaces.dat` is mounted (card RM1).
+static bool uap_race_mod_archive;
 
 void uap_init(void)
 {
@@ -24,12 +28,32 @@ void uap_init(void)
     // always made -- and it is what pushes the switch down to tig at the same
     // point in init as before.
     feature_on_change(FEATURE_UAP_FIXES, uap_fixes_changed);
+    feature_on_change(FEATURE_UAP_RACE_MOD, uap_race_mod_changed);
     uap_fixes_changed();
 }
 
 bool uap_fixes_enabled(void)
 {
     return feature_enabled(FEATURE_UAP_FIXES);
+}
+
+bool uap_race_mod_enabled(void)
+{
+    return uap_race_mod_archive
+        && feature_enabled(FEATURE_UAP_RACE_MOD)
+        && feature_enabled(FEATURE_UAP_FIXES);
+}
+
+void uap_race_mod_archive_set(bool mounted)
+{
+    uap_race_mod_archive = mounted;
+    uap_race_mod_changed();
+}
+
+void uap_race_mod_changed(void)
+{
+    // TIG cannot ask either: the two art setters change under the Race Mod.
+    tig_art_uap_race_mod_set(uap_race_mod_enabled());
 }
 
 void uap_drag_item_query_set(UapDragItemQuery query)
@@ -67,4 +91,7 @@ void uap_fixes_changed(void)
     // blended as under UAP's 3D path, or the 1.0.7.4 checkerboard.
     object_transparency_update();
     roof_transparency_update();
+
+    // The Race Mod depends on this switch too.
+    uap_race_mod_changed();
 }

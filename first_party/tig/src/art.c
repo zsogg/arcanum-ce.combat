@@ -413,6 +413,12 @@ static bool tig_art_mirroring_enabled = true;
  */
 static bool tig_art_uap_fixes;
 
+/**
+ * UAP's optional Race Mod (card RM1), off unless the game turns it on with
+ * `tig_art_uap_race_mod_set`. It changes the body-type and gender setters.
+ */
+static bool tig_art_uap_race_mod;
+
 // 0x5BEA18
 static int dword_5BEA18[4] = {
     6,
@@ -585,6 +591,16 @@ void tig_art_uap_fixes_set(bool enabled)
 {
     tig_art_uap_fixes = enabled;
     tig_art_mirroring_enabled = !enabled;
+}
+
+/**
+ * Turns UAP's Race Mod art behaviour on or off (card RM1). The game decides
+ * when it is in effect (`uap_race_mod_enabled`). Not part of the original
+ * engine.
+ */
+void tig_art_uap_race_mod_set(bool enabled)
+{
+    tig_art_uap_race_mod = enabled;
 }
 
 /**
@@ -2169,7 +2185,18 @@ tig_art_id_t tig_art_critter_id_body_type_set(tig_art_id_t art_id, int value)
     case TIG_ART_TYPE_CRITTER:
     case TIG_ART_TYPE_MONSTER:
     case TIG_ART_TYPE_UNIQUE_NPC:
-        if (value >= TIG_ART_CRITTER_BODY_TYPE_COUNT) {
+        // UAP (0x503EF9, Race Mod, card RM1): the current art is not kept.
+        // Body type 5 (`TIG_ART_CRITTER_BODY_TYPE_UAP_ORC`, the Race Mod's
+        // Orc) gives the orc monster as stock orc NPCs are made: specie 2,
+        // facing 4, the rest 0. Any other body type gives a male critter
+        // facing 4, the rest 0, with that body type. Only character creation
+        // reaches this in play (`object_set_gender_and_race`).
+        if (tig_art_uap_race_mod) {
+            if (value >= TIG_ART_CRITTER_BODY_TYPE_COUNT) {
+                return 0xC1002000;
+            }
+            art_id = 0x28002000;
+        } else if (value >= TIG_ART_CRITTER_BODY_TYPE_COUNT) {
             tig_debug_println("Range exceeded in art set.");
             value = 0;
         }
@@ -2234,9 +2261,16 @@ int tig_art_critter_id_gender_get(tig_art_id_t art_id)
 tig_art_id_t tig_art_critter_id_gender_set(tig_art_id_t art_id, int value)
 {
     switch (tig_art_type(art_id)) {
-    case TIG_ART_TYPE_CRITTER:
     case TIG_ART_TYPE_MONSTER:
     case TIG_ART_TYPE_UNIQUE_NPC:
+        // UAP (0x503FF7, 0x503FFC, Race Mod, card RM1): monster and unique
+        // NPC art keep their bits. On monster art, bit 27 is the top bit of
+        // the specie, so a male Orc player would otherwise become specie 18.
+        if (tig_art_uap_race_mod) {
+            return art_id;
+        }
+        // fall through
+    case TIG_ART_TYPE_CRITTER:
         // FIX (porting bug #353): the bound is unsigned (0x504005 `cmp ecx,2;
         // jb`), so a negative gender is reset too; CE's signed test let it
         // through to overwrite the type bits.

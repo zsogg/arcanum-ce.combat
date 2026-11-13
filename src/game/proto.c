@@ -191,6 +191,24 @@ static int race_to_body_type_tbl[RACE_COUNT] = {
     /*       RACE_ORC */ TIG_ART_CRITTER_BODY_TYPE_HUMAN,
 };
 
+/**
+ * The body type UAP's Race Mod gives a new character of `race` (card RM1).
+ *
+ * UAP (0x5453DD, Race Mod): character creation reads this table instead of
+ * its own. UAP (0x5B38C4): the Orc's entry becomes 5, which
+ * `tig_art_critter_id_body_type_set` turns into the orc monster art. Orc NPCs
+ * are made with monster art directly (`proto_load_critter_stats`) and never
+ * read that entry.
+ */
+int proto_race_mod_body_type(int race)
+{
+    if (race == RACE_ORC) {
+        return TIG_ART_CRITTER_BODY_TYPE_UAP_ORC;
+    }
+
+    return race_to_body_type_tbl[race];
+}
+
 // 0x5B38C8
 static const char* proto_field_names[] = {
     /*             PROTO_F_DESCRIPTION */ "Description",

@@ -2124,14 +2124,20 @@ void gamelib_load_data(void)
 {
     TigFileList file_list;
     unsigned int index;
+    bool race_mod_archive = false;
 
     tig_file_list_create(&file_list, "arcanum*.dat");
 
     for (index = 0; index < file_list.count; index++) {
-        tig_file_repository_add(file_list.entries[index].path);
+        // CE (card RM1): the Race Mod takes effect only with its archive.
+        if (tig_file_repository_add(file_list.entries[index].path)
+            && tig_strcasecmp(file_list.entries[index].path, "ArcanumXRaces.dat") == 0) {
+            race_mod_archive = true;
+        }
     }
 
     tig_file_list_destroy(&file_list);
+    uap_race_mod_archive_set(race_mod_archive);
 
     tig_file_mkdir("data");
     tig_file_repository_add("data");

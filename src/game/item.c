@@ -33,6 +33,7 @@
 #include "game/tf.h"
 #include "game/timeevent.h"
 #include "game/trap.h"
+#include "game/uap.h"
 #include "game/ui.h"
 #include "game/weapon_rules.h"
 
@@ -286,6 +287,14 @@ void item_generate_inventory(int64_t critter_obj)
                     proto_obj = proto_get_by_description(BP_SMALL_JACKET);
                     break;
                 case OARF_SIZE_MEDIUM:
+                    // UAP (0x4611AC, Race Mod): "Orcs are given Barbarian
+                    // Clothes during character creation, since they can't
+                    // wear suits." Any medium-size character that cannot wear
+                    // its starting clothes gets them.
+                    if (uap_race_mod_enabled()) {
+                        proto_obj = proto_get_by_description(BP_RED_BARBARIAN_CLOTHES);
+                        break;
+                    }
                     // "Jacket"
                     proto_obj = proto_get_by_description(BP_JACKET);
                     break;

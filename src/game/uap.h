@@ -22,6 +22,22 @@ void uap_init(void);
 bool uap_fixes_enabled(void);
 
 /**
+ * Whether UAP's optional Race Mod is in effect (card RM1): the `uap race mod`
+ * switch, with `uap fixes` on as well and `ArcanumXRaces.dat` mounted.
+ *
+ * Without that archive the three races have no names, portraits, backgrounds
+ * or race effects, so the switch alone changes nothing. It needs `uap fixes`
+ * because the Race Mod exe is UAP base plus the Race Mod.
+ */
+bool uap_race_mod_enabled(void);
+
+/**
+ * Records whether `ArcanumXRaces.dat` is mounted. `gamelib_load_data` calls
+ * it once the archives are mounted, which is after `uap_init`.
+ */
+void uap_race_mod_archive_set(bool mounted);
+
+/**
  * Returns the object handle of the item currently being dragged in the
  * inventory UI, or `OBJ_HANDLE_NULL` if none is.
  */

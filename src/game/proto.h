@@ -9,6 +9,7 @@ void proto_exit(void);
 int64_t proto_get_first_by_type(ObjectType object_type);
 int64_t proto_get_by_description(int description);
 bool proto_is_valid(int description);
+int proto_race_mod_body_type(int race);
 int proto_get_description(int64_t obj);
 
 #endif /* ARCANUM_GAME_PROTO_H_ */

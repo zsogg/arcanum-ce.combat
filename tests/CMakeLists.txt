@@ -63,6 +63,7 @@ add_executable(arcanum-tests
     "test_rt_budget.c"
     "test_weapon_rules.c"
     "test_uap_addons.c"
+    "test_race_mod.c"
     "test_ce_mods.c"
     "test_install_check.c"
     "test_spell_rules.c"

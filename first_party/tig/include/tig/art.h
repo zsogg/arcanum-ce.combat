@@ -60,6 +60,11 @@ typedef enum TigArtCritterBodyType {
     TIG_ART_CRITTER_BODY_TYPE_COUNT,
 } TigArtCritterBodyType;
 
+// UAP (0x5B38C4, Race Mod, card RM1): the Orc's body type, one past the
+// last real one. With the Race Mod on, `tig_art_critter_id_body_type_set`
+// turns it into the orc monster art.
+#define TIG_ART_CRITTER_BODY_TYPE_UAP_ORC TIG_ART_CRITTER_BODY_TYPE_COUNT
+
 typedef enum TigArtCritterGender {
     TIG_ART_CRITTER_GENDER_FEMALE,
     TIG_ART_CRITTER_GENDER_MALE,
@@ -431,6 +436,7 @@ void tig_art_ping(void);
 int tig_art_misc_id_create(unsigned int num, unsigned int palette, tig_art_id_t* art_id);
 void tig_art_flush(void);
 void tig_art_uap_fixes_set(bool enabled);
+void tig_art_uap_race_mod_set(bool enabled);
 void tig_art_mirroring_set(bool enabled);
 int tig_art_exists(tig_art_id_t art_id);
 int tig_art_touch(tig_art_id_t art_id);

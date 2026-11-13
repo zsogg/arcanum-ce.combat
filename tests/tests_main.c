@@ -54,6 +54,7 @@ void test_crit_guard_suite(void);
 void test_rt_budget_suite(void);
 void test_weapon_rules_suite(void);
 void test_uap_addons_suite(void);
+void test_race_mod_suite(void);
 void test_ce_mods_suite(void);
 void test_install_check_suite(void);
 void test_spell_rules_suite(void);
@@ -175,6 +176,7 @@ int main(void)
     test_rt_budget_suite();
     test_weapon_rules_suite();
     test_uap_addons_suite();
+    test_race_mod_suite();
     test_ce_mods_suite();
     test_install_check_suite();
     test_spell_rules_suite();

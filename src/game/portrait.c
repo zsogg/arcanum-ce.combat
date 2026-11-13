@@ -7,6 +7,7 @@
 #include "game/multiplayer.h"
 #include "game/player.h"
 #include "game/stat.h"
+#include "game/uap.h"
 #include "tig/file.h"
 #include "tig/memory.h"
 #include "tig/video.h"
@@ -31,6 +32,30 @@ static const char* portrait_race_specifiers[RACE_COUNT] = {
     /*      RACE_OGRE */ "HG",
     /*       RACE_ORC */ "HO",
 };
+
+/**
+ * The race part of a portrait or background prefix.
+ *
+ * CE: split out of `portrait_is_valid` (card RM1), because the Race Mod makes
+ * `background_is_legal` read this table too.
+ */
+const char* portrait_race_specifier(int race, bool race_mod)
+{
+    // UAP (0x5B7C2C, Race Mod): the three races get prefixes of their own,
+    // which `ArcanumXRaces.dat`'s portraits and backgrounds use.
+    if (race_mod) {
+        switch (race) {
+        case RACE_DARK_ELF:
+            return "DE";
+        case RACE_OGRE:
+            return "OG";
+        case RACE_ORC:
+            return "OC";
+        }
+    }
+
+    return portrait_race_specifiers[race];
+}
 
 /**
  * 0x5B7C38
@@ -538,7 +563,7 @@ bool portrait_is_valid(int64_t obj, const char* str)
         // Construct the exact portrait prefix.
         snprintf(buffer, sizeof(buffer),
             "%s%c",
-            portrait_race_specifiers[race],
+            portrait_race_specifier(race, uap_race_mod_enabled()),
             portrait_gender_specifiers[gender]);
 
         // Check if portrait file name starts with the race-gender specifiers.

@@ -9,6 +9,7 @@
 #include "game/obj.h"
 #include "game/reputation.h"
 #include "game/stat.h"
+#include "game/uap.h"
 #include "game/ui.h"
 
 static int reaction_get_ex(int64_t a1, int64_t a2, unsigned int flags);
@@ -568,6 +569,47 @@ void reaction_slot_set(int64_t npc_obj, int64_t pc_obj, int level, int index)
     combat_recalc_reaction(npc_obj);
 }
 
+/**
+ * The race part of an NPC's reaction to a PC.
+ *
+ * CE: split out of `reaction_modifiers_get` (card RM1). The table has PC
+ * columns for the first 8 races only.
+ */
+int reaction_race_modifier(int npc_race, int pc_race, bool race_mod)
+{
+    int idx;
+
+    // UAP (0x4C14F3, cave 0x4B9E02, Race Mod): a Dark Elf, Ogre or Orc PC
+    // takes its parent race's column. NPC races are not mapped.
+    if (race_mod) {
+        switch (pc_race) {
+        case RACE_DARK_ELF:
+            pc_race = RACE_ELF;
+            break;
+        case RACE_OGRE:
+            pc_race = RACE_HALF_OGRE;
+            break;
+        case RACE_ORC:
+            pc_race = RACE_HALF_ORC;
+            break;
+        }
+    }
+
+    // NOTE: the original indexes the table flat (0x4C1566 `lea eax,
+    // [eax+edx*8]`), so a PC race of 8-10 reads the next NPC row's first
+    // columns. Kept: CE read the same cells as a two-dimensional index.
+    idx = npc_race * 8 + pc_race;
+
+    // FIX: an index past the whole table (an Orc NPC and a PC of race 8-10)
+    // reads whatever the original keeps after it. Only a save made with the
+    // Race Mod reaches this with the switch off. No modifier instead.
+    if (idx < 0 || idx >= RACE_COUNT * 8) {
+        return 0;
+    }
+
+    return (&reaction_race_modifier_tbl[0][0])[idx];
+}
+
 // 0x4C1500
 int reaction_modifiers_get(int64_t npc_obj, int64_t pc_obj, unsigned int flags)
 {
@@ -582,7 +624,7 @@ int reaction_modifiers_get(int64_t npc_obj, int64_t pc_obj, unsigned int flags)
         npc_race = stat_level_get(npc_obj, STAT_RACE);
         pc_race = stat_level_get(pc_obj, STAT_RACE);
 
-        v1 = reaction_race_modifier_tbl[npc_race][pc_race] + modifier;
+        v1 = reaction_race_modifier(npc_race, pc_race, uap_race_mod_enabled()) + modifier;
         if ((flags & 0x1) != 0) {
             if (v1 < -49) {
                 v1 = -49;

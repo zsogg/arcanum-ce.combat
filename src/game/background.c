@@ -7,9 +7,11 @@
 #include "game/item.h"
 #include "game/mes.h"
 #include "game/object.h"
+#include "game/portrait.h"
 #include "game/proto.h"
 #include "game/skill.h"
 #include "game/stat.h"
+#include "game/uap.h"
 
 #define FIRST_DESCRIPTION_ID 1000
 #define BACKGROUND_BLOCK_SIZE 10
@@ -538,6 +540,29 @@ bool background_get_items(char* dest, size_t size, int background)
 }
 
 /**
+ * The race part of a background prefix.
+ *
+ * CE: split out of `background_is_legal` (card RM1).
+ */
+static const char* background_race_specifier(int race)
+{
+    // UAP (0x4C2B90, Race Mod): backgrounds read the portrait table, so the
+    // three races use their own prefixes for backgrounds too.
+    if (uap_race_mod_enabled()) {
+        return portrait_race_specifier(race, true);
+    }
+
+    // FIX: the table has 8 races. A Dark Elf, Ogre or Orc PC, only from a
+    // save made with the Race Mod, read past it into the gender letters.
+    // The portrait table's parent races instead.
+    if (race >= (int)SDL_arraysize(background_race_specifiers)) {
+        return portrait_race_specifier(race, false);
+    }
+
+    return background_race_specifiers[race];
+}
+
+/**
  * Checks if a background is legal for a given PC based on race and gender.
  *
  * NOTE: This function looks very similar to `portrait_is_valid`, but the
@@ -558,7 +583,7 @@ bool background_is_legal(int64_t obj, char* str)
         // Construct the exact background prefix.
         snprintf(buffer, sizeof(buffer),
             "%s%c",
-            background_race_specifiers[race],
+            background_race_specifier(race),
             background_gender_specifiers[gender]);
 
         // Convert the condition string to uppercase for comparison.

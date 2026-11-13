@@ -23,6 +23,7 @@ void reaction_adj(int64_t npc_obj, int64_t pc_obj, int value);
 void reaction_adj_ex(int64_t npc_obj, int64_t pc_obj, int value, bool apply_effects);
 void reaction_forget(int64_t npc_obj, int64_t pc_obj);
 int reaction_translate(int value);
+int reaction_race_modifier(int npc_race, int pc_race, bool race_mod);
 const char* reaction_get_name(int reaction);
 void reaction_current_set(int64_t pc, int64_t npc);
 void reaction_current_reset(int64_t pc, int64_t npc);
