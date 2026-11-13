@@ -4675,6 +4675,21 @@ void combat_turn_based_npc_turn(int64_t obj)
         if ((member == NULL || member->action_points > 0)
             && object_script_execute(obj, obj, OBJ_HANDLE_NULL, SAP_HEARTBEAT, 0) == 1) {
             ai_process(obj);
+
+            // CE (`firearm reloading`; zsogg, 2026-11-13): a reload plays no
+            // animation, so no animation's end prompts the NPC again and the
+            // rule below would end its turn with points unspent - a Master
+            // rifleman fired once on 16 AP. While it has points, it decides
+            // again. Each reload spends points or loads a shot, so this ends;
+            // the bound is a guard.
+            for (int again = 0; again < 8
+                && !anim_is_busy(obj, NULL)
+                && reload_ai_take_reloaded(obj)
+                && combat_turn_based_is_acting(obj)
+                && combat_action_points_of(obj) > 0;
+                again++) {
+                ai_process(obj);
+            }
         }
 
         if (!anim_is_busy(obj, NULL)) {

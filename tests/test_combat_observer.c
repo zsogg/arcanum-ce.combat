@@ -1223,7 +1223,10 @@ TEST(the_xp_train_and_inspect_xp_rows_load)
     CHECK(!load_script("0 xp\n"));
     CHECK(!load_script("0 xp 0\n"));
     CHECK(!load_script("0 train 3\n"));
-    CHECK(!load_script("0 train 12 1\n"));
+    // Since 2026-11-12 a tech skill too, by its skill number: 13 is Firearms;
+    // past the last skill is refused.
+    CHECK(load_script("0 train 13 3\n"));
+    CHECK(!load_script("0 train 20 1\n"));
     CHECK(!load_script("0 train 3 4\n"));
     CHECK(!load_script("0 inspect level\n"));
 }

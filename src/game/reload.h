@@ -142,6 +142,12 @@ int reload_clear_progress_get(int64_t weapon_obj);
 // 5). True when it has acted and must not attack.
 bool reload_ai_act(int64_t critter_obj, int64_t enemy_obj);
 
+// True once after `reload_ai_act` reloaded for this critter in a turn-based
+// turn. A reload plays no animation, so no animation's end prompts the NPC
+// again (`combat_turn_based_npc_turn`); this lets the turn go on while it has
+// action points (2026-11-13: a Master rifleman fired once on 16 AP).
+bool reload_ai_take_reloaded(int64_t critter_obj);
+
 // Combat AI AI-6 F3 (zsogg, 2026-10-28): the gun a melee backup replaced, per
 // critter, so that under `follower conduct` - where a follower of the player
 // keeps what it holds - the gun goes back into its hands once out of combat,

@@ -777,6 +777,33 @@ static void reload_backup_restore(int64_t critter_obj)
     }
 }
 
+// The critter whose last AI pass was a turn-based reload, for
+// `reload_ai_take_reloaded`.
+static int64_t reload_ai_reloaded_obj;
+
+// An NPC's Reload command; in turn-based, one with no AP left for the work
+// ends its turn.
+static void reload_ai_command(int64_t critter_obj)
+{
+    if (reload_command(critter_obj)) {
+        if (combat_turn_based_is_active()) {
+            reload_ai_reloaded_obj = critter_obj;
+        }
+    } else if (combat_turn_based_is_active() && combat_turn_based_is_acting(critter_obj)) {
+        // No AP left for the work: the turn is over.
+        combat_turn_based_end_critter_turn(critter_obj);
+    }
+}
+
+bool reload_ai_take_reloaded(int64_t critter_obj)
+{
+    if (critter_obj == OBJ_HANDLE_NULL || reload_ai_reloaded_obj != critter_obj) {
+        return false;
+    }
+    reload_ai_reloaded_obj = OBJ_HANDLE_NULL;
+    return true;
+}
+
 bool reload_ai_act(int64_t critter_obj, int64_t enemy_obj)
 {
     int64_t weapon_obj;
@@ -807,12 +834,7 @@ bool reload_ai_act(int64_t critter_obj, int64_t enemy_obj)
                 return false; // attack with it now
             }
         }
-        if (!reload_command(critter_obj)
-            && combat_turn_based_is_active()
-            && combat_turn_based_is_acting(critter_obj)) {
-            // No AP left for the work: the turn is over.
-            combat_turn_based_end_critter_turn(critter_obj);
-        }
+        reload_ai_command(critter_obj);
         return true;
     }
 
@@ -829,11 +851,7 @@ bool reload_ai_act(int64_t critter_obj, int64_t enemy_obj)
             return false;
         }
         tig_debug_printf("reload: an NPC tops up, no target in range\n");
-        if (!reload_command(critter_obj)
-            && combat_turn_based_is_active()
-            && combat_turn_based_is_acting(critter_obj)) {
-            combat_turn_based_end_critter_turn(critter_obj);
-        }
+        reload_ai_command(critter_obj);
         return true;
     }
 
@@ -851,12 +869,7 @@ bool reload_ai_act(int64_t critter_obj, int64_t enemy_obj)
     }
 
     if (reload_can_load(critter_obj, weapon_obj)) {
-        if (!reload_command(critter_obj)
-            && combat_turn_based_is_active()
-            && combat_turn_based_is_acting(critter_obj)) {
-            // No AP left for the work: the turn is over.
-            combat_turn_based_end_critter_turn(critter_obj);
-        }
+        reload_ai_command(critter_obj);
         return true;
     }
 
