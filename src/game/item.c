@@ -4130,6 +4130,16 @@ void item_weapon_damage(int64_t weapon_obj, int64_t critter_obj, int damage_type
         }
     }
 
+    // CE (`firearm expertise`; zsogg, 2026-11-12): a gun's SkillDamage, the
+    // gunner's counterpart to the Strength bonus above - 70% of the Firearms
+    // level on a rifle or heavy gun, 45% on a special, rounded up.
+    if (damage_type == DAMAGE_TYPE_NORMAL && skill == SKILL_FIREARMS && weapon_obj != OBJ_HANDLE_NULL) {
+        int skill_dam = weapon_rules_skill_damage(weapon_obj, critter_obj);
+
+        min_dam += skill_dam;
+        max_dam += skill_dam;
+    }
+
     if (weapon_obj != OBJ_HANDLE_NULL && !a5) {
         if (obj_field_int32_get(weapon_obj, OBJ_F_TYPE) == OBJ_TYPE_WEAPON) {
             int adj = obj_arrayfield_int32_get(weapon_obj, OBJ_F_WEAPON_MAGIC_DAMAGE_ADJ_IDX, damage_type);

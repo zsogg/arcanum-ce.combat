@@ -125,6 +125,23 @@ typedef struct WeaponRule {
     // stock.
     int accurate_tiles;
     int range_penalty;
+    // Under `firearm expertise` (zsogg, 2026-11-12), for everyone who fires
+    // the gun. The firing and loading costs at Expert and at Master; each
+    // unset falls back to the tier below. The critical-chance points added at
+    // Apprentice, Expert and Master, as written (the generator writes them
+    // cumulative), each unset falling back the same way, on top of CritChance.
+    // SkillDamage: percent of the Firearms level added to each shot's normal
+    // damage, rounded up - the gunner's Strength bonus. FreeLoad: percent
+    // chance that a paid reload of one shot loads a second for nothing.
+    int fire_ap_expert;
+    int fire_ap_master;
+    int load_ap_expert;
+    int load_ap_master;
+    int crit_chance_apprentice;
+    int crit_chance_expert;
+    int crit_chance_master;
+    int skill_damage;
+    int free_load;
 } WeaponRule;
 
 #define WEAPON_RULE_CAPACITY_MIN 1
@@ -153,6 +170,7 @@ typedef struct WeaponRule {
 #define WEAPON_RULE_PERCENT_MAX 100
 #define WEAPON_RULE_TILES_MAX 100
 #define WEAPON_RULE_RANGE_PENALTY_MAX 50
+#define WEAPON_RULE_SKILL_DAMAGE_MAX 500
 
 // Pure: reads one entry's text into `rule`. False, with `rule` untouched, for
 // anything malformed - an unknown key, a value that is not a number or a
@@ -160,6 +178,11 @@ typedef struct WeaponRule {
 // so a bad entry changes nothing rather than a guessed weapon. Values outside
 // their range are clamped; a range given high-low is put in order.
 bool weapon_rule_parse(int prototype, const char* str, WeaponRule* rule);
+// Pure: the value at `training` (a TRAINING_* tier) of a stat given per tier,
+// each WEAPON_RULE_UNSET falling back to the tier below.
+int weapon_rule_tiered(int untrained, int apprentice, int expert, int master, int training);
+// Pure: `percent` of `level`, rounded up; 0 for an unset percent.
+int weapon_rule_skill_damage_bonus(int percent, int level);
 // Pure: `penetration` at `distance` tiles under the rule's PenetrationRange
 // and PenetrationFalloff, rounded down and never below 0; unchanged within the
 // range, or for a NULL rule or one without them.
@@ -175,9 +198,12 @@ const WeaponRule* weapon_rule_for(int64_t weapon_obj);
 // Apprentice training or better in the weapon's skill - the test that gives an
 // attack its +5 speed in `item_weapon_magic_speed`.
 bool weapon_rules_trained(int64_t critter_obj, int64_t weapon_obj);
+// The critter's training in the weapon's skill.
+int weapon_rules_training(int64_t critter_obj, int64_t weapon_obj);
 // Criticals CR-3, under `firearm criticals`: the weapon's critical-chance
-// points (0 unlisted or off) and its critical style (none unlisted or off).
-int weapon_rules_crit_chance(int64_t weapon_obj);
+// points (0 unlisted or off), plus under `firearm expertise` those of
+// `critter_obj`'s training tier; and its critical style (none unlisted or off).
+int weapon_rules_crit_chance(int64_t weapon_obj, int64_t critter_obj);
 WeaponCritStyle weapon_rules_crit_style(int64_t weapon_obj);
 
 // The stat overrides, under `weapon rules`: each returns `stock` when the
@@ -220,7 +246,15 @@ int weapon_rules_stopped_to_fatigue(int64_t weapon_obj);
 // stock values given.
 int weapon_rules_accurate_tiles(int64_t weapon_obj, int stock);
 int weapon_rules_range_penalty(int64_t weapon_obj, int stock);
-// True, with `*action_points` set, when the entry names a firing cost.
+// What loading one shot costs `critter_obj`: LoadAP by its training, the Expert
+// and Master costs under `firearm expertise`. `rule` names a Capacity.
+int weapon_rules_load_ap(int64_t critter_obj, int64_t weapon_obj, const WeaponRule* rule);
+// Under `firearm expertise`: the damage `critter_obj`'s Firearms level adds to
+// a shot's normal damage, and the FreeLoad chance; 0 when off or unset.
+int weapon_rules_skill_damage(int64_t weapon_obj, int64_t critter_obj);
+int weapon_rules_free_load(int64_t weapon_obj);
+// True, with `*action_points` set, when the entry names a firing cost; the
+// Expert and Master costs under `firearm expertise`.
 bool weapon_rules_fire_ap(int64_t critter_obj, int64_t weapon_obj, int* action_points);
 
 #endif /* ARCANUM_GAME_WEAPON_RULES_H_ */

@@ -5633,7 +5633,8 @@ int combat_get_up_cost(int64_t obj)
 
 // CE (reload prototype session 2): what loading one ready shot costs, in AP.
 // The weapon's `rules/weapons.mes` `LoadAP`, or `LoadAPApprentice` at Apprentice
-// training or better in its skill (`weapon_rules_trained`). 0 for a weapon
+// training or better in its skill, and under `firearm expertise` the Expert and
+// Master costs (`weapon_rules_load_ap`). 0 for a weapon
 // whose rule names no Capacity. Turn-based charges it and the real-time budget times it, so a change
 // here moves both modes, as with every other `combat_*_cost`.
 int combat_reload_cost(int64_t obj, int64_t weapon_obj)
@@ -5645,7 +5646,7 @@ int combat_reload_cost(int64_t obj, int64_t weapon_obj)
         return 0;
     }
 
-    return weapon_rules_trained(obj, weapon_obj) ? rule->load_ap_apprentice : rule->load_ap;
+    return weapon_rules_load_ap(obj, weapon_obj, rule);
 }
 
 // CE (criticals, milestone CR-4.1): what clearing a jam costs, in AP, under

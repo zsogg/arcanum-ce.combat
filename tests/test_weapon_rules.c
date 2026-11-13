@@ -5,6 +5,7 @@
 #include <string.h>
 
 #include "game/item.h"
+#include "game/skill.h"
 #include "game/weapon_rules.h"
 
 #include "test_harness.h"
@@ -256,6 +257,74 @@ TEST(critical_chance_and_style_are_read)
     CHECK(!weapon_rule_parse(6053, "CritChance: many", &rule));
 }
 
+TEST(expertise_keys_are_read_and_need_their_base_cost)
+{
+    WeaponRule rule;
+
+    // Firearm expertise, zsogg 2026-11-12: the Rifle - Apprentice 1 off the
+    // load, Expert and Master 1 more off both, criticals 5, 13, 23, and 70% of
+    // the Firearms level as damage.
+    CHECK(weapon_rule_parse(6128,
+        "FireAP: 6, FireAPApprentice: 6, FireAPExpert: 5, FireAPMaster: 4,"
+        " Capacity: 1, LoadAP: 6, LoadAPApprentice: 5, LoadAPExpert: 4, LoadAPMaster: 3,"
+        " CritChanceApprentice: 5, CritChanceExpert: 13, CritChanceMaster: 23, SkillDamage: 70",
+        &rule));
+    CHECK_INT(rule.fire_ap_expert, 5);
+    CHECK_INT(rule.fire_ap_master, 4);
+    CHECK_INT(rule.load_ap_expert, 4);
+    CHECK_INT(rule.load_ap_master, 3);
+    CHECK_INT(rule.crit_chance_apprentice, 5);
+    CHECK_INT(rule.crit_chance_expert, 13);
+    CHECK_INT(rule.crit_chance_master, 23);
+    CHECK_INT(rule.skill_damage, 70);
+    CHECK_INT(rule.free_load, WEAPON_RULE_UNSET);
+
+    // The pistols' 15% free shot; clamped like the other percentages.
+    CHECK(weapon_rule_parse(6053, "Capacity: 6, LoadAP: 5, FreeLoad: 15", &rule));
+    CHECK_INT(rule.free_load, 15);
+    CHECK(weapon_rule_parse(6053, "Capacity: 6, LoadAP: 5, FreeLoad: 250", &rule));
+    CHECK_INT(rule.free_load, WEAPON_RULE_PERCENT_MAX);
+    CHECK(weapon_rule_parse(6053, "FireAP: 4, FireAPMaster: 0", &rule));
+    CHECK_INT(rule.fire_ap_master, WEAPON_RULE_AP_MIN);
+
+    // A tier's cost with no base cost, or a free shot with no loading, is
+    // half a rule.
+    CHECK(!weapon_rule_parse(6128, "FireAPExpert: 5", &rule));
+    CHECK(!weapon_rule_parse(6128, "Capacity: 1, LoadAP: 6, FireAPMaster: 4", &rule));
+    CHECK(!weapon_rule_parse(6128, "LoadAPMaster: 3", &rule));
+    CHECK(!weapon_rule_parse(6053, "FreeLoad: 15", &rule));
+}
+
+TEST(a_tier_falls_back_to_the_one_below)
+{
+    // The Rifle's firing cost: 6 untrained and at Apprentice, 5, 4.
+    CHECK_INT(weapon_rule_tiered(6, 6, 5, 4, TRAINING_NONE), 6);
+    CHECK_INT(weapon_rule_tiered(6, 6, 5, 4, TRAINING_APPRENTICE), 6);
+    CHECK_INT(weapon_rule_tiered(6, 6, 5, 4, TRAINING_EXPERT), 5);
+    CHECK_INT(weapon_rule_tiered(6, 6, 5, 4, TRAINING_MASTER), 4);
+    // Unset tiers take the value below them, down to the untrained one.
+    CHECK_INT(weapon_rule_tiered(6, WEAPON_RULE_UNSET, WEAPON_RULE_UNSET, 4, TRAINING_EXPERT), 6);
+    CHECK_INT(weapon_rule_tiered(6, 5, WEAPON_RULE_UNSET, WEAPON_RULE_UNSET, TRAINING_MASTER), 5);
+    CHECK_INT(weapon_rule_tiered(0, WEAPON_RULE_UNSET, 13, WEAPON_RULE_UNSET, TRAINING_MASTER), 13);
+}
+
+TEST(skill_damage_is_a_percentage_of_the_level_rounded_up)
+{
+    // 70% of levels 4, 8, 12, 16, 20 - one to five points: 3, 6, 9, 12, 14.
+    CHECK_INT(weapon_rule_skill_damage_bonus(70, 4), 3);
+    CHECK_INT(weapon_rule_skill_damage_bonus(70, 8), 6);
+    CHECK_INT(weapon_rule_skill_damage_bonus(70, 12), 9);
+    CHECK_INT(weapon_rule_skill_damage_bonus(70, 16), 12);
+    CHECK_INT(weapon_rule_skill_damage_bonus(70, 20), 14);
+    // The specials' 45%: 2, 4, 6, 8, 9.
+    CHECK_INT(weapon_rule_skill_damage_bonus(45, 4), 2);
+    CHECK_INT(weapon_rule_skill_damage_bonus(45, 20), 9);
+    CHECK_INT(weapon_rule_skill_damage_bonus(45, 1), 1);
+    CHECK_INT(weapon_rule_skill_damage_bonus(70, 0), 0);
+    CHECK_INT(weapon_rule_skill_damage_bonus(WEAPON_RULE_UNSET, 20), 0);
+    CHECK_INT(weapon_rule_skill_damage_bonus(0, 20), 0);
+}
+
 TEST(dodgeable_is_read_and_clamped)
 {
     WeaponRule rule;
@@ -370,6 +439,9 @@ void test_weapon_rules_suite(void)
     RUN(whole_magazine_is_read_and_needs_a_capacity);
     RUN(clear_ap_is_read_clamped_and_needs_a_capacity);
     RUN(critical_chance_and_style_are_read);
+    RUN(expertise_keys_are_read_and_need_their_base_cost);
+    RUN(a_tier_falls_back_to_the_one_below);
+    RUN(skill_damage_is_a_percentage_of_the_level_rounded_up);
     RUN(dodgeable_is_read_and_clamped);
     RUN(dodge_share_is_read_and_clamped);
     RUN(armor_damage_is_read_and_clamped);

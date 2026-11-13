@@ -1557,7 +1557,7 @@ static bool replay_parse_line(const char* text, ReplayCommand* command)
     if (strcmp(kind, "train") == 0) {
         command->kind = REPLAY_KIND_TRAIN;
         if (!replay_parse_int(tokens[index++], &(command->skill))
-            || command->skill < 0 || command->skill >= BASIC_SKILL_COUNT || index >= count
+            || command->skill < 0 || command->skill >= SKILL_COUNT || index >= count
             || !replay_parse_int(tokens[index++], &(command->count))
             || command->count < TRAINING_NONE || command->count > TRAINING_MASTER) {
             return false;
@@ -2477,6 +2477,15 @@ void replay_ui_tick(void)
         replay_stall_reported = false;
         replay_next++;
         if (command->target[0] != '\0' && !replay_resolve(command, &who_obj)) {
+            return;
+        }
+        // Since 2026-11-12 (firearm expertise): a tech skill too, by its
+        // skill number, as `skill-level` takes it - 13 is Firearms.
+        if (IS_TECH_SKILL(command->skill)) {
+            tech_skill_training_set(who_obj, GET_TECH_SKILL(command->skill), command->count);
+            tig_debug_printf("Replay: command %d set tech skill %d training to %d; it reads %d\n",
+                replay_next - 1, GET_TECH_SKILL(command->skill), command->count,
+                tech_skill_training_get(who_obj, GET_TECH_SKILL(command->skill)));
             return;
         }
         basic_skill_training_set(who_obj, command->skill, command->count);

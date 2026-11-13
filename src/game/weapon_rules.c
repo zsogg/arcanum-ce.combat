@@ -65,7 +65,7 @@ static bool weapon_rule_parse_range(char* str, int* lo, int* hi)
 bool weapon_rule_parse(int prototype, const char* str, WeaponRule* rule)
 {
     WeaponRule parsed;
-    char buffer[512];
+    char buffer[1024];
     char* part;
     char* save;
     char* colon;
@@ -117,6 +117,15 @@ bool weapon_rule_parse(int prototype, const char* str, WeaponRule* rule)
     parsed.penetration_falloff = WEAPON_RULE_UNSET;
     parsed.accurate_tiles = WEAPON_RULE_UNSET;
     parsed.range_penalty = WEAPON_RULE_UNSET;
+    parsed.fire_ap_expert = WEAPON_RULE_UNSET;
+    parsed.fire_ap_master = WEAPON_RULE_UNSET;
+    parsed.load_ap_expert = WEAPON_RULE_UNSET;
+    parsed.load_ap_master = WEAPON_RULE_UNSET;
+    parsed.crit_chance_apprentice = WEAPON_RULE_UNSET;
+    parsed.crit_chance_expert = WEAPON_RULE_UNSET;
+    parsed.crit_chance_master = WEAPON_RULE_UNSET;
+    parsed.skill_damage = WEAPON_RULE_UNSET;
+    parsed.free_load = WEAPON_RULE_UNSET;
 
     for (part = strtok_r(buffer, ",", &save); part != NULL; part = strtok_r(NULL, ",", &save)) {
         colon = strchr(part, ':');
@@ -237,6 +246,24 @@ bool weapon_rule_parse(int prototype, const char* str, WeaponRule* rule)
             parsed.dodgeable = weapon_rule_clamp(value, WEAPON_RULE_DODGEABLE_MIN, WEAPON_RULE_DODGEABLE_MAX);
         } else if (strcmp(key, "DodgeShare") == 0) {
             parsed.dodge_share = weapon_rule_clamp(value, 0, WEAPON_RULE_PERCENT_MAX);
+        } else if (strcmp(key, "FireAPExpert") == 0) {
+            parsed.fire_ap_expert = weapon_rule_clamp(value, WEAPON_RULE_AP_MIN, WEAPON_RULE_AP_MAX);
+        } else if (strcmp(key, "FireAPMaster") == 0) {
+            parsed.fire_ap_master = weapon_rule_clamp(value, WEAPON_RULE_AP_MIN, WEAPON_RULE_AP_MAX);
+        } else if (strcmp(key, "LoadAPExpert") == 0) {
+            parsed.load_ap_expert = weapon_rule_clamp(value, WEAPON_RULE_AP_MIN, WEAPON_RULE_AP_MAX);
+        } else if (strcmp(key, "LoadAPMaster") == 0) {
+            parsed.load_ap_master = weapon_rule_clamp(value, WEAPON_RULE_AP_MIN, WEAPON_RULE_AP_MAX);
+        } else if (strcmp(key, "CritChanceApprentice") == 0) {
+            parsed.crit_chance_apprentice = weapon_rule_clamp(value, WEAPON_RULE_CRIT_CHANCE_MIN, WEAPON_RULE_CRIT_CHANCE_MAX);
+        } else if (strcmp(key, "CritChanceExpert") == 0) {
+            parsed.crit_chance_expert = weapon_rule_clamp(value, WEAPON_RULE_CRIT_CHANCE_MIN, WEAPON_RULE_CRIT_CHANCE_MAX);
+        } else if (strcmp(key, "CritChanceMaster") == 0) {
+            parsed.crit_chance_master = weapon_rule_clamp(value, WEAPON_RULE_CRIT_CHANCE_MIN, WEAPON_RULE_CRIT_CHANCE_MAX);
+        } else if (strcmp(key, "SkillDamage") == 0) {
+            parsed.skill_damage = weapon_rule_clamp(value, 0, WEAPON_RULE_SKILL_DAMAGE_MAX);
+        } else if (strcmp(key, "FreeLoad") == 0) {
+            parsed.free_load = weapon_rule_clamp(value, 0, WEAPON_RULE_PERCENT_MAX);
         } else {
             return false;
         }
@@ -251,7 +278,12 @@ bool weapon_rule_parse(int prototype, const char* str, WeaponRule* rule)
         || (parsed.whole_magazine != WEAPON_RULE_UNSET && parsed.capacity == WEAPON_RULE_UNSET)
         || (parsed.clear_ap != WEAPON_RULE_UNSET && parsed.capacity == WEAPON_RULE_UNSET)
         || (parsed.penetration_range == WEAPON_RULE_UNSET) != (parsed.penetration_falloff == WEAPON_RULE_UNSET)
-        || (parsed.fire_ap_apprentice != WEAPON_RULE_UNSET && parsed.fire_ap == WEAPON_RULE_UNSET)) {
+        || (parsed.fire_ap_apprentice != WEAPON_RULE_UNSET && parsed.fire_ap == WEAPON_RULE_UNSET)
+        || ((parsed.fire_ap_expert != WEAPON_RULE_UNSET || parsed.fire_ap_master != WEAPON_RULE_UNSET)
+            && parsed.fire_ap == WEAPON_RULE_UNSET)
+        || ((parsed.load_ap_expert != WEAPON_RULE_UNSET || parsed.load_ap_master != WEAPON_RULE_UNSET
+                || parsed.free_load != WEAPON_RULE_UNSET)
+            && parsed.load_ap == WEAPON_RULE_UNSET)) {
         return false;
     }
 
@@ -264,6 +296,30 @@ bool weapon_rule_parse(int prototype, const char* str, WeaponRule* rule)
 
     *rule = parsed;
     return true;
+}
+
+int weapon_rule_tiered(int untrained, int apprentice, int expert, int master, int training)
+{
+    int value = untrained;
+
+    if (training >= TRAINING_APPRENTICE && apprentice != WEAPON_RULE_UNSET) {
+        value = apprentice;
+    }
+    if (training >= TRAINING_EXPERT && expert != WEAPON_RULE_UNSET) {
+        value = expert;
+    }
+    if (training >= TRAINING_MASTER && master != WEAPON_RULE_UNSET) {
+        value = master;
+    }
+    return value;
+}
+
+int weapon_rule_skill_damage_bonus(int percent, int level)
+{
+    if (percent == WEAPON_RULE_UNSET || percent <= 0 || level <= 0) {
+        return 0;
+    }
+    return (percent * level + 99) / 100;
 }
 
 // ---------------------------------------------------------------------------
@@ -342,16 +398,19 @@ const WeaponRule* weapon_rule_for(int64_t weapon_obj)
     return NULL;
 }
 
-bool weapon_rules_trained(int64_t critter_obj, int64_t weapon_obj)
+int weapon_rules_training(int64_t critter_obj, int64_t weapon_obj)
 {
     int skill;
-    int training;
 
     skill = item_weapon_skill(weapon_obj);
-    training = IS_TECH_SKILL(skill)
+    return IS_TECH_SKILL(skill)
         ? tech_skill_training_get(critter_obj, GET_TECH_SKILL(skill))
         : basic_skill_training_get(critter_obj, GET_BASIC_SKILL(skill));
-    return training >= TRAINING_APPRENTICE;
+}
+
+bool weapon_rules_trained(int64_t critter_obj, int64_t weapon_obj)
+{
+    return weapon_rules_training(critter_obj, weapon_obj) >= TRAINING_APPRENTICE;
 }
 
 static const WeaponRule* weapon_rules_active_for(int64_t weapon_obj)
@@ -407,16 +466,27 @@ int weapon_rules_crit_effect_for(int64_t weapon_obj, int64_t owner_obj)
         obj_field_int32_get(weapon_obj, OBJ_F_WEAPON_MAGIC_CRIT_HIT_EFFECT));
 }
 
-int weapon_rules_crit_chance(int64_t weapon_obj)
+int weapon_rules_crit_chance(int64_t weapon_obj, int64_t critter_obj)
 {
     const WeaponRule* rule;
+    int chance = 0;
 
-    if (!feature_enabled(FEATURE_FIREARM_CRITICALS)) {
+    rule = weapon_rule_for(weapon_obj);
+    if (rule == NULL) {
         return 0;
     }
 
-    rule = weapon_rule_for(weapon_obj);
-    return rule != NULL && rule->crit_chance != WEAPON_RULE_UNSET ? rule->crit_chance : 0;
+    if (feature_enabled(FEATURE_FIREARM_CRITICALS) && rule->crit_chance != WEAPON_RULE_UNSET) {
+        chance = rule->crit_chance;
+    }
+    if (feature_enabled(FEATURE_FIREARM_EXPERTISE) && critter_obj != OBJ_HANDLE_NULL) {
+        chance += weapon_rule_tiered(0,
+            rule->crit_chance_apprentice,
+            rule->crit_chance_expert,
+            rule->crit_chance_master,
+            weapon_rules_training(critter_obj, weapon_obj));
+    }
+    return chance;
 }
 
 WeaponCritStyle weapon_rules_crit_style(int64_t weapon_obj)
@@ -562,14 +632,58 @@ int weapon_rules_ammo_per_shot(int64_t weapon_obj)
 bool weapon_rules_fire_ap(int64_t critter_obj, int64_t weapon_obj, int* action_points)
 {
     const WeaponRule* rule;
+    bool expertise;
 
     rule = weapon_rules_active_for(weapon_obj);
     if (rule == NULL || rule->fire_ap == WEAPON_RULE_UNSET) {
         return false;
     }
 
-    *action_points = weapon_rules_trained(critter_obj, weapon_obj)
-        ? rule->fire_ap_apprentice
-        : rule->fire_ap;
+    expertise = feature_enabled(FEATURE_FIREARM_EXPERTISE);
+    *action_points = weapon_rule_tiered(rule->fire_ap,
+        rule->fire_ap_apprentice,
+        expertise ? rule->fire_ap_expert : WEAPON_RULE_UNSET,
+        expertise ? rule->fire_ap_master : WEAPON_RULE_UNSET,
+        weapon_rules_training(critter_obj, weapon_obj));
     return true;
+}
+
+int weapon_rules_load_ap(int64_t critter_obj, int64_t weapon_obj, const WeaponRule* rule)
+{
+    bool expertise = feature_enabled(FEATURE_FIREARM_EXPERTISE);
+
+    return weapon_rule_tiered(rule->load_ap,
+        rule->load_ap_apprentice,
+        expertise ? rule->load_ap_expert : WEAPON_RULE_UNSET,
+        expertise ? rule->load_ap_master : WEAPON_RULE_UNSET,
+        weapon_rules_training(critter_obj, weapon_obj));
+}
+
+int weapon_rules_skill_damage(int64_t weapon_obj, int64_t critter_obj)
+{
+    const WeaponRule* rule;
+
+    if (!feature_enabled(FEATURE_FIREARM_EXPERTISE) || critter_obj == OBJ_HANDLE_NULL) {
+        return 0;
+    }
+
+    rule = weapon_rules_active_for(weapon_obj);
+    if (rule == NULL) {
+        return 0;
+    }
+
+    return weapon_rule_skill_damage_bonus(rule->skill_damage,
+        tech_skill_level(critter_obj, TECH_SKILL_FIREARMS));
+}
+
+int weapon_rules_free_load(int64_t weapon_obj)
+{
+    const WeaponRule* rule;
+
+    if (!feature_enabled(FEATURE_FIREARM_EXPERTISE)) {
+        return 0;
+    }
+
+    rule = weapon_rule_for(weapon_obj);
+    return rule != NULL && rule->free_load != WEAPON_RULE_UNSET ? rule->free_load : 0;
 }

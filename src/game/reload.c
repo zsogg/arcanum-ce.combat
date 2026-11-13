@@ -16,6 +16,7 @@
 #include "game/object.h"
 #include "game/object_node.h"
 #include "game/player.h"
+#include "game/random.h"
 #include "game/rt_budget.h"
 #include "game/skill.h"
 #include "game/tf.h"
@@ -505,6 +506,32 @@ static bool reload_clear_command(int64_t critter_obj, int64_t weapon_obj)
     return true;
 }
 
+// CE (`firearm expertise`; zsogg, 2026-11-12): a paid reload of one shot. A
+// gun with a FreeLoad chance - the pistols' 15 - then loads one more shot for
+// nothing on that roll, if there is room and ammunition. Rolled once a paid
+// shot, so pressing Q again cannot re-roll it.
+static void reload_load_paid(int64_t critter_obj, int64_t weapon_obj)
+{
+    int chance;
+    char text[64];
+
+    reload_load_one(critter_obj, weapon_obj, false);
+
+    chance = weapon_rules_free_load(weapon_obj);
+    if (chance <= 0 || reload_rule_for(weapon_obj)->whole_magazine == 1) {
+        return;
+    }
+    if (random_between(1, 100) > chance || !reload_can_load_quiet(critter_obj, weapon_obj)) {
+        return;
+    }
+
+    tig_debug_printf("reload: quick reload, a second shot for 0 AP\n");
+    reload_load_one(critter_obj, weapon_obj, true);
+    snprintf(text, sizeof(text), "Quick reload %d/%d",
+        reload_loaded_get(weapon_obj), reload_rule_for(weapon_obj)->capacity);
+    reload_say(critter_obj, text);
+}
+
 bool reload_command(int64_t critter_obj)
 {
     int64_t weapon_obj;
@@ -549,7 +576,7 @@ bool reload_command(int64_t critter_obj)
                 work.progress, cost);
             return true;
         }
-        reload_load_one(critter_obj, weapon_obj, false);
+        reload_load_paid(critter_obj, weapon_obj);
         return true;
     }
 
@@ -573,7 +600,7 @@ bool reload_command(int64_t critter_obj)
 
     // Real time without the budget: stock real time gives no action any time,
     // and a reload is no different.
-    reload_load_one(critter_obj, weapon_obj, false);
+    reload_load_paid(critter_obj, weapon_obj);
     return true;
 }
 
@@ -606,7 +633,7 @@ void reload_standing_done(int64_t critter_obj, bool completed)
         return;
     }
 
-    reload_load_one(critter_obj, weapon_obj, false);
+    reload_load_paid(critter_obj, weapon_obj);
 }
 
 // ---------------------------------------------------------------------------
