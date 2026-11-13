@@ -2314,9 +2314,11 @@ bool mainmenu_ui_handle(void)
         int pregen = mainmenu_ui_newgame_pregen;
 
         mainmenu_ui_newgame_pregen = 0;
-        if (pregen > mainmenu_ui_pregen_char_cnt) {
+        // The screen offers characters 1 to count - 1 (count 13: the twelve
+        // stock ones); this bound once let the one past the last through.
+        if (pregen >= mainmenu_ui_pregen_char_cnt) {
             tig_debug_printf("Harness: newgame FAILED: no pregenerated character %d of %d\n",
-                pregen, mainmenu_ui_pregen_char_cnt);
+                pregen, mainmenu_ui_pregen_char_cnt - 1);
             exit(25);
         }
         mainmenu_ui_charedit_mode = CHAREDIT_MODE_CREATE;
