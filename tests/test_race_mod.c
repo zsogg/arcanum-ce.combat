@@ -69,6 +69,15 @@ TEST(without_the_race_mod_a_new_race_pc_reads_the_table_flat)
             reaction_race_modifier(npc_race + 1, RACE_ELF, false));
     }
 
+    // The last row is real, and a comparison of the function with itself
+    // cannot show it: Orc NPC cells from the table, and an Ogre NPC's
+    // Dark Elf column landing on the first of them.
+    CHECK_INT(reaction_race_modifier(RACE_ORC, RACE_HUMAN, false), -20);
+    CHECK_INT(reaction_race_modifier(RACE_ORC, RACE_ELF, false), -40);
+    CHECK_INT(reaction_race_modifier(RACE_ORC, RACE_HALF_ORC, false), 10);
+    CHECK_INT(reaction_race_modifier(RACE_OGRE, RACE_DARK_ELF, false), -20);
+    CHECK_INT(reaction_race_modifier(RACE_ORC, RACE_ORC, true), 10);
+
     // Past the whole table: no modifier.
     CHECK_INT(reaction_race_modifier(RACE_ORC, RACE_DARK_ELF, false), 0);
     CHECK_INT(reaction_race_modifier(RACE_ORC, RACE_ORC, false), 0);
