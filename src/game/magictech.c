@@ -3832,7 +3832,10 @@ void magictech_component_trait(int64_t obj, MagicTechComponentTrait* trait, int 
                 }
             }
 
-            weapon = tig_art_critter_id_weapon_get(art_id);
+            // FIX (porting bug #398): armed or not, 0 or 1 (0x452C18
+            // `neg; sbb; neg`). A body's monster art has no weapon past 1, so
+            // a dagger's 2 drew nothing standing and had no attack.
+            weapon = tig_art_critter_id_weapon_get(art_id) != 0 ? 1 : 0;
             anim = tig_art_id_anim_get(art_id);
             rot = tig_art_id_rotation_get(art_id);
 
