@@ -2138,6 +2138,9 @@ void gamelib_load_data(void)
 
     tig_file_list_destroy(&file_list);
     uap_race_mod_archive_set(race_mod_archive);
+    tig_debug_printf("gamelib: ArcanumXRaces.dat %s; UAP's Race Mod %s\n",
+        race_mod_archive ? "mounted" : "not mounted",
+        uap_race_mod_enabled() ? "in effect" : "off");
 
     tig_file_mkdir("data");
     tig_file_repository_add("data");

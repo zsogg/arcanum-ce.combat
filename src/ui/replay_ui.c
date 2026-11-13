@@ -802,6 +802,23 @@ static void replay_inspect_wear(int64_t obj, const char* who)
     }
 }
 
+// `inspect body [id]` (card RM1, 2026-11-13): the critter's race, gender,
+// art, art type, whether the engine counts it a monster, and its portrait,
+// so a run can show what character creation made.
+static void replay_inspect_body(int64_t obj, const char* who)
+{
+    tig_art_id_t art_id = obj_field_int32_get(obj, OBJ_F_CURRENT_AID);
+
+    tig_debug_printf("Replay: body %s race %d gender %d aid 0x%08X type %d monstrous %d portrait %d\n",
+        who,
+        stat_level_get(obj, STAT_RACE),
+        stat_level_get(obj, STAT_GENDER),
+        (unsigned int)art_id,
+        tig_art_type(art_id),
+        critter_is_monstrous(obj) ? 1 : 0,
+        obj_field_int32_get(obj, OBJ_F_CRITTER_PORTRAIT));
+}
+
 // `inspect stock <id>` (2026-11-05): every item that container or critter
 // holds, by description, as `restock` counts them.
 static void replay_inspect_stock(int64_t obj, const char* who)
@@ -1232,6 +1249,15 @@ static bool replay_parse_line(const char* text, ReplayCommand* command)
                 replay_copy_target(command, tokens[index++]);
             }
             return index == count && (command->stat == 5 || command->target[0] != '\0');
+        }
+        // `inspect body [id]` (card RM1): `stat` 12, defaulting to the player.
+        if (strcmp(tokens[index], "body") == 0) {
+            command->stat = 12;
+            index++;
+            if (index < count) {
+                replay_copy_target(command, tokens[index++]);
+            }
+            return index == count;
         }
         // `inspect state <kind> [<n>]` (QA1 phase 4): `stat` 10.
         if (strcmp(tokens[index], "state") == 0) {
@@ -2121,6 +2147,14 @@ void replay_ui_tick(void)
                 tig_debug_printf("Replay: command %d: option %d \"%s\"\n",
                     replay_next - 1, option + 1, state->options[option]);
             }
+            return;
+        }
+        if (command->stat == 12) {
+            target_obj = pc_obj;
+            if (command->target[0] != '\0' && !replay_resolve(command, &target_obj)) {
+                return;
+            }
+            replay_inspect_body(target_obj, command->target[0] != '\0' ? command->target : "the player");
             return;
         }
         if (command->stat == 4 || command->stat == 5) {

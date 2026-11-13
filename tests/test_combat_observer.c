@@ -1140,6 +1140,11 @@ TEST(the_inspect_light_and_wear_rows_load)
     CHECK(load_script("0 inspect stock @s\n"));
     CHECK(!load_script("0 inspect stock\n"));
     CHECK(!load_script("0 inspect wear @w extra\n"));
+    // Card RM1 (2026-11-13): `inspect body` defaults to the player too.
+    CHECK(load_script("0 inspect body\n0 inspect body @w\n"));
+    CHECK_INT(replay_ui_count(), 2);
+    CHECK(row_is(1, "turn=0 now=0 kind=inspect target=@w loc=0 aim=0 spell=0 cast=- wait=0"));
+    CHECK(!load_script("0 inspect body @w extra\n"));
 }
 
 TEST(the_press_click_and_block_rows_load_and_describe)
