@@ -2005,6 +2005,56 @@ static bool replay_fight_is_enemy(int64_t pc_obj, int64_t obj)
 // so a walk that got no closer is not repeated, and when it began.
 static int64_t replay_fight_walked_obj = OBJ_HANDLE_NULL;
 static int64_t replay_fight_walked_dist = 0;
+// LG1 (2026-11-14): one log line when the player has read busy for
+// REPLAY_BUSY_REPORT_MS - the goal stack holding it, its art and its spell
+// and critter flags - so a turn nobody can end names its cause.
+#define REPLAY_BUSY_REPORT_MS 5000
+static bool replay_busy_since_set;
+static bool replay_busy_reported;
+static tig_timestamp_t replay_busy_since;
+
+static void replay_report_busy(int64_t pc_obj)
+{
+    AnimID anim_id;
+    AnimRunInfo* run_info;
+    char goals[256] = "";
+    int index;
+
+    if (!replay_busy_since_set) {
+        replay_busy_since_set = true;
+        replay_busy_reported = false;
+        tig_timer_now(&replay_busy_since);
+        return;
+    }
+    if (replay_busy_reported || tig_timer_elapsed(replay_busy_since) < REPLAY_BUSY_REPORT_MS) {
+        return;
+    }
+    replay_busy_reported = true;
+    if (anim_is_busy(pc_obj, &anim_id) && anim_id_to_run_info(&anim_id, &run_info)) {
+        for (index = 0; index <= run_info->current_goal && index < 8; index++) {
+            size_t used = strlen(goals);
+            snprintf(goals + used, sizeof(goals) - used, "%s%s", index != 0 ? " > " : "",
+                run_info->goals[index].type >= 0 && run_info->goals[index].type < ANIM_GOAL_MAX
+                    ? anim_goal_names[run_info->goals[index].type]
+                    : "?");
+        }
+        tig_debug_printf("Replay: player busy %d ms: slot %d goals %s state %d flags 0x%X art 0x%08X spell flags 0x%X critter flags2 0x%X\n",
+            REPLAY_BUSY_REPORT_MS, anim_id.slot_num, goals, run_info->current_state, run_info->flags,
+            (unsigned)obj_field_int32_get(pc_obj, OBJ_F_CURRENT_AID),
+            (unsigned)obj_field_int32_get(pc_obj, OBJ_F_SPELL_FLAGS),
+            (unsigned)obj_field_int32_get(pc_obj, OBJ_F_CRITTER_FLAGS2));
+    } else {
+        tig_debug_printf("Replay: player busy %d ms: no run info\n", REPLAY_BUSY_REPORT_MS);
+    }
+    for (index = anim_find_first(pc_obj); index != -1; index = anim_find_next(index, pc_obj)) {
+        tig_debug_printf("Replay: player slot %d goal %s concurrent %d\n", index,
+            anim_run_info[index].goals[0].type >= 0 && anim_run_info[index].goals[0].type < ANIM_GOAL_MAX
+                ? anim_goal_names[anim_run_info[index].goals[0].type]
+                : "?",
+            anim_goal_nodes[anim_run_info[index].goals[0].type]->concurrent);
+    }
+}
+
 static tig_timestamp_t replay_fight_walked_at;
 // Enemies a real-time walk could not get closer to (behind a wall, bars, a
 // cliff): passed over for the next nearest until the player next attacks.
@@ -2130,6 +2180,18 @@ static bool replay_fight(int64_t pc_obj, int radius)
 
     replay_fight_walked_obj = OBJ_HANDLE_NULL;
     replay_fight_unreachable_count = 0;
+    // Body of Air refuses every attack click ("You cannot attack in this
+    // form", `intgame.c`), and a refused click costs nothing, so the rows ran
+    // out in seconds (2026-11-14). The player ends its turn, or in real time
+    // waits for the spell to end.
+    if ((obj_field_int32_get(pc_obj, OBJ_F_SPELL_FLAGS) & OSF_BODY_OF_AIR) != 0) {
+        if (my_turn) {
+            tig_debug_printf("Replay: command %d fight: cannot attack in Body of Air, ends the turn\n", replay_next);
+            combat_ui_end_turn_action();
+            return true;
+        }
+        return false;
+    }
     if (!combat_critter_is_combat_mode_active(pc_obj)) {
         combat_critter_activate_combat_mode(pc_obj);
     }
@@ -2209,8 +2271,10 @@ void replay_ui_tick(void)
     // or a recovery, which a player can make and cancelling and queueing are
     // about. Everything else below still holds.
     if (!command->now && !combat_ui_actor_ready(pc_obj)) {
+        replay_report_busy(pc_obj);
         return;
     }
+    replay_busy_since_set = false;
 
     // The UI drops every message when a turn-based encounter is running and
     // the turn is not the PC's (`intgame_process_event`, first statement). A

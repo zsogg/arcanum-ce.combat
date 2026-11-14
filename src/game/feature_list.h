@@ -337,4 +337,15 @@ FEATURE(NPC_PATH_BUDGET, "npc path budget", false)
 // command starts loads at no cost (`reload.c`).
 FEATURE(FIREARM_EXPERTISE, "firearm expertise", false)
 
+// Quirk 75 (2026-11-14, LG1), read by `anim_busy_goal_is_fidget`: a critter
+// standing still in turn-based combat is idle when its only busy goal is its
+// fidget.
+// Stock asks whether its *first* animation slot is the fidget, so a target of
+// Body of Fire, Water or Air - which fidgets in turn-based combat (its art
+// auto-animates) and carries the spell's eye candy in another slot - could
+// not act or end its turn when the eye candy's slot came first: every click,
+// the End Turn button and `E` did nothing for good. This reads the busy slot
+// itself, for the click path (`intgame_perform_action_on_target`) too.
+FEATURE(BODY_SPELL_TURN_END, "body spell turn end", false)
+
 // clang-format on

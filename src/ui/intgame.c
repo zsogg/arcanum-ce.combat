@@ -4177,11 +4177,9 @@ static void intgame_perform_action_on_target_inner(TargetDescriptor* td)
             if (feature_enabled(FEATURE_THROWN_WEAPON_TARGET)
                 && combat_turn_based_is_active()) {
                 AnimID busy_anim_id;
-                AnimID fidget_anim_id;
 
                 if (anim_is_busy(pc_obj, &busy_anim_id)
-                    && !(anim_is_current_goal_type(pc_obj, AG_ANIM_FIDGET, &fidget_anim_id)
-                        && anim_id_is_equal(&busy_anim_id, &fidget_anim_id))) {
+                    && !anim_busy_goal_is_fidget(pc_obj, &busy_anim_id)) {
                     return;
                 }
                 if (!combat_can_pay_action_points(pc_obj, combat_throw_cost_for(true))) {
@@ -4259,9 +4257,8 @@ static void intgame_perform_action_on_target_inner(TargetDescriptor* td)
     } else if (anim_is_busy(pc_obj, &anim_id)) {
         // 0x54F68E
         if (combat_turn_based_is_active()) {
-            AnimID fidget_anim_id;
-            if (anim_is_current_goal_type(pc_obj, AG_ANIM_FIDGET, &fidget_anim_id)
-                && anim_id_is_equal(&anim_id, &fidget_anim_id)
+            // CE: quirk 75, `anim_busy_goal_is_fidget`.
+            if (anim_busy_goal_is_fidget(pc_obj, &anim_id)
                 && num_goal_subslots_in_use(&anim_id) < 4) {
                 if (is_anim_forever(&anim_id)) {
                     if (anim_interrupt_all_goals_of_obj(pc_obj, 3, false, false)) {

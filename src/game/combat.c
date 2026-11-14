@@ -6481,15 +6481,7 @@ static void combat_round_mark_acted(int64_t obj)
 // critter standing still plays (`combat_ui_actor_ready`).
 static bool combat_group_member_idle(int64_t obj)
 {
-    AnimID curr_anim_id;
-    AnimID fidget_anim_id;
-
-    if (!anim_is_busy(obj, &curr_anim_id)) {
-        return true;
-    }
-
-    return anim_is_current_goal_type(obj, AG_ANIM_FIDGET, &fidget_anim_id)
-        && anim_id_is_equal(&curr_anim_id, &fidget_anim_id);
+    return anim_ready_to_end_turn(obj);
 }
 
 static bool combat_group_member_gone(CombatGroupMember* member)

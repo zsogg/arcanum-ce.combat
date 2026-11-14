@@ -43,6 +43,7 @@ void test_backstab_rules_suite(void);
 void test_followers_suite(void);
 #if ARCANUM_TESTS_GNU_LINK
 void test_interrupted_cast_suite(void);
+void test_body_spell_turn_end_suite(void);
 #endif
 void test_carried_lights_suite(void);
 void test_schematic_cap_suite(void);
@@ -166,6 +167,7 @@ int main(void)
 #if ARCANUM_TESTS_GNU_LINK
     test_interrupted_cast_suite();
 #endif
+    test_body_spell_turn_end_suite();
     test_carried_lights_suite();
     test_schematic_cap_suite();
     test_initiative_suite();

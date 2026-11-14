@@ -3627,6 +3627,38 @@ bool anim_is_busy(int64_t obj, AnimID* anim_id)
     return false;
 }
 
+// CE: whether `busy_anim_id`, the goal `anim_is_busy` found for `obj`, is the
+// fidget a critter standing still plays - the test a turn-based click and the
+// end of a turn make before acting. Stock (0x54F68E, 0x56F9B0) asked
+// `anim_is_current_goal_type`, which reads the critter's first slot only, so
+// a concurrent goal in an earlier slot (a body spell's eye candy) hid the
+// fidget for good. `body spell turn end` (quirk 75) reads the busy slot.
+bool anim_busy_goal_is_fidget(int64_t obj, AnimID* busy_anim_id)
+{
+    AnimID fidget_anim_id;
+    AnimRunInfo* run_info;
+
+    if (feature_enabled(FEATURE_BODY_SPELL_TURN_END)) {
+        return anim_id_to_run_info(busy_anim_id, &run_info)
+            && run_info->goals[0].type == AG_ANIM_FIDGET;
+    }
+
+    return anim_is_current_goal_type(obj, AG_ANIM_FIDGET, &fidget_anim_id)
+        && anim_id_is_equal(busy_anim_id, &fidget_anim_id);
+}
+
+// CE: free to end a turn - no busy goal, or only the fidget.
+bool anim_ready_to_end_turn(int64_t obj)
+{
+    AnimID curr_anim_id;
+
+    if (!anim_is_busy(obj, &curr_anim_id)) {
+        return true;
+    }
+
+    return anim_busy_goal_is_fidget(obj, &curr_anim_id);
+}
+
 // 0x4233D0
 int anim_busy_priority(int64_t obj)
 {

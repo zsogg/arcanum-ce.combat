@@ -68,6 +68,8 @@ bool anim_save(TigFile* stream);
 bool anim_load(GameLoadInfo* load_info);
 void anim_debug_enable(void);
 bool anim_is_busy(int64_t obj, AnimID* anim_id);
+bool anim_busy_goal_is_fidget(int64_t obj, AnimID* busy_anim_id);
+bool anim_ready_to_end_turn(int64_t obj);
 int anim_busy_priority(int64_t obj);
 bool anim_spell_in_flight_from(int64_t caster_obj);
 bool anim_is_idle(int64_t obj);
