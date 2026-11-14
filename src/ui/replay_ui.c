@@ -59,6 +59,11 @@
 // ... and how close an enemy must be to be attacked rather than walked to.
 #define REPLAY_FIGHT_REACH 2
 #define REPLAY_FIGHT_SALVE 10079
+// ... how long a real-time walk may get no closer before its enemy counts as
+// out of reach (the row runs again before the walk has begun), and how many
+// out-of-reach enemies it remembers until its next attack.
+#define REPLAY_FIGHT_STUCK_MS 4000
+#define REPLAY_FIGHT_MAX_UNREACHABLE 32
 #define REPLAY_MAX_COMMANDS 256
 #define REPLAY_IDENTITY_SIZE 64
 
@@ -1997,10 +2002,26 @@ static bool replay_fight_is_enemy(int64_t pc_obj, int64_t obj)
 }
 
 // LG1 (2026-11-14): the enemy `fight` last walked toward, and how far it was,
-// so a walk that got no closer is not repeated; and whether a hold was logged.
+// so a walk that got no closer is not repeated, and when it began.
 static int64_t replay_fight_walked_obj = OBJ_HANDLE_NULL;
 static int64_t replay_fight_walked_dist = 0;
-static bool replay_fight_hold_logged = false;
+static tig_timestamp_t replay_fight_walked_at;
+// Enemies a real-time walk could not get closer to (behind a wall, bars, a
+// cliff): passed over for the next nearest until the player next attacks.
+static int64_t replay_fight_unreachable[REPLAY_FIGHT_MAX_UNREACHABLE];
+static int replay_fight_unreachable_count = 0;
+
+static bool replay_fight_is_unreachable(int64_t obj)
+{
+    int index;
+
+    for (index = 0; index < replay_fight_unreachable_count && index < REPLAY_FIGHT_MAX_UNREACHABLE; index++) {
+        if (replay_fight_unreachable[index] == obj) {
+            return true;
+        }
+    }
+    return false;
+}
 
 // LG1 (2026-11-14): one `fight` action. See REPLAY_KIND_FIGHT. Returns
 // whether the row is done; false holds it, in real time, for the next tick.
@@ -2012,6 +2033,7 @@ static bool replay_fight(int64_t pc_obj, int radius)
     int64_t best_obj = OBJ_HANDLE_NULL;
     int64_t best_dist = 0;
     int64_t item_obj;
+    int unreachable = 0;
     bool my_turn;
     char identity[COMBAT_OBSERVER_IDENTITY_SIZE];
     TargetDescriptor td;
@@ -2045,6 +2067,10 @@ static bool replay_fight(int64_t pc_obj, int radius)
             continue;
         }
         dist = location_dist(pc_loc, obj_field_int64_get(node->obj, OBJ_F_LOCATION));
+        if (dist > REPLAY_FIGHT_REACH && replay_fight_is_unreachable(node->obj)) {
+            unreachable++;
+            continue;
+        }
         if (best_obj == OBJ_HANDLE_NULL || dist < best_dist) {
             best_obj = node->obj;
             best_dist = dist;
@@ -2053,7 +2079,12 @@ static bool replay_fight(int64_t pc_obj, int radius)
     object_list_destroy(&objects);
 
     if (best_obj == OBJ_HANDLE_NULL) {
-        tig_debug_printf("Replay: command %d fight: no enemy within %d tiles\n", replay_next, radius);
+        if (unreachable > 0) {
+            tig_debug_printf("Replay: command %d fight: no reachable enemy within %d tiles, %d out of reach\n",
+                replay_next, radius, unreachable);
+        } else {
+            tig_debug_printf("Replay: command %d fight: no enemy within %d tiles\n", replay_next, radius);
+        }
         return true;
     }
 
@@ -2062,9 +2093,9 @@ static bool replay_fight(int64_t pc_obj, int radius)
     // clicks the ground near it: an attack click on a far target leaves the
     // player on an attack goal that never reads as ready to the replay's
     // gate, which held every far start of the bench (2026-11-14). A walk that
-    // got no closer (no path, or the budget) is not repeated: the player
-    // holds and lets the enemy come - its turn ended, or in real time the row
-    // kept pending.
+    // got no closer (no path, or the budget) is not repeated: in turn-based
+    // the player ends its turn and lets the enemy come; in real time, after
+    // a grace, the enemy is passed over for the next nearest.
     if (best_dist > REPLAY_FIGHT_REACH) {
         if (best_obj == replay_fight_walked_obj && best_dist >= replay_fight_walked_dist) {
             if (my_turn) {
@@ -2074,24 +2105,31 @@ static bool replay_fight(int64_t pc_obj, int radius)
                 combat_ui_end_turn_action();
                 return true;
             }
-            if (!replay_fight_hold_logged) {
-                replay_fight_hold_logged = true;
-                tig_debug_printf("Replay: command %d fight: holds against %s at %d tiles\n",
-                    replay_next, identity, (int)best_dist);
+            if (tig_timer_elapsed(replay_fight_walked_at) < REPLAY_FIGHT_STUCK_MS) {
+                return false;
             }
+            // Real time: no closer after the grace, so no path; the next
+            // nearest is tried (2026-11-14: a hold here waited out the whole
+            // run at walled-off guards and a prisoner behind bars).
+            tig_debug_printf("Replay: command %d fight: gives up on %s at %d tiles, no path closer\n",
+                replay_next, identity, (int)best_dist);
+            replay_fight_unreachable[replay_fight_unreachable_count++ % REPLAY_FIGHT_MAX_UNREACHABLE] = best_obj;
+            replay_fight_walked_obj = OBJ_HANDLE_NULL;
             return false;
         }
         tig_debug_printf("Replay: command %d fight: walks toward %s at %d tiles\n",
             replay_next, identity, (int)best_dist);
         replay_fight_walked_obj = best_obj;
         replay_fight_walked_dist = best_dist;
-        replay_fight_hold_logged = false;
-        anim_goal_move_near_tile(pc_obj, obj_field_int64_get(best_obj, OBJ_F_LOCATION), REPLAY_FIGHT_REACH);
+        tig_timer_now(&replay_fight_walked_at);
+        if (!anim_goal_move_near_tile(pc_obj, obj_field_int64_get(best_obj, OBJ_F_LOCATION), REPLAY_FIGHT_REACH)) {
+            tig_debug_printf("Replay: command %d fight: the walk did not start\n", replay_next);
+        }
         return true;
     }
 
     replay_fight_walked_obj = OBJ_HANDLE_NULL;
-    replay_fight_hold_logged = false;
+    replay_fight_unreachable_count = 0;
     if (!combat_critter_is_combat_mode_active(pc_obj)) {
         combat_critter_activate_combat_mode(pc_obj);
     }
