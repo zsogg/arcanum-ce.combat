@@ -53,6 +53,10 @@
 #include "ui/tb_ui.h"
 #include "ui/wmap_rnd.h"
 
+// LG1 (2026-11-14): `fight`'s hit-point share below which it heals, and the
+// Healing Salve it heals with (description 10059).
+#define REPLAY_FIGHT_HEAL_PERCENT 40
+#define REPLAY_FIGHT_SALVE 10079
 #define REPLAY_MAX_COMMANDS 256
 #define REPLAY_IDENTITY_SIZE 64
 
@@ -384,6 +388,18 @@ typedef enum ReplayKind {
     //       the log gives the row's text. `inspect dialogue` (`stat` 11) logs
     //       the NPC's reply and every option offered.
     REPLAY_KIND_OPTION,
+    // LG1 (2026-11-14), the auto-fight bench: a simple player for a fight.
+    //   fight <radius>
+    //       one action as a plain player takes it: below 40% of its hit points
+    //       the player uses a Healing Salve it carries; otherwise it clicks
+    //       the nearest living enemy within that many tiles, through the
+    //       click path, so every rule a real click meets applies. An enemy is
+    //       a critter outside the party that is hostile on sight or fighting
+    //       the party. Rows of `fight` and `key end-turn` play a turn-based
+    //       encounter to its end without knowing who will die when. It acts
+    //       in either mode, whatever turn the row carries (on a turn-based
+    //       encounter, on the PC's turn). The radius in `count`.
+    REPLAY_KIND_FIGHT,
 } ReplayKind;
 
 // QA1 phase 4's `state` kinds, in `skill`.
@@ -1361,6 +1377,15 @@ static bool replay_parse_line(const char* text, ReplayCommand* command)
         return index == count;
     }
 
+    if (strcmp(kind, "fight") == 0) {
+        command->kind = REPLAY_KIND_FIGHT;
+        // The radius is required: every row carries an argument after its kind.
+        if (!replay_parse_int(tokens[index++], &(command->count)) || command->count <= 0) {
+            return false;
+        }
+        return index == count;
+    }
+
     if (strcmp(kind, "attack") == 0) {
         command->kind = REPLAY_KIND_ATTACK;
         replay_copy_target(command, tokens[index++]);
@@ -1732,7 +1757,7 @@ int replay_ui_count(void)
 bool replay_ui_describe(int index, char* buffer, size_t size)
 {
     const ReplayCommand* command;
-    static const char* kinds[] = { "object", "location", "key", "cast", "wield", "wait", "learn", "give", "throw", "skill", "raise", "prowl", "panel", "save", "inspect", "transfer", "take", "drop", "pickup", "wear", "skill-level", "stat-level", "jam", "afflict", "poison", "use", "xp", "train", "hour", "encounter", "hover", "screenshot", "spawn", "invulnerable", "await-death", "remove", "examine", "press", "click", "block", "face", "stay", "run", "recruit", "npc", "hurt", "order", "attack", "restock", "teleport", "degree", "state", "option" };
+    static const char* kinds[] = { "object", "location", "key", "cast", "wield", "wait", "learn", "give", "throw", "skill", "raise", "prowl", "panel", "save", "inspect", "transfer", "take", "drop", "pickup", "wear", "skill-level", "stat-level", "jam", "afflict", "poison", "use", "xp", "train", "hour", "encounter", "hover", "screenshot", "spawn", "invulnerable", "await-death", "remove", "examine", "press", "click", "block", "face", "stay", "run", "recruit", "npc", "hurt", "order", "attack", "restock", "teleport", "degree", "state", "option", "fight" };
     int written;
     static const char* casts[] = { "self", "object", "location" };
 
@@ -1943,6 +1968,81 @@ static bool replay_resolve(const ReplayCommand* command, int64_t* obj_ptr)
     return true;
 }
 
+// LG1 (2026-11-14): `fight`'s enemy test - a living critter outside the
+// player's party, not switched off, that is hostile on sight or has the
+// player or a party member as its combat focus.
+static bool replay_fight_is_enemy(int64_t pc_obj, int64_t obj)
+{
+    int64_t focus_obj;
+
+    if (obj == pc_obj
+        || critter_is_dead(obj)
+        || critter_party_same(pc_obj, obj)
+        || (obj_field_int32_get(obj, OBJ_F_FLAGS) & (OF_OFF | OF_DONTDRAW | OF_DESTROYED)) != 0) {
+        return false;
+    }
+    if ((obj_field_int32_get(obj, OBJ_F_NPC_FLAGS) & ONF_KOS) != 0) {
+        return true;
+    }
+    focus_obj = obj_field_handle_get(obj, OBJ_F_NPC_COMBAT_FOCUS);
+    return focus_obj != OBJ_HANDLE_NULL
+        && (focus_obj == pc_obj || critter_party_same(pc_obj, focus_obj));
+}
+
+// LG1 (2026-11-14): one `fight` action. See REPLAY_KIND_FIGHT.
+static void replay_fight(int64_t pc_obj, int radius)
+{
+    ObjectList objects;
+    ObjectNode* node;
+    int64_t pc_loc;
+    int64_t best_obj = OBJ_HANDLE_NULL;
+    int64_t best_dist = 0;
+    int64_t item_obj;
+    char identity[COMBAT_OBSERVER_IDENTITY_SIZE];
+    TargetDescriptor td;
+
+    if (object_hp_current(pc_obj) * 100 < object_hp_max(pc_obj) * REPLAY_FIGHT_HEAL_PERCENT) {
+        item_obj = replay_find_carried(pc_obj, REPLAY_FIGHT_SALVE, false);
+        if (item_obj != OBJ_HANDLE_NULL) {
+            tig_debug_printf("Replay: command %d fight: heals at %d/%d hp\n",
+                replay_next - 1, object_hp_current(pc_obj), object_hp_max(pc_obj));
+            item_use_on_obj(pc_obj, item_obj, pc_obj);
+            return;
+        }
+    }
+
+    pc_loc = obj_field_int64_get(pc_obj, OBJ_F_LOCATION);
+    ai_objects_in_radius(pc_obj, radius, &objects, OBJ_TM_NPC);
+    for (node = objects.head; node != NULL; node = node->next) {
+        int64_t dist;
+
+        if (!replay_fight_is_enemy(pc_obj, node->obj)) {
+            continue;
+        }
+        dist = location_dist(pc_loc, obj_field_int64_get(node->obj, OBJ_F_LOCATION));
+        if (best_obj == OBJ_HANDLE_NULL || dist < best_dist) {
+            best_obj = node->obj;
+            best_dist = dist;
+        }
+    }
+    object_list_destroy(&objects);
+
+    if (best_obj == OBJ_HANDLE_NULL) {
+        tig_debug_printf("Replay: command %d fight: no enemy within %d tiles\n", replay_next - 1, radius);
+        return;
+    }
+    if (!combat_critter_is_combat_mode_active(pc_obj)) {
+        combat_critter_activate_combat_mode(pc_obj);
+    }
+    combat_observer_object_id(best_obj, identity);
+    tig_debug_printf("Replay: command %d fight: attacks %s at %d tiles\n",
+        replay_next - 1, identity, (int)best_dist);
+    memset(&td, 0, sizeof(td));
+    td.is_loc = 0;
+    td.obj = best_obj;
+    intgame_perform_action_on_target(&td);
+}
+
 void replay_ui_tick(void)
 {
     ReplayCommand* command;
@@ -2028,7 +2128,11 @@ void replay_ui_tick(void)
     // its turn as `wait` and `await-death` do. Held to its turn, a
     // playtest's next creature waited for the encounter to end, which the
     // range's own wolves, fleeing the player, never let happen.
-    if (command->kind != REPLAY_KIND_SPAWN && !replay_mode_matches(command)) {
+    // LG1 (2026-11-14): `fight` too, in either mode - a fight may start in
+    // real time or turn-based the moment the party arrives, and on a
+    // turn-based encounter the gate above already holds it to the PC's turn.
+    if (command->kind != REPLAY_KIND_SPAWN && command->kind != REPLAY_KIND_FIGHT
+        && !replay_mode_matches(command)) {
         // Say it once - the flag is cleared only when a command is actually
         // submitted, not on the way past this gate. It used to be cleared here,
         // which meant a stall the *next* check caught reported itself every
@@ -3191,6 +3295,13 @@ void replay_ui_tick(void)
                 spell_ui_cancel();
             }
         }
+        return;
+    }
+
+    if (command->kind == REPLAY_KIND_FIGHT) {
+        replay_stall_reported = false;
+        replay_next++;
+        replay_fight(pc_obj, command->count);
         return;
     }
 
