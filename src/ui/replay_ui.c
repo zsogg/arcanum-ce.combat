@@ -56,6 +56,8 @@
 // LG1 (2026-11-14): `fight`'s hit-point share below which it heals, and the
 // Healing Salve it heals with (description 10059).
 #define REPLAY_FIGHT_HEAL_PERCENT 40
+// ... and how close an enemy must be to be attacked rather than walked to.
+#define REPLAY_FIGHT_REACH 2
 #define REPLAY_FIGHT_SALVE 10079
 #define REPLAY_MAX_COMMANDS 256
 #define REPLAY_IDENTITY_SIZE 64
@@ -391,14 +393,19 @@ typedef enum ReplayKind {
     // LG1 (2026-11-14), the auto-fight bench: a simple player for a fight.
     //   fight <radius>
     //       one action as a plain player takes it: below 40% of its hit points
-    //       the player uses a Healing Salve it carries; otherwise it clicks
-    //       the nearest living enemy within that many tiles, through the
+    //       the player uses a Healing Salve it carries; otherwise it walks
+    //       toward the nearest living enemy within that many tiles, or, once
+    //       within two tiles, clicks it, through the
     //       click path, so every rule a real click meets applies. An enemy is
     //       a critter outside the party that is hostile on sight or fighting
-    //       the party. Rows of `fight` and `key end-turn` play a turn-based
-    //       encounter to its end without knowing who will die when. It acts
-    //       in either mode, whatever turn the row carries (on a turn-based
-    //       encounter, on the PC's turn). The radius in `count`.
+    //       the party. An enemy further than two tiles is walked toward; if
+    //       the last walk got no closer, the player holds and lets it come.
+    //       On the PC's turn of a turn-based encounter, with too few action
+    //       points for a blow or holding, it ends the turn; in real time a
+    //       hold keeps the row pending, as a wait does. So rows of `fight`
+    //       alone play an encounter to its end without knowing who dies
+    //       when. It acts in either mode, whatever turn the row carries. The
+    //       radius in `count`.
     REPLAY_KIND_FIGHT,
 } ReplayKind;
 
@@ -1989,8 +1996,15 @@ static bool replay_fight_is_enemy(int64_t pc_obj, int64_t obj)
         && (focus_obj == pc_obj || critter_party_same(pc_obj, focus_obj));
 }
 
-// LG1 (2026-11-14): one `fight` action. See REPLAY_KIND_FIGHT.
-static void replay_fight(int64_t pc_obj, int radius)
+// LG1 (2026-11-14): the enemy `fight` last walked toward, and how far it was,
+// so a walk that got no closer is not repeated; and whether a hold was logged.
+static int64_t replay_fight_walked_obj = OBJ_HANDLE_NULL;
+static int64_t replay_fight_walked_dist = 0;
+static bool replay_fight_hold_logged = false;
+
+// LG1 (2026-11-14): one `fight` action. See REPLAY_KIND_FIGHT. Returns
+// whether the row is done; false holds it, in real time, for the next tick.
+static bool replay_fight(int64_t pc_obj, int radius)
 {
     ObjectList objects;
     ObjectNode* node;
@@ -1998,16 +2012,27 @@ static void replay_fight(int64_t pc_obj, int radius)
     int64_t best_obj = OBJ_HANDLE_NULL;
     int64_t best_dist = 0;
     int64_t item_obj;
+    bool my_turn;
     char identity[COMBAT_OBSERVER_IDENTITY_SIZE];
     TargetDescriptor td;
+
+    my_turn = combat_turn_based_is_active() && combat_turn_based_whos_turn_get() == pc_obj;
+
+    // Out of points for a blow: the turn is over, as a player presses End.
+    if (my_turn && combat_action_points_of(pc_obj) < combat_attack_cost(pc_obj)) {
+        tig_debug_printf("Replay: command %d fight: ends the turn with %d AP\n",
+            replay_next, combat_action_points_of(pc_obj));
+        combat_ui_end_turn_action();
+        return true;
+    }
 
     if (object_hp_current(pc_obj) * 100 < object_hp_max(pc_obj) * REPLAY_FIGHT_HEAL_PERCENT) {
         item_obj = replay_find_carried(pc_obj, REPLAY_FIGHT_SALVE, false);
         if (item_obj != OBJ_HANDLE_NULL) {
             tig_debug_printf("Replay: command %d fight: heals at %d/%d hp\n",
-                replay_next - 1, object_hp_current(pc_obj), object_hp_max(pc_obj));
+                replay_next, object_hp_current(pc_obj), object_hp_max(pc_obj));
             item_use_on_obj(pc_obj, item_obj, pc_obj);
-            return;
+            return true;
         }
     }
 
@@ -2028,19 +2053,55 @@ static void replay_fight(int64_t pc_obj, int radius)
     object_list_destroy(&objects);
 
     if (best_obj == OBJ_HANDLE_NULL) {
-        tig_debug_printf("Replay: command %d fight: no enemy within %d tiles\n", replay_next - 1, radius);
-        return;
+        tig_debug_printf("Replay: command %d fight: no enemy within %d tiles\n", replay_next, radius);
+        return true;
     }
+
+    combat_observer_object_id(best_obj, identity);
+    // An enemy further than a step or two is walked to first, as a player
+    // clicks the ground near it: an attack click on a far target leaves the
+    // player on an attack goal that never reads as ready to the replay's
+    // gate, which held every far start of the bench (2026-11-14). A walk that
+    // got no closer (no path, or the budget) is not repeated: the player
+    // holds and lets the enemy come - its turn ended, or in real time the row
+    // kept pending.
+    if (best_dist > REPLAY_FIGHT_REACH) {
+        if (best_obj == replay_fight_walked_obj && best_dist >= replay_fight_walked_dist) {
+            if (my_turn) {
+                tig_debug_printf("Replay: command %d fight: holds against %s at %d tiles, ends the turn\n",
+                    replay_next, identity, (int)best_dist);
+                replay_fight_walked_obj = OBJ_HANDLE_NULL;
+                combat_ui_end_turn_action();
+                return true;
+            }
+            if (!replay_fight_hold_logged) {
+                replay_fight_hold_logged = true;
+                tig_debug_printf("Replay: command %d fight: holds against %s at %d tiles\n",
+                    replay_next, identity, (int)best_dist);
+            }
+            return false;
+        }
+        tig_debug_printf("Replay: command %d fight: walks toward %s at %d tiles\n",
+            replay_next, identity, (int)best_dist);
+        replay_fight_walked_obj = best_obj;
+        replay_fight_walked_dist = best_dist;
+        replay_fight_hold_logged = false;
+        anim_goal_move_near_tile(pc_obj, obj_field_int64_get(best_obj, OBJ_F_LOCATION), REPLAY_FIGHT_REACH);
+        return true;
+    }
+
+    replay_fight_walked_obj = OBJ_HANDLE_NULL;
+    replay_fight_hold_logged = false;
     if (!combat_critter_is_combat_mode_active(pc_obj)) {
         combat_critter_activate_combat_mode(pc_obj);
     }
-    combat_observer_object_id(best_obj, identity);
     tig_debug_printf("Replay: command %d fight: attacks %s at %d tiles\n",
-        replay_next - 1, identity, (int)best_dist);
+        replay_next, identity, (int)best_dist);
     memset(&td, 0, sizeof(td));
     td.is_loc = 0;
     td.obj = best_obj;
     intgame_perform_action_on_target(&td);
+    return true;
 }
 
 void replay_ui_tick(void)
@@ -3299,9 +3360,12 @@ void replay_ui_tick(void)
     }
 
     if (command->kind == REPLAY_KIND_FIGHT) {
-        replay_stall_reported = false;
-        replay_next++;
-        replay_fight(pc_obj, command->count);
+        // A hold in real time keeps the row pending, as a wait does, until an
+        // enemy comes within reach or none is left.
+        if (replay_fight(pc_obj, command->count)) {
+            replay_stall_reported = false;
+            replay_next++;
+        }
         return;
     }
 
