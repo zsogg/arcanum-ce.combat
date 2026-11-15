@@ -859,6 +859,9 @@ These were wrong in the original 2001 game itself. CE fixes them, always.
   original it could stick for good: a gnome gained 10 per charm.
 - Teleport's exit picks the map area the caster is really standing in, not a
   neighbouring one.
+- A character under Body of Fire, Water or Air in turn-based combat is no
+  longer left with a turn that no click, End Turn or `E` would end; the
+  game waited for good (`body spell turn end`, quirk 75; new in release 6).
 
 **Fatigue**
 
@@ -1791,10 +1794,6 @@ an Ogre or an Orc cannot.
 
 - **Aimed throws** (`called shot throws`): built, but in no mod and not yet
   playtested.
-- **A body spell's stuck turn** (`body spell turn end`, new in release 6):
-  in turn-based combat a character under Body of Fire, Water or Air could be
-  left with a turn that no click and no End Turn would end (quirk 75 of the
-  original). The switch ends it; built and tested, in no mod yet.
 
 ## 5. Running the game
 
