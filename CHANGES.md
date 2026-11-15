@@ -23,6 +23,23 @@ Magick Obscura*.
 - The original's 'quirks' are kept on purpose. Section 6 lists reachable
   quirks.
 
+**Release 6 in brief.** Release 5 came out on 2026-11-10; release 6 is a
+beta. It adds:
+
+- Three new optional mods: Large Sector Cache (section 1.11), Aptitude
+  Balance (1.12), which makes the magick and tech rules fairer to
+  technologists, and Praetor's Guards (1.13)
+- Simultaneous Turns can be turned off on the Options screen (1.10);
+  Better Shops sells large armor for half-ogres (1.6)
+- In the Combat Rebalance: Firearms training pays, a follower's summon
+  outlasts the fight, a follower keeps a reserve, missile spells are paid
+  for as they are thrown, and the party lands spread out
+- Dark Elf, Ogre and Orc player characters with UAP's Race Mod installed
+- Fixes: the game no longer quits after 100 different scripts, two
+  crashes, body spells with a weapon drawn; Troika's 2001 limits lifted
+
+What release 6 adds is marked "new in release 6".
+
 **Release 5 in brief.** Release 4 came out on 2026-11-07; release 5 is a
 beta. It adds:
 
@@ -88,7 +105,8 @@ release 1".
 **Contents:**
 1. The optional mods: Combat Rebalance, Real-Time Pacing, Called Shots,
    Followers, Initiative and Awareness, Better Shops, Starting Gold, Brighter
-   Lanterns, Encounter Variety, Simultaneous Turns
+   Lanterns, Encounter Variety, Simultaneous Turns, Large Sector Cache,
+   Aptitude Balance, Praetor's Guards
 2. Highlights: the bugs worth a story, and the quirks left alone
 3. Bug fixes: the original game's bugs, the decompilation's mistakes, safety
 4. Changes to game mechanics: the Unofficial Arcanum Patch, CE's own rules,
@@ -102,10 +120,10 @@ ledger of decompilation mistakes.
 
 ## 1. The optional mods
 
-Twelve optional mods come with Arcanum CE, all off unless you turn them on.
+Thirteen optional mods come with Arcanum CE, all off unless you turn them on.
 Six were new in release 2 (sections 1.4 to 1.9), Simultaneous Turns (section
-1.10) in release 3, and Large Sector Cache and Aptitude Balance (sections 1.11
-and 1.12) are new in release 6.
+1.10) in release 3, and Large Sector Cache, Aptitude Balance and Praetor's
+Guards (sections 1.11 to 1.13) are new in release 6.
 
 - **Turning them on:** setup asks about each one. Afterwards each is one line
   in `arcanum-ce.cfg`: change its `0` to `1` and restart the game to turn it
@@ -147,6 +165,17 @@ magazine/cylinder mechanic and must be reloaded.
 - **Jams:** a firearm's fumble jams it. Clearing the jam costs reload work,
   the gun keeps its ammo. (In the original, every fumble shot the shooter)
 - **An easier first shot** at an enemy that has not yet noticed you.
+- **Training pays** (new in release 6): each tier of Firearms training
+  takes an AP off loading, and Expert and Master one more off firing and
+  loading, never below 1; it adds to the critical chance (+5, +13, +23 by
+  tier, pistols +5, +10, +15); and each shot adds 70% of the Firearms skill
+  as damage, 14 at a skill of 20 (45% for the rare guns, none for pistols).
+  A pistol's next shot sometimes loads for nothing ("Quick reload", 15 in
+  100). Rifles pierce armor a little better.
+- **An NPC that reloads in turn-based combat goes on with its turn**
+  (new in release 6). A reload plays no animation, so nothing prompted the
+  NPC again and its points were thrown away: a Master rifleman fired once
+  on 16 AP. Now he fires twice.
 
 **Armor**
 
@@ -174,6 +203,9 @@ magazine/cylinder mechanic and must be reloaded.
   enemies, casts nothing worth less than its own weapon's blow, and in
   turn-based does not spend the points its attack needs on a buff. In the
   original it took the first spell its lists allowed.
+- **A summon still gets its turn** (new in release 6): while none of its
+  summons is alive, a caster whose summon lost to a better-scoring spell
+  casts it anyway one time in five, at most once a turn.
 - **Targets are chosen better:** undead hold their ground, and hunters go for
   gunners and casters they can see or hear (new in release 5).
 - **Followers on Defensive** fight within 8 tiles of you.
@@ -206,9 +238,18 @@ magazine/cylinder mechanic and must be reloaded.
   barely gets through the foe's armour summons, protects and attacks with
   its spells like any other caster. Fighters who know a spell or two keep
   the original rule.
-- **A reserve while everyone is healthy:** such a follower stops casting
-  below a fifth of its fatigue and never risks fainting. Once you or it are
-  hurt, it may spend everything, as other casters do.
+- **A reserve:** such a follower keeps a fifth of its fatigue after every
+  cast and never risks fainting, unless you are below a fifth of your health
+  or it is healing someone badly hurt (changed in release 6; before, it
+  spent everything once you or it were hurt).
+- **A summon outlasts the fight** (new in release 6): when the fight ends, a
+  follower's summoned creature stays 150 seconds, and 40 more for each blow
+  it lands, while you are out of combat. Keeping it costs the follower 5
+  fatigue every 10 seconds. Other spells it maintains end with the fight,
+  as before.
+- **The party lands spread out** (new in release 6): arriving on a map, each
+  follower takes a free tile one to three away from you instead of standing
+  on yours.
 - **Arronax casts every spell he knows** - all seven, not only the highest
   of each college, as his map entry otherwise insists.
 - **No wasted turns on spells that cannot reach:** a follower does not cast
@@ -310,6 +351,9 @@ magazine/cylinder mechanic and must be reloaded.
 - **A cast cut short** - by turn-based combat starting, or a new order - ends
   instead of sticking, which had kept the AI from ever casting that spell on
   that target again (new in release 3).
+- **A missile spell is paid for as it is thrown** (new in release 6), and
+  a caster waits for its missile to land before throwing another. A missile
+  in flight when turn-based combat starts still lands.
 
 **Dodge** (new in release 3)
 
@@ -568,7 +612,7 @@ New since release 1; as yet untested in play.
 
 ### 1.6 Better Shops - `mod better-shops`
 
-New since release 1; as yet untested in play. Three changes to what shops
+New since release 1; as yet untested in play. Four changes to what shops
 sell, in one mod because they edit the same file:
 
 - **Schematics in stock:** every schematic a shop sells is in stock at least
@@ -579,6 +623,11 @@ sell, in one mod because they edit the same file:
   are sold.
 - **Conjure Spirit scrolls** in every magic shop, where only the Tarant
   magick shop carried them.
+- **Large armor for a half-ogre** (new in release 6): wherever a shop sells
+  an armor in the medium size, the large size comes up at least half as
+  often, where most came up 5 to 10% of the time against the medium's 50 to
+  90%. At the Quality Smith, over 200 restocks, Large Basic Platemail came
+  up 66 times where the original gave 7.
 
 A shop shows the new stock from your first visit: one still holding the stock the
 game's maps ship is restocked once when its map loads. After that it re-rolls
@@ -653,6 +702,10 @@ usual costs, and your turn comes when the last of them has finished.
   enemy still acts before your party in an ambush's first round.
 - **Nobody acts twice in a round**, and Fast Turn-Based still applies.
   Real-time combat is unchanged.
+- **Turn it off in the game** (new in release 6): with the mod on, the
+  Options screen's Video tab has a Simultaneous Turns control after
+  Shadows. Off, every critter takes its own turn again, as in the original;
+  a change made during a fight applies from the next round.
 
 ### 1.11 Large Sector Cache - `mod large-sector-cache`
 
@@ -687,6 +740,19 @@ everywhere. This mod makes the rules fairer:
 - **Enemy mages cast at technologists.** They weigh a damage spell by the
   damage it loses to resistance, so a technologist is no longer spared them.
 - **Two Automatons stand among the Kree bandits.**
+
+### 1.13 Praetor's Guards - `mod praetors-guards`
+
+New in release 6. Tell King Praetor in Dernholm that his brother sends his
+regards, and he asks whether you have anything to say before you die. The
+humble answer makes him attack you. The defiant one is meant to call his
+guards on you, but the game never gave any guard the name his call looks
+for, so the conversation just ends and nothing happens.
+
+- **With this mod the castle's guards answer the call:** the guards in view
+  attack you along with the king. Nothing else about them changes.
+- **Saves:** it can be turned on or off with any save, one that has visited
+  the castle included.
 
 ## 2. Highlights
 
@@ -773,6 +839,10 @@ These were wrong in the original 2001 game itself. CE fixes them, always.
 - Quitting from inside a conversation no longer crashes the game.
 - The follower bar refreshing after its window has closed no longer crashes
   the game.
+- A save that cannot create a map's change file no longer crashes the game
+  (new in release 6).
+- With every spell id in use, a new spell does not start; the original quit
+  the game (new in release 6).
 
 **Spells and magic**
 
@@ -944,6 +1014,9 @@ then what release 1 did.
   in release 3)
 - Effects that multiply or divide work, and carrying the Flow Reaper no longer
   crashes the game; before, every multiplier was zero. (#60)
+- A character turned by Body of Fire, Water or Air with a weapon drawn is
+  drawn and can attack; before, it got art that does not exist, showed only
+  while walking and could not attack. (#398, new in release 6)
 - Wall of Fire, Squall of Ice and the fire grenade hurt enemies and spare their
   caster's party; before, they burned the caster instead. (#65)
 - Wall of Fire, Wall of Stone and Wall of Force are five tiles long and lie
@@ -1091,6 +1164,9 @@ then what release 1 did.
   could crash the game, and Escape waited on X. (#369)
 - If the roof art list fails to load, the game no longer reads from an empty
   table, which could crash; release 1 kept a stale roof count. (#172)
+- The game no longer quits after the 100th different script since a load;
+  before, no script was ever released, and the 101st quit the game without
+  a word. (#397, new in release 6)
 
 **Saving and loading**
 
@@ -1637,6 +1713,13 @@ All of UAP 2.0.2's fixes to the game program are part of Arcanum CE, and on.
 - **No combat music** is off: CE's combat music shuffle (below) is on in its
   place.
 
+**UAP's Race Mod** (new in release 6), on wherever its `ArcanumXRaces.dat`
+is installed: character creation offers a Dark Elf, an Ogre and an Orc,
+with the Race Mod's art, portraits, backgrounds, starting clothes and three
+more pregenerated characters. People react to a Dark Elf, an Ogre or an Orc
+as they do to an elf, a half-ogre or a half-orc. A Dark Elf can be female;
+an Ogre or an Orc cannot.
+
 **Followers**
 
 - **Spend a follower's character points yourself:** turn off their automatic
@@ -1683,6 +1766,14 @@ All of UAP 2.0.2's fixes to the game program are part of Arcanum CE, and on.
 
 ### 4.2 CE's own rules, always on
 
+- **Play writes nothing to disk until you save** (`save scratch in memory`,
+  new in release 6). The save's working folder is held in memory, so moving
+  between maps no longer writes files, and a long campaign's list of
+  destroyed objects no longer repeats itself.
+- **Troika's 2001 limits lifted** (new in release 6): art is decoded from
+  memory, about three times faster; more room for sounds and music, speech
+  bubbles, the message history and running animations; a script cache that
+  grows instead of quitting the game.
 - **Varied combat music** (`combat music shuffle`, new since release 1). The
   original loops one track through every fight, a copy of the dwarven theme.
   Now a fight opens with the usual sting, then plays the game's area music in
@@ -1700,6 +1791,10 @@ All of UAP 2.0.2's fixes to the game program are part of Arcanum CE, and on.
 
 - **Aimed throws** (`called shot throws`): built, but in no mod and not yet
   playtested.
+- **A body spell's stuck turn** (`body spell turn end`, new in release 6):
+  in turn-based combat a character under Body of Fire, Water or Air could be
+  left with a turn that no click and no End Turn would end (quirk 75 of the
+  original). The switch ends it; built and tested, in no mod yet.
 
 ## 5. Running the game
 
