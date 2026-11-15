@@ -818,7 +818,6 @@ bool map_open(const char* base_path, const char* save_path, bool a3)
     tig_debug_printf("map_open: map_gender_check()...");
     tig_timer_now(&timestamp);
     map_gender_check();
-    map_fresh_shop_stock();
     map_is_start_map = false;
     if (map_current_map_index != 0 && map_type_to_map_index[MAP_TYPE_START_MAP] == map_current_map_index) {
         map_is_start_map = true;
@@ -831,6 +830,11 @@ bool map_open(const char* base_path, const char* save_path, bool a3)
 
     map_closed = false;
     map_valid = true;
+
+    // CE (`fresh shop stock`, 2026-11-15): after the map is valid. Run before
+    // it, each restock's new objects asked to lock sectors of a map not yet
+    // valid: about 3,800 "Attempt to lock a sector" errors a map open.
+    map_fresh_shop_stock();
 
     return true;
 }
