@@ -36,7 +36,8 @@ beta. It adds:
   for as they are thrown, and the party lands spread out
 - Dark Elf, Ogre and Orc player characters with UAP's Race Mod installed
 - Fixes: the game no longer quits after 100 different scripts, two
-  crashes, body spells with a weapon drawn; Troika's 2001 limits lifted
+  crashes, body spells with a weapon drawn, a turn that Body of Fire, Water
+  or Air left frozen; Troika's 2001 limits lifted
 
 What release 6 adds is marked "new in release 6".
 
@@ -130,6 +131,10 @@ Guards (sections 1.11 to 1.13) are new in release 6.
   on, back to `0` to turn it off.
 - **Saves:** keep the Combat Rebalance on for a save made with it. Every
   other mod can be turned on or off with any save.
+- **Mods that place things on a map** (Aptitude Balance's Kree Automatons,
+  Praetor's Guards) reach maps you have already visited (new in release 6).
+  Before, the game kept using the list of the map's objects it had already
+  built.
 
 ### 1.1 Combat Rebalance (preview) - `mod combat-rebalance`
 
@@ -631,7 +636,9 @@ sell, in one mod because they edit the same file:
 
 A shop shows the new stock from your first visit: one still holding the stock the
 game's maps ship is restocked once when its map loads. After that it re-rolls
-a day after you trade there, as before.
+a day after you trade there, as before. Since release 6 that first restock
+waits until the map has loaded; before, it ran a moment early and filled the
+game's log with errors, though the shops restocked the same.
 Measured over 200 restocks of every shop list in the game, every item came
 in as often as the mod's model predicts, and Conjure Spirit scrolls were in every
 magic shop's stock every time.

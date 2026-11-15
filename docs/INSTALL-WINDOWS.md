@@ -72,8 +72,8 @@ folder, not from Steam. Steam's Play button starts the original game. Setup's
    - checks that the game and UAP are there;
    - shows a table: what is always on, what each
      mod turns on, and what setup never turns on;
-   - asks yes or no for each of the ten optional mods, from Called Shots
-     to Encounter Variety (README's "Optional mods" lists them).
+   - asks yes or no for each of the thirteen optional mods, from Called
+     Shots to Praetor's Guards (README's "Optional mods" lists them).
    - installs Arcanum CE into the folder and runs a check.
 
 **Setup changes nothing outside the game folder**: no registry value and no
@@ -154,7 +154,7 @@ arcanum-ce-CHANGES.md), with what each optional mod does.
 
 ## Optional mods
 
-Ten mods come with Arcanum CE, all off unless you turn them on.
+Thirteen mods come with Arcanum CE, all off unless you turn them on.
 
 - **Turning them on:** setup asks about each one. Afterwards each corresponds to one line
   in `arcanum-ce.cfg`.
@@ -204,10 +204,12 @@ tested in a game):
   ambushes in which at most one enemy acts first.
 - `mod simultaneous-turns`, **Simultaneous Turns**: in turn-based fights the
   enemy side takes one turn together, each on its own action points, and
-  your turn comes when the last has finished. New in release 3, and played.
+  your turn comes when the last has finished. New in release 3, and played;
+  since release 6 it can be turned off in Options > Video.
 - `mod better-shops`, **Better Shops**: schematics in stock more often,
-  specialist components sold and easier to use, and Conjure Spirit scrolls
-  in every magic shop, from a shop's first visit.
+  specialist components sold and easier to use, Conjure Spirit scrolls
+  in every magic shop, and large armor for half-ogres, from a shop's first
+  visit.
 - `mod starting-gold`, **Starting Gold**: a new character starts with three
   times the gold.
 - `mod brighter-lanterns`, **Brighter Lanterns**: carried lights light a
@@ -218,6 +220,14 @@ tested in a game):
   sectors in memory instead of 16. A town you leave and come back to stays
   loaded, so its people carry on instead of going back to their posts. New,
   and not yet played.
+- `mod aptitude-balance`, **Aptitude Balance**: technologists fairer against
+  magick. No weapon misses outright because of its target's aptitude,
+  a friendly spell works on a technologist, and a technologist keeps part of
+  a magick item's power. Adds Automatons to the Kree bandit camp. New in
+  release 6.
+- `mod praetors-guards`, **Praetor's Guards**: Dernholm castle's guards
+  answer King Praetor's call to arms, which no one answers in the original
+  game. New in release 6.
 
 **Saves and mods:**
 
