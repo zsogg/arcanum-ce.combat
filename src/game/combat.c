@@ -522,6 +522,11 @@ bool combat_load(GameLoadInfo* load_info)
         return true;
     }
 
+    // CE (`simultaneous npc turns`, 2026-11-15): a loaded round follows the
+    // switch and the Options choice as they stand now; the load's own walk
+    // and the rebuild below read it before any round begins.
+    combat_round_simultaneous = combat_simultaneous_turns_enabled();
+
     combat_callbacks.field_4();
 
     if (tig_file_fread(&combat_action_points, sizeof(combat_action_points), 1, load_info->stream) != 1) return false;
