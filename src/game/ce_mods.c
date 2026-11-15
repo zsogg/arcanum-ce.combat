@@ -15,6 +15,8 @@
 static char ce_mods_enabled[CE_MODS_MAX][CE_MODS_ID_MAX];
 static int ce_mods_enabled_count;
 
+int ce_mods_found_count;
+
 // Which enabled bundles' `module/` folders are mounted now.
 static bool ce_mods_module_mounted[CE_MODS_MAX];
 
@@ -140,6 +142,7 @@ void ce_mods_init(void)
     const char* id;
 
     ce_mods_enabled_count = 0;
+    ce_mods_found_count = 0;
 
     tig_file_list_create(&list, CE_MODS_DIR "\\*.*");
     for (index = 0; index < list.count; index++) {
@@ -152,6 +155,7 @@ void ce_mods_init(void)
             tig_debug_printf("ce mods: \"%s\" is not a bundle id (a-z, 0-9, -); ignored\n", id);
             continue;
         }
+        ce_mods_found_count++;
 
         snprintf(setting, sizeof(setting), "mod %s", id);
         settings_register(&settings, setting, "0", NULL);
@@ -215,5 +219,38 @@ void ce_mods_unmount_module(void)
             tig_file_repository_remove(path);
             ce_mods_module_mounted[index] = false;
         }
+    }
+}
+
+bool ce_mods_signature_append(char* buffer, size_t size, const char* id)
+{
+    size_t length = strlen(buffer);
+    size_t needed = strlen(id) + (length != 0 ? 1 : 0);
+
+    if (length + needed + 1 > size) {
+        return false;
+    }
+    if (length != 0) {
+        buffer[length++] = ',';
+    }
+    strcpy(buffer + length, id);
+    return true;
+}
+
+void ce_mods_map_signature(const char* map_name, char* buffer, size_t size)
+{
+    char path[TIG_MAX_PATH];
+    int index;
+
+    buffer[0] = '\0';
+    for (index = 0; index < ce_mods_enabled_count; index++) {
+        snprintf(path, sizeof(path), "%s\\%s\\module\\maps\\%s", CE_MODS_DIR, ce_mods_enabled[index], map_name);
+        if (!tig_file_is_directory(path)) {
+            snprintf(path, sizeof(path), "%s\\%s\\maps\\%s", CE_MODS_DIR, ce_mods_enabled[index], map_name);
+            if (!tig_file_is_directory(path)) {
+                continue;
+            }
+        }
+        ce_mods_signature_append(buffer, size, ce_mods_enabled[index]);
     }
 }

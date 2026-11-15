@@ -803,6 +803,7 @@ set(COMBAT_TEST_DATA
     combat_required_action_points
     combat_group_count
     combat_round_acted_count
+    combat_round_simultaneous
 )
 set(COMBAT_TEST_OBJ "${CMAKE_CURRENT_BINARY_DIR}/combat_test_globalized.o")
 set(_combat_test_globalize_args "")

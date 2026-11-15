@@ -48,8 +48,25 @@ TEST(a_features_line_reads_a_key_and_a_whole_number)
     CHECK(!ce_mods_parse_line("weapon rules=1", small, sizeof(small), &value));
 }
 
+TEST(a_map_signature_lists_bundles_comma_separated_and_refuses_overflow)
+{
+    char buffer[16];
+
+    buffer[0] = '\0';
+    CHECK(ce_mods_signature_append(buffer, sizeof(buffer), "praetors"));
+    CHECK_STR(buffer, "praetors");
+    CHECK(ce_mods_signature_append(buffer, sizeof(buffer), "ap1"));
+    CHECK_STR(buffer, "praetors,ap1");
+    // 12 + ",xyz" + NUL = 17 > 16: refused, unchanged.
+    CHECK(!ce_mods_signature_append(buffer, sizeof(buffer), "xyz"));
+    CHECK_STR(buffer, "praetors,ap1");
+    CHECK(ce_mods_signature_append(buffer, sizeof(buffer), "x"));
+    CHECK_STR(buffer, "praetors,ap1,x");
+}
+
 void test_ce_mods_suite(void)
 {
     RUN(a_bundle_id_is_lower_case_letters_digits_and_dashes);
     RUN(a_features_line_reads_a_key_and_a_whole_number);
+    RUN(a_map_signature_lists_bundles_comma_separated_and_refuses_overflow);
 }

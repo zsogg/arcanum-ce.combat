@@ -3,6 +3,7 @@
 #include <stdio.h>
 
 #include "game/anim.h"
+#include "game/ce_mods.h"
 #include "game/critter.h"
 #include "game/description.h"
 #include "game/descriptions.h"
@@ -1123,6 +1124,47 @@ void map_paths(char** base_path_ptr, char** save_path_ptr)
     }
 }
 
+// CE: the bundle signature recorded beside a map's object cache when it was
+// built, "" when there is no record (ce_mods.h).
+static void map_cache_signature_read(const char* cache_path, char* buffer, size_t size)
+{
+    char path[TIG_MAX_PATH];
+    TigFile* stream;
+    char* end;
+
+    buffer[0] = '\0';
+    snprintf(path, sizeof(path), "%s.cemods", cache_path);
+    stream = tig_file_fopen(path, "rt");
+    if (stream == NULL) {
+        return;
+    }
+    if (tig_file_fgets(buffer, (int)size, stream) == NULL) {
+        buffer[0] = '\0';
+    }
+    tig_file_fclose(stream);
+    end = buffer + strlen(buffer);
+    while (end > buffer && (end[-1] == '\n' || end[-1] == '\r')) {
+        *--end = '\0';
+    }
+}
+
+// CE: record the signature the cache was built with. Written only when a
+// bundle is involved, now or at the last build, so stock play writes nothing.
+static void map_cache_signature_write(const char* cache_path, const char* signature)
+{
+    char path[TIG_MAX_PATH];
+    TigFile* stream;
+
+    snprintf(path, sizeof(path), "%s.cemods", cache_path);
+    stream = tig_file_fopen(path, "wt");
+    if (stream == NULL) {
+        tig_debug_printf("Error creating file %s\n", path);
+        return;
+    }
+    tig_file_fputs(signature, stream);
+    tig_file_fclose(stream);
+}
+
 // 0x4102F0
 bool map_preprocess_mobile(const char* name)
 {
@@ -1134,6 +1176,8 @@ bool map_preprocess_mobile(const char* name)
     TigFileList file_list;
     unsigned int index;
     int64_t obj;
+    char signature[CE_MODS_SIGNATURE_MAX];
+    char recorded[CE_MODS_SIGNATURE_MAX];
 
     if (!gamelib_mod_guid_get(&guid)) {
         tig_debug_printf("Attempt to retrieve mod GUID when no mod is loaded\n");
@@ -1147,7 +1191,16 @@ bool map_preprocess_mobile(const char* name)
     snprintf(path, sizeof(path), "maps\\%s", name);
     map_obfuscate_name(&(path[5]));
 
-    if (tig_file_exists(path, NULL)) {
+    // CE: a change in the bundles that place objects on this map rebuilds
+    // its cache, as modkit's install deletes it (ce_mods.h).
+    signature[0] = '\0';
+    recorded[0] = '\0';
+    if (ce_mods_found_count != 0) {
+        ce_mods_map_signature(name, signature, sizeof(signature));
+        map_cache_signature_read(path, recorded, sizeof(recorded));
+    }
+
+    if (strcmp(signature, recorded) == 0 && tig_file_exists(path, NULL)) {
         stream = tig_file_fopen(path, "rb");
         if (stream == NULL) {
             tig_debug_printf("Error opening file %s\n", path);
@@ -1223,6 +1276,14 @@ bool map_preprocess_mobile(const char* name)
 
     tig_file_list_destroy(&file_list);
     tig_file_fclose(stream);
+
+    // CE: see ce_mods.h. `path` holds the last object read; rebuild the name.
+    if (signature[0] != '\0' || recorded[0] != '\0') {
+        snprintf(path, sizeof(path), "maps\\%s", name);
+        map_obfuscate_name(&(path[5]));
+        map_cache_signature_write(path, signature);
+        tig_debug_printf("Map %s: object cache rebuilt for bundles \"%s\"\n", name, signature);
+    }
     return true;
 }
 

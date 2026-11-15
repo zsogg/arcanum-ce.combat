@@ -2,6 +2,7 @@
 
 #include "game/anim.h"
 #include "game/combat.h"
+#include "game/feature.h"
 #include "game/gamelib.h"
 #include "game/highres_config.h"
 #include "game/location.h"
@@ -67,6 +68,8 @@ static void options_ui_music_volume_get(int* value_ptr, bool* enabled_ptr);
 static void options_ui_music_volume_set(int value);
 static void options_ui_shadows_get(int* value_ptr, bool* enabled_ptr);
 static void options_ui_shadows_set(int value);
+static void options_ui_simultaneous_turns_get(int* value_ptr, bool* enabled_ptr);
+static void options_ui_simultaneous_turns_set(int value);
 
 /**
  * 0x5CCD38
@@ -175,6 +178,22 @@ static OptionsUiControlInfo options_ui_uap_shadows_meta = {
     options_ui_shadows_set,
 };
 
+// CE (`simultaneous npc turns`, zsogg 2026-11-15): the "Simultaneous Turns"
+// control, Off/On, in the "Video" tab's slot after UAP's "Shadows", shown only
+// while the switch is on. Its title is written here, as `options_ui.mes` has
+// no entry 206.
+#define OPTIONS_UI_VIDEO_SIMULTANEOUS_TURNS 6
+
+static OptionsUiControlInfo options_ui_simultaneous_turns_meta = {
+    true,
+    CYCLIC_UI_CONTROL_MESSAGE_FILE,
+    0,
+    "Simultaneous Turns",
+    "mes\\OptionsOffOn.mes",
+    options_ui_simultaneous_turns_get,
+    options_ui_simultaneous_turns_set,
+};
+
 /**
  * Flag indicating if the options UI is displayed in-game.
  *
@@ -259,6 +278,13 @@ void options_ui_start(OptionsUiTab tab, tig_window_handle_t window_handle, bool 
             meta = &options_ui_uap_shadows_meta;
         }
 
+        // CE: the Simultaneous Turns control, while its switch is on.
+        if (feature_enabled(FEATURE_SIMULTANEOUS_NPC_TURNS)
+            && tab == OPTIONS_UI_TAB_VIDEO
+            && index == OPTIONS_UI_VIDEO_SIMULTANEOUS_TURNS) {
+            meta = &options_ui_simultaneous_turns_meta;
+        }
+
         if (!meta->active) {
             continue;
         }
@@ -292,6 +318,10 @@ void options_ui_start(OptionsUiTab tab, tig_window_handle_t window_handle, bool 
         control_info.title = mes_search(options_ui_mes_file, &mes_file_entry)
             ? mes_file_entry.str
             : NULL;
+        // CE: a control with no entry of its own names itself.
+        if (meta == &options_ui_simultaneous_turns_meta) {
+            control_info.title = meta->debug_name;
+        }
 
         // Finish control set up.
         control_info.mes_file_path = meta->mes;
@@ -776,4 +806,18 @@ void options_ui_shadows_get(int* value_ptr, bool* enabled_ptr)
 void options_ui_shadows_set(int value)
 {
     settings_set_value(&settings, SHADOWS_KEY, value);
+}
+
+// CE (`simultaneous npc turns`, zsogg 2026-11-15): the player's choice, shown
+// only while the switch is on. Takes effect at the next round.
+void options_ui_simultaneous_turns_get(int* value_ptr, bool* enabled_ptr)
+{
+    *value_ptr = combat_simultaneous_turns_enabled() ? 1 : 0;
+    *enabled_ptr = true;
+}
+
+// CE: see `options_ui_simultaneous_turns_get`.
+void options_ui_simultaneous_turns_set(int value)
+{
+    settings_set_value(&settings, SIMULTANEOUS_TURNS_KEY, value);
 }

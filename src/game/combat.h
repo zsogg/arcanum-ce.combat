@@ -134,6 +134,12 @@ int64_t combat_turn_based_whos_turn_get(void);
 // it has left and its last check required. With no group turn running, the
 // original's whose-turn test and `combat_action_points_get`.
 bool combat_turn_based_is_acting(int64_t obj);
+// CE (`simultaneous npc turns`, zsogg 2026-11-15): the player's choice on the
+// Options screen, shown only while the switch is on. Absent from the config
+// reads as on, so the switch's default holds until the player turns it off.
+#define SIMULTANEOUS_TURNS_KEY "simultaneous turns"
+// CE: the switch and the choice both on; read at each round's start.
+bool combat_simultaneous_turns_enabled(void);
 int combat_action_points_of(int64_t obj);
 int combat_required_action_points_of(int64_t obj);
 // CE (card TB1): the group turn's pure rules and its one entry point for a

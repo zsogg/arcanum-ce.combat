@@ -8,7 +8,9 @@
 
 #include "game/combat.h"
 #include "game/feature.h"
+#include "game/gamelib.h"
 #include "game/object_node.h"
+#include "game/settings.h"
 #include "test_harness.h"
 
 // Globalized out of combat.c by the build; in no header.
@@ -18,6 +20,7 @@ extern int combat_action_points;
 extern int combat_required_action_points;
 extern int combat_group_count;
 extern int combat_round_acted_count;
+extern bool combat_round_simultaneous;
 bool combat_round_has_acted(int64_t obj);
 void combat_round_mark_acted(int64_t obj);
 
@@ -209,19 +212,47 @@ TEST(with_no_group_only_whose_turn_it_is_acts)
 
 TEST(a_turn_comes_round_once_a_round_only_under_the_switch)
 {
+    // The switch as the round began (`combat_turn_based_begin_turn`).
+    combat_round_simultaneous = false;
     combat_round_acted_count = 0;
     combat_round_mark_acted(NPC(1));
     CHECK(!combat_round_has_acted(NPC(1)));
 
-    feature_override(FEATURE_SIMULTANEOUS_NPC_TURNS, true);
+    combat_round_simultaneous = true;
     combat_round_mark_acted(NPC(1));
     combat_round_mark_acted(NPC(1));
     CHECK(combat_round_has_acted(NPC(1)));
     CHECK_INT(combat_round_acted_count, 1);
     CHECK(!combat_round_has_acted(NPC(2)));
 
-    feature_clear_overrides();
+    combat_round_simultaneous = false;
     combat_round_acted_count = 0;
+}
+
+TEST(the_options_choice_turns_the_mode_off_only_under_the_switch)
+{
+    // zsogg, 2026-11-15: the switch shows the control; the choice, absent
+    // until the player changes it, reads as on.
+    settings_init(&settings, "unused");
+    feature_init();
+    CHECK(!combat_simultaneous_turns_enabled());
+    settings_set_value(&settings, SIMULTANEOUS_TURNS_KEY, 1);
+    CHECK(!combat_simultaneous_turns_enabled());
+
+    settings_set_value(&settings, feature_key(FEATURE_SIMULTANEOUS_NPC_TURNS), 1);
+    CHECK(combat_simultaneous_turns_enabled());
+    settings_set_value(&settings, SIMULTANEOUS_TURNS_KEY, 0);
+    CHECK(!combat_simultaneous_turns_enabled());
+    settings_exit(&settings);
+
+    // Absent: on with the switch, as before the control existed.
+    settings_init(&settings, "unused");
+    feature_init();
+    settings_set_value(&settings, feature_key(FEATURE_SIMULTANEOUS_NPC_TURNS), 1);
+    CHECK(combat_simultaneous_turns_enabled());
+    // The switch off again for the suites after this one.
+    settings_set_value(&settings, feature_key(FEATURE_SIMULTANEOUS_NPC_TURNS), 0);
+    settings_exit(&settings);
 }
 
 TEST(the_opening_s_held_enemies_go_behind_the_player_once_each)
@@ -282,5 +313,6 @@ void test_group_turn_suite(void)
     RUN(each_member_pays_from_its_own_pool_and_others_go_free);
     RUN(with_no_group_only_whose_turn_it_is_acts);
     RUN(a_turn_comes_round_once_a_round_only_under_the_switch);
+    RUN(the_options_choice_turns_the_mode_off_only_under_the_switch);
     RUN(the_opening_s_held_enemies_go_behind_the_player_once_each);
 }

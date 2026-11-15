@@ -291,6 +291,10 @@ static int combat_group_progress;
 #define COMBAT_ROUND_ACTED_MAX 1024
 static int64_t combat_round_acted[COMBAT_ROUND_ACTED_MAX];
 static int combat_round_acted_count;
+// CE (zsogg, 2026-11-15): `combat_simultaneous_turns_enabled` as the round
+// began. The Options screen can change it mid-fight; a change takes effect at
+// the next round, so a group turn already open ends as it would have.
+static bool combat_round_simultaneous;
 
 // 0x5FC234
 static int combat_action_points;
@@ -571,7 +575,7 @@ bool combat_load(GameLoadInfo* load_info)
     // own walk already marked as the round's first. shortcut: a first round
     // under the opening or ambush safeguard is not rebuilt - the enemies
     // the opening put behind the player lose that round's turn on a load.
-    if (feature_enabled(FEATURE_SIMULTANEOUS_NPC_TURNS)) {
+    if (combat_round_simultaneous) {
         ObjectNode* leader;
 
         for (leader = combat_critter_list.head; leader != node; leader = leader->next) {
@@ -4459,6 +4463,20 @@ bool combat_turn_based_is_active(void)
     return combat_turn_based_active;
 }
 
+// CE (`simultaneous npc turns`, zsogg 2026-11-15): the switch, and the
+// player's choice on the Options screen; an absent choice reads as on.
+bool combat_simultaneous_turns_enabled(void)
+{
+    const char* choice;
+
+    if (!feature_enabled(FEATURE_SIMULTANEOUS_NPC_TURNS)) {
+        return false;
+    }
+
+    choice = settings_get_str_value(&settings, SIMULTANEOUS_TURNS_KEY);
+    return choice == NULL || atoi(choice) != 0;
+}
+
 // CE (`simultaneous npc turns`, card TB1): `obj`'s entry in the running
 // group turn, or NULL.
 static CombatGroupMember* combat_group_member(int64_t obj)
@@ -4932,6 +4950,8 @@ bool combat_turn_based_begin_turn(void)
     combat_summons_round_began();
     // CE (card TB1): a new round; nobody's turn has come round yet.
     combat_round_acted_count = 0;
+    // CE: the Options screen's choice holds for the whole round.
+    combat_round_simultaneous = combat_simultaneous_turns_enabled();
     // CE (opening safeguard): the opening is the first round only.
     if (combat_turn_based_turn > 1) {
         combat_opening_end();
@@ -6470,7 +6490,7 @@ static bool combat_round_has_acted(int64_t obj)
 
 static void combat_round_mark_acted(int64_t obj)
 {
-    if (feature_enabled(FEATURE_SIMULTANEOUS_NPC_TURNS)
+    if (combat_round_simultaneous
         && combat_round_acted_count < COMBAT_ROUND_ACTED_MAX
         && !combat_round_has_acted(obj)) {
         combat_round_acted[combat_round_acted_count++] = obj;
@@ -6514,7 +6534,7 @@ static bool combat_group_turn_start(void)
     char actor[COMBAT_OBSERVER_IDENTITY_SIZE];
     int index;
 
-    if (!feature_enabled(FEATURE_SIMULTANEOUS_NPC_TURNS)
+    if (!combat_round_simultaneous
         || combat_group_count != 0
         || gamelib_in_load()
         || leader == NULL

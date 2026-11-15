@@ -48,4 +48,22 @@ void ce_mods_mount_module(void);
 // With the module's data: unmount what `ce_mods_mount_module` mounted.
 void ce_mods_unmount_module(void);
 
+// CE (2026-11-15): a map's placed objects are read from a cache the engine
+// builds from the map's `.mob` files and does not rebuild while its module
+// GUID matches (map_preprocess_mobile, quirk 33), so a bundle's `.mob` files
+// would be unseen wherever the player already has the cache, and would stay
+// in it after the bundle is turned off. The signature names the enabled
+// bundles that carry a folder for the map (`module\maps\<map>` or
+// `maps\<map>`), comma-separated in mount order, "" for none; the cache is
+// rebuilt whenever it differs from the one recorded beside it.
+#define CE_MODS_SIGNATURE_MAX (CE_MODS_MAX * CE_MODS_ID_MAX)
+// Bundles found at start, on or off: 0 means a game folder with no `ce-mods`,
+// where map loading takes the original's path call for call.
+extern int ce_mods_found_count;
+void ce_mods_map_signature(const char* map_name, char* buffer, size_t size);
+
+// Pure: append `id` to a signature, comma-separated. False, and the buffer
+// unchanged, when it does not fit.
+bool ce_mods_signature_append(char* buffer, size_t size, const char* id);
+
 #endif /* ARCANUM_GAME_CE_MODS_H_ */
