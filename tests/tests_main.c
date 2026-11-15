@@ -167,9 +167,9 @@ int main(void)
     test_followers_suite();
 #if ARCANUM_TESTS_GNU_LINK
     test_interrupted_cast_suite();
-#endif
     test_body_spell_turn_end_suite();
     test_aptitude_balance_suite();
+#endif
     test_carried_lights_suite();
     test_schematic_cap_suite();
     test_initiative_suite();

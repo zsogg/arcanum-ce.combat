@@ -201,6 +201,9 @@ TEST(non_item_types_resolve_to_themselves)
 
 // Card HW1: the 513th spell run is refused. The original quits the game when
 // every one of its 512 ids is in use (0x45576A `push 1; call exit`).
+// `magictech_id_new_lock` is static, reachable only through the GNU link's
+// globalized objects, so the case is built where they are (not Apple clang).
+#if ARCANUM_TESTS_GNU_LINK
 extern bool magictech_id_new_lock(MagicTechRunInfo** run_info_ptr);
 
 #define TEST_MAGICTECH_RUNS 512
@@ -228,10 +231,13 @@ TEST(a_full_spell_pool_refuses_the_run_instead_of_quitting)
     magictech_run_info = saved;
     free(pool);
 }
+#endif
 
 void test_magitech_suite(void)
 {
+#if ARCANUM_TESTS_GNU_LINK
     RUN(a_full_spell_pool_refuses_the_run_instead_of_quitting);
+#endif
     RUN(null_parent_resolves_to_null);
     RUN(every_item_type_resolves_to_parent_when_in_inventory);
     RUN(item_without_inventory_flag_resolves_to_itself);
