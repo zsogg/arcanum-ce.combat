@@ -102,9 +102,10 @@ ledger of decompilation mistakes.
 
 ## 1. The optional mods
 
-Ten optional mods come with Arcanum CE, all off unless you turn them on.
-Six were new in release 2 (sections 1.4 to 1.9), and Simultaneous Turns
-(section 1.10) is new in release 3.
+Twelve optional mods come with Arcanum CE, all off unless you turn them on.
+Six were new in release 2 (sections 1.4 to 1.9), Simultaneous Turns (section
+1.10) in release 3, and Large Sector Cache and Aptitude Balance (sections 1.11
+and 1.12) are new in release 6.
 
 - **Turning them on:** setup asks about each one. Afterwards each is one line
   in `arcanum-ce.cfg`: change its `0` to `1` and restart the game to turn it
@@ -652,6 +653,40 @@ usual costs, and your turn comes when the last of them has finished.
   enemy still acts before your party in an ambush's first round.
 - **Nobody acts twice in a round**, and Fast Turn-Based still applies.
   Real-time combat is unchanged.
+
+### 1.11 Large Sector Cache - `mod large-sector-cache`
+
+New in release 6. Arcanum keeps 16 map sectors in memory, a budget sized for
+a 2001 PC; walking far enough drops the oldest, and walking back loads it
+again. This mod keeps 128, the most the game's own code allows, about 100 MB
+more.
+
+- **People carry on where they were.** A sector that comes back after it was
+  dropped restarts its people at their posts. With this mod a town you leave
+  and come back to mostly stays loaded.
+- **Saves:** a save made with it loads without it.
+
+### 1.12 Aptitude Balance - `mod aptitude-balance`
+
+New in release 6. Arcanum's magick and tech aptitude punishes a
+technologist far more than a mage, and late in the game magickal enemies are
+everywhere. This mod makes the rules fairer:
+
+- **No weapon misses outright for its target's lean.** A gun at a magickal
+  creature, or a magick bow at a technological one, always rolls to hit and
+  loses some damage instead. A tech melee weapon at a magickal creature
+  lands without its own bonuses, as a magick one at a technological creature
+  already did.
+- **A mage with a gun fumbles less:** the critical-failure chance a magickal
+  character has with a technological weapon is divided by 250, not 100.
+- **A technologist keeps part of a magick item's power**, half at a neutral
+  aptitude falling evenly to none at -100.
+- **Friendly spells work on technologists.** A heal never fails outright and
+  heals a little less; a buff still fails now and then, at most about a
+  third of the time; worn magic resistance does not stop a friendly spell.
+- **Enemy mages cast at technologists.** They weigh a damage spell by the
+  damage it loses to resistance, so a technologist is no longer spared them.
+- **Two Automatons stand among the Kree bandits.**
 
 ## 2. Highlights
 
