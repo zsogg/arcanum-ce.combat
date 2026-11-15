@@ -147,6 +147,7 @@ target_sources(arcanum-tests PRIVATE
     "test_eye_candy_sound.c"
     "test_interrupted_cast.c"
     "test_body_spell_turn_end.c"
+    "test_aptitude_balance.c"
     "test_proto.c"
     "test_script.c"
     "test_text_filter.c"
